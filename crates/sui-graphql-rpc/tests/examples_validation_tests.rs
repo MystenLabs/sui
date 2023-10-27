@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//#[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 mod tests {
-    use markdown_gen::markdown::{AsMarkdown, Markdown};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serial_test::serial;
@@ -14,159 +13,7 @@ mod tests {
     use std::sync::Arc;
     use sui_graphql_rpc::cluster::SimulatorCluster;
     use sui_graphql_rpc::config::ConnectionConfig;
-
-    #[derive(Debug)]
-    struct ExampleQuery {
-        pub name: String,
-        pub contents: String,
-        pub path: PathBuf,
-    }
-
-    #[derive(Debug)]
-    struct ExampleQueryGroup {
-        pub name: String,
-        pub queries: Vec<ExampleQuery>,
-        pub _path: PathBuf,
-    }
-
-    const QUERY_EXT: &str = "graphql";
-
-    fn regularize_string(s: &str) -> String {
-        // Replace underscore with space and make every word first letter uppercase
-        s.replace('_', " ")
-            .split_whitespace()
-            .map(|word| {
-                let mut chars = word.chars();
-                match chars.next() {
-                    None => String::new(),
-                    Some(f) => f.to_uppercase().chain(chars).collect(),
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
-
-    #[test]
-    fn verify_examples_x() {
-        let groups = verify_examples_impl();
-
-        let mut out_file = File::create("docs/examples.md").unwrap();
-        let mut output = BufWriter::new(Vec::new());
-        let mut md = Markdown::new(&mut output);
-
-        md.write("Sui GraphQL Examples".heading(1)).unwrap();
-
-        // TODO: reduce multiple loops
-        // Generate the table of contents
-        for (id, group) in groups.iter().enumerate() {
-            let group_name = regularize_string(&group.name);
-            let group_name_toc = format!("[{}](#{})", group_name, id);
-            md.write(group_name_toc.heading(3)).unwrap();
-
-            for (inner, query) in group.queries.iter().enumerate() {
-                let inner_id = inner + 0xFFFF * id;
-                let inner_name = regularize_string(&query.name);
-
-                let inner_name_toc = format!("&emsp;&emsp;[{}](#{})", inner_name, inner_id);
-                md.write(inner_name_toc.heading(4)).unwrap();
-            }
-        }
-
-        for (id, group) in groups.iter().enumerate() {
-            let group_name = regularize_string(&group.name);
-
-            let id_tag = format!("<a id={}></a>", id);
-            md.write(id_tag.heading(2)).unwrap();
-            md.write(group_name.heading(2)).unwrap();
-            for (inner, query) in group.queries.iter().enumerate() {
-                let inner_id = inner + 0xFFFF * id;
-                let name = regularize_string(&query.name);
-
-                let id_tag = format!("<a id={}></a>", inner_id);
-                md.write(id_tag.heading(3)).unwrap();
-                md.write(name.heading(3)).unwrap();
-
-                // Extract all lines that start with `#` and use them as headers
-                let mut headers = vec![];
-                let mut query_start = 0;
-                for (idx, line) in query.contents.lines().enumerate() {
-                    let line = line.trim();
-                    if line.starts_with('#') {
-                        headers.push(line.trim_start_matches('#'));
-                    } else if line.starts_with('{') {
-                        query_start = idx;
-                        break;
-                    }
-                }
-
-                // Remove headers from query
-                let query = query
-                    .contents
-                    .lines()
-                    .skip(query_start)
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                let content = format!("<pre>{}</pre>", query);
-                for header in headers {
-                    md.write(header.heading(4)).unwrap();
-                }
-                md.write(content.quote()).unwrap();
-            }
-        }
-        let bytes = output.into_inner().unwrap();
-        let string = String::from_utf8(bytes).unwrap().replace('\\', "");
-
-        // write string to out_file
-        out_file.write_all(string.as_bytes()).unwrap();
-    }
-
-    fn verify_examples_impl() -> Vec<ExampleQueryGroup> {
-        let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.push("examples");
-
-        let mut groups = vec![];
-        for entry in std::fs::read_dir(buf).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            let group_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-
-            let mut group = ExampleQueryGroup {
-                name: group_name.clone(),
-                queries: vec![],
-                _path: path.clone(),
-            };
-
-            for file in std::fs::read_dir(path).unwrap() {
-                assert!(file.is_ok());
-                let file = file.unwrap();
-                assert!(file.path().extension().is_some());
-                let ext = file
-                    .path()
-                    .extension()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string();
-                assert_eq!(ext, QUERY_EXT);
-
-                let file_path = file.path();
-                let query_name = file_path.file_stem().unwrap().to_str().unwrap().to_string();
-
-                let mut contents = String::new();
-                let mut fp = std::fs::File::open(file_path.clone()).unwrap();
-                fp.read_to_string(&mut contents).unwrap();
-                group.queries.push(ExampleQuery {
-                    name: query_name,
-                    contents,
-                    path: file_path,
-                });
-            }
-
-            groups.push(group);
-        }
-        groups
-    }
+    use sui_graphql_rpc::examples::{load_examples, ExampleQuery, ExampleQueryGroup};
 
     fn bad_examples() -> ExampleQueryGroup {
         ExampleQueryGroup {
@@ -234,7 +81,7 @@ mod tests {
         let cluster =
             sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
 
-        let groups = verify_examples_impl();
+        let groups = load_examples();
 
         let mut errors = vec![];
         for group in groups {
@@ -266,4 +113,18 @@ mod tests {
             "all examples should fail"
         );
     }
+}
+
+#[test]
+fn test_generate_markdown() {
+    let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.push("docs");
+    buf.push("examples.md");
+    let mut out_file: File = File::create(buf).unwrap();
+
+    // Read the current content of `out_file`
+    let mut current_content = String::new();
+    out_file.read_to_string(&mut current_content).unwrap();
+    let new_content: String = sui_graphql_rpc::examples::generate_markdown();
+    assert_eq!(current_content, new_content, "Doc examples have changed. Please run `sui-graphql-rpc generate-examples` to update the docs.");
 }

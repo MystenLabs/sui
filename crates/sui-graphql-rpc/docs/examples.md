@@ -82,7 +82,7 @@
 >        }
 >        lamportVersion
 >        gasEffects {
->          gasSummary{
+>          gasSummary {
 >            computationCost
 >            storageCost
 >            storageRebate
@@ -115,13 +115,17 @@
 ####  Get last 3 coins before coins at cursor 13034947
 
 ><pre>{
->  address(address:"0x0000000000000000000000000000000000000000000000000000000000000000") {
->    coinConnection(last: 3, before:"0x13034947") {
+>  address(
+>    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
+>  ) {
+>    coinConnection(last: 3, before: "0x13034947") {
 >      nodes {
->        id, balance
->      },
+>        id
+>        balance
+>      }
 >      pageInfo {
->        endCursor, hasNextPage
+>        endCursor
+>        hasNextPage
 >      }
 >    }
 >  }
@@ -131,18 +135,28 @@
 ## Balance Connection
 ### <a id=131070></a>
 ### Balance Connection
+####  Query the balance for objects of type COIN and then for each coin
+####  get the coin type, the number of objects, and the total balance
 
 ><pre>{
->  address(address:"0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
->    balance(type:"0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN") {
->      coinObjectCount totalBalance
+>  address(
+>    address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9"
+>  ) {
+>    balance(
+>      type: "0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN"
+>    ) {
+>      coinObjectCount
+>      totalBalance
 >    }
 >    balanceConnection {
 >      nodes {
+>        coinType
 >        coinObjectCount
 >        totalBalance
 >      }
->      pageInfo {endCursor}
+>      pageInfo {
+>        endCursor
+>      }
 >    }
 >  }
 >}</pre>
@@ -151,21 +165,28 @@
 ## Checkpoint
 ### <a id=196605></a>
 ### At Seq Num
-####  At a particular sequence number
+####  Get the checkpoint's information at a particular sequence number
 
 ><pre>{
->  checkpoint(id: {
->    sequenceNumber:10
->  }) {
->    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+>  checkpoint(id: { sequenceNumber: 10 }) {
+>    digest
+>    sequenceNumber
+>    validatorSignature
+>    previousCheckpointDigest
+>    networkTotalTransactions
+>    rollingGasSummary {
 >      computationCost
 >      storageCost
 >      storageRebate
 >      nonRefundableStorageFee
->    }, epoch {
+>    }
+>    epoch {
+>      epochId
 >      referenceGasPrice
 >      startTimestamp
->    }, endOfEpoch {
+>      endTimestamp
+>    }
+>    endOfEpoch {
 >      nextProtocolVersion
 >    }
 >  }
@@ -173,21 +194,28 @@
 
 ### <a id=196606></a>
 ### At Digest
-####  At a particular digest
+####  Get the checkpoint's information at a particular digest
 
 ><pre>{
->  checkpoint(id: {
->    digest:"GaDeWEfbSQCQ8FBQHUHVdm4KjrnbgMqEZPuhStoq5njU"
->  }) {
->    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+>  checkpoint(id: { digest: "GaDeWEfbSQCQ8FBQHUHVdm4KjrnbgMqEZPuhStoq5njU" }) {
+>    digest
+>    sequenceNumber
+>    validatorSignature
+>    previousCheckpointDigest
+>    networkTotalTransactions
+>    rollingGasSummary {
 >      computationCost
 >      storageCost
 >      storageRebate
 >      nonRefundableStorageFee
->    }, epoch {
+>    }
+>    epoch {
+>      epochId
 >      referenceGasPrice
 >      startTimestamp
->    }, endOfEpoch {
+>      endTimestamp
+>    }
+>    endOfEpoch {
 >      nextProtocolVersion
 >    }
 >  }
@@ -195,7 +223,7 @@
 
 ### <a id=196607></a>
 ### With Timestamp Tx Block Live Objects
-####  with timestamp, liveObjectSetDigest, and transaction block data for the latest checkpoint
+####  Latest checkpoint's timestamp, liveObjectSetDigest, and transaction block data
 
 ><pre>{
 >  checkpoint {
@@ -221,11 +249,11 @@
 
 ### <a id=196608></a>
 ### Multiple Selections
+####  Get the checkpoint at sequence 9769 and show
+####  the new committe authority and stake units
 
 ><pre>{
->  checkpoint(id:{
->    sequenceNumber: 9769
->  }) {
+>  checkpoint(id: { sequenceNumber: 9769 }) {
 >    digest
 >    sequenceNumber
 >    timestamp
@@ -249,7 +277,7 @@
 >      }
 >      nextProtocolVersion
 >    }
->    transactionBlockConnection{
+>    transactionBlockConnection {
 >      edges {
 >        node {
 >          digest
@@ -270,10 +298,13 @@
 ####  Get data for the first two transaction blocks of checkpoint at sequence number 10
 
 ><pre>{
->  checkpoint(id: {sequenceNumber: 10}) {
+>  checkpoint(id: { sequenceNumber: 10 }) {
 >    transactionBlockConnection(first: 2) {
 >      edges {
 >        node {
+>          kind {
+>            __typename
+>          }
 >          digest
 >          sender {
 >            location
@@ -285,6 +316,9 @@
 >      }
 >      pageInfo {
 >        startCursor
+>        hasNextPage
+>        hasPreviousPage
+>        endCursor
 >      }
 >    }
 >  }
@@ -292,19 +326,28 @@
 
 ### <a id=196610></a>
 ### Latest Checkpoint
-####  Latest checkpoint
+####  Latest checkpoint's data
 
 ><pre>{
 >  checkpoint {
->    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+>    digest
+>    sequenceNumber
+>    validatorSignature
+>    previousCheckpointDigest
+>    networkTotalTransactions
+>    rollingGasSummary {
 >      computationCost
 >      storageCost
 >      storageRebate
 >      nonRefundableStorageFee
->    }, epoch {
+>    }
+>    epoch {
+>      epochId
 >      referenceGasPrice
 >      startTimestamp
->    }, endOfEpoch {
+>      endTimestamp
+>    }
+>    endOfEpoch {
 >      nextProtocolVersion
 >    }
 >  }
@@ -315,16 +358,16 @@
 ####  Select checkpoint at sequence number 14830285 for transactions from sentAddress
 
 ><pre>{
->  checkpoint(id:{
->    sequenceNumber: 14830285
->  }) {
+>  checkpoint(id: { sequenceNumber: 14830285 }) {
 >    digest
 >    sequenceNumber
 >    timestamp
 >    liveObjectSetDigest
->    transactionBlockConnection(filter: {
->      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
->    }) {
+>    transactionBlockConnection(
+>      filter: {
+>        sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+>      }
+>    ) {
 >      edges {
 >        node {
 >          digest
@@ -356,12 +399,14 @@
 ### Name Service
 
 ><pre>{
->  resolveNameServiceAddress(name:"example.sui") {
+>  resolveNameServiceAddress(name: "example.sui") {
 >    location
 >  }
->  address(address:"0x0b86be5d779fac217b41d484b8040ad5145dc9ba0cba099d083c6cbda50d983e"){
+>  address(
+>    address: "0x0b86be5d779fac217b41d484b8040ad5145dc9ba0cba099d083c6cbda50d983e"
+>  ) {
 >    location
->    balance(type:"0x2::sui::SUI") {
+>    balance(type: "0x2::sui::SUI") {
 >      coinType
 >      coinObjectCount
 >      totalBalance
@@ -376,7 +421,9 @@
 ### Owner
 
 ><pre>{
->  owner(address:"0x931f293ce7f65fd5ebe9542653e1fd92fafa03dda563e13b83be35da8a2eecbe"){
+>  owner(
+>    address: "0x931f293ce7f65fd5ebe9542653e1fd92fafa03dda563e13b83be35da8a2eecbe"
+>  ) {
 >    location
 >  }
 >}</pre>
@@ -385,11 +432,12 @@
 ## Checkpoint Connection
 ### <a id=458745></a>
 ### First Ten After Checkpoint
-####  Fetch first 10 after the cursor - note that cursor will be opaque
+####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that cursor will be opaque
 
 ><pre>{
->  checkpointConnection(first:10, after:"11") {
+>  checkpointConnection(first: 10, after: "11") {
 >    nodes {
+>      sequenceNumber
 >      digest
 >    }
 >  }
@@ -397,7 +445,7 @@
 
 ### <a id=458746></a>
 ### Ascending Fetch
-####  Fetch some default amount of checkpoints, ascending
+####  Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
 
 ><pre>{
 >  checkpointConnection {
@@ -414,8 +462,10 @@
 >        nonRefundableStorageFee
 >      }
 >      epoch {
+>        epochId
 >        referenceGasPrice
 >        startTimestamp
+>        endTimestamp
 >      }
 >      endOfEpoch {
 >        nextProtocolVersion
@@ -426,11 +476,12 @@
 
 ### <a id=458747></a>
 ### Last Ten After Checkpoint
-####  Fetch last 20 before the cursor
+####  Fetch the digest and the sequence number of the last 20 checkpoints before the cursor
 
 ><pre>{
->  checkpointConnection(last:20, before:"100") {
+>  checkpointConnection(last: 20, before: "100") {
 >    nodes {
+>      sequenceNumber
 >      digest
 >    }
 >  }
@@ -444,7 +495,8 @@
 ><pre>{
 >  eventConnection(
 >    filter: {
->      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"}
+>      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
+>    }
 >  ) {
 >    nodes {
 >      id
@@ -459,7 +511,9 @@
 >      eventType {
 >        repr
 >      }
->      senders {location}
+>      senders {
+>        location
+>      }
 >      timestamp
 >      json
 >      bcs
@@ -474,7 +528,7 @@
 ####  Selecting all fields for epoch 100
 
 ><pre>{
->  epoch(id: 100){
+>  epoch(id: 100) {
 >    protocolConfigs {
 >      protocolVersion
 >    }
@@ -527,43 +581,44 @@
 ><pre>{
 >  epoch {
 >    checkpointConnection {
->        nodes {
->          transactionBlockConnection(first: 10) {
->            pageInfo {
->              hasNextPage
->              endCursor
->            }
->            edges {
->              cursor
->              node {
->                sender {
->                  location
->                }
->                effects {
->                  gasEffects {
->                    gasObject {
->                      location
->                    }
+>      nodes {
+>        transactionBlockConnection(first: 10) {
+>          pageInfo {
+>            hasNextPage
+>            endCursor
+>          }
+>          edges {
+>            cursor
+>            node {
+>              sender {
+>                location
+>              }
+>              effects {
+>                gasEffects {
+>                  gasObject {
+>                    location
 >                  }
 >                }
->                gasInput {
->                  gasPrice
->                  gasBudget
->                }
+>              }
+>              gasInput {
+>                gasPrice
+>                gasBudget
 >              }
 >            }
 >          }
 >        }
 >      }
 >    }
->  }</pre>
+>  }
+>}</pre>
 
 ### <a id=589817></a>
 ### With Tx Block Connection
+####  Fetch the first 20 transactions after 231220100 for epoch 97
 
 ><pre>{
 >  epoch(id:97) {
->    transactionBlockConnection(first: 20, after:"261225985") {
+>    transactionBlockConnection(first: 20, after:"231220100") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -571,6 +626,7 @@
 >      edges {
 >        cursor
 >        node {
+>          digest
 >          sender {
 >            location
 >          }
@@ -598,7 +654,7 @@
 
 ><pre>{
 >  epoch {
->    transactionBlockConnection(first: 20, after:"261225985") {
+>    transactionBlockConnection(first: 20, after: "261225985") {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -708,7 +764,7 @@
 >          storageRebate
 >        }
 >        ... on GenesisTransaction {
->          objects 
+>          objects
 >        }
 >      }
 >    }
@@ -727,9 +783,11 @@
 >      digest
 >      storageRebate
 >      previousTransactionBlock {
->        digest, sender {
+>        digest
+>        sender {
 >          defaultNameServiceName
->        }, gasInput {
+>        }
+>        gasInput {
 >          gasPrice
 >          gasBudget
 >        }
@@ -746,9 +804,11 @@
 ####  Filter on owner
 
 ><pre>{
->  objectConnection(filter:{
->    owner: "0x23b7b0e2badb01581ba9b3ab55587d8d9fdae087e0cfc79f2c72af36f5059439"
->  }) {
+>  objectConnection(
+>    filter: {
+>      owner: "0x23b7b0e2badb01581ba9b3ab55587d8d9fdae087e0cfc79f2c72af36f5059439"
+>    }
+>  ) {
 >    edges {
 >      node {
 >        storageRebate
@@ -756,17 +816,20 @@
 >      }
 >    }
 >  }
->}
-></pre>
+>}</pre>
 
 ### <a id=720887></a>
 ### Filter Object Ids
 ####  Filter on objectIds
 
 ><pre>{
->  objectConnection(filter:{
->    objectIds: ["0x4bba2c7b9574129c272bca8f58594eba933af8001257aa6e0821ad716030f149"]
->  }) {
+>  objectConnection(
+>    filter: {
+>      objectIds: [
+>        "0x4bba2c7b9574129c272bca8f58594eba933af8001257aa6e0821ad716030f149"
+>      ]
+>    }
+>  ) {
 >    edges {
 >      node {
 >        storageRebate
@@ -856,18 +919,17 @@
 ####  similar behavior to the `transactionBlockConnection` in Query but
 ####  supports additional `AddressTransactionBlockRelationship` filter
 ####  Filtering on package where the sender of the TX is the current address
+####  and displaying the transaction's sender and the gas price and budget
 
 ><pre># See examples in Query::transactionBlockConnection as this is
-># similar behavior to the `transactionBlockConnection` in Query but 
+># similar behavior to the `transactionBlockConnection` in Query but
 ># supports additional `AddressTransactionBlockRelationship` filter
 >
 ># Filtering on package where the sender of the TX is the current address
+># and displaying the transaction's sender and the gas price and budget
 >query transaction_block_with_relation_filter {
 >  address(address: "0x2") {
->    transactionBlockConnection(
->      relation: SENT
->      filter: {package: "0x2"}
->    ) {
+>    transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
 >      nodes {
 >        sender {
 >          location
@@ -885,10 +947,11 @@
 ## Stake Connection
 ### <a id=983025></a>
 ### Stake Connection
+####  Get all the staked objects for this address and all the active validators at the epoch when the stake became active
 
-><pre>query stake_connection {
+><pre>{
 >  address(
->    address: "0x341fa71e4e58d63668034125c3152f935b00b0bb5c68069045d8c646d017fae1"
+>    address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
 >  ) {
 >    location
 >    balance(type: "0x2::sui::SUI") {
@@ -897,8 +960,10 @@
 >    }
 >    stakeConnection {
 >      nodes {
+>        id
 >        status
 >        principal
+>        estimatedReward
 >        activeEpoch {
 >          epochId
 >          referenceGasPrice
@@ -927,7 +992,7 @@
 ><pre>{
 >  protocolConfig {
 >    protocolVersion
->    featureFlag(key:"advance_epoch_start_time_in_safe_mode") {
+>    featureFlag(key: "advance_epoch_start_time_in_safe_mode") {
 >      value
 >    }
 >  }
@@ -941,7 +1006,7 @@
 >  protocolConfig {
 >    featureFlags {
 >      key
->	    value
+>      value
 >    }
 >  }
 >}</pre>
@@ -967,7 +1032,7 @@
 >  protocolConfig {
 >    configs {
 >      key
->	    value
+>      value
 >    }
 >  }
 >}</pre>
@@ -981,13 +1046,13 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      inputObject:"0x0000000000000000000000000000000000000000000000000000000000000006"
+>      inputObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1003,17 +1068,19 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      inputObject:"0x0000000000000000000000000000000000000000000000000000000000000006",
->      sentAddress:"0x0000000000000000000000000000000000000000000000000000000000000000"
+>      inputObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
+>      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      effects {
 >        gasEffects {
->          gasObject { location}
+>          gasObject {
+>            location
+>          }
 >        }
 >      }
 >      gasInput {
@@ -1031,13 +1098,13 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      sentAddress:"0x0000000000000000000000000000000000000000000000000000000000000000"
+>      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1053,14 +1120,14 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      package: "0x0000000000000000000000000000000000000000000000000000000000000003",
->      module:"sui_system"
+>      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
+>      module: "sui_system"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1076,13 +1143,13 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      recvAddress:"0x0000000000000000000000000000000000000000000000000000000000000000"
+>      recvAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1096,15 +1163,11 @@
 ####  Filter on TransactionKind (only SYSTEM_TX or PROGRAMMABLE_TX)
 
 ><pre>{
->  transactionBlockConnection(
->    filter: {
->      kind:SYSTEM_TX
->    }
->  ) {
+>  transactionBlockConnection(filter: { kind: SYSTEM_TX }) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1119,15 +1182,12 @@
 
 ><pre>{
 >  transactionBlockConnection(
->    filter: {
->      afterCheckpoint: 10,
->      beforeCheckpoint: 20
->    }
+>    filter: { afterCheckpoint: 10, beforeCheckpoint: 20 }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1179,14 +1239,12 @@
 
 ><pre>{
 >  transactionBlockConnection(
->    filter: {
->      transactionIds:["DtQ6v6iJW4wMLgadENPUCEUS5t8AP7qvdG5jX84T1akR"]
->    }
+>    filter: { transactionIds: ["DtQ6v6iJW4wMLgadENPUCEUS5t8AP7qvdG5jX84T1akR"] }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1202,15 +1260,15 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      package: "0x0000000000000000000000000000000000000000000000000000000000000003",
->      module:"sui_system",
->      function:"request_withdraw_stake"
+>      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
+>      module: "sui_system"
+>      function: "request_withdraw_stake"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1226,13 +1284,13 @@
 ><pre>{
 >  transactionBlockConnection(
 >    filter: {
->      changedObject:"0x0000000000000000000000000000000000000000000000000000000000000006"
+>      changedObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
 >    }
 >  ) {
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
@@ -1254,7 +1312,7 @@
 >    nodes {
 >      sender {
 >        location
->      },
+>      }
 >      gasInput {
 >        gasPrice
 >        gasBudget
