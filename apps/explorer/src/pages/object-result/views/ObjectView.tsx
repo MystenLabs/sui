@@ -93,12 +93,23 @@ function DescriptionCard({
 	objectType: string;
 	objectId: string;
 }) {
-	const { address, module, ...rest } = parseStructTag(objectType);
+	const { address, module, typeParams, ...rest } = parseStructTag(objectType);
 
-	const formattedAddress = formatAddress(address);
+	const formattedTypeParams = typeParams.map((typeParam) => {
+		if (typeof typeParam === 'string') {
+			return typeParam;
+		} else {
+			return {
+				...typeParam,
+				address: formatAddress(typeParam.address),
+			};
+		}
+	});
+
 	const structTag = {
-		address: formattedAddress,
+		address: formatAddress(address),
 		module,
+		typeParams: formattedTypeParams,
 		...rest,
 	};
 
