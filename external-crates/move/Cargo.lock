@@ -1876,6 +1876,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-prover",
+ "move-read-write-set-types",
  "move-resource-viewer",
  "move-stdlib",
  "move-unit-test",
@@ -1883,7 +1884,6 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
- "read-write-set",
  "serde_yaml",
  "tempfile",
  "toml_edit 0.14.4",
@@ -3311,31 +3311,6 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
-]
-
-[[package]]
-name = "read-write-set"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-model",
- "move-read-write-set-types",
- "move-stackless-bytecode",
- "read-write-set-dynamic",
-]
-
-[[package]]
-name = "read-write-set-dynamic"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-read-write-set-types",
 ]
 
 [[package]]
