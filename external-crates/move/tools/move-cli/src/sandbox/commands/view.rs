@@ -9,22 +9,8 @@ use crate::sandbox::utils::{
 use anyhow::{bail, Result};
 use std::path::Path;
 /// Print a module or resource stored in `file`
-pub fn view(state: &OnDiskStateView, path: &Path) -> Result<()> {
-    if state.is_resource_path(path) {
-        match state.view_resource(path)? {
-            Some(resource) => println!("{}", resource),
-            None => println!("Resource not found."),
-        }
-    } else if state.is_event_path(path) {
-        let events = state.view_events(path)?;
-        if events.is_empty() {
-            println!("Events not found.")
-        } else {
-            for event in events {
-                println!("{}", event)
-            }
-        }
-    } else if is_bytecode_file(path) {
+pub fn view(_state: &OnDiskStateView, path: &Path) -> Result<()> {
+    if is_bytecode_file(path) {
         let bytecode_opt = if contains_module(path) {
             OnDiskStateView::view_module(path)?
         } else {

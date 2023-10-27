@@ -15,12 +15,11 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
-    parser,
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
-use move_resource_viewer::{AnnotatedMoveStruct, AnnotatedMoveValue, MoveValueAnnotator};
+use move_resource_viewer::{AnnotatedMoveValue, MoveValueAnnotator};
 use std::{
     convert::{TryFrom, TryInto},
     fs,
@@ -29,8 +28,6 @@ use std::{
 
 type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
 
-/// subdirectory of `DEFAULT_STORAGE_DIR`/<addr> where resources are stored
-pub const RESOURCES_DIR: &str = "resources";
 /// subdirectory of `DEFAULT_STORAGE_DIR`/<addr> where modules are stored
 pub const MODULES_DIR: &str = "modules";
 /// subdirectory of `DEFAULT_STORAGE_DIR`/<addr> where events are stored
@@ -86,10 +83,6 @@ impl OnDiskStateView {
             }
     }
 
-    pub fn is_resource_path(&self, p: &Path) -> bool {
-        self.is_data_path(p, RESOURCES_DIR)
-    }
-
     pub fn is_event_path(&self, p: &Path) -> bool {
         self.is_data_path(p, EVENTS_DIR)
     }
@@ -102,13 +95,6 @@ impl OnDiskStateView {
         let mut path = self.storage_dir.clone();
         path.push(format!("0x{}", addr));
         path
-    }
-
-    fn get_resource_path(&self, addr: AccountAddress, tag: StructTag) -> PathBuf {
-        let mut path = self.get_addr_path(&addr);
-        path.push(RESOURCES_DIR);
-        path.push(StructID(tag).to_string());
-        path.with_extension(BCS_EXTENSION)
     }
 
     // Events are stored under address/handle creation number
@@ -150,15 +136,6 @@ impl OnDiskStateView {
     }
 
     /// Read the resource bytes stored on-disk at `addr`/`tag`
-    pub fn get_resource_bytes(
-        &self,
-        addr: AccountAddress,
-        tag: StructTag,
-    ) -> Result<Option<Vec<u8>>> {
-        Self::get_bytes(&self.get_resource_path(addr, tag))
-    }
-
-    /// Read the resource bytes stored on-disk at `addr`/`tag`
     fn get_module_bytes(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>> {
         Self::get_bytes(&self.get_module_path(module_id))
     }
@@ -189,35 +166,6 @@ impl OnDiskStateView {
         } else {
             None
         })
-    }
-
-    /// Returns a deserialized representation of the resource value stored at `resource_path`.
-    /// Returns Err if the path does not hold a resource value or the resource cannot be deserialized
-    pub fn view_resource(&self, resource_path: &Path) -> Result<Option<AnnotatedMoveStruct>> {
-        if resource_path.is_dir() {
-            bail!(
-                "Bad resource path {:?}. Needed file, found directory",
-                resource_path
-            )
-        }
-        match resource_path.file_stem() {
-            None => bail!(
-                "Bad resource path {:?}; last component must be a file",
-                resource_path
-            ),
-            Some(name) => Ok({
-                let id = match parser::parse_type_tag(&name.to_string_lossy())? {
-                    TypeTag::Struct(s) => s,
-                    t => bail!("Expected to parse struct tag, but got {}", t),
-                };
-                match Self::get_bytes(resource_path)? {
-                    Some(resource_data) => {
-                        Some(MoveValueAnnotator::new(self).view_resource(&id, &resource_data)?)
-                    }
-                    None => None,
-                }
-            }),
-        }
     }
 
     fn get_events(&self, events_path: &Path) -> Result<Vec<Event>> {
@@ -272,32 +220,6 @@ impl OnDiskStateView {
 
     pub fn view_script(script_path: &Path) -> Result<Option<String>> {
         Self::view_bytecode(script_path, false)
-    }
-
-    /// Delete resource stored on disk at the path `addr`/`tag`
-    pub fn delete_resource(&self, addr: AccountAddress, tag: StructTag) -> Result<()> {
-        let path = self.get_resource_path(addr, tag);
-        fs::remove_file(path)?;
-
-        // delete addr directory if this address is now empty
-        let addr_path = self.get_addr_path(&addr);
-        if addr_path.read_dir()?.next().is_none() {
-            fs::remove_dir(addr_path)?
-        }
-        Ok(())
-    }
-
-    pub fn save_resource(
-        &self,
-        addr: AccountAddress,
-        tag: StructTag,
-        bcs_bytes: &[u8],
-    ) -> Result<()> {
-        let path = self.get_resource_path(addr, tag);
-        if !path.exists() {
-            fs::create_dir_all(path.parent().unwrap())?;
-        }
-        Ok(fs::write(path, bcs_bytes)?)
     }
 
     pub fn save_event(
@@ -376,10 +298,6 @@ impl OnDiskStateView {
             .filter(move |path| f(path))
     }
 
-    pub fn resource_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
-        self.iter_paths(move |p| self.is_resource_path(p))
-    }
-
     pub fn module_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
         self.iter_paths(move |p| self.is_module_path(p))
     }
@@ -417,10 +335,10 @@ impl ResourceResolver for OnDiskStateView {
 
     fn get_resource(
         &self,
-        address: &AccountAddress,
-        struct_tag: &StructTag,
+        _address: &AccountAddress,
+        _struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.get_resource_bytes(*address, struct_tag.clone())
+        unimplemented!()
     }
 }
 
