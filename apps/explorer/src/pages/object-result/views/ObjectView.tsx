@@ -24,6 +24,7 @@ import { Link } from '~/ui/Link';
 import { ObjectVideoImage } from '~/ui/ObjectVideoImage';
 import { extractName, getDisplayUrl, parseImageURL, parseObjectType } from '~/utils/objectUtils';
 import { genFileTypeMsg, trimStdLibPrefix } from '~/utils/stringUtils';
+import { Tooltip } from '~/ui/Tooltip';
 
 interface HeroVideoImageProps {
 	title: string;
@@ -135,10 +136,12 @@ function DescriptionCard({
 			</Description>
 
 			<Description title="Type">
-				<ObjectLink
-					label={<div className="text-right">{normalizedStructTag}</div>}
-					objectId={`${address}?module=${module}`}
-				/>
+				<Tooltip tip={<div className="flex flex-wrap break-all">{objectType}</div>}>
+					<ObjectLink
+						label={<div className="text-right">{normalizedStructTag}</div>}
+						objectId={`${address}?module=${module}`}
+					/>
+				</Tooltip>
 			</Description>
 		</ObjectViewCard>
 	);
