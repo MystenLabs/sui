@@ -8,7 +8,7 @@
     nodes {
       sender {
         location
-      },
+      }
       gasInput {
         gasPrice
         gasBudget

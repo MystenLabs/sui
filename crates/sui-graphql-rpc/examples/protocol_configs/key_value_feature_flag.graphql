@@ -3,7 +3,7 @@
   protocolConfig {
     featureFlags {
       key
-	    value
+      value
     }
   }
 }
