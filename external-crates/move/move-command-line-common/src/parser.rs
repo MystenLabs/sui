@@ -12,7 +12,7 @@ use move_core_types::{
     u256::{U256FromStrError, U256},
 };
 use num_bigint::BigUint;
-use std::{collections::BTreeMap, fmt::Display, iter::Peekable, num::ParseIntError};
+use std::{fmt::Display, iter::Peekable, num::ParseIntError};
 
 const MAX_TYPE_DEPTH: u64 = 128;
 const MAX_TYPE_NODE_COUNT: u64 = 256;
@@ -295,33 +295,16 @@ impl<'a, I: Iterator<Item = (ValueToken, &'a str)>> Parser<'a, ValueToken, I> {
                 ParsedValue::Vector(values)
             }
 
-            ValueToken::Number | ValueToken::Ident => {
-                let addr_ident = parse_address_impl(tok, contents)?;
-                self.advance(ValueToken::ColonColon)?;
-                let module_name = self.advance(ValueToken::Ident)?.to_owned();
-                self.advance(ValueToken::ColonColon)?;
-                let struct_name = self.advance(ValueToken::Ident)?.to_owned();
-                self.advance(ValueToken::LBrace)?;
-                let values_vec = self.parse_list(
-                    |parser| {
-                        let field = parser.advance(ValueToken::Ident)?.to_owned();
-                        parser.advance(ValueToken::Colon)?;
-                        let value = parser.parse_value()?;
-                        Ok((field, value))
-                    },
+            ValueToken::Ident if contents == "struct" => {
+                self.advance(ValueToken::LParen)?;
+                let values = self.parse_list(
+                    |parser| parser.parse_value(),
                     ValueToken::Comma,
-                    ValueToken::RBracket,
+                    ValueToken::RParen,
                     true,
                 )?;
-                self.advance(ValueToken::RBrace)?;
-                let mut values = BTreeMap::new();
-                for (field, value) in values_vec {
-                    if let Some(_prev) = values.insert(field.clone(), value) {
-                        // TODO should this be done in here? Seems useful for most tools though...
-                        bail!("Duplicate field binding for field: {}", field)
-                    }
-                }
-                ParsedValue::Struct(addr_ident, module_name, struct_name, values)
+                self.advance(ValueToken::RParen)?;
+                ParsedValue::Struct(values)
             }
 
             _ => bail!("unexpected token {}, expected type", tok),
