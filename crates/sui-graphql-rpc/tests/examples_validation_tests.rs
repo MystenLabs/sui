@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
+
 #[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
@@ -120,8 +124,9 @@ fn test_generate_markdown() {
     let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     buf.push("docs");
     buf.push("examples.md");
-    let mut out_file: File = File::create(buf).unwrap();
+    let mut out_file: File = File::open(buf).unwrap();
 
+    println!("Writing examples to: {:?}", out_file);
     // Read the current content of `out_file`
     let mut current_content = String::new();
     out_file.read_to_string(&mut current_content).unwrap();
