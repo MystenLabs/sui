@@ -1,9 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// An example of a simple deny_rule which uses a VecSet to store blocked
-/// addresses. In future, we will provide a more efficient implementation of
-/// deny_rule which uses a better data structure.
+/// An implementation of a simple `DenyList` for the Closed Loop system. For
+/// demonstration purposes it is implemented as a `VecSet`, however for a larger
+/// number of records there needs to be a different storage implementation
+/// utilizing dynamic fields.
+///
+/// Denylist checks both the sender and the recipient of the transaction.
+///
+/// Notes:
+/// - current implementation uses a separate dataset for each action, which will
+/// be fixed / improved in the future;
+/// - the current implementation is not optimized for a large number of records
+/// and the final one will feature better collection type;
 module examples::denylist_rule {
     use std::option;
     use std::vector;
@@ -17,7 +26,7 @@ module examples::denylist_rule {
         ActionRequest
     };
 
-    /// User is in the list.
+    /// Trying to `verify` but the sender or the recipient is on the denylist.
     const EUserBlocked: u64 = 0;
 
     /// The Rule witness.
@@ -36,8 +45,8 @@ module examples::denylist_rule {
         );
     }
 
-    /// Verifies that the request does not exceed the limit and adds an approval
-    /// to the `ActionRequest`.
+    /// Verifies that the sender and the recipient (if set) are not on the
+    /// denylist for the given action.
     public fun verify<T>(
         policy: &TokenPolicy<T>,
         request: &mut ActionRequest<T>,
@@ -60,6 +69,7 @@ module examples::denylist_rule {
         cl::add_approval(DenyList {}, request, ctx);
     }
 
+    /// Removes the `denylist_rule` for a given action.
     public fun remove_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
@@ -73,6 +83,8 @@ module examples::denylist_rule {
 
     // === Protected: List Management ===
 
+    /// Adds records to the `denylist_rule` for a given action. The Policy
+    /// owner can batch-add records.
     public fun add_records_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
@@ -92,6 +104,8 @@ module examples::denylist_rule {
         };
     }
 
+    /// Removes records from the `denylist_rule` for a given action. The Policy
+    /// owner can batch-remove records.
     public fun remove_records_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
@@ -121,34 +135,30 @@ module examples::denylist_rule_tests {
     use closed_loop::closed_loop_tests as test;
 
     #[test]
+    // Scenario: add a denylist with addresses, sender is not on the list and
+    // transaction is confirmed.
     fun denylist_pass_not_on_the_list() {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        // create an empty denylist and then populate it with records
+        // first add the list for action and then add records
         denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
         denylist::add_records_for(&mut policy, &cap, utf8(b"action"), vector[ @0x1 ], ctx);
 
         let request = cl::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
         denylist::verify(&policy, &mut request, ctx);
-
-        // try to confirm request with 100 tokens
-        cl::confirm_request(
-            &mut policy,
-            request,
-            ctx
-        );
-
+        cl::confirm_request(&mut policy, request, ctx);
         test::return_policy(policy, cap);
     }
 
     #[test, expected_failure(abort_code = examples::denylist_rule::EUserBlocked)]
+    // Scenario: add a denylist with addresses, sender is on the list and
+    // transaction fails with `EUserBlocked`.
     fun denylist_on_the_list_banned_fail() {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        // create an empty denylist and then populate it with records
         denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
         denylist::add_records_for(&mut policy, &cap, utf8(b"action"), vector[ @0x0 ], ctx);
 
@@ -160,11 +170,12 @@ module examples::denylist_rule_tests {
     }
 
     #[test, expected_failure(abort_code = examples::denylist_rule::EUserBlocked)]
+    // Scenario: add a denylist with addresses, Recipient is on the list and
+    // transaction fails with `EUserBlocked`.
     fun denylist_recipient_on_the_list_banned_fail() {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        // create an empty denylist and then populate it with records
         denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
         denylist::add_records_for(&mut policy, &cap, utf8(b"action"), vector[ @0x1 ], ctx);
 

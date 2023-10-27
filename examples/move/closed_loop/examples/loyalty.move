@@ -3,7 +3,7 @@
 
 /// This module illustrates a Closed Loop Loyalty Token. The `Token` is sent to
 /// users as a reward for their loyalty by the application Admin. The `Token`
-/// can be used to buy a gift in the shop.
+/// can be used to buy a `Gift` in the shop.
 ///
 /// Actions:
 /// - spend - spend the token in the shop
@@ -25,11 +25,15 @@ module examples::loyalty {
     /// The OTW for the Token / Coin.
     struct LOYALTY has drop {}
 
-    /// This is the Rule requirement for the `GiftShop`.
+    /// This is the Rule requirement for the `GiftShop`. The Rules don't need
+    /// to be separate applications, some rules make sense to be part of the
+    /// application itself, like this one.
     struct GiftShop has drop {}
 
     /// The Gift object - can be purchased for 10 tokens.
-    struct Gift has key, store { id: UID }
+    struct Gift has key, store {
+        id: UID
+    }
 
     // Create a new LOYALTY currency, create a `TokenPolicy` for it and allow
     // everyone to spend `Token`s if they were `reward`ed.
@@ -45,7 +49,6 @@ module examples::loyalty {
         );
 
         let (policy, policy_cap) = cl::new(&mut treasury_cap, ctx);
-
 
         // but we constrain spend by this shop:
         cl::add_rule_for_action(
@@ -68,8 +71,8 @@ module examples::loyalty {
     /// to reward users for their loyalty :)
     ///
     /// `Mint` is available to the holder of the `TreasuryCap` by default and
-    /// hence does not need to be confirmed; however, for `transfer` operation
-    /// we require a confirmation.
+    /// hence does not need to be confirmed; however, the `transfer` action
+    /// does require a confirmation and can be confirmed with `TreasuryCap`.
     public fun reward_user(
         cap: &mut TreasuryCap<LOYALTY>,
         amount: u64,
@@ -82,9 +85,8 @@ module examples::loyalty {
         cl::confirm_with_treasury_cap(cap, req, ctx);
     }
 
-    /// Buy a gift for 10 tokens.
-    ///
-    /// We require a `TokenPolicy` since
+    /// Buy a gift for 10 tokens. The `Gift` is received, and the `Token` is
+    /// spent (stored in the `ActionRequest`'s `burned_balance` field).
     public fun buy_a_gift(
         token: Token<LOYALTY>,
         ctx: &mut TxContext

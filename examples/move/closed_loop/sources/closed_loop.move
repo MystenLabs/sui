@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
-// Balance <-> Coin(Balance = X) <-> Token(Balance = X)
-// Supply      TreasuryCap           ???
-
-
-#[allow(unused_const, unused_field, unused_use)]
-/// -
-/// -
-/// -
+/// This module implements a closed loop `Token` which is guarded by a
+/// `TokenPolicy`. The `TokenPolicy` defines the allowed actions that can be
+/// performed on the `Token`, and for each action, it stores the set of `Rules`
+/// that must be satisfied for the action to be performed.
+///
+/// Actions:
+/// - `transfer` - transfer the `Token` to another account
+/// - `spend` - "burn" the `Token` and store it in the `TokenPolicy`
+/// - `to_coin` - convert the `Token` into an open `Coin`
+/// - `from_coin` - convert an open `Coin` into a `Token`
 module closed_loop::closed_loop {
     use std::vector;
     use std::string::{Self, String};
@@ -41,13 +42,6 @@ module closed_loop::closed_loop {
     /// The rule config was not found (on read or get_mut).
     const ERuleConfigNotFound: u64 = 7;
 
-    /// A Tag for the `burn` action. Unlike other tags, it's not a part of the
-    /// default flow, only recommended for the issuer to use.
-    const BURN: vector<u8> = b"burn";
-    /// A Tag for the `mint` action. Unlike other tags, it's not a part of the
-    /// default flow, only recommended for the issuer to use.
-    const MINT: vector<u8> = b"mint";
-
     /// A Tag for the `spend` action.
     const SPEND: vector<u8> = b"spend";
     /// A Tag for the `transfer` action.
@@ -59,12 +53,6 @@ module closed_loop::closed_loop {
 
     /// A token with closed-loop restrictions set by the issuer
     struct Token<phantom T> has key { id: UID, balance: Balance<T> }
-
-    /// A token that has been spent and is no longer valid. Can be "burned" in
-    /// the `TokenPolicy` if the owner wishes to reclaim the storage fee.
-    /// SpentToken is a dead weight, and the only action that can be performed
-    /// on it is to burn it.
-    struct SpentToken<phantom T> has key { id: UID, balance: Balance<T> }
 
     /// A Capability that allows managing the `TokenPolicy`s.
     struct TokenPolicyCap<phantom T> has key, store { id: UID, for: ID }
@@ -93,19 +81,9 @@ module closed_loop::closed_loop {
         rules: VecMap<String, VecSet<TypeName>>
     }
 
-/*
-    rules:
-        - action: transfer
-          rules[]:
-            - Limiter {}
-            - DenyList {}
-        - action: spend
-          rules[]:
-            - Limiter {}
-            - DenyList {}
-*/
-
-    /// A request to perform an "Action" on a token.
+    /// A request to perform an "Action" on a token. Stores the information
+    /// about the performed action and must be consumed by the `confirm_request`
+    /// function when the Rules are satisfied.
     struct ActionRequest<phantom T> {
         /// Name of the Action to look up in the Policy.
         ///
@@ -116,11 +94,12 @@ module closed_loop::closed_loop {
         amount: u64,
         /// Sender is a permanent field always
         sender: address,
-        /// Recipient is only available in transfer operation
+        /// Recipient is only available in `transfer` action.
         recipient: Option<address>,
-        /// The balance to be "burned" in the `TokenPolicy`.
+        /// The balance to be "burned" in the `TokenPolicy`, only available
+        /// in the `spend` action.
         burned_balance: Option<Balance<T>>,
-        /// Collected approvals from Rules.
+        /// Collected approvals (stamps) from completed `Rules`.
         approvals: VecSet<TypeName>,
     }
 
@@ -144,12 +123,13 @@ module closed_loop::closed_loop {
             for: object::id(&policy)
         };
 
-        (policy, cap) // we don't share it to use in `init()`
+        (policy, cap)
     }
 
-    // === Token Actions ===
+    // === Protected Actions ===
 
-    /// Transfer a `Token` to a `recipient`.
+    /// Transfer a `Token` to a `recipient`. Creates an `ActionRequest` for the
+    /// "transfer" action.
     public fun transfer<T>(
         t: Token<T>, recipient: address, ctx: &mut TxContext
     ): ActionRequest<T> {
@@ -179,7 +159,8 @@ module closed_loop::closed_loop {
         )
     }
 
-    /// Convert `Token` into an open `Coin`.
+    /// Convert `Token` into an open `Coin`. Creates an `ActionRequest` for the
+    /// "to_coin" action.
     public fun to_coin<T>(
         t: Token<T>, ctx: &mut TxContext
     ): (Coin<T>, ActionRequest<T>) {
@@ -199,7 +180,8 @@ module closed_loop::closed_loop {
         )
     }
 
-    /// Convert an open `Coin` into a `Token`.
+    /// Convert an open `Coin` into a `Token`. Creates an `ActionRequest` for
+    /// the "from_coin" action.
     public fun from_coin<T>(
         coin: Coin<T>, ctx: &mut TxContext
     ): (Token<T>, ActionRequest<T>) {
@@ -218,6 +200,8 @@ module closed_loop::closed_loop {
             )
         )
     }
+
+    // === Public Actions ===
 
     /// Join two `Token`s into one, always available.
     public fun join<T>(token: &mut Token<T>, another: Token<T>) {
