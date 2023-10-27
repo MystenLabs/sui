@@ -36,7 +36,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
-use fastcrypto_tbls::types::PublicVssKey;
+use fastcrypto_tbls::{tbls::ThresholdBls, types::PublicVssKey};
 use mysten_metrics::metered_channel::{channel_with_total, Receiver, Sender};
 use mysten_metrics::monitored_scope;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
@@ -72,8 +72,8 @@ use types::{
     FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SendRandomnessPartialSignaturesRequest, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
-    WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    SendRandomnessPartialSignaturesRequest, SystemMessage, Vote, VoteInfoAPI,
+    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(test)]
@@ -201,7 +201,6 @@ impl Primary {
             tx_new_certificates,
             tx_parents,
             rx_consensus_round_updates.clone(),
-            randomness_vss_key_lock.clone(),
             node_metrics.clone(),
             &primary_channel_metrics,
         ));
@@ -646,11 +645,7 @@ impl PrimaryReceiverHandler {
     ) -> DagResult<RequestVoteResponse> {
         let header = &request.body().header;
         let committee = self.committee.clone();
-        header.validate(
-            &committee,
-            &self.worker_cache,
-            self.randomness_vss_key_lock.get(),
-        )?;
+        header.validate(&committee, &self.worker_cache)?;
 
         let num_parents = request.body().parents.len();
         ensure!(
@@ -748,6 +743,21 @@ impl PrimaryReceiverHandler {
             stake >= committee.quorum_threshold(),
             DagError::HeaderRequiresQuorum(header.digest())
         );
+
+        // Verify any randomness signature present in the header.
+        for m in header.system_messages().iter() {
+            if let SystemMessage::RandomnessSignature(round, sig) = m {
+                fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
+                    self.randomness_vss_key_lock
+                        .get()
+                        .ok_or(DagError::RandomnessUnavailable)?
+                        .c0(),
+                    round.to_be_bytes().as_slice(),
+                    sig,
+                )
+                .map_err(|_| DagError::InvalidRandomnessSignature)?;
+            }
+        }
 
         // Synchronize all batches referenced in the header.
         self.synchronizer
@@ -992,6 +1002,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                         DagError::InvalidSignature
                         | DagError::InvalidEpoch { .. }
                         | DagError::InvalidHeaderDigest
+                        | DagError::InvalidRandomnessSignature
                         | DagError::HeaderHasBadWorkerIds(_)
                         | DagError::HeaderHasInvalidParentRoundNumbers(_)
                         | DagError::HeaderHasDuplicateParentAuthorities(_)

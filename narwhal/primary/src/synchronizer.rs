@@ -6,7 +6,6 @@ use anemo::{rpc::Status, Network, Request, Response};
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
-use fastcrypto_tbls::types::PublicVssKey;
 use futures::{stream::FuturesOrdered, StreamExt};
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::metered_channel::{channel_with_total, Sender};
@@ -17,7 +16,6 @@ use network::{
     PrimaryToWorkerClient, RetryConfig,
 };
 use parking_lot::Mutex;
-use std::sync::OnceLock;
 use std::{
     cmp::min,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -94,8 +92,6 @@ struct Inner {
     tx_own_certificate_broadcast: broadcast::Sender<Certificate>,
     /// Get a signal when the commit & gc round changes.
     rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
-    /// Stores the randomness VSS public key when available.
-    randomness_vss_key_lock: Arc<OnceLock<PublicVssKey>>,
     /// Genesis digests and contents.
     genesis: HashMap<CertificateDigest, Certificate>,
     /// Contains Synchronizer specific metrics among other Primary metrics.
@@ -339,7 +335,6 @@ impl Synchronizer {
         tx_new_certificates: Sender<Certificate>,
         tx_parents: Sender<(Vec<Certificate>, Round, Epoch)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
-        randomness_vss_key_lock: Arc<OnceLock<PublicVssKey>>,
         metrics: Arc<PrimaryMetrics>,
         primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
@@ -380,7 +375,6 @@ impl Synchronizer {
             tx_parents,
             tx_own_certificate_broadcast: tx_own_certificate_broadcast.clone(),
             rx_consensus_round_updates: rx_consensus_round_updates.clone(),
-            randomness_vss_key_lock,
             genesis,
             metrics,
             tx_batch_tasks,
@@ -696,11 +690,7 @@ impl Synchronizer {
             DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
         );
         // Verify the certificate (and the embedded header).
-        certificate.verify(
-            &self.inner.committee,
-            &self.inner.worker_cache,
-            self.inner.randomness_vss_key_lock.get(),
-        )
+        certificate.verify(&self.inner.committee, &self.inner.worker_cache)
     }
 
     // CertificateV2 maintains signature verification state. Therefore when this

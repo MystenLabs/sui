@@ -53,7 +53,7 @@ async fn propose_empty() {
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(header.round(), 1);
     assert!(header.payload().is_empty());
-    assert!(header.validate(&committee, &worker_cache, None).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 }
 
 #[tokio::test]
@@ -127,7 +127,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         header.payload().get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.validate(&committee, &worker_cache, None).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // WHEN available batches are more than the maximum ones
     let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> =
@@ -263,7 +263,7 @@ async fn equivocation_protection() {
         header.payload().get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.validate(&committee, &worker_cache, None).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // restart the proposer.
     tx_shutdown.send().unwrap();

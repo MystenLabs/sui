@@ -413,22 +413,17 @@ impl Header {
         }
     }
 
-    pub fn validate(
-        &self,
-        committee: &Committee,
-        worker_cache: &WorkerCache,
-        randomness_vss_key: Option<&fastcrypto_tbls::types::PublicVssKey>,
-    ) -> DagResult<()> {
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         match self {
             Header::V1(data) => data.validate(committee, worker_cache),
-            Header::V2(data) => data.validate(committee, worker_cache, randomness_vss_key),
+            Header::V2(data) => data.validate(committee, worker_cache),
         }
     }
 
-    pub fn unwrap_v1(self) -> HeaderV1 {
+    pub fn unwrap_v2(self) -> HeaderV2 {
         match self {
-            Header::V1(data) => data,
-            Header::V2(_) => panic!("called into_v1 on Header::V2"),
+            Header::V1(_) => panic!("called unwrap_v2 on Header::V1"),
+            Header::V2(data) => data,
         }
     }
 }
@@ -725,12 +720,7 @@ impl HeaderV2 {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
-    pub fn validate(
-        &self,
-        committee: &Committee,
-        worker_cache: &WorkerCache,
-        randomness_vss_key: Option<&fastcrypto_tbls::types::PublicVssKey>,
-    ) -> DagResult<()> {
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -780,17 +770,10 @@ impl HeaderV2 {
                     ensure!(!has_dkg_confirmation, DagError::DuplicateSystemMessage);
                     has_dkg_confirmation = true;
                 }
-                SystemMessage::RandomnessSignature(round, sig) => {
-                    // We can't sign a header with a randomness sig if the VSS public key is not
-                    // yet available to verify it.
-                    ensure!(randomness_vss_key.is_some(), DagError::InvalidSystemMessage);
-
-                    fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
-                        randomness_vss_key.unwrap().c0(),
-                        round.to_be_bytes().as_slice(),
-                        sig,
-                    )
-                    .map_err(|_| DagError::InvalidRandomnessSignature)?;
+                SystemMessage::RandomnessSignature(_round, _sig) => {
+                    // NOTE: correctness of the randomness signature is verified during header
+                    // voting. Security here relies on honest validators refusing to sign a
+                    // header with invalid randomness signature.
                 }
             }
         }
@@ -1161,15 +1144,10 @@ impl Certificate {
         self,
         committee: &Committee,
         worker_cache: &WorkerCache,
-        randomness_vss_key: Option<&fastcrypto_tbls::types::PublicVssKey>,
     ) -> DagResult<Certificate> {
         match self {
-            Certificate::V1(certificate) => {
-                certificate.verify(committee, worker_cache, randomness_vss_key)
-            }
-            Certificate::V2(certificate) => {
-                certificate.verify(committee, worker_cache, randomness_vss_key)
-            }
+            Certificate::V1(certificate) => certificate.verify(committee, worker_cache),
+            Certificate::V2(certificate) => certificate.verify(committee, worker_cache),
         }
     }
 
@@ -1403,7 +1381,6 @@ impl CertificateV1 {
         self,
         committee: &Committee,
         worker_cache: &WorkerCache,
-        randomness_vss_key: Option<&fastcrypto_tbls::types::PublicVssKey>,
     ) -> DagResult<Certificate> {
         // Ensure the header is from the correct epoch.
         ensure!(
@@ -1420,8 +1397,7 @@ impl CertificateV1 {
         }
 
         // Save signature verifications when the header is invalid.
-        self.header
-            .validate(committee, worker_cache, randomness_vss_key)?;
+        self.header.validate(committee, worker_cache)?;
 
         let (weight, pks) = self.signed_by(committee);
 
@@ -1671,7 +1647,6 @@ impl CertificateV2 {
         self,
         committee: &Committee,
         worker_cache: &WorkerCache,
-        randomness_vss_key: Option<&fastcrypto_tbls::types::PublicVssKey>,
     ) -> DagResult<Certificate> {
         // Ensure the header is from the correct epoch.
         ensure!(
@@ -1688,8 +1663,7 @@ impl CertificateV2 {
         }
 
         // Save signature verifications when the header is invalid.
-        self.header
-            .validate(committee, worker_cache, randomness_vss_key)?;
+        self.header.validate(committee, worker_cache)?;
 
         let (weight, pks) = self.signed_by(committee);
 

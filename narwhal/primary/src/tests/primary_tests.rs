@@ -308,7 +308,6 @@ async fn test_request_vote_has_missing_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -479,7 +478,6 @@ async fn test_request_vote_accept_missing_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -676,7 +674,6 @@ async fn test_request_vote_missing_batches() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -824,7 +821,6 @@ async fn test_request_vote_already_voted() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -1013,7 +1009,6 @@ async fn test_fetch_certificates_v1_handler() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -1194,7 +1189,6 @@ async fn test_fetch_certificates_v2_handler() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -1391,7 +1385,6 @@ async fn test_request_vote_created_at_in_future() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates,
-        randomness_vss_key_lock.clone(),
         metrics.clone(),
         &primary_channel_metrics,
     ));

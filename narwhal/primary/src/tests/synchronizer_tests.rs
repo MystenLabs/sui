@@ -18,7 +18,7 @@ use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap},
     num::NonZeroUsize,
-    sync::{Arc, OnceLock},
+    sync::Arc,
     time::Duration,
 };
 use test_utils::{
@@ -66,7 +66,6 @@ async fn accept_certificates() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -165,7 +164,6 @@ async fn accept_suspended_certificates() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -273,7 +271,6 @@ async fn synchronizer_recover_basic() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -323,7 +320,6 @@ async fn synchronizer_recover_basic() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -393,7 +389,6 @@ async fn synchronizer_recover_partial_certs() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -445,7 +440,6 @@ async fn synchronizer_recover_partial_certs() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -507,7 +501,6 @@ async fn synchronizer_recover_previous_round() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -578,7 +571,6 @@ async fn synchronizer_recover_previous_round() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -626,7 +618,6 @@ async fn deliver_certificate_using_store() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     );
@@ -699,7 +690,6 @@ async fn deliver_certificate_not_found_parents() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     );
@@ -785,7 +775,6 @@ async fn sync_batches_drops_old() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -872,7 +861,6 @@ async fn gc_suspended_certificates_v1() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -993,7 +981,6 @@ async fn gc_suspended_certificates_v2() {
         tx_new_certificates,
         tx_parents,
         rx_consensus_round_updates.clone(),
-        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
