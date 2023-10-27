@@ -977,9 +977,16 @@ type MovePackage {
     before: String,
   ): MoveModuleConnection
 
+  linkage: [Linkage!]
   bcs: Base64
 
   asObject: Object!
+}
+
+type Linkage {
+  originalId: SuiAddress!
+  upgradedId: SuiAddress!
+  version: Int!
 }
 
 type MoveModuleId {
