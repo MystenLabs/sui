@@ -1377,11 +1377,11 @@ impl Symbolicator {
                 self.exp_symbols(t, scope, references, use_defs);
                 self.exp_symbols(f, scope, references, use_defs);
             }
-            E::While(cond, body) => {
+            E::While(_, cond, body) => {
                 self.exp_symbols(cond, scope, references, use_defs);
                 self.exp_symbols(body, scope, references, use_defs);
             }
-            E::Loop { has_break: _, body } => {
+            E::Loop { body, .. } => {
                 self.exp_symbols(body, scope, references, use_defs);
             }
             E::Block(sequence) => {

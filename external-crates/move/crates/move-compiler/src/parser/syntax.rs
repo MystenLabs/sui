@@ -992,7 +992,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 
 // Parse an expression term:
 //      Term =
-//          "break"
+//          "break" <Exp>?
 //          | "continue"
 //          | "vector" ('<' Comma<Type> ">")? "[" Comma<Exp> "]"
 //          | <Value>
@@ -1023,20 +1023,6 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             }
 
             return parse_binop_exp(context, control_exp, /* min_prec */ 1);
-        }
-        Tok::Break => {
-            context.tokens.advance()?;
-            if at_start_of_exp(context) {
-                let mut diag = unexpected_token_error(context.tokens, "the end of an expression");
-                diag.add_note("'break' with a value is not yet supported");
-                return Err(diag);
-            }
-            Exp_::Break
-        }
-
-        Tok::Continue => {
-            context.tokens.advance()?;
-            Exp_::Continue
         }
 
         Tok::Identifier
@@ -1154,7 +1140,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 fn is_control_exp(tok: Tok) -> bool {
     matches!(
         tok,
-        Tok::If | Tok::While | Tok::Loop | Tok::Return | Tok::Abort
+        Tok::Break | Tok::Continue | Tok::If | Tok::While | Tok::Loop | Tok::Return | Tok::Abort
     )
 }
 
@@ -1256,6 +1242,20 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             let (e, ends_in_block) = parse_exp_or_sequence(context)?;
             (Exp_::Abort(Box::new(e)), ends_in_block)
+        }
+        Tok::Break => {
+            context.tokens.advance()?;
+            let (e, ends_in_block) = if !at_start_of_exp(context) {
+                (None, false)
+            } else {
+                let (e, ends_in_block) = parse_exp_or_sequence(context)?;
+                (Some(Box::new(e)), ends_in_block)
+            };
+            (Exp_::Break(e), ends_in_block)
+        }
+        Tok::Continue => {
+            context.tokens.advance()?;
+            (Exp_::Continue, false)
         }
         _ => unreachable!(),
     };
