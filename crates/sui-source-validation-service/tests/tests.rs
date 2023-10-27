@@ -26,7 +26,7 @@ use sui_source_validation_service::{
     host_port, initialize, serve, start_prometheus_server, verify_packages, watch_for_upgrades,
     AddressLookup, AppState, CloneCommand, Config, DirectorySource, ErrorResponse, Network,
     NetworkLookup, Package, PackageSource, RepositorySource, SourceInfo, SourceLookup,
-    SourceResponse, METRICS_HOST_PORT, SUI_SOURCE_VALIDATION_VERSION_HEADER,
+    SourceResponse, SourceServiceMetrics, METRICS_HOST_PORT, SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -90,7 +90,8 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Start watching for upgrades.
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, AddressLookup::new());
-    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    let metrics = start_metrics()?;
+    let app_state = Arc::new(RwLock::new(AppState { sources, metrics }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
     tokio::spawn(async move {
@@ -290,7 +291,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     address_lookup.insert(account_address, source_lookup);
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, address_lookup);
-    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    let metrics = start_metrics()?;
+    let app_state = Arc::new(RwLock::new(AppState { sources, metrics }));
     tokio::spawn(serve(app_state).expect("Cannot start service."));
 
     let client = Client::new();
@@ -332,11 +334,7 @@ async fn test_api_route() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_metrics_route() -> anyhow::Result<()> {
-    let metrics_listener = std::net::TcpListener::bind(METRICS_HOST_PORT)?;
-    let registry_service = start_prometheus_server(metrics_listener);
-    let prometheus_registry = registry_service.default_registry();
-    prometheus_registry.register(mysten_metrics::uptime_metric("v0", "sui-source-service"))?;
-
+    let _ = start_metrics();
     let client = Client::new();
     let response = client
         .get(format!("http://{METRICS_HOST_PORT}/metrics"))
@@ -347,9 +345,9 @@ async fn test_metrics_route() -> anyhow::Result<()> {
         .await?;
 
     let expected = expect![[r#"
-        # HELP uptime uptime of the node service in seconds
-        # TYPE uptime counter
-        uptime{chain_identifier="sui-source-service",version="v0"} 0
+        # HELP total_requests Total number of requests received by Source Service
+        # TYPE total_requests counter
+        total_requests 0
     "#]];
     expected.assert_eq(response.as_str());
     Ok(())
@@ -474,4 +472,11 @@ fn test_clone_command() -> anyhow::Result<()> {
     ];
     expect.assert_eq(&format!("{:#?}", command));
     Ok(())
+}
+
+pub fn start_metrics() -> anyhow::Result<SourceServiceMetrics> {
+    let metrics_listener = std::net::TcpListener::bind(METRICS_HOST_PORT)?;
+    let registry_service = start_prometheus_server(metrics_listener);
+    let prometheus_registry = registry_service.default_registry();
+    Ok(SourceServiceMetrics::new(&prometheus_registry))
 }
