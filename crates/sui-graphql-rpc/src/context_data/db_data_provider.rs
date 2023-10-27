@@ -159,32 +159,6 @@ pub struct Explained<T> {
     query: T
 }
 
-// impl<T> Explained<T> {
-//     fn load_with_cost_check<'a, R, EF, F, E>(&self, conn: &mut PgConnection, execute_fn: EF) -> Result<R, E>
-//     where
-//         EF: FnOnce(T) -> F,
-//         F: FnOnce(&mut PgConnection) -> Result<R, E>,
-//         E: From<diesel::result::Error> + std::error::Error,
-//         // This is for self.load
-//         Self: LoadQuery<'a, PgConnection, String>,
-//     {
-//         // 1. Run the EXPLAIN and get the estimated cost
-//         let explain_results: Vec<String> = self.load(conn)?;
-
-//         // 2. Check the estimated cost against the threshold
-//         // if estimated_cost > 10000 as f64 {
-//             // return Err(diesel::result::Error::RollbackTransaction); // Or any other error
-//         // }
-//         for result in &explain_results {
-//             println!("query_plan: {}", result);
-//         }
-
-//         // 3. Execute the actual query
-//         let execute_closure = execute_fn(self.query);
-//         execute_closure(conn)
-//     }
-// }
-
 impl<T: QueryId> QueryId for Explained<T> {
     type QueryId = (T::QueryId, std::marker::PhantomData<&'static str>);
     const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID;
