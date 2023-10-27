@@ -620,15 +620,12 @@ impl PgManager {
         let max_db_query_cost = self.limits.max_db_query_cost;
         self.inner
             .spawn_blocking(move |this| {
-                let query = query_builder_fn();
+                let query = query_builder_fn().explain();
                 let debugged_query = debug_query::<Pg, _>(&query);
-                println!("debug sql: {:?}", debugged_query);
-                let sql = format!("{}", debugged_query);
-                println!("sql: {}", sql);
-                let explained_sql = format!("EXPLAIN {}", sql);
+                println!("sql: {}", debugged_query);
 
                 let results: Vec<String>  = this.run_query(|conn| {
-                    query.explain().load(conn)
+                    query.load(conn)
                 })
                     .map_err(|e| Error::Internal(e.to_string()))?;
 
