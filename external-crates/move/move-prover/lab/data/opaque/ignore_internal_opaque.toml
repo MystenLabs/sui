@@ -1,3 +1,0 @@
-# Ignore pragma opaque for internal functions wherever possible
-[model_builder]
-ignore_pragma_opaque_internal_only = true
