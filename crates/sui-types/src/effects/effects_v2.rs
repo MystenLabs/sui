@@ -474,6 +474,20 @@ impl TransactionEffectsV2 {
             assert!(unique_ids.insert(*id));
         }
     }
+
+    // Returns a list of object digest who are modified by this transaction.
+    pub fn modified_at_digests(&self) -> Vec<ObjectDigest> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(_id, change)| {
+                if let ObjectIn::Exist(((_version, digest), _owner)) = &change.input_state {
+                    Some(*digest)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 impl Default for TransactionEffectsV2 {

@@ -247,6 +247,44 @@ where
     acc
 }
 
+// Returns the list of modified objects' digests from `effects`. Works with both Effect V1 and V2.
+fn modified_at_digests<T, S>(store: S, effects: Vec<TransactionEffects>) -> Vec<ObjectDigest>
+where
+    S: std::ops::Deref<Target = T>,
+    T: AccumulatorReadStore,
+{
+    let mut modified_digests: Vec<ObjectDigest> = vec![];
+    for effect in effects {
+        match effect {
+            TransactionEffects::V1(_) => {
+                // Collect keys from modified_at_versions to remove from the accumulator.
+                let modified_at_version_keys: Vec<_> = effect
+                    .modified_at_versions()
+                    .into_iter()
+                    .map(|(id, version)| ObjectKey(id, version))
+                    .collect();
+                let current_effect_modified_digests: Vec<_> = store
+                    .multi_get_object_by_key(&modified_at_version_keys.clone())
+                    .expect("Failed to get modified_at_versions object from object table")
+                    .into_iter()
+                    .zip(modified_at_version_keys).map(|(obj, key)| {
+                        obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
+                            .compute_object_reference()
+                            .2
+                    })
+                    .collect();
+
+                modified_digests.extend(current_effect_modified_digests);
+            }
+            TransactionEffects::V2(effect_v2) => {
+                modified_digests.extend(effect_v2.modified_at_digests());
+            }
+        }
+    }
+
+    modified_digests
+}
+
 fn accumulate_effects_v2<T, S>(store: S, effects: Vec<TransactionEffects>) -> Accumulator
 where
     S: std::ops::Deref<Target = T>,
@@ -266,28 +304,7 @@ where
             .collect::<Vec<ObjectDigest>>(),
     );
 
-    // Collect keys from modified_at_versions to remove from the accumulator.
-    let modified_at_version_keys: Vec<_> = effects
-        .iter()
-        .flat_map(|fx| {
-            fx.modified_at_versions()
-                .into_iter()
-                .map(|(id, version)| ObjectKey(id, version))
-        })
-        .collect();
-
-    let modified_at_digests: Vec<_> = store
-        .multi_get_object_by_key(&modified_at_version_keys.clone())
-        .expect("Failed to get modified_at_versions object from object table")
-        .into_iter()
-        .zip(modified_at_version_keys)
-        .map(|(obj, key)| {
-            obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
-                .compute_object_reference()
-                .2
-        })
-        .collect();
-    acc.remove_all(modified_at_digests);
+    acc.remove_all(modified_at_digests(store, effects));
 
     acc
 }
