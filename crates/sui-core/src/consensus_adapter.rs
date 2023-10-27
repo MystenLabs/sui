@@ -473,7 +473,7 @@ impl ConsensusAdapter {
     fn override_by_throughput_profiler(&self, position: usize, latency: Duration) -> Duration {
         const LOW_THROUGHPUT_LATENCY_MS: u64 = 0;
         const MEDIUM_THROUGHPUT_LATENCY_MS: u64 = 2_500;
-        const HIGH_THROUGHPUT_LATENCY_MS: u64 = 4_000;
+        const HIGH_THROUGHPUT_LATENCY_MS: u64 = 3_500;
 
         let p = self.consensus_throughput_profiler.load();
 
