@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/object-ownership/shared",
+  "id": "concepts/object-ownership/shared",
+  "title": "Shared Ownership",
+  "description": "Anyone can access shared objects on the Sui network, so care must be taken to secure access, if needed.",
+  "source": "@site/../content/concepts/object-ownership/shared.mdx",
+  "sourceDirName": "concepts/object-ownership",
+  "slug": "/concepts/object-ownership/shared",
+  "permalink": "/concepts/object-ownership/shared",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/object-ownership/shared.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Shared Ownership",
+    "description": "Anyone can access shared objects on the Sui network, so care must be taken to secure access, if needed."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Immutable",
+    "permalink": "/concepts/object-ownership/immutable"
+  },
+  "next": {
+    "title": "Wrapped",
+    "permalink": "/concepts/object-ownership/wrapped"
+  }
+}

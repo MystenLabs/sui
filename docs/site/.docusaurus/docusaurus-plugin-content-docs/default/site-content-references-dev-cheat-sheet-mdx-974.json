@@ -1,0 +1,23 @@
+{
+  "unversionedId": "references/dev-cheat-sheet",
+  "id": "references/dev-cheat-sheet",
+  "title": "Sui Developer Cheat Sheet",
+  "description": "Quick reference on best practices for Sui Network developers.",
+  "source": "@site/../content/references/dev-cheat-sheet.mdx",
+  "sourceDirName": "references",
+  "slug": "/references/dev-cheat-sheet",
+  "permalink": "/references/dev-cheat-sheet",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/dev-cheat-sheet.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Developer Cheat Sheet",
+    "sidebar_label": "Dev Cheat Sheet"
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Move.lock File",
+    "permalink": "/references/move/move-lock"
+  }
+}

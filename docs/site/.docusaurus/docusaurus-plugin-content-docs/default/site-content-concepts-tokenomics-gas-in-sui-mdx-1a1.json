@@ -1,0 +1,22 @@
+{
+  "unversionedId": "concepts/tokenomics/gas-in-sui",
+  "id": "concepts/tokenomics/gas-in-sui",
+  "title": "Gas in Sui",
+  "description": "A Sui transaction must pay for both the computational cost of execution and the long-term cost of storing the objects a transaction creates or mutates. Specifically, Sui Gas Pricing is such that any transaction pays the following gas fees:",
+  "source": "@site/../content/concepts/tokenomics/gas-in-sui.mdx",
+  "sourceDirName": "concepts/tokenomics",
+  "slug": "/concepts/tokenomics/gas-in-sui",
+  "permalink": "/concepts/tokenomics/gas-in-sui",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/tokenomics/gas-in-sui.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Gas in Sui"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Sui Gas Pricing",
+    "permalink": "/concepts/tokenomics/gas-pricing"
+  }
+}

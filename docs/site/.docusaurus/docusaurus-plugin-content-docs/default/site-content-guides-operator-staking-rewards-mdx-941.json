@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/operator/staking-rewards",
+  "id": "guides/operator/staking-rewards",
+  "title": "Staking and Rewards",
+  "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Scelerisque fermentum dui faucibus in ornare. Ut tristique et egestas quis ipsum suspendisse. Ac placerat vestibulum lectus mauris ultrices eros. Lorem ipsum dolor sit amet. Justo nec ultrices dui sapien eget mi proin sed libero. Nunc lobortis mattis aliquam faucibus. Nec ultrices dui sapien eget mi proin sed. Tellus elementum sagittis vitae et. Tellus at urna condimentum mattis pellentesque id nibh tortor. Sit amet venenatis urna cursus. Imperdiet sed euismod nisi porta lorem mollis aliquam ut. Malesuada fames ac turpis egestas maecenas pharetra convallis posuere.",
+  "source": "@site/../content/guides/operator/staking-rewards.mdx",
+  "sourceDirName": "guides/operator",
+  "slug": "/guides/operator/staking-rewards",
+  "permalink": "/guides/operator/staking-rewards",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/operator/staking-rewards.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Staking and Rewards",
+    "draft": true
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Validator Tasks",
+    "permalink": "/guides/operator/validator-tasks"
+  },
+  "next": {
+    "title": "Node Tools",
+    "permalink": "/guides/operator/node-tools"
+  }
+}

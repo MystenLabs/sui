@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/sui-security",
+  "id": "references/sui-security",
+  "title": "Understand Sui Security",
+  "description": "This page provides an overview of the major guarantees Sui provides in terms of Security.",
+  "source": "@site/../content/references/sui-security.mdx",
+  "sourceDirName": "references",
+  "slug": "/sui-security",
+  "permalink": "/sui-security",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/sui-security.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Understand Sui Security",
+    "sidebar_label": "Security",
+    "slug": "/sui-security"
+  }
+}

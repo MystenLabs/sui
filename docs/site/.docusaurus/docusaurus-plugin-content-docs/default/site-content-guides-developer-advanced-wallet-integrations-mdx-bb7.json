@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/developer/advanced/wallet-integrations",
+  "id": "guides/developer/advanced/wallet-integrations",
+  "title": "Wallet Integrations",
+  "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Scelerisque fermentum dui faucibus in ornare. Ut tristique et egestas quis ipsum suspendisse. Ac placerat vestibulum lectus mauris ultrices eros. Lorem ipsum dolor sit amet. Justo nec ultrices dui sapien eget mi proin sed libero. Nunc lobortis mattis aliquam faucibus. Nec ultrices dui sapien eget mi proin sed. Tellus elementum sagittis vitae et. Tellus at urna condimentum mattis pellentesque id nibh tortor. Sit amet venenatis urna cursus. Imperdiet sed euismod nisi porta lorem mollis aliquam ut. Malesuada fames ac turpis egestas maecenas pharetra convallis posuere.",
+  "source": "@site/../content/guides/developer/advanced/wallet-integrations.mdx",
+  "sourceDirName": "guides/developer/advanced",
+  "slug": "/guides/developer/advanced/wallet-integrations",
+  "permalink": "/guides/developer/advanced/wallet-integrations",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/advanced/wallet-integrations.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Wallet Integrations",
+    "draft": true
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Minimize Gas Fees",
+    "permalink": "/guides/developer/advanced/min-gas-fees"
+  },
+  "next": {
+    "title": "Security Best Practices",
+    "permalink": "/guides/developer/advanced/security-best-practices"
+  }
+}

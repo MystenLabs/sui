@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/developer/app-examples/auction",
+  "id": "guides/developer/app-examples/auction",
+  "title": "Auction",
+  "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Scelerisque fermentum dui faucibus in ornare. Ut tristique et egestas quis ipsum suspendisse. Ac placerat vestibulum lectus mauris ultrices eros. Lorem ipsum dolor sit amet. Justo nec ultrices dui sapien eget mi proin sed libero. Nunc lobortis mattis aliquam faucibus. Nec ultrices dui sapien eget mi proin sed. Tellus elementum sagittis vitae et. Tellus at urna condimentum mattis pellentesque id nibh tortor. Sit amet venenatis urna cursus. Imperdiet sed euismod nisi porta lorem mollis aliquam ut. Malesuada fames ac turpis egestas maecenas pharetra convallis posuere.",
+  "source": "@site/../content/guides/developer/app-examples/auction.mdx",
+  "sourceDirName": "guides/developer/app-examples",
+  "slug": "/guides/developer/app-examples/auction",
+  "permalink": "/guides/developer/app-examples/auction",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/app-examples/auction.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Auction",
+    "draft": true
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "App Examples",
+    "permalink": "/guides/developer/app-examples"
+  },
+  "next": {
+    "title": "Escrow",
+    "permalink": "/guides/developer/app-examples/escrow"
+  }
+}

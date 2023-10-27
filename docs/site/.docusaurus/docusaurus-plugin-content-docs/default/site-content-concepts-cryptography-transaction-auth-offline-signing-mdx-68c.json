@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/cryptography/transaction-auth/offline-signing",
+  "id": "concepts/cryptography/transaction-auth/offline-signing",
+  "title": "Offline Signing",
+  "description": "Sui supports offline signing, which is signing transactions using a device not connected to a Sui network, or in a wallet implemented in a different programming language without relying on the Sui key store. The steps to implement offline signing include:",
+  "source": "@site/../content/concepts/cryptography/transaction-auth/offline-signing.mdx",
+  "sourceDirName": "concepts/cryptography/transaction-auth",
+  "slug": "/concepts/cryptography/transaction-auth/offline-signing",
+  "permalink": "/concepts/cryptography/transaction-auth/offline-signing",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/cryptography/transaction-auth/offline-signing.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Offline Signing"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Multisig",
+    "permalink": "/concepts/cryptography/transaction-auth/multisig"
+  },
+  "next": {
+    "title": "Intent Signing",
+    "permalink": "/concepts/cryptography/transaction-auth/intent-signing"
+  }
+}

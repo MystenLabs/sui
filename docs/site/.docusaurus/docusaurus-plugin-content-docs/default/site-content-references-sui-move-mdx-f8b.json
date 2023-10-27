@@ -1,0 +1,26 @@
+{
+  "unversionedId": "references/sui-move",
+  "id": "references/sui-move",
+  "title": "Move on the Sui Blockchain",
+  "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Scelerisque fermentum dui faucibus in ornare. Ut tristique et egestas quis ipsum suspendisse. Ac placerat vestibulum lectus mauris ultrices eros. Lorem ipsum dolor sit amet. Justo nec ultrices dui sapien eget mi proin sed libero. Nunc lobortis mattis aliquam faucibus. Nec ultrices dui sapien eget mi proin sed. Tellus elementum sagittis vitae et. Tellus at urna condimentum mattis pellentesque id nibh tortor. Sit amet venenatis urna cursus. Imperdiet sed euismod nisi porta lorem mollis aliquam ut. Malesuada fames ac turpis egestas maecenas pharetra convallis posuere.",
+  "source": "@site/../content/references/sui-move.mdx",
+  "sourceDirName": "references",
+  "slug": "/references/sui-move",
+  "permalink": "/references/sui-move",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/sui-move.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Move on the Sui Blockchain"
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Rust SDK",
+    "permalink": "/references/sdk/rust-sdk"
+  },
+  "next": {
+    "title": "Move.toml File",
+    "permalink": "/references/move/move-toml"
+  }
+}

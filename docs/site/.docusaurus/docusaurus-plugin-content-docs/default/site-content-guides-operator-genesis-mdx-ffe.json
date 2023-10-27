@@ -1,0 +1,26 @@
+{
+  "unversionedId": "guides/operator/genesis",
+  "id": "guides/operator/genesis",
+  "title": "Genesis",
+  "description": "Genesis is the initial state of the Sui blockchain. To launch a network, the initial committee of validators collaborate by providing their validator information (public keys, network addresses, and so on) to a shared workspace. After all of the initial validators have contributed their information, Sui generates the initial, unsigned genesis checkpoint (checkpoint with sequence number 0) and each validator provides their signature. Sui aggregates these signatures to form a certificate on the genesis checkpoint. Sui bundles this checkpoint, as well as the initial objects, together into a single genesis.blob file that is used to initialize the state when running the sui-node binary for both validators and Full nodes.",
+  "source": "@site/../content/guides/operator/genesis.mdx",
+  "sourceDirName": "guides/operator",
+  "slug": "/guides/operator/genesis",
+  "permalink": "/guides/operator/genesis",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/operator/genesis.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Genesis"
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Sui Archives",
+    "permalink": "/guides/operator/archives"
+  },
+  "next": {
+    "title": "Validator Committee",
+    "permalink": "/guides/operator/validator-committee"
+  }
+}

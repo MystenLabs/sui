@@ -1,0 +1,23 @@
+{
+  "unversionedId": "references",
+  "id": "references",
+  "title": "References Overview",
+  "description": "Already familiar with Sui? Use these valuable resources to continue your development journey.",
+  "source": "@site/../content/references.mdx",
+  "sourceDirName": ".",
+  "slug": "/references",
+  "permalink": "/references",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "References Overview",
+    "sidebar_label": "Overview"
+  },
+  "sidebar": "referencesSidebar",
+  "next": {
+    "title": "Sui API",
+    "permalink": "/references/sui-api"
+  }
+}

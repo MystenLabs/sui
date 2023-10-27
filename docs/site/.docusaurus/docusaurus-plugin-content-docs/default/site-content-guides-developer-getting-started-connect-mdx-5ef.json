@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/developer/getting-started/connect",
+  "id": "guides/developer/getting-started/connect",
+  "title": "Connect to a Sui Network",
+  "description": "Besides Mainnet, Sui offers Testnet, Devnet, and local networks that you can connect to for development. You can also configure a custom RPC endpoint.",
+  "source": "@site/../content/guides/developer/getting-started/connect.mdx",
+  "sourceDirName": "guides/developer/getting-started",
+  "slug": "/guides/developer/getting-started/connect",
+  "permalink": "/guides/developer/getting-started/connect",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/getting-started/connect.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Connect to a Sui Network",
+    "description": "Besides Mainnet, Sui offers Testnet, Devnet, and local networks that you can connect to for development. You can also configure a custom RPC endpoint."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Install Sui",
+    "permalink": "/guides/developer/getting-started/sui-install"
+  },
+  "next": {
+    "title": "Connect to a Local Network",
+    "permalink": "/guides/developer/getting-started/local-network"
+  }
+}

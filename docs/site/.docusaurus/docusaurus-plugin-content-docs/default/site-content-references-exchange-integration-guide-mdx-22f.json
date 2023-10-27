@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/exchange-integration-guide",
+  "id": "references/exchange-integration-guide",
+  "title": "Exchange Integration Guide",
+  "description": "This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking on the Sui network.",
+  "source": "@site/../content/references/exchange-integration-guide.mdx",
+  "sourceDirName": "references",
+  "slug": "/exchange-integration-guide",
+  "permalink": "/exchange-integration-guide",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/exchange-integration-guide.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Exchange Integration Guide",
+    "sidebar_label": "Exchange Integration",
+    "slug": "/exchange-integration-guide"
+  }
+}

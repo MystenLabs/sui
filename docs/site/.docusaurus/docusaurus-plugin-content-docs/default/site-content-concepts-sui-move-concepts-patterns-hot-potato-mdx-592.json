@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/patterns/hot-potato",
+  "id": "concepts/sui-move-concepts/patterns/hot-potato",
+  "title": "Hot Potato",
+  "description": "A hot potato is a struct that has no capabilities, therefore you can only pack and unpack it in its module. In this struct, you must call function B after function A in the case where function A returns a hot potato and function B consumes it. A hot potato pattern is useful when implementing flash loans, for example.",
+  "source": "@site/../content/concepts/sui-move-concepts/patterns/hot-potato.mdx",
+  "sourceDirName": "concepts/sui-move-concepts/patterns",
+  "slug": "/concepts/sui-move-concepts/patterns/hot-potato",
+  "permalink": "/concepts/sui-move-concepts/patterns/hot-potato",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/patterns/hot-potato.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Hot Potato"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Transferrable Witness",
+    "permalink": "/concepts/sui-move-concepts/patterns/transferrable-witness"
+  },
+  "next": {
+    "title": "ID Pointer",
+    "permalink": "/concepts/sui-move-concepts/patterns/id-pointer"
+  }
+}

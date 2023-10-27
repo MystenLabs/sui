@@ -1,0 +1,27 @@
+{
+  "unversionedId": "references/cli/client",
+  "id": "references/cli/client",
+  "title": "Sui Client CLI",
+  "description": "The Sui Client CLI provides command-level access to interact with the Sui network.",
+  "source": "@site/../content/references/cli/client.mdx",
+  "sourceDirName": "references/cli",
+  "slug": "/references/cli/client",
+  "permalink": "/references/cli/client",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/cli/client.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Client CLI",
+    "description": "The Sui Client CLI provides command-level access to interact with the Sui network."
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Sui CLI",
+    "permalink": "/references/cli"
+  },
+  "next": {
+    "title": "Sui Console CLI",
+    "permalink": "/references/cli/console"
+  }
+}

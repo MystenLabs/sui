@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/packages/custom-policies",
+  "id": "concepts/sui-move-concepts/packages/custom-policies",
+  "title": "Custom Policies",
+  "description": "The ability to upgrade Sui Move packages provides the opportunity to iterate your package development, whether to continuously improve features or address logic defects. The sui client upgrade command offers an approachable way to upgrade packages when the CLI active address owns the UpgradeCap object associated with those packages.",
+  "source": "@site/../content/concepts/sui-move-concepts/packages/custom-policies.mdx",
+  "sourceDirName": "concepts/sui-move-concepts/packages",
+  "slug": "/concepts/sui-move-concepts/packages/custom-policies",
+  "permalink": "/concepts/sui-move-concepts/packages/custom-policies",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/packages/custom-policies.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Custom Policies"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Package Upgrades",
+    "permalink": "/concepts/sui-move-concepts/packages/upgrade"
+  },
+  "next": {
+    "title": "Patterns",
+    "permalink": "/concepts/sui-move-concepts/patterns"
+  }
+}

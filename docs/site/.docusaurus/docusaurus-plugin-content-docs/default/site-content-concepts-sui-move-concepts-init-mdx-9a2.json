@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/init",
+  "id": "concepts/sui-move-concepts/init",
+  "title": "Init",
+  "description": "The init function is a special function that executes only once - when you publish the associated module. It always has the same signature and only one argument:",
+  "source": "@site/../content/concepts/sui-move-concepts/init.mdx",
+  "sourceDirName": "concepts/sui-move-concepts",
+  "slug": "/concepts/sui-move-concepts/init",
+  "permalink": "/concepts/sui-move-concepts/init",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/init.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Init"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Move on the Sui Blockchain",
+    "permalink": "/concepts/sui-move-concepts"
+  },
+  "next": {
+    "title": "Entry Functions",
+    "permalink": "/concepts/sui-move-concepts/entry-functions"
+  }
+}

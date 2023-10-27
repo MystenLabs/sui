@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/developer/getting-started/sui-install",
+  "id": "guides/developer/getting-started/sui-install",
+  "title": "Install Sui",
+  "description": "Install the Sui framework and required prerequisites on your system, including the Sui command line interface to interact with the Sui network.",
+  "source": "@site/../content/guides/developer/getting-started/sui-install.mdx",
+  "sourceDirName": "guides/developer/getting-started",
+  "slug": "/guides/developer/getting-started/sui-install",
+  "permalink": "/guides/developer/getting-started/sui-install",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/getting-started/sui-install.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Install Sui",
+    "description": "Install the Sui framework and required prerequisites on your system, including the Sui command line interface to interact with the Sui network."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Sui Environment Setup",
+    "permalink": "/guides/developer/getting-started/sui-environment"
+  },
+  "next": {
+    "title": "Connect to a Sui Network",
+    "permalink": "/guides/developer/getting-started/connect"
+  }
+}

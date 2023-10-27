@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/object-ownership",
+  "id": "concepts/object-ownership",
+  "title": "Object Ownership",
+  "description": "Every object has an owner field that dictates how you can use it in transactions. Objects can have the following types of ownership:",
+  "source": "@site/../content/concepts/object-ownership.mdx",
+  "sourceDirName": "concepts",
+  "slug": "/concepts/object-ownership",
+  "permalink": "/concepts/object-ownership",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/object-ownership.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Object Ownership"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Object Model",
+    "permalink": "/concepts/object-model"
+  },
+  "next": {
+    "title": "Address-Owned Objects",
+    "permalink": "/concepts/object-ownership/address-owned"
+  }
+}

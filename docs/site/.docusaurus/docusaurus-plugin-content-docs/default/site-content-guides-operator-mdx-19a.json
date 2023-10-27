@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/operator",
+  "id": "guides/operator",
+  "title": "Operator Guides",
+  "description": "Guides for operators on the Sui network. Whether you are running a Full node for your dApp or operating as a validator on the Sui network, these guides help you setup your environment and operate your network.",
+  "source": "@site/../content/guides/operator.mdx",
+  "sourceDirName": "guides",
+  "slug": "/guides/operator",
+  "permalink": "/guides/operator",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/operator.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Operator Guides",
+    "description": "Guides for operators on the Sui network. Whether you are running a Full node for your dApp or operating as a validator on the Sui network, these guides help you setup your environment and operate your network."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Blackjack",
+    "permalink": "/guides/developer/app-examples/blackjack"
+  },
+  "next": {
+    "title": "Sui Full Node Configuration",
+    "permalink": "/guides/operator/sui-full-node"
+  }
+}

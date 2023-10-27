@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/move-on-sui",
+  "id": "concepts/sui-move-concepts/move-on-sui",
+  "title": "Move on Sui",
+  "description": "The Move language has additional benefits with the Sui blockchain implementation.",
+  "source": "@site/../content/concepts/sui-move-concepts/move-on-sui.mdx",
+  "sourceDirName": "concepts/sui-move-concepts",
+  "slug": "/concepts/sui-move-concepts/move-on-sui",
+  "permalink": "/concepts/sui-move-concepts/move-on-sui",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/move-on-sui.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Move on Sui",
+    "description": "The Move language has additional benefits with the Sui blockchain implementation."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "App Extensions",
+    "permalink": "/concepts/sui-move-concepts/patterns/app-extensions"
+  },
+  "next": {
+    "title": "Object Model",
+    "permalink": "/concepts/object-model"
+  }
+}

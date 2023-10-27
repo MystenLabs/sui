@@ -1,0 +1,17 @@
+{
+  "unversionedId": "guides/developer/examples",
+  "id": "guides/developer/examples",
+  "title": "Examples",
+  "description": "Placeholder",
+  "source": "@site/../content/guides/developer/examples.mdx",
+  "sourceDirName": "guides/developer",
+  "slug": "/guides/developer/examples",
+  "permalink": "/guides/developer/examples",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/examples.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Examples"
+  }
+}

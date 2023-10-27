@@ -1,0 +1,27 @@
+{
+  "unversionedId": "references/move/move-lock",
+  "id": "references/move/move-lock",
+  "title": "Move.lock File",
+  "description": "Get the details of a Move package lock file.",
+  "source": "@site/../content/references/move/move-lock.mdx",
+  "sourceDirName": "references/move",
+  "slug": "/references/move/move-lock",
+  "permalink": "/references/move/move-lock",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/move/move-lock.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Move.lock File",
+    "description": "Get the details of a Move package lock file."
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Move.toml File",
+    "permalink": "/references/move/move-toml"
+  },
+  "next": {
+    "title": "Docs Contribution",
+    "permalink": "/references/contribute/contribution-process"
+  }
+}

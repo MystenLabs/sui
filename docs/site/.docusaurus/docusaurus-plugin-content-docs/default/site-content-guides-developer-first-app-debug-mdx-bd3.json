@@ -1,0 +1,26 @@
+{
+  "unversionedId": "guides/developer/first-app/debug",
+  "id": "guides/developer/first-app/debug",
+  "title": "Debugging",
+  "description": "At the moment, there isn't a debugger for Move. To aid with debugging, however, you can use the std:",
+  "source": "@site/../content/guides/developer/first-app/debug.mdx",
+  "sourceDirName": "guides/developer/first-app",
+  "slug": "/guides/developer/first-app/debug",
+  "permalink": "/guides/developer/first-app/debug",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/first-app/debug.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Debugging"
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Publish a Package",
+    "permalink": "/guides/developer/first-app/publish"
+  },
+  "next": {
+    "title": "Client App with Sui TypeScript SDK",
+    "permalink": "/guides/developer/first-app/client-tssdk"
+  }
+}

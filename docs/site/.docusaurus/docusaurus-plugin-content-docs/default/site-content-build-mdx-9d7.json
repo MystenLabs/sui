@@ -1,0 +1,18 @@
+{
+  "unversionedId": "build",
+  "id": "build",
+  "title": "Build",
+  "description": "This is a LP card",
+  "source": "@site/../content/build.mdx",
+  "sourceDirName": ".",
+  "slug": "/build",
+  "permalink": "/build",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/build.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Build",
+    "slug": "build"
+  }
+}

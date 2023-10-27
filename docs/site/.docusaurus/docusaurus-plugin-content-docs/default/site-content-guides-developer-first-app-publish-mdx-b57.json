@@ -1,0 +1,26 @@
+{
+  "unversionedId": "guides/developer/first-app/publish",
+  "id": "guides/developer/first-app/publish",
+  "title": "Publish a Package",
+  "description": "Before you can call functions in a Move package (beyond an emulated Sui execution scenario), that package must be available on the Sui network. When you publish a package, you are actually creating an immutable Sui object on the network that anyone can access.",
+  "source": "@site/../content/guides/developer/first-app/publish.mdx",
+  "sourceDirName": "guides/developer/first-app",
+  "slug": "/guides/developer/first-app/publish",
+  "permalink": "/guides/developer/first-app/publish",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/first-app/publish.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Publish a Package"
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Build and Test Packages",
+    "permalink": "/guides/developer/first-app/build-test"
+  },
+  "next": {
+    "title": "Debugging",
+    "permalink": "/guides/developer/first-app/debug"
+  }
+}

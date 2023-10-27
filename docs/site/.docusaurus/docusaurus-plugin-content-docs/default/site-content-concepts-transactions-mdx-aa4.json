@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/transactions",
+  "id": "concepts/transactions",
+  "title": "Transactions",
+  "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Scelerisque fermentum dui faucibus in ornare. Ut tristique et egestas quis ipsum suspendisse. Ac placerat vestibulum lectus mauris ultrices eros. Lorem ipsum dolor sit amet. Justo nec ultrices dui sapien eget mi proin sed libero. Nunc lobortis mattis aliquam faucibus. Nec ultrices dui sapien eget mi proin sed. Tellus elementum sagittis vitae et. Tellus at urna condimentum mattis pellentesque id nibh tortor. Sit amet venenatis urna cursus. Imperdiet sed euismod nisi porta lorem mollis aliquam ut. Malesuada fames ac turpis egestas maecenas pharetra convallis posuere.",
+  "source": "@site/../content/concepts/transactions.mdx",
+  "sourceDirName": "concepts",
+  "slug": "/concepts/transactions",
+  "permalink": "/concepts/transactions",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/transactions.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Transactions"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Object and Package Versioning",
+    "permalink": "/concepts/dynamic-fields/versioning"
+  },
+  "next": {
+    "title": "Programmable Transaction Blocks",
+    "permalink": "/concepts/transactions/prog-txn-blocks"
+  }
+}

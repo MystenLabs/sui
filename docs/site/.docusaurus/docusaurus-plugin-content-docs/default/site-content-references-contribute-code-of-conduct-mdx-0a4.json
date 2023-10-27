@@ -1,0 +1,28 @@
+{
+  "unversionedId": "references/contribute/code-of-conduct",
+  "id": "references/contribute/code-of-conduct",
+  "title": "Sui Contributor Covenant Code of Conduct",
+  "description": "Sui, as an open-source project, encourages free discussion rooted in respect.",
+  "source": "@site/../content/references/contribute/code-of-conduct.mdx",
+  "sourceDirName": "references/contribute",
+  "slug": "/code-of-conduct",
+  "permalink": "/code-of-conduct",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/contribute/code-of-conduct.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Contributor Covenant Code of Conduct",
+    "sidebar_label": "Code of Conduct",
+    "slug": "/code-of-conduct"
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Localize Sui Documentation",
+    "permalink": "/localize-sui-docs"
+  },
+  "next": {
+    "title": "Style Guide",
+    "permalink": "/style-guide"
+  }
+}

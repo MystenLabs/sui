@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/dynamic-fields",
+  "id": "concepts/dynamic-fields",
+  "title": "Dynamic (Object) Fields",
+  "description": "Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.",
+  "source": "@site/../content/concepts/dynamic-fields.mdx",
+  "sourceDirName": "concepts",
+  "slug": "/concepts/dynamic-fields",
+  "permalink": "/concepts/dynamic-fields",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/dynamic-fields.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Dynamic (Object) Fields",
+    "description": "Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Wrapped",
+    "permalink": "/concepts/object-ownership/wrapped"
+  },
+  "next": {
+    "title": "Dynamic (Object) Fields",
+    "permalink": "/concepts/dynamic-fields/dynamic-object-fields"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/developer/first-app",
+  "id": "guides/developer/first-app",
+  "title": "Your First Sui dApp",
+  "description": "Build your first dApp and publish it on chain. These guides demonstrate the basics you need to know to start your development journey on Sui.",
+  "source": "@site/../content/guides/developer/first-app.mdx",
+  "sourceDirName": "guides/developer",
+  "slug": "/guides/developer/first-app",
+  "permalink": "/guides/developer/first-app",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/first-app.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Your First Sui dApp",
+    "description": "Build your first dApp and publish it on chain. These guides demonstrate the basics you need to know to start your development journey on Sui."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Get SUI Tokens",
+    "permalink": "/guides/developer/getting-started/get-coins"
+  },
+  "next": {
+    "title": "Build and Test Packages",
+    "permalink": "/guides/developer/first-app/build-test"
+  }
+}

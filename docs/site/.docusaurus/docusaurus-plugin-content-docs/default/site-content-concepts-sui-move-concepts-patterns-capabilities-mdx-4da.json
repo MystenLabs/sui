@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/patterns/capabilities",
+  "id": "concepts/sui-move-concepts/patterns/capabilities",
+  "title": "Capabilities",
+  "description": "A capability is a pattern that allows authorizing actions with an object. For example, the upgradeCap authorizes the action of upgrading packages. One of the most common capabilities you might encounter is TreasuryCap, which is defined in sui::coin).",
+  "source": "@site/../content/concepts/sui-move-concepts/patterns/capabilities.mdx",
+  "sourceDirName": "concepts/sui-move-concepts/patterns",
+  "slug": "/concepts/sui-move-concepts/patterns/capabilities",
+  "permalink": "/concepts/sui-move-concepts/patterns/capabilities",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/patterns/capabilities.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Capabilities"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Patterns",
+    "permalink": "/concepts/sui-move-concepts/patterns"
+  },
+  "next": {
+    "title": "Witness",
+    "permalink": "/concepts/sui-move-concepts/patterns/witness"
+  }
+}

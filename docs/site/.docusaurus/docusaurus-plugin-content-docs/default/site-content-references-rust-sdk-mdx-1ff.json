@@ -1,0 +1,15 @@
+{
+  "unversionedId": "references/rust-sdk",
+  "id": "references/rust-sdk",
+  "title": "rust-sdk",
+  "description": "",
+  "source": "@site/../content/references/rust-sdk.mdx",
+  "sourceDirName": "references",
+  "slug": "/references/rust-sdk",
+  "permalink": "/references/rust-sdk",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/rust-sdk.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {}
+}

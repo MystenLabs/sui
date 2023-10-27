@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/tokenomics/storage-fund",
+  "id": "concepts/tokenomics/storage-fund",
+  "title": "Storage Fund",
+  "description": "Sui includes an efficient and sustainable economic mechanism for financing data storage, which is important given the ability of Sui to store arbitrarily large amounts of on-chain data.",
+  "source": "@site/../content/concepts/tokenomics/storage-fund.mdx",
+  "sourceDirName": "concepts/tokenomics",
+  "slug": "/concepts/tokenomics/storage-fund",
+  "permalink": "/concepts/tokenomics/storage-fund",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/tokenomics/storage-fund.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Storage Fund"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "SUI Token",
+    "permalink": "/concepts/tokenomics/sui-token"
+  },
+  "next": {
+    "title": "Sui Gas Pricing",
+    "permalink": "/concepts/tokenomics/gas-pricing"
+  }
+}

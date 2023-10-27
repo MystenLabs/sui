@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/operator/sui-full-node",
+  "id": "guides/operator/sui-full-node",
+  "title": "Sui Full Node Configuration",
+  "description": "Operate a Sui Full node to validate blockchain activities, like transactions, checkpoints, and epoch changes.",
+  "source": "@site/../content/guides/operator/sui-full-node.mdx",
+  "sourceDirName": "guides/operator",
+  "slug": "/guides/operator/sui-full-node",
+  "permalink": "/guides/operator/sui-full-node",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/operator/sui-full-node.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Full Node Configuration",
+    "description": "Operate a Sui Full node to validate blockchain activities, like transactions, checkpoints, and epoch changes."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Operator Guides",
+    "permalink": "/guides/operator"
+  },
+  "next": {
+    "title": "Sui Validator Node Configuration",
+    "permalink": "/guides/operator/validator-config"
+  }
+}

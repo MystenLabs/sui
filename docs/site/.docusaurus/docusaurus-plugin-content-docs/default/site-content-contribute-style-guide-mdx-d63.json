@@ -1,0 +1,19 @@
+{
+  "unversionedId": "contribute/style-guide",
+  "id": "contribute/style-guide",
+  "title": "Style Guide",
+  "description": "This document defines the styles, word and term usage, and content formatting for Sui documentation. Entries are in alphabetical order. A style guide is never finished. Expect continued iterations to add additional styles, additional information to existing styles, and infrequently a change to an existing style.",
+  "source": "@site/../content/contribute/style-guide.mdx",
+  "sourceDirName": "contribute",
+  "slug": "/style-guide",
+  "permalink": "/style-guide",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/contribute/style-guide.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Style Guide",
+    "slug": "/style-guide",
+    "toc_max_heading_level": 2
+  }
+}

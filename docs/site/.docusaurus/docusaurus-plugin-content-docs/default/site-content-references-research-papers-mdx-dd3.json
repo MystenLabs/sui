@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/research-papers",
+  "id": "references/research-papers",
+  "title": "Sui-Related Research Papers",
+  "description": "This document contains a list of research papers that are relevant to Sui and have been co-authored by at least one member of the team.",
+  "source": "@site/../content/references/research-papers.mdx",
+  "sourceDirName": "references",
+  "slug": "/research",
+  "permalink": "/research",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/research-papers.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui-Related Research Papers",
+    "sidebar_label": "Research",
+    "slug": "/research"
+  }
+}

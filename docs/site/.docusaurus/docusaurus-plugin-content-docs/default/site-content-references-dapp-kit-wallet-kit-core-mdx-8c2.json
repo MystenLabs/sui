@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/dapp-kit/wallet-kit-core",
+  "id": "references/dapp-kit/wallet-kit-core",
+  "title": "Wallet Kit Core",
+  "description": "While Wallet Kit is a React library, we also have a lower-level library that provides the core state management and wallet adapter interaction, which can be used in other non-React contexts. This package is published on npm as @mysten/wallet-kit-core.",
+  "source": "@site/../content/references/dapp-kit/wallet-kit-core.mdx",
+  "sourceDirName": "references/dapp-kit",
+  "slug": "/wallet-kit-core",
+  "permalink": "/wallet-kit-core",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/dapp-kit/wallet-kit-core.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Wallet Kit Core",
+    "sidebar_label": "Wallet Kit Core",
+    "slug": "/wallet-kit-core"
+  }
+}

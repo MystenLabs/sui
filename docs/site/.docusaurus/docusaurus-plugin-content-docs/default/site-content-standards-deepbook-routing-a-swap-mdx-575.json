@@ -1,0 +1,27 @@
+{
+  "unversionedId": "standards/deepbook/routing-a-swap",
+  "id": "standards/deepbook/routing-a-swap",
+  "title": "Routing a Swap",
+  "description": "Overview",
+  "source": "@site/../content/standards/deepbook/routing-a-swap.mdx",
+  "sourceDirName": "standards/deepbook",
+  "slug": "/routing-a-swap",
+  "permalink": "/routing-a-swap",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/standards/deepbook/routing-a-swap.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Routing a Swap",
+    "slug": "/routing-a-swap"
+  },
+  "sidebar": "standardsSidebar",
+  "previous": {
+    "title": "Query The Pool",
+    "permalink": "/query-the-pool"
+  },
+  "next": {
+    "title": "Trade and Swap",
+    "permalink": "/trade-and-swap"
+  }
+}

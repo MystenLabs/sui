@@ -1,0 +1,18 @@
+{
+  "unversionedId": "references/sui-framework-reference",
+  "id": "references/sui-framework-reference",
+  "title": "Sui Framework Reference",
+  "description": "The Sui Framework includes the core on-chain libraries for Move developers. You can view the Sui Framework Reference docs in Markdown format in the Sui GitHub repo.",
+  "source": "@site/../content/references/sui-framework-reference.mdx",
+  "sourceDirName": "references",
+  "slug": "/sui-framework-reference",
+  "permalink": "/sui-framework-reference",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/sui-framework-reference.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Framework Reference",
+    "slug": "/sui-framework-reference"
+  }
+}

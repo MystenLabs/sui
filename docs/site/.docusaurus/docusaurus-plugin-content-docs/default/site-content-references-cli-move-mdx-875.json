@@ -1,0 +1,27 @@
+{
+  "unversionedId": "references/cli/move",
+  "id": "references/cli/move",
+  "title": "Sui Move CLI",
+  "description": "The Sui Move CLI provides commands for working with Move source code.",
+  "source": "@site/../content/references/cli/move.mdx",
+  "sourceDirName": "references/cli",
+  "slug": "/references/cli/move",
+  "permalink": "/references/cli/move",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/cli/move.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Move CLI",
+    "description": "The Sui Move CLI provides commands for working with Move source code."
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Sui Keytool CLI",
+    "permalink": "/references/cli/keytool"
+  },
+  "next": {
+    "title": "Sui Validator CLI",
+    "permalink": "/references/cli/validator"
+  }
+}

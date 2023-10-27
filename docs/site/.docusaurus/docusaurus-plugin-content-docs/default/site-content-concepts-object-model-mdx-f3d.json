@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/object-model",
+  "id": "concepts/object-model",
+  "title": "Object Model",
+  "description": "Everything on the Sui blockchain is an object, with metadata, type of ownership, and a referencing scheme.",
+  "source": "@site/../content/concepts/object-model.mdx",
+  "sourceDirName": "concepts",
+  "slug": "/concepts/object-model",
+  "permalink": "/concepts/object-model",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/object-model.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Object Model",
+    "description": "Everything on the Sui blockchain is an object, with metadata, type of ownership, and a referencing scheme."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Move on Sui",
+    "permalink": "/concepts/sui-move-concepts/move-on-sui"
+  },
+  "next": {
+    "title": "Object Ownership",
+    "permalink": "/concepts/object-ownership"
+  }
+}

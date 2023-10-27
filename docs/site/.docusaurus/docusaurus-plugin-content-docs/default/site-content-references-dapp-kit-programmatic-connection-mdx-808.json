@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/dapp-kit/programmatic-connection",
+  "id": "references/dapp-kit/programmatic-connection",
+  "title": "Programmatic Connection",
+  "description": "While we provide the ConnectButton to allow you to get started quickly, you can also use the useWalletKit hook to programmatically connect to a wallet, which allows you to build your own connection UI.",
+  "source": "@site/../content/references/dapp-kit/programmatic-connection.mdx",
+  "sourceDirName": "references/dapp-kit",
+  "slug": "/programmatic-connection",
+  "permalink": "/programmatic-connection",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/dapp-kit/programmatic-connection.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Programmatic Connection",
+    "sidebar_label": "Programmatic Connection",
+    "slug": "/programmatic-connection"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "unversionedId": "standards/deepbook/query-the-pool",
+  "id": "standards/deepbook/query-the-pool",
+  "title": "Query The Pool",
+  "description": "Overview",
+  "source": "@site/../content/standards/deepbook/query-the-pool.mdx",
+  "sourceDirName": "standards/deepbook",
+  "slug": "/query-the-pool",
+  "permalink": "/query-the-pool",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/standards/deepbook/query-the-pool.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Query The Pool",
+    "slug": "/query-the-pool"
+  },
+  "sidebar": "standardsSidebar",
+  "previous": {
+    "title": "DeepBook Pools",
+    "permalink": "/deepbook-pools"
+  },
+  "next": {
+    "title": "Routing a Swap",
+    "permalink": "/routing-a-swap"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "unversionedId": "concepts/cryptography/smart-contracts/ecvrf",
+  "id": "concepts/cryptography/smart-contracts/ecvrf",
+  "title": "ECVRF",
+  "description": "Elliptic curve verifiable random function is a cryptographic algorithm that enables you to generate a random number and provide proof that the number used a secret key for generation.",
+  "source": "@site/../content/concepts/cryptography/smart-contracts/ecvrf.mdx",
+  "sourceDirName": "concepts/cryptography/smart-contracts",
+  "slug": "/concepts/cryptography/smart-contracts/ecvrf",
+  "permalink": "/concepts/cryptography/smart-contracts/ecvrf",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/cryptography/smart-contracts/ecvrf.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "ECVRF",
+    "description": "Elliptic curve verifiable random function is a cryptographic algorithm that enables you to generate a random number and provide proof that the number used a secret key for generation."
+  }
+}

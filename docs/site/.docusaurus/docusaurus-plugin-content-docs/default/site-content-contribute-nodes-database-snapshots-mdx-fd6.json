@@ -1,0 +1,18 @@
+{
+  "unversionedId": "contribute/nodes/database-snapshots",
+  "id": "contribute/nodes/database-snapshots",
+  "title": "Database Snapshots",
+  "description": "Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for Full node operators.",
+  "source": "@site/../content/contribute/nodes/database-snapshots.mdx",
+  "sourceDirName": "contribute/nodes",
+  "slug": "/database-snapshots",
+  "permalink": "/database-snapshots",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/contribute/nodes/database-snapshots.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Database Snapshots",
+    "slug": "/database-snapshots"
+  }
+}

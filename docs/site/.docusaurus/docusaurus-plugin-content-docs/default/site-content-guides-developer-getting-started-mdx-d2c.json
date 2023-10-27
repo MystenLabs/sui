@@ -1,0 +1,26 @@
+{
+  "unversionedId": "guides/developer/getting-started",
+  "id": "guides/developer/getting-started",
+  "title": "Getting Started",
+  "description": "Sui is the first internet-scale programmable blockchain platform. That might read like marketing speak, but as you peruse the documentation to understand the technology, you will discover that Sui addresses many of the problems that hold blockchains back from mass adoption.",
+  "source": "@site/../content/guides/developer/getting-started.mdx",
+  "sourceDirName": "guides/developer",
+  "slug": "/guides/developer/getting-started",
+  "permalink": "/guides/developer/getting-started",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/getting-started.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Getting Started"
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Developer Guides",
+    "permalink": "/guides/developer"
+  },
+  "next": {
+    "title": "Sui Environment Setup",
+    "permalink": "/guides/developer/getting-started/sui-environment"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "unversionedId": "standards/deepbook/trade-and-swap",
+  "id": "standards/deepbook/trade-and-swap",
+  "title": "Trade and Swap",
+  "description": "Overview",
+  "source": "@site/../content/standards/deepbook/trade-and-swap.mdx",
+  "sourceDirName": "standards/deepbook",
+  "slug": "/trade-and-swap",
+  "permalink": "/trade-and-swap",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/standards/deepbook/trade-and-swap.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Trade and Swap",
+    "slug": "/trade-and-swap"
+  },
+  "sidebar": "standardsSidebar",
+  "previous": {
+    "title": "Routing a Swap",
+    "permalink": "/routing-a-swap"
+  },
+  "next": {
+    "title": "Display",
+    "permalink": "/standards/display"
+  }
+}

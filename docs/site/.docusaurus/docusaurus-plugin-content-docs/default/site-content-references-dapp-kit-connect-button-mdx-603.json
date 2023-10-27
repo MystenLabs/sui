@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/dapp-kit/connect-button",
+  "id": "references/dapp-kit/connect-button",
+  "title": "ConnectButton",
+  "description": "ConnectButton",
+  "source": "@site/../content/references/dapp-kit/connect-button.mdx",
+  "sourceDirName": "references/dapp-kit",
+  "slug": "/connect-button",
+  "permalink": "/connect-button",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/dapp-kit/connect-button.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "ConnectButton",
+    "sidebar_label": "ConnectButton",
+    "slug": "/connect-button"
+  }
+}

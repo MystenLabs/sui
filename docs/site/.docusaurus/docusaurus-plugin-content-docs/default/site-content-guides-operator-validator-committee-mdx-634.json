@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/operator/validator-committee",
+  "id": "guides/operator/validator-committee",
+  "title": "Validator Committee",
+  "description": "Sui has a committee of validators to verify on-chain transactions. Epochs, quorums, transactions, certificates, and consensus are touch points for this committee.",
+  "source": "@site/../content/guides/operator/validator-committee.mdx",
+  "sourceDirName": "guides/operator",
+  "slug": "/guides/operator/validator-committee",
+  "permalink": "/guides/operator/validator-committee",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/operator/validator-committee.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Validator Committee",
+    "description": "Sui has a committee of validators to verify on-chain transactions. Epochs, quorums, transactions, certificates, and consensus are touch points for this committee."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Genesis",
+    "permalink": "/guides/operator/genesis"
+  },
+  "next": {
+    "title": "Validator Tasks",
+    "permalink": "/guides/operator/validator-tasks"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "unversionedId": "contribute/nodes/full-node",
+  "id": "contribute/nodes/full-node",
+  "title": "Sui Full Node",
+  "description": "These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in Create a Local Sui Network to create a local Full node, validators, and faucet.",
+  "source": "@site/../content/contribute/nodes/full-node.mdx",
+  "sourceDirName": "contribute/nodes",
+  "slug": "/full-node",
+  "permalink": "/full-node",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/contribute/nodes/full-node.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Full Node",
+    "slug": "/full-node"
+  }
+}

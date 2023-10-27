@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/object-ownership/address-owned",
+  "id": "concepts/object-ownership/address-owned",
+  "title": "Address-Owned Objects",
+  "description": "Address-owned objects are owned by a Sui 32-byte address, which can either be an account address or an object ID. Learn how to create and access these objects.",
+  "source": "@site/../content/concepts/object-ownership/address-owned.mdx",
+  "sourceDirName": "concepts/object-ownership",
+  "slug": "/concepts/object-ownership/address-owned",
+  "permalink": "/concepts/object-ownership/address-owned",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/object-ownership/address-owned.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Address-Owned Objects",
+    "description": "Address-owned objects are owned by a Sui 32-byte address, which can either be an account address or an object ID. Learn how to create and access these objects."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Object Ownership",
+    "permalink": "/concepts/object-ownership"
+  },
+  "next": {
+    "title": "Immutable",
+    "permalink": "/concepts/object-ownership/immutable"
+  }
+}

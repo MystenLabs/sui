@@ -1,0 +1,1017 @@
+{
+  "docusaurus-plugin-google-tag-manager": {
+    "default": {
+      "containerId": "GTM-TTZ5J8V",
+      "id": "default"
+    }
+  },
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/",
+          "mainDocId": "guides",
+          "docs": [
+            {
+              "id": "concepts",
+              "path": "/concepts",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/app-devs",
+              "path": "/concepts/app-devs",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/architecture",
+              "path": "/concepts/architecture"
+            },
+            {
+              "id": "concepts/components",
+              "path": "/concepts/components",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography",
+              "path": "/concepts/cryptography",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/smart-contracts",
+              "path": "/concepts/cryptography/smart-contracts",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/smart-contracts/ecvrf",
+              "path": "/concepts/cryptography/smart-contracts/ecvrf"
+            },
+            {
+              "id": "concepts/cryptography/smart-contracts/groth16",
+              "path": "/concepts/cryptography/smart-contracts/groth16",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/smart-contracts/hashing",
+              "path": "/concepts/cryptography/smart-contracts/hashing",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/smart-contracts/signing",
+              "path": "/concepts/cryptography/smart-contracts/signing",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/system",
+              "path": "/concepts/cryptography/system",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/system/checkpoint-verification",
+              "path": "/concepts/cryptography/system/checkpoint-verification",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/system/intents-for-validation",
+              "path": "/concepts/cryptography/system/intents-for-validation",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/system/validator-signatures",
+              "path": "/concepts/cryptography/system/validator-signatures",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/transaction-auth",
+              "path": "/concepts/cryptography/transaction-auth",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/transaction-auth/intent-signing",
+              "path": "/concepts/cryptography/transaction-auth/intent-signing",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/transaction-auth/keys-addresses",
+              "path": "/concepts/cryptography/transaction-auth/keys-addresses",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/transaction-auth/multisig",
+              "path": "/concepts/cryptography/transaction-auth/multisig",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/transaction-auth/offline-signing",
+              "path": "/concepts/cryptography/transaction-auth/offline-signing",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/transaction-auth/signatures",
+              "path": "/concepts/cryptography/transaction-auth/signatures",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/cryptography/zklogin",
+              "path": "/concepts/cryptography/zklogin",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields",
+              "path": "/concepts/dynamic-fields",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/dynamic-object-fields",
+              "path": "/concepts/dynamic-fields/dynamic-object-fields",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/events",
+              "path": "/concepts/dynamic-fields/events",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/tables-bags",
+              "path": "/concepts/dynamic-fields/tables-bags",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/transfers",
+              "path": "/concepts/dynamic-fields/transfers",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/transfers/custom-rules",
+              "path": "/concepts/dynamic-fields/transfers/custom-rules",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/transfers/transfer-to-object",
+              "path": "/concepts/dynamic-fields/transfers/transfer-to-object",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/dynamic-fields/versioning",
+              "path": "/concepts/dynamic-fields/versioning",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/object-model",
+              "path": "/concepts/object-model",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/object-ownership",
+              "path": "/concepts/object-ownership",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/object-ownership/address-owned",
+              "path": "/concepts/object-ownership/address-owned",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/object-ownership/immutable",
+              "path": "/concepts/object-ownership/immutable",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/object-ownership/shared",
+              "path": "/concepts/object-ownership/shared",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/object-ownership/wrapped",
+              "path": "/concepts/object-ownership/wrapped",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture",
+              "path": "/concepts/sui-architecture",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/certification-overview",
+              "path": "/concepts/sui-architecture/certification-overview",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/confirmation",
+              "path": "/concepts/sui-architecture/confirmation",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/consensus",
+              "path": "/concepts/sui-architecture/consensus",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/data-management-things",
+              "path": "/concepts/sui-architecture/data-management-things",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/epochs",
+              "path": "/concepts/sui-architecture/epochs",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/high-level",
+              "path": "/concepts/sui-architecture/high-level",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/indexer-functions",
+              "path": "/concepts/sui-architecture/indexer-functions",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/protocol-upgrades",
+              "path": "/concepts/sui-architecture/protocol-upgrades",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-architecture/transaction-lifetime",
+              "path": "/concepts/sui-architecture/transaction-lifetime"
+            },
+            {
+              "id": "concepts/sui-move-concepts",
+              "path": "/concepts/sui-move-concepts",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/collections",
+              "path": "/concepts/sui-move-concepts/collections",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/entry-functions",
+              "path": "/concepts/sui-move-concepts/entry-functions",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/init",
+              "path": "/concepts/sui-move-concepts/init",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/language",
+              "path": "/concepts/sui-move-concepts/language"
+            },
+            {
+              "id": "concepts/sui-move-concepts/move-on-sui",
+              "path": "/concepts/sui-move-concepts/move-on-sui",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/one-time-witness",
+              "path": "/concepts/sui-move-concepts/one-time-witness",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/packages",
+              "path": "/concepts/sui-move-concepts/packages",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/packages/custom-policies",
+              "path": "/concepts/sui-move-concepts/packages/custom-policies",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/packages/upgrade",
+              "path": "/concepts/sui-move-concepts/packages/upgrade",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns",
+              "path": "/concepts/sui-move-concepts/patterns",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns/app-extensions",
+              "path": "/concepts/sui-move-concepts/patterns/app-extensions",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns/capabilities",
+              "path": "/concepts/sui-move-concepts/patterns/capabilities",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns/hot-potato",
+              "path": "/concepts/sui-move-concepts/patterns/hot-potato",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns/id-pointer",
+              "path": "/concepts/sui-move-concepts/patterns/id-pointer",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns/transferrable-witness",
+              "path": "/concepts/sui-move-concepts/patterns/transferrable-witness",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/patterns/witness",
+              "path": "/concepts/sui-move-concepts/patterns/witness",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/sui-move-concepts/strings",
+              "path": "/concepts/sui-move-concepts/strings",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics",
+              "path": "/concepts/tokenomics",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/gas-in-sui",
+              "path": "/concepts/tokenomics/gas-in-sui",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/gas-pricing",
+              "path": "/concepts/tokenomics/gas-pricing",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/proof-of-stake",
+              "path": "/concepts/tokenomics/proof-of-stake",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/staking-unstaking",
+              "path": "/concepts/tokenomics/staking-unstaking",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/storage-fund",
+              "path": "/concepts/tokenomics/storage-fund",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/sui-token",
+              "path": "/concepts/tokenomics/sui-token",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/tokenomics/validators-staking",
+              "path": "/concepts/tokenomics/validators-staking",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions",
+              "path": "/concepts/transactions",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/certification-overview",
+              "path": "/concepts/transactions/certification-overview"
+            },
+            {
+              "id": "concepts/transactions/gas-smashing",
+              "path": "/concepts/transactions/gas-smashing",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/input-types",
+              "path": "/concepts/transactions/input-types",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/prog-txn-blocks",
+              "path": "/concepts/transactions/prog-txn-blocks",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/result-and-nested",
+              "path": "/concepts/transactions/result-and-nested",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/sponsored-transactions",
+              "path": "/concepts/transactions/sponsored-transactions",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-lifecycle",
+              "path": "/concepts/transactions/transaction-lifecycle",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-things",
+              "path": "/concepts/transactions/transaction-things",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-types",
+              "path": "/concepts/transactions/transaction-types",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-types/merge-coin",
+              "path": "/concepts/transactions/transaction-types/merge-coin",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-types/move-call",
+              "path": "/concepts/transactions/transaction-types/move-call",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-types/split-coin",
+              "path": "/concepts/transactions/transaction-types/split-coin",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "concepts/transactions/transaction-types/transfer-object",
+              "path": "/concepts/transactions/transaction-types/transfer-object",
+              "sidebar": "conceptsSidebar"
+            },
+            {
+              "id": "examples",
+              "path": "/examples"
+            },
+            {
+              "id": "guides",
+              "path": "/guides",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer",
+              "path": "/guides/developer",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/advanced",
+              "path": "/guides/developer/advanced",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/advanced/efficient-smart-contracts",
+              "path": "/guides/developer/advanced/efficient-smart-contracts",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/advanced/maximize-reach",
+              "path": "/guides/developer/advanced/maximize-reach",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/advanced/min-gas-fees",
+              "path": "/guides/developer/advanced/min-gas-fees",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/advanced/security-best-practices",
+              "path": "/guides/developer/advanced/security-best-practices",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/advanced/wallet-integrations",
+              "path": "/guides/developer/advanced/wallet-integrations",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples",
+              "path": "/guides/developer/app-examples",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/auction",
+              "path": "/guides/developer/app-examples/auction",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/blackjack",
+              "path": "/guides/developer/app-examples/blackjack",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/coin-flip",
+              "path": "/guides/developer/app-examples/coin-flip",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/escrow",
+              "path": "/guides/developer/app-examples/escrow",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/meta-pricing-oracle",
+              "path": "/guides/developer/app-examples/meta-pricing-oracle",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/oracle",
+              "path": "/guides/developer/app-examples/oracle",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/tic-tac-toe",
+              "path": "/guides/developer/app-examples/tic-tac-toe",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/trusted-swap",
+              "path": "/guides/developer/app-examples/trusted-swap",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/turnip-town",
+              "path": "/guides/developer/app-examples/turnip-town",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/app-examples/weather-oracle",
+              "path": "/guides/developer/app-examples/weather-oracle",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/dev-cheat-sheet",
+              "path": "/guides/developer/dev-cheat-sheet",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/examples",
+              "path": "/guides/developer/examples"
+            },
+            {
+              "id": "guides/developer/first-app",
+              "path": "/guides/developer/first-app",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/first-app/build-test",
+              "path": "/guides/developer/first-app/build-test",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/first-app/client-tssdk",
+              "path": "/guides/developer/first-app/client-tssdk",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/first-app/debug",
+              "path": "/guides/developer/first-app/debug",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/first-app/publish",
+              "path": "/guides/developer/first-app/publish",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/first-app/write-package",
+              "path": "/guides/developer/first-app/write-package"
+            },
+            {
+              "id": "guides/developer/getting-started",
+              "path": "/guides/developer/getting-started",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/getting-started/connect",
+              "path": "/guides/developer/getting-started/connect",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/getting-started/get-address",
+              "path": "/guides/developer/getting-started/get-address",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/getting-started/get-coins",
+              "path": "/guides/developer/getting-started/get-coins",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/getting-started/local-network",
+              "path": "/guides/developer/getting-started/local-network",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/getting-started/sui-environment",
+              "path": "/guides/developer/getting-started/sui-environment",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/getting-started/sui-install",
+              "path": "/guides/developer/getting-started/sui-install",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/starter-templates",
+              "path": "/guides/developer/starter-templates",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101",
+              "path": "/guides/developer/sui-101",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/access-time",
+              "path": "/guides/developer/sui-101/access-time",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/building-ptb",
+              "path": "/guides/developer/sui-101/building-ptb",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/coin-mgt",
+              "path": "/guides/developer/sui-101/coin-mgt",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/create-coin",
+              "path": "/guides/developer/sui-101/create-coin",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/create-nft",
+              "path": "/guides/developer/sui-101/create-nft",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/send-txn",
+              "path": "/guides/developer/sui-101/send-txn",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/shared-owned",
+              "path": "/guides/developer/sui-101/shared-owned",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/sign-txn",
+              "path": "/guides/developer/sui-101/sign-txn",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/simulating-refs",
+              "path": "/guides/developer/sui-101/simulating-refs",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/sponsor-txn",
+              "path": "/guides/developer/sui-101/sponsor-txn",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/using-events",
+              "path": "/guides/developer/sui-101/using-events",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/sui-101/working-with-ptbs",
+              "path": "/guides/developer/sui-101/working-with-ptbs",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/developer/zklogin-onboarding",
+              "path": "/guides/developer/zklogin-onboarding",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator",
+              "path": "/guides/operator",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/archives",
+              "path": "/guides/operator/archives",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/data-management",
+              "path": "/guides/operator/data-management",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/genesis",
+              "path": "/guides/operator/genesis",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/node-tools",
+              "path": "/guides/operator/node-tools",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/observability",
+              "path": "/guides/operator/observability"
+            },
+            {
+              "id": "guides/operator/snapshots",
+              "path": "/guides/operator/snapshots",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/staking-rewards",
+              "path": "/guides/operator/staking-rewards",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/sui-full-node",
+              "path": "/guides/operator/sui-full-node",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/validator-committee",
+              "path": "/guides/operator/validator-committee",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/validator-config",
+              "path": "/guides/operator/validator-config",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "guides/operator/validator-tasks",
+              "path": "/guides/operator/validator-tasks",
+              "sidebar": "guidesSidebar"
+            },
+            {
+              "id": "references",
+              "path": "/references",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/cli",
+              "path": "/references/cli",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/cli/client",
+              "path": "/references/cli/client",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/cli/console",
+              "path": "/references/cli/console",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/cli/keytool",
+              "path": "/references/cli/keytool",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/cli/move",
+              "path": "/references/cli/move",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/cli/validator",
+              "path": "/references/cli/validator",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/contribute/code-of-conduct",
+              "path": "/code-of-conduct",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/contribute/contribute-to-sui-repos",
+              "path": "/contribute-to-sui-repos",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/contribute/contribution-process",
+              "path": "/references/contribute/contribution-process",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/contribute/localize-sui-docs",
+              "path": "/localize-sui-docs",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/contribute/style-guide",
+              "path": "/style-guide",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/dapp-kit",
+              "path": "/references/dapp-kit"
+            },
+            {
+              "id": "references/dapp-kit/connect-button",
+              "path": "/connect-button"
+            },
+            {
+              "id": "references/dapp-kit/getting-started",
+              "path": "/wallet-kit-getting-started"
+            },
+            {
+              "id": "references/dapp-kit/introduction",
+              "path": "/wallet-kit-introduction"
+            },
+            {
+              "id": "references/dapp-kit/programmatic-connection",
+              "path": "/programmatic-connection"
+            },
+            {
+              "id": "references/dapp-kit/use-wallet-kit",
+              "path": "/use-wallet-kit"
+            },
+            {
+              "id": "references/dapp-kit/wallet-adapters",
+              "path": "/wallet-adapters"
+            },
+            {
+              "id": "references/dapp-kit/wallet-kit-core",
+              "path": "/wallet-kit-core"
+            },
+            {
+              "id": "references/dapp-kit/wallet-kit-provider",
+              "path": "/wallet-kit-provider"
+            },
+            {
+              "id": "references/dapp-kit/wallet-standard",
+              "path": "/wallet-standard"
+            },
+            {
+              "id": "references/event-query-and-subscription",
+              "path": "/references/event-query-and-subscription"
+            },
+            {
+              "id": "references/exchange-integration-guide",
+              "path": "/exchange-integration-guide"
+            },
+            {
+              "id": "references/move/language",
+              "path": "/references/move/language"
+            },
+            {
+              "id": "references/move/move-lock",
+              "path": "/references/move/move-lock",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/move/move-toml",
+              "path": "/references/move/move-toml",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/research-papers",
+              "path": "/research"
+            },
+            {
+              "id": "references/sdk/rust-sdk",
+              "path": "/references/sdk/rust-sdk",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/sui-api",
+              "path": "/references/sui-api",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/sui-api/json-rpc-format",
+              "path": "/references/sui-api/json-rpc-format",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/sui-api/rpc-api",
+              "path": "/references/sui-api/rpc-api"
+            },
+            {
+              "id": "references/sui-api/rpc-best-practices",
+              "path": "/references/sui-api/rpc-best-practices",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/sui-bridging",
+              "path": "/bridging"
+            },
+            {
+              "id": "references/sui-compared",
+              "path": "/sui-compared"
+            },
+            {
+              "id": "references/sui-framework-reference",
+              "path": "/sui-framework-reference"
+            },
+            {
+              "id": "references/sui-glossary",
+              "path": "/sui-glossary"
+            },
+            {
+              "id": "references/sui-move",
+              "path": "/references/sui-move",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/sui-sdks",
+              "path": "/references/sui-sdks",
+              "sidebar": "referencesSidebar"
+            },
+            {
+              "id": "references/sui-security",
+              "path": "/sui-security"
+            },
+            {
+              "id": "snippets/staking-pool-reqs",
+              "path": "/snippets/staking-pool-reqs"
+            },
+            {
+              "id": "standards",
+              "path": "/standards",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook",
+              "path": "/standards/deepbook",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook/design",
+              "path": "/deepbook-design",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook/orders",
+              "path": "/deepbook-orders",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook/pools",
+              "path": "/deepbook-pools",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook/query-the-pool",
+              "path": "/query-the-pool",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook/routing-a-swap",
+              "path": "/routing-a-swap",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/deepbook/trade-and-swap",
+              "path": "/trade-and-swap",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/display",
+              "path": "/standards/display",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/kiosk",
+              "path": "/standards/kiosk",
+              "sidebar": "standardsSidebar"
+            },
+            {
+              "id": "standards/wallet-adapter",
+              "path": "/standards/wallet-adapter",
+              "sidebar": "standardsSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "guidesSidebar": {
+              "link": {
+                "path": "/guides",
+                "label": "Guides"
+              }
+            },
+            "conceptsSidebar": {
+              "link": {
+                "path": "/concepts",
+                "label": "concepts"
+              }
+            },
+            "standardsSidebar": {
+              "link": {
+                "path": "/standards",
+                "label": "standards"
+              }
+            },
+            "referencesSidebar": {
+              "link": {
+                "path": "/references",
+                "label": "References"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

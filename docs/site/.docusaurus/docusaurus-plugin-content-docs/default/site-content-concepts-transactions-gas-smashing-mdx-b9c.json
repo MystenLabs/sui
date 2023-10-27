@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/transactions/gas-smashing",
+  "id": "concepts/transactions/gas-smashing",
+  "title": "Gas Smashing",
+  "description": "Sui optimizes coin management by combining multiple coins into a single object to pay for gas fees.",
+  "source": "@site/../content/concepts/transactions/gas-smashing.mdx",
+  "sourceDirName": "concepts/transactions",
+  "slug": "/concepts/transactions/gas-smashing",
+  "permalink": "/concepts/transactions/gas-smashing",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/transactions/gas-smashing.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Gas Smashing",
+    "description": "Sui optimizes coin management by combining multiple coins into a single object to pay for gas fees."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Sponsored Transactions",
+    "permalink": "/concepts/transactions/sponsored-transactions"
+  },
+  "next": {
+    "title": "Cryptography",
+    "permalink": "/concepts/cryptography"
+  }
+}

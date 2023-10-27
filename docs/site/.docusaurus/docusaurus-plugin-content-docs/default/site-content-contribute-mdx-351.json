@@ -1,0 +1,17 @@
+{
+  "unversionedId": "contribute",
+  "id": "contribute",
+  "title": "Contribute",
+  "description": "This is the Contribute landing page.",
+  "source": "@site/../content/contribute.mdx",
+  "sourceDirName": ".",
+  "slug": "/contribute",
+  "permalink": "/contribute",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/contribute.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Contribute"
+  }
+}

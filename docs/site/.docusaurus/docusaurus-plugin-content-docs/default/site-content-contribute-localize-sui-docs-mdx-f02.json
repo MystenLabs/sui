@@ -1,0 +1,18 @@
+{
+  "unversionedId": "contribute/localize-sui-docs",
+  "id": "contribute/localize-sui-docs",
+  "title": "Localize Sui Documentation",
+  "description": "The Sui documentation can be localized (translated) into any language of your choosing. The localization platform utilized is Crowdin. For more information regarding the localization process please see here.",
+  "source": "@site/../content/contribute/localize-sui-docs.mdx",
+  "sourceDirName": "contribute",
+  "slug": "/localize-sui-docs",
+  "permalink": "/localize-sui-docs",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/contribute/localize-sui-docs.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Localize Sui Documentation",
+    "slug": "/localize-sui-docs"
+  }
+}

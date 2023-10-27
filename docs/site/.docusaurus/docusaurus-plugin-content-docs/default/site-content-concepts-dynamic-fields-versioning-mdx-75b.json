@@ -1,0 +1,27 @@
+{
+  "unversionedId": "concepts/dynamic-fields/versioning",
+  "id": "concepts/dynamic-fields/versioning",
+  "title": "Object and Package Versioning",
+  "description": "Versioning provides the ability to upgrade packages and objects on the Sui network.",
+  "source": "@site/../content/concepts/dynamic-fields/versioning.mdx",
+  "sourceDirName": "concepts/dynamic-fields",
+  "slug": "/concepts/dynamic-fields/versioning",
+  "permalink": "/concepts/dynamic-fields/versioning",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/dynamic-fields/versioning.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Object and Package Versioning",
+    "description": "Versioning provides the ability to upgrade packages and objects on the Sui network."
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Transfer to Object",
+    "permalink": "/concepts/dynamic-fields/transfers/transfer-to-object"
+  },
+  "next": {
+    "title": "Transactions",
+    "permalink": "/concepts/transactions"
+  }
+}

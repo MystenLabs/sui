@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/entry-functions",
+  "id": "concepts/sui-move-concepts/entry-functions",
+  "title": "Entry Functions",
+  "description": "The entry modifier for functions enables safe and direct invocation of module functions, much like scripts. Providing an entry function defines where your module's execution should begin. You can assume that any non-entry function is being called from a Move program already in execution.",
+  "source": "@site/../content/concepts/sui-move-concepts/entry-functions.mdx",
+  "sourceDirName": "concepts/sui-move-concepts",
+  "slug": "/concepts/sui-move-concepts/entry-functions",
+  "permalink": "/concepts/sui-move-concepts/entry-functions",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/entry-functions.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Entry Functions"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Init",
+    "permalink": "/concepts/sui-move-concepts/init"
+  },
+  "next": {
+    "title": "Strings",
+    "permalink": "/concepts/sui-move-concepts/strings"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/tokenomics/proof-of-stake",
+  "id": "concepts/tokenomics/proof-of-stake",
+  "title": "Proof of Stake",
+  "description": "The Sui platform relies on delegated proof-of-stake (DPoS) to determine the set of validators that process transactions.",
+  "source": "@site/../content/concepts/tokenomics/proof-of-stake.mdx",
+  "sourceDirName": "concepts/tokenomics",
+  "slug": "/concepts/tokenomics/proof-of-stake",
+  "permalink": "/concepts/tokenomics/proof-of-stake",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/tokenomics/proof-of-stake.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Proof of Stake"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Sui Tokenomics",
+    "permalink": "/concepts/tokenomics"
+  },
+  "next": {
+    "title": "Validators and Staking Pools",
+    "permalink": "/concepts/tokenomics/validators-staking"
+  }
+}

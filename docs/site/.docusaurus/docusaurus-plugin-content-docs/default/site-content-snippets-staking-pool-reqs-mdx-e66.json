@@ -1,0 +1,15 @@
+{
+  "unversionedId": "snippets/staking-pool-reqs",
+  "id": "snippets/staking-pool-reqs",
+  "title": "staking-pool-reqs",
+  "description": "Validator staking pool requirements",
+  "source": "@site/../content/snippets/staking-pool-reqs.mdx",
+  "sourceDirName": "snippets",
+  "slug": "/snippets/staking-pool-reqs",
+  "permalink": "/snippets/staking-pool-reqs",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/snippets/staking-pool-reqs.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {}
+}

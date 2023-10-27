@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/sui-bridging",
+  "id": "references/sui-bridging",
+  "title": "Sui Bridging",
+  "description": "Bridging is the process of moving tokens from one blockchain to another. When you use a bridge to move tokens between blockchains that are incompatible, the tokens are \"wrapped\" by the bridge, which means that they get converted to a derivative token for the target blockchain. You can transfer tokens in from other blockchains to SUI, or transfer SUI tokens out to other blockchains.",
+  "source": "@site/../content/references/sui-bridging.mdx",
+  "sourceDirName": "references",
+  "slug": "/bridging",
+  "permalink": "/bridging",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/sui-bridging.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Bridging",
+    "sidebar_label": "Bridging",
+    "slug": "/bridging"
+  }
+}

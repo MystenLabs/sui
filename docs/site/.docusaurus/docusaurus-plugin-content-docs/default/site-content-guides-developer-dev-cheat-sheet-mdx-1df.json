@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/developer/dev-cheat-sheet",
+  "id": "guides/developer/dev-cheat-sheet",
+  "title": "Sui Developer Cheat Sheet",
+  "description": "Quick reference on best practices for Sui Network developers.",
+  "source": "@site/../content/guides/developer/dev-cheat-sheet.mdx",
+  "sourceDirName": "guides/developer",
+  "slug": "/guides/developer/dev-cheat-sheet",
+  "permalink": "/guides/developer/dev-cheat-sheet",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/developer/dev-cheat-sheet.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Developer Cheat Sheet",
+    "sidebar_label": "Dev Cheat Sheet"
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "zkLogin Onboarding",
+    "permalink": "/guides/developer/zklogin-onboarding"
+  },
+  "next": {
+    "title": "App Examples",
+    "permalink": "/guides/developer/app-examples"
+  }
+}

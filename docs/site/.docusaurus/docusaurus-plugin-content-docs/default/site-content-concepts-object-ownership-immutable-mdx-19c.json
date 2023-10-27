@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/object-ownership/immutable",
+  "id": "concepts/object-ownership/immutable",
+  "title": "Immutable",
+  "description": "Objects in Sui can have different types of ownership, with two broad categories: immutable objects and mutable objects. An immutable object is an object that can't be mutated, transferred, or deleted. Immutable objects have no owner, so anyone can use them.",
+  "source": "@site/../content/concepts/object-ownership/immutable.mdx",
+  "sourceDirName": "concepts/object-ownership",
+  "slug": "/concepts/object-ownership/immutable",
+  "permalink": "/concepts/object-ownership/immutable",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/object-ownership/immutable.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Immutable"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Address-Owned Objects",
+    "permalink": "/concepts/object-ownership/address-owned"
+  },
+  "next": {
+    "title": "Shared Ownership",
+    "permalink": "/concepts/object-ownership/shared"
+  }
+}

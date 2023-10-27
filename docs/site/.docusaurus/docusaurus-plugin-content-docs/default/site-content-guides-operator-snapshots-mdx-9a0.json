@@ -1,0 +1,27 @@
+{
+  "unversionedId": "guides/operator/snapshots",
+  "id": "guides/operator/snapshots",
+  "title": "Snapshots",
+  "description": "Database snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis.",
+  "source": "@site/../content/guides/operator/snapshots.mdx",
+  "sourceDirName": "guides/operator",
+  "slug": "/guides/operator/snapshots",
+  "permalink": "/guides/operator/snapshots",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/guides/operator/snapshots.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Snapshots",
+    "description": "Database snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis."
+  },
+  "sidebar": "guidesSidebar",
+  "previous": {
+    "title": "Data Management",
+    "permalink": "/guides/operator/data-management"
+  },
+  "next": {
+    "title": "Sui Archives",
+    "permalink": "/guides/operator/archives"
+  }
+}

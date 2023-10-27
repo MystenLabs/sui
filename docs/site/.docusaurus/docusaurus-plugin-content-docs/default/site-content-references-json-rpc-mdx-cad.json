@@ -1,0 +1,26 @@
+{
+  "unversionedId": "references/json-rpc",
+  "id": "references/json-rpc",
+  "title": "Sui API",
+  "description": "The Sui API is in JSON-RPC format.",
+  "source": "@site/../content/references/json-rpc.mdx",
+  "sourceDirName": "references",
+  "slug": "/references/json-rpc",
+  "permalink": "/references/json-rpc",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/json-rpc.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui API"
+  },
+  "sidebar": "referencesSidebar",
+  "previous": {
+    "title": "Overview",
+    "permalink": "/references"
+  },
+  "next": {
+    "title": "JSON-RPC API Format",
+    "permalink": "/references/json-rpc/json-rpc-format"
+  }
+}

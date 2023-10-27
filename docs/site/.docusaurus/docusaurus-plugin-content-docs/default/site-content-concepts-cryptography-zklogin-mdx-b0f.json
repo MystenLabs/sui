@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/cryptography/zklogin",
+  "id": "concepts/cryptography/zklogin",
+  "title": "zkLogin",
+  "description": "zkLogin is a Sui primitive that provides the ability for you to send transactions from a Sui address using an OAuth credential, without publicly linking the two.",
+  "source": "@site/../content/concepts/cryptography/zklogin.mdx",
+  "sourceDirName": "concepts/cryptography",
+  "slug": "/concepts/cryptography/zklogin",
+  "permalink": "/concepts/cryptography/zklogin",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/cryptography/zklogin.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "zkLogin"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Intent Signing",
+    "permalink": "/concepts/cryptography/transaction-auth/intent-signing"
+  },
+  "next": {
+    "title": "Smart Contracts",
+    "permalink": "/concepts/cryptography/smart-contracts"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "unversionedId": "references/json-rpc/rpc-best-practices",
+  "id": "references/json-rpc/rpc-best-practices",
+  "title": "RPC Best Practices",
+  "description": "This topic provides some best practices for configuring your RPC settings to ensure a reliable infrastructure for your projects and services built on Sui.",
+  "source": "@site/../content/references/json-rpc/rpc-best-practices.mdx",
+  "sourceDirName": "references/json-rpc",
+  "slug": "/references/json-rpc/rpc-best-practices",
+  "permalink": "/references/json-rpc/rpc-best-practices",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/json-rpc/rpc-best-practices.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "RPC Best Practices"
+  }
+}

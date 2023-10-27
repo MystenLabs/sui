@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/tokenomics/validators-staking",
+  "id": "concepts/tokenomics/validators-staking",
+  "title": "Validators and Staking Pools",
+  "description": "Each Sui validator maintains its own staking pool to track the amount of stake and to compound staking rewards. Validator pools operate together with a time series of exchange rates that are computed at each epoch boundary. These exchange rates determine the amount of SUI tokens that each past SUI staker can withdraw in the future. Importantly, the exchange rates increase as more rewards are deposited into a staking pool and the longer an amount of SUI is deposited in a staking pool, the more rewards it will accrue.",
+  "source": "@site/../content/concepts/tokenomics/validators-staking.mdx",
+  "sourceDirName": "concepts/tokenomics",
+  "slug": "/concepts/tokenomics/validators-staking",
+  "permalink": "/concepts/tokenomics/validators-staking",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/tokenomics/validators-staking.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Validators and Staking Pools"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Proof of Stake",
+    "permalink": "/concepts/tokenomics/proof-of-stake"
+  },
+  "next": {
+    "title": "Staking and Unstaking",
+    "permalink": "/concepts/tokenomics/staking-unstaking"
+  }
+}

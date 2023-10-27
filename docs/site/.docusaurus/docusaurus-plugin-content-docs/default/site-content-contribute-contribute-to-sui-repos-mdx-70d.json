@@ -1,0 +1,18 @@
+{
+  "unversionedId": "contribute/contribute-to-sui-repos",
+  "id": "contribute/contribute-to-sui-repos",
+  "title": "Contribute to Sui Repositories",
+  "description": "This page describes how to contribute to Sui, and provides additional information about participating in the Sui community.",
+  "source": "@site/../content/contribute/contribute-to-sui-repos.mdx",
+  "sourceDirName": "contribute",
+  "slug": "/contribute-to-sui-repos",
+  "permalink": "/contribute-to-sui-repos",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/contribute/contribute-to-sui-repos.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Contribute to Sui Repositories",
+    "slug": "/contribute-to-sui-repos"
+  }
+}

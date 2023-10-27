@@ -1,0 +1,26 @@
+{
+  "unversionedId": "concepts/sui-move-concepts/patterns/witness",
+  "id": "concepts/sui-move-concepts/patterns/witness",
+  "title": "Witness",
+  "description": "A witness is a pattern you use to confirm the ownership of a type. To do so, pass a drop instance of a type. Coin relies on this implementation.",
+  "source": "@site/../content/concepts/sui-move-concepts/patterns/witness.mdx",
+  "sourceDirName": "concepts/sui-move-concepts/patterns",
+  "slug": "/concepts/sui-move-concepts/patterns/witness",
+  "permalink": "/concepts/sui-move-concepts/patterns/witness",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/concepts/sui-move-concepts/patterns/witness.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Witness"
+  },
+  "sidebar": "conceptsSidebar",
+  "previous": {
+    "title": "Capabilities",
+    "permalink": "/concepts/sui-move-concepts/patterns/capabilities"
+  },
+  "next": {
+    "title": "Transferrable Witness",
+    "permalink": "/concepts/sui-move-concepts/patterns/transferrable-witness"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "unversionedId": "references/event-query-and-subscription",
+  "id": "references/event-query-and-subscription",
+  "title": "Event Query and Subscription",
+  "description": "Sui Full nodes support publish/subscribe using JSON-RPC notifications via the WebSocket API. You can use this service with Sui client to filter and subscribe to a real-time event stream generated from Move or from the Sui network.",
+  "source": "@site/../content/references/event-query-and-subscription.mdx",
+  "sourceDirName": "references",
+  "slug": "/references/event-query-and-subscription",
+  "permalink": "/references/event-query-and-subscription",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/event-query-and-subscription.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Event Query and Subscription"
+  }
+}

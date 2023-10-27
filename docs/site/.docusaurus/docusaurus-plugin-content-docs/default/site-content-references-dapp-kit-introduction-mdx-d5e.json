@@ -1,0 +1,19 @@
+{
+  "unversionedId": "references/dapp-kit/introduction",
+  "id": "references/dapp-kit/introduction",
+  "title": "Sui Wallet Kit Introduction",
+  "description": "Sui Wallet Kit is a set of TypeScript libraries that makes it easy to integrate your dApp with users' wallets in the Sui ecosystem.",
+  "source": "@site/../content/references/dapp-kit/introduction.mdx",
+  "sourceDirName": "references/dapp-kit",
+  "slug": "/wallet-kit-introduction",
+  "permalink": "/wallet-kit-introduction",
+  "draft": false,
+  "editUrl": "https://github.com/sui-foundation/sui-docs/tree/main/../content/references/dapp-kit/introduction.mdx",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Sui Wallet Kit Introduction",
+    "sidebar_label": "Introduction",
+    "slug": "/wallet-kit-introduction"
+  }
+}
