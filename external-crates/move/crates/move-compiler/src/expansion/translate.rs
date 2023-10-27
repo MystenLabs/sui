@@ -2389,7 +2389,13 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             EE::Return(ev)
         }
         PE::Abort(pe) => EE::Abort(exp(context, *pe)),
-        PE::Break => EE::Break,
+        PE::Break(pe_opt) => {
+            let ev = match pe_opt {
+                None => Box::new(sp(loc, EE::Unit { trailing: false })),
+                Some(pe) => exp(context, *pe),
+            };
+            EE::Break(ev)
+        }
         PE::Continue => EE::Continue,
         PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
@@ -2851,7 +2857,6 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
     use E::Exp_ as EE;
     match e_ {
         EE::Value(_)
-        | EE::Break
         | EE::Continue
         | EE::UnresolvedError
         | EE::Name(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _)
@@ -2908,6 +2913,7 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
         | EE::Dereference(e)
         | EE::UnaryExp(_, e)
         | EE::Borrow(_, e)
+        | EE::Break(e)
         | EE::Cast(e, _)
         | EE::Annotate(e, _) => unbound_names_exp(unbound, e),
         EE::FieldMutate(ed, er) => {

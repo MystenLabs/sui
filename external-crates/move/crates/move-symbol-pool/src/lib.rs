@@ -80,6 +80,7 @@ static_symbols!(
     "emit",
     "Receiving",
     "receive",
+    "loop",
 );
 
 /// The global, unique cache of strings.

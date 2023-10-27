@@ -94,6 +94,8 @@ struct Context<'env> {
     function_locals: UniqueMap<H::Var, H::SingleType>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
+    named_block_binders: UniqueMap<H::Var, Vec<H::LValue>>,
+    named_block_types: UniqueMap<H::Var, H::Type>,
     /// collects all struct fields used in the current module
     pub used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
 }
@@ -142,6 +144,8 @@ impl<'env> Context<'env> {
             signature: None,
             tmp_counter: 0,
             used_fields: BTreeMap::new(),
+            named_block_binders: UniqueMap::new(),
+            named_block_types: UniqueMap::new(),
         }
     }
 
@@ -166,6 +170,29 @@ impl<'env> Context<'env> {
         self.function_locals.add(symbol, t).unwrap();
     }
 
+    pub fn record_named_block_binders(&mut self, block_name: H::Var, binders: Vec<H::LValue>) {
+        self.named_block_binders
+            .add(block_name, binders)
+            .expect("ICE reused block name");
+    }
+
+    pub fn record_named_block_type(&mut self, block_name: H::Var, ty: H::Type) {
+        self.named_block_types
+            .add(block_name, ty)
+            .expect("ICE reused named block name");
+    }
+
+    pub fn lookup_named_block_binders(&mut self, block_name: &H::Var) -> Vec<H::LValue> {
+        self.named_block_binders
+            .get(block_name)
+            .expect("ICE named block with no binders")
+            .clone()
+    }
+
+    pub fn lookup_named_block_type(&mut self, block_name: &H::Var) -> Option<H::Type> {
+        self.named_block_types.get(block_name).cloned()
+    }
+
     pub fn fields(
         &self,
         module: &ModuleIdent,
@@ -184,6 +211,12 @@ impl<'env> Context<'env> {
     fn counter_next(&mut self) -> usize {
         self.tmp_counter += 1;
         self.tmp_counter
+    }
+
+    fn exit_function(&mut self) {
+        self.signature = None;
+        self.named_block_binders = UniqueMap::new();
+        self.named_block_types = UniqueMap::new();
     }
 }
 
@@ -407,7 +440,7 @@ fn function_body_defined(
         body.print_verbose();
         println!("--------------------------------------------------");
     }
-    context.signature = None;
+    context.exit_function();
     (locals, body)
 }
 
@@ -693,17 +726,46 @@ fn tail(
                 None
             }
         }
-        // Whiles and loops Loops are currently moved to statement position
-        e_ @ E::While(_, _) => {
+        // While loops can't yield values, so we treat them as statements with no binders.
+        e_ @ E::While(_, _, _) => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             Some(trailing_unit_exp(eloc))
         }
-        e_ @ E::Loop { .. } => {
-            if statement(context, block, T::exp(in_type.clone(), sp(eloc, e_))) {
-                None
+        E::Loop {
+            name,
+            has_break: true,
+            body,
+        } => {
+            let name = translate_var(name);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            let result = if binders.is_empty() {
+                // need to swap the implicit unit out for a trailing unit in tail position
+                trailing_unit_exp(eloc)
             } else {
-                Some(trailing_unit_exp(eloc))
+                bound_exp
+            };
+            context.record_named_block_binders(name, binders);
+            context.record_named_block_type(name, out_type.clone());
+            let (loop_body, has_break) = process_loop_body(context, *body);
+            block.push_back(sp(
+                eloc,
+                S::Loop {
+                    name,
+                    has_break,
+                    block: loop_body,
+                },
+            ));
+            if has_break {
+                Some(result)
+            } else {
+                None
             }
+        }
+        e_ @ E::Loop { .. } => {
+            // A loop wthout a break has no concrete type for its binders, but since we'll never
+            // find a break we won't need binders anyway. We just treat it like a statement.
+            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
+            None
         }
         E::Block(seq) => tail_block(context, block, Some(&out_type), seq),
 
@@ -712,8 +774,8 @@ fn tail(
         // -----------------------------------------------------------------------------------------
         E::Return(_)
         | E::Abort(_)
-        | E::Break
-        | E::Continue
+        | E::Give(_, _)
+        | E::Continue(_)
         | E::Assign(_, _, _)
         | E::Mutate(_, _) => panic!("ICE statement mishandled"),
 
@@ -884,16 +946,34 @@ fn value(
                 None
             }
         }
-        // Whiles and loops Loops are currently moved to statement position
-        e_ @ E::While(_, _) => {
+        // While loops can't yield values, so we treat them as statements with no binders.
+        e_ @ E::While(_, _, _) => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
             Some(unit_exp(eloc))
         }
-        e_ @ E::Loop {
-            has_break: true, ..
+        E::Loop {
+            name,
+            has_break: true,
+            body,
         } => {
-            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(unit_exp(eloc))
+            let name = translate_var(name);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            context.record_named_block_binders(name, binders);
+            context.record_named_block_type(name, out_type.clone());
+            let (loop_body, has_break) = process_loop_body(context, *body);
+            block.push_back(sp(
+                eloc,
+                S::Loop {
+                    name,
+                    has_break,
+                    block: loop_body,
+                },
+            ));
+            if has_break {
+                Some(bound_exp)
+            } else {
+                None
+            }
         }
         e_ @ E::Loop { .. } => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
@@ -1156,8 +1236,8 @@ fn value(
         E::BinopExp(_, _, _, _)
         | E::Return(_)
         | E::Abort(_)
-        | E::Break
-        | E::Continue
+        | E::Give(_, _)
+        | E::Continue(_)
         | E::Assign(_, _, _)
         | E::Mutate(_, _) => panic!("ICE statement mishandled"),
 
@@ -1252,7 +1332,7 @@ fn value_list(
 
 macro_rules! h_stmt_cmd {
     ($cmd:pat) => {
-        sp!(_, S::Command(sp!(_, $cmd)))
+        sp!(_, H::Statement_::Command(sp!(_, $cmd)))
     };
 }
 
@@ -1267,7 +1347,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
     } = e;
 
     let make_exp = |e_| T::Exp {
-        ty,
+        ty: ty.clone(),
         exp: sp(eloc, e_),
     };
     match e_ {
@@ -1292,16 +1372,21 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
             }
             if_diverged && else_diverged
         }
-        E::While(test, body) => {
+        E::While(name, test, body) => {
             let mut cond_block = make_block!();
             let cond_exp = value(context, &mut cond_block, Some(&tbool(eloc)), *test);
             if let Some(cond_exp) = cond_exp {
                 let cond = (cond_block, Box::new(cond_exp));
+                let name = translate_var(name);
+                // While loops can still use break and continue so we build them dummy binders.
+                context.record_named_block_binders(name, vec![]);
+                context.record_named_block_type(name, tunit(eloc));
                 let mut body_block = make_block!();
                 statement(context, &mut body_block, *body);
                 block.push_back(sp(
                     eloc,
                     S::While {
+                        name,
                         cond,
                         block: body_block,
                     },
@@ -1312,18 +1397,24 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
                 true
             }
         }
-        E::Loop { body, .. } => {
-            let mut loop_block = make_block!();
-            statement(context, &mut loop_block, *body);
-            // nonlocal control flow may have removed the break, so we recompute has_break.
-            let has_break = still_has_break(&loop_block);
+        E::Loop { name, body, .. } => {
+            let name = translate_var(name);
+            let out_type = type_(context, ty.clone());
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            context.record_named_block_binders(name, binders);
+            context.record_named_block_type(name, out_type);
+            let (loop_body, has_break) = process_loop_body(context, *body);
             block.push_back(sp(
                 eloc,
                 S::Loop {
-                    block: loop_block,
+                    name,
                     has_break,
+                    block: loop_body,
                 },
             ));
+            if has_break {
+                make_ignore_and_pop(block, Some(bound_exp));
+            }
             // we aren't divergent if we still have a break, because the loop could call it
             !has_break
         }
@@ -1351,12 +1442,22 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
                 false
             }
         }
-        E::Break => {
-            block.push_back(make_command(eloc, C::Break));
+        E::Give(name, rhs) => {
+            let out_name = translate_var(name);
+            let bind_ty = context.lookup_named_block_type(&out_name);
+            let rhs = value(context, block, bind_ty.as_ref(), *rhs);
+            let binders = context.lookup_named_block_binders(&out_name);
+            if binders.is_empty() {
+                make_ignore_and_pop(block, rhs);
+            } else {
+                bind_value_in_block(context, binders, bind_ty, block, rhs);
+            }
+            block.push_back(make_command(eloc, C::Break(out_name)));
             true
         }
-        E::Continue => {
-            block.push_back(make_command(eloc, C::Continue));
+        E::Continue(name) => {
+            let out_name = translate_var(name);
+            block.push_back(make_command(eloc, C::Continue(out_name)));
             true
         }
 
@@ -1471,6 +1572,14 @@ fn make_command(loc: Loc, command: H::Command_) -> H::Statement {
     sp(loc, H::Statement_::Command(sp(loc, command)))
 }
 
+fn process_loop_body(context: &mut Context, body: T::Exp) -> (H::Block, bool) {
+    let mut loop_block = make_block!();
+    statement(context, &mut loop_block, body);
+    // nonlocal control flow may have removed the break, so we recompute has_break.
+    let has_break = still_has_break(&loop_block);
+    (loop_block, has_break)
+}
+
 fn tbool(loc: Loc) -> H::Type {
     H::Type_::bool(loc)
 }
@@ -1538,7 +1647,12 @@ fn is_statement(e: &T::Exp) -> bool {
     use T::UnannotatedExp_ as E;
     matches!(
         e.exp.value,
-        E::Return(_) | E::Abort(_) | E::Break | E::Continue | E::Assign(_, _, _) | E::Mutate(_, _)
+        E::Return(_)
+            | E::Abort(_)
+            | E::Give(_, _)
+            | E::Continue(_)
+            | E::Assign(_, _, _)
+            | E::Mutate(_, _)
     )
 }
 
@@ -1570,7 +1684,7 @@ fn still_has_break(block: &Block) -> bool {
             } => has_break_block(if_block) || has_break_block(else_block),
             S::While { block, .. } => has_break_block(block),
             S::Loop { .. } => false,
-            hcmd!(C::Break) => true,
+            hcmd!(C::Break(_)) => true,
             _ => false,
         }
     }
@@ -1585,12 +1699,6 @@ fn still_has_break(block: &Block) -> bool {
 fn divergent(stmt_: &H::Statement_) -> bool {
     use H::{Command_ as C, Statement_ as S};
 
-    macro_rules! hcmd {
-        ($cmd:pat) => {
-            S::Command(sp!(_, $cmd))
-        };
-    }
-
     fn divergent_while(block: &Block) -> bool {
         matches!(
             block.back(),
@@ -1601,8 +1709,8 @@ fn divergent(stmt_: &H::Statement_) -> bool {
     fn divergent_block(block: &Block) -> bool {
         matches!(
             block.back(),
-            Some(h_stmt_cmd!(C::Break))
-                | Some(h_stmt_cmd!(C::Continue))
+            Some(h_stmt_cmd!(C::Break(_)))
+                | Some(h_stmt_cmd!(C::Continue(_)))
                 | Some(h_stmt_cmd!(C::Abort(_)))
                 | Some(h_stmt_cmd!(C::Return { .. }))
         )
@@ -1620,7 +1728,10 @@ fn divergent(stmt_: &H::Statement_) -> bool {
 
         S::Loop { has_break, .. } => !has_break,
 
-        hcmd!(C::Break) | hcmd!(C::Continue) | hcmd!(C::Abort(_)) | hcmd!(C::Return { .. }) => true,
+        hcmd!(C::Break(_))
+        | hcmd!(C::Continue(_))
+        | hcmd!(C::Abort(_))
+        | hcmd!(C::Return { .. }) => true,
 
         _ => false,
     }

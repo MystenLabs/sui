@@ -313,8 +313,8 @@ pub enum Exp_ {
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, Box<Exp>),
-    Loop(Box<Exp>),
+    While(Var, Box<Exp>, Box<Exp>),
+    Loop(Var, Box<Exp>),
     Block(Sequence),
 
     Assign(LValueList, Box<Exp>),
@@ -323,8 +323,8 @@ pub enum Exp_ {
 
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Break,
-    Continue,
+    Give(Var, Box<Exp>),
+    Continue(Var),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
@@ -1278,14 +1278,18 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, e) => {
-                w.write("while (");
+            E::While(name, b, e) => {
+                w.write("while @");
+                name.ast_debug(w);
+                w.write(" (");
                 b.ast_debug(w);
                 w.write(")");
                 e.ast_debug(w);
             }
-            E::Loop(e) => {
-                w.write("loop ");
+            E::Loop(name, e) => {
+                w.write("loop @");
+                name.ast_debug(w);
+                w.write(" ");
                 e.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
@@ -1320,8 +1324,16 @@ impl AstDebug for Exp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Break => w.write("break"),
-            E::Continue => w.write("continue"),
+            E::Give(name, e) => {
+                w.write("give @");
+                name.ast_debug(w);
+                w.write(" ");
+                e.ast_debug(w);
+            }
+            E::Continue(name) => {
+                w.write("continue @");
+                name.ast_debug(w);
+            }
             E::Dereference(e) => {
                 w.write("*");
                 e.ast_debug(w)
