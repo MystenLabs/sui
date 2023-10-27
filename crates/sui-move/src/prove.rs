@@ -93,7 +93,7 @@ impl Prover {
             ),
         );
 
-        eprintln!("WARNING: the level of Move Prover support for Sui is incomplete; use at your own risk as not everything is guaranteed to work (support for bug fixes and new features is also limited)");
+        eprintln!("WARNING: the level of Move Prover support for Sui is incomplete; use at your own risk as not everything is guaranteed to work (please file an issue if an update breaks existing usage but the level of current support is limited)");
         let prover_result = std::thread::spawn(move || {
             prove::run_move_prover(
                 build_config,
