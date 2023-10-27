@@ -30,7 +30,6 @@ runs:
           - 'sui-execution/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
-          - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
         isDoc:
           - 'doc/**'
