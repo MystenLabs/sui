@@ -1130,7 +1130,7 @@ fn value(
                 context
                     .used_fields
                     .entry(struct_name.value())
-                    .or_insert_with(BTreeSet::new)
+                    .or_default()
                     .insert(field.value());
             }
             make_exp(HE::Borrow(mut_, Box::new(exp), field))
