@@ -21,6 +21,7 @@ hex.workspace = true
 hyper.workspace = true
 lru.workspace = true
 move-binary-format.workspace = true
+markdown-gen.workspace = true
 mysten-metrics.workspace = true
 move-core-types.workspace = true
 once_cell.workspace = true

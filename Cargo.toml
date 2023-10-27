@@ -333,6 +333,7 @@ json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c0
 leb128 = "0.2.5"
 linked-hash-map = "0.5.6"
 lru = "0.10"
+markdown-gen = "1.2.1"
 match_opt = "0.1.2"
 mime = "0.3"
 mockall = "0.11.4"
