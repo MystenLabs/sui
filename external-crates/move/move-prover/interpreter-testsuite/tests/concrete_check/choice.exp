@@ -1,8 +1,6 @@
 Running Move unit tests
 [ FAIL    ] 0x2::A::simple_number_min_range_failure
 [ FAIL    ] 0x2::A::simple_number_range_failure
-[ PASS    ] 0x2::A::unroll_address_success
-[ FAIL    ] 0x2::A::unroll_address_unsatisfied_predicate
 [ FAIL    ] 0x2::A::vector_choose_min_unsatisfied_predicate
 [ PASS    ] 0x2::A::vector_choose_success
 [ FAIL    ] 0x2::A::vector_choose_unsatisfied_predicate
@@ -13,15 +11,15 @@ Failures in 0x2::A:
 
 ┌── simple_number_min_range_failure ──────
 │ error: failed to evaluate expression: enumeration of a non-address type domain is not supported
-│    ┌─ tests/concrete_check/choice.move:78:42
+│    ┌─ tests/concrete_check/choice.move:56:42
 │    │
-│ 78 │         ensures result <= (choose min x: u64 where x >= 4);
+│ 56 │         ensures result <= (choose min x: u64 where x >= 4);
 │    │                                          ^^^
 │
 │ error: failed to evaluate expression: unexpected error code
-│    ┌─ tests/concrete_check/choice.move:78:17
+│    ┌─ tests/concrete_check/choice.move:56:17
 │    │
-│ 78 │         ensures result <= (choose min x: u64 where x >= 4);
+│ 56 │         ensures result <= (choose min x: u64 where x >= 4);
 │    │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 │
 │
@@ -30,27 +28,16 @@ Failures in 0x2::A:
 
 ┌── simple_number_range_failure ──────
 │ error: failed to evaluate expression: enumeration of a non-address type domain is not supported
-│    ┌─ tests/concrete_check/choice.move:71:38
+│    ┌─ tests/concrete_check/choice.move:49:38
 │    │
-│ 71 │         ensures result <= (choose x: u64 where x >= 4);
+│ 49 │         ensures result <= (choose x: u64 where x >= 4);
 │    │                                      ^^^
 │
 │ error: failed to evaluate expression: unexpected error code
-│    ┌─ tests/concrete_check/choice.move:71:17
+│    ┌─ tests/concrete_check/choice.move:49:17
 │    │
-│ 71 │         ensures result <= (choose x: u64 where x >= 4);
+│ 49 │         ensures result <= (choose x: u64 where x >= 4);
 │    │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-│
-│
-└──────────────────
-
-
-┌── unroll_address_unsatisfied_predicate ──────
-│ error: failed to evaluate expression: choose fails to satisfy a predicate
-│    ┌─ tests/concrete_check/choice.move:23:51
-│    │
-│ 23 │         let post choice = choose a: address where !exists<R>(a);
-│    │                                                   ^^^^^^^^^^^^^
 │
 │
 └──────────────────
@@ -58,9 +45,9 @@ Failures in 0x2::A:
 
 ┌── vector_choose_min_unsatisfied_predicate ──────
 │ error: failed to evaluate expression: choose min fails to satisfy a predicate
-│    ┌─ tests/concrete_check/choice.move:64:68
+│    ┌─ tests/concrete_check/choice.move:42:68
 │    │
-│ 64 │         let post choice_min = choose min i in 0..len(result) where result[i] == 3;
+│ 42 │         let post choice_min = choose min i in 0..len(result) where result[i] == 3;
 │    │                                                                    ^^^^^^^^^^^^^^
 │
 │
@@ -69,12 +56,12 @@ Failures in 0x2::A:
 
 ┌── vector_choose_unsatisfied_predicate ──────
 │ error: failed to evaluate expression: choose fails to satisfy a predicate
-│    ┌─ tests/concrete_check/choice.move:51:60
+│    ┌─ tests/concrete_check/choice.move:29:60
 │    │
-│ 51 │         let post choice = choose i in 0..len(result) where result[i] == 3;
+│ 29 │         let post choice = choose i in 0..len(result) where result[i] == 3;
 │    │                                                            ^^^^^^^^^^^^^^
 │
 │
 └──────────────────
 
-Test result: FAILED. Total tests: 7; passed: 2; failed: 5
+Test result: FAILED. Total tests: 5; passed: 1; failed: 4
