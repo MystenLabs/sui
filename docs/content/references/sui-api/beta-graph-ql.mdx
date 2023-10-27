@@ -1,0 +1,61 @@
+---
+title: GraphQL RPC 
+description: The Sui API is migrating from JSON RPC to a GraphQL RPC soon. A beta version is available to you for testing.
+---
+
+:::info
+
+This is a beta version providing a READ ONLY snapshot of the Sui Mainnet and Testnet networks. That is, these snapshots provide data up to a fixed checkpoint and are frozen. The beta version is made available for you to get familiar with the upcoming RPC 2.0 in an interactive manner.
+
+:::
+
+GraphQL is an open-source data query and manipulation language designed to facilitate building expressive APIs and services that require complex data querying. 
+
+We are providing an early beta version (feature development continues) of the envisioned RPC 2.0, for `mainnet` and `testnet`, where users have access to a READ-ONLY snapshot of the two networks. This is not intended for production-ready applications, but more as a playground to get familiar with the upcoming GraphQL RPC. The [Appendix](#appendix) provides a description on the GraphQL schema. For examples, see the [Query Examples](#query-examples) section.
+
+## Using Sui GraphQL RPC
+
+There are currently two available playgrounds for Sui GraphQL Service:
+- `mainnet`: https://graphql-beta.mainnet.sui.io/
+- `testnet`: https://graphql-beta.testnet.sui.io/
+
+Both instances run the GraphQL IDE, an interactive IDE with autocomplete support and in-built documentation.
+
+## Query examples
+
+An extensive list of query examples is available in the Sui repository: https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples.
+
+Any existing addresses/object IDs in these examples refer to data served by the `graphql-beta.mainnet.sui.io` service only.
+
+## Limitations and unsupported features
+
+Due to the query richness and highly flexible nature of writing queries, there are limits on the maximum depth and number of nodes in a query. Use the `serviceConfig` field to get the exact values. 
+
+```graphql
+{
+    serviceConfig 
+    {
+        maxQueryDepth
+        maxQueryNodes
+  }
+}
+```
+
+By default, there is a query timeout of 20s. If the time limit is exceeded, the query is stopped and an error is returned.
+
+As this is only a beta version, there are a few unsupported features and/or limitations:
+- There are no performance optimizations, thus some queries may be slower than expected
+- Subscriptions are not supported
+- Executing transactions and other information on-chain is not possible - the beta release is a READ-ONLY service
+- Queries requesting stake related information might be a bit slower or fail the first time, depending on an internal cache. If it fails, try again after a couple of minutes.
+
+# Feedback
+
+We are happy to hear your feedback. Please reply in this thread (link to forums.sui.io post) or in this GitHub issue (link to GitHub RPC issue feedback). 
+
+## Appendix
+
+Call this endpoint to get the schema that the server is currently using:
+
+- Mainnet - https://graphql-beta.mainnet.sui.io/schema
+- Testnet - https://graphql-beta.testnet.sui.io/schema
