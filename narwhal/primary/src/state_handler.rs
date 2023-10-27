@@ -116,7 +116,7 @@ impl RandomnessState {
         let nodes = match nodes::Nodes::new(nodes) {
             Ok(nodes) => nodes,
             Err(err) => {
-                error!("Error while initializing random beacon Nodes: {err:?}");
+                error!("random beacon: error while initializing Nodes: {err:?}");
                 return None;
             }
         };
@@ -128,6 +128,7 @@ impl RandomnessState {
             protocol_config.random_beacon_reduction_allowed_delta(),
         );
         let total_weight = nodes.n();
+        let num_nodes = nodes.num_nodes();
         let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
@@ -139,11 +140,13 @@ impl RandomnessState {
         ) {
             Ok(party) => party,
             Err(err) => {
-                error!("Error while initializing random beacon Party: {err:?}");
+                error!("random beacon: error while initializing Party: {err:?}");
                 return None;
             }
         };
-        info!("random beacon: state initialized with total_weight={total_weight}, t={t}");
+        info!(
+            "random beacon: state initialized with total_weight={total_weight}, t={t}, num_nodes={num_nodes}",
+        );
         Some(Self {
             tx_system_messages,
             party,
@@ -166,7 +169,12 @@ impl RandomnessState {
 
     async fn start_dkg(&self) {
         let msg = self.party.create_message(&mut rand::thread_rng());
-        info!("random beacon: sending DKG Message: {msg:?}");
+        info!(
+            "random beacon: sending DKG Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
+            msg.sender,
+            msg.vss_pk.degree(),
+            msg.encrypted_shares.len(),
+        );
         let _ = self
             .tx_system_messages
             .send(SystemMessage::DkgMessage(msg))
@@ -183,7 +191,7 @@ impl RandomnessState {
                 self.processed_messages.push(processed);
             }
             Err(err) => {
-                debug!("error while processing randomness DKG message: {err:?}");
+                debug!("random beacon: error while processing DKG Message: {err:?}");
             }
         }
     }
@@ -219,7 +227,7 @@ impl RandomnessState {
                         .await;
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
-                Err(e) => debug!("Error while merging randomness DKG messages: {e:?}"),
+                Err(e) => debug!("random beacon: error while merging DKG Messages: {e:?}"),
             }
         }
 
@@ -245,7 +253,7 @@ impl RandomnessState {
                     );
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
-                Err(e) => error!("Error while processing randomness DKG confirmations: {e:?}"),
+                Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
             }
             // Begin randomness generation.
             if self.dkg_output.is_some() {
