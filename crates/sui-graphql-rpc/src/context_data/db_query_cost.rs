@@ -71,11 +71,10 @@ pub fn raw_sql_string_values_set(
 
 pub fn extract_cost(
     query: &dyn QueryFragment<Pg>,
-    // pg_connection: &mut PgConnection,
     pg_reader: &IndexerReader,
 ) -> Result<f64, crate::error::Error> {
     let raw_sql_string = raw_sql_string_values_set(query)?;
-    println!("raw_sql_string: {}", raw_sql_string);
+    // Use IndexerReader.run_query so we get alerted when blocking calls are made in an async thread
     pg_reader
         .run_query(|conn| diesel::select(query_cost(&raw_sql_string)).get_result::<f64>(conn))
         .map_err(|e| {
