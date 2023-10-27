@@ -160,10 +160,18 @@ pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum UnannotatedExp_ {
-    Unit { trailing: bool },
+    Unit {
+        trailing: bool,
+    },
     Value(Value),
-    Move { from_user: bool, var: Var },
-    Copy { from_user: bool, var: Var },
+    Move {
+        from_user: bool,
+        var: Var,
+    },
+    Copy {
+        from_user: bool,
+        var: Var,
+    },
     Use(Var),
     Constant(Option<ModuleIdent>, ConstantName),
 
@@ -172,15 +180,19 @@ pub enum UnannotatedExp_ {
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, Box<Exp>),
-    Loop { has_break: bool, body: Box<Exp> },
+    While(Var, Box<Exp>, Box<Exp>),
+    Loop {
+        name: Var,
+        has_break: bool,
+        body: Box<Exp>,
+    },
     Block(Sequence),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Break,
-    Continue,
+    Give(Var, Box<Exp>),
+    Continue(Var),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
@@ -561,17 +573,25 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, e) => {
-                w.write("while (");
+            E::While(name, b, e) => {
+                w.write("while@");
+                name.ast_debug(w);
+                w.write(" (");
                 b.ast_debug(w);
                 w.write(")");
                 e.ast_debug(w);
             }
-            E::Loop { has_break, body } => {
+            E::Loop {
+                name,
+                has_break,
+                body,
+            } => {
                 w.write("loop");
                 if *has_break {
                     w.write("#with_break");
                 }
+                w.write("@");
+                name.ast_debug(w);
                 w.write(" ");
                 body.ast_debug(w);
             }
@@ -605,8 +625,16 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Break => w.write("break"),
-            E::Continue => w.write("continue"),
+            E::Give(name, exp) => {
+                w.write("give@");
+                name.ast_debug(w);
+                w.write(" ");
+                exp.ast_debug(w);
+            }
+            E::Continue(name) => {
+                w.write("continue@");
+                name.ast_debug(w);
+            }
             E::Dereference(e) => {
                 w.write("*");
                 e.ast_debug(w)

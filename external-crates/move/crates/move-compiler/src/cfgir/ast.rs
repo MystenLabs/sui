@@ -176,7 +176,7 @@ fn remap_labels_block(remapping: &BTreeMap<Label, Label>, block: &mut BasicBlock
 fn remap_labels_cmd(remapping: &BTreeMap<Label, Label>, sp!(_, cmd_): &mut Command) {
     use Command_::*;
     match cmd_ {
-        Break | Continue => panic!("ICE break/continue not translated to jumps"),
+        Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
         Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } | Abort(_) | Return { .. } => (),
         Jump { target, .. } => *target = remapping[target],
         JumpIf {

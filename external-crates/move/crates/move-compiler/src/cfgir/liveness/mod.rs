@@ -96,7 +96,7 @@ fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
         | C::JumpIf { cond: e, .. } => exp(state, e),
 
         C::Jump { .. } => (),
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
 
@@ -275,7 +275,7 @@ mod last_usage {
             | C::JumpIf { cond: e, .. } => exp(context, e),
 
             C::Jump { .. } => (),
-            C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
     }
 

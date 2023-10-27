@@ -196,10 +196,12 @@ pub enum Statement_ {
         else_block: Block,
     },
     While {
+        name: Var,
         cond: (Block, Box<Exp>),
         block: Block,
     },
     Loop {
+        name: Var,
         block: Block,
         has_break: bool,
     },
@@ -229,8 +231,8 @@ pub enum Command_ {
         from_user: bool,
         exp: Exp,
     },
-    Break,
-    Continue,
+    Break(Var),
+    Continue(Var),
     IgnoreAndPop {
         pop_num: usize,
         exp: Exp,
@@ -405,7 +407,7 @@ impl Command_ {
     pub fn is_terminal(&self) -> bool {
         use Command_::*;
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
             Abort(_) | Return { .. } | Jump { .. } | JumpIf { .. } => true,
         }
@@ -414,7 +416,7 @@ impl Command_ {
     pub fn is_exit(&self) -> bool {
         use Command_::*;
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } | Jump { .. } | JumpIf { .. } => {
                 false
             }
@@ -425,7 +427,7 @@ impl Command_ {
     pub fn is_unit(&self) -> bool {
         use Command_::*;
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(ls, e) => ls.is_empty() && e.is_unit(),
             IgnoreAndPop { exp: e, .. } => e.is_unit(),
 
@@ -438,7 +440,7 @@ impl Command_ {
 
         let mut successors = BTreeSet::new();
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } => {
                 panic!("ICE Should not be last command in block")
             }
@@ -460,7 +462,7 @@ impl Command_ {
         use Command_::*;
         match self {
             Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
-            Break | Continue | Abort(_) | Return { .. } => true,
+            Break(_) | Continue(_) | Abort(_) | Return { .. } => true,
             Jump { .. } | JumpIf { .. } => panic!("ICE found jump/jump-if in hlir"),
         }
     }
@@ -1131,17 +1133,25 @@ impl AstDebug for Statement_ {
                 w.write(" else ");
                 w.block(|w| else_block.ast_debug(w));
             }
-            S::While { cond, block } => {
-                w.write("while (");
+            S::While { name, cond, block } => {
+                w.write("while@");
+                name.ast_debug(w);
+                w.write(" (");
                 cond.ast_debug(w);
                 w.write(")");
                 w.block(|w| block.ast_debug(w))
             }
-            S::Loop { block, has_break } => {
+            S::Loop {
+                name,
+                block,
+                has_break,
+            } => {
                 w.write("loop");
                 if *has_break {
                     w.write("#has_break");
                 }
+                w.write("@");
+                name.ast_debug(w);
                 w.write(" ");
                 w.block(|w| block.ast_debug(w))
             }
@@ -1176,8 +1186,14 @@ impl AstDebug for Command_ {
                 w.write("return ");
                 e.ast_debug(w);
             }
-            C::Break => w.write("break"),
-            C::Continue => w.write("continue"),
+            C::Break(name) => {
+                w.write("break@");
+                name.ast_debug(w);
+            }
+            C::Continue(name) => {
+                w.write("continue");
+                name.ast_debug(w);
+            }
             C::IgnoreAndPop { pop_num, exp } => {
                 w.write("pop ");
                 w.comma(0..*pop_num, |w, _| w.write("_"));
