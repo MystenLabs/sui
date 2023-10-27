@@ -70,6 +70,7 @@ impl SingleValidator {
             None,
             None,
             ConsensusAdapterMetrics::new_test(),
+            epoch_store.protocol_config().clone(),
         ));
         let validator_service = Arc::new(ValidatorService::new(
             validator,

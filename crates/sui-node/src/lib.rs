@@ -990,6 +990,7 @@ impl SuiNode {
             state.name,
             connection_monitor_status.clone(),
             &registry_service.default_registry(),
+            epoch_store.protocol_config().clone(),
         ));
         let narwhal_manager =
             Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
@@ -1076,7 +1077,7 @@ impl SuiNode {
             None,
             None,
             state.metrics.clone(),
-            ThroughputProfileRanges::default(), // TODO: move configuration to protocol-config and potentially differentiate for each environment.
+            ThroughputProfileRanges::from_chain(epoch_store.get_chain_identifier()),
         ));
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
@@ -1211,6 +1212,7 @@ impl SuiNode {
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
+        protocol_config: ProtocolConfig,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -1226,6 +1228,7 @@ impl SuiNode {
             consensus_config.max_submit_position,
             consensus_config.submit_delay_step_override(),
             ca_metrics,
+            protocol_config,
         )
     }
 
