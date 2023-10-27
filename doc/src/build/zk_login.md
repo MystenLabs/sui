@@ -384,7 +384,6 @@ docker run \
 ```bash
 docker run \
     -e PROVER_URI='http://localhost:PORT1/input' \
-    -e NODE_ENV=production \
     -e DEBUG=zkLogin:info,jwks \
     -p PORT2:8080 \
     <prover-fe-image>
