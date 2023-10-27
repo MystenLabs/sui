@@ -139,8 +139,9 @@ module deepbook::clob_test {
         );
     }
 
-    #[test] fun test_inject_and_price_limit_affected_match_taker_ask_returned_pool() {
-        let _ = test_inject_and_price_limit_affected_match_taker_ask_returned_pool_(
+    #[test] 
+    fun test_inject_and_price_limit_affected_match_taker_ask_returned_pool() {
+        test_inject_and_price_limit_affected_match_taker_ask_returned_pool_(
             scenario()
         );
     }
@@ -4158,14 +4159,50 @@ module deepbook::clob_test {
             let pool = borrow_mut_pool<SUI, USD>(&mut wrapped_pool);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
             // let account_cap_user = get_account_cap_user(&account_cap);
-            clob::test_inject_limit_order(pool, CLIENT_ID_ALICE, 5 * FLOAT_SCALING, 2, 2, true,
-                CANCEL_OLDEST, &account_cap, ctx(&mut test));
-            clob::test_inject_limit_order(pool, CLIENT_ID_ALICE, 5 * FLOAT_SCALING, 3, 3, true,
-                CANCEL_OLDEST, &account_cap, ctx(&mut test));
-            clob::test_inject_limit_order(pool, CLIENT_ID_ALICE, 2 * FLOAT_SCALING, 10, 10, true,
-                CANCEL_OLDEST, &account_cap, ctx(&mut test));
-            clob::test_inject_limit_order(pool, CLIENT_ID_ALICE, 20 * FLOAT_SCALING, 10, 10, false,
-                CANCEL_OLDEST, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(
+                pool, 
+                CLIENT_ID_ALICE, 
+                5 * FLOAT_SCALING, 
+                2, 
+                2, 
+                true,
+                CANCEL_OLDEST, 
+                &account_cap, 
+                ctx(&mut test)
+            );
+            clob::test_inject_limit_order(
+                pool, 
+                CLIENT_ID_ALICE, 
+                5 * FLOAT_SCALING, 
+                3, 
+                3, 
+                true,
+                CANCEL_OLDEST, 
+                &account_cap, 
+                ctx(&mut test)
+            );
+            clob::test_inject_limit_order(
+                pool, 
+                CLIENT_ID_ALICE, 
+                2 * FLOAT_SCALING, 
+                10, 
+                10, 
+                true,
+                CANCEL_OLDEST, 
+                &account_cap, 
+                ctx(&mut test)
+            );
+            clob::test_inject_limit_order(
+                pool, 
+                CLIENT_ID_ALICE, 
+                20 * FLOAT_SCALING, 
+                10, 
+                10, 
+                false,
+                CANCEL_OLDEST, 
+                &account_cap, 
+                ctx(&mut test)
+            );
             test::return_shared(wrapped_pool);
             test::return_to_address<AccountCap>(alice, account_cap);
         };

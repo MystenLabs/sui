@@ -375,22 +375,22 @@ module deepbook::clob_v2 {
             lot_size,
         });
         Pool<BaseAsset, QuoteAsset> {
-                id: pool_uid,
-                bids: critbit::new(ctx),
-                asks: critbit::new(ctx),
-                next_bid_order_id: MIN_BID_ORDER_ID,
-                next_ask_order_id: MIN_ASK_ORDER_ID,
-                usr_open_orders: table::new(ctx),
-                taker_fee_rate,
-                maker_rebate_rate,
-                tick_size,
-                lot_size,
-                base_custodian: custodian::new<BaseAsset>(ctx),
-                quote_custodian: custodian::new<QuoteAsset>(ctx),
-                creation_fee,
-                base_asset_trading_fees: balance::zero(),
-                quote_asset_trading_fees: balance::zero(),
-            }
+            id: pool_uid,
+            bids: critbit::new(ctx),
+            asks: critbit::new(ctx),
+            next_bid_order_id: MIN_BID_ORDER_ID,
+            next_ask_order_id: MIN_ASK_ORDER_ID,
+            usr_open_orders: table::new(ctx),
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            base_custodian: custodian::new<BaseAsset>(ctx),
+            quote_custodian: custodian::new<QuoteAsset>(ctx),
+            creation_fee,
+            base_asset_trading_fees: balance::zero(),
+            quote_asset_trading_fees: balance::zero(),
+        }
     }
 
     public fun create_pool_with_return<BaseAsset, QuoteAsset>(
@@ -1899,8 +1899,8 @@ module deepbook::clob_v2 {
     #[test_only]
     public fun borrow_mut_pool<BaseAsset, QuoteAsset>(
         wpool: &mut WrappedPool<BaseAsset, QuoteAsset>
-    ): (&mut Pool<BaseAsset, QuoteAsset>) {
-        (&mut wpool.pool)
+    ): &mut Pool<BaseAsset, QuoteAsset> {
+        &mut wpool.pool
     }
 
     #[test_only]
