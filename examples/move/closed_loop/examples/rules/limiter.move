@@ -1,6 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+
+// get_object({ id }) -> TokenPolicy<Token<LOL>>;
+// transfer() -> TokenPolicy.transferRules[ "0x0::limiter::Limiter", "0x0::denomination::Denomination" ];
+
+// do I know limiter? no -> abort
+// do I know denomination? no -> abort
+
+// let action = transfer();
+// limiter::verify(policy, action);
+// denomination::verify(policy, action);
+// closed_loop::confirm_request(policy, request);
+
 /// An example of a Rule for the Closed Loop Token which limits the amount per
 /// operation.
 module examples::limiter_rule {
@@ -30,12 +42,12 @@ module examples::limiter_rule {
     public fun add_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         limit: u64,
         ctx: &mut TxContext
     ) {
         cl::add_rule_for_action(
-            Limiter {}, policy, cap, name, Config { limit }, ctx
+            Limiter {}, policy, cap, action, Config { limit }, ctx
         );
     }
 
@@ -59,11 +71,11 @@ module examples::limiter_rule {
     public fun remove_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         ctx: &mut TxContext
     ) {
         let _: Config = cl::remove_rule_for_action<T, Limiter, Config>(
-            policy, cap, name, ctx
+            policy, cap, action, ctx
         );
     }
 }

@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+
+// Balance <-> Coin(Balance = X) <-> Token(Balance = X)
+// Supply      TreasuryCap           ???
+
+
 #[allow(unused_const, unused_field, unused_use)]
 /// -
 /// -
@@ -87,6 +92,18 @@ module closed_loop::closed_loop {
         /// received by the `ActionRequest` for the action to be performed.
         rules: VecMap<String, VecSet<TypeName>>
     }
+
+/*
+    rules:
+        - action: transfer
+          rules[]:
+            - Limiter {}
+            - DenyList {}
+        - action: spend
+          rules[]:
+            - Limiter {}
+            - DenyList {}
+*/
 
     /// A request to perform an "Action" on a token.
     struct ActionRequest<phantom T> {
@@ -376,21 +393,21 @@ module closed_loop::closed_loop {
 
     /// Adds a rule for an action with `name` in the `TokenPolicy`.
     public fun add_rule_for_action<T, Rule: drop, Config: store>(
-        _t: Rule,
+        _rule: Rule,
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         // should we allow optional config? do we see cases where config is not
         // needed? I kinda do but I'm not sure what's the benefit of it... yet
         config: Config,
         ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        if (!vec_map::contains(&self.rules, &name)) {
-            allow(self, cap, name, ctx);
+        if (!vec_map::contains(&self.rules, &action)) {
+            allow(self, cap, action, ctx);
         };
 
-        add_rule<T, Rule, Config>(self, name, config)
+        add_rule<T, Rule, Config>(self, action, config)
     }
 
     /// Disables a Rule for an action with `name` in the `TokenPolicy`. However,
@@ -399,11 +416,11 @@ module closed_loop::closed_loop {
     public fun disable_rule_for_action<T, Rule: drop>(
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         _ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        disable_rule<T, Rule>(self, name)
+        disable_rule<T, Rule>(self, action)
     }
 
     /// Removes a rule for an action with `name` in the `TokenPolicy`. Returns
@@ -411,11 +428,11 @@ module closed_loop::closed_loop {
     public fun remove_rule_for_action<T, Rule: drop, Config: store>(
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         _ctx: &mut TxContext
     ): Config {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        remove_rule<T, Rule, Config>(self, name)
+        remove_rule<T, Rule, Config>(self, action)
     }
 
     /// Allow Rule to mutate the Config object.
@@ -423,16 +440,16 @@ module closed_loop::closed_loop {
     public fun get_rule_for_action_mut<T, Rule: drop, Config: store>(
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         _ctx: &mut TxContext
     ): &mut Config {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        let rule_key = key<Rule>(name);
+        let rule_key = key<Rule>(action);
         let exists_ = df::exists_with_type<RuleKey, Config>(&self.id, rule_key);
 
         assert!(exists_, ERuleConfigNotFound);
 
-        get_rule_mut<T, Rule, Config>(self, name)
+        get_rule_mut<T, Rule, Config>(self, action)
     }
 
     // === Rules API ===
@@ -441,9 +458,9 @@ module closed_loop::closed_loop {
     public fun get_rule<T, Rule: drop, Config: store>(
         _rule: Rule,
         self: &TokenPolicy<T>,
-        name: String
+        action: String
     ): &Config {
-        let rule_key = key<Rule>(name);
+        let rule_key = key<Rule>(action);
         let exists_ = df::exists_with_type<RuleKey, Config>(&self.id, rule_key);
 
         assert!(exists_, ERuleConfigNotFound);
