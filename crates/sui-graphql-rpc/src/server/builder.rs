@@ -223,7 +223,7 @@ async fn health_checks(
         .elapsed()
         .as_secs_f64();
     let ret = format!(
-        r#"{{"status": UP,"uptime": {},"checks": {{"DB": {},}}}}
+        r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
         "#,
         uptime, db_up
     );
