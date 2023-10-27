@@ -49,7 +49,9 @@ pub fn raw_sql_string_values_set(
     let re = Regex::new(r"(LIMIT\s+)\$(\d+)")
         .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
     let replacement_string = format!("LIMIT {}", DEFAULT_PAGE_SIZE);
-    let output = re.replace_all(&sql, replacement_string.as_str()).to_string();
+    let output = re
+        .replace_all(&sql, replacement_string.as_str())
+        .to_string();
 
     // handle matching column against ANY value in input array
     let re = Regex::new(r"ANY\(\$(\d+)\)")
@@ -57,7 +59,9 @@ pub fn raw_sql_string_values_set(
     let nums: Vec<String> = (1..=50).map(|n| n.to_string()).collect();
     let nums_str = nums.join(", ");
     let replacement_string = format!("ANY ('{{{}}}')", nums_str);
-    let output = re.replace_all(&output, replacement_string.as_str()).to_string();
+    let output = re
+        .replace_all(&output, replacement_string.as_str())
+        .to_string();
 
     let re = Regex::new(r"\$(\d+)")
         .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
