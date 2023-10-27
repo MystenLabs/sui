@@ -151,11 +151,11 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
-            E::While(e1, e2) => {
+            E::While(_, e1, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }
-            E::Loop { has_break: _, body } => self.visit_exp(body),
+            E::Loop { body, .. } => self.visit_exp(body),
             E::Block(seq) => self.visit_seq(seq),
             E::Assign(_, _, e) => self.visit_exp(e),
             E::Mutate(e1, e2) => {
@@ -164,6 +164,7 @@ pub trait TypingVisitorContext {
             }
             E::Return(e) => self.visit_exp(e),
             E::Abort(e) => self.visit_exp(e),
+            E::Give(_, e) => self.visit_exp(e),
             E::Dereference(e) => self.visit_exp(e),
             E::UnaryExp(_, e) => self.visit_exp(e),
             E::BinopExp(e1, _, _, e2) => {
@@ -191,8 +192,7 @@ pub trait TypingVisitorContext {
             | E::Copy { .. }
             | E::Use(_)
             | E::Constant(..)
-            | E::Break
-            | E::Continue
+            | E::Continue(_)
             | E::BorrowLocal(..)
             | E::Spec(..)
             | E::UnresolvedError => (),
