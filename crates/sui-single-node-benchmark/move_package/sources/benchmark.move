@@ -5,8 +5,6 @@ module move_benchmark::benchmark {
     use std::ascii;
     use std::ascii::String;
     use std::vector;
-    use sui::balance;
-    use sui::coin;
     use sui::coin::Coin;
     use sui::dynamic_field;
     use sui::object;
@@ -16,7 +14,7 @@ module move_benchmark::benchmark {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
-    public fun transfer_coin(coin: Coin<SUI>, ctx: &mut TxContext) {
+    public fun transfer_coin(coin: Coin<SUI>, ctx: &TxContext) {
         transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 
