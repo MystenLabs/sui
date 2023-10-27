@@ -7,9 +7,8 @@
 ///
 /// Actions:
 /// - spend - spend the token in the shop
-module 0x0::loyalty {
+module examples::loyalty {
     use std::option;
-    use std::type_name;
     use sui::transfer;
     use sui::object::{Self, UID};
     use sui::coin::{Self, TreasuryCap};
@@ -45,20 +44,16 @@ module 0x0::loyalty {
             ctx
         );
 
-        // create and share the `TokenPolicy`, use the cap to initialize the
         let (policy, policy_cap) = cl::new(&mut treasury_cap, ctx);
 
-        // we allow spending the balance in the shop but only in this shop!
-
-        // for open policy a handy alias:
-        // cl::allow(&mut policy, &policy_cap, cl::spend_name(), ctx);
 
         // but we constrain spend by this shop:
-        cl::set_rules_for_action(
+        cl::add_rule_for_action(
+            GiftShop {},
             &mut policy,
             &policy_cap,
             cl::spend_name(),
-            vector[ type_name::get<GiftShop>() ],
+            false,
             ctx
         );
 

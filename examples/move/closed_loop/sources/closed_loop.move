@@ -16,6 +16,7 @@ module closed_loop::closed_loop {
     use sui::object::{Self, ID, UID};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
+    use sui::dynamic_field as df;
     use sui::transfer;
 
     /// The action is not allowed (defined) in the policy.
@@ -32,6 +33,8 @@ module closed_loop::closed_loop {
     const ENotZero: u64 = 5;
     /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
     const ECantConsumeBalance: u64 = 6;
+    /// The rule config was not found (on read or get_mut).
+    const ERuleConfigNotFound: u64 = 7;
 
     /// A Tag for the `burn` action. Unlike other tags, it's not a part of the
     /// default flow, only recommended for the issuer to use.
@@ -82,7 +85,7 @@ module closed_loop::closed_loop {
         /// The set of rules that define what actions can be performed on the
         /// token. Each rule contains the set of `TypeName`s that must be
         /// received by the `ActionRequest` for the action to be performed.
-        rules: VecMap<String, vector<TypeName>>
+        rules: VecMap<String, VecSet<TypeName>>
     }
 
     /// A request to perform an "Action" on a token.
@@ -103,6 +106,10 @@ module closed_loop::closed_loop {
         /// Collected approvals from Rules.
         approvals: VecSet<TypeName>,
     }
+
+    /// Dynamic field key for the `TokenPolicy` to store the `Config` for a
+    /// specific `Rule` for an action.
+    struct RuleKey has store, copy, drop { action: String, rule: TypeName }
 
     /// Create a new `TokenPolicy` and a matching `TokenPolicyCap`.
     /// The `TokenPolicy` must then be shared using the `share_policy` method.
@@ -132,7 +139,13 @@ module closed_loop::closed_loop {
         let amount = balance::value(&t.balance);
         transfer::transfer(t, recipient);
 
-        new_request(string::utf8(TRANSFER), amount, option::some(recipient), option::none(), ctx)
+        new_request(
+            string::utf8(TRANSFER),
+            amount,
+            option::some(recipient),
+            option::none(),
+            ctx
+        )
     }
 
     /// Spend a `Token` by "burning" it and storing in the `ActionRequest` for
@@ -258,7 +271,7 @@ module closed_loop::closed_loop {
             amount, sender, recipient,
         } = request;
 
-        let rules = vec_map::get(&policy.rules, &name);
+        let rules = &vec_set::into_keys(*vec_map::get(&policy.rules, &name));
         let rules_len = vector::length(rules);
         let i = 0;
 
@@ -347,25 +360,98 @@ module closed_loop::closed_loop {
         _ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        vec_map::insert(&mut self.rules, name, vector::empty());
+        vec_map::insert(&mut self.rules, name, vec_set::empty());
     }
 
-    /// Sets the rules for an action with `name` in the `TokenPolicy`.
-    public fun set_rules_for_action<T>(
+    /// Completely disallows an action on the `Token`.
+    public fun disallow<T>(
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         name: String,
-        rules: vector<TypeName>,
         _ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotAuthorized);
+        vec_map::remove(&mut self.rules, &name);
+    }
 
-        if (vec_map::contains(&self.rules, &name)) {
-            vec_map::remove(&mut self.rules, &name);
+    /// Adds a rule for an action with `name` in the `TokenPolicy`.
+    public fun add_rule_for_action<T, Rule: drop, Config: store>(
+        _t: Rule,
+        self: &mut TokenPolicy<T>,
+        cap: &TokenPolicyCap<T>,
+        name: String,
+        // should we allow optional config? do we see cases where config is not
+        // needed? I kinda do but I'm not sure what's the benefit of it... yet
+        config: Config,
+        ctx: &mut TxContext
+    ) {
+        assert!(object::id(self) == cap.for, ENotAuthorized);
+        if (!vec_map::contains(&self.rules, &name)) {
+            allow(self, cap, name, ctx);
         };
 
-        vec_map::insert(&mut self.rules, name, rules)
+        add_rule<T, Rule, Config>(self, name, config)
     }
+
+    /// Disables a Rule for an action with `name` in the `TokenPolicy`. However,
+    /// keeps the Config, as the policy owner may not be able to handle Config
+    /// object.
+    public fun disable_rule_for_action<T, Rule: drop>(
+        self: &mut TokenPolicy<T>,
+        cap: &TokenPolicyCap<T>,
+        name: String,
+        _ctx: &mut TxContext
+    ) {
+        assert!(object::id(self) == cap.for, ENotAuthorized);
+        disable_rule<T, Rule>(self, name)
+    }
+
+    /// Removes a rule for an action with `name` in the `TokenPolicy`. Returns
+    /// the config object to be handled by the sender (or a Rule itself).
+    public fun remove_rule_for_action<T, Rule: drop, Config: store>(
+        self: &mut TokenPolicy<T>,
+        cap: &TokenPolicyCap<T>,
+        name: String,
+        _ctx: &mut TxContext
+    ): Config {
+        assert!(object::id(self) == cap.for, ENotAuthorized);
+        remove_rule<T, Rule, Config>(self, name)
+    }
+
+    /// Allow Rule to mutate the Config object.
+    /// We should not allow the Rule module mutate it... it's a security risk.
+    public fun get_rule_for_action_mut<T, Rule: drop, Config: store>(
+        self: &mut TokenPolicy<T>,
+        cap: &TokenPolicyCap<T>,
+        name: String,
+        _ctx: &mut TxContext
+    ): &mut Config {
+        assert!(object::id(self) == cap.for, ENotAuthorized);
+        let rule_key = key<Rule>(name);
+        let exists_ = df::exists_with_type<RuleKey, Config>(&self.id, rule_key);
+
+        assert!(exists_, ERuleConfigNotFound);
+
+        get_rule_mut<T, Rule, Config>(self, name)
+    }
+
+    // === Rules API ===
+
+    /// Allow Rule to read the Config object.
+    public fun get_rule<T, Rule: drop, Config: store>(
+        _rule: Rule,
+        self: &TokenPolicy<T>,
+        name: String
+    ): &Config {
+        let rule_key = key<Rule>(name);
+        let exists_ = df::exists_with_type<RuleKey, Config>(&self.id, rule_key);
+
+        assert!(exists_, ERuleConfigNotFound);
+
+        df::borrow(&self.id, rule_key)
+    }
+
+    // === Protected: Minting and Burning ===
 
     /// Mint a `Token` with a given `amount` using the `TreasuryCap`.
     public fun mint<T>(
@@ -404,7 +490,7 @@ module closed_loop::closed_loop {
     // === Public Getters ===
 
     /// Returns the rules required for a specific action.
-    public fun rules<T>(self: &TokenPolicy<T>, name: String): vector<TypeName> {
+    public fun rules<T>(self: &TokenPolicy<T>, name: String): VecSet<TypeName> {
         *vec_map::get(&self.rules, &name)
     }
 
@@ -422,10 +508,13 @@ module closed_loop::closed_loop {
 
     /// Name of the Transfer action.
     public fun transfer_name(): String { string::utf8(TRANSFER) }
+
     /// Name of the `Spend` action.
     public fun spend_name(): String { string::utf8(SPEND) }
+
     /// Name of the `ToCoin` action.
     public fun to_coin_name(): String { string::utf8(TO_COIN) }
+
     /// Name of the `FromCoin` action.
     public fun from_coin_name(): String { string::utf8(FROM_COIN) }
 
@@ -445,21 +534,73 @@ module closed_loop::closed_loop {
         self.recipient
     }
 
+    // === Internal: Rule Storage ===
+
+    fun add_rule<T, Rule, Config: store>(
+        self: &mut TokenPolicy<T>, action: String, config: Config
+    ) {
+        let rule = type_name::get<Rule>();
+        vec_set::insert(vec_map::get_mut(&mut self.rules, &action), rule);
+        df::add(&mut self.id, key<Rule>(action), config);
+    }
+
+    fun disable_rule<T, Rule>(self: &mut TokenPolicy<T>, action: String) {
+        vec_set::remove(
+            vec_map::get_mut(&mut self.rules, &action),
+            &type_name::get<Rule>()
+        );
+    }
+
+    fun remove_rule<T, Rule, Config: store>(
+        self: &mut TokenPolicy<T>, action: String
+    ): Config {
+        let rule = type_name::get<Rule>();
+        let rules = vec_map::get_mut(&mut self.rules, &action);
+        if (vec_set::contains(rules, &rule)) {
+            vec_set::remove(rules, &rule);
+        };
+        df::remove(&mut self.id, key<Rule>(action))
+    }
+
+    fun get_rule_mut<T, Rule: drop, Config: store>(
+        self: &mut TokenPolicy<T>, action: String
+    ): &mut Config {
+        df::borrow_mut(&mut self.id, key<Rule>(action))
+    }
+
+    /// Internal: generate a DF Key for an `action` and a `Rule` type.
+    fun key<Rule>(action: String): RuleKey {
+        RuleKey { action, rule: type_name::get<Rule>() }
+    }
+
     // === Testing ===
 
     #[test_only]
-    public fun new_policy_for_testing<T>(ctx: &mut TxContext): TokenPolicy<T> {
-        TokenPolicy {
+    public fun new_policy_for_testing<T>(
+        ctx: &mut TxContext
+    ): (TokenPolicy<T>, TokenPolicyCap<T>) {
+        let policy = TokenPolicy {
             id: object::new(ctx),
             rules: vec_map::empty(),
             burned_balance: balance::zero(),
-        }
+        };
+        let cap = TokenPolicyCap {
+            id: object::new(ctx),
+            for: object::id(&policy)
+        };
+
+        (policy, cap)
     }
 
     #[test_only]
-    public fun burn_policy_for_testing<T>(policy: TokenPolicy<T>) {
+    public fun burn_policy_for_testing<T>(
+        policy: TokenPolicy<T>,
+        cap: TokenPolicyCap<T>
+    ) {
+        let TokenPolicyCap { id: cap_id, for: _ } = cap;
         let TokenPolicy { id, rules: _, burned_balance } = policy;
         balance::destroy_for_testing(burned_balance);
+        object::delete(cap_id);
         object::delete(id);
     }
 
@@ -474,20 +615,5 @@ module closed_loop::closed_loop {
         let Token { id, balance } = token;
         balance::destroy_for_testing(balance);
         object::delete(id);
-    }
-
-    #[test_only]
-    public fun add_rules_for_testing<T>(
-        policy: &mut TokenPolicy<T>, name: String, rules: vector<TypeName>
-    ) {
-        vec_map::insert(&mut policy.rules, name, rules);
-    }
-
-    #[test_only]
-    public fun remove_rules_for_testing<T>(
-        policy: &mut TokenPolicy<T>, name: String
-    ): vector<TypeName> {
-        let (_k, rules) = vec_map::remove(&mut policy.rules, &name);
-        rules
     }
 }
