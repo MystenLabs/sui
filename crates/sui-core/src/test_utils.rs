@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::{
+    test_authority_builder::TestAuthorityBuilder, AuthorityState, EffectsNotifyRead,
+};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
+use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use prometheus::Registry;
@@ -18,6 +21,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::local_ip_utils;
+use sui_config::node::OverloadThresholdConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
@@ -266,26 +270,50 @@ pub async fn init_local_authorities(
     ObjectID,
 ) {
     let (genesis, key_pairs, framework) = init_genesis(committee_size, genesis_objects).await;
-    let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
+    let authorities = join_all(key_pairs.iter().map(|(_, key_pair)| {
+        TestAuthorityBuilder::new()
+            .with_genesis_and_keypair(&genesis, key_pair)
+            .build()
+    }))
+    .await;
+    let aggregator = init_local_authorities_with_genesis(&genesis, authorities.clone()).await;
+    (aggregator, authorities, genesis, framework)
+}
+
+pub async fn init_local_authorities_with_overload_thresholds(
+    committee_size: usize,
+    genesis_objects: Vec<Object>,
+    overload_thresholds: OverloadThresholdConfig,
+) -> (
+    AuthorityAggregator<LocalAuthorityClient>,
+    Vec<Arc<AuthorityState>>,
+    Genesis,
+    ObjectID,
+) {
+    let (genesis, key_pairs, framework) = init_genesis(committee_size, genesis_objects).await;
+    let authorities = join_all(key_pairs.iter().map(|(_, key_pair)| {
+        TestAuthorityBuilder::new()
+            .with_genesis_and_keypair(&genesis, key_pair)
+            .with_overload_threshold_config(overload_thresholds.clone())
+            .build()
+    }))
+    .await;
+    let aggregator = init_local_authorities_with_genesis(&genesis, authorities.clone()).await;
     (aggregator, authorities, genesis, framework)
 }
 
 pub async fn init_local_authorities_with_genesis(
     genesis: &Genesis,
-    key_pairs: Vec<(AuthorityPublicKeyBytes, AuthorityKeyPair)>,
-) -> (
-    AuthorityAggregator<LocalAuthorityClient>,
-    Vec<Arc<AuthorityState>>,
-) {
+    authorities: Vec<Arc<AuthorityState>>,
+) -> AuthorityAggregator<LocalAuthorityClient> {
     telemetry_subscribers::init_for_testing();
     let committee = genesis.committee().unwrap();
 
     let mut clients = BTreeMap::new();
-    let mut states = Vec::new();
-    for (authority_name, secret) in key_pairs {
-        let client = LocalAuthorityClient::new(secret, genesis).await;
-        states.push(client.state.clone());
-        clients.insert(authority_name, client);
+    for state in authorities {
+        let name = state.name;
+        let client = LocalAuthorityClient::new_from_authority(state);
+        clients.insert(name, client);
     }
     let timeouts = TimeoutConfig {
         pre_quorum_timeout: Duration::from_secs(5),
@@ -293,16 +321,13 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_interval: Duration::from_secs(1),
     };
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
-    (
-        AuthorityAggregator::new_with_timeouts(
-            committee,
-            committee_store,
-            clients,
-            &Registry::new(),
-            Arc::new(HashMap::new()),
-            timeouts,
-        ),
-        states,
+    AuthorityAggregator::new_with_timeouts(
+        committee,
+        committee_store,
+        clients,
+        &Registry::new(),
+        Arc::new(HashMap::new()),
+        timeouts,
     )
 }
 

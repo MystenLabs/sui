@@ -580,6 +580,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
+            config.overload_threshold_config.clone(),
             archive_readers,
         )
         .await;
