@@ -539,6 +539,7 @@ impl PgManager {
                     )
                     .into());
                 }
+
                 let execute_closure = execute_fn(query);
                 this.run_query(execute_closure)
                     .map_err(|e| Error::Internal(e.to_string()))
