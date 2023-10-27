@@ -84,7 +84,7 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 //             Add support for random beacon.
 //             Enable transaction effects v2 in testnet.
 //             Deprecate supported oauth providers from protocol config and rely on node config instead.
-// Version 31: Enabling throughput aware submission for Devnet & Testnet
+//             Enable throughput aware submission for Devnet & Testnet
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
