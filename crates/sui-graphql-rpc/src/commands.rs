@@ -18,6 +18,11 @@ pub enum Command {
         #[clap(short, long)]
         file: Option<PathBuf>,
     },
+    GenerateExamples {
+        /// Path to output examples docs.
+        #[clap(short, long)]
+        file: Option<PathBuf>,
+    },
     FromConfig {
         /// Path to TOML file containing configuration for server.
         #[clap(short, long)]

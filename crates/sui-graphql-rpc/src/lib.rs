@@ -11,6 +11,7 @@ pub mod client;
 pub mod cluster;
 pub mod context_data;
 mod error;
+pub mod examples;
 mod extensions;
 mod metrics;
 mod types;
