@@ -8,6 +8,7 @@ edition = "2021"
 
 
 [dependencies]
+anyhow.workspace = true
 async-graphql = {workspace = true, features = ["dataloader"] }
 async-graphql-axum.workspace = true
 async-trait.workspace = true
@@ -21,6 +22,7 @@ hex.workspace = true
 hyper.workspace = true
 lru.workspace = true
 move-binary-format.workspace = true
+markdown-gen.workspace = true
 mysten-metrics.workspace = true
 move-core-types.workspace = true
 once_cell.workspace = true
@@ -33,6 +35,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
+similar.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true

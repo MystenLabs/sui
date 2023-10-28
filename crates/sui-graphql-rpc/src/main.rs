@@ -25,6 +25,18 @@ async fn main() {
                 println!("{}", &out);
             }
         }
+        Command::GenerateExamples { file } => {
+            let new_content: String = sui_graphql_rpc::examples::generate_markdown()
+                .expect("Generating examples markdown failed");
+
+            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            buf.push("docs");
+            buf.push("examples.md");
+            let file = file.unwrap_or(buf);
+
+            std::fs::write(file.clone(), new_content).expect("Writing examples markdown failed");
+            println!("Written examples to file: {:?}", file);
+        }
         Command::StartServer {
             db_url,
             port,
