@@ -3,12 +3,7 @@
 import { useLotSize } from '_app/hooks/deepbook/useLotSize';
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
-import {
-	DEEPBOOK_KEY,
-	ESTIMATED_GAS_FEES_PERCENTAGE,
-	USDC_CONVERSION_RATE,
-	WALLET_FEES_PERCENTAGE,
-} from '_pages/swap/constants';
+import { DEEPBOOK_KEY, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
 import { useDeepBookContext } from '_shared/deepBook/context';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
@@ -113,16 +108,7 @@ async function getPlaceMarketOrderTxn({
 	let txnResult;
 
 	if (isAsk) {
-		const bigNumberBaseBalance = new BigNumber(baseBalance);
-		const oneSuiDeepBook = new BigNumber(1).shiftedBy(USDC_CONVERSION_RATE);
-
-		if (bigNumberBaseBalance.isLessThan(oneSuiDeepBook)) {
-			balanceToSwap = bigNumberBaseBalance.minus(
-				bigNumberBaseBalance.times(ESTIMATED_GAS_FEES_PERCENTAGE / 100),
-			);
-		} else {
-			balanceToSwap = bigNumberBaseBalance;
-		}
+		balanceToSwap = new BigNumber(baseBalance);
 
 		const walletFee = balanceToSwap
 			.times(WALLET_FEES_PERCENTAGE / 100)

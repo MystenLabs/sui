@@ -187,7 +187,7 @@ export function SwapPageContent() {
 				if (numberPercent < 0 || numberPercent > 100) {
 					context.addIssue({
 						code: 'custom',
-						message: 'Value must be between 0 and 100.',
+						message: 'Value must be between 0 and 100',
 					});
 					return z.NEVER;
 				}
@@ -392,7 +392,7 @@ export function SwapPageContent() {
 													activeCoinType === SUI_TYPE_ARG
 														? formattedBaseTokenBalance
 														: formattedQuoteTokenBalance,
-													{ shouldDirty: true },
+													{ shouldValidate: true },
 												);
 											}}
 										/>
