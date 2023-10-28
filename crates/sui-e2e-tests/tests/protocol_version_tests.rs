@@ -63,7 +63,7 @@ mod sim_only_tests {
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
     use sui_json_rpc::api::WriteApiClient;
-    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+    use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
@@ -81,10 +81,13 @@ mod sim_only_tests {
         TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     };
     use sui_types::{
-        base_types::SequenceNumber, digests::TransactionDigest, object::Object,
-        programmable_transaction_builder::ProgrammableTransactionBuilder, storage::ObjectStore,
-        transaction::TransactionKind, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
-        SUI_SYSTEM_PACKAGE_ID,
+        base_types::{SequenceNumber, SuiAddress},
+        digests::TransactionDigest,
+        object::Object,
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        storage::ObjectStore,
+        transaction::TransactionKind,
+        MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     };
     use test_cluster::TestCluster;
     use tokio::time::{sleep, Duration};
@@ -327,18 +330,28 @@ mod sim_only_tests {
         let cluster = run_framework_upgrade("base", "add_struct_ability").await;
 
         assert_eq!(call_canary(&cluster).await, 42);
-        let obj0 = create_obj(&cluster).await;
+        let to_wrap0 = create_obj(&cluster).await;
+        let to_transfer0 = create_obj(&cluster).await;
 
         expect_upgrade_succeeded(&cluster).await;
 
         // The upgrade happened
         assert_eq!(call_canary(&cluster).await, 43);
-        let obj1 = create_obj(&cluster).await;
+        let to_wrap1 = create_obj(&cluster).await;
+        let to_transfer1 = create_obj(&cluster).await;
 
+        // Instances of the type that existed before will not have public transfer despite
+        // now having store
+        assert!(!has_public_transfer(&cluster, &to_wrap0.0).await);
+        assert!(!has_public_transfer(&cluster, &to_transfer0.0).await);
+        assert!(has_public_transfer(&cluster, &to_wrap1.0).await);
+        assert!(has_public_transfer(&cluster, &to_transfer1.0).await);
         // Instances of the type that existed before and new instances are able to take advantage of
         // the newly introduced ability
-        wrap_obj(&cluster, obj0).await;
-        wrap_obj(&cluster, obj1).await;
+        wrap_obj(&cluster, to_wrap0).await;
+        transfer_obj(&cluster, SuiAddress::ZERO, to_transfer0).await;
+        wrap_obj(&cluster, to_wrap1).await;
+        transfer_obj(&cluster, SuiAddress::ZERO, to_transfer1).await;
     }
 
     #[sim_test]
@@ -509,6 +522,25 @@ mod sim_only_tests {
         .clone()
     }
 
+    async fn transfer_obj(
+        cluster: &TestCluster,
+        recipient: SuiAddress,
+        obj: ObjectRef,
+    ) -> ObjectRef {
+        execute(cluster, {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_object(recipient, obj).unwrap();
+            builder.finish()
+        })
+        .await
+        .mutated()
+        .iter()
+        .find(|oref| oref.reference.object_id == obj.0)
+        .unwrap()
+        .reference
+        .to_object_ref()
+    }
+
     async fn dev_inspect_call(cluster: &TestCluster, call: ProgrammableMoveCall) -> u64 {
         let client = cluster.rpc_client();
         let sender = cluster.get_address_0();
@@ -540,6 +572,18 @@ mod sim_only_tests {
         cluster: &TestCluster,
         ptb: ProgrammableTransaction,
     ) -> Vec<ObjectRef> {
+        execute(cluster, ptb)
+            .await
+            .created()
+            .iter()
+            .map(|oref| oref.reference.to_object_ref())
+            .collect()
+    }
+
+    async fn execute(
+        cluster: &TestCluster,
+        ptb: ProgrammableTransaction,
+    ) -> SuiTransactionBlockEffects {
         let context = &cluster.wallet;
         let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
 
@@ -557,10 +601,6 @@ mod sim_only_tests {
             .await
             .effects
             .unwrap()
-            .created()
-            .iter()
-            .map(|oref| oref.reference.to_object_ref())
-            .collect()
     }
 
     async fn expect_upgrade_failed(cluster: &TestCluster) {
@@ -606,12 +646,21 @@ mod sim_only_tests {
             .await
     }
 
-    async fn get_object(cluster: &TestCluster, package: &ObjectID) -> Object {
+    async fn get_object(cluster: &TestCluster, object_id: &ObjectID) -> Object {
         let node_handle = &cluster.fullnode_handle.sui_node;
 
         node_handle
-            .with_async(|node| async { node.state().db().get_object(package).unwrap().unwrap() })
+            .with_async(|node| async { node.state().db().get_object(object_id).unwrap().unwrap() })
             .await
+    }
+
+    async fn has_public_transfer(cluster: &TestCluster, object_id: &ObjectID) -> bool {
+        get_object(&cluster, object_id)
+            .await
+            .data
+            .try_as_move()
+            .unwrap()
+            .has_public_transfer()
     }
 
     #[sim_test]
