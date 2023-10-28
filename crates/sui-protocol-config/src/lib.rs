@@ -1603,8 +1603,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.verify_legacy_zklogin_address = true;
                 }
                 30 => {
-                    // Only enable nw certificate v2 on devnet.
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    // Only enable nw certificate v2 on testnet.
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.narwhal_certificate_v2 = true;
                     }
 
