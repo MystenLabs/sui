@@ -1,10 +1,10 @@
 # Sui GraphQL Examples
-### [Transaction Block Effects](#0)
-#### &emsp;&emsp;[Transaction Block Effects](#0)
-### [Coin Connection](#1)
-#### &emsp;&emsp;[Coin Connection](#65535)
-### [Balance Connection](#2)
-#### &emsp;&emsp;[Balance Connection](#131070)
+### [Address](#0)
+#### &emsp;&emsp;[Transaction Block Connection](#0)
+### [Balance Connection](#1)
+#### &emsp;&emsp;[Balance Connection](#65535)
+### [Chain Id](#2)
+#### &emsp;&emsp;[Chain Id](#131070)
 ### [Checkpoint](#3)
 #### &emsp;&emsp;[At Seq Num](#196605)
 #### &emsp;&emsp;[At Digest](#196606)
@@ -13,95 +13,82 @@
 #### &emsp;&emsp;[First Two Tx Blocks For Checkpoint](#196609)
 #### &emsp;&emsp;[Latest Checkpoint](#196610)
 #### &emsp;&emsp;[With Tx Sent Addr Filter](#196611)
-### [Chain Id](#4)
-#### &emsp;&emsp;[Chain Id](#262140)
-### [Name Service](#5)
-#### &emsp;&emsp;[Name Service](#327675)
-### [Owner](#6)
-#### &emsp;&emsp;[Owner](#393210)
-### [Checkpoint Connection](#7)
-#### &emsp;&emsp;[First Ten After Checkpoint](#458745)
-#### &emsp;&emsp;[Ascending Fetch](#458746)
-#### &emsp;&emsp;[Last Ten After Checkpoint](#458747)
-### [Event Connection](#8)
-#### &emsp;&emsp;[Event Connection](#524280)
-### [Epoch](#9)
-#### &emsp;&emsp;[Specific Epoch](#589815)
-#### &emsp;&emsp;[With Checkpoint Connection](#589816)
-#### &emsp;&emsp;[With Tx Block Connection](#589817)
-#### &emsp;&emsp;[With Tx Block Connection Latest Epoch](#589818)
-#### &emsp;&emsp;[Latest Epoch](#589819)
-### [Transaction Block](#10)
-#### &emsp;&emsp;[Transaction Block Kind](#655350)
-### [Object Connection](#11)
-#### &emsp;&emsp;[Object Connection](#720885)
-#### &emsp;&emsp;[Filter Owner](#720886)
-#### &emsp;&emsp;[Filter Object Ids](#720887)
-### [Object](#12)
-#### &emsp;&emsp;[Object](#786420)
-### [Sui System State Summary](#13)
-#### &emsp;&emsp;[Sui System State Summary](#851955)
-### [Address](#14)
-#### &emsp;&emsp;[Transaction Block Connection](#917490)
-### [Stake Connection](#15)
-#### &emsp;&emsp;[Stake Connection](#983025)
-### [Protocol Configs](#16)
-#### &emsp;&emsp;[Specific Feature Flag](#1048560)
-#### &emsp;&emsp;[Key Value Feature Flag](#1048561)
-#### &emsp;&emsp;[Specific Config](#1048562)
-#### &emsp;&emsp;[Key Value](#1048563)
-### [Transaction Block Connection](#17)
-#### &emsp;&emsp;[Input Object Filter](#1114095)
-#### &emsp;&emsp;[Input Object Sent Addr Filter](#1114096)
-#### &emsp;&emsp;[Sent Addr Filter](#1114097)
-#### &emsp;&emsp;[Package Module Filter](#1114098)
-#### &emsp;&emsp;[Recv Addr Filter](#1114099)
-#### &emsp;&emsp;[Tx Kind Filter](#1114100)
-#### &emsp;&emsp;[Before After Checkpoint](#1114101)
-#### &emsp;&emsp;[With Defaults Ascending](#1114102)
-#### &emsp;&emsp;[Tx Ids Filter](#1114103)
-#### &emsp;&emsp;[Package Module Func Filter](#1114104)
-#### &emsp;&emsp;[Changed Object Filter](#1114105)
-#### &emsp;&emsp;[Package Filter](#1114106)
+### [Checkpoint Connection](#4)
+#### &emsp;&emsp;[First Ten After Checkpoint](#262140)
+#### &emsp;&emsp;[Ascending Fetch](#262141)
+#### &emsp;&emsp;[Last Ten After Checkpoint](#262142)
+### [Coin Connection](#5)
+#### &emsp;&emsp;[Coin Connection](#327675)
+### [Epoch](#6)
+#### &emsp;&emsp;[Specific Epoch](#393210)
+#### &emsp;&emsp;[With Checkpoint Connection](#393211)
+#### &emsp;&emsp;[With Tx Block Connection](#393212)
+#### &emsp;&emsp;[With Tx Block Connection Latest Epoch](#393213)
+#### &emsp;&emsp;[Latest Epoch](#393214)
+### [Event Connection](#7)
+#### &emsp;&emsp;[Event Connection](#458745)
+### [Name Service](#8)
+#### &emsp;&emsp;[Name Service](#524280)
+### [Object](#9)
+#### &emsp;&emsp;[Object](#589815)
+### [Object Connection](#10)
+#### &emsp;&emsp;[Object Connection](#655350)
+#### &emsp;&emsp;[Filter Owner](#655351)
+#### &emsp;&emsp;[Filter Object Ids](#655352)
+### [Owner](#11)
+#### &emsp;&emsp;[Owner](#720885)
+### [Protocol Configs](#12)
+#### &emsp;&emsp;[Specific Feature Flag](#786420)
+#### &emsp;&emsp;[Key Value Feature Flag](#786421)
+#### &emsp;&emsp;[Specific Config](#786422)
+#### &emsp;&emsp;[Key Value](#786423)
+### [Stake Connection](#13)
+#### &emsp;&emsp;[Stake Connection](#851955)
+### [Sui System State Summary](#14)
+#### &emsp;&emsp;[Sui System State Summary](#917490)
+### [Transaction Block](#15)
+#### &emsp;&emsp;[Transaction Block Kind](#983025)
+### [Transaction Block Connection](#16)
+#### &emsp;&emsp;[Input Object Filter](#1048560)
+#### &emsp;&emsp;[Input Object Sent Addr Filter](#1048561)
+#### &emsp;&emsp;[Sent Addr Filter](#1048562)
+#### &emsp;&emsp;[Package Module Filter](#1048563)
+#### &emsp;&emsp;[Recv Addr Filter](#1048564)
+#### &emsp;&emsp;[Tx Kind Filter](#1048565)
+#### &emsp;&emsp;[Before After Checkpoint](#1048566)
+#### &emsp;&emsp;[With Defaults Ascending](#1048567)
+#### &emsp;&emsp;[Tx Ids Filter](#1048568)
+#### &emsp;&emsp;[Package Module Func Filter](#1048569)
+#### &emsp;&emsp;[Changed Object Filter](#1048570)
+#### &emsp;&emsp;[Package Filter](#1048571)
+### [Transaction Block Effects](#17)
+#### &emsp;&emsp;[Transaction Block Effects](#1114095)
 ## <a id=0></a>
-## Transaction Block Effects
+## Address
 ### <a id=0></a>
-### Transaction Block Effects
+### Transaction Block Connection
+####  See examples in Query::transactionBlockConnection as this is
+####  similar behavior to the `transactionBlockConnection` in Query but
+####  supports additional `AddressTransactionBlockRelationship` filter
+####  Filtering on package where the sender of the TX is the current address
+####  and displaying the transaction's sender and the gas price and budget
 
-><pre>{
->  object(
->    address: "0x0bba1e7d907dc2832edfc3bf4468b6deacd9a2df435a35b17e640e135d2d5ddc"
->  ) {
->    version
->    kind
->    previousTransactionBlock {
->      effects {
->        status
->        checkpoint {
->          sequenceNumber
+><pre># See examples in Query::transactionBlockConnection as this is
+># similar behavior to the `transactionBlockConnection` in Query but
+># supports additional `AddressTransactionBlockRelationship` filter
+>
+># Filtering on package where the sender of the TX is the current address
+># and displaying the transaction's sender and the gas price and budget
+>query transaction_block_with_relation_filter {
+>  address(address: "0x2") {
+>    transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
+>      nodes {
+>        sender {
+>          location
 >        }
->        lamportVersion
->        gasEffects {
->          gasSummary {
->            computationCost
->            storageCost
->            storageRebate
->            nonRefundableStorageFee
->          }
->        }
->        balanceChanges {
->          owner {
->            location
->            balance(type: "0x2::sui::SUI") {
->              totalBalance
->            }
->          }
->          amount
->        }
->        dependencies {
->          sender {
->            location
->          }
+>        gasInput {
+>          gasPrice
+>          gasBudget
 >        }
 >      }
 >    }
@@ -109,31 +96,8 @@
 >}</pre>
 
 ## <a id=1></a>
-## Coin Connection
-### <a id=65535></a>
-### Coin Connection
-####  Get last 3 coins before coins at cursor 13034947
-
-><pre>{
->  address(
->    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
->  ) {
->    coinConnection(last: 3, before: "0x13034947") {
->      nodes {
->        id
->        balance
->      }
->      pageInfo {
->        endCursor
->        hasNextPage
->      }
->    }
->  }
->}</pre>
-
-## <a id=2></a>
 ## Balance Connection
-### <a id=131070></a>
+### <a id=65535></a>
 ### Balance Connection
 ####  Query the balance for objects of type COIN and then for each coin
 ####  get the coin type, the number of objects, and the total balance
@@ -159,6 +123,16 @@
 >      }
 >    }
 >  }
+>}</pre>
+
+## <a id=2></a>
+## Chain Id
+### <a id=131070></a>
+### Chain Id
+####  Returns the chain identifier for the chain that the server is tracking
+
+><pre>{
+>  chainIdentifier
 >}</pre>
 
 ## <a id=3></a>
@@ -384,53 +358,8 @@
 >}</pre>
 
 ## <a id=4></a>
-## Chain Id
-### <a id=262140></a>
-### Chain Id
-####  Returns the chain identifier for the chain that the server is tracking
-
-><pre>{
->  chainIdentifier
->}</pre>
-
-## <a id=5></a>
-## Name Service
-### <a id=327675></a>
-### Name Service
-
-><pre>{
->  resolveNameServiceAddress(name: "example.sui") {
->    location
->  }
->  address(
->    address: "0x0b86be5d779fac217b41d484b8040ad5145dc9ba0cba099d083c6cbda50d983e"
->  ) {
->    location
->    balance(type: "0x2::sui::SUI") {
->      coinType
->      coinObjectCount
->      totalBalance
->    }
->    defaultNameServiceName
->  }
->}</pre>
-
-## <a id=6></a>
-## Owner
-### <a id=393210></a>
-### Owner
-
-><pre>{
->  owner(
->    address: "0x931f293ce7f65fd5ebe9542653e1fd92fafa03dda563e13b83be35da8a2eecbe"
->  ) {
->    location
->  }
->}</pre>
-
-## <a id=7></a>
 ## Checkpoint Connection
-### <a id=458745></a>
+### <a id=262140></a>
 ### First Ten After Checkpoint
 ####  Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that cursor will be opaque
 
@@ -443,7 +372,7 @@
 >  }
 >}</pre>
 
-### <a id=458746></a>
+### <a id=262141></a>
 ### Ascending Fetch
 ####  Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
 
@@ -474,7 +403,7 @@
 >  }
 >}</pre>
 
-### <a id=458747></a>
+### <a id=262142></a>
 ### Last Ten After Checkpoint
 ####  Fetch the digest and the sequence number of the last 20 checkpoints before the cursor
 
@@ -487,43 +416,32 @@
 >  }
 >}</pre>
 
-## <a id=8></a>
-## Event Connection
-### <a id=524280></a>
-### Event Connection
+## <a id=5></a>
+## Coin Connection
+### <a id=327675></a>
+### Coin Connection
+####  Get last 3 coins before coins at cursor 13034947
 
 ><pre>{
->  eventConnection(
->    filter: {
->      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
->    }
+>  address(
+>    address: "0x0000000000000000000000000000000000000000000000000000000000000000"
 >  ) {
->    nodes {
->      id
->      sendingModuleId {
->        name
->        package {
->          asObject {
->            digest
->          }
->        }
+>    coinConnection(last: 3, before: "0x13034947") {
+>      nodes {
+>        id
+>        balance
 >      }
->      eventType {
->        repr
+>      pageInfo {
+>        endCursor
+>        hasNextPage
 >      }
->      senders {
->        location
->      }
->      timestamp
->      json
->      bcs
 >    }
 >  }
 >}</pre>
 
-## <a id=9></a>
+## <a id=6></a>
 ## Epoch
-### <a id=589815></a>
+### <a id=393210></a>
 ### Specific Epoch
 ####  Selecting all fields for epoch 100
 
@@ -575,7 +493,7 @@
 >  }
 >}</pre>
 
-### <a id=589816></a>
+### <a id=393211></a>
 ### With Checkpoint Connection
 
 ><pre>{
@@ -612,7 +530,7 @@
 >  }
 >}</pre>
 
-### <a id=589817></a>
+### <a id=393212></a>
 ### With Tx Block Connection
 ####  Fetch the first 20 transactions after 231220100 for epoch 97
 
@@ -647,7 +565,7 @@
 >  }
 >}</pre>
 
-### <a id=589818></a>
+### <a id=393213></a>
 ### With Tx Block Connection Latest Epoch
 ####  the last checkpoint of epoch 97 is 8097645
 ####  last tx number of the checkpoint is 261225985
@@ -682,7 +600,7 @@
 >  }
 >}</pre>
 
-### <a id=589819></a>
+### <a id=393214></a>
 ### Latest Epoch
 ####  Latest epoch, since epoch omitted
 
@@ -734,46 +652,88 @@
 >  }
 >}</pre>
 
-## <a id=10></a>
-## Transaction Block
-### <a id=655350></a>
-### Transaction Block Kind
+## <a id=7></a>
+## Event Connection
+### <a id=458745></a>
+### Event Connection
 
 ><pre>{
->  object(
->    address: "0xd6b9c261ab53d636760a104e4ab5f46c2a3e9cda58bd392488fc4efa6e43728c"
+>  eventConnection(
+>    filter: {
+>      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
+>    }
 >  ) {
->    previousTransactionBlock {
->      sender {
->        location
->      }
->      kind {
->        __typename
->        ... on ConsensusCommitPrologueTransaction {
->          timestamp
->          round
->          epoch {
->            epochId
->            referenceGasPrice
+>    nodes {
+>      id
+>      sendingModuleId {
+>        name
+>        package {
+>          asObject {
+>            digest
 >          }
 >        }
->        ... on ChangeEpochTransaction {
->          computationCharge
->          storageCharge
->          timestamp
->          storageRebate
->        }
->        ... on GenesisTransaction {
->          objects
->        }
 >      }
+>      eventType {
+>        repr
+>      }
+>      senders {
+>        location
+>      }
+>      timestamp
+>      json
+>      bcs
 >    }
 >  }
 >}</pre>
 
-## <a id=11></a>
+## <a id=8></a>
+## Name Service
+### <a id=524280></a>
+### Name Service
+
+><pre>{
+>  resolveNameServiceAddress(name: "example.sui") {
+>    location
+>  }
+>  address(
+>    address: "0x0b86be5d779fac217b41d484b8040ad5145dc9ba0cba099d083c6cbda50d983e"
+>  ) {
+>    location
+>    balance(type: "0x2::sui::SUI") {
+>      coinType
+>      coinObjectCount
+>      totalBalance
+>    }
+>    defaultNameServiceName
+>  }
+>}</pre>
+
+## <a id=9></a>
+## Object
+### <a id=589815></a>
+### Object
+
+><pre>{
+>  object(
+>    address: "0x04e20ddf36af412a4096f9014f4a565af9e812db9a05cc40254846cf6ed0ad91"
+>  ) {
+>    location
+>    version
+>    digest
+>    storageRebate
+>    owner {
+>      defaultNameServiceName
+>    }
+>    previousTransactionBlock {
+>      digest
+>    }
+>    kind
+>  }
+>}</pre>
+
+## <a id=10></a>
 ## Object Connection
-### <a id=720885></a>
+### <a id=655350></a>
 ### Object Connection
 
 ><pre>{
@@ -799,7 +759,7 @@
 >  }
 >}</pre>
 
-### <a id=720886></a>
+### <a id=655351></a>
 ### Filter Owner
 ####  Filter on owner
 
@@ -818,7 +778,7 @@
 >  }
 >}</pre>
 
-### <a id=720887></a>
+### <a id=655352></a>
 ### Filter Object Ids
 ####  Filter on objectIds
 
@@ -839,32 +799,116 @@
 >  }
 >}</pre>
 
-## <a id=12></a>
-## Object
-### <a id=786420></a>
-### Object
+## <a id=11></a>
+## Owner
+### <a id=720885></a>
+### Owner
 
 ><pre>{
->  object(
->    address: "0x04e20ddf36af412a4096f9014f4a565af9e812db9a05cc40254846cf6ed0ad91"
+>  owner(
+>    address: "0x931f293ce7f65fd5ebe9542653e1fd92fafa03dda563e13b83be35da8a2eecbe"
 >  ) {
 >    location
->    version
->    digest
->    storageRebate
->    owner {
->      defaultNameServiceName
+>  }
+>}</pre>
+
+## <a id=12></a>
+## Protocol Configs
+### <a id=786420></a>
+### Specific Feature Flag
+
+><pre>{
+>  protocolConfig {
+>    protocolVersion
+>    featureFlag(key: "advance_epoch_start_time_in_safe_mode") {
+>      value
 >    }
->    previousTransactionBlock {
->      digest
+>  }
+>}</pre>
+
+### <a id=786421></a>
+### Key Value Feature Flag
+####  Select the key and value of the feature flag
+
+><pre>{
+>  protocolConfig {
+>    featureFlags {
+>      key
+>      value
 >    }
->    kind
+>  }
+>}</pre>
+
+### <a id=786422></a>
+### Specific Config
+####  Select the key and value of the specific protocol configuration, in this case `max_move_identifier_len`
+
+><pre>{
+>  protocolConfig {
+>    config(key: "max_move_identifier_len") {
+>      key
+>      value
+>    }
+>  }
+>}</pre>
+
+### <a id=786423></a>
+### Key Value
+####  Select the key and value of the protocol configuration
+
+><pre>{
+>  protocolConfig {
+>    configs {
+>      key
+>      value
+>    }
 >  }
 >}</pre>
 
 ## <a id=13></a>
-## Sui System State Summary
+## Stake Connection
 ### <a id=851955></a>
+### Stake Connection
+####  Get all the staked objects for this address and all the active validators at the epoch when the stake became active
+
+><pre>{
+>  address(
+>    address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
+>  ) {
+>    location
+>    balance(type: "0x2::sui::SUI") {
+>      coinType
+>      totalBalance
+>    }
+>    stakeConnection {
+>      nodes {
+>        id
+>        status
+>        principal
+>        estimatedReward
+>        activeEpoch {
+>          epochId
+>          referenceGasPrice
+>          validatorSet {
+>            activeValidators {
+>              name
+>              description
+>              exchangeRatesSize
+>            }
+>            totalStake
+>          }
+>        }
+>        requestEpoch {
+>          epochId
+>        }
+>      }
+>    }
+>  }
+>}</pre>
+
+## <a id=14></a>
+## Sui System State Summary
+### <a id=917490></a>
 ### Sui System State Summary
 
 ><pre>{
@@ -911,73 +955,37 @@
 >  }
 >}</pre>
 
-## <a id=14></a>
-## Address
-### <a id=917490></a>
-### Transaction Block Connection
-####  See examples in Query::transactionBlockConnection as this is
-####  similar behavior to the `transactionBlockConnection` in Query but
-####  supports additional `AddressTransactionBlockRelationship` filter
-####  Filtering on package where the sender of the TX is the current address
-####  and displaying the transaction's sender and the gas price and budget
-
-><pre># See examples in Query::transactionBlockConnection as this is
-># similar behavior to the `transactionBlockConnection` in Query but
-># supports additional `AddressTransactionBlockRelationship` filter
->
-># Filtering on package where the sender of the TX is the current address
-># and displaying the transaction's sender and the gas price and budget
->query transaction_block_with_relation_filter {
->  address(address: "0x2") {
->    transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
->      nodes {
->        sender {
->          location
->        }
->        gasInput {
->          gasPrice
->          gasBudget
->        }
->      }
->    }
->  }
->}</pre>
-
 ## <a id=15></a>
-## Stake Connection
+## Transaction Block
 ### <a id=983025></a>
-### Stake Connection
-####  Get all the staked objects for this address and all the active validators at the epoch when the stake became active
+### Transaction Block Kind
 
 ><pre>{
->  address(
->    address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
+>  object(
+>    address: "0xd6b9c261ab53d636760a104e4ab5f46c2a3e9cda58bd392488fc4efa6e43728c"
 >  ) {
->    location
->    balance(type: "0x2::sui::SUI") {
->      coinType
->      totalBalance
->    }
->    stakeConnection {
->      nodes {
->        id
->        status
->        principal
->        estimatedReward
->        activeEpoch {
->          epochId
->          referenceGasPrice
->          validatorSet {
->            activeValidators {
->              name
->              description
->              exchangeRatesSize
->            }
->            totalStake
+>    previousTransactionBlock {
+>      sender {
+>        location
+>      }
+>      kind {
+>        __typename
+>        ... on ConsensusCommitPrologueTransaction {
+>          timestamp
+>          round
+>          epoch {
+>            epochId
+>            referenceGasPrice
 >          }
 >        }
->        requestEpoch {
->          epochId
+>        ... on ChangeEpochTransaction {
+>          computationCharge
+>          storageCharge
+>          timestamp
+>          storageRebate
+>        }
+>        ... on GenesisTransaction {
+>          objects
 >        }
 >      }
 >    }
@@ -985,61 +993,8 @@
 >}</pre>
 
 ## <a id=16></a>
-## Protocol Configs
-### <a id=1048560></a>
-### Specific Feature Flag
-
-><pre>{
->  protocolConfig {
->    protocolVersion
->    featureFlag(key: "advance_epoch_start_time_in_safe_mode") {
->      value
->    }
->  }
->}</pre>
-
-### <a id=1048561></a>
-### Key Value Feature Flag
-####  Select the key and value of the feature flag
-
-><pre>{
->  protocolConfig {
->    featureFlags {
->      key
->      value
->    }
->  }
->}</pre>
-
-### <a id=1048562></a>
-### Specific Config
-####  Select the key and value of the specific protocol configuration, in this case `max_move_identifier_len`
-
-><pre>{
->  protocolConfig {
->    config(key: "max_move_identifier_len") {
->      key
->      value
->    }
->  }
->}</pre>
-
-### <a id=1048563></a>
-### Key Value
-####  Select the key and value of the protocol configuration
-
-><pre>{
->  protocolConfig {
->    configs {
->      key
->      value
->    }
->  }
->}</pre>
-
-## <a id=17></a>
 ## Transaction Block Connection
-### <a id=1114095></a>
+### <a id=1048560></a>
 ### Input Object Filter
 ####  Filter on inputObject
 
@@ -1061,7 +1016,7 @@
 >  }
 >}</pre>
 
-### <a id=1114096></a>
+### <a id=1048561></a>
 ### Input Object Sent Addr Filter
 ####  multiple filters
 
@@ -1091,7 +1046,7 @@
 >  }
 >}</pre>
 
-### <a id=1114097></a>
+### <a id=1048562></a>
 ### Sent Addr Filter
 ####  Filter on sign or sentAddress
 
@@ -1113,7 +1068,7 @@
 >  }
 >}</pre>
 
-### <a id=1114098></a>
+### <a id=1048563></a>
 ### Package Module Filter
 ####  Filtering on package and module
 
@@ -1136,7 +1091,7 @@
 >  }
 >}</pre>
 
-### <a id=1114099></a>
+### <a id=1048564></a>
 ### Recv Addr Filter
 ####  Filter on recvAddress
 
@@ -1158,7 +1113,7 @@
 >  }
 >}</pre>
 
-### <a id=1114100></a>
+### <a id=1048565></a>
 ### Tx Kind Filter
 ####  Filter on TransactionKind (only SYSTEM_TX or PROGRAMMABLE_TX)
 
@@ -1176,7 +1131,7 @@
 >  }
 >}</pre>
 
-### <a id=1114101></a>
+### <a id=1048566></a>
 ### Before After Checkpoint
 ####  Filter on before_ and after_checkpoint. If both are provided, before must be greater than after
 
@@ -1196,7 +1151,7 @@
 >  }
 >}</pre>
 
-### <a id=1114102></a>
+### <a id=1048567></a>
 ### With Defaults Ascending
 ####  Fetch some default amount of transactions, ascending
 
@@ -1233,7 +1188,7 @@
 >  }
 >}</pre>
 
-### <a id=1114103></a>
+### <a id=1048568></a>
 ### Tx Ids Filter
 ####  Filter on transactionIds
 
@@ -1253,7 +1208,7 @@
 >  }
 >}</pre>
 
-### <a id=1114104></a>
+### <a id=1048569></a>
 ### Package Module Func Filter
 ####  Filtering on package, module and function
 
@@ -1277,7 +1232,7 @@
 >  }
 >}</pre>
 
-### <a id=1114105></a>
+### <a id=1048570></a>
 ### Changed Object Filter
 ####  Filter on changedObject
 
@@ -1299,7 +1254,7 @@
 >  }
 >}</pre>
 
-### <a id=1114106></a>
+### <a id=1048571></a>
 ### Package Filter
 ####  Filtering on package
 
@@ -1316,6 +1271,51 @@
 >      gasInput {
 >        gasPrice
 >        gasBudget
+>      }
+>    }
+>  }
+>}</pre>
+
+## <a id=17></a>
+## Transaction Block Effects
+### <a id=1114095></a>
+### Transaction Block Effects
+
+><pre>{
+>  object(
+>    address: "0x0bba1e7d907dc2832edfc3bf4468b6deacd9a2df435a35b17e640e135d2d5ddc"
+>  ) {
+>    version
+>    kind
+>    previousTransactionBlock {
+>      effects {
+>        status
+>        checkpoint {
+>          sequenceNumber
+>        }
+>        lamportVersion
+>        gasEffects {
+>          gasSummary {
+>            computationCost
+>            storageCost
+>            storageRebate
+>            nonRefundableStorageFee
+>          }
+>        }
+>        balanceChanges {
+>          owner {
+>            location
+>            balance(type: "0x2::sui::SUI") {
+>              totalBalance
+>            }
+>          }
+>          amount
+>        }
+>        dependencies {
+>          sender {
+>            location
+>          }
+>        }
 >      }
 >    }
 >  }

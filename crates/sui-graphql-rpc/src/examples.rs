@@ -91,6 +91,8 @@ pub fn load_examples() -> anyhow::Result<Vec<ExampleQueryGroup>> {
 
         groups.push(group);
     }
+
+    groups.sort_by(|x, y| x.name.cmp(&y.name));
     Ok(groups)
 }
 

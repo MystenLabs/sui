@@ -10650,6 +10650,7 @@ dependencies = [
  "serde_with",
  "serde_yaml 0.8.26",
  "serial_test",
+ "similar",
  "simulacrum",
  "sui-indexer",
  "sui-json-rpc",
