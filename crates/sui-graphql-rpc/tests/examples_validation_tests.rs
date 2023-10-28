@@ -83,7 +83,7 @@ mod tests {
         let cluster =
             sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
 
-        let groups = load_examples();
+        let groups = load_examples().unwrap();
 
         let mut errors = vec![];
         for group in groups {
@@ -122,12 +122,15 @@ fn test_generate_markdown() {
     let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     buf.push("docs");
     buf.push("examples.md");
-    let mut out_file: File = File::open(buf).unwrap();
+    let mut out_file: File = File::open(buf).expect("Could not open examples.md");
 
     println!("Writing examples to: {:?}", out_file);
     // Read the current content of `out_file`
     let mut current_content = String::new();
-    out_file.read_to_string(&mut current_content).unwrap();
-    let new_content: String = sui_graphql_rpc::examples::generate_markdown();
+    out_file
+        .read_to_string(&mut current_content)
+        .expect("Could not read examples.md");
+    let new_content: String = sui_graphql_rpc::examples::generate_markdown()
+        .expect("Generating examples markdown failed");
     assert_eq!(current_content, new_content, "Doc examples have changed. Please run `sui-graphql-rpc generate-examples` to update the docs.");
 }

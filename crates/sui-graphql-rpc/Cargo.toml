@@ -8,6 +8,7 @@ edition = "2021"
 
 
 [dependencies]
+anyhow.workspace = true
 async-graphql = {workspace = true, features = ["dataloader"] }
 async-graphql-axum.workspace = true
 async-trait.workspace = true

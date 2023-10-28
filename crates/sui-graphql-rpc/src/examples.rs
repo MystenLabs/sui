@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use markdown_gen::markdown::{AsMarkdown, Markdown};
 use std::io::{BufWriter, Read};
 use std::path::PathBuf;
@@ -36,15 +37,20 @@ fn regularize_string(s: &str) -> String {
         .join(" ")
 }
 
-pub fn load_examples() -> Vec<ExampleQueryGroup> {
+pub fn load_examples() -> anyhow::Result<Vec<ExampleQueryGroup>> {
     let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     buf.push("examples");
 
     let mut groups = vec![];
-    for entry in std::fs::read_dir(buf).unwrap() {
-        let entry = entry.unwrap();
+    for entry in std::fs::read_dir(buf).map_err(|e| anyhow::anyhow!(e))? {
+        let entry = entry.map_err(|e| anyhow::anyhow!(e))?;
         let path = entry.path();
-        let group_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+        let group_name = path
+            .file_stem()
+            .ok_or(anyhow::anyhow!("File stem cannot be read"))?
+            .to_str()
+            .ok_or(anyhow::anyhow!("File stem cannot be read"))?
+            .to_string();
 
         let mut group = ExampleQueryGroup {
             name: group_name.clone(),
@@ -52,24 +58,29 @@ pub fn load_examples() -> Vec<ExampleQueryGroup> {
             _path: path.clone(),
         };
 
-        for file in std::fs::read_dir(path).unwrap() {
+        for file in std::fs::read_dir(path).map_err(|e| anyhow::anyhow!(e))? {
             assert!(file.is_ok());
-            let file = file.unwrap();
+            let file = file.map_err(|e| anyhow::anyhow!(e))?;
             assert!(file.path().extension().is_some());
             let ext = file
                 .path()
                 .extension()
-                .unwrap()
+                .ok_or(anyhow!("File extension cannot be read"))?
                 .to_str()
-                .unwrap()
+                .ok_or(anyhow!("File extension cannot be read to string"))?
                 .to_string();
             assert_eq!(ext, QUERY_EXT);
 
             let file_path = file.path();
-            let query_name = file_path.file_stem().unwrap().to_str().unwrap().to_string();
+            let query_name = file_path
+                .file_stem()
+                .ok_or(anyhow!("File stem cannot be read"))?
+                .to_str()
+                .unwrap()
+                .to_string();
 
             let mut contents = String::new();
-            let mut fp = std::fs::File::open(file_path.clone()).unwrap();
+            let mut fp = std::fs::File::open(file_path.clone()).map_err(|e| anyhow!(e))?;
             fp.read_to_string(&mut contents).unwrap();
             group.queries.push(ExampleQuery {
                 name: query_name,
@@ -80,29 +91,32 @@ pub fn load_examples() -> Vec<ExampleQueryGroup> {
 
         groups.push(group);
     }
-    groups
+    Ok(groups)
 }
 
-pub fn generate_markdown() -> String {
-    let groups = load_examples();
+pub fn generate_markdown() -> anyhow::Result<String> {
+    let groups = load_examples()?;
 
     let mut output = BufWriter::new(Vec::new());
     let mut md = Markdown::new(&mut output);
 
-    md.write("Sui GraphQL Examples".heading(1)).unwrap();
+    md.write("Sui GraphQL Examples".heading(1))
+        .map_err(|e| anyhow!(e))?;
 
     // TODO: reduce multiple loops
     // Generate the table of contents
     for (id, group) in groups.iter().enumerate() {
         let group_name = regularize_string(&group.name);
         let group_name_toc = format!("[{}](#{})", group_name, id);
-        md.write(group_name_toc.heading(3)).unwrap();
+        md.write(group_name_toc.heading(3))
+            .map_err(|e| anyhow!(e))?;
 
         for (inner, query) in group.queries.iter().enumerate() {
             let inner_id = inner + 0xFFFF * id;
             let inner_name = regularize_string(&query.name);
             let inner_name_toc = format!("&emsp;&emsp;[{}](#{})", inner_name, inner_id);
-            md.write(inner_name_toc.heading(4)).unwrap();
+            md.write(inner_name_toc.heading(4))
+                .map_err(|e| anyhow!(e))?;
         }
     }
 
@@ -110,15 +124,18 @@ pub fn generate_markdown() -> String {
         let group_name = regularize_string(&group.name);
 
         let id_tag = format!("<a id={}></a>", id);
-        md.write(id_tag.heading(2)).unwrap();
-        md.write(group_name.heading(2)).unwrap();
+        md.write(id_tag.heading(2))
+            .map_err(|e| anyhow::anyhow!(e))?;
+        md.write(group_name.heading(2))
+            .map_err(|e| anyhow::anyhow!(e))?;
         for (inner, query) in group.queries.iter().enumerate() {
             let inner_id = inner + 0xFFFF * id;
             let name = regularize_string(&query.name);
 
             let id_tag = format!("<a id={}></a>", inner_id);
-            md.write(id_tag.heading(3)).unwrap();
-            md.write(name.heading(3)).unwrap();
+            md.write(id_tag.heading(3))
+                .map_err(|e| anyhow::anyhow!(e))?;
+            md.write(name.heading(3)).map_err(|e| anyhow::anyhow!(e))?;
 
             // Extract all lines that start with `#` and use them as headers
             let mut headers = vec![];
@@ -143,11 +160,14 @@ pub fn generate_markdown() -> String {
 
             let content = format!("<pre>{}</pre>", query);
             for header in headers {
-                md.write(header.heading(4)).unwrap();
+                md.write(header.heading(4))
+                    .map_err(|e| anyhow::anyhow!(e))?;
             }
             md.write(content.quote()).unwrap();
         }
     }
-    let bytes = output.into_inner().unwrap();
-    String::from_utf8(bytes).unwrap().replace('\\', "")
+    let bytes = output.into_inner().map_err(|e| anyhow::anyhow!(e))?;
+    Ok(String::from_utf8(bytes)
+        .map_err(|e| anyhow::anyhow!(e))?
+        .replace('\\', ""))
 }
