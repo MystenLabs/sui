@@ -107,7 +107,7 @@ where
     T: AccumulatorReadStore,
 {
     if protocol_config.simplified_unwrap_then_delete() {
-        accumulate_effects_v2(store, effects)
+        accumulate_effects_v2(store, effects, protocol_config)
     } else {
         accumulate_effects_v1(store, effects, protocol_config)
     }
@@ -248,22 +248,30 @@ where
 }
 
 // Returns the list of modified objects' digests from `effects`. Works with both Effect V1 and V2.
-fn modified_at_digests<T, S>(store: S, effects: Vec<TransactionEffects>) -> Vec<ObjectDigest>
+// This function is only for when simplified_unwrap_then_delete is enabled.
+fn modified_at_digests<T, S>(
+    store: S,
+    effects: Vec<TransactionEffects>,
+    protocol_config: &ProtocolConfig,
+) -> Vec<ObjectDigest>
 where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
 {
-    let mut modified_digests: Vec<ObjectDigest> = vec![];
-    for effect in effects {
+    assert!(
+        protocol_config.simplified_unwrap_then_delete(),
+        "This modified_at_digests is only for when simplified_unwrap_then_delete is enabled."
+    );
+    effects.into_iter().flat_map(|effect| {
         match effect {
             TransactionEffects::V1(_) => {
-                // Collect keys from modified_at_versions to remove from the accumulator.
+                // For TransactionEffectsV1, we need to collect keys from modified_at_versions to remove from the accumulator.
                 let modified_at_version_keys: Vec<_> = effect
                     .modified_at_versions()
                     .into_iter()
                     .map(|(id, version)| ObjectKey(id, version))
                     .collect();
-                let current_effect_modified_digests: Vec<_> = store
+                store
                     .multi_get_object_by_key(&modified_at_version_keys.clone())
                     .expect("Failed to get modified_at_versions object from object table")
                     .into_iter()
@@ -272,20 +280,20 @@ where
                             .compute_object_reference()
                             .2
                     })
-                    .collect();
-
-                modified_digests.extend(current_effect_modified_digests);
+                    .collect()
             }
             TransactionEffects::V2(effect_v2) => {
-                modified_digests.extend(effect_v2.modified_at_digests());
+                effect_v2.modified_at_digests()
             }
         }
-    }
-
-    modified_digests
+    }).collect()
 }
 
-fn accumulate_effects_v2<T, S>(store: S, effects: Vec<TransactionEffects>) -> Accumulator
+fn accumulate_effects_v2<T, S>(
+    store: S,
+    effects: Vec<TransactionEffects>,
+    protocol_config: &ProtocolConfig,
+) -> Accumulator
 where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
@@ -304,7 +312,7 @@ where
             .collect::<Vec<ObjectDigest>>(),
     );
 
-    acc.remove_all(modified_at_digests(store, effects));
+    acc.remove_all(modified_at_digests(store, effects, protocol_config));
 
     acc
 }
