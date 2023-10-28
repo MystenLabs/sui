@@ -26,7 +26,8 @@ use axum::{
 use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
-use std::{any::Any, net::SocketAddr, sync::Arc};
+use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use tokio::sync::OnceCell;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -35,6 +36,7 @@ pub struct Server {
 #[allow(dead_code)]
 impl Server {
     pub async fn run(self) -> Result<(), Error> {
+        get_or_init_server_start_time().await;
         self.server
             .await
             .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
@@ -150,6 +152,7 @@ impl ServerBuilder {
         let app = axum::Router::new()
             .route("/", axum::routing::get(graphiql).post(graphql_handler))
             .route("/schema", axum::routing::get(get_schema))
+            .route("/health", axum::routing::get(health_checks))
             .layer(axum::extract::Extension(schema))
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
@@ -199,6 +202,37 @@ async fn graphiql() -> impl axum::response::IntoResponse {
             .endpoint("/")
             .finish(),
     )
+}
+
+async fn health_checks(
+    schema: axum::Extension<SuiGraphQLSchema>,
+) -> impl axum::response::IntoResponse {
+    // Simple request to check if the DB is up
+    // TODO: add more checks
+    let req = r#"
+        query {
+            chainIdentifier
+        }
+        "#;
+    let db_up = match schema.execute(req).await.is_ok() {
+        true => "UP",
+        false => "DOWN",
+    };
+    let uptime = get_or_init_server_start_time()
+        .await
+        .elapsed()
+        .as_secs_f64();
+    format!(
+        r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
+        "#,
+        uptime, db_up
+    )
+}
+
+// One server per proc, so this is okay
+async fn get_or_init_server_start_time() -> &'static Instant {
+    static ONCE: OnceCell<Instant> = OnceCell::const_new();
+    ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
 pub mod tests {
