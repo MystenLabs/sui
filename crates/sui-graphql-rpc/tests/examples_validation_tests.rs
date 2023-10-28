@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use similar::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-
 #[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
@@ -124,7 +124,6 @@ fn test_generate_markdown() {
     buf.push("examples.md");
     let mut out_file: File = File::open(buf).expect("Could not open examples.md");
 
-    println!("Writing examples to: {:?}", out_file);
     // Read the current content of `out_file`
     let mut current_content = String::new();
     out_file
@@ -132,5 +131,18 @@ fn test_generate_markdown() {
         .expect("Could not read examples.md");
     let new_content: String = sui_graphql_rpc::examples::generate_markdown()
         .expect("Generating examples markdown failed");
-    assert_eq!(current_content, new_content, "Doc examples have changed. Please run `sui-graphql-rpc generate-examples` to update the docs.");
+
+    if current_content != new_content {
+        let mut res = vec![];
+        let diff = TextDiff::from_lines(&current_content, &new_content);
+        for change in diff.iter_all_changes() {
+            let sign = match change.tag() {
+                ChangeTag::Delete => "---",
+                ChangeTag::Insert => "+++",
+                ChangeTag::Equal => "   ",
+            };
+            res.push(format!("{}{}", sign, change));
+        }
+        panic!("Doc examples have changed. Please run `sui-graphql-rpc generate-examples` to update the docs. Diff: {}", res.join(""));
+    }
 }
