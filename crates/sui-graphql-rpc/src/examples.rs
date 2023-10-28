@@ -171,3 +171,35 @@ pub fn generate_markdown() -> anyhow::Result<String> {
         .map_err(|e| anyhow::anyhow!(e))?
         .replace('\\', ""))
 }
+
+#[test]
+fn test_generate_markdown() {
+    use similar::*;
+    use std::fs::File;
+
+    let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    buf.push("docs");
+    buf.push("examples.md");
+    let mut out_file: File = File::open(buf).expect("Could not open examples.md");
+
+    // Read the current content of `out_file`
+    let mut current_content = String::new();
+    out_file
+        .read_to_string(&mut current_content)
+        .expect("Could not read examples.md");
+    let new_content: String = generate_markdown().expect("Generating examples markdown failed");
+
+    if current_content != new_content {
+        let mut res = vec![];
+        let diff = TextDiff::from_lines(&current_content, &new_content);
+        for change in diff.iter_all_changes() {
+            let sign = match change.tag() {
+                ChangeTag::Delete => "---",
+                ChangeTag::Insert => "+++",
+                ChangeTag::Equal => "   ",
+            };
+            res.push(format!("{}{}", sign, change));
+        }
+        panic!("Doc examples have changed. Please run `sui-graphql-rpc generate-examples` to update the docs. Diff: {}", res.join(""));
+    }
+}
