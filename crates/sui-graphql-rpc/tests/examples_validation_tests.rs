@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-//#[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
