@@ -36,7 +36,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
 use tempfile::tempdir;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
@@ -150,11 +150,15 @@ impl<'a> TestAuthorityBuilder<'a> {
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
-        let local_network_config =
+        let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                 .with_accounts(self.accounts)
-                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500))
-                .build();
+                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500));
+        if let Some(protocol_config) = &self.protocol_config {
+            local_network_config_builder =
+                local_network_config_builder.with_protocol_version(protocol_config.version);
+        }
+        let local_network_config = local_network_config_builder.build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee().unwrap();
         let path = self.store_base_path.unwrap_or_else(|| {
@@ -284,6 +288,11 @@ impl<'a> TestAuthorityBuilder<'a> {
             .await
             .unwrap();
 
+        // We want to insert these objects directly instead of relying on genesis because
+        // genesis process would set the previous transaction field for these objects, which would
+        // change their object digest. This makes it difficult to write tests that want to use
+        // these objects directly.
+        // TODO: we should probably have a better way to do this.
         if let Some(starting_objects) = self.starting_objects {
             state
                 .database
