@@ -69,19 +69,19 @@ pub fn load_examples() -> anyhow::Result<Vec<ExampleQueryGroup>> {
                 .to_str()
                 .ok_or(anyhow!("File extension cannot be read to string"))?
                 .to_string();
-            assert_eq!(ext, QUERY_EXT);
+            assert_eq!(ext, QUERY_EXT, "wrong file extension for example");
 
             let file_path = file.path();
             let query_name = file_path
                 .file_stem()
                 .ok_or(anyhow!("File stem cannot be read"))?
                 .to_str()
-                .unwrap()
+                .ok_or(anyhow!("File extension cannot be read to string"))?
                 .to_string();
 
             let mut contents = String::new();
             let mut fp = std::fs::File::open(file_path.clone()).map_err(|e| anyhow!(e))?;
-            fp.read_to_string(&mut contents).unwrap();
+            fp.read_to_string(&mut contents).map_err(|e| anyhow!(e))?;
             group.queries.push(ExampleQuery {
                 name: query_name,
                 contents,
@@ -163,7 +163,7 @@ pub fn generate_markdown() -> anyhow::Result<String> {
                 md.write(header.heading(4))
                     .map_err(|e| anyhow::anyhow!(e))?;
             }
-            md.write(content.quote()).unwrap();
+            md.write(content.quote()).map_err(|e| anyhow::anyhow!(e))?;
         }
     }
     let bytes = output.into_inner().map_err(|e| anyhow::anyhow!(e))?;

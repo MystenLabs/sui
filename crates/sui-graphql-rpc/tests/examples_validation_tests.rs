@@ -83,7 +83,7 @@ mod tests {
         let cluster =
             sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
 
-        let groups = load_examples().unwrap();
+        let groups = load_examples().expect("Could not load examples");
 
         let mut errors = vec![];
         for group in groups {
