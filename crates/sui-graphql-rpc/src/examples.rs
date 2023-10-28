@@ -88,6 +88,7 @@ pub fn load_examples() -> anyhow::Result<Vec<ExampleQueryGroup>> {
                 path: file_path,
             });
         }
+        group.queries.sort_by(|x, y| x.name.cmp(&y.name));
 
         groups.push(group);
     }
