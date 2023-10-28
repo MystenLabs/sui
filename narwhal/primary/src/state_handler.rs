@@ -5,6 +5,7 @@ use crate::consensus::LeaderSchedule;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee};
 use crypto::{RandomnessPartialSignature, RandomnessPrivateKey};
 use fastcrypto::groups;
+use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto_tbls::tbls::ThresholdBls;
 use fastcrypto_tbls::types::{PublicVssKey, ThresholdBls12381MinSig};
 use fastcrypto_tbls::{dkg, nodes};
@@ -105,6 +106,13 @@ impl RandomnessState {
         }
 
         let info = committee.randomness_dkg_info();
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            // Log first few entries in DKG info for debugging.
+            for (id, pk, stake) in info.iter().filter(|(id, _, _)| id.0 < 3) {
+                let pk_bytes = pk.as_element().to_byte_array();
+                debug!("random beacon: DKG info: id={id}, stake={stake}, pk={pk_bytes:x?}");
+            }
+        }
         let nodes = info
             .iter()
             .map(|(id, pk, stake)| nodes::Node::<EncG> {
@@ -129,13 +137,12 @@ impl RandomnessState {
         );
         let total_weight = nodes.n();
         let num_nodes = nodes.num_nodes();
+        let prefix_str = format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch());
         let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
             t.into(),
-            fastcrypto_tbls::random_oracle::RandomOracle::new(
-                format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch()).as_str(),
-            ),
+            fastcrypto_tbls::random_oracle::RandomOracle::new(prefix_str.as_str()),
             &mut rand::thread_rng(),
         ) {
             Ok(party) => party,
@@ -145,7 +152,7 @@ impl RandomnessState {
             }
         };
         info!(
-            "random beacon: state initialized with total_weight={total_weight}, t={t}, num_nodes={num_nodes}",
+            "random beacon: state initialized with authority_id={authority_id}, total_weight={total_weight}, t={t}, num_nodes={num_nodes}, oracle initial_prefix={prefix_str:?}",
         );
         Some(Self {
             tx_system_messages,
