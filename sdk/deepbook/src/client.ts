@@ -22,7 +22,6 @@ import {
 	normalizeSuiObjectId,
 	parseStructTag,
 	SUI_CLOCK_OBJECT_ID,
-	SUI_FRAMEWORK_ADDRESS,
 } from '@mysten/sui.js/utils';
 
 import {
