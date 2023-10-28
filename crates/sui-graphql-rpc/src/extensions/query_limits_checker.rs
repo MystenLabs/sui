@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::Limits;
 use crate::config::ServiceConfig;
+use crate::error::code::BAD_USER_INPUT;
+use crate::error::code::INTERNAL_SERVER_ERROR;
+use crate::error::graphql_error;
+use crate::error::graphql_error_at_pos;
 use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
@@ -139,16 +144,14 @@ impl Extension for QueryLimitsChecker {
         // Only allow one operation
         match doc.operations.iter().count() {
             0 => {
-                return Err(ServerError::new(
-                    "One operation is required".to_string(),
-                    None,
-                ));
+                return Err(graphql_error(BAD_USER_INPUT, "One operation is required"));
             }
             1 => {}
             _ => {
-                return Err(ServerError::new(
-                    "Query has too many operations. The maximum allowed is 1".to_string(),
-                    None,
+                return Err(graphql_error_at_pos(
+                    BAD_USER_INPUT,
+                    "Query has too many operations. The maximum allowed is 1",
+                    doc.operations.iter().next().unwrap().1.pos,
                 ));
             }
         }
@@ -179,36 +182,6 @@ impl Extension for QueryLimitsChecker {
 }
 
 impl QueryLimitsChecker {
-    fn check_limits(
-        &self,
-        cfg: &ServiceConfig,
-        nodes: u32,
-        depth: u32,
-        pos: Option<Pos>,
-    ) -> ServerResult<()> {
-        if nodes > cfg.limits.max_query_nodes {
-            return Err(ServerError::new(
-                format!(
-                    "Query has too many nodes. The maximum allowed is {}",
-                    cfg.limits.max_query_nodes
-                ),
-                pos,
-            ));
-        }
-
-        if depth > cfg.limits.max_query_depth {
-            return Err(ServerError::new(
-                format!(
-                    "Query has too many levels of nesting. The maximum allowed is {}",
-                    cfg.limits.max_query_depth
-                ),
-                pos,
-            ));
-        }
-
-        Ok(())
-    }
-
     fn analyze_selection_set(
         &self,
         cfg: &ServiceConfig,
@@ -224,22 +197,20 @@ impl QueryLimitsChecker {
         let mut num_nodes: u32 = 0;
         // Depth of the query
         let mut depth: u32 = 0;
-        // Number of nodes at each level
-        let mut level_len;
 
         for top_level_sel in sel_set.node.items.iter() {
             que.push_back(top_level_sel);
             num_nodes += 1;
-            self.check_limits(cfg, num_nodes, depth, Some(top_level_sel.pos))?;
+            check_limits(&cfg.limits, num_nodes, depth, Some(top_level_sel.pos))?;
         }
 
         // Track the number of nodes at first level if any
-        level_len = que.len();
+        let mut level_len = que.len();
 
         while !que.is_empty() {
             // Signifies the start of a new level
             depth += 1;
-            self.check_limits(cfg, num_nodes, depth, None)?;
+            check_limits(&cfg.limits, num_nodes, depth, None)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -250,15 +221,19 @@ impl QueryLimitsChecker {
                         for field_sel in f.node.selection_set.node.items.iter() {
                             que.push_back(field_sel);
                             num_nodes += 1;
-                            self.check_limits(cfg, num_nodes, depth, Some(field_sel.pos))?;
+                            check_limits(&cfg.limits, num_nodes, depth, Some(field_sel.pos))?;
                         }
                     }
                     Selection::FragmentSpread(fs) => {
                         let frag_name = &fs.node.fragment_name.node;
                         let frag_def = fragment_defs.get(frag_name).ok_or_else(|| {
-                            ServerError::new(
-                                format!("Fragment {} not found", frag_name),
-                                Some(fs.pos),
+                            graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                format!(
+                                    "Fragment {} not found but present in fragment list",
+                                    frag_name
+                                ),
+                                fs.pos,
                             )
                         })?;
 
@@ -268,14 +243,14 @@ impl QueryLimitsChecker {
                         for frag_sel in frag_def.node.selection_set.node.items.iter() {
                             que.push_back(frag_sel);
                             num_nodes += 1;
-                            self.check_limits(cfg, num_nodes, depth, Some(frag_sel.pos))?;
+                            check_limits(&cfg.limits, num_nodes, depth, Some(frag_sel.pos))?;
                         }
                     }
                     Selection::InlineFragment(fs) => {
                         for in_frag_sel in fs.node.selection_set.node.items.iter() {
                             que.push_back(in_frag_sel);
                             num_nodes += 1;
-                            self.check_limits(cfg, num_nodes, depth, Some(in_frag_sel.pos))?;
+                            check_limits(&cfg.limits, num_nodes, depth, Some(in_frag_sel.pos))?;
                         }
                     }
                 }
@@ -285,4 +260,28 @@ impl QueryLimitsChecker {
         }
         Ok(ComponentCost { num_nodes, depth })
     }
+}
+
+fn check_limits(limits: &Limits, nodes: u32, depth: u32, pos: Option<Pos>) -> ServerResult<()> {
+    if nodes > limits.max_query_nodes {
+        return Err(ServerError::new(
+            format!(
+                "Query has too many nodes. The maximum allowed is {}",
+                limits.max_query_nodes
+            ),
+            pos,
+        ));
+    }
+
+    if depth > limits.max_query_depth {
+        return Err(ServerError::new(
+            format!(
+                "Query has too many levels of nesting. The maximum allowed is {}",
+                limits.max_query_depth
+            ),
+            pos,
+        ));
+    }
+
+    Ok(())
 }

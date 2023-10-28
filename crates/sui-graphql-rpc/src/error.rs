@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError};
+use async_graphql::{ErrorExtensionValues, ErrorExtensions, Pos, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
 use sui_json_rpc::name_service::DomainParseError;
@@ -39,6 +39,23 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
         message: message.into(),
         source: None,
         locations: vec![],
+        path: vec![],
+        extensions: Some(ext),
+    }
+}
+
+pub(crate) fn graphql_error_at_pos(
+    code: &str,
+    message: impl Into<String>,
+    pos: Pos,
+) -> ServerError {
+    let mut ext = ErrorExtensionValues::default();
+    ext.set("code", code);
+
+    ServerError {
+        message: message.into(),
+        source: None,
+        locations: vec![pos],
         path: vec![],
         extensions: Some(ext),
     }
