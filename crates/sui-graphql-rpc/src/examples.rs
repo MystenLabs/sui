@@ -101,7 +101,6 @@ pub fn generate_markdown() -> String {
         for (inner, query) in group.queries.iter().enumerate() {
             let inner_id = inner + 0xFFFF * id;
             let inner_name = regularize_string(&query.name);
-
             let inner_name_toc = format!("&emsp;&emsp;[{}](#{})", inner_name, inner_id);
             md.write(inner_name_toc.heading(4)).unwrap();
         }

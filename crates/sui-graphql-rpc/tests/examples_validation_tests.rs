@@ -5,14 +5,12 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serial_test::serial;
     use simulacrum::Simulacrum;
-    use std::fs::File;
-    use std::io::{BufWriter, Read, Write};
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_graphql_rpc::cluster::SimulatorCluster;

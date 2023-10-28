@@ -33,7 +33,7 @@ async fn main() {
             buf.push("examples.md");
             let file = file.unwrap_or(buf);
 
-            std::fs::write(file.clone(), &new_content).unwrap();
+            std::fs::write(file.clone(), new_content).unwrap();
             println!("Written examples to file: {:?}", file);
         }
         Command::StartServer {
