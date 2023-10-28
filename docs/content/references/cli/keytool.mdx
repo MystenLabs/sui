@@ -91,7 +91,7 @@ $ sui keytool list
 
 ### Generate a new key pair and store it in a file
 
-To generate a new key pair with the `ed25519` scheme, use the `sui keytool generate ed25519` command. For other schemes, see `sui keytool generate –help`. The key pair file is output to the current directory with its filename being the address. The content of the file is a Base64 encoded string of 33-byte `flag || privkey`. 
+To generate a new key pair with the `ed25519` scheme, use the `sui keytool generate ed25519` command. For other schemes, see `sui keytool generate –help`. The keypair file is saved to the current directory with its filename being the address. The content of the file is a Base64 encoded string of 33-byte `flag || privkey`. 
 
 ```shell
 $ sui keytool generate ed25519
