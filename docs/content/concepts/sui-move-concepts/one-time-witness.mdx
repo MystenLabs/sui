@@ -1,20 +1,17 @@
 ---
 title: One-Time Witness
-description: A one-time witness is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance.
+description: A one-time witness is a special type that is guaranteed to have at most one instance.
 ---
 
-A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. It's important for cases where you need to make sure that a witness-authorized action was performed only once (for example, creating a new coin). In Move, a type is considered a OTW if it meets the following criteria:
+A one-time witness (OTW) is a special type that is guaranteed to have at most one instance.  It is useful for limiting certain actions to only happen once (for example, creating a coin).  In Move, a type is considered a OTW if:
 
-- Named after the module
-- All uppercased
-- Only has the drop ability
-- A type defined in the module
-- Is empty
+- Its name is the same as its module's names, all uppercased.
+- It has the `drop` ability and only the `drop` ability.
+- It has no fields, or a single `bool` field.
 
+The only instance of this type is passed to its module's `init` function when the package containing it is published.
 
-To check whether an instance is an OTW, use `sui::types::is_one_time_witness(witness)`.
-
-To get an instance of this type, you need to add it as the first argument to the `init()` function. Sui runtime supplies both initializer arguments automatically.
+To check whether a type could be used as a OTW, pass an instance of it to `sui::types::is_one_time_witness`.
 
 ```rust
 module examples::mycoin {
