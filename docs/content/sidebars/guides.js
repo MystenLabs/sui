@@ -120,6 +120,7 @@ const guides = [
 			id: 'guides/developer/app-examples',
 		},
 		items: [
+			'guides/developer/app-examples/e2e-counter',
 			'guides/developer/app-examples/auction',
 			'guides/developer/app-examples/escrow',
 			'guides/developer/app-examples/trusted-swap',
