@@ -1,15 +1,9 @@
 ---
 title: Tables and Bags
-description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty. 
+description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
 ---
 
 The types and function discussed in this section are built into the Sui framework in modules [`table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/table.move) and [`bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/bag.move). As with dynamic fields, there is also an `object_` variant of both: `ObjectTable` in [`object_table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_table.move) and `ObjectBag` in [`object_bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_bag.move). The relationship between `Table` and `ObjectTable`, and `Bag` and `ObjectBag` are the same as between a field and an object field: The former can hold any `store` type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
-
-### Current limitations
-
-Collections are built on top of [dynamic fields](../dynamic-fields.mdx), and so are subject to its limitations. Additionally, the following functionality is planned, but not currently supported:
-
-- `sui::bag::contains<K: copy + drop + store>(bag: &Bag, k: K): bool` which checks whether a key-value pair exists in `bag` with key `k: K` and a value of any type (in addition to `contain_with_type` which performs a similar check, but requires passing a specific value type).
 
 
 ### Tables
@@ -113,7 +107,7 @@ public fun is_empty<K: copy + drop + store, V: store>(
 
 ### Querying for containment
 
-All collections can be queried for key containment with:
+Tables can be queried for key containment with:
 
 ```rust
 module sui::table {
@@ -126,10 +120,12 @@ public fun contains<K: copy + drop + store, V: store>(
 }
 ```
 
-The equivalent function for `Bag` is,
+The equivalent functions for `Bag` are:
 
 ```rust
 module sui::bag {
+
+public fun contains<K: copy + drop + store>(bag: &Bag, k: K): bool;
 
 public fun contains_with_type<K: copy + drop + store, V: store>(
     bag: &Bag,
@@ -139,7 +135,7 @@ public fun contains_with_type<K: copy + drop + store, V: store>(
 }
 ```
 
-This example tests whether `bag` contains a key-value pair with key `k: K` and some value of type `V`.
+The first function tests whether `bag` contains a key-value pair with key `k: K`, and the second function additionally tests whether its value has type `V`.
 
 ### Clean-up
 
