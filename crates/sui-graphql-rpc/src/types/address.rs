@@ -124,6 +124,7 @@ impl Address {
             .extend()
     }
 
+    /// The stake objects for the given address
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,
