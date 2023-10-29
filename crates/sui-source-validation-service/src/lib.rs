@@ -24,7 +24,7 @@ use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use mysten_metrics::RegistryService;
-use prometheus::Registry;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
@@ -456,6 +456,7 @@ pub async fn watch_for_upgrades(
 
 pub struct AppState {
     pub sources: NetworkLookup,
+    pub metrics: Option<SourceServiceMetrics>,
 }
 
 pub fn serve(
@@ -515,6 +516,9 @@ async fn api_route(
     };
 
     let app_state = app_state.read().unwrap();
+    if let Some(metrics) = &app_state.metrics {
+        metrics.total_requests_received.inc();
+    }
     let source_result = app_state
         .sources
         .get(&network)
@@ -586,6 +590,23 @@ async fn check_version_header<B>(
 
 async fn list_route(State(_app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
     (StatusCode::OK, "").into_response()
+}
+
+pub struct SourceServiceMetrics {
+    pub total_requests_received: IntCounter,
+}
+
+impl SourceServiceMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_requests_received: register_int_counter_with_registry!(
+                "total_requests",
+                "Total number of requests received by Source Service",
+                registry
+            )
+            .unwrap(),
+        }
+    }
 }
 
 pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
