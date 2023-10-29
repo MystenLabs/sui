@@ -210,9 +210,9 @@ module escrow::example {
     }
 
     // === Tests ===
-    use sui::coin::{Self, Coin};
-    use sui::sui::SUI;
-    use sui::test_scenario::{Self as ts, Scenario};
+    #[test_only] use sui::coin::{Self, Coin};
+    #[test_only] use sui::sui::SUI;
+    #[test_only] use sui::test_scenario::{Self as ts, Scenario};
 
     #[test_only]
     fun test_coin(ts: &mut Scenario): Coin<SUI> {
