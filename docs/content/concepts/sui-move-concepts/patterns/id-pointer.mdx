@@ -4,9 +4,9 @@ title: ID Pointer
 
 ID pointer is a technique that separates the main data (an object) and its accessors/capabilities by linking the latter to the original. There's a few different ways you can use this pattern:
 
-    - Issuing transferable capabilities for shared objects (for example, a TransferCap that changes 'owner' field of a shared object)
-    - Splitting dynamic data and static (for example, an NFT and its collection information)
-    - Avoiding unnecessary type linking (and witness requirement) in generic applications (LP token for a `LiquidityPool`)
+- Issuing transferable capabilities for shared objects (for example, a TransferCap that changes 'owner' field of a shared object)
+- Splitting dynamic data and static (for example, an NFT and its collection information)
+- Avoiding unnecessary type linking (and witness requirement) in generic applications (LP token for a `LiquidityPool`)
 
 The following example implements basic `Lock` and `Key` mechanics on Sui where `Lock<T>` is a shared object that can contain any object, and `Key` is an owned object, which is required to get access to the contents of the lock.
 
