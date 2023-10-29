@@ -1914,7 +1914,7 @@ impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
             system_parameters: Some(SystemParameters {
                 duration_ms: Some(BigInt::from(system_state.epoch_duration_ms)),
                 stake_subsidy_start_epoch: Some(system_state.stake_subsidy_start_epoch),
-                min_validator_count: Some(system_state.max_validator_count),
+                min_validator_count: Some(system_state.min_validator_count),
                 max_validator_count: Some(system_state.max_validator_count),
                 min_validator_joining_stake: Some(BigInt::from(
                     system_state.min_validator_joining_stake,
