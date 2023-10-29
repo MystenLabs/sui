@@ -5,6 +5,7 @@
 /// operation. Can be used to limit any action (eg transfer, toCoin, fromCoin).
 module examples::limiter_rule {
     use std::string::String;
+    use sui::vec_map::{Self, VecMap};
     use sui::tx_context::TxContext;
     use closed_loop::closed_loop::{
         Self as cl,
@@ -19,10 +20,10 @@ module examples::limiter_rule {
     /// The Rule witness.
     struct Limiter has drop {}
 
-    /// Configuration for the Rule.
+    /// The Config object for the `lo
     struct Config has store, drop {
-        /// A limit for a single operation.
-        limit: u64
+        /// Mapping of Action -> Limit
+        limits: VecMap<String, u64>
     }
 
     /// Adds a limiter rule to the `TokenPolicy` with the given limit per
@@ -34,9 +35,15 @@ module examples::limiter_rule {
         limit: u64,
         ctx: &mut TxContext
     ) {
-        cl::add_rule_for_action(
-            Limiter {}, policy, cap, action, Config { limit }, ctx
-        );
+        // if there's no stored config for the rule, add a new one
+        if (!cl::has_rule_config<T, Limiter>(policy)) {
+            let config = Config { limits: vec_map::empty() };
+            cl::add_rule_config(Limiter {}, policy, cap, config, ctx);
+        };
+
+        let config = cl::rule_config_mut<T, Limiter, Config>(policy, cap);
+        vec_map::insert(&mut config.limits, action, limit);
+        cl::add_rule_for_action(Limiter {}, policy, cap, action, ctx);
     }
 
     /// Verifies that the request does not exceed the limit and adds an approval
@@ -46,8 +53,10 @@ module examples::limiter_rule {
         request: &mut ActionRequest<T>,
         ctx: &mut TxContext
     ) {
-        let config: &Config = cl::get_rule(Limiter {}, policy, cl::name(request));
-        assert!(cl::amount(request) <= config.limit, ELimitExceeded);
+        let config: &Config = cl::rule_config(Limiter {}, policy);
+        let action_limit = *vec_map::get(&config.limits, &cl::name(request));
+
+        assert!(cl::amount(request) <= action_limit, ELimitExceeded);
         cl::add_approval(Limiter {}, request, ctx);
     }
 
@@ -59,8 +68,11 @@ module examples::limiter_rule {
         action: String,
         ctx: &mut TxContext
     ) {
-        let _: Config = cl::remove_rule_for_action<T, Limiter, Config>(
-            policy, cap, action, ctx
+        cl::remove_rule_for_action<T, Limiter>(policy, cap, action, ctx);
+        let config = cl::rule_config_mut<T, Limiter, Config>(policy, cap);
+        vec_map::remove(
+            &mut config.limits,
+            &action
         );
     }
 }

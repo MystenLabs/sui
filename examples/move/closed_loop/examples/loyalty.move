@@ -56,7 +56,6 @@ module examples::loyalty {
             &mut policy,
             &policy_cap,
             cl::spend_name(),
-            false,
             ctx
         );
 

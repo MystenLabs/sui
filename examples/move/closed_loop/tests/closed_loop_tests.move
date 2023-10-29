@@ -50,7 +50,6 @@ module closed_loop::closed_loop_tests {
             &mut policy,
             &cap,
             string::utf8(b"test"),
-            false,
             ctx
         );
 

@@ -23,3 +23,16 @@ One of the challenges in the Closed Loop request system is that most of the Coin
 // Misc
 
 - rule can't mutate its state without permission from Policy owner (eg Denylist)
+
+---
+
+Rules Design V2
+
+- rules do not require config by default, a simple witness can be used
+- some rules may require a config to exist;
+- for that a `rule_config` API should be used:
+    - config can be read by a Rule
+    - config can only be mutated by the `TokenPolicyCap` owner
+    - it's up to a rule to store configuration and manage it
+
+---

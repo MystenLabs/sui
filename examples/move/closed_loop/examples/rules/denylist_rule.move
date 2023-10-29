@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// An implementation of a simple `DenyList` for the Closed Loop system. For
+/// An implementation of a simple `Denylist` for the Closed Loop system. For
 /// demonstration purposes it is implemented as a `VecSet`, however for a larger
 /// number of records there needs to be a different storage implementation
 /// utilizing dynamic fields.
@@ -17,8 +17,8 @@ module examples::denylist_rule {
     use std::option;
     use std::vector;
     use std::string::String;
+    use sui::bag::{Self, Bag};
     use sui::tx_context::TxContext;
-    use sui::vec_set::{Self, VecSet};
     use closed_loop::closed_loop::{
         Self as cl,
         TokenPolicy,
@@ -30,19 +30,21 @@ module examples::denylist_rule {
     const EUserBlocked: u64 = 0;
 
     /// The Rule witness.
-    struct DenyList has drop {}
+    struct Denylist has drop {}
 
     /// Adds a limiter rule to the `TokenPolicy` with the given limit per
     /// operation.
     public fun add_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         ctx: &mut TxContext
     ) {
-        cl::add_rule_for_action(
-            DenyList {}, policy, cap, name, vec_set::empty<address>(), ctx
-        );
+        if (!cl::has_rule_config<T, Denylist>(policy)) {
+            cl::add_rule_config(Denylist {}, policy, cap, bag::new(ctx), ctx)
+        };
+
+        cl::add_rule_for_action(Denylist {}, policy, cap, action, ctx);
     }
 
     /// Verifies that the sender and the recipient (if set) are not on the
@@ -52,21 +54,18 @@ module examples::denylist_rule {
         request: &mut ActionRequest<T>,
         ctx: &mut TxContext
     ) {
+        let config = config(policy);
         let sender = cl::sender(request);
         let receiver = cl::recipient(request);
-        let denylist: &VecSet<address> = cl::get_rule(
-            DenyList {}, policy, cl::name(request)
-        );
 
-        assert!(!vec_set::contains(denylist, &sender), EUserBlocked);
+        assert!(!bag::contains(config, sender), EUserBlocked);
 
         if (option::is_some(&receiver)) {
-            assert!(!vec_set::contains(
-                denylist, option::borrow(&receiver)
-            ), EUserBlocked);
+            let receiver = *option::borrow(&receiver);
+            assert!(!bag::contains(config, receiver), EUserBlocked);
         };
 
-        cl::add_approval(DenyList {}, request, ctx);
+        cl::add_approval(Denylist {}, request, ctx);
     }
 
     /// Removes the `denylist_rule` for a given action.
@@ -76,53 +75,47 @@ module examples::denylist_rule {
         action: String,
         ctx: &mut TxContext
     ) {
-        let _ = cl::remove_rule_for_action<T, DenyList, VecSet<address>>(
-            policy, cap, action, ctx
-        );
+        cl::remove_rule_for_action<T, Denylist>(policy, cap, action, ctx);
     }
 
     // === Protected: List Management ===
 
     /// Adds records to the `denylist_rule` for a given action. The Policy
     /// owner can batch-add records.
-    public fun add_records_for<T>(
+    public fun add_records<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        action: String,
         addresses: vector<address>,
-        ctx: &mut TxContext
     ) {
-        let denylist = cl::get_rule_for_action_mut<T, DenyList, VecSet<address>>(
-            policy, cap, action, ctx
-        );
-
+        let config_mut = config_mut(policy, cap);
         while (vector::length(&addresses) > 0) {
-            let new_record = vector::pop_back(&mut addresses);
-            if (!vec_set::contains(denylist, &new_record)) {
-                vec_set::insert(denylist, new_record);
-            };
-        };
+            bag::add(config_mut, vector::pop_back(&mut addresses), true)
+        }
     }
 
     /// Removes records from the `denylist_rule` for a given action. The Policy
     /// owner can batch-remove records.
-    public fun remove_records_for<T>(
+    public fun remove_records<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        action: String,
         addresses: vector<address>,
-        ctx: &mut TxContext
     ) {
-        let denylist = cl::get_rule_for_action_mut<T, DenyList, VecSet<address>>(
-            policy, cap, action, ctx
-        );
+        let config_mut = config_mut(policy, cap);
 
         while (vector::length(&addresses) > 0) {
             let record = vector::pop_back(&mut addresses);
-            if (vec_set::contains(denylist, &record)) {
-                vec_set::remove(denylist, &record);
-            };
+            let _: bool = bag::remove(config_mut, record);
         };
+    }
+
+    // === Internal ===
+
+    fun config<T>(self: &TokenPolicy<T>): &Bag {
+        cl::rule_config<T, Denylist, Bag>(Denylist {}, self)
+    }
+
+    fun config_mut<T>(self: &mut TokenPolicy<T>, cap: &TokenPolicyCap<T>): &mut Bag {
+        cl::rule_config_mut<T, Denylist, Bag>(self, cap)
     }
 }
 
@@ -143,7 +136,7 @@ module examples::denylist_rule_tests {
 
         // first add the list for action and then add records
         denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records_for(&mut policy, &cap, utf8(b"action"), vector[ @0x1 ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[ @0x1 ]);
 
         let request = cl::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
@@ -160,7 +153,7 @@ module examples::denylist_rule_tests {
         let (policy, cap) = test::get_policy(ctx);
 
         denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records_for(&mut policy, &cap, utf8(b"action"), vector[ @0x0 ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[ @0x0 ]);
 
         let request = cl::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
@@ -177,7 +170,7 @@ module examples::denylist_rule_tests {
         let (policy, cap) = test::get_policy(ctx);
 
         denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records_for(&mut policy, &cap, utf8(b"action"), vector[ @0x1 ], ctx);
+        denylist::add_records(&mut policy, &cap, vector[ @0x1 ]);
 
         let request = cl::new_request(utf8(b"action"), 100, some(@0x1), none(), ctx);
 
