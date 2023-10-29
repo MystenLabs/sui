@@ -14,10 +14,9 @@ use store::{rocks::DBMap, Map};
 use sui_protocol_config::ProtocolConfig;
 use tracing::{debug, trace};
 use types::{
-    now, validate_batch_version, Batch, BatchAPI, BatchDigest, FetchBatchesRequest,
-    FetchBatchesResponse, MetadataAPI, PrimaryToWorker, RequestBatchesRequest,
-    RequestBatchesResponse, WorkerBatchMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage,
-    WorkerToWorker, WorkerToWorkerClient,
+    now, Batch, BatchAPI, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, MetadataAPI,
+    PrimaryToWorker, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
+    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
@@ -206,6 +205,8 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             )
             .await?
             .into_inner();
+
+        let mut write_batch = self.store.batch();
         for batch in response.batches.iter_mut() {
             if !message.is_certified {
                 // This batch is not part of a certificate, so we need to validate it.
@@ -219,25 +220,25 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
                         format!("Invalid batch: {err}"),
                     ));
                 }
+                tokio::task::yield_now().await;
             }
-
-            // TODO: Remove once we have removed BatchV1 from the codebase.
-            validate_batch_version(batch, &self.protocol_config).map_err(|err| {
-                anemo::rpc::Status::new_with_message(
-                    StatusCode::BadRequest,
-                    format!("Invalid batch: {err}"),
-                )
-            })?;
 
             let digest = batch.digest();
             if missing.remove(&digest) {
                 // Set received_at timestamp for remote batch.
                 batch.versioned_metadata_mut().set_received_at(now());
-                self.store.insert(&digest, batch).map_err(|e| {
-                    anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
-                })?;
+                write_batch
+                    .insert_batch(&self.store, [(digest, batch)])
+                    .map_err(|e| {
+                        anemo::rpc::Status::internal(format!(
+                            "failed to batch transaction to commit: {e:?}"
+                        ))
+                    })?;
             }
         }
+        write_batch.write().map_err(|e| {
+            anemo::rpc::Status::internal(format!("failed to commit to batch store: {e:?}"))
+        })?;
 
         if missing.is_empty() {
             return Ok(anemo::Response::new(()));

@@ -21,10 +21,9 @@ use std::{
 };
 use storage::CertificateStore;
 use sui_protocol_config::ProtocolConfig;
-use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
     sync::watch,
-    task::JoinHandle,
+    task::{spawn_blocking, JoinHandle, JoinSet},
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};

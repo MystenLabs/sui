@@ -54,6 +54,9 @@ pub mod synchronizer_tests;
 /// locally highest processed round.
 /// Expected max memory usage with 100 nodes: 100 nodes * 1000 rounds * 3.3KB per certificate = 330MB.
 const NEW_CERTIFICATE_ROUND_LIMIT: Round = 1000;
+/// During catchup, periodically batches ~2000 certificates can arrive for processing. So channel capacity
+/// should be much bigger than that.
+const PROCESS_CERTIFICATE_CHANNEL_CAPACITY: usize = 100000;
 
 struct Inner {
     /// The id of this primary.
@@ -346,13 +349,13 @@ impl Synchronizer {
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
             broadcast::channel(CHANNEL_CAPACITY);
         let (tx_certificate_acceptor, mut rx_certificate_acceptor) = channel_with_total(
-            CHANNEL_CAPACITY,
+            PROCESS_CERTIFICATE_CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_certificate_acceptor,
             &primary_channel_metrics.tx_certificate_acceptor_total,
         );
 
         let (tx_batch_tasks, mut rx_batch_tasks) = channel_with_total(
-            CHANNEL_CAPACITY,
+            PROCESS_CERTIFICATE_CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_batch_tasks,
             &primary_channel_metrics.tx_batch_tasks_total,
         );
