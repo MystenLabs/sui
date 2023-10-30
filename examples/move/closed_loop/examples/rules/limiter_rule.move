@@ -41,7 +41,7 @@ module examples::limiter_rule {
             cl::add_rule_config(Limiter {}, policy, cap, config, ctx);
         };
 
-        let config = cl::rule_config_mut<T, Limiter, Config>(policy, cap);
+        let config: &mut Config = cl::rule_config_mut(Limiter {}, policy, cap);
         vec_map::insert(&mut config.limits, action, limit);
         cl::add_rule_for_action(Limiter {}, policy, cap, action, ctx);
     }
@@ -69,7 +69,7 @@ module examples::limiter_rule {
         ctx: &mut TxContext
     ) {
         cl::remove_rule_for_action<T, Limiter>(policy, cap, action, ctx);
-        let config = cl::rule_config_mut<T, Limiter, Config>(policy, cap);
+        let config: &mut Config = cl::rule_config_mut(Limiter {}, policy, cap);
         vec_map::remove(
             &mut config.limits,
             &action
@@ -83,7 +83,7 @@ module examples::limiter_rule_tests {
     use std::string::utf8;
     use std::option::{none, /* some */};
     use closed_loop::closed_loop as cl;
-    use closed_loop::closed_loop_tests as test;
+    use closed_loop::test_utils as test;
 
     #[test]
     // Scenario: add a limiter rule for 100 tokens per operation, verify that

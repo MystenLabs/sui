@@ -143,6 +143,12 @@ module sui::balance {
     }
 
     #[test_only]
+    /// Create a `Supply` of any coin for testing purposes.
+    public fun create_supply_for_testing<T>(): Supply<T> {
+        Supply { value: 0 }
+    }
+
+    #[test_only]
     /// Create a `Balance` of any coin for testing purposes.
     public fun create_for_testing<T>(value: u64): Balance<T> {
         Balance { value }

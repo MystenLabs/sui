@@ -81,7 +81,7 @@ module examples::gem {
         let (policy, cap) = cl::new(&mut treasury_cap, ctx);
 
         cl::allow(&mut policy, &cap, buy_action(), ctx);
-        cl::allow(&mut policy, &cap, cl::spend_name(), ctx);
+        cl::allow(&mut policy, &cap, cl::spend_action(), ctx);
 
         // create and share the GemStore
         transfer::share_object(GemStore {

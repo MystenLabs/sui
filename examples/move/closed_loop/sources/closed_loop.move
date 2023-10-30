@@ -66,13 +66,13 @@ module closed_loop::closed_loop {
     /// `allow` function that can be called by the `TokenPolicyCap` owner.
     struct TokenPolicy<phantom T> has key {
         id: UID,
-        /// The balance that is effectively burned by the user on the "spend"
+        /// The balance that is effectively spent by the user on the "spend"
         /// action. However, actual decrease of the supply can only be done by
         /// the `TreasuryCap` owner.
         ///
         /// This balance can never be withdrawn by anyone and can only be
         /// `flush`-ed by the Admin.
-        burned_balance: Balance<T>,
+        spent_balance: Balance<T>,
         /// The set of rules that define what actions can be performed on the
         /// token. Each rule contains the set of `TypeName`s that must be
         /// received by the `ActionRequest` for the action to be performed.
@@ -94,9 +94,9 @@ module closed_loop::closed_loop {
         sender: address,
         /// Recipient is only available in `transfer` action.
         recipient: Option<address>,
-        /// The balance to be "burned" in the `TokenPolicy`, only available
+        /// The balance to be "spent" in the `TokenPolicy`, only available
         /// in the `spend` action.
-        burned_balance: Option<Balance<T>>,
+        spent_balance: Option<Balance<T>>,
         /// Collected approvals (stamps) from completed `Rules`.
         approvals: VecSet<TypeName>,
     }
@@ -112,7 +112,7 @@ module closed_loop::closed_loop {
     ): (TokenPolicy<T>, TokenPolicyCap<T>) {
         let policy = TokenPolicy {
             id: object::new(ctx),
-            burned_balance: balance::zero(),
+            spent_balance: balance::zero(),
             rules: vec_map::empty()
         };
 
@@ -242,14 +242,14 @@ module closed_loop::closed_loop {
         name: String,
         amount: u64,
         recipient: Option<address>,
-        burned_balance: Option<Balance<T>>,
+        spent_balance: Option<Balance<T>>,
         ctx: &TxContext
     ): ActionRequest<T> {
         ActionRequest {
             name,
             amount,
             recipient,
-            burned_balance,
+            spent_balance,
             sender: tx_context::sender(ctx),
             approvals: vec_set::empty(),
         }
@@ -266,7 +266,7 @@ module closed_loop::closed_loop {
 
         let ActionRequest {
             name, approvals,
-            burned_balance,
+            spent_balance,
             amount, sender, recipient,
         } = request;
 
@@ -282,13 +282,13 @@ module closed_loop::closed_loop {
             i = i + 1;
         };
 
-        if (option::is_some(&burned_balance)) {
+        if (option::is_some(&spent_balance)) {
             balance::join(
-                &mut policy.burned_balance,
-                option::destroy_some(burned_balance)
+                &mut policy.spent_balance,
+                option::destroy_some(spent_balance)
             );
         } else {
-            option::destroy_none(burned_balance);
+            option::destroy_none(spent_balance);
         };
 
         (name, amount, sender, recipient)
@@ -306,14 +306,14 @@ module closed_loop::closed_loop {
     ): (String, u64, address, Option<address>) {
         let ActionRequest {
             name, amount, sender, recipient, approvals: _,
-            burned_balance
+            spent_balance
         } = request;
 
-        if (option::is_some(&burned_balance)) {
-            let burned = option::destroy_some(burned_balance);
-            balance::decrease_supply(coin::supply_mut(treasury_cap), burned);
+        if (option::is_some(&spent_balance)) {
+            let spent = option::destroy_some(spent_balance);
+            balance::decrease_supply(coin::supply_mut(treasury_cap), spent);
         } else {
-            option::destroy_none(burned_balance);
+            option::destroy_none(spent_balance);
         };
 
         (name, amount, sender, recipient)
@@ -329,13 +329,13 @@ module closed_loop::closed_loop {
         request: ActionRequest<T>,
         _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
-        assert!(option::is_none(&request.burned_balance), ECantConsumeBalance);
+        assert!(option::is_none(&request.spent_balance), ECantConsumeBalance);
 
         let ActionRequest {
-            name, amount, sender, recipient, approvals: _, burned_balance
+            name, amount, sender, recipient, approvals: _, spent_balance
         } = request;
 
-        option::destroy_none(burned_balance);
+        option::destroy_none(spent_balance);
 
         (name, amount, sender, recipient)
     }
@@ -399,7 +399,7 @@ module closed_loop::closed_loop {
     /// consider a design that will allow for a Rule to mutate the Config in the
     /// future.
     public fun rule_config_mut<T, Rule: drop, Config: store>(
-        self: &mut TokenPolicy<T>, cap: &TokenPolicyCap<T>
+        _rule: Rule, self: &mut TokenPolicy<T>, cap: &TokenPolicyCap<T>
     ): &mut Config {
         assert!(object::id(self) == cap.for, ENotAuthorized);
         df::borrow_mut(&mut self.id, key<Rule>())
@@ -411,22 +411,22 @@ module closed_loop::closed_loop {
     public fun allow<T>(
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         _ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        vec_map::insert(&mut self.rules, name, vec_set::empty());
+        vec_map::insert(&mut self.rules, action, vec_set::empty());
     }
 
     /// Completely disallows an action on the `Token`.
     public fun disallow<T>(
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        name: String,
+        action: String,
         _ctx: &mut TxContext
     ) {
         assert!(object::id(self) == cap.for, ENotAuthorized);
-        vec_map::remove(&mut self.rules, &name);
+        vec_map::remove(&mut self.rules, &action);
     }
 
     /// Adds a rule for an action with `name` in the `TokenPolicy`.
@@ -490,8 +490,8 @@ module closed_loop::closed_loop {
         cap: &mut TreasuryCap<T>,
         _ctx: &mut TxContext
     ): u64 {
-        let amount = balance::value(&self.burned_balance);
-        let balance = balance::split(&mut self.burned_balance, amount);
+        let amount = balance::value(&self.spent_balance);
+        let balance = balance::split(&mut self.spent_balance, amount);
         balance::decrease_supply(coin::supply_mut(cap), balance)
     }
 
@@ -502,14 +502,19 @@ module closed_loop::closed_loop {
 
     // === Public Getters ===
 
-    /// Returns the rules required for a specific action.
-    public fun rules<T>(self: &TokenPolicy<T>, name: String): VecSet<TypeName> {
-        *vec_map::get(&self.rules, &name)
+    /// Check whether an action is present in the rules VecMap.
+    public fun is_allowed<T>(self: &TokenPolicy<T>, action: &String): bool {
+        vec_map::contains(&self.rules, action)
     }
 
-    /// Returns the `burned_balance` of the `TokenPolicy`.
-    public fun burned_balance<T>(self: &TokenPolicy<T>): u64 {
-        balance::value(&self.burned_balance)
+    /// Returns the rules required for a specific action.
+    public fun rules<T>(self: &TokenPolicy<T>, action: &String): VecSet<TypeName> {
+        *vec_map::get(&self.rules, action)
+    }
+
+    /// Returns the `spent_balance` of the `TokenPolicy`.
+    public fun spent_balance<T>(self: &TokenPolicy<T>): u64 {
+        balance::value(&self.spent_balance)
     }
 
     /// Returns the `balance` of the `Token`.
@@ -520,16 +525,16 @@ module closed_loop::closed_loop {
     // === Action Names ===
 
     /// Name of the Transfer action.
-    public fun transfer_name(): String { string::utf8(TRANSFER) }
+    public fun transfer_action(): String { string::utf8(TRANSFER) }
 
     /// Name of the `Spend` action.
-    public fun spend_name(): String { string::utf8(SPEND) }
+    public fun spend_action(): String { string::utf8(SPEND) }
 
     /// Name of the `ToCoin` action.
-    public fun to_coin_name(): String { string::utf8(TO_COIN) }
+    public fun to_coin_action(): String { string::utf8(TO_COIN) }
 
     /// Name of the `FromCoin` action.
-    public fun from_coin_name(): String { string::utf8(FROM_COIN) }
+    public fun from_coin_action(): String { string::utf8(FROM_COIN) }
 
     // === Action Request Fields ===
 
@@ -547,6 +552,15 @@ module closed_loop::closed_loop {
         self.recipient
     }
 
+    /// Burned balance of the `ActionRequest`.
+    public fun spent<T>(self: &ActionRequest<T>): Option<u64> {
+        if (option::is_some(&self.spent_balance)) {
+            option::some(balance::value(option::borrow(&self.spent_balance)))
+        } else {
+            option::none()
+        }
+    }
+
     // === Internal: Rule Key ===
 
     /// Internal: generate a DF Key for an `action` and a `Rule` type.
@@ -561,7 +575,7 @@ module closed_loop::closed_loop {
         let policy = TokenPolicy {
             id: object::new(ctx),
             rules: vec_map::empty(),
-            burned_balance: balance::zero(),
+            spent_balance: balance::zero(),
         };
         let cap = TokenPolicyCap {
             id: object::new(ctx),
@@ -577,8 +591,8 @@ module closed_loop::closed_loop {
         cap: TokenPolicyCap<T>
     ) {
         let TokenPolicyCap { id: cap_id, for: _ } = cap;
-        let TokenPolicy { id, rules: _, burned_balance } = policy;
-        balance::destroy_for_testing(burned_balance);
+        let TokenPolicy { id, rules: _, spent_balance } = policy;
+        balance::destroy_for_testing(spent_balance);
         object::delete(cap_id);
         object::delete(id);
     }

@@ -55,7 +55,7 @@ module examples::loyalty {
             GiftShop {},
             &mut policy,
             &policy_cap,
-            cl::spend_name(),
+            cl::spend_action(),
             ctx
         );
 

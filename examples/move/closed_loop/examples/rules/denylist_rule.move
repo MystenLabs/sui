@@ -115,7 +115,7 @@ module examples::denylist_rule {
     }
 
     fun config_mut<T>(self: &mut TokenPolicy<T>, cap: &TokenPolicyCap<T>): &mut Bag {
-        cl::rule_config_mut<T, Denylist, Bag>(self, cap)
+        cl::rule_config_mut(Denylist {}, self, cap)
     }
 }
 
@@ -125,7 +125,7 @@ module examples::denylist_rule_tests {
     use std::string::utf8;
     use std::option::{none, some};
     use closed_loop::closed_loop as cl;
-    use closed_loop::closed_loop_tests as test;
+    use closed_loop::test_utils as test;
 
     #[test]
     // Scenario: add a denylist with addresses, sender is not on the list and
