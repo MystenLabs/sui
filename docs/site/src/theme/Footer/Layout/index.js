@@ -5,8 +5,8 @@ import Link from "@docusaurus/Link";
 export default function FooterLayout({ style, links, logo, copyright }) {
   return (
     <footer className="px-2 pb-2 bg-sui-black">
-      <div className="bg-sui-card-dark text-white rounded-sui flex flex-row flex-wrap-reverse items-end">
-        <div className="flex-0 w-full lg:w-1/3 pl-8 pb-8 lg:text-left text-center">
+      <div className="bg-sui-card-dark text-white rounded-sui flex flex-row flex-wrap-reverse">
+        <div className="flex-0 lg:w-1/3 pl-8 pb-8 pt-12 lg:text-left">
           <div className="discord-icon inline p-2">
             <Link to="https://discord.gg/Sui">
               <svg

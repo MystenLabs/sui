@@ -3,6 +3,7 @@
 
 const concepts = [
 	'concepts',
+	'concepts/components',
 	{
 		type: 'category',
 		label: 'App Developers',
@@ -11,7 +12,6 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
-			'concepts/components',
 			{
 				type: 'category',
 				label: 'Object Model',
