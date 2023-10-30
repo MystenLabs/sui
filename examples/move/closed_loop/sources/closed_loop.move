@@ -108,7 +108,7 @@ module closed_loop::closed_loop {
     /// Create a new `TokenPolicy` and a matching `TokenPolicyCap`.
     /// The `TokenPolicy` must then be shared using the `share_policy` method.
     public fun new<T>(
-        _treasury_cap: &mut TreasuryCap<T>, ctx: &mut TxContext
+        _treasury_cap: &TreasuryCap<T>, ctx: &mut TxContext
     ): (TokenPolicy<T>, TokenPolicyCap<T>) {
         let policy = TokenPolicy {
             id: object::new(ctx),
