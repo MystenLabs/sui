@@ -22,11 +22,3 @@ error[E07001]: referential transparency violated
    │                                    │          
    │                                    Field 'f' is still being mutably borrowed by this reference
 
-error[E07001]: referential transparency violated
-   ┌─ tests/move_check/locals/eliminate_temps.move:27:58
-   │
-27 │         let (f, u): (&R, &R) = (borrow_global_mut<R>(a), borrow_global<R>(a));
-   │                                 -----------------------  ^^^^^^^^^^^^^^^^^^^ Invalid borrowing of resource 'R'
-   │                                 │                         
-   │                                 It is still being mutably borrowed by this reference
-

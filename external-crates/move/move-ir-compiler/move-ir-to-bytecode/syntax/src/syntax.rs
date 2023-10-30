@@ -453,12 +453,7 @@ fn parse_qualified_function_name(
 ) -> Result<FunctionCall, ParseError<Loc, anyhow::Error>> {
     let start_loc = tokens.start_loc();
     let call = match tokens.peek() {
-        Tok::Exists
-        | Tok::BorrowGlobal
-        | Tok::BorrowGlobalMut
-        | Tok::MoveFrom
-        | Tok::MoveTo
-        | Tok::VecPack(_)
+        Tok::VecPack(_)
         | Tok::VecLen
         | Tok::VecImmBorrow
         | Tok::VecMutBorrow
@@ -599,12 +594,7 @@ fn parse_call(tokens: &mut Lexer) -> Result<Exp, ParseError<Loc, anyhow::Error>>
 
 fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error>> {
     match tokens.peek() {
-        Tok::Exists
-        | Tok::BorrowGlobal
-        | Tok::BorrowGlobalMut
-        | Tok::MoveFrom
-        | Tok::MoveTo
-        | Tok::VecPack(_)
+        Tok::VecPack(_)
         | Tok::VecLen
         | Tok::VecImmBorrow
         | Tok::VecMutBorrow
@@ -722,14 +712,6 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
     }
 }
 
-// StructName: StructName = {
-//     <n: Name> =>? StructName::parse(n),
-// }
-
-fn parse_struct_name(tokens: &mut Lexer) -> Result<StructName, ParseError<Loc, anyhow::Error>> {
-    Ok(StructName(parse_name(tokens)?))
-}
-
 // QualifiedStructIdent : QualifiedStructIdent = {
 //     <module_dot_struct: DotName> =>? { ... }
 // }
@@ -753,21 +735,6 @@ fn parse_module_name(tokens: &mut Lexer) -> Result<ModuleName, ParseError<Loc, a
     Ok(ModuleName(parse_name(tokens)?))
 }
 
-fn consume_end_of_generics(tokens: &mut Lexer) -> Result<(), ParseError<Loc, anyhow::Error>> {
-    match tokens.peek() {
-        Tok::Greater => tokens.advance(),
-        Tok::GreaterGreater => {
-            tokens.replace_token(Tok::Greater, 1)?;
-            tokens.advance()?;
-            Ok(())
-        }
-        _ => Err(ParseError::InvalidToken {
-            location: current_token_loc(tokens),
-            message: "expected Tok::Greater or Tok::GreaterGreater".to_string(),
-        }),
-    }
-}
-
 // Builtin: Builtin = {
 //     "exists<" <name_and_type_actuals: NameAndTypeActuals> ">" =>? { ... },
 //     "borrow_global<" <name_and_type_actuals: NameAndTypeActuals> ">" =>? { ... },
@@ -780,36 +747,6 @@ fn consume_end_of_generics(tokens: &mut Lexer) -> Result<(), ParseError<Loc, any
 
 fn parse_builtin(tokens: &mut Lexer) -> Result<Builtin, ParseError<Loc, anyhow::Error>> {
     match tokens.peek() {
-        Tok::Exists => {
-            tokens.advance()?;
-            let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
-            consume_end_of_generics(tokens)?;
-            Ok(Builtin::Exists(StructName(name), type_actuals))
-        }
-        Tok::BorrowGlobal => {
-            tokens.advance()?;
-            let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
-            consume_end_of_generics(tokens)?;
-            Ok(Builtin::BorrowGlobal(false, StructName(name), type_actuals))
-        }
-        Tok::BorrowGlobalMut => {
-            tokens.advance()?;
-            let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
-            consume_end_of_generics(tokens)?;
-            Ok(Builtin::BorrowGlobal(true, StructName(name), type_actuals))
-        }
-        Tok::MoveFrom => {
-            tokens.advance()?;
-            let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
-            consume_end_of_generics(tokens)?;
-            Ok(Builtin::MoveFrom(StructName(name), type_actuals))
-        }
-        Tok::MoveTo => {
-            tokens.advance()?;
-            let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
-            consume_end_of_generics(tokens)?;
-            Ok(Builtin::MoveTo(StructName(name), type_actuals))
-        }
         Tok::VecPack(num) => {
             tokens.advance()?;
             let type_actuals = parse_type_actuals(tokens)?;
@@ -1058,12 +995,7 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
             let (name, tys) = parse_name_and_type_actuals(tokens)?;
             parse_unpack_(tokens, name, tys)
         }
-        Tok::Exists
-        | Tok::BorrowGlobal
-        | Tok::BorrowGlobalMut
-        | Tok::MoveFrom
-        | Tok::MoveTo
-        | Tok::VecPack(_)
+        Tok::VecPack(_)
         | Tok::VecLen
         | Tok::VecImmBorrow
         | Tok::VecMutBorrow
@@ -1462,23 +1394,6 @@ fn parse_return_type(tokens: &mut Lexer) -> Result<Vec<Type>, ParseError<Loc, an
         v.push(parse_type(tokens)?);
     }
     Ok(v)
-}
-
-// AcquireList: Vec<StructName> = {
-//     "acquires" <s: StructName> <al: ("," <StructName>)*> => { ... }
-// }
-
-fn parse_acquire_list(
-    tokens: &mut Lexer,
-) -> Result<Vec<StructName>, ParseError<Loc, anyhow::Error>> {
-    consume_token(tokens, Tok::Acquires)?;
-    let s = parse_struct_name(tokens)?;
-    let mut al = vec![s];
-    while tokens.peek() == Tok::Comma {
-        tokens.advance()?;
-        al.push(parse_struct_name(tokens)?);
-    }
-    Ok(al)
 }
 
 /// Spec language parsing ///
@@ -1905,12 +1820,6 @@ fn parse_function_decl(
         None
     };
 
-    let acquires = if tokens.peek() == Tok::Acquires {
-        Some(parse_acquire_list(tokens)?)
-    } else {
-        None
-    };
-
     // parse each specification directive--there may be zero or more
     let mut specifications = Vec::new();
     while tokens.peek().is_spec_directive() {
@@ -1927,7 +1836,6 @@ fn parse_function_decl(
         args,
         ret.unwrap_or_default(),
         type_parameters,
-        acquires.unwrap_or_default(),
         specifications,
         if is_native {
             consume_token(tokens, Tok::Semicolon)?;
@@ -1988,7 +1896,6 @@ fn parse_script(tokens: &mut Lexer) -> Result<Script, ParseError<Loc, anyhow::Er
         args,
         vec![],
         type_formals,
-        vec![],
         vec![],
         FunctionBody::Move { locals, code },
     );

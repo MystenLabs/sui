@@ -25,21 +25,6 @@ module 0x42::M {
         (copy x, x)
     }
 
-    // `move_to` requires key
-    fun f5(s: &signer, x: HasKey<NoAbilities, u64>) {
-        move_to<HasKey<NoAbilities, u64>>(s, x);
-    }
-
-    // `move_from` requires key
-    fun f6(): HasKey<NoAbilities, u64> acquires HasKey {
-        move_from<HasKey<NoAbilities, u64>>(@0x0)
-    }
-
-    // `exists` requires key
-    fun f7(): bool {
-        exists<HasKey<NoAbilities, u64>>(@0x0)
-    }
-
     // Explicit store constraint
     fun f8(): RequireStore<HasStore<NoAbilities, u64>> {
         RequireStore<HasStore<NoAbilities, u64>> { a: HasStore { a: 1 } }

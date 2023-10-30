@@ -1,28 +1,6 @@
 module 0x2::A {
     use std::vector;
 
-    struct R has key { i: u64 }
-
-    #[test(a=@0x2)]
-    public fun unroll_address_success(a: &signer) {
-        let r = R{i: 1};
-        move_to(a, r);
-    }
-
-    spec unroll_address_success {
-        let post choice = choose a: address where exists<R>(a) && global<R>(a).i == 1;
-    }
-
-    #[test(a=@0x2)]
-    public fun unroll_address_unsatisfied_predicate(a: &signer) {
-        let r = R{i: 1};
-        move_to(a, r);
-    }
-
-    spec unroll_address_unsatisfied_predicate {
-        let post choice = choose a: address where !exists<R>(a);
-    }
-
     #[test]
     public fun vector_choose_success(): vector<u64> {
         let v = vector::empty<u64>();

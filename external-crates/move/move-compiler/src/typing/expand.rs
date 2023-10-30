@@ -335,11 +335,7 @@ fn module_call(context: &mut Context, call: &mut T::ModuleCall) {
 fn builtin_function(context: &mut Context, b: &mut T::BuiltinFunction) {
     use T::BuiltinFunction_ as B;
     match &mut b.value {
-        B::MoveTo(bt)
-        | B::MoveFrom(bt)
-        | B::BorrowGlobal(_, bt)
-        | B::Exists(bt)
-        | B::Freeze(bt) => {
+        B::Freeze(bt) => {
             type_(context, bt);
         }
         B::Assert(_) => (),

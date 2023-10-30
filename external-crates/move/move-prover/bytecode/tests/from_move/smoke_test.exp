@@ -121,60 +121,6 @@ fun SmokeTest::bool_ops($t0|a: u64, $t1|b: u64): (bool, bool) {
 
 
 [variant baseline]
-fun SmokeTest::borrow_global_mut_test($t0|a: address) {
-     var $t1: address
-     var $t2: &mut SmokeTest::R
-     var $t3: address
-     var $t4: &mut SmokeTest::R
-  0: $t1 := copy($t0)
-  1: $t2 := borrow_global<SmokeTest::R>($t1)
-  2: destroy($t2)
-  3: $t3 := move($t0)
-  4: $t4 := borrow_global<SmokeTest::R>($t3)
-  5: destroy($t4)
-  6: return ()
-}
-
-
-[variant baseline]
-fun SmokeTest::create_resource($t0|sender: &signer) {
-     var $t1: &signer
-     var $t2: u64
-     var $t3: SmokeTest::R
-  0: $t1 := move($t0)
-  1: $t2 := 1
-  2: $t3 := pack SmokeTest::R($t2)
-  3: move_to<SmokeTest::R>($t3, $t1)
-  4: return ()
-}
-
-
-[variant baseline]
-fun SmokeTest::create_resoure_generic($t0|sender: &signer) {
-     var $t1: &signer
-     var $t2: u64
-     var $t3: SmokeTest::G<u64>
-  0: $t1 := move($t0)
-  1: $t2 := 1
-  2: $t3 := pack SmokeTest::G<u64>($t2)
-  3: move_to<SmokeTest::G<u64>>($t3, $t1)
-  4: return ()
-}
-
-
-[variant baseline]
-fun SmokeTest::exists_resource($t0|sender: &signer): bool {
-     var $t1: &signer
-     var $t2: address
-     var $t3: bool
-  0: $t1 := move($t0)
-  1: $t2 := signer::address_of($t1)
-  2: $t3 := exists<SmokeTest::R>($t2)
-  3: return $t3
-}
-
-
-[variant baseline]
 fun SmokeTest::identity($t0|a: SmokeTest::A, $t1|b: SmokeTest::B, $t2|c: SmokeTest::C): (SmokeTest::A, SmokeTest::B, SmokeTest::C) {
      var $t3: SmokeTest::A
      var $t4: SmokeTest::B
@@ -183,40 +129,6 @@ fun SmokeTest::identity($t0|a: SmokeTest::A, $t1|b: SmokeTest::B, $t2|c: SmokeTe
   1: $t4 := move($t1)
   2: $t5 := move($t2)
   3: return ($t3, $t4, $t5)
-}
-
-
-[variant baseline]
-fun SmokeTest::move_from_addr($t0|a: address) {
-     var $t1: address
-     var $t2: SmokeTest::R
-     var $t3: u64
-  0: $t1 := move($t0)
-  1: $t2 := move_from<SmokeTest::R>($t1)
-  2: $t3 := unpack SmokeTest::R($t2)
-  3: destroy($t3)
-  4: return ()
-}
-
-
-[variant baseline]
-fun SmokeTest::move_from_addr_to_sender($t0|sender: &signer, $t1|a: address) {
-     var $t2|x#1#0: u64
-     var $t3: address
-     var $t4: SmokeTest::R
-     var $t5: u64
-     var $t6: &signer
-     var $t7: u64
-     var $t8: SmokeTest::R
-  0: $t3 := move($t1)
-  1: $t4 := move_from<SmokeTest::R>($t3)
-  2: $t5 := unpack SmokeTest::R($t4)
-  3: $t2 := $t5
-  4: $t6 := move($t0)
-  5: $t7 := move($t2)
-  6: $t8 := pack SmokeTest::R($t7)
-  7: move_to<SmokeTest::R>($t8, $t6)
-  8: return ()
 }
 
 

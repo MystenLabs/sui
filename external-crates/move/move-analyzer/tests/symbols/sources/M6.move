@@ -29,9 +29,9 @@ module Symbols::M6 {
     }
 
     /** Asterix based single-line docstring */
-    fun acq(addr: address): u64 acquires DocumentedStruct {
-        let val = borrow_global<DocumentedStruct>(addr);
-        val.documented_field
+    fun acq(uint: u64): u64 {
+        uint +
+        1
     }
 
     use Symbols::M7::{Self, OtherDocStruct};

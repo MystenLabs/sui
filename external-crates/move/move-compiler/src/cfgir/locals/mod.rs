@@ -263,9 +263,7 @@ fn exp(context: &mut Context, parent_e: &Exp) {
         }
 
         E::ModuleCall(mcall) => mcall.arguments.iter().map(|e| exp(context, e)).collect(),
-        E::Builtin(_, args) | E::Vector(_, _, _, args) => {
-            args.iter().map(|e| exp(context, e)).collect()
-        }
+        E::Vector(_, _, _, args) => args.iter().map(|e| exp(context, e)).collect(),
         E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)

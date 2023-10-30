@@ -30,7 +30,6 @@ members = [
     "move-prover/interpreter",
     "move-prover/interpreter/crypto",
     "move-prover/interpreter-testsuite",
-    "move-prover/lab",
     "move-prover/move-abigen",
     "move-prover/move-docgen",
     "move-prover/move-errmapgen",

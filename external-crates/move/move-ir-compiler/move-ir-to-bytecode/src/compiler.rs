@@ -855,19 +855,13 @@ fn compile_function(
         FunctionVisibility::Friend => Visibility::Friend,
         FunctionVisibility::Internal => Visibility::Private,
     };
-    let acquires_global_resources = ast_function
-        .acquires
-        .iter()
-        .map(|name| context.struct_definition_index(name))
-        .collect::<Result<_>>()?;
-
     let code = compile_function_body_impl(context, ast_function)?;
 
     Ok(FunctionDefinition {
         function: fh_idx,
         visibility,
         is_entry,
-        acquires_global_resources,
+        acquires_global_resources: vec![],
         code,
     })
 }
@@ -1336,86 +1330,6 @@ fn compile_call(
     match call.value {
         FunctionCall_::Builtin(function) => {
             match function {
-                Builtin::Exists(name, tys) => {
-                    let tokens = Signature(compile_types(
-                        context,
-                        function_frame.type_parameters(),
-                        &tys,
-                    )?);
-                    let type_actuals_id = context.signature_index(tokens)?;
-                    let def_idx = context.struct_definition_index(&name)?;
-                    if tys.is_empty() {
-                        push_instr!(call.loc, Bytecode::Exists(def_idx));
-                    } else {
-                        let si_idx =
-                            context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                        push_instr!(call.loc, Bytecode::ExistsGeneric(si_idx));
-                    }
-                    function_frame.pop()?;
-                    function_frame.push()?;
-                }
-                Builtin::BorrowGlobal(mut_, name, ast_tys) => {
-                    let sig_tys =
-                        compile_types(context, function_frame.type_parameters(), &ast_tys)?;
-                    let tokens = Signature(sig_tys);
-                    let type_actuals_id = context.signature_index(tokens)?;
-                    let def_idx = context.struct_definition_index(&name)?;
-                    if ast_tys.is_empty() {
-                        push_instr! {call.loc,
-                            if mut_ {
-                                Bytecode::MutBorrowGlobal(def_idx)
-                            } else {
-                                Bytecode::ImmBorrowGlobal(def_idx)
-                            }
-                        };
-                    } else {
-                        let si_idx =
-                            context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                        push_instr! {call.loc,
-                            if mut_ {
-                                Bytecode::MutBorrowGlobalGeneric(si_idx)
-                            } else {
-                                Bytecode::ImmBorrowGlobalGeneric(si_idx)
-                            }
-                        };
-                    }
-                    function_frame.pop()?;
-                    function_frame.push()?;
-                }
-                Builtin::MoveFrom(name, ast_tys) => {
-                    let sig_tys =
-                        compile_types(context, function_frame.type_parameters(), &ast_tys)?;
-                    let tokens = Signature(sig_tys);
-                    let type_actuals_id = context.signature_index(tokens)?;
-                    let def_idx = context.struct_definition_index(&name)?;
-                    if ast_tys.is_empty() {
-                        push_instr!(call.loc, Bytecode::MoveFrom(def_idx));
-                    } else {
-                        let si_idx =
-                            context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                        push_instr!(call.loc, Bytecode::MoveFromGeneric(si_idx));
-                    }
-                    function_frame.pop()?; // pop the address
-                    function_frame.push()?; // push the return value
-                }
-                Builtin::MoveTo(name, tys) => {
-                    let tokens = Signature(compile_types(
-                        context,
-                        function_frame.type_parameters(),
-                        &tys,
-                    )?);
-                    let type_actuals_id = context.signature_index(tokens)?;
-                    let def_idx = context.struct_definition_index(&name)?;
-                    if tys.is_empty() {
-                        push_instr!(call.loc, Bytecode::MoveTo(def_idx));
-                    } else {
-                        let si_idx =
-                            context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                        push_instr!(call.loc, Bytecode::MoveToGeneric(si_idx));
-                    }
-                    function_frame.pop()?; // pop the address
-                    function_frame.pop()?; // pop the value to be moved
-                }
                 Builtin::VecPack(tys, num) => {
                     let tokens = compile_types(context, function_frame.type_parameters(), &tys)?;
                     let type_actuals_id = context.signature_index(Signature(tokens))?;
@@ -1770,36 +1684,6 @@ fn compile_bytecode(
                 Bytecode::ImmBorrowFieldGeneric(fi_idx)
             }
         }
-        IRBytecode_::MutBorrowGlobal(n, tys) => {
-            let tokens = Signature(compile_types(
-                context,
-                function_frame.type_parameters(),
-                &tys,
-            )?);
-            let type_actuals_id = context.signature_index(tokens)?;
-            let def_idx = context.struct_definition_index(&n)?;
-            if tys.is_empty() {
-                Bytecode::MutBorrowGlobal(def_idx)
-            } else {
-                let si_idx = context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                Bytecode::MutBorrowGlobalGeneric(si_idx)
-            }
-        }
-        IRBytecode_::ImmBorrowGlobal(n, tys) => {
-            let tokens = Signature(compile_types(
-                context,
-                function_frame.type_parameters(),
-                &tys,
-            )?);
-            let type_actuals_id = context.signature_index(tokens)?;
-            let def_idx = context.struct_definition_index(&n)?;
-            if tys.is_empty() {
-                Bytecode::ImmBorrowGlobal(def_idx)
-            } else {
-                let si_idx = context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                Bytecode::ImmBorrowGlobalGeneric(si_idx)
-            }
-        }
         IRBytecode_::Add => Bytecode::Add,
         IRBytecode_::Sub => Bytecode::Sub,
         IRBytecode_::Mul => Bytecode::Mul,
@@ -1818,51 +1702,6 @@ fn compile_bytecode(
         IRBytecode_::Le => Bytecode::Le,
         IRBytecode_::Ge => Bytecode::Ge,
         IRBytecode_::Abort => Bytecode::Abort,
-        IRBytecode_::Exists(n, tys) => {
-            let tokens = Signature(compile_types(
-                context,
-                function_frame.type_parameters(),
-                &tys,
-            )?);
-            let type_actuals_id = context.signature_index(tokens)?;
-            let def_idx = context.struct_definition_index(&n)?;
-            if tys.is_empty() {
-                Bytecode::Exists(def_idx)
-            } else {
-                let si_idx = context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                Bytecode::ExistsGeneric(si_idx)
-            }
-        }
-        IRBytecode_::MoveFrom(n, tys) => {
-            let tokens = Signature(compile_types(
-                context,
-                function_frame.type_parameters(),
-                &tys,
-            )?);
-            let type_actuals_id = context.signature_index(tokens)?;
-            let def_idx = context.struct_definition_index(&n)?;
-            if tys.is_empty() {
-                Bytecode::MoveFrom(def_idx)
-            } else {
-                let si_idx = context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                Bytecode::MoveFromGeneric(si_idx)
-            }
-        }
-        IRBytecode_::MoveTo(n, tys) => {
-            let tokens = Signature(compile_types(
-                context,
-                function_frame.type_parameters(),
-                &tys,
-            )?);
-            let type_actuals_id = context.signature_index(tokens)?;
-            let def_idx = context.struct_definition_index(&n)?;
-            if tys.is_empty() {
-                Bytecode::MoveTo(def_idx)
-            } else {
-                let si_idx = context.struct_instantiation_index(def_idx, type_actuals_id)?;
-                Bytecode::MoveToGeneric(si_idx)
-            }
-        }
         IRBytecode_::Shl => Bytecode::Shl,
         IRBytecode_::Shr => Bytecode::Shr,
         IRBytecode_::VecPack(ty, n) => {

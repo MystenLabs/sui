@@ -1107,12 +1107,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fst"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
-
-[[package]]
 name = "funty"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1899,7 +1893,7 @@ dependencies = [
  "dirs-next",
  "hex",
  "move-core-types",
- "num-bigint 0.4.3",
+ "num-bigint",
  "once_cell",
  "serde",
  "sha2 0.9.9",
@@ -1952,7 +1946,7 @@ dependencies = [
  "ethnum",
  "hex",
  "move-proc-macros",
- "num 0.4.0",
+ "num",
  "once_cell",
  "primitive-types",
  "proptest",
@@ -2016,7 +2010,7 @@ dependencies = [
  "move-model",
  "move-prover",
  "move-prover-test-utils",
- "num 0.4.0",
+ "num",
  "once_cell",
  "regex",
  "serde",
@@ -2131,7 +2125,7 @@ dependencies = [
  "move-ir-types",
  "move-prover-test-utils",
  "move-symbol-pool",
- "num 0.4.0",
+ "num",
  "once_cell",
  "regex",
  "serde",
@@ -2222,7 +2216,7 @@ dependencies = [
  "move-core-types",
  "move-model",
  "move-stackless-bytecode",
- "num 0.4.0",
+ "num",
  "once_cell",
  "pretty",
  "rand 0.8.5",
@@ -2285,7 +2279,7 @@ dependencies = [
  "move-prover-test-utils",
  "move-read-write-set-types",
  "move-stdlib",
- "num 0.4.0",
+ "num",
  "paste",
  "petgraph",
  "serde",
@@ -2306,7 +2300,7 @@ dependencies = [
  "move-model",
  "move-prover-test-utils",
  "move-stackless-bytecode",
- "num 0.4.0",
+ "num",
 ]
 
 [[package]]
@@ -2549,40 +2543,15 @@ dependencies = [
 
 [[package]]
 name = "num"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7a8e9be5e039e2ff869df49155f1c06bd01ade2117ec783e56ab0932b67a8f"
-dependencies = [
- "num-bigint 0.3.3",
- "num-complex 0.3.1",
- "num-integer",
- "num-iter",
- "num-rational 0.3.2",
- "num-traits",
-]
-
-[[package]]
-name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43db66d1170d347f9a065114077f7dccb00c1b9478c89384490a3425279a4606"
 dependencies = [
- "num-bigint 0.4.3",
- "num-complex 0.4.3",
+ "num-bigint",
+ "num-complex",
  "num-integer",
  "num-iter",
- "num-rational 0.4.1",
- "num-traits",
-]
-
-[[package]]
-name = "num-bigint"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f6f7833f2cbf2360a6cfd58cd41a53aa7a90bd4c202f5b1c7dd2ed73c57b2c3"
-dependencies = [
- "autocfg",
- "num-integer",
+ "num-rational",
  "num-traits",
 ]
 
@@ -2594,15 +2563,6 @@ checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
 dependencies = [
  "autocfg",
  "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-complex"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
-dependencies = [
  "num-traits",
 ]
 
@@ -2638,24 +2598,12 @@ dependencies = [
 
 [[package]]
 name = "num-rational"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
-dependencies = [
- "autocfg",
- "num-bigint 0.3.3",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-rational"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
 dependencies = [
  "autocfg",
- "num-bigint 0.4.3",
+ "num-bigint",
  "num-integer",
  "num-traits",
 ]
@@ -2977,26 +2925,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pomelo"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76dd249f63dbbc68c8caa9b5fd16b32c7ba5da56df93d40a9552c91ebfd2a1cd"
-dependencies = [
- "pomelo-impl",
-]
-
-[[package]]
-name = "pomelo-impl"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "597c3287a549da151aca6ada2795ecde089c7527bd5093114e8e0e1c3f0e52b1"
-dependencies = [
- "proc-macro2 1.0.63",
- "quote 1.0.28",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3020,7 +2948,7 @@ checksum = "3bc9e8bdfe446d34975ff774fbb4a2b944d17054f6b5845ec132d4fb9ff8f559"
 dependencies = [
  "ansi_term 0.9.0",
  "prettytable-rs",
- "structopt 0.2.18",
+ "structopt",
 ]
 
 [[package]]
@@ -3131,24 +3059,6 @@ dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
-]
-
-[[package]]
-name = "prover-lab"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap 4.4.1",
- "codespan-reporting",
- "itertools",
- "log",
- "move-compiler",
- "move-model",
- "move-prover",
- "move-stackless-bytecode",
- "plotters",
- "z3tracer",
 ]
 
 [[package]]
@@ -3708,18 +3618,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
-name = "smt2parser"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957720820c5237fbbff199be910433e453479ec91b28c5a20d3dce7ccba52f1d"
-dependencies = [
- "fst",
- "num 0.3.1",
- "pomelo",
- "structopt 0.3.26",
-]
-
-[[package]]
 name = "socket2"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3768,18 +3666,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16c2cdbf9cc375f15d1b4141bc48aeef444806655cd0e904207edc8d68d86ed7"
 dependencies = [
  "clap 2.34.0",
- "structopt-derive 0.2.18",
-]
-
-[[package]]
-name = "structopt"
-version = "0.3.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6b5c64445ba8094a6ab0c3cd2ad323e07171012d9c98b0b15651daf1787a10"
-dependencies = [
- "clap 2.34.0",
- "lazy_static",
- "structopt-derive 0.4.18",
+ "structopt-derive",
 ]
 
 [[package]]
@@ -3792,19 +3679,6 @@ dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
-]
-
-[[package]]
-name = "structopt-derive"
-version = "0.4.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
-dependencies = [
- "heck 0.3.3",
- "proc-macro-error",
- "proc-macro2 1.0.63",
- "quote 1.0.28",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -4662,17 +4536,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
-]
-
-[[package]]
-name = "z3tracer"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b52f3d4b300ffa9400cd78caebaaa6ef5a0189d08ec134624e2b8f3890b6e0"
-dependencies = [
- "smt2parser",
- "structopt 0.3.26",
- "thiserror",
 ]
 
 [[package]]

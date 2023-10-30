@@ -11,7 +11,7 @@ use crate::{
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     naming::ast::{self as N, Neighbor_},
-    parser::ast::{self as P, Ability_, ConstantName, Field, FunctionName, StructName},
+    parser::ast::{self as P, ConstantName, Field, FunctionName, StructName},
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -48,7 +48,6 @@ struct ResolvedModuleType {
 struct ModuleType {
     original_mident: ModuleIdent,
     decl_loc: Loc,
-    declared_abilities: AbilitySet,
     arity: usize,
     is_positional: bool,
 }
@@ -109,14 +108,12 @@ impl<'env> Context<'env> {
                     .structs
                     .key_cloned_iter()
                     .map(|(s, sdef)| {
-                        let abilities = sdef.abilities.clone();
                         let arity = sdef.type_parameters.len();
                         let sname = s.value();
                         let is_positional = matches!(sdef.fields, E::StructFields::Positional(_));
                         let type_info = ModuleType {
                             original_mident: mident,
                             decl_loc: s.loc(),
-                            declared_abilities: abilities,
                             arity,
                             is_positional,
                         };
@@ -816,7 +813,6 @@ fn function(
         visibility,
         entry,
         signature,
-        acquires,
         body,
         specs,
     } = ef;
@@ -831,7 +827,6 @@ fn function(
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
     let signature = function_signature(context, signature);
-    let acquires = function_acquires(context, acquires);
     let body = function_body(context, body);
 
     if !matches!(body.value, N::FunctionBody_::Native) {
@@ -853,7 +848,6 @@ fn function(
         visibility,
         entry,
         signature,
-        acquires,
         body,
     };
     fake_natives::function(context.env, module_opt, name, &f);
@@ -904,118 +898,6 @@ fn function_body(context: &mut Context, sp!(loc, b_): E::FunctionBody) -> N::Fun
     match b_ {
         E::FunctionBody_::Native => sp(loc, N::FunctionBody_::Native),
         E::FunctionBody_::Defined(es) => sp(loc, N::FunctionBody_::Defined(sequence(context, es))),
-    }
-}
-
-fn function_acquires(
-    context: &mut Context,
-    eacquires: Vec<E::ModuleAccess>,
-) -> BTreeMap<StructName, Loc> {
-    let mut acquires = BTreeMap::new();
-    for eacquire in eacquires {
-        let new_loc = eacquire.loc;
-        let sn = match acquires_type(context, eacquire) {
-            None => continue,
-            Some(sn) => sn,
-        };
-        if let Some(old_loc) = acquires.insert(sn, new_loc) {
-            context.env.add_diag(diag!(
-                Declarations::DuplicateItem,
-                (new_loc, "Duplicate acquires item"),
-                (old_loc, "Item previously listed here"),
-            ))
-        }
-    }
-    acquires
-}
-
-fn acquires_type(context: &mut Context, ma: E::ModuleAccess) -> Option<StructName> {
-    use ResolvedType as RT;
-    match context.resolve_type(ma) {
-        RT::Unbound => {
-            assert!(context.env.has_errors());
-            None
-        }
-        rt @ RT::BuiltinType(_) | rt @ RT::TParam(_, _) => {
-            let case = match rt {
-                RT::BuiltinType(_) => "builtin type",
-                RT::TParam(_, _) => "type parameter",
-                _ => unreachable!(),
-            };
-            let msg = format!(
-                "Invalid acquires item. Expected a struct name, but got a {}",
-                case
-            );
-            context
-                .env
-                .add_diag(diag!(NameResolution::NamePositionMismatch, (ma.loc, msg)));
-            None
-        }
-        RT::Module(mt) => {
-            let ResolvedModuleType {
-                original_loc: loc,
-                original_type_name: n,
-                module_type:
-                    ModuleType {
-                        original_mident: m,
-                        decl_loc,
-                        declared_abilities: abilities,
-                        arity: _,
-                        is_positional: _,
-                    },
-            } = *mt;
-            acquires_type_struct(context, loc, decl_loc, m, StructName(n), &abilities)
-        }
-    }
-}
-
-fn acquires_type_struct(
-    context: &mut Context,
-    loc: Loc,
-    decl_loc: Loc,
-    declared_module: ModuleIdent,
-    n: StructName,
-    abilities: &AbilitySet,
-) -> Option<StructName> {
-    let declared_in_current = match &context.current_module {
-        Some(current_module) => current_module == &declared_module,
-        None => false,
-    };
-
-    let mut has_errors = false;
-
-    if !abilities.has_ability_(Ability_::Key) {
-        let msg = format!(
-            "Invalid acquires item. Expected a struct with the '{}' ability.",
-            Ability_::KEY
-        );
-        let decl_msg = format!("Declared without the '{}' ability here", Ability_::KEY);
-        context.env.add_diag(diag!(
-            Declarations::InvalidAcquiresItem,
-            (loc, msg),
-            (decl_loc, decl_msg),
-        ));
-        has_errors = true;
-    }
-
-    if !declared_in_current {
-        let tmsg = format!(
-            "The struct '{}' was not declared in the current module. Global storage access is \
-             internal to the module'",
-            n
-        );
-        context.env.add_diag(diag!(
-            Declarations::InvalidAcquiresItem,
-            (loc, "Invalid acquires item"),
-            (decl_loc, tmsg),
-        ));
-        has_errors = true;
-    }
-
-    if has_errors {
-        None
-    } else {
-        Some(n)
     }
 }
 
@@ -1781,11 +1663,6 @@ fn resolve_builtin_function(
 ) -> Option<N::BuiltinFunction_> {
     use N::{BuiltinFunction_ as B, BuiltinFunction_::*};
     Some(match b.value.as_str() {
-        B::MOVE_TO => MoveTo(check_builtin_ty_arg(context, loc, b, ty_args)),
-        B::MOVE_FROM => MoveFrom(check_builtin_ty_arg(context, loc, b, ty_args)),
-        B::BORROW_GLOBAL => BorrowGlobal(false, check_builtin_ty_arg(context, loc, b, ty_args)),
-        B::BORROW_GLOBAL_MUT => BorrowGlobal(true, check_builtin_ty_arg(context, loc, b, ty_args)),
-        B::EXISTS => Exists(check_builtin_ty_arg(context, loc, b, ty_args)),
         B::FREEZE => Freeze(check_builtin_ty_arg(context, loc, b, ty_args)),
         B::ASSERT_MACRO => {
             let dep_msg = format!(

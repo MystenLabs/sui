@@ -1,23 +1,7 @@
 module 0x2::A {
     use std::vector;
 
-    struct R has key { i: u64 }
-
-    struct S has key { i: u64 }
-
-    #[test(a=@0x2)]
-    public fun move_to_test(a: &signer) {
-        let r = R {i: 1};
-        let s = S {i: 1};
-        move_to(a, r);
-        move_to(a, s);
-
-        spec {
-            assert forall a: address where exists<R>(a): exists<S>(a);
-        };
-    }
-
-    #[test]
+   #[test]
     public fun init_vector_success(): vector<u64> {
         let v = vector::empty<u64>();
         vector::push_back(&mut v, 1);

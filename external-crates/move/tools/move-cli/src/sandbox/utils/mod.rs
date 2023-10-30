@@ -4,8 +4,7 @@
 #![allow(hidden_glob_reexports)]
 use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{bail, Result};
-use colored::Colorize;
-use difference::{Changeset, Difference};
+
 use move_binary_format::{
     access::ModuleAccess,
     compatibility::Compatibility,
@@ -29,7 +28,6 @@ use move_core_types::{
 };
 use move_ir_types::location::Loc;
 use move_package::compilation::compiled_package::CompiledUnitWithSource;
-use move_resource_viewer::{AnnotatedMoveStruct, MoveValueAnnotator};
 use move_vm_test_utils::gas_schedule::Gas;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -103,59 +101,14 @@ pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
     )
 }
 
-// Print a struct with a specified outer indent
-fn print_struct_with_indent(value: &AnnotatedMoveStruct, indent: u64) {
-    let indent_str: String = (0..indent).map(|_| " ").collect::<String>();
-    let value_str = format!("{}", value);
-    let lines = value_str.split('\n');
-    for line in lines {
-        println!("{}{}", indent_str, line)
-    }
-}
-
-// Print struct diff with a specified outer indent
-fn print_struct_diff_with_indent(
-    value1: &AnnotatedMoveStruct,
-    value2: &AnnotatedMoveStruct,
-    indent: u64,
-) {
-    let indent_str: String = (0..indent).map(|_| " ").collect::<String>();
-    let prev_str = format!("{}", value1);
-    let new_str = format!("{}", value2);
-
-    let Changeset { diffs, .. } = Changeset::new(&prev_str, &new_str, "\n");
-
-    for diff in diffs {
-        match diff {
-            Difference::Same(ref x) => {
-                let lines = x.split('\n');
-                for line in lines {
-                    println!(" {}{}", indent_str, line);
-                }
-            }
-            Difference::Add(ref x) => {
-                let lines = x.split('\n');
-                for line in lines {
-                    println!("{}{}{}", "+".green(), indent_str, line.green());
-                }
-            }
-            Difference::Rem(ref x) => {
-                let lines = x.split('\n');
-                for line in lines {
-                    println!("{}{}{}", "-".red(), indent_str, line.red());
-                }
-            }
-        }
-    }
-}
-
 pub(crate) fn explain_execution_effects(
     changeset: &ChangeSet,
     events: &[Event],
-    state: &OnDiskStateView,
+    _state: &OnDiskStateView,
 ) -> Result<()> {
     // execution effects should contain no modules
     assert!(changeset.modules().next().is_none());
+    assert!(changeset.resources().next().is_none());
     if !events.is_empty() {
         println!("Emitted {:?} events:", events.len());
         // TODO: better event printing
@@ -166,80 +119,6 @@ pub(crate) fn explain_execution_effects(
             )
         }
     }
-    if !changeset.accounts().is_empty() {
-        println!(
-            "Changed resource(s) under {:?} address(es):",
-            changeset.accounts().len()
-        );
-    }
-    // total bytes written across all accounts
-    let mut total_bytes_written = 0;
-    for (addr, account) in changeset.accounts() {
-        print!("  ");
-        if account.resources().is_empty() {
-            continue;
-        }
-        println!(
-            "Changed {:?} resource(s) under address {:?}:",
-            account.resources().len(),
-            addr
-        );
-        for (struct_tag, write_op) in account.resources() {
-            print!("    ");
-            let mut bytes_to_write = struct_tag.access_vector().len();
-            match write_op {
-                Op::New(blob) => {
-                    bytes_to_write += blob.len();
-                    println!(
-                        "Added type {}: {:?} (wrote {:?} bytes)",
-                        struct_tag, blob, bytes_to_write
-                    );
-                    // Print new resource
-                    let resource =
-                        MoveValueAnnotator::new(state).view_resource(struct_tag, blob)?;
-                    print_struct_with_indent(&resource, 6)
-                }
-                Op::Modify(blob) => {
-                    bytes_to_write += blob.len();
-                    println!(
-                        "Changed type {}: {:?} (wrote {:?} bytes)",
-                        struct_tag, blob, bytes_to_write
-                    );
-                    // Print resource diff
-                    let resource_data = state
-                        .get_resource_bytes(*addr, struct_tag.clone())?
-                        .unwrap();
-                    let resource_old =
-                        MoveValueAnnotator::new(state).view_resource(struct_tag, &resource_data)?;
-                    let resource_new =
-                        MoveValueAnnotator::new(state).view_resource(struct_tag, blob)?;
-
-                    print_struct_diff_with_indent(&resource_old, &resource_new, 8)
-                }
-                Op::Delete => {
-                    println!(
-                        "Deleted type {} (wrote {:?} bytes)",
-                        struct_tag, bytes_to_write
-                    );
-                    // Print deleted resource
-                    let resource_data = state
-                        .get_resource_bytes(*addr, struct_tag.clone())?
-                        .unwrap();
-                    let resource_old =
-                        MoveValueAnnotator::new(state).view_resource(struct_tag, &resource_data)?;
-                    print_struct_with_indent(&resource_old, 6);
-                }
-            };
-            total_bytes_written += bytes_to_write;
-        }
-    }
-    if total_bytes_written != 0 {
-        println!(
-            "Wrote {:?} bytes of resource ID's and data",
-            total_bytes_written
-        );
-    }
-
     Ok(())
 }
 
@@ -253,17 +132,6 @@ pub(crate) fn maybe_commit_effects(
     // similar to explain effects, all module publishing happens via save_modules(), so effects
     // shouldn't contain modules
     if commit {
-        for (addr, account) in changeset.into_inner() {
-            for (struct_tag, blob_op) in account.into_resources() {
-                match blob_op {
-                    Op::New(blob) | Op::Modify(blob) => {
-                        state.save_resource(addr, struct_tag, &blob)?
-                    }
-                    Op::Delete => state.delete_resource(addr, struct_tag)?,
-                }
-            }
-        }
-
         for (event_key, event_sequence_number, event_type, event_data) in events {
             state.save_event(&event_key, event_sequence_number, event_type, event_data)?
         }

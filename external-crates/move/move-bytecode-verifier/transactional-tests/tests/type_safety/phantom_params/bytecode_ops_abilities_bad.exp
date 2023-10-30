@@ -1,4 +1,4 @@
-processed 9 tasks
+processed 6 tasks
 
 task 1 'publish'. lines 10-22:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
@@ -36,34 +36,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(0), 0)],
 }
 
-task 5 'publish'. lines 63-76:
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M6'. Got VMError: {
-    major_status: MOVETO_WITHOUT_KEY_ABILITY,
-    sub_status: None,
-    location: 0x1::M6,
-    indices: [(FunctionDefinition, 0)],
-    offsets: [(FunctionDefinitionIndex(0), 2)],
-}
-
-task 6 'publish'. lines 78-89:
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M7'. Got VMError: {
-    major_status: MOVEFROM_WITHOUT_KEY_ABILITY,
-    sub_status: None,
-    location: 0x1::M7,
-    indices: [(FunctionDefinition, 0)],
-    offsets: [(FunctionDefinitionIndex(0), 1)],
-}
-
-task 7 'publish'. lines 91-102:
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M8'. Got VMError: {
-    major_status: EXISTS_WITHOUT_KEY_ABILITY_OR_BAD_ARGUMENT,
-    sub_status: None,
-    location: 0x1::M8,
-    indices: [(FunctionDefinition, 0)],
-    offsets: [(FunctionDefinitionIndex(0), 1)],
-}
-
-task 8 'publish'. lines 104-115:
+task 5 'publish'. lines 63-74:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M9'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,

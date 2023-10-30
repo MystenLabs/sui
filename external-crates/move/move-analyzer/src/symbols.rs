@@ -132,7 +132,6 @@ pub enum IdentType {
         Vec<Symbol>,  /* arg names */
         Vec<Type>,    /* arg types */
         Type,         /* ret */
-        Vec<Type>,    /* acquires */
     ),
 }
 
@@ -266,18 +265,11 @@ impl fmt::Display for IdentType {
                 // IDE independently on how compiler error messages are generated.
                 write!(f, "{}", type_to_ide_string(t))
             }
-            Self::FunctionType(mod_ident, name, type_args, arg_names, arg_types, ret, acquires) => {
+            Self::FunctionType(mod_ident, name, type_args, arg_names, arg_types, ret) => {
                 let type_args_str = if !type_args.is_empty() {
                     let mut s = '<'.to_string();
                     s.push_str(&type_list_to_ide_string(type_args));
                     s.push('>');
-                    s
-                } else {
-                    "".to_string()
-                };
-                let acquires_str = if !acquires.is_empty() {
-                    let mut s = " acquires ".to_string();
-                    s.push_str(&type_list_to_ide_string(acquires));
                     s
                 } else {
                     "".to_string()
@@ -289,14 +281,13 @@ impl fmt::Display for IdentType {
 
                 write!(
                     f,
-                    "fun {}::{}::{}{}({}){}{}",
+                    "fun {}::{}::{}{}({}){}",
                     addr_to_ide_string(&mod_ident.address),
                     mod_ident.module.value(),
                     name,
                     type_args_str,
                     arg_list_to_ide_string(arg_names, arg_types),
                     ret_str,
-                    acquires_str
                 )
             }
         }
@@ -884,10 +875,6 @@ impl Symbolicator {
                     .map(|(_, _, t)| t.clone())
                     .collect(),
                 fun.signature.return_type.clone(),
-                fun.acquires
-                    .iter()
-                    .map(|(k, v)| Self::create_struct_type(*mod_ident, *k, *v, vec![]))
-                    .collect(),
             );
             functions.insert(
                 *name,
@@ -1113,18 +1100,6 @@ impl Symbolicator {
 
         // process return types
         self.add_type_id_use_def(&fun.signature.return_type, references, use_defs);
-        // process optional "acquires" clause
-        for (name, loc) in fun.acquires.clone() {
-            let typ = Self::create_struct_type(self.current_mod.unwrap(), name, loc, vec![]);
-            self.add_struct_use_def(
-                &self.current_mod.unwrap(),
-                &name.value(),
-                &name.loc(),
-                references,
-                use_defs,
-                &typ,
-            );
-        }
 
         // clear type params from the scope
         self.type_params.clear();
@@ -1388,12 +1363,8 @@ impl Symbolicator {
             E::Builtin(builtin_fun, exp) => {
                 use BuiltinFunction_ as BF;
                 match &builtin_fun.value {
-                    BF::MoveTo(t) => self.add_type_id_use_def(t, references, use_defs),
-                    BF::MoveFrom(t) => self.add_type_id_use_def(t, references, use_defs),
-                    BF::BorrowGlobal(_, t) => self.add_type_id_use_def(t, references, use_defs),
-                    BF::Exists(t) => self.add_type_id_use_def(t, references, use_defs),
                     BF::Freeze(t) => self.add_type_id_use_def(t, references, use_defs),
-                    _ => (),
+                    BF::Assert(_) => (),
                 }
                 self.exp_symbols(exp, scope, references, use_defs);
             }
@@ -2012,7 +1983,7 @@ impl Symbolicator {
     fn ident_type_def_loc(&self, ident_type: &IdentType) -> Option<DefLoc> {
         match ident_type {
             IdentType::RegularType(t) => self.type_def_loc(t),
-            IdentType::FunctionType(_, _, _, _, _, ret, _) => self.type_def_loc(ret),
+            IdentType::FunctionType(_, _, _, _, _, ret) => self.type_def_loc(ret),
         }
     }
 
@@ -2405,19 +2376,23 @@ fn assert_use_def_with_doc_string(
     type_def: Option<(u32, u32, &str)>,
     doc_string: &str,
 ) {
-    let uses = mod_symbols.get(use_line).unwrap();
-    let use_def = uses.iter().nth(use_idx).unwrap();
-    assert!(use_def.col_start == use_col);
-    assert!(use_def.def_loc.start.line == def_line);
-    assert!(use_def.def_loc.start.character == def_col);
+    let Some(uses) = mod_symbols.get(use_line) else {
+        panic!("No use_line {use_line} in mod_symbols {mod_symbols:#?}");
+    };
+    let Some(use_def) = uses.iter().nth(use_idx) else {
+        panic!("No use_line {use_idx} in uses {uses:#?}");
+    };
+    assert_eq!(use_def.col_start, use_col);
+    assert_eq!(use_def.def_loc.start.line, def_line);
+    assert_eq!(use_def.def_loc.start.character, def_col);
     assert!(file_name_mapping
         .get(&use_def.def_loc.fhash)
         .unwrap()
         .as_str()
         .ends_with(def_file));
-    assert!(type_str == format!("{}", use_def.use_type));
+    assert_eq!(type_str, format!("{}", use_def.use_type));
 
-    assert!(doc_string == use_def.doc_string);
+    assert_eq!(doc_string, use_def.doc_string);
     match use_def.type_def_loc {
         Some(type_def_loc) => {
             let tdef_line = type_def.unwrap().0;
@@ -2619,7 +2594,7 @@ fn docstring_test() {
         31,
         8,
         "M6.move",
-        "fun Symbols::M6::acq(addr: address): u64 acquires Symbols::M6::DocumentedStruct",
+        "fun Symbols::M6::acq(uint: u64): u64",
         None,
         "Asterix based single-line docstring\n",
     );
@@ -2947,46 +2922,7 @@ fn symbols_test() {
         34,
         8,
         "M1.move",
-        "fun Symbols::M1::acq(addr: address): u64 acquires Symbols::M1::SomeStruct",
-        None,
-    );
-    // struct name in acquires (acq function)
-    assert_use_def(
-        mod_symbols,
-        &symbols.file_name_mapping,
-        2,
-        34,
-        41,
-        2,
-        11,
-        "M1.move",
-        "Symbols::M1::SomeStruct",
-        Some((2, 11, "M1.move")),
-    );
-    // struct name in builtin type param (acq function)
-    assert_use_def(
-        mod_symbols,
-        &symbols.file_name_mapping,
-        1,
-        35,
-        32,
-        2,
-        11,
-        "M1.move",
-        "Symbols::M1::SomeStruct",
-        Some((2, 11, "M1.move")),
-    );
-    // param name in builtin (acq function)
-    assert_use_def(
-        mod_symbols,
-        &symbols.file_name_mapping,
-        2,
-        35,
-        44,
-        34,
-        12,
-        "M1.move",
-        "address",
+        "fun Symbols::M1::acq(uint: u64): u64",
         None,
     );
     // const in first param (multi_arg_call function)

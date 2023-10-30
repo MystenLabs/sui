@@ -1604,7 +1604,6 @@ fn function_(
         entry,
         signature: psignature,
         body: pbody,
-        acquires,
     } = pfunction;
     assert!(context.exp_specs.is_empty());
     let attributes = flatten_attributes(context, AttributePosition::Function, pattributes);
@@ -1612,10 +1611,6 @@ fn function_(
     context.env.add_warning_filter_scope(warning_filter.clone());
     let visibility = visibility(pvisibility);
     let (old_aliases, signature) = function_signature(context, psignature);
-    let acquires = acquires
-        .into_iter()
-        .flat_map(|a| name_access_chain(context, Access::Type, a))
-        .collect();
     let body = function_body(context, pbody);
     let specs = context.extract_exp_specs();
     if let Some((m, use_funs_builder)) = module_and_use_funs {
@@ -1638,7 +1633,6 @@ fn function_(
         visibility,
         entry,
         signature,
-        acquires,
         body,
         specs,
     };
