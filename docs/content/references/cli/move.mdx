@@ -7,15 +7,15 @@ The Sui Move CLI provides several commands for working with Move source code. A 
 
 ## Commands
 
-Typing `sui move --help` into your terminal or console displays the following information on available commands. 
+Typing `sui move --help` into your terminal or console displays the following information on available commands.
 
 ```
 Usage: sui move [OPTIONS] <COMMAND>
 
 Commands:
-  build   	 
+  build
   coverage 	Inspect test coverage for this package. A previous test run with the `--coverage` flag must have previously been run
-  disassemble  
+  disassemble
   new      	Create a new Move package with name `name` at `path`. If `path` is not provided the package will be created in the directory `name`
   prove    	Run the Move Prover on the package at `path`. If no path is provided defaults to current directory. Use `.. prove .. -- <options>` to pass on options to the
                	prover
@@ -42,7 +42,7 @@ Options:
 
 ## Examples
 
-The following examples demonstrate some of the most often used commands. 
+The following examples demonstrate some of the most often used commands.
 
 ### Create a new Move project
 
@@ -84,7 +84,7 @@ BUILDING smart_contract_test
 Use `sui move test` to run the tests in a Move package.
 
 ```shell
-$ sui move test    	 
+$ sui move test
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
@@ -95,87 +95,29 @@ Test result: OK. Total tests: 0; passed: 0; failed: 0
 
 ### Get test coverage for a module
 
-This example uses the `nfts` example from [sui_programmability folder](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples) in the Sui repository.
 
-To get the a summary of the test coverage, you must first run the `sui move test --coverage` command, and then the `sui move coverage summary` to get a summary of the test coverage in the `nfts` Move example project.
+This example uses [`first_package`](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package) Move package.
+
+To get the a summary of the test coverage, you must first run the `sui move test --coverage` command, and then the `sui move coverage summary --test` to get a summary of the test coverage in the example project.
 
 ```shell
 $ sui move test --coverage
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
-BUILDING NFTs
-warning[W09011]: unused constant
-   ┌─ ./tests/cross_chain_airdrop_tests.move:13:11
-   │
-13 │ 	const ETOKEN_ID_CLAIMED: u64 = 0;
-   │       	^^^^^^^^^^^^^^^^^ The constant 'ETOKEN_ID_CLAIMED' is never used. Consider removing it.
-   │
-   = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09009]: unused struct field
-   ┌─ ./tests/cross_chain_airdrop_tests.move:24:9
-   │
-24 │     	id: UID,
-   │     	^^ The 'id' field of the 'Object' type is unused
-   │
-   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09011]: unused constant
-   ┌─ ./sources/geniteam.move:20:11
-   │
-20 │ 	const EMonsterCollectionNotOwnedByFarm: u64 = 2;
-   │       	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The constant 'EMonsterCollectionNotOwnedByFarm' is never used. Consider removing it.
-   │
-   = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09011]: unused constant
-   ┌─ ./sources/geniteam.move:23:11
-   │
-23 │ 	const EInventoryNotOwnedByPlayer: u64 = 3;
-   │       	^^^^^^^^^^^^^^^^^^^^^^^^^^ The constant 'EInventoryNotOwnedByPlayer' is never used. Consider removing it.
-   │
-   = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
+BUILDING first_package
 Running Move unit tests
-[ PASS	] 0x0::chat_tests::test_chat
-[ PASS	] 0x0::discount_coupon_tests::test_mint_then_transfer
-[ PASS	] 0x0::devnet_nftTests::mint_transfer_update
-[ PASS	] 0x0::cross_chain_airdrop_tests::test_claim_airdrop
-[ PASS	] 0x0::shared_auction_tests::simple_auction_test
-[ PASS	] 0x0::auction_tests::simple_auction_test
-[ PASS	] 0x0::cross_chain_airdrop_tests::test_double_claim
-Test result: OK. Total tests: 7; passed: 7; failed: 0
+[ PASS    ] 0x0::example::test_module_init
+[ PASS    ] 0x0::example::test_sword_transactions
+Test result: OK. Total tests: 2; passed: 2; failed: 0
 
-$ sui move coverage --summary
+$ sui move coverage summary --test
 +-------------------------+
 | Move Coverage Summary   |
 +-------------------------+
-Module 0000000000000000000000000000000000000000000000000000000000000000::auction_lib
->>> % Module coverage: 84.68
-Module 0000000000000000000000000000000000000000000000000000000000000000::auction
->>> % Module coverage: 89.09
-Module 0000000000000000000000000000000000000000000000000000000000000000::chat
->>> % Module coverage: 60.00
-Module 0000000000000000000000000000000000000000000000000000000000000000::erc721_metadata
->>> % Module coverage: 59.09
-Module 0000000000000000000000000000000000000000000000000000000000000000::cross_chain_airdrop
->>> % Module coverage: 91.43
-Module 0000000000000000000000000000000000000000000000000000000000000000::devnet_nft
->>> % Module coverage: 87.76
-Module 0000000000000000000000000000000000000000000000000000000000000000::discount_coupon
->>> % Module coverage: 54.55
-Module 0000000000000000000000000000000000000000000000000000000000000000::typed_id
->>> % Module coverage: 0.00
-Module 0000000000000000000000000000000000000000000000000000000000000000::geniteam
->>> % Module coverage: 0.00
-Module 0000000000000000000000000000000000000000000000000000000000000000::marketplace
->>> % Module coverage: 0.00
-Module 0000000000000000000000000000000000000000000000000000000000000000::num
->>> % Module coverage: 0.00
-Module 0000000000000000000000000000000000000000000000000000000000000000::shared_auction
->>> % Module coverage: 82.86
+Module 0000000000000000000000000000000000000000000000000000000000000000::example
+>>> % Module coverage: 92.81
 +-------------------------+
-| % Move Coverage: 40.36  |
+| % Move Coverage: 92.81  |
 +-------------------------+
 ```
 
@@ -184,7 +126,7 @@ Module 0000000000000000000000000000000000000000000000000000000000000000::shared_
 Each command has its own help section. For example `sui move build –help` displays the following prompt:
 
 ```shell
-$ sui move build --help    
+$ sui move build --help
 Usage: sui move build [OPTIONS]
 
 Options:
