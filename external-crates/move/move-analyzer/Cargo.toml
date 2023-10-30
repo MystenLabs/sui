@@ -9,24 +9,20 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-codespan-reporting = "0.11.1"
-derivative = "2.2.0"
-dunce = "1.0.2"
-im = "15.1.0"
-lsp-server = "0.5.1"
-lsp-types = "0.90.1"
-serde_json = "1.0.64"
-tempfile = "3.2.0"
-url = "2.2.2"
+anyhow.workspace = true
+codespan-reporting.workspace = true
+derivative.workspace = true
+dunce.workspace = true
+im.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+url.workspace = true
 clap.workspace = true
-crossbeam = "0.8"
-move-command-line-common = { path = "../move-command-line-common" }
-move-compiler = { path = "../move-compiler" }
-move-ir-types = { path = "../move-ir/types" }
-move-package = { path = "../tools/move-package" }
-move-symbol-pool = { path = "../move-symbol-pool" }
-
-[features]
-address20 = ["move-compiler/address20"]
-address32 = ["move-compiler/address32"]
+crossbeam.workspace = true
+move-command-line-common.workspace = true
+move-compiler.workspace = true
+move-ir-types.workspace = true
+move-package.workspace = true
+move-symbol-pool.workspace = true

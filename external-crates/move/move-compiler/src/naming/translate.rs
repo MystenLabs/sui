@@ -621,7 +621,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         .flat_map(|e| explicit_use_fun(context, e))
         .collect();
     for (tn, method, nuf) in resolved_vec {
-        let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
+        let methods = resolved.entry(tn.clone()).or_default();
         let nuf_loc = nuf.loc;
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);

@@ -86,8 +86,7 @@ impl<T: Ord + Copy + Debug> Graph<T> {
         let mut stack = vec![];
         visited.insert(self.entry, false);
         stack.push(self.entry);
-        while !stack.is_empty() {
-            let n = stack.pop().unwrap();
+        while let Some(n) = stack.pop() {
             if visited[&n] {
                 visited.entry(n).and_modify(|x| {
                     *x = false;
@@ -122,8 +121,7 @@ impl<T: Ord + Copy + Debug> Graph<T> {
             loop_body.insert(loop_latch);
             stack.push(loop_latch);
         }
-        while !stack.is_empty() {
-            let m = stack.pop().unwrap();
+        while let Some(m) = stack.pop() {
             for p in &self.predecessors[&m] {
                 if !loop_body.contains(p) {
                     loop_body.insert(*p);
@@ -194,8 +192,7 @@ impl<T: Ord + Copy + Debug> DomRelation<T> {
         let mut grey = BTreeSet::new();
         stack.push(graph.entry);
         visited.insert(graph.entry);
-        while !stack.is_empty() {
-            let curr = stack.pop().unwrap();
+        while let Some(curr) = stack.pop() {
             if grey.contains(&curr) {
                 let curr_num = self.postorder_num_to_node.len();
                 self.postorder_num_to_node.push(curr);

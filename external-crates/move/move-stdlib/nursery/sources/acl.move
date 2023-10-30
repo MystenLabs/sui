@@ -23,13 +23,13 @@ module std::acl {
 
     /// Add the address to the ACL.
     public fun add(acl: &mut ACL, addr: address) {
-        assert!(!vector::contains(&mut acl.list, &addr), errors::invalid_argument(ECONTAIN));
+        assert!(!vector::contains(&acl.list, &addr), errors::invalid_argument(ECONTAIN));
         vector::push_back(&mut acl.list, addr);
     }
 
     /// Remove the address from the ACL.
     public fun remove(acl: &mut ACL, addr: address) {
-        let (found, index) = vector::index_of(&mut acl.list, &addr);
+        let (found, index) = vector::index_of(&acl.list, &addr);
         assert!(found, errors::invalid_argument(ENOT_CONTAIN));
         vector::remove(&mut acl.list, index);
     }

@@ -43,9 +43,8 @@ multiple packages, and multiple runs over a package. This functionality is
 important if you have a large functional test suite such as Diem's and want
 to gather coverage information across all of them.
 
-The `move-resource-viewer`, and `read-write-set` similarly are library
-crates that are used by and exposed by the Move CLI, but not through the
-`package` subcommand.
+The `move-resource-viewer` is a library crate that is used by and exposed by
+the Move CLI, but not through the `package` subcommand.
 
 The `move-bytecode-utils` crates holds general
 utilities for working with Move bytecode, e.g., computing the dependency

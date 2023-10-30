@@ -5,8 +5,10 @@ use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
+use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
@@ -20,7 +22,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, trace, warn};
+use tracing::{error, instrument, trace, warn};
 
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore,
@@ -249,10 +251,10 @@ struct Inner {
     // Maps input objects to transactions waiting for locks on the object.
     lock_waiters: HashMap<InputKey, LockQueue>,
 
-    // Number of transactions that depend on each object ID. Should match exactly with total
-    // number of transactions per object ID prefix in the missing_inputs table.
+    // Stores age info for all transactions depending on each object.
     // Used for throttling signing and submitting transactions depending on hot objects.
-    input_objects: HashMap<ObjectID, usize>,
+    // An `IndexMap` is used to ensure that the insertion order is preserved.
+    input_objects: HashMap<ObjectID, IndexMap<TransactionDigest, Instant>>,
 
     // Maps object IDs to the highest observed sequence number of the object. When the value is
     // None, indicates that the object is immutable, corresponding to an InputKey with no sequence
@@ -315,7 +317,7 @@ impl Inner {
             return ready_certificates;
         }
 
-        let input_count = self
+        let input_txns = self
             .input_objects
             .get_mut(&input_key.id())
             .unwrap_or_else(|| {
@@ -324,8 +326,12 @@ impl Inner {
                     input_key.id()
                 )
             });
-        *input_count -= digests.len();
-        if *input_count == 0 {
+        for digest in digests.iter() {
+            // The digest of the transaction must be inside the map.
+            assert!(input_txns.shift_remove(digest).is_some());
+        }
+
+        if input_txns.is_empty() {
             self.input_objects.remove(&input_key.id());
         }
 
@@ -398,6 +404,7 @@ impl TransactionManager {
     ///
     /// REQUIRED: Shared object locks must be taken before calling enqueueing transactions
     /// with shared objects!
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue_certificates(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -410,6 +417,7 @@ impl TransactionManager {
         self.enqueue(executable_txns, epoch_store)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue(
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
@@ -419,6 +427,7 @@ impl TransactionManager {
         self.enqueue_impl(certs, epoch_store)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue_with_expected_effects_digest(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
@@ -540,6 +549,7 @@ impl TransactionManager {
 
         // Internal lock is held only for updating the internal state.
         let mut inner = self.inner.write();
+
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for (available, key) in cache_miss_availability {
@@ -667,8 +677,8 @@ impl TransactionManager {
                 }
                 if acquire {
                     pending_cert.acquiring_locks.insert(key, lock_mode);
-                    let input_count = inner.input_objects.entry(key.id()).or_default();
-                    *input_count += 1;
+                    let input_txns = inner.input_objects.entry(key.id()).or_default();
+                    input_txns.insert(digest, Instant::now());
                 } else {
                     pending_cert.acquired_locks.insert(key, lock_mode);
                 }
@@ -761,6 +771,7 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager about a transaction that has been committed.
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn notify_commit(
         &self,
         digest: &TransactionDigest,
@@ -839,14 +850,20 @@ impl TransactionManager {
             .map(|cert| cert.acquiring_locks.keys().cloned().collect())
     }
 
-    // Returns the number of transactions waiting on each object ID.
-    pub(crate) fn objects_queue_len(&self, keys: Vec<ObjectID>) -> Vec<(ObjectID, usize)> {
+    // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
+    pub(crate) fn objects_queue_len_and_age(
+        &self,
+        keys: Vec<ObjectID>,
+    ) -> Vec<(ObjectID, usize, Option<Duration>)> {
         let inner = self.inner.read();
         keys.into_iter()
             .map(|key| {
+                let default_map = IndexMap::new();
+                let txns = inner.input_objects.get(&key).unwrap_or(&default_map);
                 (
                     key,
-                    inner.input_objects.get(&key).cloned().unwrap_or_default(),
+                    txns.len(),
+                    txns.first().map(|(_, time)| time.elapsed()),
                 )
             })
             .collect()
@@ -865,7 +882,11 @@ impl TransactionManager {
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
-    pub(crate) fn check_execution_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
+    pub(crate) fn check_execution_overload(
+        &self,
+        txn_age_threshold: Duration,
+        tx_data: &SenderSignedData,
+    ) -> SuiResult {
         // Too many transactions are pending execution.
         let inflight_queue_len = self.inflight_queue_len();
         fp_ensure!(
@@ -876,7 +897,7 @@ impl TransactionManager {
             }
         );
 
-        for (object_id, queue_len) in self.objects_queue_len(
+        for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
                 .transaction_data()
                 .input_objects()?
@@ -893,6 +914,17 @@ impl TransactionManager {
                     threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
                 }
             );
+            if let Some(age) = txn_age {
+                // Check that we don't have a txn that has been waiting for a long time in the queue.
+                fp_ensure!(
+                    age < txn_age_threshold,
+                    SuiError::TooOldTransactionPendingOnObject {
+                        object_id,
+                        txn_age_sec: age.as_secs(),
+                        threshold: txn_age_threshold.as_secs(),
+                    }
+                );
+            }
         }
         Ok(())
     }

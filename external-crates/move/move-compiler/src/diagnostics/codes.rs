@@ -298,6 +298,7 @@ codes!(
         FunTypeParam: { msg: "unused function type parameter", severity: Warning },
         Constant: { msg: "unused constant", severity: Warning },
         MutModifier: { msg: "unused 'mut' modifiers", severity: Warning },
+        MutReference: { msg: "unused mutable reference '&mut'", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },

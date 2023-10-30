@@ -10,9 +10,11 @@ publish = false
 edition = "2021"
 
 [dev-dependencies]
-proptest = "1.0.0"
-proptest-derive = "0.3.0"
-move-binary-format = { path = "../", features = ["fuzzing"] }
+proptest.workspace = true
+proptest-derive.workspace = true
+move-binary-format = { workspace = true, features = ["fuzzing"] }
 
 [features]
 fuzzing = ["move-binary-format/fuzzing"]
+
+[dependencies]

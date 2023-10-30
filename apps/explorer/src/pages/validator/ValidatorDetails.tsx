@@ -26,7 +26,7 @@ const getAtRiskRemainingEpochs = (
 
 function ValidatorDetails() {
 	const { id } = useParams();
-	const { data, isLoading } = useSuiClientQuery('getLatestSuiSystemState');
+	const { data, isPending } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const validatorData = useMemo(() => {
 		if (!data) return null;
@@ -40,9 +40,9 @@ function ValidatorDetails() {
 	const atRiskRemainingEpochs = getAtRiskRemainingEpochs(data, id);
 
 	const numberOfValidators = data?.activeValidators.length ?? null;
-	const { data: rollingAverageApys, isLoading: validatorsApysLoading } = useGetValidatorsApy();
+	const { data: rollingAverageApys, isPending: validatorsApysLoading } = useGetValidatorsApy();
 
-	const { data: validatorEvents, isLoading: validatorsEventsLoading } = useGetValidatorsEvents({
+	const { data: validatorEvents, isPending: validatorsEventsLoading } = useGetValidatorsEvents({
 		limit: numberOfValidators,
 		order: 'descending',
 	});
@@ -55,7 +55,7 @@ function ValidatorDetails() {
 		return rewards ? Number(rewards) : null;
 	}, [id, validatorEvents]);
 
-	if (isLoading || validatorsEventsLoading || validatorsApysLoading) {
+	if (isPending || validatorsEventsLoading || validatorsApysLoading) {
 		return (
 			<PageLayout
 				content={

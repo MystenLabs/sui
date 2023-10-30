@@ -707,16 +707,14 @@ impl<'a> BytecodeGenerator<'a> {
                     state =
                         next_instructions
                             .into_iter()
-                            .fold(Some(state), |state, instruction| {
-                                state.and_then(|state| {
-                                    self.apply_instruction(
-                                        fn_context,
-                                        state,
-                                        &mut bytecode,
-                                        instruction,
-                                        true,
-                                    )
-                                })
+                            .try_fold(state, |state, instruction| {
+                                self.apply_instruction(
+                                    fn_context,
+                                    state,
+                                    &mut bytecode,
+                                    instruction,
+                                    true,
+                                )
                             })?;
                     state = self.apply_instruction(
                         fn_context,
@@ -841,18 +839,16 @@ impl<'a> BytecodeGenerator<'a> {
                             "Return value instructions: {:#?} for token {:#?}",
                             next_instructions, &token_type
                         );
-                        state_f = next_instructions.into_iter().fold(
-                            Some(state_f),
+                        state_f = next_instructions.into_iter().try_fold(
+                            state_f,
                             |state_f, instruction| {
-                                state_f.and_then(|state_f| {
-                                    self.apply_instruction(
-                                        fn_context,
-                                        state_f,
-                                        &mut bytecode,
-                                        instruction,
-                                        true,
-                                    )
-                                })
+                                self.apply_instruction(
+                                    fn_context,
+                                    state_f,
+                                    &mut bytecode,
+                                    instruction,
+                                    true,
+                                )
                             },
                         )?;
                     }

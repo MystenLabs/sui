@@ -20,7 +20,7 @@ export default function CheckpointDetail() {
 	const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
 	const client = useSuiClient();
-	const { data, isError, isLoading } = useQuery({
+	const { data, isError, isPending } = useQuery({
 		queryKey: ['checkpoints', digestOrSequenceNumber],
 		queryFn: () => client.getCheckpoint({ id: String(digestOrSequenceNumber!) }),
 	});
@@ -31,7 +31,7 @@ export default function CheckpointDetail() {
 					<Banner variant="error" fullWidth>
 						There was an issue retrieving data for checkpoint: {id}
 					</Banner>
-				) : isLoading ? (
+				) : isPending ? (
 					<LoadingIndicator />
 				) : (
 					<div className="flex flex-col space-y-12">

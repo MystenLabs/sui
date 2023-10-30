@@ -10,17 +10,17 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-move-ir-to-bytecode-syntax = { path = "syntax" }
-move-command-line-common = { path = "../../move-command-line-common" }
-move-core-types = { path = "../../move-core/types" }
-move-ir-types = { path = "../../move-ir/types" }
-move-binary-format = { path = "../../move-binary-format" }
-move-symbol-pool = { path = "../../move-symbol-pool" }
-move-bytecode-source-map = { path = "../move-bytecode-source-map" }
-log = "0.4.14"
-codespan-reporting = "0.11.1"
-ouroboros = "0.17.2"
+anyhow.workspace = true
+move-ir-to-bytecode-syntax.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-binary-format.workspace = true
+move-symbol-pool.workspace = true
+move-bytecode-source-map.workspace = true
+log.workspace = true
+codespan-reporting.workspace = true
+ouroboros.workspace = true
 
 [features]
 default = []

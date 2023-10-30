@@ -11,32 +11,30 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-move-errmapgen = { path = "../move-prover/move-errmapgen" }
-move-docgen = { path = "../move-prover/move-docgen" }
-move-command-line-common = { path = "../move-command-line-common" }
-move-prover = { path = "../move-prover" }
-move-vm-types = { path = "../move-vm/types" }
-move-binary-format = { path = "../move-binary-format" }
-move-core-types = { path = "../move-core/types" }
+move-errmapgen.workspace = true
+move-docgen.workspace = true
+move-command-line-common.workspace = true
+move-prover.workspace = true
+move-vm-types.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
 move-vm-runtime = { path = "../move-vm/runtime" }
-log = "0.4.14"
-walkdir = "2.3.1"
-smallvec = "1.6.1"
-sha2 = "0.9.3"
-sha3 = "0.9.1"
-anyhow = "1.0.52"
-hex = "0.4.3"
+log.workspace = true
+walkdir.workspace = true
+smallvec.workspace = true
+sha2.workspace = true
+sha3.workspace = true
+anyhow.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
-move-unit-test = { path = "../tools/move-unit-test" }
-tempfile = "3.2.0"
-dir-diff = "0.3.2"
-file_diff = "1.0.0"
-move-cli = { path = "../tools/move-cli" }
-move-package = { path = "../tools/move-package" }
+move-unit-test.workspace = true
+tempfile.workspace = true
+dir-diff.workspace = true
+file_diff.workspace = true
+move-cli.workspace = true
+move-package.workspace = true
 
 [features]
-default = ["address32"]
+default = []
 testing = []
-address20 = ["move-core-types/address20"]
-address32 = ["move-core-types/address32"]

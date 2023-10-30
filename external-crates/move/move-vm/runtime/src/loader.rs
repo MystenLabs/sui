@@ -2537,7 +2537,7 @@ impl Loader {
         let info = cache
             .structs
             .entry(gidx)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfo::new);
 
@@ -2661,7 +2661,7 @@ impl Loader {
         let info = cache
             .structs
             .entry(gidx)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfo::new);
         info.struct_layout = Some(struct_layout.clone());
@@ -2759,7 +2759,7 @@ impl Loader {
         let info = cache
             .structs
             .entry(gidx)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .entry(ty_args.to_vec())
             .or_insert_with(StructInfo::new);
         info.annotated_struct_layout = Some(struct_layout.clone());

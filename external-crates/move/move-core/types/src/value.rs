@@ -505,12 +505,6 @@ impl serde::Serialize for MoveStruct {
     }
 }
 
-impl fmt::Display for MoveFieldLayout {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {}", self.name, self.layout)
-    }
-}
-
 impl fmt::Display for MoveTypeLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         use MoveTypeLayout::*;
@@ -523,36 +517,63 @@ impl fmt::Display for MoveTypeLayout {
             U128 => write!(f, "u128"),
             U256 => write!(f, "u256"),
             Address => write!(f, "address"),
-            Vector(typ) => write!(f, "vector<{}>", typ),
-            Struct(s) => write!(f, "{}", s),
             Signer => write!(f, "signer"),
+            Vector(typ) if f.alternate() => write!(f, "vector<{typ:#}>"),
+            Vector(typ) => write!(f, "vector<{typ}>"),
+            Struct(s) if f.alternate() => write!(f, "{s:#}"),
+            Struct(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+/// Helper type that uses `T`'s `Display` implementation as its own `Debug` implementation, to allow
+/// other `Display` implementations in this module to take advantage of the structured formatting
+/// helpers that Rust uses for its own debug types.
+struct DebugAsDisplay<'a, T>(&'a T);
+impl<'a, T: fmt::Display> fmt::Debug for DebugAsDisplay<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "{:#}", self.0)
+        } else {
+            write!(f, "{}", self.0)
         }
     }
 }
 
 impl fmt::Display for MoveStructLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{{ ")?;
+        use DebugAsDisplay as DD;
+
+        write!(f, "struct ")?;
         match self {
             Self::Runtime(layouts) => {
+                let mut map = f.debug_map();
                 for (i, l) in layouts.iter().enumerate() {
-                    write!(f, "{}: {}, ", i, l)?
+                    map.entry(&i, &DD(&l));
                 }
+
+                map.finish()
             }
-            Self::WithFields(layouts) => {
-                for layout in layouts {
-                    write!(f, "{}, ", layout)?
-                }
-            }
-            Self::WithTypes { type_, fields } => {
-                write!(f, "Type: {}", type_)?;
-                write!(f, "Fields:")?;
+
+            Self::WithFields(fields) => {
+                let mut map = f.debug_map();
                 for field in fields {
-                    write!(f, "{}, ", field)?
+                    map.entry(&DD(&field.name), &DD(&field.layout));
                 }
+
+                map.finish()
+            }
+
+            Self::WithTypes { type_, fields } => {
+                write!(f, "{type_} ")?;
+                let mut map = f.debug_map();
+                for field in fields {
+                    map.entry(&DD(&field.name), &DD(&field.layout));
+                }
+
+                map.finish()
             }
         }
-        write!(f, "}}")
     }
 }
 

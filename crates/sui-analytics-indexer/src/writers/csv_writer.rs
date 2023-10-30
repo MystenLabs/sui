@@ -15,7 +15,7 @@ use sui_storage::object_store::util::path_to_filesystem;
 use sui_types::base_types::EpochId;
 
 use crate::writers::AnalyticsWriter;
-use crate::{FileFormat, FileType};
+use crate::{FileFormat, FileType, ParquetSchema};
 
 // Save table entries to csv files.
 pub(crate) struct CSVWriter {
@@ -77,7 +77,7 @@ impl CSVWriter {
     }
 }
 
-impl<S: Serialize> AnalyticsWriter<S> for CSVWriter {
+impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
     fn file_format(&self) -> Result<FileFormat> {
         Ok(FileFormat::CSV)
     }

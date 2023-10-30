@@ -6,12 +6,13 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{cap_page_limit, CoinReadApiServer};
-use sui_json_rpc::coin_api::parse_to_type_tag;
+use sui_json_rpc::coin_api::{parse_to_struct_tag, parse_to_type_tag};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{Balance, CoinPage, Page, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_SUI};
 
 pub(crate) struct CoinReadApiV2 {
     inner: IndexerReader,
@@ -116,12 +117,26 @@ impl CoinReadApiServer for CoinReadApiV2 {
             .map_err(Into::into)
     }
 
-    async fn get_coin_metadata(&self, _coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
-        unimplemented!()
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
+        let coin_struct = parse_to_struct_tag(&coin_type)?;
+        self.inner
+            .get_coin_metadata_in_blocking_task(coin_struct)
+            .await
+            .map_err(Into::into)
     }
 
-    async fn get_total_supply(&self, _coin_type: String) -> RpcResult<Supply> {
-        unimplemented!()
+    async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
+        let coin_struct = parse_to_struct_tag(&coin_type)?;
+        if GAS::is_gas(&coin_struct) {
+            Ok(Supply {
+                value: TOTAL_SUPPLY_SUI,
+            })
+        } else {
+            self.inner
+                .get_total_supply_in_blocking_task(coin_struct)
+                .await
+                .map_err(Into::into)
+        }
     }
 }
 

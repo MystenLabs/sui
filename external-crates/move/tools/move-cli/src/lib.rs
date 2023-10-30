@@ -9,7 +9,6 @@ use base::{
 use move_package::BuildConfig;
 
 pub mod base;
-pub mod experimental;
 pub mod sandbox;
 
 /// Default directory where saved Move resources live
@@ -81,16 +80,6 @@ pub enum Command {
         #[clap(subcommand)]
         cmd: sandbox::cli::SandboxCommand,
     },
-    /// (Experimental) Run static analyses on Move source or bytecode.
-    #[clap(name = "experimental")]
-    Experimental {
-        /// Directory storing Move resources, events, and module bytecodes produced by module publishing
-        /// and script execution.
-        #[clap(long, default_value = DEFAULT_STORAGE_DIR)]
-        storage_dir: PathBuf,
-        #[clap(subcommand)]
-        cmd: experimental::cli::ExperimentalCommand,
-    },
 }
 
 pub fn run_cli(
@@ -125,7 +114,6 @@ pub fn run_cli(
             &move_args,
             &storage_dir,
         ),
-        Command::Experimental { storage_dir, cmd } => cmd.handle_command(&move_args, &storage_dir),
     }
 }
 

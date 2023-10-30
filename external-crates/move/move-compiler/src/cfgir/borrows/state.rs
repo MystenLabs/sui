@@ -14,7 +14,7 @@ use crate::{
         Diagnostic, Diagnostics,
     },
     hlir::{
-        ast::{TypeName_, *},
+        ast::{self as H, TypeName_, *},
         translate::{display_var, DisplayVar},
     },
     parser::ast::{Field, StructName},
@@ -23,7 +23,11 @@ use crate::{
 use move_borrow_graph::references::RefID;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Label {
@@ -41,8 +45,34 @@ pub enum Value {
 }
 pub type Values = Vec<Value>;
 
+// Unique identifier based on label + command + number in that command
+// This is used for uniquely identifying references based on their creation site,
+// which is used for identifying unused mutable references
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ExpBasedID {
+    block: Option<H::Label>,
+    command: usize,
+    count: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RefExpInfo {
+    pub loc: Loc,
+    pub is_mut: bool,
+    pub used_mutably: bool,
+    pub param_name: Option<Var>,
+}
+
+pub type RefExpInfoMap = Rc<RefCell<BTreeMap<ExpBasedID, RefExpInfo>>>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BorrowState {
+    // metadata fields, needed for gathering warnings
+    mutably_used: RefExpInfoMap,
+    next_eid: ExpBasedID,
+    id_to_exp: BTreeMap<RefID, BTreeSet<ExpBasedID>>,
+
+    // fields necessary to the analysis
     locals: UniqueMap<Var, Value>,
     acquired_resources: BTreeMap<StructName, Loc>,
     borrows: BorrowGraph,
@@ -86,6 +116,7 @@ impl Value {
 impl BorrowState {
     pub fn initial<T>(
         locals: &UniqueMap<Var, T>,
+        mutably_used: RefExpInfoMap,
         acquired_resources: BTreeMap<StructName, Loc>,
         prev_had_errors: bool,
     ) -> Self {
@@ -95,6 +126,13 @@ impl BorrowState {
             next_id: locals.len() + 1,
             acquired_resources,
             prev_had_errors,
+            mutably_used,
+            next_eid: ExpBasedID {
+                block: None,
+                command: 0,
+                count: 0,
+            },
+            id_to_exp: BTreeMap::new(),
         };
         new_state.borrows.new_ref(Self::LOCAL_ROOT, true);
         new_state
@@ -165,17 +203,69 @@ impl BorrowState {
     }
 
     //**********************************************************************************************
-    // Core API
+    // Metadata API
     //**********************************************************************************************
 
-    fn single_type_value(&mut self, s: &SingleType) -> Value {
-        match &s.value {
-            SingleType_::Base(_) => Value::NonRef,
-            SingleType_::Ref(mut_, _) => Value::Ref(self.declare_new_ref(*mut_)),
+    pub fn start_command(&mut self, block: H::Label, command: usize) {
+        self.next_eid = ExpBasedID {
+            block: Some(block),
+            command,
+            count: 0,
+        };
+    }
+
+    fn set_param_name(&mut self, id: RefID, name: Var) {
+        let exps = self.id_to_exp.get(&id).unwrap();
+        assert_eq!(exps.len(), 1);
+        let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
+            &mut RefCell::borrow_mut(&self.mutably_used);
+        let info = infos.get_mut(exps.first().unwrap()).unwrap();
+        assert!(info.param_name.is_none());
+        info.param_name = Some(name)
+    }
+
+    fn mark_mutably_used(&mut self, id: RefID) {
+        let Some(exps) = self.id_to_exp.get(&id) else {
+            return;
+        };
+        let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
+            &mut RefCell::borrow_mut(&self.mutably_used);
+        for e in exps {
+            let info = infos.get_mut(e).unwrap();
+            info.used_mutably = true;
         }
     }
 
-    fn declare_new_ref(&mut self, mut_: bool) -> RefID {
+    fn new_exp(&mut self, loc: Loc, is_mut: bool) -> ExpBasedID {
+        let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
+            &mut RefCell::borrow_mut(&self.mutably_used);
+        let eid = self.next_eid;
+        infos.entry(eid).or_insert_with(|| RefExpInfo {
+            loc,
+            is_mut,
+            used_mutably: false,
+            param_name: None,
+        });
+        self.next_eid.count += 1;
+        eid
+    }
+
+    //**********************************************************************************************
+    // Core API
+    //**********************************************************************************************
+
+    fn single_type_value(&mut self, loc: Loc, s: &SingleType) -> Value {
+        match &s.value {
+            SingleType_::Base(_) => Value::NonRef,
+            SingleType_::Ref(mut_, _) => Value::Ref(self.declare_new_ref(loc, *mut_)),
+        }
+    }
+
+    fn declare_new_ref(&mut self, loc: Loc, mut_: bool) -> RefID {
+        self.declare_new_ref_impl(loc, mut_, None)
+    }
+
+    fn declare_new_ref_impl(&mut self, loc: Loc, mut_: bool, copy_eid: Option<RefID>) -> RefID {
         fn new_id(next: &mut usize) -> RefID {
             *next += 1;
             RefID::new(*next)
@@ -183,6 +273,12 @@ impl BorrowState {
 
         let id = new_id(&mut self.next_id);
         self.borrows.new_ref(id, mut_);
+        let eids = if let Some(parent) = copy_eid {
+            self.id_to_exp.get(&parent).unwrap().clone()
+        } else {
+            BTreeSet::from([self.new_exp(loc, mut_)])
+        };
+        self.id_to_exp.insert(id, eids);
         id
     }
 
@@ -291,12 +387,14 @@ impl BorrowState {
     }
 
     fn release(&mut self, ref_id: RefID) {
+        self.id_to_exp.remove(&ref_id);
         self.borrows.release(ref_id)
     }
 
     fn divergent_control_flow(&mut self) {
         *self = Self::initial(
             &self.locals,
+            self.mutably_used.clone(),
             self.acquired_resources.clone(),
             self.prev_had_errors,
         );
@@ -350,7 +448,14 @@ impl BorrowState {
 
     pub fn bind_arguments(&mut self, parameter_types: &[(Var, SingleType)]) {
         for (local, ty) in parameter_types.iter() {
-            let value = self.single_type_value(ty);
+            let value = self.single_type_value(ty.loc, ty);
+            if let Value::Ref(id) = value {
+                self.set_param_name(id, *local);
+                // silence unused mutable reference error for parameters with a leading _
+                if local.starts_with_underscore() {
+                    self.mark_mutably_used(id)
+                }
+            }
             let diags = self.assign_local(local.loc(), local, value);
             assert!(diags.is_empty())
         }
@@ -404,6 +509,7 @@ impl BorrowState {
             Value::Ref(id) => id,
         };
 
+        self.mark_mutably_used(id);
         let diags = self.writable(loc, || "Invalid mutation of reference.".into(), id);
         self.release(id);
         diags
@@ -465,6 +571,7 @@ impl BorrowState {
         for rvalue in rvalues {
             match rvalue {
                 Value::Ref(id) if self.borrows.is_mutable(id) => {
+                    self.mark_mutably_used(id);
                     let (fulls, fields) = self.borrows.borrowed_by(id);
                     let msg = || {
                         "Invalid return of reference. Cannot transfer a mutable reference that is \
@@ -566,7 +673,7 @@ impl BorrowState {
         match self.locals.get(local).unwrap() {
             Value::Ref(id) => {
                 let id = *id;
-                let new_id = self.declare_new_ref(self.borrows.is_mutable(id));
+                let new_id = self.declare_new_ref_impl(loc, self.borrows.is_mutable(id), Some(id));
                 self.add_copy(loc, id, new_id);
                 (Diagnostics::new(), Value::Ref(new_id))
             }
@@ -597,7 +704,7 @@ impl BorrowState {
             "ICE borrow ref {:#?}. Should have been caught in typing",
             loc
         );
-        let new_id = self.declare_new_ref(mut_);
+        let new_id = self.declare_new_ref(loc, mut_);
         // fails if there are full/epsilon borrows on the local
         let borrowed_by = self.local_borrowed_by(local);
         let diags = if !mut_ {
@@ -643,7 +750,7 @@ impl BorrowState {
             id,
             None,
         );
-        let frozen_id = self.declare_new_ref(false);
+        let frozen_id = self.declare_new_ref(loc, false);
         self.add_copy(loc, id, frozen_id);
         self.release(id);
         (diags, Value::Ref(frozen_id))
@@ -693,6 +800,7 @@ impl BorrowState {
         };
 
         let diags = if mut_ {
+            self.mark_mutably_used(id);
             let msg = || format!("Invalid mutable borrow at field '{}'.", field);
             let (full_borrows, _field_borrows) = self.borrows.borrowed_by(id);
             // Any field borrows will be factored out
@@ -709,14 +817,14 @@ impl BorrowState {
             let msg = || format!("Invalid immutable borrow at field '{}'.", field);
             self.readable(loc, ReferenceSafety::RefTrans, msg, id, Some(field))
         };
-        let field_borrow_id = self.declare_new_ref(mut_);
+        let field_borrow_id = self.declare_new_ref(loc, mut_);
         self.add_field_borrow(loc, id, *field, field_borrow_id);
         self.release(id);
         (diags, Value::Ref(field_borrow_id))
     }
 
     pub fn borrow_global(&mut self, loc: Loc, mut_: bool, t: &BaseType) -> (Diagnostics, Value) {
-        let new_id = self.declare_new_ref(mut_);
+        let new_id = self.declare_new_ref(loc, mut_);
         let resource = match &t.value {
             BaseType_::Apply(_, sp!(_, TypeName_::ModuleType(_, s)), _) => s,
             _ => panic!("ICE type checking failed"),
@@ -818,22 +926,24 @@ impl BorrowState {
 
         let mut all_parents = BTreeSet::new();
         let mut mut_parents = BTreeSet::new();
-        args.into_iter()
-            .filter_map(|arg| arg.as_vref())
-            .for_each(|id| {
-                all_parents.insert(id);
-                if self.borrows.is_mutable(id) {
-                    mut_parents.insert(id);
-                }
-            });
+        for id in args.into_iter().filter_map(|arg| arg.as_vref()) {
+            all_parents.insert(id);
+            if self.borrows.is_mutable(id) {
+                self.mark_mutably_used(id);
+                mut_parents.insert(id);
+            }
+        }
 
         let values = match &return_ty.value {
             Type_::Unit => vec![],
-            Type_::Single(s) => vec![self.single_type_value(s)],
-            Type_::Multiple(ss) => ss.iter().map(|s| self.single_type_value(s)).collect(),
+            Type_::Single(s) => vec![self.single_type_value(loc, s)],
+            Type_::Multiple(ss) => ss.iter().map(|s| self.single_type_value(loc, s)).collect(),
         };
         for value in &values {
             if let Value::Ref(id) = value {
+                // mark return values as used mutably, since the caller cannot change the signature
+                // of the called function
+                self.mark_mutably_used(*id);
                 let parents = if self.borrows.is_mutable(*id) {
                     &mut_parents
                 } else {
@@ -866,6 +976,10 @@ impl BorrowState {
         self.locals
             .iter_mut()
             .for_each(|(_, _, v)| v.remap_refs(&id_map));
+        self.id_to_exp = std::mem::take(&mut self.id_to_exp)
+            .into_iter()
+            .map(|(id, eids)| (*id_map.get(&id).unwrap(), eids))
+            .collect();
         self.borrows.remap_refs(&id_map);
         self.next_id = self.locals.len() + 1;
     }
@@ -901,6 +1015,10 @@ impl BorrowState {
         let next_id = locals.len() + 1;
         let acquired_resources = self.acquired_resources.clone();
         let prev_had_errors = self.prev_had_errors;
+        let mut id_to_exp = self.id_to_exp;
+        for (id, exps) in other.id_to_exp {
+            id_to_exp.entry(id).or_default().extend(exps);
+        }
         assert!(next_id == self.next_id);
         assert!(next_id == other.next_id);
         assert!(acquired_resources == other.acquired_resources);
@@ -912,6 +1030,9 @@ impl BorrowState {
             borrows,
             next_id,
             prev_had_errors,
+            next_eid: self.next_eid,
+            mutably_used: self.mutably_used.clone(),
+            id_to_exp,
         }
     }
 
@@ -922,6 +1043,10 @@ impl BorrowState {
             next_id: self_next,
             acquired_resources: self_resources,
             prev_had_errors: self_prev_had_errors,
+            // metadata gathered
+            mutably_used: _,
+            next_eid: _,
+            id_to_exp: self_id_to_exp,
         } = self;
         let BorrowState {
             locals: other_locals,
@@ -929,6 +1054,10 @@ impl BorrowState {
             next_id: other_next,
             acquired_resources: other_resources,
             prev_had_errors: other_prev_had_errors,
+            // metadata gathered
+            mutably_used: _,
+            next_eid: _,
+            id_to_exp: other_id_to_exp,
         } = other;
         assert!(self_next == other_next, "ICE canonicalization failed");
         assert!(
@@ -939,7 +1068,14 @@ impl BorrowState {
             self_prev_had_errors == other_prev_had_errors,
             "ICE previous errors flag changed"
         );
-        self_locals == other_locals && self_borrows.leq(other_borrows)
+        self_locals == other_locals
+            && self_borrows.leq(other_borrows)
+            && other_id_to_exp.iter().all(|(id, other_eids)| {
+                self_id_to_exp
+                    .get(id)
+                    .map(|self_eids| other_eids.is_subset(self_eids))
+                    .unwrap_or(false)
+            })
     }
 }
 

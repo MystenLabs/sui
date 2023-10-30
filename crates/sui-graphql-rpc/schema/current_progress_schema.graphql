@@ -190,6 +190,8 @@ type Epoch {
 	startTimestamp: DateTime
 	endTimestamp: DateTime
 	protocolConfigs: ProtocolConfigs
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type Event {
@@ -305,6 +307,24 @@ type GenesisTransaction {
 
 
 """
+Information used by a package to link to a specific version of its dependency.
+"""
+type Linkage {
+	"""
+	The ID on-chain of the first version of the dependency.
+	"""
+	originalId: SuiAddress!
+	"""
+	The ID on-chain of the version of the dependency that this package depends on.
+	"""
+	upgradedId: SuiAddress!
+	"""
+	The version of the dependency that this package depends on.
+	"""
+	version: Int!
+}
+
+"""
 The contents of a Move Value, corresponding to the following recursive type:
 
 type MoveData =
@@ -368,6 +388,19 @@ type MoveObject {
 type MovePackage {
 	module(name: String!): MoveModule
 	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
+	The transitive dependencies of this package.
+	"""
+	linkage: [Linkage!]
+	"""
+	The (previous) versions of this package that introduced its types.
+	"""
+	typeOrigins: [TypeOrigin!]
+	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+	name, followed by module bytes), in alphabetic order by module name.
+	"""
+	bcs: Base64
 	asObject: Object
 }
 
@@ -383,12 +416,26 @@ type MoveType {
 	Structured representation of the type signature.
 	"""
 	signature: MoveTypeSignature!
+	"""
+	Structured representation of the "shape" of values that match this type.
+	"""
+	layout: MoveTypeLayout!
 }
 
 """
-The signature of a concrete Move Type (a type with all its type
-parameters instantiated with concrete types, that contains no
-references), corresponding to the following recursive type:
+The shape of a concrete Move Type (a type with all its type parameters instantiated with concrete types), corresponding to the following recursive type:
+
+type MoveTypeLayout =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeLayout }
+  | { struct: [{ name: string, layout: MoveTypeLayout }] }
+"""
+scalar MoveTypeLayout
+
+"""
+The signature of a concrete Move Type (a type with all its type parameters instantiated with concrete types, that contains no references), corresponding to the following recursive type:
 
 type MoveTypeSignature =
     "address"
@@ -451,6 +498,7 @@ type Object implements ObjectOwner {
 	previousTransactionBlock: TransactionBlock
 	kind: ObjectKind
 	owner: Owner
+	asMoveObject: MoveObject
 	asMovePackage: MovePackage
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
@@ -637,6 +685,7 @@ type ServiceConfig {
 }
 
 type Stake {
+	id: ID!
 	estimatedReward: BigInt
 	principal: BigInt
 	status: StakeStatus
@@ -799,6 +848,24 @@ enum TransactionBlockKindInput {
 
 type TransactionSignature {
 	base64Sig: Base64!
+}
+
+"""
+Information about which previous versions of a package introduced its types.
+"""
+type TypeOrigin {
+	"""
+	Module defining the type.
+	"""
+	module: String!
+	"""
+	Name of the struct.
+	"""
+	struct: String!
+	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress!
 }
 
 type Validator {

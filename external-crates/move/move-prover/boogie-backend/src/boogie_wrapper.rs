@@ -867,7 +867,7 @@ fn create_domain_map(
     let mut default_domain = None;
 
     let mut insert_map = |elems: &Vec<ModelValue>, val: &ModelValue| -> Option<()> {
-        map.entry(elems[0].clone()).or_insert_with(BTreeMap::new);
+        map.entry(elems[0].clone()).or_default();
         map.get_mut(&elems[0])
             .unwrap()
             .insert(elems[1].extract_number()?, extract_bool(val)?);

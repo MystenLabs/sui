@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use crate::indexer_reader::IndexerReader;
 use jsonrpsee::{core::RpcResult, RpcModule};
 use sui_json_rpc::{
@@ -68,9 +64,9 @@ impl ExtendedApiServer for ExtendedApiV2 {
 
     async fn query_objects(
         &self,
-        query: SuiObjectResponseQuery,
-        cursor: Option<CheckpointedObjectID>,
-        limit: Option<usize>,
+        _query: SuiObjectResponseQuery,
+        _cursor: Option<CheckpointedObjectID>,
+        _limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
         Err(jsonrpsee::types::error::CallError::Custom(
             jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
@@ -79,30 +75,54 @@ impl ExtendedApiServer for ExtendedApiV2 {
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {
-        unimplemented!()
+        let network_metrics = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_network_metrics())
+            .await?;
+        Ok(network_metrics)
     }
 
     async fn get_move_call_metrics(&self) -> RpcResult<MoveCallMetrics> {
-        unimplemented!()
+        let move_call_metrics = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_move_call_metrics())
+            .await?;
+        Ok(move_call_metrics)
     }
 
     async fn get_latest_address_metrics(&self) -> RpcResult<AddressMetrics> {
-        unimplemented!()
+        let latest_address_metrics = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_address_metrics())
+            .await?;
+        Ok(latest_address_metrics)
     }
 
     async fn get_checkpoint_address_metrics(&self, checkpoint: u64) -> RpcResult<AddressMetrics> {
-        unimplemented!()
+        let checkpoint_address_metrics = self
+            .inner
+            .spawn_blocking(move |this| this.get_checkpoint_address_metrics(checkpoint))
+            .await?;
+        Ok(checkpoint_address_metrics)
     }
 
     async fn get_all_epoch_address_metrics(
         &self,
         descending_order: Option<bool>,
     ) -> RpcResult<Vec<AddressMetrics>> {
-        unimplemented!()
+        let all_epoch_address_metrics = self
+            .inner
+            .spawn_blocking(move |this| this.get_all_epoch_address_metrics(descending_order))
+            .await?;
+        Ok(all_epoch_address_metrics)
     }
 
     async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
-        unimplemented!()
+        let latest_checkpoint = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_checkpoint())
+            .await?;
+        Ok(latest_checkpoint.network_total_transactions.into())
     }
 }
 

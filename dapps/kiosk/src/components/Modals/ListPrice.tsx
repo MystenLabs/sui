@@ -44,7 +44,7 @@ export function ListPrice({ item, onSuccess, closeModal, listAndPlace, kioskId }
 
 				<div className="mt-6">
 					<Button
-						loading={placeAndListToKioskMutation.isLoading}
+						loading={placeAndListToKioskMutation.isPending}
 						className="ease-in-out duration-300 rounded py-2 px-4 bg-primary text-white hover:opacity-70 w-full"
 						onClick={() =>
 							placeAndListToKioskMutation.mutate({

@@ -17,14 +17,15 @@ use std::sync::Arc;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
-use sui_config::node::StateDebugDumpConfig;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
+use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
+use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
@@ -35,7 +36,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
 use tempfile::tempdir;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
     store: Option<Arc<AuthorityStore>>,
@@ -48,8 +49,10 @@ pub struct TestAuthorityBuilder<'a> {
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
     disable_indexer: bool,
+    accounts: Vec<AccountConfig>,
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
+    overload_threshold_config: Option<OverloadThresholdConfig>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -136,11 +139,26 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
+    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.accounts = accounts;
+        self
+    }
+
+    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
+        assert!(self.overload_threshold_config.replace(config).is_none());
+        self
+    }
+
     pub async fn build(self) -> Arc<AuthorityState> {
-        let local_network_config =
+        let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
-                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500))
-                .build();
+                .with_accounts(self.accounts)
+                .with_reference_gas_price(self.reference_gas_price.unwrap_or(500));
+        if let Some(protocol_config) = &self.protocol_config {
+            local_network_config_builder =
+                local_network_config_builder.with_protocol_version(protocol_config.version);
+        }
+        let local_network_config = local_network_config_builder.build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
         let genesis_committee = genesis.committee().unwrap();
         let path = self.store_base_path.unwrap_or_else(|| {
@@ -228,6 +246,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         };
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
+        let overload_threshold_config = self.overload_threshold_config.unwrap_or_default();
         let state = AuthorityState::new(
             name,
             secret,
@@ -248,6 +267,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             StateDebugDumpConfig {
                 dump_file_directory: Some(tempdir().unwrap().into_path()),
             },
+            overload_threshold_config,
             ArchiveReaderBalancer::default(),
         )
         .await;
@@ -268,6 +288,11 @@ impl<'a> TestAuthorityBuilder<'a> {
             .await
             .unwrap();
 
+        // We want to insert these objects directly instead of relying on genesis because
+        // genesis process would set the previous transaction field for these objects, which would
+        // change their object digest. This makes it difficult to write tests that want to use
+        // these objects directly.
+        // TODO: we should probably have a better way to do this.
         if let Some(starting_objects) = self.starting_objects {
             state
                 .database

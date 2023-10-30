@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -258,9 +258,11 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
     ) {
         let epoch = epoch_store.epoch();
-        let supported_providers = epoch_store
-            .protocol_config()
-            .zklogin_supported_providers()
+
+        let supported_providers = config
+            .zklogin_oauth_providers
+            .get(&epoch_store.get_chain_identifier().chain())
+            .unwrap_or(&BTreeSet::new())
             .iter()
             .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
             .collect::<Vec<_>>();
@@ -338,7 +340,7 @@ impl SuiNode {
                         match Self::fetch_jwks(authority, &p).await {
                             Err(e) => {
                                 metrics.jwk_request_errors.with_label_values(&[&provider_str]).inc();
-                                warn!("Error when fetching JWK {:?}", e);
+                                warn!("Error when fetching JWK for provider {:?} {:?}", p, e);
                                 // Retry in 30 seconds
                                 tokio::time::sleep(Duration::from_secs(30)).await;
                                 continue;
@@ -578,6 +580,7 @@ impl SuiNode {
             config.certificate_deny_config.clone(),
             config.indirect_objects_threshold,
             config.state_debug_dump_config.clone(),
+            config.overload_threshold_config.clone(),
             archive_readers,
         )
         .await;
@@ -987,6 +990,7 @@ impl SuiNode {
             state.name,
             connection_monitor_status.clone(),
             &registry_service.default_registry(),
+            epoch_store.protocol_config().clone(),
         ));
         let narwhal_manager =
             Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
@@ -1073,7 +1077,7 @@ impl SuiNode {
             None,
             None,
             state.metrics.clone(),
-            ThroughputProfileRanges::default(), // TODO: move configuration to protocol-config and potentially differentiate for each environment.
+            ThroughputProfileRanges::from_chain(epoch_store.get_chain_identifier()),
         ));
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
@@ -1208,6 +1212,7 @@ impl SuiNode {
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
+        protocol_config: ProtocolConfig,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -1223,6 +1228,7 @@ impl SuiNode {
             consensus_config.max_submit_position,
             consensus_config.submit_delay_step_override(),
             ca_metrics,
+            protocol_config,
         )
     }
 

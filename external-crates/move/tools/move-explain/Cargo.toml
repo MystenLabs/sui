@@ -11,8 +11,8 @@ edition = "2021"
 
 [dependencies]
 clap.workspace = true
-move-command-line-common = { path = "../../move-command-line-common" }
-move-core-types = { path = "../../move-core/types" }
+move-command-line-common.workspace = true
+move-core-types.workspace = true
 
 bcs.workspace = true
 

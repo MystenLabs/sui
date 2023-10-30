@@ -2,12 +2,9 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move-execution/v0/move-bytecode-verifier",
-    "external-crates/move-execution/v0/move-stdlib",
-    "external-crates/move-execution/v0/move-vm/runtime",
-    "external-crates/move-execution/vm-rework/move-bytecode-verifier",
-    "external-crates/move-execution/vm-rework/move-stdlib",
-    "external-crates/move-execution/vm-rework/move-vm/runtime",
+    "external-crates/move/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move/move-execution/v0/move-stdlib",
+    "external-crates/move/move-execution/v0/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
@@ -62,9 +59,7 @@ exclude = [
     "external-crates/move/tools/move-package",
     "external-crates/move/tools/move-resource-viewer",
     "external-crates/move/tools/move-unit-test",
-    "external-crates/move/tools/read-write-set",
-    "external-crates/move/tools/read-write-set/dynamic",
-    "external-crates/move/tools/read-write-set/types",
+    "external-crates/move/tools/move-read-write-set-types",
     "sdk/move-binary-format-wasm",
 ]
 
@@ -82,6 +77,7 @@ members = [
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-analytics-indexer",
+    "crates/sui-analytics-indexer-derive",
     "crates/sui-archival",
     "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
@@ -150,7 +146,6 @@ members = [
     "crates/workspace-hack",
     "crates/x",
     "narwhal/config",
-    "narwhal/consensus",
     "narwhal/crypto",
     "narwhal/executor",
     "narwhal/network",
@@ -168,14 +163,11 @@ members = [
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
-    "sui-execution/vm-rework/sui-adapter",
-    "sui-execution/vm-rework/sui-move-natives",
-    "sui-execution/vm-rework/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.13.0"
+version = "1.14.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -214,12 +206,14 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0.71"
+arrow-array = "47.0.0"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "6.0.7"
 async-graphql-axum = "6.0.7"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
+atomic_float = "0.1"
 aws-config = "0.56"
 aws-sdk-ec2 = "0.29.0"
 aws-sdk-dynamodb = "0.29.0"
@@ -289,6 +283,8 @@ diesel = { version = "2.1.0", features = [
   "r2d2",
   "serde_json",
   "64-column-tables",
+  "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
+  "postgres_backend",
 ] }
 diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 diesel_migrations = { version = "2.0.0" }
@@ -337,6 +333,7 @@ json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c0
 leb128 = "0.2.5"
 linked-hash-map = "0.5.6"
 lru = "0.10"
+markdown-gen = "1.2.1"
 match_opt = "0.1.2"
 mime = "0.3"
 mockall = "0.11.4"
@@ -358,6 +355,7 @@ object_store = { version = "0.7", features = [
 once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
+parquet = "47.0.0"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
@@ -411,6 +409,7 @@ rustyline = "9.1.2"
 rustyline-derive = "0.7.0"
 schemars = { version = "0.8.10", features = ["either"] }
 scopeguard = "1.1"
+serial_test = "2.0.0"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
@@ -496,9 +495,7 @@ move-binary-format = { path = "external-crates/move/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
 move-cli = { path = "external-crates/move/tools/move-cli" }
 move-compiler = { path = "external-crates/move/move-compiler" }
-move-core-types = { path = "external-crates/move/move-core/types", features = [
-  "address32",
-] }
+move-core-types = { path = "external-crates/move/move-core/types" }
 move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
 move-package = { path = "external-crates/move/tools/move-package" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
@@ -517,9 +514,9 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5"}
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52"}
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
@@ -540,6 +537,7 @@ simulacrum = { path = "crates/simulacrum" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
+sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
 sui-archival = { path = "crates/sui-archival" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
@@ -604,7 +602,6 @@ workspace-hack = "0.1.0"
 x = { path = "crates/x" }
 
 narwhal-config = { path = "narwhal/config" }
-narwhal-consensus = { path = "narwhal/consensus" }
 narwhal-crypto = { path = "narwhal/crypto" }
 narwhal-executor = { path = "narwhal/executor" }
 narwhal-network = { path = "narwhal/network" }

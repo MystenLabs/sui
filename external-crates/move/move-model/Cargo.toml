@@ -8,35 +8,31 @@ license = "Apache-2.0"
 
 [dependencies]
 # diem dependencies
-move-compiler = { path = "../move-compiler" }
-move-binary-format = { path = "../move-binary-format" }
-move-bytecode-source-map = { path = "../move-ir-compiler/move-bytecode-source-map" }
-move-ir-types = { path = "../move-ir/types" }
-move-core-types = { path = "../move-core/types" }
-move-disassembler = { path = "../tools/move-disassembler" }
-move-command-line-common = { path = "../move-command-line-common" }
-move-symbol-pool = { path = "../move-symbol-pool" }
+move-compiler.workspace = true
+move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
+move-ir-types.workspace = true
+move-core-types.workspace = true
+move-disassembler.workspace = true
+move-command-line-common.workspace = true
+move-symbol-pool.workspace = true
 
 # external dependencies
-codespan = "0.11.1"
-codespan-reporting = "0.11.1"
-internment = { version = "0.5.0", features = [ "arc"] }
-itertools = "0.10.0"
-log = "0.4.14"
-num = "0.4.0"
-once_cell = "1.7.2"
-regex = "1.5.5"
-anyhow = "1.0.52"
-serde = { version = "1.0.124", features = ["derive"] }
+codespan.workspace = true
+codespan-reporting.workspace = true
+internment.workspace = true
+itertools.workspace = true
+log.workspace = true
+num.workspace = true
+once_cell.workspace = true
+regex.workspace = true
+anyhow.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
-datatest-stable = "0.1.1"
-move-prover-test-utils = { path = "../move-prover/test-utils" }
+datatest-stable.workspace = true
+move-prover-test-utils.workspace = true
 
 [[test]]
 name = "testsuite"
 harness = false
-
-[features]
-default = ["address32"]
-address32 = ["move-core-types/address32"]

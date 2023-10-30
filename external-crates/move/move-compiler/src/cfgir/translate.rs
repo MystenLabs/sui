@@ -20,6 +20,10 @@ use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, value::MoveValue};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use petgraph::{
+    algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
+    graphmap::DiGraphMap,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     mem,
@@ -198,7 +202,7 @@ fn module(
     } = mdef;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = hconstants.map(|name, c| constant(context, Some(module_ident), name, c));
+    let constants = constants(context, Some(module_ident), hconstants);
     let functions = hfunctions.map(|name, f| function(context, Some(module_ident), name, f));
     context.env.pop_warning_filter_scope();
     (
@@ -238,7 +242,7 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
         function: hfunction,
     } = hscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = hconstants.map(|name, c| constant(context, None, name, c));
+    let constants = constants(context, None, hconstants);
     let function = function(context, None, function_name, hfunction);
     context.env.pop_warning_filter_scope();
     G::Script {
@@ -256,8 +260,183 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
 // Functions
 //**************************************************************************************************
 
+fn constants(
+    context: &mut Context,
+    module: Option<ModuleIdent>,
+    mut consts: UniqueMap<ConstantName, H::Constant>,
+) -> UniqueMap<ConstantName, G::Constant> {
+    // Traverse the constants and compute the dependency graph between constants: if one mentions
+    // another, an edge is added between them.
+    let mut graph = DiGraphMap::new();
+    for (name, constant) in consts.key_cloned_iter() {
+        let deps = dependent_constants(constant);
+        if deps.is_empty() {
+            graph.add_node(name);
+        } else {
+            for dep in deps {
+                graph.add_edge(dep, name, ());
+            }
+        }
+    }
+
+    // report any cycles we find
+    let sccs = petgraph_scc(&graph);
+    let mut cycle_nodes = BTreeSet::new();
+    for scc in sccs {
+        if scc.len() > 1 {
+            let names = scc
+                .iter()
+                .map(|name| name.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut diag = diag!(
+                BytecodeGeneration::UnfoldableConstant,
+                (
+                    *consts.get_loc(&scc[0]).unwrap(),
+                    format!("Constant definitions form a circular dependency: {}", names),
+                )
+            );
+            for name in scc.iter().skip(1) {
+                diag.add_secondary_label((
+                    *consts.get_loc(name).unwrap(),
+                    "Cyclic constant defined here",
+                ));
+            }
+            context.env.add_diag(diag);
+            cycle_nodes.append(&mut scc.into_iter().collect());
+        }
+    }
+    // report any node that relies on a node in a cycle but is not iself part of that cycle
+    for cycle_node in cycle_nodes.iter() {
+        // petgraph retains edges for nodes that have been deleted, so we ensure the node is not
+        // part of a cyclle _and_ it's still in the graph
+        let neighbors: Vec<_> = graph
+            .neighbors(*cycle_node)
+            .filter(|node| !cycle_nodes.contains(node) && graph.contains_node(*node))
+            .collect();
+        for node in neighbors {
+            context.env.add_diag(diag!(
+                BytecodeGeneration::UnfoldableConstant,
+                (
+                    *consts.get_loc(&node).unwrap(),
+                    format!(
+                        "Constant uses constant {}, which has a circular dependency",
+                        cycle_node
+                    )
+                )
+            ));
+            graph.remove_node(node);
+        }
+        graph.remove_node(*cycle_node);
+    }
+
+    // Finally, iterate the remaining constants in dependency order, inlining them into each other
+    // via the constant folding optimizer as we process them.
+
+    // petgraph will include nodes in the toposort that only appear in an edge, even if that node
+    // has been removed from the graph, so we filter down to only the remaining nodes
+    let remaining_nodes: BTreeSet<_> = graph.nodes().collect();
+    let sorted: Vec<_> = petgraph_toposort(&graph, None)
+        .expect("ICE concstant cycles not removed")
+        .into_iter()
+        .filter(|node| remaining_nodes.contains(node))
+        .collect();
+
+    let mut out_map = UniqueMap::new();
+    let mut constant_values = UniqueMap::new();
+    for constant_name in sorted.into_iter() {
+        let cdef = consts.remove(&constant_name).unwrap();
+        let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
+        out_map
+            .add(constant_name, new_cdef)
+            .expect("ICE constant name collision");
+    }
+
+    out_map
+}
+
+fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
+    fn dep_exp(set: &mut BTreeSet<ConstantName>, exp: &H::Exp) {
+        use H::UnannotatedExp_ as E;
+        match &exp.exp.value {
+            E::UnresolvedError
+            | E::Unreachable
+            | E::Unit { .. }
+            | E::Value(_)
+            | E::Move { .. }
+            | E::Copy { .. } => (),
+            E::UnaryExp(_, rhs) => dep_exp(set, rhs),
+            E::BinopExp(lhs, _, rhs) => {
+                dep_exp(set, lhs);
+                dep_exp(set, rhs)
+            }
+            E::Cast(base, _) => dep_exp(set, base),
+            E::Vector(_, _, _, args) | E::Multiple(args) => {
+                for arg in args {
+                    dep_exp(set, arg);
+                }
+            }
+            E::Constant(c) => {
+                set.insert(*c);
+            }
+            _ => panic!("ICE typing should have rejected exp in const"),
+        }
+    }
+
+    fn dep_cmd(set: &mut BTreeSet<ConstantName>, command: &H::Command_) {
+        use H::Command_ as C;
+        match command {
+            C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
+            C::Return { exp, .. } => dep_exp(set, exp),
+            C::Abort(exp) | C::Assign(_, exp) => dep_exp(set, exp),
+            C::Mutate(lhs, rhs) => {
+                dep_exp(set, lhs);
+                dep_exp(set, rhs)
+            }
+            C::Break | C::Continue | C::Jump { .. } | C::JumpIf { .. } => (),
+        }
+    }
+
+    fn dep_stmt(set: &mut BTreeSet<ConstantName>, stmt: &H::Statement_) {
+        use H::Statement_ as S;
+        match stmt {
+            S::Command(cmd) => dep_cmd(set, &cmd.value),
+            S::IfElse {
+                cond,
+                if_block,
+                else_block,
+            } => {
+                dep_exp(set, cond);
+                dep_block(set, if_block);
+                dep_block(set, else_block)
+            }
+            S::While {
+                cond: (cond_block, cond_exp),
+                block,
+            } => {
+                dep_block(set, cond_block);
+                dep_exp(set, cond_exp);
+                dep_block(set, block)
+            }
+            S::Loop { block, .. } => dep_block(set, block),
+        }
+    }
+
+    fn dep_block(set: &mut BTreeSet<ConstantName>, block: &H::Block) {
+        for entry in block {
+            dep_stmt(set, &entry.value);
+        }
+    }
+
+    let mut output = BTreeSet::new();
+    let (_, block) = &constant.value;
+    dep_block(&mut output, block);
+    output
+}
+
 fn constant(
     context: &mut Context,
+    constant_values: &mut UniqueMap<ConstantName, Value>,
     module: Option<ModuleIdent>,
     name: ConstantName,
     c: H::Constant,
@@ -272,8 +451,28 @@ fn constant(
     } = c;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let final_value = constant_(context, module, name, loc, signature.clone(), locals, block);
-    let value = final_value.and_then(move_value_from_exp);
+    let final_value = constant_(
+        context,
+        constant_values,
+        module,
+        name,
+        loc,
+        signature.clone(),
+        locals,
+        block,
+    );
+    let value = match final_value {
+        Some(H::Exp {
+            exp: sp!(_, H::UnannotatedExp_::Value(value)),
+            ..
+        }) => {
+            constant_values
+                .add(name, value.clone())
+                .expect("ICE constant name collision");
+            Some(move_value_from_value(value))
+        }
+        _ => None,
+    };
 
     context.env.pop_warning_filter_scope();
     G::Constant {
@@ -291,6 +490,7 @@ const CANNOT_FOLD: &str =
 
 fn constant_(
     context: &mut Context,
+    constant_values: &UniqueMap<ConstantName, Value>,
     module: Option<ModuleIdent>,
     name: ConstantName,
     full_loc: Loc,
@@ -332,7 +532,7 @@ fn constant_(
         "{}",
         ICE_MSG
     );
-    cfgir::optimize(&fake_signature, &locals, &mut cfg);
+    cfgir::optimize(&fake_signature, &locals, constant_values, &mut cfg);
 
     if blocks.len() != 1 {
         context.env.add_diag(diag!(
@@ -373,14 +573,6 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
             BytecodeGeneration::UnfoldableConstant,
             (e.exp.loc, CANNOT_FOLD)
         )),
-    }
-}
-
-fn move_value_from_exp(e: H::Exp) -> Option<MoveValue> {
-    use H::UnannotatedExp_ as E;
-    match e.exp.value {
-        E::Value(v) => Some(move_value_from_value(v)),
-        _ => None,
     }
 }
 
@@ -480,7 +672,7 @@ fn function_body(
             cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
-                cfgir::optimize(signature, &locals, &mut cfg);
+                cfgir::optimize(signature, &locals, &UniqueMap::new(), &mut cfg);
             }
 
             let block_info = block_info

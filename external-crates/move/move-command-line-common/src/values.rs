@@ -8,13 +8,10 @@ use crate::{
 use anyhow::bail;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{self, Identifier},
+    identifier::{self},
     value::{MoveStruct, MoveValue},
 };
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Display},
-};
+use std::fmt::{self, Display};
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum ValueToken {
@@ -51,12 +48,7 @@ pub enum ParsedValue<Extra: ParsableValue = ()> {
     U256(move_core_types::u256::U256),
     Bool(bool),
     Vector(Vec<ParsedValue<Extra>>),
-    Struct(
-        ParsedAddress,
-        String,
-        String,
-        BTreeMap<String, ParsedValue<Extra>>,
-    ),
+    Struct(Vec<ParsedValue<Extra>>),
     Custom(Extra),
 }
 
@@ -68,12 +60,7 @@ pub trait ParsableValue: Sized + Send + Sync + Clone + 'static {
 
     fn move_value_into_concrete(v: MoveValue) -> anyhow::Result<Self::ConcreteValue>;
     fn concrete_vector(elems: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue>;
-    fn concrete_struct(
-        addr: AccountAddress,
-        module: String,
-        name: String,
-        values: BTreeMap<String, Self::ConcreteValue>,
-    ) -> anyhow::Result<Self::ConcreteValue>;
+    fn concrete_struct(values: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue>;
     fn into_concrete_value(
         self,
         mapping: &impl Fn(&str) -> Option<AccountAddress>,
@@ -95,18 +82,8 @@ impl ParsableValue for () {
         Ok(MoveValue::Vector(elems))
     }
 
-    fn concrete_struct(
-        _address: AccountAddress,
-        _module: String,
-        _name: String,
-        values: BTreeMap<String, Self::ConcreteValue>,
-    ) -> anyhow::Result<Self::ConcreteValue> {
-        Ok(MoveValue::Struct(MoveStruct::WithFields(
-            values
-                .into_iter()
-                .map(|(f, v)| Ok((Identifier::new(f)?, v)))
-                .collect::<anyhow::Result<_>>()?,
-        )))
+    fn concrete_struct(values: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue> {
+        Ok(MoveValue::Struct(MoveStruct::Runtime(values)))
     }
     fn into_concrete_value(
         self,
@@ -325,13 +302,10 @@ impl<Extra: ParsableValue> ParsedValue<Extra> {
                     .map(|value| value.into_concrete_value(mapping))
                     .collect::<anyhow::Result<_>>()?,
             ),
-            ParsedValue::Struct(addr, module, name, values) => Extra::concrete_struct(
-                ParsedAddress::into_account_address(addr, mapping)?,
-                module,
-                name,
+            ParsedValue::Struct(values) => Extra::concrete_struct(
                 values
                     .into_iter()
-                    .map(|(field, value)| Ok((field, value.into_concrete_value(mapping)?)))
+                    .map(|value| value.into_concrete_value(mapping))
                     .collect::<anyhow::Result<_>>()?,
             ),
             ParsedValue::Custom(c) => Extra::into_concrete_value(c, mapping),

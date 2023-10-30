@@ -102,7 +102,9 @@ impl NodeStorage {
             payload_map,
             batch_map,
             last_committed_map,
-            sub_dag_index_map,
+            // table `sub_dag` is deprecated in favor of `committed_sub_dag`.
+            // This can be removed when DBMap supports removing tables.
+            _sub_dag_index_map,
             committed_sub_dag_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
@@ -134,7 +136,6 @@ impl NodeStorage {
         let batch_store = batch_map;
         let consensus_store = Arc::new(ConsensusStore::new(
             last_committed_map,
-            sub_dag_index_map,
             committed_sub_dag_map,
         ));
 

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sui_types::base_types::{ObjectID, SuiAddress};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct TransactionDenyConfig {
     /// A list of object IDs that are not allowed to be accessed/used in transactions.
     /// Note that since this is checked during transaction signing, only root object ids

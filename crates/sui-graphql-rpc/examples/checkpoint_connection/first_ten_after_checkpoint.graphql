@@ -1,0 +1,9 @@
+# Fetch the digest and sequence number of the first 10 checkpoints after the cursor, which in this example is set to be checkpoint 11. Note that cursor will be opaque
+{
+  checkpointConnection(first: 10, after: "11") {
+    nodes {
+      sequenceNumber
+      digest
+    }
+  }
+}
