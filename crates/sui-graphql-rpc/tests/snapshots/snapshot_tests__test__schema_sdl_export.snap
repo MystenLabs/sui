@@ -724,7 +724,7 @@ type Stake {
 	"""
 	requestEpoch: Epoch
 	"""
-	The Stake object as a Move object
+	The corresponding StakedSui Move object
 	"""
 	asMoveObject: MoveObject
 }

@@ -68,7 +68,7 @@ impl Stake {
         }
     }
 
-    /// The Stake object as a Move object
+    /// The corresponding StakedSui Move object
     async fn as_move_object(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         let obj = ctx
             .data_unchecked::<PgManager>()
