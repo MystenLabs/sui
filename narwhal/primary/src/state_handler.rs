@@ -360,7 +360,6 @@ impl RandomnessState {
                 return;
             }
         };
-        const MAX_ROUND_DELTA: u64 = 2;
         if round < self.randomness_round {
             debug!(
                 "random beacon: ignoring partial signatures for old round {round} (we are at {})",
@@ -368,6 +367,7 @@ impl RandomnessState {
             );
             return;
         }
+        const MAX_ROUND_DELTA: u64 = 2;
         if round > self.randomness_round + MAX_ROUND_DELTA {
             debug!(
                 "random beacon: ignoring partial signatures for too-new round {round} (we are at {})",
