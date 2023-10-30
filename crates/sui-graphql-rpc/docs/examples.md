@@ -1,6 +1,7 @@
 # Sui GraphQL Examples
 ### [Address](#0)
-#### &emsp;&emsp;[Transaction Block Connection](#0)
+#### &emsp;&emsp;[Address](#0)
+#### &emsp;&emsp;[Transaction Block Connection](#1)
 ### [Balance Connection](#1)
 #### &emsp;&emsp;[Balance Connection](#65535)
 ### [Chain Id](#2)
@@ -66,6 +67,36 @@
 ## <a id=0></a>
 ## Address
 ### <a id=0></a>
+### Address
+####  Get the address' balance and its coins' id and type
+
+><pre>{
+>  address(
+>    address: "0x341fa71e4e58d63668034125c3152f935b00b0bb5c68069045d8c646d017fae1"
+>  ) {
+>    location
+>    balance {
+>      coinType
+>      coinObjectCount
+>      totalBalance
+>    }
+>    coinConnection {
+>      nodes {
+>        id
+>        asMoveObject {
+>          contents {
+>            type {
+>              repr
+>            }
+>          }
+>        }
+>        
+>      }
+>    }
+>  }
+>}</pre>
+
+### <a id=1></a>
 ### Transaction Block Connection
 ####  See examples in Query::transactionBlockConnection as this is
 ####  similar behavior to the `transactionBlockConnection` in Query but
