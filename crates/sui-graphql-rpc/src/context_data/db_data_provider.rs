@@ -45,10 +45,12 @@ use async_graphql::{
     ID,
 };
 use diesel::{
+    debug_query,
     pg::Pg,
-    query_builder::{BoxedSelectStatement, FromClause, QueryFragment, AstPass, QueryId},
+    query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment, QueryId},
+    sql_types::Text,
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
-    RunQueryDsl, sql_query, debug_query, prelude::{Queryable, QueryableByName}, sql_types::Text, backend::Backend, QueryResult, query_dsl::methods::{BoxedDsl, LoadQuery},
+    QueryResult, RunQueryDsl,
 };
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
@@ -61,7 +63,7 @@ use sui_indexer::{
     },
     schema_v2::{
         checkpoints, epochs, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
-        tx_recipients, tx_senders, query_cost,
+        tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
     PgConnectionPoolConfig,
@@ -93,7 +95,7 @@ use sui_types::{
     Identifier,
 };
 
-use super::{db_query_cost::extract_cost, DEFAULT_PAGE_SIZE};
+use super::DEFAULT_PAGE_SIZE;
 
 use super::sui_sdk_data_provider::convert_to_validators;
 
@@ -123,14 +125,6 @@ pub enum DbValidationError {
     QueryCostExceeded(u64, u64),
 }
 
-#[derive(Debug, Queryable)]
-pub struct ExplainResult {
-    #[diesel(column_name = "QUERY PLAN")]
-    // #[diesel(sql_type = diesel::sql_types::Text)]
-    query_plan: String,
-}
-
-
 type BalanceQuery<'a> = BoxedSelectStatement<
     'a,
     (
@@ -147,18 +141,19 @@ type BalanceQuery<'a> = BoxedSelectStatement<
 pub trait Explain: Sized {
     fn explain(self) -> Explained<Self>;
 }
-
 impl<T> Explain for T {
     fn explain(self) -> Explained<Self> {
         Explained { query: self }
     }
 }
 
+/// Struct for custom diesel function
 #[derive(Debug, Clone, Copy)]
 pub struct Explained<T> {
-    query: T
+    query: T,
 }
 
+/// All queries need to implement QueryId
 impl<T: QueryId> QueryId for Explained<T> {
     type QueryId = (T::QueryId, std::marker::PhantomData<&'static str>);
     const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID;
@@ -169,16 +164,16 @@ impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained
     type SqlType = Text;
 }
 
-/// Allows methods like load() on an Explained query
+/// Allows methods like load(), get_result(), etc. on an Explained query
 impl<T> RunQueryDsl<PgConnection> for Explained<T> {}
 
-/// Custom query fragment for prefixing queries with "EXPLAIN"
+/// Implement logic for prefixing queries with "EXPLAIN"
 impl<T> QueryFragment<Pg> for Explained<T>
 where
     T: QueryFragment<Pg>,
 {
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
-        out.push_sql("EXPLAIN ");
+        out.push_sql("EXPLAIN (FORMAT JSON) ");
         self.query.walk_ast(out.reborrow())?;
         Ok(())
     }
@@ -243,8 +238,7 @@ impl QueryBuilder {
         filter: Option<TransactionBlockFilter>,
         after_tx_seq_num: Option<i64>,
         before_tx_seq_num: Option<i64>,
-        digests: Option<Vec<Vec<u8>>>,
-    ) -> transactions::BoxedQuery<'a, Pg> {
+    ) -> Result<transactions::BoxedQuery<'a, Pg>, Error> {
         let mut query = transactions::dsl::transactions.into_boxed();
 
         if let Some(cursor_val) = cursor {
@@ -281,12 +275,11 @@ impl QueryBuilder {
                 query = query
                     .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
             }
-            // if let Some(transaction_ids) = filter.transaction_ids {
-                // let digests = transaction_ids
-                    // .into_iter()
-                    // .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
-                    // .collect::<Result<Vec<_>, _>>()?;
-            if let Some(digests) = digests {
+            if let Some(transaction_ids) = filter.transaction_ids {
+                let digests = transaction_ids
+                    .into_iter()
+                    .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
+                    .collect::<Result<Vec<_>, _>>()?;
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
@@ -352,9 +345,9 @@ impl QueryBuilder {
                 query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
             if filter.paid_address.is_some() {
-                // return Err(Error::Internal(
-                //     "Paid address filter not supported".to_string(),
-                // ));
+                return Err(Error::Internal(
+                    "Paid address filter not supported".to_string(),
+                ));
             }
 
             if let Some(input_object) = filter.input_object {
@@ -373,8 +366,7 @@ impl QueryBuilder {
             }
         };
 
-        // Ok(query)
-        query
+        Ok(query)
     }
 
     fn multi_get_coins<'a>(
@@ -560,58 +552,23 @@ impl PgManager {
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
-    /// Takes a query fragment and a lambda that executes the query
+    /// Takes a query_builder_fn that returns Result<QueryFragment> and a lambda to execute the query
     /// Spawns a blocking task that determines the cost of the query fragment
-    /// And if within limits, executes the query
-    async fn run_query_async_with_cost<T, Q, EF, E, F>(
-        &self,
-        query: Q,
-        execute_fn: EF,
-    ) -> Result<T, Error>
-    where
-        Q: QueryDsl
-            + RunQueryDsl<Pg>
-            + diesel::query_builder::QueryFragment<diesel::pg::Pg>
-            + Send
-            + 'static,
-        EF: FnOnce(Q) -> F + Send + 'static,
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        let max_db_query_cost = self.limits.max_db_query_cost;
-        self.inner
-            .spawn_blocking(move |this| {
-                let cost = extract_cost(&query, &this)?;
-                if cost > max_db_query_cost as f64 {
-                    return Err(DbValidationError::QueryCostExceeded(
-                        cost as u64,
-                        max_db_query_cost,
-                    )
-                    .into());
-                }
-
-                let execute_closure = execute_fn(query);
-                this.run_query(execute_closure)
-                    .map_err(|e| Error::Internal(e.to_string()))
-            })
-            .await
-    }
-
+    /// And if within limits, then executes the query
     async fn run_query_async_with_cost_v2<T, Q, QResult, EF, E, F>(
         &self,
         mut query_builder_fn: Q,
         execute_fn: EF,
     ) -> Result<T, Error>
     where
-        Q: FnMut() -> QResult + Send + 'static,
+        Q: FnMut() -> Result<QResult, Error> + Send + 'static,
         QResult: QueryDsl
-        + RunQueryDsl<Pg>
-        + diesel::query_builder::QueryFragment<diesel::pg::Pg>
-        + diesel::query_builder::Query
-        + diesel::query_builder::QueryId
-        + Send
-        + 'static,
+            + RunQueryDsl<Pg>
+            + diesel::query_builder::QueryFragment<diesel::pg::Pg>
+            + diesel::query_builder::Query
+            + diesel::query_builder::QueryId
+            + Send
+            + 'static,
         EF: FnOnce(QResult) -> F + Send + 'static,
         F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
         E: From<diesel::result::Error> + std::error::Error + Send + 'static,
@@ -620,35 +577,48 @@ impl PgManager {
         let max_db_query_cost = self.limits.max_db_query_cost;
         self.inner
             .spawn_blocking(move |this| {
-                let query = query_builder_fn().explain();
+                let query = query_builder_fn()?;
                 let debugged_query = debug_query::<Pg, _>(&query);
                 println!("sql: {}", debugged_query);
 
-                let results: Vec<String>  = this.run_query(|conn| {
-                    query.load(conn)
-                })
+                let result: String = this
+                    .run_query(|conn| query.explain().get_result(conn))
                     .map_err(|e| Error::Internal(e.to_string()))?;
 
-                for result in &results {
-                    println!("query_plan: {}", result);
+                println!("query_plan: {}", result);
+
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&result).map_err(|e| Error::Internal(e.to_string()))?;
+                if let Some(cost) = parsed[0]["Plan"]["Total Cost"].as_f64() {
+                    if cost > max_db_query_cost as f64 {
+                        return Err(DbValidationError::QueryCostExceeded(
+                            cost as u64,
+                            max_db_query_cost,
+                        )
+                        .into());
+                    }
+                } else {
+                    return Err(Error::Internal(
+                        "Failed to get cost from query plan".to_string(),
+                    ));
                 }
 
-                let new_query = query_builder_fn();
-                let execute_closure = execute_fn(new_query);
+                let query = query_builder_fn()?;
+                let execute_closure = execute_fn(query);
                 this.run_query(execute_closure)
                     .map_err(|e| Error::Internal(e.to_string()))
             })
             .await
     }
-
 }
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
-        self.run_query_async_with_cost_v2(move || QueryBuilder::get_tx_by_digest(digest.clone()), |query| {
-            move |conn| query.get_result::<StoredTransaction>(conn).optional()
-        })
+        self.run_query_async_with_cost_v2(
+            move || Ok(QueryBuilder::get_tx_by_digest(digest.clone())),
+            |query| move |conn| query.get_result::<StoredTransaction>(conn).optional(),
+        )
         .await
     }
 
@@ -657,16 +627,19 @@ impl PgManager {
         address: Vec<u8>,
         version: Option<i64>,
     ) -> Result<Option<StoredObject>, Error> {
-        self.run_query_async_with_cost_v2(move || QueryBuilder::get_obj(address.clone(), version), |query| {
-            move |conn| query.get_result::<StoredObject>(conn).optional()
-        })
+        self.run_query_async_with_cost_v2(
+            move || Ok(QueryBuilder::get_obj(address.clone(), version)),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+        )
         .await
     }
 
     pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
-        let query_fn = move || match epoch_id {
-            Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
-            None => QueryBuilder::get_latest_epoch(),
+        let query_fn = move || {
+            Ok(match epoch_id {
+                Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
+                None => QueryBuilder::get_latest_epoch(),
+            })
         };
 
         self.run_query_async_with_cost_v2(query_fn, |query| {
@@ -680,18 +653,20 @@ impl PgManager {
         digest: Option<Vec<u8>>,
         sequence_number: Option<i64>,
     ) -> Result<Option<StoredCheckpoint>, Error> {
-        let query = match (digest, sequence_number) {
-            (Some(digest), None) => QueryBuilder::get_checkpoint_by_digest(digest),
-            (None, Some(sequence_number)) => {
-                QueryBuilder::get_checkpoint_by_sequence_number(sequence_number)
-            }
-            (Some(_), Some(_)) => {
-                return Err(Error::InvalidCheckpointQuery);
-            }
-            _ => QueryBuilder::get_latest_checkpoint(),
+        let query = move || {
+            Ok(match (digest.clone(), sequence_number) {
+                (Some(digest), None) => QueryBuilder::get_checkpoint_by_digest(digest),
+                (None, Some(sequence_number)) => {
+                    QueryBuilder::get_checkpoint_by_sequence_number(sequence_number)
+                }
+                (Some(_), Some(_)) => {
+                    return Err(Error::InvalidCheckpointQuery);
+                }
+                _ => QueryBuilder::get_latest_checkpoint(),
+            })
         };
 
-        self.run_query_async_with_cost(query, |query| {
+        self.run_query_async_with_cost_v2(query, |query| {
             move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
         })
         .await
@@ -729,7 +704,15 @@ impl PgManager {
 
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost_v2(
-                move || QueryBuilder::multi_get_coins(cursor.clone(), descending_order, limit, address.clone(), coin_type.clone()),
+                move || {
+                    Ok(QueryBuilder::multi_get_coins(
+                        cursor.clone(),
+                        descending_order,
+                        limit,
+                        address.clone(),
+                        coin_type.clone(),
+                    ))
+                },
                 |query| move |conn| query.load(conn).optional(),
             )
             .await?;
@@ -751,9 +734,15 @@ impl PgManager {
         address: Vec<u8>,
         coin_type: String,
     ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
-        self.run_query_async_with_cost_v2(move ||QueryBuilder::get_balance(address.clone(), coin_type.clone()), |query| {
-            move |conn| query.get_result(conn).optional()
-        })
+        self.run_query_async_with_cost_v2(
+            move || {
+                Ok(QueryBuilder::get_balance(
+                    address.clone(),
+                    coin_type.clone(),
+                ))
+            },
+            |query| move |conn| query.get_result(conn).optional(),
+        )
         .await
     }
 
@@ -771,9 +760,10 @@ impl PgManager {
             return Err(DbValidationError::PaginationDisabledOnBalances.into());
         }
 
-        self.run_query_async_with_cost_v2(move || QueryBuilder::multi_get_balances(address.clone()), |query| {
-            move |conn| query.load(conn).optional()
-        })
+        self.run_query_async_with_cost_v2(
+            move || Ok(QueryBuilder::multi_get_balances(address.clone())),
+            |query| move |conn| query.load(conn).optional(),
+        )
         .await
     }
 
@@ -830,27 +820,16 @@ impl PgManager {
             }
         }
 
-        let mut digests: Option<Vec<Vec<u8>>> = None;
-
-        if let Some(filter) = &filter {
-            if let Some(transaction_ids) = &filter.transaction_ids {
-                digests = Some(transaction_ids
-                    .into_iter()
-                    .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(id)?.into_vec()))
-                    .collect::<Result<Vec<_>, _>>()?);
-            }
-        }
-
-
-        let query = move || QueryBuilder::multi_get_txs(
-            cursor,
-            descending_order,
-            limit,
-            filter.clone(),
-            after_tx_seq_num,
-            before_tx_seq_num,
-            digests.clone()
-        );
+        let query = move || {
+            QueryBuilder::multi_get_txs(
+                cursor,
+                descending_order,
+                limit,
+                filter.clone(),
+                after_tx_seq_num,
+                before_tx_seq_num,
+            )
+        };
 
         let result: Option<Vec<StoredTransaction>> = self
             .run_query_async_with_cost_v2(query, |query| move |conn| query.load(conn).optional())
@@ -885,12 +864,14 @@ impl PgManager {
 
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost_v2(
-                move || QueryBuilder::multi_get_checkpoints(
-                    cursor,
-                    descending_order,
-                    limit,
-                    epoch.map(|e| e as i64),
-                ),
+                move || {
+                    Ok(QueryBuilder::multi_get_checkpoints(
+                        cursor,
+                        descending_order,
+                        limit,
+                        epoch.map(|e| e as i64),
+                    ))
+                },
                 |query| move |conn| query.load(conn).optional(),
             )
             .await?;
@@ -923,11 +904,18 @@ impl PgManager {
             .transpose()?;
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
-        let query =
-            QueryBuilder::multi_get_objs(cursor, descending_order, limit, filter, owner_type)?;
+        let query = move || {
+            QueryBuilder::multi_get_objs(
+                cursor.clone(),
+                descending_order,
+                limit,
+                filter.clone(),
+                owner_type,
+            )
+        };
 
         let result: Option<Vec<StoredObject>> = self
-            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
+            .run_query_async_with_cost_v2(query, |query| move |conn| query.load(conn).optional())
             .await?;
         result
             .map(|mut stored_objs| {
