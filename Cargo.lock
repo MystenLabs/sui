@@ -6587,7 +6587,6 @@ dependencies = [
  "proptest-derive",
  "prost 0.12.1",
  "prost-build",
- "protobuf-src",
  "rand 0.8.5",
  "roaring",
  "rustversion",
