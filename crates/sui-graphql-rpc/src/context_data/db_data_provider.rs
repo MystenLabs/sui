@@ -45,7 +45,6 @@ use async_graphql::{
     ID,
 };
 use diesel::{
-    debug_query,
     pg::Pg,
     query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment, QueryId},
     sql_types::Text,
@@ -578,17 +577,11 @@ impl PgManager {
         self.inner
             .spawn_blocking(move |this| {
                 let query = query_builder_fn()?;
-                let debugged_query = debug_query::<Pg, _>(&query);
-                println!("sql: {}", debugged_query);
-
-                let result: String = this
+                let explain_result: String = this
                     .run_query(|conn| query.explain().get_result(conn))
                     .map_err(|e| Error::Internal(e.to_string()))?;
-
-                println!("query_plan: {}", result);
-
-                let parsed: serde_json::Value =
-                    serde_json::from_str(&result).map_err(|e| Error::Internal(e.to_string()))?;
+                let parsed: serde_json::Value = serde_json::from_str(&explain_result)
+                    .map_err(|e| Error::Internal(e.to_string()))?;
                 if let Some(cost) = parsed[0]["Plan"]["Total Cost"].as_f64() {
                     if cost > max_db_query_cost as f64 {
                         return Err(DbValidationError::QueryCostExceeded(
