@@ -178,6 +178,23 @@ where
     }
 }
 
+pub fn extract_cost(explain_result: &str) -> Result<f64, Error> {
+    let parsed: serde_json::Value =
+        serde_json::from_str(explain_result).map_err(|e| Error::Internal(e.to_string()))?;
+    if let Some(cost) = parsed
+        .get(0)
+        .and_then(|entry| entry.get("Plan"))
+        .and_then(|plan| plan.get("Total Cost"))
+        .and_then(|cost| cost.as_f64())
+    {
+        Ok(cost)
+    } else {
+        Err(Error::Internal(
+            "Failed to get cost from query plan".to_string(),
+        ))
+    }
+}
+
 pub struct QueryBuilder;
 impl QueryBuilder {
     fn get_tx_by_digest<'a>(digest: Vec<u8>) -> transactions::BoxedQuery<'a, Pg> {
@@ -580,20 +597,13 @@ impl PgManager {
                 let explain_result: String = this
                     .run_query(|conn| query.explain().get_result(conn))
                     .map_err(|e| Error::Internal(e.to_string()))?;
-                let parsed: serde_json::Value = serde_json::from_str(&explain_result)
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                if let Some(cost) = parsed[0]["Plan"]["Total Cost"].as_f64() {
-                    if cost > max_db_query_cost as f64 {
-                        return Err(DbValidationError::QueryCostExceeded(
-                            cost as u64,
-                            max_db_query_cost,
-                        )
-                        .into());
-                    }
-                } else {
-                    return Err(Error::Internal(
-                        "Failed to get cost from query plan".to_string(),
-                    ));
+                let cost = extract_cost(&explain_result)?;
+                if cost > max_db_query_cost as f64 {
+                    return Err(DbValidationError::QueryCostExceeded(
+                        cost as u64,
+                        max_db_query_cost,
+                    )
+                    .into());
                 }
 
                 let query = query_builder_fn()?;
@@ -2103,4 +2113,51 @@ pub(crate) fn validate_cursor_pagination(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_json() {
+        let explain_result = "invalid json";
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_missing_entry_at_0() {
+        let explain_result = "[]";
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_missing_plan() {
+        let explain_result = r#"[{}]"#;
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_missing_total_cost() {
+        let explain_result = r#"[{"Plan": {}}]"#;
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_failure_on_conversion_to_f64() {
+        let explain_result = r#"[{"Plan": {"Total Cost": "string_instead_of_float"}}]"#;
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_happy_scenario() {
+        let explain_result = r#"[{"Plan": {"Total Cost": 1.0}}]"#;
+        let result = extract_cost(explain_result).unwrap();
+        assert_eq!(result, 1.0);
+    }
 }
