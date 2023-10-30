@@ -28,6 +28,18 @@ module closed_loop::request_tests {
         test::return_policy(policy, cap)
     }
 
+    #[test]
+    /// Scenario: issue a non-spend request, confirm with `TokenPolicyCap`
+    fun test_request_confirm_with_cap() {
+        let ctx = &mut test::ctx();
+        let (policy, cap) = test::get_policy(ctx);
+        let token = test::mint(100, ctx);
+
+        let request = cl::transfer(token, @0x2, ctx);
+        cl::confirm_with_policy_cap(&cap, request, ctx);
+        test::return_policy(policy, cap);
+    }
+
     #[test, expected_failure(abort_code = cl::EUnknownAction)]
     /// Scenario: Policy does not allow test action, create request, try confirm
     fun test_request_confirm_unknown_action_fail() {
@@ -73,6 +85,19 @@ module closed_loop::request_tests {
 
         cl::add_approval(Rule2 {}, &mut request, ctx);
         cl::confirm_request(&mut policy, request, ctx);
+
+        abort 1337
+    }
+
+    #[test, expected_failure(abort_code = cl::ECantConsumeBalance)]
+    /// Scenario: issue a Spend request, try to confirm it with `TokenPolicyCap`
+    fun test_request_cant_consume_balance_with_cap() {
+        let ctx = &mut test::ctx();
+        let (_policy, cap) = test::get_policy(ctx);
+        let token = test::mint(100, ctx);
+        let request = cl::spend(token, ctx);
+
+        cl::confirm_with_policy_cap(&cap, request, ctx);
 
         abort 1337
     }
