@@ -2,34 +2,59 @@
 title: Entry Functions
 ---
 
-The `entry` modifier for functions enables safe and direct invocation of module functions, much like scripts. Providing an `entry` function defines where your module's execution should begin. You can assume that any non-`entry` function is being called from a Move program already in execution.
+The `entry` modifier allows a function to be called directly from a programmable transaction block, as an "entrypoint" to the module.
 
-You can combine the entry modifier with other visibility modifiers, such as public (which allows calling from other modules) and public(friend) for calling from friend modules.
+When called this way, parameters passed to `entry` functions must be inputs to the transaction block, not the results of previous transactions in that block, and not modified by previous transactions in that block. Entry functions are also only allowed to return types that have `drop`.
 
-Essentially, `entry` functions are the "main" functions of a module, and they specify where Move programs start executing.
+These restrictions prevent third parties using the scriptable nature of programmable transaction blocks to bypass the fact that `entry` functions are not otherwise allowed to be called from other modules.
+
+## `public` vs `entry` functions
+
+The `public` modifier also allows a function to be called from a programmable transaction block.  It additionally allows the function to be called from other modules, and does not impose the same restrictions on where the function's parameters can come from and what it can return, so in many cases `public` is the right way to expose your function to the outside world. `entry` is useful if:
+
+- You want strong guarantees that your function is not being combined with third-party module functions, in programmable transaction blocks.  The canonical example of this is a swap protocol that does not want to interact with a flash loan provider: If the swap protocol exposes only `entry` functions to perform swaps, it will not be possible to pass in a flash loaned `Coin`, because that coin will be the output of some previous transaction.
+- You do not want the function's signature to appear in your module's ABI.  `public` function signatures must be maintained by upgrades while `entry` function signatures do not.
+
+It is also possible to create a `public entry` function, which can be called by other modules and by programmable transaction blocks but is restricted like an `entry` function in the latter case.  This is rarely useful -- you probably only want one of `public` or `entry`.
+
+## Example
 
 ```rust
-module examples::object {
-    use sui::transfer;
+module entry_functions::example {
     use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
 
-    struct Object has key {
-        id: UID
+    struct Foo has key {
+        id: UID,
+        bar: u64,
     }
 
-    /// If function is defined as public - any module can call it.
-    /// Non-entry functions are also allowed to have return values.
-    public fun create(ctx: &mut TxContext): Object {
-        Object { id: object::new(ctx) }
+    /// Entry functions can accept a reference to the `TxContext`
+    /// (mutable or immutable) as their last parameter.
+    entry fun share(bar: u64, ctx: &mut TxContext) {
+        transfer::share_object(Foo {
+            id: object::new(ctx),
+            bar,
+        })
     }
 
-    /// Entrypoints can't have return values as they can only be called
-    /// directly in a transaction and the returned value can't be used.
-    /// However, `entry` without `public` disallows calling this method from
-    /// other Move modules.
-    entry fun create_and_transfer(to: address, ctx: &mut TxContext) {
-        transfer::transfer(create(ctx), to)
+    /// Parameters passed to entry functions called in a programmable
+    /// transaction block (like `foo`, below) must be inputs to the
+    /// transaction block, and not results of previous transactions.
+    entry fun update(foo: &mut Foo, ctx: &TxContext) {
+        foo.bar = tx_context::epoch(ctx);
+    }
+
+    /// Entry functions can return types that have `drop`.
+    entry fun bar(foo: &Foo): u64 {
+        foo.bar
+    }
+
+    /// This function cannot be `entry` because it returns a value
+    /// that does not have `drop`.
+    public fun foo(ctx: &mut TxContext): Foo {
+        Foo { id: object::new(ctx), bar: 0 }
     }
 }
 ```
