@@ -310,6 +310,11 @@ type GenesisTransaction {
 
 
 """
+Arbitrary JSON data.
+"""
+scalar JSON
+
+"""
 Information used by a package to link to a specific version of its dependency.
 """
 type Linkage {
@@ -459,7 +464,25 @@ scalar MoveTypeSignature
 type MoveValue {
 	type: MoveType!
 	bcs: Base64!
+	"""
+	Structured contents of a Move value.
+	"""
 	data: MoveData!
+	"""
+	Representation of a Move value in JSON, where:
+	
+	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Empty optional values are represented by `null`.
+	
+	This form is offered as a less verbose convenience in cases where the layout of the type is
+	known by the client.
+	"""
+	json: JSON!
 }
 
 scalar NameService

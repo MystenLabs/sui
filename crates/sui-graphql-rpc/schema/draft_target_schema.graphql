@@ -177,6 +177,9 @@ scalar Base64
 # ISO-8601 Date and Time
 scalar DateTime
 
+# Arbitrary JSON data
+scalar JSON
+
 # Scalar representing the contents of a Move Value, corresponding to
 # the following recursive type:
 #
@@ -1073,6 +1076,7 @@ type MoveFunction {
 type MoveValue {
   type: MoveType!
   data: MoveData
+  json: JSON
 
   bcs: Base64
 }
