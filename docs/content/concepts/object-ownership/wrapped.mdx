@@ -57,14 +57,10 @@ struct Object has key, store {
 In a real application, you might make sure that there is a limited supply of the objects, and there is a mechanism to mint them to a list of owners. For simplicity and demonstration purposes, this example simplifies creation:
 
 ```rust
-public fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
-    let object = Object {
-        id: object::new(ctx),
-        scarcity,
-        style,
-    };
-    transfer::transfer(object, tx_context::sender(ctx))
+public fun new(scarcity: u8, style: u8, ctx: &mut TxContext): Object {
+    Object { id: object::new(ctx), scarcity, style }
 }
+
 ```
 
 You can also enable a swap/trade between your object and others' objects. For example, define a function that takes two objects from two addresses and swaps their ownership. But this doesn't work in Sui. Only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
@@ -74,91 +70,87 @@ Another common solution is to send your object to a pool - such as an NFT market
 To swap objects, the same address must own both objects. Anyone who wants to swap their object can send their objects to the third party, such as a site that offers swapping services, and the third party helps perform the swap and send the objects to the appropriate owner. To ensure that you retain custody of your objects (such as coins and NFTs) and not give full custody to the third party, use direct wrapping. To define a wrapper object type:
 
 ```rust
-struct ObjectWrapper has key {
+struct SwapRequest has key {
     id: UID,
-    original_owner: address,
-    to_swap: Object,
+    owner: address,
+    object: Object,
     fee: Balance<SUI>,
 }
 ```
 
-`ObjectWrapper` defines a Sui object type, wraps the object to swap as `to_swap`, and tracks the original owner of the object in `original_owner`. You might need to also pay the third party some fee for this swap. To define an interface to request a swap by someone who owns an `Object`:
+`SwapRequest` defines a Sui object type, wraps the `object` to swap, and tracks the original `owner` of the object. You might need to also pay the third party some fee for this swap. To define an interface to request a swap by someone who owns an `Object`:
 
 ```rust
-public fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
-    assert!(coin::value(&fee) >= MIN_FEE, 0);
-    let wrapper = ObjectWrapper {
+public fun request_swap(
+    object: Object,
+    fee: Coin<SUI>,
+    service: address,
+    ctx: &mut TxContext,
+) {
+    assert!(coin::value(&fee) >= MIN_FEE, EFeeTooLow);
+
+    let request = SwapRequest {
         id: object::new(ctx),
-        original_owner: tx_context::sender(ctx),
-        to_swap: object,
+        owner: tx_context::sender(ctx),
+        object,
         fee: coin::into_balance(fee),
     };
-    transfer::transfer(wrapper, service_address);
+
+    transfer::transfer(request, service)
 }
+
 ```
 
-In the preceding entry function, you must pass the object by value so that it's fully consumed and wrapped into `ObjectWrapper`to request swapping an `object`. The example also provides a fee (in the type of `Coin<SUI>`). The function also checks that the fee is sufficient. The example turns `Coin` into `Balance` when it's put into the `wrapper` object. This is because `Coin` is a Sui object type and used only to pass around as Sui objects (such as entry function arguments or objects sent to addresses). For coin balances that need to be embedded in another Sui object struct, use `Balance` instead because it's not a Sui object type and is much less expensive to use.
+In the preceding function, you must pass the object by value so that it's fully consumed and wrapped into `SwapRequest` to request swapping an `object`. The example also provides a fee (in the type of `Coin<SUI>`) and checks that the fee is sufficient. The example turns `Coin` into `Balance` when it's put into the `wrapper` object. This is because `Coin` is a Sui object type and used only to pass around as Sui objects (such as transaction inputs or objects sent to addresses). For coin balances that need to be embedded in other structs, use `Balance` instead because to avoid the overhead of carrying around an unnecessary `UID` field.
 
-The wrapper object is then sent to the service operator, with the address specified in the call as `service_address`.
+The wrapper object is then sent to the service operator, with the address specified in the call as `service`.
 
 The function interface for the function that the service operator can call to perform a swap between two objects sent from two addresses resembles:
 
 ```rust
-public fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext);
+public fun execute_swap(s1: SwapRequest, s2: SwapRequest): Balance<SUI>;
 ```
 
-Where `wrapper1` and `wrapper2` are two wrapped objects that were sent from different object owners to the service operator. Both wrapped objects are passed by value because they eventually need to be [unpacked](https://move-book.com/advanced-topics/struct.html#destructing-structures).
+Where `s1` and `s2` are two wrapped objects that were sent from different object owners to the service operator. Both wrapped objects are passed by value because they eventually need to be [unpacked](https://move-book.com/advanced-topics/struct.html#destructing-structures).
 
-First, check that the swap is legitimate:
+First, unpack the two object to obtain the inner fields:
 
 ```rust
-assert!(wrapper1.to_swap.scarcity == wrapper2.to_swap.scarcity, 0);
-assert!(wrapper1.to_swap.style != wrapper2.to_swap.style, 0);
+let SwapRequest {id: id1, owner: owner1, object: o1, fee: fee1} = s1;
+let SwapRequest {id: id2, owner: owner2, object: o2, fee: fee2} = s2;
 ```
 
-It checks that the two objects have identical scarcity, but have different styles. This meets your criteria for a swap. Unpacking the two objects to obtain the inner fields, also unwraps the objects:
+Then, check that the swap is legitimate (the two objects have identical scarcity and different styles):
 
 ```rust
-let ObjectWrapper {
-    id: id1,
-    original_owner: original_owner1,
-    to_swap: object1,
-    fee: fee1,
-} = wrapper1;
-
-let ObjectWrapper {
-    id: id2,
-    original_owner: original_owner2,
-    to_swap: object2,
-    fee: fee2,
-} = wrapper2;
+assert!(o1.scarcity == o2.scarcity, EBadSwap);
+assert!(o1.style != o2.style, EBadSwap);
 ```
 
 To perform the actual swap:
 
 ```rust
-transfer::transfer(object1, original_owner2);
-transfer::transfer(object2, original_owner1);
+transfer::transfer(o1, owner2);
+transfer::transfer(o2, owner1);
 ```
 
-The preceding code sends `object1` to the original owner of `object2`, and sends `object2` to the original owner of `object1`. The service provider also takes a fee:
-
-```rust
-let service_address = tx_context::sender(ctx);
-balance::join(&mut fee1, fee2);
-transfer::public_transfer(coin::from_balance(fee1, ctx), service_address);
-```
-
-The `fee2` is merged into `fee1`, turned into a `Coin` and sent to the `service_address`. Finally, delete  both wrapped objects: 
+The preceding code sends `o1` to the original owner of `o2`, and sends `o2` to the original owner of `o1`. The service can then delete the wrapping `SwapRequest` objects:
 
 ```rust
 object::delete(id1);
 object::delete(id2);
 ```
 
+Finally, the service merges together the `fee1` and `fee2`, and returns it.  The service provider can then turn it into a coin, or merge it into some larger pool where it collects all fees: 
+
+```rust
+balance::join(&mut fee1, fee2);
+fee1
+```
+
 After this call, the two objects are swapped and the service provider takes the service fee.
 
-Since the contract defined only one way to deal with `ObjectWrapper` - `execute_swap` - there is no other way the service operator can interact with `ObjectWrapper` despite its ownership.
+Since the contract defined only one way to deal with `SwapRequest` - `execute_swap` - there is no other way the service operator can interact with `SwapRequest` despite its ownership.
 
 Find the full source code in the [trusted_swap](https://github.com/MystenLabs/sui/blob/main/examples/move/trusted_swap) example.
 
