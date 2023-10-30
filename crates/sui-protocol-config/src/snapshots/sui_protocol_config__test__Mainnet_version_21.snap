@@ -1,5 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
+assertion_line: 1578
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 21

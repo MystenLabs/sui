@@ -13,8 +13,8 @@ use sui_types::base_types::{
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
-    ParentSync, ReceivedMarkerQuery,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, MarkerTableQuery,
+    ObjectStore, ParentSync,
 };
 
 #[derive(Clone)]
@@ -107,7 +107,7 @@ impl GetModule for InMemoryObjectStore {
     }
 }
 
-impl ReceivedMarkerQuery for InMemoryObjectStore {
+impl MarkerTableQuery for InMemoryObjectStore {
     fn have_received_object_at_version(
         &self,
         _object_id: &ObjectID,
@@ -115,6 +115,22 @@ impl ReceivedMarkerQuery for InMemoryObjectStore {
         _epoch_id: EpochId,
     ) -> Result<bool, SuiError> {
         // Currently the workload doesn't yet support receiving objects.
+        unimplemented!()
+    }
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        _object_id: &ObjectID,
+        _version: &SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        // Currently the workload doesn't yet support deleted shared objects
+        unimplemented!()
+    }
+    fn is_shared_object_deleted(
+        &self,
+        _object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
         unimplemented!()
     }
 }

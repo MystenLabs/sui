@@ -94,7 +94,10 @@ pub async fn get_full_checkpoint(
         let input_object_keys = fx
             .input_shared_objects()
             .into_iter()
-            .map(|(object_ref, _kind)| ObjectKey::from(object_ref))
+            .map(|kind| {
+                let (id, version) = kind.id_and_version();
+                ObjectKey(id, version)
+            })
             .chain(
                 fx.modified_at_versions()
                     .into_iter()

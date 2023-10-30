@@ -1347,7 +1347,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "30",
+              "maxSupportedProtocolVersion": "31",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,
@@ -1376,6 +1376,7 @@
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
                 "scoring_decision_with_validity_cutoff": true,
+                "shared_object_deletion": false,
                 "simple_conservation_checks": false,
                 "simplified_unwrap_then_delete": false,
                 "throughput_aware_consensus_submission": false,

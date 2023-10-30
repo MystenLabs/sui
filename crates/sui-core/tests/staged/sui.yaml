@@ -204,6 +204,8 @@ CommandArgumentError:
       InvalidObjectByValue: UNIT
     10:
       InvalidObjectByMutRef: UNIT
+    11:
+      SharedObjectOperationNotAllowed: UNIT
 CompressedSignature:
   ENUM:
     0:
@@ -408,6 +410,10 @@ ExecutionFailureStatus:
       CertificateDenied: UNIT
     30:
       SuiMoveVerificationTimedout: UNIT
+    31:
+      SharedObjectWrapped: UNIT
+    32:
+      InputObjectDeleted: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -1053,6 +1059,14 @@ UnchangedSharedKind:
           TUPLE:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    1:
+      MutateDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    2:
+      ReadDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 UpgradeInfo:
   STRUCT:
     - upgraded_id:

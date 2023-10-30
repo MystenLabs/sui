@@ -20,8 +20,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
-    ReceivedMarkerQuery,
+    get_module, BackingPackageStore, ChildObjectResolver, MarkerTableQuery, MarkerValue, ObjectKey,
+    ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -400,6 +400,52 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
+    pub fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, TypedStoreError> {
+        let object_key = (epoch_id, ObjectKey(*object_id, *version));
+
+        match self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .get(&object_key)?
+        {
+            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        let object_key = ObjectKey::max_for_id(object_id);
+        let marker_key = (epoch_id, object_key);
+
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .unbounded_iter()
+            .skip_prior_to(&marker_key)?
+            .next();
+        match marker_entry {
+            Some(((epoch, key), marker)) => {
+                // Make sure object id matches and version is >= `version`
+                let object_id_matches = key.0 == *object_id;
+                // Make sure we don't have a stale epoch for some reason (e.g., a revert)
+                let epoch_data_ok = epoch == epoch_id;
+                // Make sure the object was deleted or wrapped.
+                let mark_data_ok = matches!(marker, MarkerValue::SharedDeleted(_));
+                Ok(object_id_matches && epoch_data_ok && mark_data_ok)
+            }
+            None => Ok(false),
+        }
+    }
+
     /// Returns future containing the state hash for the given epoch
     /// once available
     pub async fn notify_read_root_state_hash(
@@ -679,6 +725,17 @@ impl AuthorityStore {
                         epoch_store.epoch(),
                     )?;
                 versioned_results.push((*idx, is_available));
+            } else if self
+                .get_deleted_shared_object_previous_tx_digest(
+                    &input_key.id(),
+                    &input_key.version().unwrap(),
+                    epoch_store.epoch(),
+                )?
+                .is_some()
+            {
+                // If the object is an already deleted shared object, mark it as available if the
+                // version for that object is in the shared deleted marker table.
+                versioned_results.push((*idx, true));
             } else {
                 versioned_results.push((*idx, false));
             }
@@ -992,7 +1049,7 @@ impl AuthorityStore {
         epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
-            input_objects: _,
+            input_objects,
             mutable_inputs,
             written,
             events,
@@ -1000,6 +1057,7 @@ impl AuthorityStore {
             loaded_runtime_objects: _,
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
+            lamport_version,
         } = inner_temporary_store;
         trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
@@ -1028,23 +1086,48 @@ impl AuthorityStore {
                 .collect()
         };
 
-        // We record any received or deleted objects since they could be pruned.
-        let markers_to_place = received_objects
-            .iter()
-            .map(|(object_id, version, _)| {
+        // We record any received or deleted objects since they could be pruned, and smear shared
+        // object deletions in the marker table. For deleted entries in the marker table we need to
+        // make sure we don't accidentally overwite entries.
+        let markers_to_place = {
+            let received = received_objects.iter().map(|(object_id, version, _)| {
                 (
                     (epoch_id, ObjectKey(*object_id, *version)),
                     MarkerValue::Received,
                 )
-            })
-            .chain(deleted.into_iter().map(|(object_id, version)| {
-                (
-                    (epoch_id, ObjectKey(object_id, version)),
-                    MarkerValue::OwnedDeleted,
-                )
-            }));
+            });
 
-        // Insert each received and deleted object into the objects marker table
+            let deleted = deleted.into_iter().map(|(object_id, version)| {
+                let object_key = (epoch_id, ObjectKey(object_id, version));
+                if input_objects
+                    .get(&object_id)
+                    .is_some_and(|object| object.is_shared())
+                {
+                    (
+                        object_key,
+                        MarkerValue::SharedDeleted(*transaction.digest()),
+                    )
+                } else {
+                    (object_key, MarkerValue::OwnedDeleted)
+                }
+            });
+
+            // We "smear" shared deleted objects in the marker table to allow for proper sequencing
+            // of transactions that are submitted after the deletion of the shared object.
+            // NB: that we do _not_ smear shared objects that were taken immutably in the
+            // transaction.
+            let smeared_objects = effects.deleted_mutably_accessed_shared_objects();
+            let shared_smears = smeared_objects.into_iter().map(move |object_id| {
+                let object_key = (epoch_id, ObjectKey(object_id, lamport_version));
+                (
+                    object_key,
+                    MarkerValue::SharedDeleted(*transaction.digest()),
+                )
+            });
+
+            received.chain(deleted).chain(shared_smears)
+        };
+
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table,
             markers_to_place,
@@ -1160,12 +1243,6 @@ impl AuthorityStore {
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
-    /// to None state.  It is also OK if they have been set to the same transaction.
-    /// The locks are all set to the given transaction digest.
-    /// Returns UserInputError::ObjectNotFound if no lock record can be found for one of the objects.
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if one of the objects is not locked at the given version.
-    /// Returns SuiError::ObjectLockConflict if one of the objects is locked by a different transaction in the same epoch.
-    /// Returns SuiError::ObjectLockedAtFutureEpoch if one of the objects is locked in a future epoch (bug).
     pub(crate) async fn acquire_transaction_locks(
         &self,
         epoch: EpochId,
@@ -1886,7 +1963,7 @@ impl AuthorityStore {
     }
 }
 
-impl ReceivedMarkerQuery for AuthorityStore {
+impl MarkerTableQuery for AuthorityStore {
     fn have_received_object_at_version(
         &self,
         object_id: &ObjectID,
@@ -1894,6 +1971,22 @@ impl ReceivedMarkerQuery for AuthorityStore {
         epoch_id: EpochId,
     ) -> Result<bool, SuiError> {
         self.have_received_object_at_version(object_id, version, epoch_id)
+    }
+
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        Ok(self.get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)?)
+    }
+    fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        self.is_shared_object_deleted(object_id, epoch_id)
     }
 }
 

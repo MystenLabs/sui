@@ -657,7 +657,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                     effect
                         .input_shared_objects()
                         .into_iter()
-                        .map(|(obj_ref, _)| obj_ref)
+                        .map(|kind| kind.object_ref())
                         .collect(),
                 ),
                 transaction_digest: *effect.transaction_digest(),

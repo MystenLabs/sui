@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 30;
+const MAX_PROTOCOL_VERSION: u64 = 31;
 
 // Record history of protocol version allocations here:
 //
@@ -63,7 +63,7 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 19: Changes to sui-system package to enable liquid staking.
 //             Add limit for total size of events.
 //             Increase limit for number of events emitted to 1024.
-// Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+// Version 20: Enables the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
 //             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
 //             value. Both values are set for all the environments except mainnet.
 // Version 21: ZKLogin known providers.
@@ -87,6 +87,9 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 //             Deprecate supported oauth providers from protocol config and rely on node config
 //             instead.
 //             In execution, has_public_transfer is recomputed when loading the object.
+//             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
+// Version 31: Add support for shared object deletion in devnet only.
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -270,6 +273,10 @@ struct FeatureFlags {
     // If true minimum txn charge is a multiplier of the gas price
     #[serde(skip_serializing_if = "is_false")]
     txn_base_cost_as_multiplier: bool,
+
+    // If true, the ability to delete shared objects is in effect
+    #[serde(skip_serializing_if = "is_false")]
+    shared_object_deletion: bool,
 
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
@@ -949,6 +956,10 @@ impl ProtocolConfig {
         self.feature_flags.txn_base_cost_as_multiplier
     }
 
+    pub fn shared_object_deletion(&self) -> bool {
+        self.feature_flags.shared_object_deletion
+    }
+
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {
         self.feature_flags.narwhal_new_leader_election_schedule
     }
@@ -1625,7 +1636,12 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
-
+                31 => {
+                    // Only enable shared object deletion on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shared_object_deletion = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -1675,7 +1691,6 @@ impl ProtocolConfig {
     pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_jwk_consensus_updates = val
     }
-
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
@@ -1683,6 +1698,10 @@ impl ProtocolConfig {
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val
     }
+    pub fn set_shared_object_deletion(&mut self, val: bool) {
+        self.feature_flags.shared_object_deletion = val;
+    }
+
     pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
         self.feature_flags.narwhal_new_leader_election_schedule = val;
     }

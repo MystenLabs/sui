@@ -1144,7 +1144,7 @@ impl AuthorityPerEpochStore {
             &effects
                 .input_shared_objects()
                 .into_iter()
-                .map(|(obj_ref, _)| (obj_ref.0, obj_ref.1))
+                .map(|iso| iso.id_and_version())
                 .collect(),
             object_store,
         )

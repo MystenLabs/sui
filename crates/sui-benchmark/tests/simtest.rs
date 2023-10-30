@@ -489,6 +489,7 @@ mod test {
         let num_transfer_accounts = 2;
         let delegation_weight = 1;
         let batch_payment_weight = 1;
+        let shared_object_deletion_weight = 1;
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
@@ -510,6 +511,7 @@ mod test {
             transfer_object_weight,
             delegation_weight,
             batch_payment_weight,
+            shared_object_deletion_weight,
             adversarial_weight,
             adversarial_cfg,
             batch_payment_size,
