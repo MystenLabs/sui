@@ -96,6 +96,13 @@ Test result: OK. Total tests: 0; passed: 0; failed: 0
 ### Get test coverage for a module
 
 
+:::caution
+
+This command currently only works on debug builds of the CLI.  Please build the CLI from source to use it.
+
+:::
+
+
 This example uses [`first_package`](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package) Move package.
 
 To get the a summary of the test coverage, you must first run the `sui move test --coverage` command, and then the `sui move coverage summary --test` to get a summary of the test coverage in the example project.
