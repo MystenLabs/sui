@@ -1,10 +1,11 @@
 ---
 title: Building Programmable Transaction Blocks
+description: Using the Sui TypeScript SDK, you can create programmable transaction blocks to perform multiple commands in a single transaction. 
 ---
 
 This guide explores creating a programmable transaction block (PTB) on Sui using the TypeScript SDK. For an overview of what a PTB is, see [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) in the Concepts section. If you don't already have the Sui TypeScript SDK, follow the [install instructions](https://sui-typescript-docs.vercel.app/typescript/install) on the Sui TypeScript SDK site.
 
-This example starts by constructing a PTB to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a paySui transaction. To construct transactions, import the TransactionBlock class, and construct it:
+This example starts by constructing a PTB to send Sui. If you are familiar with the legacy Sui transaction types, this is similar to a `paySui` transaction. To construct transactions, import the `TransactionBlock` class, and construct it:
 
 ```ts
 import { TransactionBlock } from "@mysten/sui.js";
@@ -20,7 +21,11 @@ const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
 
 // Transfer the split coin to a specific address.
 txb.transferObjects([coin], txb.pure("0xSomeSuiAddress"));
-Note that you can attach multiple transaction commands of the same type to a PTB as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
+```
+
+You can attach multiple transaction commands of the same type to a PTB as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
+
+```ts
 interface Transfer {
   to: string;
   amount: number;

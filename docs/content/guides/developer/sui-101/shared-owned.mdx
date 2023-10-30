@@ -1,6 +1,6 @@
 ---
 title: Shared versus Owned Objects
-description: On Sui, you can use shared objects, owned objects, or both in your programmable transaction blocks. Weigh the benefits of each to decide the best approach for your project. 
+description: On Sui, you can use shared objects, owned objects, or both in your transactions. Weigh the benefits of each to decide the best approach for your project. 
 ---
 
 With owned objects, only a single address can access and change the object. Transactions that use only owned objects can execute in parallel with other transactions that don't have any objects in common without needing to go through consensus. Because of this, owned objects are not subject to contention under load and are less affected by system throughput. If you want your transaction to execute quickly and consistently, then you should prefer owned objects.

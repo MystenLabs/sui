@@ -322,7 +322,7 @@ module hero::example {
     }
 
     // === Tests ===
-    use sui::test_scenario as ts;
+    #[test_only] use sui::test_scenario as ts;
 
     #[test]
     fun slay_boar_test() {

@@ -58,7 +58,7 @@ module first_package::example {
     }
 
     // === Tests ===
-    use sui::test_scenario as ts;
+    #[test_only] use sui::test_scenario as ts;
 
     #[test_only] const ADMIN: address = @0xAD;
     #[test_only] const ALICE: address = @0xA;
@@ -80,13 +80,13 @@ module first_package::example {
             ts::next_tx(&mut ts, ADMIN);
 
             // extract the Forge object
-            let forge: Forge = ts::take_from_sender(&mut ts);
+            let forge: Forge = ts::take_from_sender(&ts);
 
             // verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
 
             // return the Forge object to the object pool
-            ts::return_to_sender(&mut ts, forge);
+            ts::return_to_sender(&ts, forge);
         };
 
         ts::end(ts);
@@ -105,18 +105,18 @@ module first_package::example {
         // second transaction executed by admin to create the sword
         {
             ts::next_tx(&mut ts, ADMIN);
-            let forge: Forge = ts::take_from_sender(&mut ts);
+            let forge: Forge = ts::take_from_sender(&ts);
             // create the sword and transfer it to the initial owner
             let sword = new_sword(&mut forge, 42, 7, ts::ctx(&mut ts));
             transfer::public_transfer(sword, ALICE);
-            ts::return_to_sender(&mut ts, forge);
+            ts::return_to_sender(&ts, forge);
         };
 
         // third transaction executed by the initial sword owner
         {
             ts::next_tx(&mut ts, ALICE);
             // extract the sword owned by the initial owner
-            let sword: Sword = ts::take_from_sender(&mut ts);
+            let sword: Sword = ts::take_from_sender(&ts);
             // transfer the sword to the final owner
             transfer::public_transfer(sword, BOB);
         };
@@ -125,11 +125,11 @@ module first_package::example {
         {
             ts::next_tx(&mut ts, BOB);
             // extract the sword owned by the final owner
-            let sword: Sword = ts::take_from_sender(&mut ts);
+            let sword: Sword = ts::take_from_sender(&ts);
             // verify that the sword has expected properties
             assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
             // return the sword to the object pool (it cannot be dropped)
-            ts::return_to_sender(&mut ts, sword)
+            ts::return_to_sender(&ts, sword)
         };
 
         ts::end(ts);

@@ -3,6 +3,7 @@
 
 const concepts = [
 	'concepts',
+	'concepts/components',
 	{
 		type: 'category',
 		label: 'App Developers',
@@ -11,51 +12,6 @@ const concepts = [
 			id: 'concepts/app-devs',
 		},
 		items: [
-			'concepts/components',
-			{
-				type: 'category',
-				label: 'Move Overview',
-				link: {
-					type: 'doc',
-					id: 'concepts/sui-move-concepts',
-				},
-				items: [
-					'concepts/sui-move-concepts/init',
-					'concepts/sui-move-concepts/entry-functions',
-					'concepts/sui-move-concepts/strings',
-					'concepts/sui-move-concepts/one-time-witness',
-					'concepts/sui-move-concepts/collections',
-					{
-						type: 'category',
-						label: 'Packages',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/packages',
-						},
-						items: [
-							'concepts/sui-move-concepts/packages/upgrade',
-							'concepts/sui-move-concepts/packages/custom-policies',
-						],
-					},
-					{
-						type: 'category',
-						label: 'Patterns',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/patterns',
-						},
-						items: [
-							'concepts/sui-move-concepts/patterns/capabilities',
-							'concepts/sui-move-concepts/patterns/witness',
-							'concepts/sui-move-concepts/patterns/transferrable-witness',
-							'concepts/sui-move-concepts/patterns/hot-potato',
-							'concepts/sui-move-concepts/patterns/id-pointer',
-							'concepts/sui-move-concepts/patterns/app-extensions',
-						],
-					},
-					'concepts/sui-move-concepts/move-on-sui',
-				],
-			},
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -88,22 +44,65 @@ const concepts = [
 						items: [
 							'concepts/dynamic-fields/dynamic-object-fields',
 							'concepts/dynamic-fields/tables-bags',
+							'concepts/dynamic-fields/events',
+							{
+								type: 'category',
+								label: 'Transfers',
+								link: {
+									type: 'doc',
+									id: 'concepts/dynamic-fields/transfers',
+								},
+								items: [
+									'concepts/dynamic-fields/transfers/custom-rules',
+									'concepts/dynamic-fields/transfers/transfer-to-object',
+								],
+							},
+							'concepts/dynamic-fields/versioning',
 						],
 					},
-					'concepts/dynamic-fields/events',
+				],
+			},
+			{
+				type: 'category',
+				label: 'Move Overview',
+				link: {
+					type: 'doc',
+					id: 'concepts/sui-move-concepts',
+				},
+				items: [
+					'concepts/sui-move-concepts/strings',
+					'concepts/sui-move-concepts/collections',
+					'concepts/sui-move-concepts/init',
+					'concepts/sui-move-concepts/entry-functions',
+					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
-						label: 'Transfers',
+						label: 'Packages',
 						link: {
 							type: 'doc',
-							id: 'concepts/dynamic-fields/transfers',
+							id: 'concepts/sui-move-concepts/packages',
 						},
 						items: [
-							'concepts/dynamic-fields/transfers/custom-rules',
-							'concepts/dynamic-fields/transfers/transfer-to-object',
+							'concepts/sui-move-concepts/packages/upgrade',
+							'concepts/sui-move-concepts/packages/custom-policies',
 						],
 					},
-					'concepts/dynamic-fields/versioning',
+					{
+						type: 'category',
+						label: 'Patterns',
+						link: {
+							type: 'doc',
+							id: 'concepts/sui-move-concepts/patterns',
+						},
+						items: [
+							'concepts/sui-move-concepts/patterns/capabilities',
+							'concepts/sui-move-concepts/patterns/witness',
+							'concepts/sui-move-concepts/patterns/transferrable-witness',
+							'concepts/sui-move-concepts/patterns/hot-potato',
+							'concepts/sui-move-concepts/patterns/id-pointer',
+							'concepts/sui-move-concepts/patterns/app-extensions',
+						],
+					},
 				],
 			},
 			{
@@ -181,7 +180,7 @@ const concepts = [
 					'concepts/cryptography/smart-contracts/signing',
 					'concepts/cryptography/smart-contracts/groth16',
 					'concepts/cryptography/smart-contracts/hashing',
-					'concepts/cryptography/smart-contracts/signing',
+					'concepts/cryptography/smart-contracts/ecvrf',
 				],
 			},
 			{

@@ -79,5 +79,6 @@
 }
 
 .active-scroll-spy {
-  @apply bg-sui-ghost-white dark:bg-sui-ghost-dark rounded-lg
+  @apply bg-sui-ghost-white dark:bg-sui-ghost-dark rounded-lg;
 }
+

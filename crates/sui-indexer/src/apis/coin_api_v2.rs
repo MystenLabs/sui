@@ -12,6 +12,7 @@ use sui_json_rpc_types::{Balance, CoinPage, Page, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_SUI};
 
 pub(crate) struct CoinReadApiV2 {
     inner: IndexerReader,
@@ -124,8 +125,18 @@ impl CoinReadApiServer for CoinReadApiV2 {
             .map_err(Into::into)
     }
 
-    async fn get_total_supply(&self, _coin_type: String) -> RpcResult<Supply> {
-        unimplemented!()
+    async fn get_total_supply(&self, coin_type: String) -> RpcResult<Supply> {
+        let coin_struct = parse_to_struct_tag(&coin_type)?;
+        if GAS::is_gas(&coin_struct) {
+            Ok(Supply {
+                value: TOTAL_SUPPLY_SUI,
+            })
+        } else {
+            self.inner
+                .get_total_supply_in_blocking_task(coin_struct)
+                .await
+                .map_err(Into::into)
+        }
     }
 }
 

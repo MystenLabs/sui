@@ -86,7 +86,6 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 //             Enable transaction effects v2 in testnet.
 //             Deprecate supported oauth providers from protocol config and rely on node config
 //             instead.
-//             Enable throughput aware submission for Devnet & Testnet
 //             In execution, has_public_transfer is recomputed when loading the object.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1623,10 +1622,6 @@ impl ProtocolConfig {
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
                     cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
-
-                    if chain != Chain::Mainnet {
-                        cfg.feature_flags.throughput_aware_consensus_submission = true;
-                    }
 
                     cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }

@@ -4,7 +4,6 @@
 module dynamic_fields::example {
     use sui::dynamic_object_field as ofield;
     use sui::object::{Self, UID};
-    use sui::test_scenario;
 
     struct Parent has key {
         id: UID,
@@ -46,6 +45,9 @@ module dynamic_fields::example {
         let Child { id, count: _ } = reclaim_child(parent);
         object::delete(id);
     }
+
+    // === Tests ===
+    #[test_only] use sui::test_scenario;
 
     #[test]
     fun test_add_delete() {
