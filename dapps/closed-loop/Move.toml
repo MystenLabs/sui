@@ -1,0 +1,10 @@
+[package]
+name = "CLI Token"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../crates/sui-framework/packages/sui-framework" }
+"Closed Loop Token" = { local = "../../examples/move/closed_loop" }
+
+[addresses]
+cli = "0x0"
