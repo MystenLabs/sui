@@ -47,17 +47,17 @@ Commands:
 Options:
   	--client.config <CONFIG>  Sets the file storing the state of our user accounts (an empty one will be created if missing)
   	--json                	Return command outputs in json format
-  -y, --yes                	 
+  -y, --yes
   -h, --help                	Print help
 ```
 
 ## JSON output
 
-Append the `--json` flag to commands to format responses in JSON instead of the more human-friendly default Sui CLI output. This can be useful for extremely large datasets, for example, as those results can have a troublesome display on smaller screens. In these cases, the `--json` flag is useful. 
+Append the `--json` flag to commands to format responses in JSON instead of the more human-friendly default Sui CLI output. This can be useful for extremely large datasets, for example, as those results can have a troublesome display on smaller screens. In these cases, the `--json` flag is useful.
 
 ## Examples
 
-The following examples demonstrate some of the most often used commands. 
+The following examples demonstrate some of the most often used commands.
 
 ### List available network environments
 
@@ -95,7 +95,7 @@ If you run `sui client envs` after this command, you see the asterisk in the `ac
 
 ### Get current active environment
 
-Use the `sui client active-address` command to reveal the current address. The CLI uses the current active address to execute address-specific CLI commands (like `sui client objects`) when you don't provide them with a Sui address value. 
+Use the `sui client active-address` command to reveal the current address. The CLI uses the current active address to execute address-specific CLI commands (like `sui client objects`) when you don't provide them with a Sui address value.
 
 ```shell
 $ sui client active-address
@@ -104,12 +104,12 @@ $ sui client active-address
 
 ### Get objects owned by an address
 
-Use `sui client objects` to list summary information about the objects the current active address owns. You can provide a Sui address value to the command to list objects for a particular address. This example lists objects for the defined Sui address.  
+Use `sui client objects` to list summary information about the objects the current active address owns. You can provide a Sui address value to the command to list objects for a particular address. This example lists objects for the defined Sui address.
 
 ```
 $ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0aaf6b69
 
-╭───────────────────────────────────────────────────────────────────────────────────────╮ 
+╭───────────────────────────────────────────────────────────────────────────────────────╮
 | ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
 │ │ objectId   │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f  │ │       |
 │ │ version	   │  33363559                                                        	  │ │
@@ -127,7 +127,7 @@ $ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0
 
 ### Get complete object information
 
-Use `sui client object <OBJECT-ID>` to output complete details for the object with the ID you provide. This example checks the details for a Coin object. 
+Use `sui client object <OBJECT-ID>` to output complete details for the object with the ID you provide. This example checks the details for a Coin object.
 
 ```
 $ sui client object 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f
@@ -181,16 +181,16 @@ $ sui client dynamic-field 0x5
 
 ## Publish a Move package
 
-One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: `https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples` 
+One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: `https://github.com/MystenLabs/sui/tree/main/examples/move`
 
-This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx). 
+This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
 
-1. Open a terminal or console to the root of your local Sui repository and navigate to the move_tutorial example. 
+1. Open a terminal or console to the root of your local Sui repository and navigate to the move_tutorial example.
     ```shell
-    cd sui_programmability/examples
-    cd move_tutorial
+    cd examples/move
+    cd first_package
     ```
-1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration. 
+1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration.
     ```shell
     sui client switch --env devnet
     ```
@@ -199,20 +199,19 @@ This example also makes use of `sui move` commands. To learn more about those co
     sui move build
     INCLUDING DEPENDENCY Sui
     INCLUDING DEPENDENCY MoveStdlib
-    BUILDING MyFirstPackage
+    BUILDING first_package
     ```
 1. Use `sui move test` to run the unit tests. The console responds with updates of its progress.
     ```shell
     sui move test
     INCLUDING DEPENDENCY Sui
     INCLUDING DEPENDENCY MoveStdlib
-    BUILDING MyFirstPackage
+    BUILDING first_package
     Running Move unit tests
-    [ PASS	] 0x0::my_module::test_module_init
-    [ PASS	] 0x0::my_module::test_sword_create
-    [ PASS	] 0x0::my_module::test_sword_transactions
-    Test result: OK. Total tests: 3; passed: 3; failed: 0
-    ```
+    [ PASS    ] 0x0::example::test_module_init
+    [ PASS    ] 0x0::example::test_sword_transactions
+    Test result: OK. Total tests: 2; passed: 2; failed: 0
+     ```
 1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values as well as the amount the package uses.
     ```shell
     $ sui client verify-bytecode-meter
@@ -220,9 +219,9 @@ This example also makes use of `sui move` commands. To learn more about those co
     ╭──────────────────────────────────╮
     │ Module will pass metering check! │
     ├────────┬────────────┬────────────┤
-    │    	 │ Module 	  │ Function   │
-    │ Max	 │ 16000000   │ 16000000   │
-    │ Used   │ 5265   	  │ 5265   	   │
+    │        │ Module     │ Function   │
+    │ Max    │ 16000000   │ 16000000   │
+    │ Used   │ 4565       │ 4565       │
     ╰────────┴────────────┴────────────╯
     ```
 1. Use `sui client gas` to verify that the active address has a gas coin for paying gas. In the case of this example, the console responds with the information that the address is coinless.
@@ -250,7 +249,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     │ 0x2f3799d094573b0958eef703b95996fe459bb00afc2d09866335c30cf480e522 │ 10000000000 │
     ╰────────────────────────────────────────────────────────────────────┴─────────────╯
     ```
-1. Use `sui client publish` to publish the package, being sure to set an appropriate value for the `gas-budget` flag. The console responds with the details of the publish. You can use `sui client object <OBJECT-ID>` to check the details of any of the objects from the process. 
+1. Use `sui client publish` to publish the package, being sure to set an appropriate value for the `gas-budget` flag. The console responds with the details of the publish. You can use `sui client object <OBJECT-ID>` to check the details of any of the objects from the process.
     ```shell
     $ sui client publish --gas-budget 5000000
 
