@@ -32,6 +32,8 @@ pub(crate) struct ShowUsage;
 struct ValidationRes {
     num_nodes: u32,
     depth: u32,
+    num_variables: u32,
+    num_fragments: u32,
 }
 
 #[derive(Debug, Default)]
@@ -75,6 +77,8 @@ impl Extension for QueryLimitsChecker {
                 value! ({
                     "nodes": validation_result.num_nodes,
                     "depth": validation_result.depth,
+                    "variables": validation_result.num_variables,
+                    "fragments": validation_result.num_fragments,
                 }),
             )
         } else {
@@ -93,14 +97,36 @@ impl Extension for QueryLimitsChecker {
     ) -> ServerResult<ExecutableDocument> {
         // TODO: limit number of variables, fragments, etc
 
-        // Use BFS to analyze the query and
-        // count the number of nodes and the depth of the query
-
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
+
+        if variables.len() > cfg.limits.max_query_variables as usize {
+            return Err(ServerError::new(
+                format!(
+                    "Query has too many variables. The maximum allowed is {}",
+                    cfg.limits.max_query_variables
+                ),
+                None,
+            ));
+        }
+
         // Document layout of the query
         let doc = next.run(ctx, query, variables).await?;
+
+        if doc.fragments.len() > cfg.limits.max_query_fragments as usize {
+            return Err(ServerError::new(
+                format!(
+                    "Query has too many fragments definitions. The maximum allowed is {}",
+                    cfg.limits.max_query_fragments
+                ),
+                None,
+            ));
+        }
+
+        // Use BFS to analyze the query and
+        // count the number of nodes and the depth of the query
+
         // Queue to store the nodes at each level
         let mut que = VecDeque::new();
         // Number of nodes in the query
@@ -125,6 +151,8 @@ impl Extension for QueryLimitsChecker {
             depth += 1;
             self.check_limits(cfg, num_nodes, depth, None)?;
             while level_len > 0 {
+                // Ok to unwrap since we checked for empty queue
+                // and level_len > 0
                 let sel = que.pop_front().unwrap();
                 // TODO: check for fragments, variables, etc
                 if let Field(f) = &sel.node {
@@ -140,7 +168,12 @@ impl Extension for QueryLimitsChecker {
             level_len = que.len();
         }
         if ctx.data_opt::<ShowUsage>().is_some() {
-            *self.validation_result.lock().await = Some(ValidationRes { num_nodes, depth });
+            *self.validation_result.lock().await = Some(ValidationRes {
+                num_nodes,
+                depth,
+                num_variables: variables.len() as u32,
+                num_fragments: doc.fragments.len() as u32,
+            });
         }
         if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
             metrics.num_nodes.observe(num_nodes as f64);

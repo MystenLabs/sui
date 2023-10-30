@@ -1,0 +1,27 @@
+# Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
+{
+  checkpointConnection {
+    nodes {
+      digest
+      sequenceNumber
+      validatorSignature
+      previousCheckpointDigest
+      networkTotalTransactions
+      rollingGasSummary {
+        computationCost
+        storageCost
+        storageRebate
+        nonRefundableStorageFee
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+        startTimestamp
+        endTimestamp
+      }
+      endOfEpoch {
+        nextProtocolVersion
+      }
+    }
+  }
+}

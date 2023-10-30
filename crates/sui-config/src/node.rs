@@ -12,6 +12,7 @@ use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -19,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
-use sui_protocol_config::SupportedProtocolVersions;
+use sui_protocol_config::{Chain, SupportedProtocolVersions};
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -155,6 +156,12 @@ pub struct NodeConfig {
 
     #[serde(default = "default_jwk_fetch_interval_seconds")]
     pub jwk_fetch_interval_seconds: u64,
+
+    #[serde(default = "default_zklogin_oauth_providers")]
+    pub zklogin_oauth_providers: BTreeMap<Chain, BTreeSet<String>>,
+
+    #[serde(default = "default_overload_threshold_config")]
+    pub overload_threshold_config: OverloadThresholdConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -165,6 +172,27 @@ pub struct TransactionKeyValueStoreReadConfig {
 
 fn default_jwk_fetch_interval_seconds() -> u64 {
     3600
+}
+
+pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
+    let mut map = BTreeMap::new();
+    let experimental_providers = BTreeSet::from([
+        "Google".to_string(),
+        "Facebook".to_string(),
+        "Twitch".to_string(),
+        "Kakao".to_string(),
+        "Apple".to_string(),
+        "Slack".to_string(),
+    ]);
+    let providers = BTreeSet::from([
+        "Google".to_string(),
+        "Facebook".to_string(),
+        "Twitch".to_string(),
+    ]);
+    map.insert(Chain::Mainnet, providers.clone());
+    map.insert(Chain::Testnet, providers);
+    map.insert(Chain::Unknown, experimental_providers);
+    map
 }
 
 fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {
@@ -644,6 +672,29 @@ pub struct TransactionKeyValueStoreWriteConfig {
     pub table_name: String,
     pub bucket_name: String,
     pub concurrency: usize,
+}
+
+/// Configuration for the threshold(s) at which we consider the system
+/// to be overloaded. When one of the threshold is passed, the node may
+/// stop processing new transactions and/or certificates until the congestion
+/// resolves.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct OverloadThresholdConfig {
+    pub max_txn_age_in_queue: Duration,
+    // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
+    // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
+}
+
+impl Default for OverloadThresholdConfig {
+    fn default() -> Self {
+        Self {
+            max_txn_age_in_queue: Duration::from_secs(1), // 1 second
+        }
+    }
+}
+
+fn default_overload_threshold_config() -> OverloadThresholdConfig {
+    OverloadThresholdConfig::default()
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

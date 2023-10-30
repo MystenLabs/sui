@@ -7,7 +7,7 @@ use move_core_types::{
     ident_str,
     identifier::{IdentStr, Identifier},
     language_storage::{StructTag, TypeTag},
-    value::{self, MoveTypeLayout},
+    value,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,15 +36,13 @@ const TYP_UID: &IdentStr = ident_str!("UID");
 pub(crate) struct MoveValue {
     #[graphql(name = "type")]
     type_: MoveType,
-    #[graphql(skip)]
-    layout: MoveTypeLayout,
     bcs: Base64,
 }
 
 scalar!(
     MoveData,
     "MoveData",
-    r#"The contents of a Move Value, corresponding to the following recursive type:
+    "The contents of a Move Value, corresponding to the following recursive type:
 
 type MoveData =
     { Address: SuiAddress }
@@ -54,7 +52,7 @@ type MoveData =
   | { String:  string }
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
-  | { Struct:  [{ name: string, value: MoveData }] }"#
+  | { Struct:  [{ name: string, value: MoveData }] }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -78,24 +76,31 @@ pub(crate) struct MoveField {
 
 #[ComplexObject]
 impl MoveValue {
-    async fn data(&self) -> Result<MoveData> {
+    async fn data(&self, ctx: &Context<'_>) -> Result<MoveData> {
+        let cache = ctx.data().map_err(|_| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                "Unable to fetch Package Cache.",
+            )
+        })?;
+
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.data_impl()
+        self.data_impl(self.type_.layout_impl(cache).await?)
     }
 }
 
 impl MoveValue {
-    pub fn new(repr: String, layout: MoveTypeLayout, bcs: Base64) -> Self {
+    pub fn new(repr: String, bcs: Base64) -> Self {
         let type_ = MoveType::new(repr);
-        Self { type_, layout, bcs }
+        Self { type_, bcs }
     }
 
-    fn data_impl(&self) -> Result<MoveData> {
+    fn data_impl(&self, layout: value::MoveTypeLayout) -> Result<MoveData> {
         // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
         // deserializing via `value::MoveValue` (but this is significantly more code).
         let value: value::MoveValue =
-            bcs::from_bytes_seed(&self.layout, &self.bcs.0[..]).map_err(|_| {
-                let type_tag: Option<TypeTag> = (&self.layout).try_into().ok();
+            bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
+                let type_tag: Option<TypeTag> = (&layout).try_into().ok();
                 let message = if let Some(type_tag) = type_tag {
                     format!("Failed to deserialize Move value for type: {}", type_tag)
                 } else {
@@ -345,7 +350,7 @@ mod tests {
 
     macro_rules! struct_layout {
         ($type:literal { $($name:literal : $layout:expr),* $(,)?}) => {
-            MoveTypeLayout::Struct(S::WithTypes {
+            value::MoveTypeLayout::Struct(S::WithTypes {
                 type_: StructTag::from_str($type).expect("Failed to parse struct"),
                 fields: vec![$(MoveFieldLayout {
                     name: ident_str!($name).to_owned(),
@@ -357,7 +362,7 @@ mod tests {
 
     macro_rules! vector_layout {
         ($inner:expr) => {
-            MoveTypeLayout::Vector(Box::new($inner))
+            value::MoveTypeLayout::Vector(Box::new($inner))
         };
     }
 
@@ -365,7 +370,7 @@ mod tests {
         SuiAddress::from_str(a).unwrap()
     }
 
-    fn data<T: Serialize>(layout: MoveTypeLayout, data: T) -> Result<MoveData> {
+    fn data<T: Serialize>(layout: value::MoveTypeLayout, data: T) -> Result<MoveData> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
 
         // The format for type from its `Display` impl does not technically match the format that
@@ -376,12 +381,12 @@ mod tests {
 
     fn data_with_tag<T: Serialize>(
         tag: impl Into<String>,
-        layout: MoveTypeLayout,
+        layout: value::MoveTypeLayout,
         data: T,
     ) -> Result<MoveData> {
         let type_ = MoveType::new(tag.into());
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
-        MoveValue { type_, layout, bcs }.data_impl()
+        MoveValue { type_, bcs }.data_impl(layout)
     }
 
     #[test]

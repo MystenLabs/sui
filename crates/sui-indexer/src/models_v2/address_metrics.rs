@@ -4,6 +4,9 @@
 use std::collections::HashMap;
 
 use diesel::prelude::*;
+use diesel::sql_types::BigInt;
+
+use sui_json_rpc_types::AddressMetrics;
 
 use crate::schema_v2::{active_addresses, address_metrics, addresses};
 
@@ -39,15 +42,34 @@ impl From<StoredAddress> for StoredActiveAddress {
     }
 }
 
-#[derive(Clone, Debug, Default, Queryable, Insertable)]
+#[derive(Clone, Debug, Default, Queryable, Insertable, QueryableByName)]
 #[diesel(table_name = address_metrics)]
 pub struct StoredAddressMetrics {
+    #[diesel(sql_type = BigInt)]
     pub checkpoint: i64,
+    #[diesel(sql_type = BigInt)]
     pub epoch: i64,
+    #[diesel(sql_type = BigInt)]
     pub timestamp_ms: i64,
+    #[diesel(sql_type = BigInt)]
     pub cumulative_addresses: i64,
+    #[diesel(sql_type = BigInt)]
     pub cumulative_active_addresses: i64,
+    #[diesel(sql_type = BigInt)]
     pub daily_active_addresses: i64,
+}
+
+impl From<StoredAddressMetrics> for AddressMetrics {
+    fn from(metrics: StoredAddressMetrics) -> Self {
+        Self {
+            checkpoint: metrics.checkpoint as u64,
+            epoch: metrics.epoch as u64,
+            timestamp_ms: metrics.timestamp_ms as u64,
+            cumulative_addresses: metrics.cumulative_addresses as u64,
+            cumulative_active_addresses: metrics.cumulative_active_addresses as u64,
+            daily_active_addresses: metrics.daily_active_addresses as u64,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

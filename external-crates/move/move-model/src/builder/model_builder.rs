@@ -175,10 +175,7 @@ impl<'env> ModelBuilder<'env> {
     /// Defines a spec function, adding it to the spec fun table.
     pub fn define_spec_fun(&mut self, name: QualifiedSymbol, entry: SpecFunEntry) {
         // TODO: check whether overloads are distinguishable
-        self.spec_fun_table
-            .entry(name)
-            .or_insert_with(Vec::new)
-            .push(entry);
+        self.spec_fun_table.entry(name).or_default().push(entry);
     }
 
     /// Defines a spec variable.

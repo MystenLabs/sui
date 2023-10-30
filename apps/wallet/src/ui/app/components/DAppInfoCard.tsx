@@ -34,7 +34,7 @@ export function DAppInfoCard({
 	const validDAppUrl = getValidDAppUrl(url);
 	const appHostname = validDAppUrl?.hostname ?? url;
 	const { data: account } = useAccountByAddress(connectedAddress);
-	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
+	const { unlockAccount, lockAccount, isPending, accountToUnlock } = useUnlockAccount();
 
 	return (
 		<div className="bg-white p-6 flex flex-col gap-5">
@@ -70,7 +70,7 @@ export function DAppInfoCard({
 								<div className="h-4">
 									<LockUnlockButton
 										isLocked={account.isLocked}
-										isLoading={isLoading && accountToUnlock?.id === account.id}
+										isLoading={isPending && accountToUnlock?.id === account.id}
 										onClick={(e) => {
 											// prevent the account from being selected when clicking the lock button
 											e.stopPropagation();

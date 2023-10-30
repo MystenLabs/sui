@@ -20,9 +20,9 @@ const PACKAGE_TYPE_NAME = 'Move Package';
 
 export function ObjectResult() {
 	const { id: objID } = useParams();
-	const { data, isLoading, isError, isFetched } = useGetObject(objID!);
+	const { data, isPending, isError, isFetched } = useGetObject(objID!);
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<PageLayout
 				content={

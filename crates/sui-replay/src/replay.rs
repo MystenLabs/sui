@@ -17,6 +17,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use prometheus::Registry;
+use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -65,18 +66,20 @@ use tracing::{error, info, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionSandboxState {
     /// Information describing the transaction
     pub transaction_info: OnChainTransactionInfo,
     /// All the obejcts that are required for the execution of the transaction
     pub required_objects: Vec<Object>,
     /// Temporary store from executing this locally in `execute_transaction_to_effects`
+    #[serde(skip)]
     pub local_exec_temporary_store: Option<InnerTemporaryStore>,
     /// Effects from executing this locally in `execute_transaction_to_effects`
     pub local_exec_effects: SuiTransactionBlockEffects,
     /// Status from executing this locally in `execute_transaction_to_effects`
-    pub local_exec_status: Result<(), ExecutionError>,
+    #[serde(skip)]
+    pub local_exec_status: Option<Result<(), ExecutionError>>,
     /// Pre exec diag info
     pub pre_exec_diag: DiagInfo,
 }
@@ -695,7 +698,7 @@ impl LocalExec {
                 required_objects: vec![],
                 local_exec_temporary_store: None,
                 local_exec_effects: effects,
-                local_exec_status: Ok(()),
+                local_exec_status: Some(Ok(())),
                 pre_exec_diag: self.diag.clone(),
             });
         }
@@ -713,7 +716,8 @@ impl LocalExec {
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-        let protocol_config = &tx_info.protocol_config;
+        let protocol_config =
+            &ProtocolConfig::get_for_version(tx_info.protocol_version, Chain::Unknown);
 
         let metrics = self.metrics.clone();
 
@@ -761,7 +765,7 @@ impl LocalExec {
             required_objects: all_required_objects,
             local_exec_temporary_store: Some(res.0),
             local_exec_effects: effects,
-            local_exec_status: res.2,
+            local_exec_status: Some(res.2),
             pre_exec_diag: self.diag.clone(),
         })
     }
@@ -799,9 +803,9 @@ impl LocalExec {
     /// If no transaction is provided, the transaction in the sandbox state is used
     /// Currently if the transaction is provided, the signing will fail, so this feature is TBD
     pub async fn certificate_execute_with_sandbox_state(
-        &mut self,
         pre_run_sandbox: &ExecutionSandboxState,
         override_transaction_data: Option<TransactionData>,
+        pre_exec_diag: &DiagInfo,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         assert!(
             override_transaction_data.is_none(),
@@ -812,7 +816,10 @@ impl LocalExec {
         let executed_epoch = pre_run_sandbox.transaction_info.executed_epoch;
         let reference_gas_price = pre_run_sandbox.transaction_info.reference_gas_price;
         let epoch_start_timestamp = pre_run_sandbox.transaction_info.epoch_start_timestamp;
-        let protocol_config = pre_run_sandbox.transaction_info.protocol_config.clone();
+        let protocol_config = ProtocolConfig::get_for_version(
+            pre_run_sandbox.transaction_info.protocol_version,
+            Chain::Unknown,
+        );
         let required_objects = pre_run_sandbox.required_objects.clone();
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
@@ -914,8 +921,8 @@ impl LocalExec {
             required_objects,
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
-            local_exec_status: exec_res,
-            pre_exec_diag: self.diag.clone(),
+            local_exec_status: Some(exec_res),
+            pre_exec_diag: pre_exec_diag.clone(),
         })
     }
 
@@ -930,8 +937,7 @@ impl LocalExec {
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
-        self.certificate_execute_with_sandbox_state(&pre_run_sandbox, None)
-            .await
+        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, None, &self.diag).await
     }
 
     /// Must be called after `init_for_execution`
@@ -1441,7 +1447,7 @@ impl LocalExec {
             effects: SuiTransactionBlockEffects::V1(effects),
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-            protocol_config: self.get_protocol_config(epoch_id).await?,
+            protocol_version: self.get_protocol_config(epoch_id).await?.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
@@ -1504,7 +1510,7 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
-            protocol_config,
+            protocol_version: protocol_config.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
@@ -1560,7 +1566,7 @@ impl LocalExec {
         in_objs.extend(
             self.multi_download_relevant_packages_and_store(
                 package_inputs,
-                tx_info.protocol_config.version.as_u64(),
+                tx_info.protocol_version.as_u64(),
             )
             .await?,
         );
@@ -1623,7 +1629,7 @@ impl LocalExec {
         tx_info: &OnChainTransactionInfo,
     ) -> Result<InputObjects, ReplayEngineError> {
         // We need this for other activities in this session
-        self.current_protocol_version = tx_info.protocol_config.version.as_u64();
+        self.current_protocol_version = tx_info.protocol_version.as_u64();
 
         // Download the objects at the version right before the execution of this TX
         self.multi_download_and_store(&tx_info.modified_at_versions)

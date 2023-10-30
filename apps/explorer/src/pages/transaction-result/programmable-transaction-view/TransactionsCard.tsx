@@ -7,8 +7,6 @@ import { Transaction } from './Transaction';
 import { ProgrammableTxnBlockCard } from '~/components/transactions/ProgTxnBlockCard';
 import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
-const DEFAULT_ITEMS_TO_SHOW = 5;
-
 interface TransactionsCardProps {
 	transactions: SuiTransaction[];
 }
@@ -36,8 +34,6 @@ export function TransactionsCard({ transactions }: TransactionsCardProps) {
 			items={expandableItems}
 			itemsLabel={transactions.length > 1 ? 'Transactions' : 'Transaction'}
 			count={transactions.length}
-			defaultItemsToShow={DEFAULT_ITEMS_TO_SHOW}
-			noExpandableList={transactions.length < DEFAULT_ITEMS_TO_SHOW}
 		/>
 	);
 }

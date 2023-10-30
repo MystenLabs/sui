@@ -136,10 +136,7 @@ impl CallGraph {
     }
 
     pub fn add_call(&mut self, caller: FunctionHandleIndex, callee: FunctionHandleIndex) {
-        self.calls
-            .entry(caller)
-            .or_insert_with(HashSet::new)
-            .insert(callee);
+        self.calls.entry(caller).or_default().insert(callee);
     }
 
     pub fn can_call(&self, my_index: FunctionHandleIndex) -> Vec<FunctionHandleIndex> {

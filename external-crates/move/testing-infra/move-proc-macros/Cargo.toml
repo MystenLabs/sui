@@ -10,6 +10,6 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-quote = "1"
+quote.workspace = true
 syn = { version = "2", features = ["full", "fold", "extra-traits"] }
-enum-compat-util = { path = "../enum-compat-util" }
+enum-compat-util.workspace = true

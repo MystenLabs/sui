@@ -1,9 +1,10 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use crate::consensus::LeaderSchedule;
 use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
-use consensus::consensus::LeaderSchedule;
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;

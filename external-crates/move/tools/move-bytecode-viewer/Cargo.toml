@@ -9,15 +9,14 @@ edition = "2021"
 
 [dependencies]
 clap.workspace = true
-anyhow = "1.0.52"
-regex = "1.5.5"
-tui = "0.17.0"
-crossterm = "0.21"
+anyhow.workspace = true
+regex.workspace = true
+tui.workspace = true
+crossterm.workspace = true
 
-move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }
-move-binary-format = { path = "../../move-binary-format" }
-move-disassembler = { path = "../move-disassembler" }
-
+move-bytecode-source-map.workspace = true
+move-binary-format.workspace = true
+move-disassembler.workspace = true
 
 [features]
 default = []

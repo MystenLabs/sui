@@ -11,7 +11,7 @@ use crate::{
         WellKnownFilterName,
     },
     shared::{
-        ast_debug::AstDebug, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION,
+        ast_debug::AstDebug, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_MUT_REF,
         FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
     },
 };
@@ -55,7 +55,10 @@ pub struct Diagnostic {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
-pub struct Diagnostics {
+pub struct Diagnostics(Option<Diagnostics_>);
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
+struct Diagnostics_ {
     diagnostics: Vec<Diagnostic>,
     // diagnostics filtered in source code
     filtered_source_diagnostics: Vec<Diagnostic>,
@@ -156,8 +159,11 @@ fn render_diagnostics(
     writer: &mut dyn WriteColor,
     files: &SimpleFiles<Symbol, &str>,
     file_mapping: &FileMapping,
-    mut diags: Diagnostics,
+    diags: Diagnostics,
 ) {
+    let Diagnostics(Some(mut diags)) = diags else {
+        return;
+    };
     diags.diagnostics.sort_by(|e1, e2| {
         let loc1: &Loc = &e1.primary_label.0;
         let loc2: &Loc = &e2.primary_label.0;
@@ -217,32 +223,39 @@ fn render_diagnostic(
 
 impl Diagnostics {
     pub fn new() -> Self {
-        Self {
-            diagnostics: vec![],
-            filtered_source_diagnostics: vec![],
-            severity_count: BTreeMap::new(),
-        }
+        Self(None)
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
-        debug_assert!(self.severity_count.values().all(|count| *count > 0));
-        self.severity_count
+        let Self(Some(inner)) = self else { return None };
+        debug_assert!(inner.severity_count.values().all(|count| *count > 0));
+        inner
+            .severity_count
             .iter()
             .max_by_key(|(sev, _count)| **sev)
             .map(|(sev, _count)| *sev)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.diagnostics.is_empty()
+        let Self(Some(inner)) = self else { return true };
+        inner.diagnostics.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.diagnostics.len()
+        let Self(Some(inner)) = self else { return 0 };
+        inner.diagnostics.len()
     }
 
     pub fn add(&mut self, diag: Diagnostic) {
-        *self.severity_count.entry(diag.info.severity()).or_insert(0) += 1;
-        self.diagnostics.push(diag)
+        if self.0.is_none() {
+            self.0 = Some(Diagnostics_::default())
+        }
+        let inner = self.0.as_mut().unwrap();
+        *inner
+            .severity_count
+            .entry(diag.info.severity())
+            .or_insert(0) += 1;
+        inner.diagnostics.push(diag)
     }
 
     pub fn add_opt(&mut self, diag_opt: Option<Diagnostic>) {
@@ -252,23 +265,34 @@ impl Diagnostics {
     }
 
     pub fn add_source_filtered(&mut self, diag: Diagnostic) {
-        self.filtered_source_diagnostics.push(diag)
+        if self.0.is_none() {
+            self.0 = Some(Diagnostics_::default())
+        }
+        let inner = self.0.as_mut().unwrap();
+        inner.filtered_source_diagnostics.push(diag)
     }
 
     pub fn extend(&mut self, other: Self) {
-        let Self {
+        let Self(Some(Diagnostics_ {
             diagnostics,
             filtered_source_diagnostics: _,
             severity_count,
-        } = other;
-        for (sev, count) in severity_count {
-            *self.severity_count.entry(sev).or_insert(0) += count;
+        })) = other
+        else {
+            return;
+        };
+        if self.0.is_none() {
+            self.0 = Some(Diagnostics_::default())
         }
-        self.diagnostics.extend(diagnostics)
+        let inner = self.0.as_mut().unwrap();
+        for (sev, count) in severity_count {
+            *inner.severity_count.entry(sev).or_insert(0) += count;
+        }
+        inner.diagnostics.extend(diagnostics)
     }
 
     pub fn into_vec(self) -> Vec<Diagnostic> {
-        self.diagnostics
+        self.0.map(|inner| inner.diagnostics).unwrap_or_default()
     }
 
     pub fn into_codespan_format(
@@ -301,7 +325,11 @@ impl Diagnostics {
     }
 
     pub fn any_with_prefix(&self, prefix: &str) -> bool {
-        self.diagnostics
+        let Self(Some(inner)) = self else {
+            return false;
+        };
+        inner
+            .diagnostics
             .iter()
             .any(|d| d.info.external_prefix() == Some(prefix))
     }
@@ -310,9 +338,12 @@ impl Diagnostics {
     /// have a given prefix (first value returned) and how many different categories of diags were
     /// filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
+        let Self(Some(inner)) = self else {
+            return (0, 0);
+        };
         let mut filtered_diags_num = 0;
         let mut filtered_categories = HashSet::new();
-        self.filtered_source_diagnostics.iter().for_each(|d| {
+        inner.filtered_source_diagnostics.iter().for_each(|d| {
             if d.info.external_prefix() == Some(prefix) {
                 filtered_diags_num += 1;
                 filtered_categories.insert(d.info.category());
@@ -557,31 +588,19 @@ impl UnprefixedWarningFilters {
     }
 
     pub fn unused_warnings_filter_for_test() -> Self {
-        let unused_fun_info = UnusedItem::Function.into_info();
-        let unused_field_info = UnusedItem::StructField.into_info();
-        let unused_fn_tparam_info = UnusedItem::FunTypeParam.into_info();
-        let unused_const_info = UnusedItem::Constant.into_info();
-        let filtered_codes = BTreeMap::from([
-            (
-                (unused_fun_info.category(), unused_fun_info.code()),
-                Some(FILTER_UNUSED_FUNCTION),
-            ),
-            (
-                (unused_field_info.category(), unused_field_info.code()),
-                Some(FILTER_UNUSED_STRUCT_FIELD),
-            ),
-            (
-                (
-                    unused_fn_tparam_info.category(),
-                    unused_fn_tparam_info.code(),
-                ),
-                Some(FILTER_UNUSED_TYPE_PARAMETER),
-            ),
-            (
-                (unused_const_info.category(), unused_const_info.code()),
-                Some(FILTER_UNUSED_CONST),
-            ),
-        ]);
+        let filtered_codes = [
+            (UnusedItem::Function, FILTER_UNUSED_FUNCTION),
+            (UnusedItem::StructField, FILTER_UNUSED_STRUCT_FIELD),
+            (UnusedItem::FunTypeParam, FILTER_UNUSED_TYPE_PARAMETER),
+            (UnusedItem::Constant, FILTER_UNUSED_CONST),
+            (UnusedItem::MutReference, FILTER_UNUSED_MUT_REF),
+        ]
+        .into_iter()
+        .map(|(item, filter)| {
+            let info = item.into_info();
+            ((info.category(), info.code()), Some(filter))
+        })
+        .collect();
         Self::Specified {
             categories: BTreeMap::new(),
             codes: filtered_codes,
@@ -602,15 +621,19 @@ impl FromIterator<Diagnostic> for Diagnostics {
 
 impl From<Vec<Diagnostic>> for Diagnostics {
     fn from(diagnostics: Vec<Diagnostic>) -> Self {
+        if diagnostics.is_empty() {
+            return Self(None);
+        }
+
         let mut severity_count = BTreeMap::new();
         for diag in &diagnostics {
             *severity_count.entry(diag.info.severity()).or_insert(0) += 1;
         }
-        Self {
+        Self(Some(Diagnostics_ {
             diagnostics,
             filtered_source_diagnostics: vec![],
             severity_count,
-        }
+        }))
     }
 }
 

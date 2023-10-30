@@ -10,11 +10,7 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    DevInspectResults,
-    DryRunTransactionBlockResponse,
-    // TODO(gegaowp): temp. disable fast-path
-    // SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
@@ -22,30 +18,22 @@ use sui_types::base_types::SuiAddress;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 
-use crate::store::IndexerStore;
 use crate::types::SuiTransactionBlockResponseWithOptions;
 
-// TODO(gegaowp): temp. disable fast-path and allow dead code.
-#[allow(dead_code)]
-pub(crate) struct WriteApi<S> {
+pub(crate) struct WriteApi {
     fullnode: HttpClient,
-    state: S,
 }
 
-impl<S: IndexerStore> WriteApi<S> {
-    pub fn new(state: S, fullnode_client: HttpClient) -> Self {
+impl WriteApi {
+    pub fn new(fullnode_client: HttpClient) -> Self {
         Self {
-            state,
             fullnode: fullnode_client,
         }
     }
 }
 
 #[async_trait]
-impl<S> WriteApiServer for WriteApi<S>
-where
-    S: IndexerStore + Sync + Send + 'static,
-{
+impl WriteApiServer for WriteApi {
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
@@ -86,10 +74,7 @@ where
     }
 }
 
-impl<S> SuiRpcModule for WriteApi<S>
-where
-    S: IndexerStore + Sync + Send + 'static,
-{
+impl SuiRpcModule for WriteApi {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

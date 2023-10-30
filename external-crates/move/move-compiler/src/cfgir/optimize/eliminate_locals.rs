@@ -4,7 +4,8 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
-    hlir::ast::{FunctionSignature, SingleType, Var},
+    hlir::ast::{FunctionSignature, SingleType, Value, Var},
+    parser,
     shared::unique_map::UniqueMap,
 };
 use std::collections::BTreeSet;
@@ -13,6 +14,7 @@ use std::collections::BTreeSet;
 pub fn optimize(
     signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
+    _constants: &UniqueMap<parser::ast::ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = remove_no_ops::optimize(cfg);

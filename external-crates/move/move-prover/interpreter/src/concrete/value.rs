@@ -1181,7 +1181,7 @@ impl GlobalState {
         self.touched_addresses.insert(addr);
         self.accounts
             .entry(addr)
-            .or_insert_with(AccountState::default)
+            .or_default()
             .put_resource(&key, object.val)
             .map(|val| TypedValue {
                 ty: Type::mk_struct(key),
@@ -1199,11 +1199,7 @@ impl GlobalState {
 
     /// Emit an event to the event store
     pub fn emit_event(&mut self, guid: Vec<u8>, seq: u64, msg: TypedValue) {
-        let res = self
-            .events
-            .entry(guid)
-            .or_insert_with(BTreeMap::new)
-            .insert(seq, msg);
+        let res = self.events.entry(guid).or_default().insert(seq, msg);
         if cfg!(debug_assertions) {
             assert!(res.is_none());
         }
@@ -1308,7 +1304,7 @@ impl EvalState {
         self.saved_memory
             .entry(label)
             .and_modify(|per_label_map| per_label_map.clear())
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .insert(partial_inst.ident, per_struct_map);
     }
 

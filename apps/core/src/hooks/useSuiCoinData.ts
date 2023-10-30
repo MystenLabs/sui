@@ -22,7 +22,7 @@ export function useSuiCoinData() {
 	return useQuery({
 		queryKey: ['sui-coin-data'],
 		queryFn: () => request<CoinData>('coins/sui', {}),
-		cacheTime: 24 * 60 * 60 * 1000,
+		gcTime: 24 * 60 * 60 * 1000,
 		staleTime: Infinity,
 	});
 }

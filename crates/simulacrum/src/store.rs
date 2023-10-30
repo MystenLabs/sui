@@ -409,3 +409,172 @@ impl KeyStore {
         self.account_keys.iter()
     }
 }
+
+pub trait SimulatorStore:
+    sui_types::storage::BackingPackageStore
+    + sui_types::storage::ObjectStore
+    + sui_types::storage::ReceivedMarkerQuery
+{
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<&VerifiedCheckpoint>;
+
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<&VerifiedCheckpoint>;
+
+    fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint>;
+    fn get_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<&CheckpointContents>;
+
+    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee>;
+
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction>;
+
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<&TransactionEffects>;
+    fn get_transaction_events(
+        &self,
+        digest: &TransactionEventsDigest,
+    ) -> Option<&TransactionEvents>;
+
+    fn get_object(&self, id: &ObjectID) -> Option<&Object>;
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object>;
+
+    fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState;
+
+    fn get_clock(&self) -> sui_types::clock::Clock;
+
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_>;
+
+    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint);
+
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents);
+
+    fn insert_committee(&mut self, committee: Committee);
+
+    fn insert_executed_transaction(
+        &mut self,
+        transaction: VerifiedTransaction,
+        effects: TransactionEffects,
+        events: TransactionEvents,
+        written_objects: BTreeMap<ObjectID, Object>,
+    );
+
+    fn insert_transaction(&mut self, transaction: VerifiedTransaction);
+
+    fn insert_transaction_effects(&mut self, effects: TransactionEffects);
+
+    fn insert_events(&mut self, events: TransactionEvents);
+
+    fn update_objects(
+        &mut self,
+        written_objects: BTreeMap<ObjectID, Object>,
+        deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
+    );
+}
+
+impl SimulatorStore for InMemoryStore {
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Option<&VerifiedCheckpoint> {
+        self.get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<&VerifiedCheckpoint> {
+        self.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint> {
+        self.get_highest_checkpint()
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<&CheckpointContents> {
+        self.get_checkpoint_contents(digest)
+    }
+
+    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
+        self.get_committee_by_epoch(epoch)
+    }
+
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
+        self.get_transaction(digest)
+    }
+
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<&TransactionEffects> {
+        self.get_transaction_effects(digest)
+    }
+
+    fn get_transaction_events(
+        &self,
+        digest: &TransactionEventsDigest,
+    ) -> Option<&TransactionEvents> {
+        self.get_transaction_events(digest)
+    }
+
+    fn get_object(&self, id: &ObjectID) -> Option<&Object> {
+        self.get_object(id)
+    }
+
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {
+        self.get_object_at_version(id, version)
+    }
+
+    fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
+        self.get_system_state()
+    }
+
+    fn get_clock(&self) -> sui_types::clock::Clock {
+        self.get_clock()
+    }
+
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_> {
+        Box::new(self.owned_objects(owner))
+    }
+
+    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
+        self.insert_checkpoint(checkpoint)
+    }
+
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
+        self.insert_checkpoint_contents(contents)
+    }
+
+    fn insert_committee(&mut self, committee: Committee) {
+        self.insert_committee(committee)
+    }
+
+    fn insert_executed_transaction(
+        &mut self,
+        transaction: VerifiedTransaction,
+        effects: TransactionEffects,
+        events: TransactionEvents,
+        written_objects: BTreeMap<ObjectID, Object>,
+    ) {
+        self.insert_executed_transaction(transaction, effects, events, written_objects)
+    }
+
+    fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
+        self.insert_transaction(transaction)
+    }
+
+    fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
+        self.insert_transaction_effects(effects)
+    }
+
+    fn insert_events(&mut self, events: TransactionEvents) {
+        self.insert_events(events)
+    }
+
+    fn update_objects(
+        &mut self,
+        written_objects: BTreeMap<ObjectID, Object>,
+        deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
+    ) {
+        self.update_objects(written_objects, deleted_objects)
+    }
+}

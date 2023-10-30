@@ -1,0 +1,11 @@
+---
+title: Collections
+draft: true
+---
+
+The previous chapter, Dynamic Fields, introduced a way to extend existing objects with dynamic fields. Note that it's possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types which could be holding unboundedly many key-value pairs as dynamic fields.
+This chapter describes two such collections -- Table and Bag -- built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
+The types and function discussed in this section are built into the Sui framework in modules table and bag. As with dynamic fields, there is also an object_ variant of both: ObjectTable in object_table and ObjectBag in object_bag. The relationship between Table and ObjectTable, and Bag and ObjectBag are the same as between a field and an object field: The former can hold any store type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
+Current Limitations 
+Collections are built on top of dynamic fields, and so are subject to its limitations. Additionally, the following functionality is planned, but not currently supported:
+sui::bag::contains<K: copy + drop + store>(bag: &Bag, k: K): bool which checks whether a key-value pair exists in bag with key k: K and a value of any type (in addition to contain_with_type which performs a similar check, but requires passing a specific value type).

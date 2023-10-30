@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { allowedSwapCoinsList } from '_app/hooks/useDeepBook';
+import { allowedSwapCoinsList } from '_app/hooks/deepbook';
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
-import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import { ButtonOrLink } from '_app/shared/utils/ButtonOrLink';
@@ -11,7 +10,7 @@ import Alert from '_components/alert';
 import { CoinIcon } from '_components/coin-icon';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
+import { useAppSelector, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
@@ -105,7 +104,7 @@ export function TokenRow({
 	return (
 		<Tag
 			className={clsx(
-				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent',
+				'group flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent border-transparent',
 				onClick && 'hover:cursor-pointer',
 			)}
 			onClick={onClick}
@@ -118,7 +117,7 @@ export function TokenRow({
 					</Text>
 
 					{renderActions ? (
-						<div className="flex gap-2.5 items-center">
+						<div className="group-hover:visible invisible gap-2.5 items-center flex">
 							<TokenRowButton
 								coinBalance={coinBalance}
 								to={`/send?${params.toString()}`}
@@ -255,7 +254,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const {
 		data: coinBalance,
 		isError,
-		isLoading,
+		isPending,
 		isFetched,
 	} = useSuiClientQuery(
 		'getBalance',
@@ -279,7 +278,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 	const {
 		data: coinBalances,
-		isLoading: coinBalancesLoading,
+		isPending: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
 	} = useSuiClientQuery(
 		'getAllBalances',
@@ -302,7 +301,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
-	const isFirstTimeLoading = isLoading && !isFetched;
+	const isFirstTimeLoading = isPending && !isFetched;
 
 	useEffect(() => {
 		const dismissed =
@@ -375,7 +374,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												<SvgSuiTokensStack className="h-14 w-14 text-steel" />
 												<div className="flex flex-col gap-2 justify-center">
 													<Text variant="pBodySmall" color="gray-80" weight="normal">
-														To conduct transactions on the Sui network, you need SUI in your wallet.
+														To send transactions on the Sui network, you need SUI in your wallet.
 													</Text>
 												</div>
 											</div>
@@ -415,7 +414,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 										<LargeButton
 											center
-											disabled={!isDefiWalletEnabled}
+											disabled={!isDefiWalletEnabled || !tokenBalance}
 											to={`/swap${
 												coinBalance?.coinType
 													? `?${new URLSearchParams({

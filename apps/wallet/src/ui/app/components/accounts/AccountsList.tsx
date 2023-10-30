@@ -6,7 +6,7 @@ import { Collapsible } from '_src/ui/app/shared/collapse';
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import cn from 'classnames';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { getAccountBackgroundByType } from '../../helpers/accounts';
 import { useAccountGroups } from '../../hooks/useAccountGroups';
@@ -21,6 +21,7 @@ export function AccountsList() {
 	const accounts = accountGroups.list();
 	const activeAccount = useActiveAccount();
 	const backgroundClient = useBackgroundClient();
+	const [isSwitchToAccountOpen, setIsSwitchToAccountOpen] = useState(false);
 
 	const otherAccounts = useMemo(
 		() => accounts.filter((a) => a.id !== activeAccount?.id) || [],
@@ -35,6 +36,7 @@ export function AccountsList() {
 				toAccountType: account.type,
 			});
 			await backgroundClient.selectAccount(accountID);
+			setIsSwitchToAccountOpen(false);
 		}
 	};
 	if (!accounts || !activeAccount) return null;
@@ -57,7 +59,7 @@ export function AccountsList() {
 				onValueChange={handleSelectAccount}
 			>
 				<>
-					<Collapsible title="Current" defaultOpen shade="darker">
+					<Collapsible defaultOpen title="Current" shade="darker">
 						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
 								<AccountListItem account={activeAccount} editable showLock />
@@ -66,7 +68,12 @@ export function AccountsList() {
 					</Collapsible>
 
 					{otherAccounts.length ? (
-						<Collapsible title="Switch To" shade="darker">
+						<Collapsible
+							isOpen={isSwitchToAccountOpen}
+							onOpenChange={setIsSwitchToAccountOpen}
+							title="Switch To"
+							shade="darker"
+						>
 							<div className="flex flex-col gap-3">
 								{otherAccounts.map((account) => {
 									return (

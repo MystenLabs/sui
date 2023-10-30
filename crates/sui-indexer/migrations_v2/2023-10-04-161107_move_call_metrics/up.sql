@@ -22,3 +22,4 @@ CREATE TABLE move_call_metrics (
     count                       BIGINT      NOT NULL
 );
 CREATE INDEX move_call_metrics_checkpoint ON move_call_metrics (checkpoint_sequence_number);
+CREATE INDEX move_call_metrics_day ON move_call_metrics (day);

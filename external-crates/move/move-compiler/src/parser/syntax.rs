@@ -84,6 +84,64 @@ fn add_type_args_ambiguity_label(loc: Loc, mut diag: Box<Diagnostic>) -> Box<Dia
     diag
 }
 
+// A macro for providing better diagnostics when we expect a specific token and find some other
+// pattern instead. For example, we can use this to handle the case when a const is missing its
+// type annotation as:
+//
+//  expect_token!(
+//      context.tokens,
+//      Tok::Colon,
+//      Tok::Equal => (Syntax::UnexpectedToken, name.loc(), "Add type annotation to this constant")
+//  )?;
+//
+// This macro will fall through to an unexpected token error, but may also define its own default
+// as well:
+//
+//  expect_token!(
+//      context.tokens,
+//      Tok::Colon,
+//      Tok::Equal => (Syntax::UnexpectedToken, name.loc(), "Add type annotation to this constant")
+//      _ => (Syntax::UnexpectedToken, name.loc(), "Misformed constant definition")
+//  )?;
+//
+//  NB(cgswords): we could make $expected a pat if we required users to pass in a name for it as
+//  well for the default-case error reporting.
+
+macro_rules! expect_token {
+    ($tokens:expr, $expected:expr, $($tok:pat => ($code:expr, $loc:expr, $msg:expr)),+) => {
+        {
+            let next = $tokens.peek();
+            match next {
+                _ if next == $expected => {
+                    $tokens.advance()?;
+                    Ok(())
+                },
+                $($tok => Err(Box::new(diag!($code, ($loc, $msg)))),)+
+                _ => {
+                    let expected = format!("'{}'{}", next, $expected);
+                    Err(unexpected_token_error_($tokens, $tokens.start_loc(), &expected))
+                },
+            }
+        }
+    };
+    ($tokens:expr,
+     $expected:expr,
+     $($tok:pat => ($code:expr, $loc:expr, $msg:expr)),+
+     _ => ($dcode:expr, $dloc:expr, $dmsg:expr)) => {
+        {
+            let next = {
+                $tokens.advance()?;
+                Ok(())
+            };
+            match next {
+                _ if next == $expected => Ok(()),
+                $($tok => Err(Box::new(diag!($code, ($loc, $msg)))),)+
+                _ => Err(Box::new(diag!($dcode, ($dloc, $dmsg)))),
+            }
+        }
+    }
+}
+
 //**************************************************************************************************
 // Miscellaneous Utilities
 //**************************************************************************************************
@@ -2435,7 +2493,16 @@ fn parse_constant_decl(
     }
     consume_token(context.tokens, Tok::Const)?;
     let name = ConstantName(parse_identifier(context)?);
-    consume_token(context.tokens, Tok::Colon)?;
+    expect_token!(
+        context.tokens,
+        Tok::Colon,
+        Tok::Equal =>
+        (
+            Syntax::UnexpectedToken,
+            context.tokens.current_token_loc(),
+            format!("Expected a type annotation for this constant, e.g. '{}: <type>'", name)
+        )
+    )?;
     let signature = parse_type(context)?;
     consume_token(context.tokens, Tok::Equal)?;
     let value = parse_exp(context)?;

@@ -38,7 +38,7 @@ function TooltipContent({ data }: { data: AllEpochsAddressMetrics[number] }) {
 
 export function AccountsCardGraph() {
 	const { data: addressMetrics } = useGetAddressMetrics();
-	const { data: allEpochMetrics, isLoading } = useGetAllEpochAddressMetrics({
+	const { data: allEpochMetrics, isPending } = useGetAllEpochAddressMetrics({
 		descendingOrder: false,
 	});
 	const adjEpochAddressMetrics = useMemo(() => allEpochMetrics?.slice(-30), [allEpochMetrics]);
@@ -77,7 +77,7 @@ export function AccountsCardGraph() {
 						!adjEpochAddressMetrics?.length && 'bg-gray-40',
 					)}
 				>
-					{isLoading ? (
+					{isPending ? (
 						<div className="flex flex-col items-center gap-1">
 							<LoadingIndicator />
 							<Text color="steel" variant="body/medium">

@@ -46,11 +46,11 @@ export function ProtectAccountPage() {
 	useEffect(() => {
 		if (
 			typeof hasPasswordAccounts !== 'undefined' &&
-			!(createMutation.isSuccess || createMutation.isLoading)
+			!(createMutation.isSuccess || createMutation.isPending)
 		) {
 			setShowVerifyPasswordView(hasPasswordAccounts);
 		}
-	}, [hasPasswordAccounts, createMutation.isSuccess, createMutation.isLoading]);
+	}, [hasPasswordAccounts, createMutation.isSuccess, createMutation.isPending]);
 	const createAccountCallback = useCallback(
 		async (password: string, type: CreateType) => {
 			try {

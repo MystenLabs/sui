@@ -492,6 +492,12 @@ mod check_valid_constant {
                 return;
             }
 
+            // NB: module scoping is checked during constant type creation, so we don't need to
+            // relitigate here.
+            E::Constant(_, _) => {
+                return;
+            }
+
             //*****************************************
             // Invalid cases
             //*****************************************
@@ -548,7 +554,6 @@ mod check_valid_constant {
                 }
                 "Structs are"
             }
-            E::Constant(_, _) => "Other constants are",
         };
         context.env.add_diag(diag!(
             TypeSafety::UnsupportedConstant,
@@ -1287,7 +1292,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 context
                     .used_module_members
                     .entry(mident.value)
-                    .or_insert_with(BTreeSet::new)
+                    .or_default()
                     .insert(c.value());
             }
             (ty, TE::Constant(m, c))
@@ -2321,7 +2326,7 @@ fn module_call_impl(
     context
         .used_module_members
         .entry(m.value)
-        .or_insert_with(BTreeSet::new)
+        .or_default()
         .insert(f.value());
     call
 }
@@ -2554,7 +2559,7 @@ fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
                     context
                         .used_module_members
                         .entry(mident.value)
-                        .or_insert_with(BTreeSet::new)
+                        .or_default()
                         .insert(name.value);
                 }
             }

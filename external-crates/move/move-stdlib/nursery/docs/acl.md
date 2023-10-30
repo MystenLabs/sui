@@ -118,7 +118,7 @@ Add the address to the ACL.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="acl.md#0x1_acl_add">add</a>(<a href="acl.md#0x1_acl">acl</a>: &<b>mut</b> <a href="acl.md#0x1_acl_ACL">ACL</a>, addr: <b>address</b>) {
-    <b>assert</b>!(!<a href="_contains">vector::contains</a>(&<b>mut</b> <a href="acl.md#0x1_acl">acl</a>.list, &addr), <a href="errors.md#0x1_errors_invalid_argument">errors::invalid_argument</a>(<a href="acl.md#0x1_acl_ECONTAIN">ECONTAIN</a>));
+    <b>assert</b>!(!<a href="_contains">vector::contains</a>(&<a href="acl.md#0x1_acl">acl</a>.list, &addr), <a href="errors.md#0x1_errors_invalid_argument">errors::invalid_argument</a>(<a href="acl.md#0x1_acl_ECONTAIN">ECONTAIN</a>));
     <a href="_push_back">vector::push_back</a>(&<b>mut</b> <a href="acl.md#0x1_acl">acl</a>.list, addr);
 }
 </code></pre>
@@ -144,7 +144,7 @@ Remove the address from the ACL.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="acl.md#0x1_acl_remove">remove</a>(<a href="acl.md#0x1_acl">acl</a>: &<b>mut</b> <a href="acl.md#0x1_acl_ACL">ACL</a>, addr: <b>address</b>) {
-    <b>let</b> (found, index) = <a href="_index_of">vector::index_of</a>(&<b>mut</b> <a href="acl.md#0x1_acl">acl</a>.list, &addr);
+    <b>let</b> (found, index) = <a href="_index_of">vector::index_of</a>(&<a href="acl.md#0x1_acl">acl</a>.list, &addr);
     <b>assert</b>!(found, <a href="errors.md#0x1_errors_invalid_argument">errors::invalid_argument</a>(<a href="acl.md#0x1_acl_ENOT_CONTAIN">ENOT_CONTAIN</a>));
     <a href="_remove">vector::remove</a>(&<b>mut</b> <a href="acl.md#0x1_acl">acl</a>.list, index);
 }

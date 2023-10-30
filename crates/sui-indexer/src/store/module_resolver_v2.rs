@@ -27,7 +27,6 @@ pub struct IndexerStoreModuleResolver {
 }
 
 impl IndexerStoreModuleResolver {
-    #[allow(dead_code)]
     pub fn new(cp: PgConnectionPool) -> Self {
         Self { cp }
     }
@@ -73,7 +72,6 @@ pub struct InterimModuleResolver<GM> {
 }
 
 impl<GM> InterimModuleResolver<GM> {
-    #[allow(dead_code)]
     pub fn new(
         backup: GM,
         package_cache: Arc<Mutex<IndexingPackageCache>>,

@@ -3,12 +3,13 @@
 use super::{Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
 use crate::{
     common::create_db_stores,
+    consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable},
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
     synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
+
 use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters};
-use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,

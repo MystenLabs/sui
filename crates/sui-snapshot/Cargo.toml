@@ -10,6 +10,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 
 [dependencies]
 integer-encoding.workspace = true
+indicatif.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 bcs.workspace = true

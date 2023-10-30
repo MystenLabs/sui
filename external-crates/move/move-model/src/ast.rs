@@ -34,10 +34,7 @@ use crate::{
     ty::{Type, TypeDisplayContext},
 };
 
-#[cfg(feature = "address32")]
 const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-#[cfg(not(feature = "address32"))]
-const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffff";
 
 // =================================================================================================
 /// # Declarations

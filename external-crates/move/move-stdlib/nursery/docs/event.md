@@ -147,8 +147,8 @@ Use EventHandleGenerator to generate a unique event handle for <code>sig</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="event.md#0x1_event_new_event_handle">new_event_handle</a>&lt;T: drop + store&gt;(account: &<a href="">signer</a>): <a href="event.md#0x1_event_EventHandle">EventHandle</a>&lt;T&gt; {
-    // must be 24 for compatibility <b>with</b> legacy Event ID's--see comment on <a href="event.md#0x1_event_GUIDWrapper">GUIDWrapper</a>
-    <b>let</b> len_bytes = 24u8;
+    // must be 40 for compatibility <b>with</b> legacy Event ID's--see comment on <a href="event.md#0x1_event_GUIDWrapper">GUIDWrapper</a>
+    <b>let</b> len_bytes = 40;
      <a href="event.md#0x1_event_EventHandle">EventHandle</a>&lt;T&gt; {
         counter: 0,
         <a href="guid.md#0x1_guid">guid</a>: <a href="event.md#0x1_event_GUIDWrapper">GUIDWrapper</a> { len_bytes, <a href="guid.md#0x1_guid">guid</a>: <a href="guid.md#0x1_guid_create">guid::create</a>(account) }

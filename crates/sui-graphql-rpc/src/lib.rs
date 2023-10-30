@@ -9,8 +9,9 @@ pub(crate) mod functional_group;
 
 pub mod client;
 pub mod cluster;
-mod context_data;
+pub mod context_data;
 mod error;
+pub mod examples;
 mod extensions;
 mod metrics;
 mod types;

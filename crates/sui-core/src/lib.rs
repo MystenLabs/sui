@@ -30,7 +30,6 @@ pub mod streamer;
 pub mod subscription_handler;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
-pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
 pub mod verify_indexes;

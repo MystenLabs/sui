@@ -13,6 +13,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
+use sui_types::storage::get_module;
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError, SuiResult},
@@ -343,7 +344,7 @@ impl<'state> ModuleResolver for LinkageView<'state> {
     type Error = SuiError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.resolver.get_module(id)
+        get_module(self, id)
     }
 }
 

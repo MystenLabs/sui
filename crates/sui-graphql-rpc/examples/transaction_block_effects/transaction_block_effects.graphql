@@ -12,7 +12,7 @@
         }
         lamportVersion
         gasEffects {
-          gasSummary{
+          gasSummary {
             computationCost
             storageCost
             storageRebate

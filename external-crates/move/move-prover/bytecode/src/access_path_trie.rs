@@ -342,11 +342,11 @@ impl<T: FootprintDomain> AccessPathTrie<T> {
             weak_update = true
         };
 
-        let mut node = self.0.entry(root).or_insert_with(TrieNode::default);
+        let mut node = self.0.entry(root).or_default();
         for offset in offsets.into_iter() {
             // if one of the offsets is not statically known, we must do a weak update
             weak_update = weak_update || !offset.is_statically_known();
-            node = node.entry(offset).or_insert_with(TrieNode::default);
+            node = node.entry(offset).or_default();
         }
         if weak_update {
             node.join(&new_node);

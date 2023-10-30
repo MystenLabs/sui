@@ -1,36 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use atomic_float::AtomicF64;
 use crossterm::tty::IsTty;
 use once_cell::sync::Lazy;
+use opentelemetry::sdk::trace::Sampler;
 use opentelemetry::sdk::{
     self, runtime,
-    trace::{BatchSpanProcessor, TracerProvider},
+    trace::{BatchSpanProcessor, ShouldSample, TracerProvider},
     Resource,
 };
 use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_api::{
+    trace::{Link, SamplingResult, SpanKind, TraceId},
+    Context, Key, OrderMap, Value,
+};
 use opentelemetry_otlp::WithExportConfig;
 use span_latency_prom::PrometheusSpanLatencyLayer;
+use std::collections::hash_map::RandomState;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     env,
     io::{stderr, Write},
     str::FromStr,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
-    },
+    sync::{atomic::Ordering, Arc, Mutex},
 };
+use tracing::metadata::LevelFilter;
 use tracing::{error, info, Level};
-use tracing::{metadata::LevelFilter, subscriber::Interest, Metadata, Subscriber};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{
-    filter, fmt,
-    layer::{Context, SubscriberExt},
-    registry::LookupSpan,
-    reload, EnvFilter, Layer, Registry,
-};
+use tracing_subscriber::{filter, fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
 
 use crate::file_exporter::{CachedOpenFile, FileExporter};
 
@@ -65,8 +64,7 @@ pub struct TelemetryConfig {
     pub crash_on_panic: bool,
     /// Optional Prometheus registry - if present, all enabled span latencies are measured
     pub prom_registry: Option<prometheus::Registry>,
-    /// Log sampling rate
-    pub sample_nth: Option<usize>,
+    pub sample_rate: f64,
     pub target_prefix: Option<String>,
 }
 
@@ -118,6 +116,7 @@ pub struct TracingHandle {
     log: FilterHandle,
     trace: Option<FilterHandle>,
     file_output: CachedOpenFile,
+    sampler: SamplingFilter,
 }
 
 impl TracingHandle {
@@ -129,17 +128,21 @@ impl TracingHandle {
         self.log.get()
     }
 
-    pub fn update_trace<S: AsRef<str>>(
+    pub fn update_sampling_rate(&self, sample_rate: f64) {
+        self.sampler.update_sampling_rate(sample_rate);
+    }
+
+    pub fn update_trace_file<S: AsRef<str>>(&self, trace_file: S) -> Result<(), BoxError> {
+        let trace_path = PathBuf::from_str(trace_file.as_ref())?;
+        self.file_output.update_path(trace_path)?;
+        Ok(())
+    }
+
+    pub fn update_trace_filter<S: AsRef<str>>(
         &self,
         directives: S,
-        trace_file: Option<String>,
         duration: Duration,
     ) -> Result<(), BoxError> {
-        if let Some(trace_file) = trace_file {
-            let trace_path = PathBuf::from_str(&trace_file)?;
-            self.file_output.update_path(trace_path)?;
-        }
-
         if let Some(trace) = &self.trace {
             let res = trace.update(directives);
             // after duration is elapsed, reset to the env setting
@@ -252,7 +255,7 @@ impl TelemetryConfig {
             panic_hook: true,
             crash_on_panic: false,
             prom_registry: None,
-            sample_nth: None,
+            sample_rate: 1.0,
             target_prefix: None,
         }
     }
@@ -282,8 +285,8 @@ impl TelemetryConfig {
         self
     }
 
-    pub fn with_sample_nth(mut self, rate: usize) -> Self {
-        self.sample_nth = Some(rate);
+    pub fn with_sample_rate(mut self, rate: f64) -> Self {
+        self.sample_rate = rate;
         self
     }
 
@@ -318,8 +321,8 @@ impl TelemetryConfig {
             self.log_file = Some(filepath);
         }
 
-        if let Ok(sample_nth) = env::var("SAMPLE_NTH") {
-            self.sample_nth = Some(sample_nth.parse().expect("Cannot parse SAMPLE_NTH"));
+        if let Ok(sample_rate) = env::var("SAMPLE_RATE") {
+            self.sample_rate = sample_rate.parse().expect("Cannot parse SAMPLE_RATE");
         }
 
         if let Ok(target_prefix) = env::var("TARGET_PREFIX") {
@@ -370,12 +373,17 @@ impl TelemetryConfig {
         let mut trace_filter_handle = None;
         let mut file_output = CachedOpenFile::new::<&str>(None).unwrap();
         let mut provider = None;
+        let sampler = SamplingFilter::new(config.sample_rate);
+
         if config.enable_otlp_tracing {
             let trace_file = env::var("TRACE_FILE").ok();
 
-            let config = sdk::trace::config().with_resource(Resource::new(vec![
-                opentelemetry::KeyValue::new("service.name", "sui-node"),
-            ]));
+            let config = sdk::trace::config()
+                .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
+                    "service.name",
+                    "sui-node",
+                )]))
+                .with_sampler(Sampler::ParentBased(Box::new(sampler.clone())));
 
             // We can either do file output or OTLP, but not both. tracing-opentelemetry
             // only supports a single tracer at a time.
@@ -445,12 +453,6 @@ impl TelemetryConfig {
             layers.push(fmt_layer);
         }
 
-        if config.sample_nth.is_some() {
-            let sample_nth = config.sample_nth.unwrap();
-            let sampling_layer = SamplingFilter::new(sample_nth, config.target_prefix);
-            layers.push(sampling_layer.boxed());
-        }
-
         let subscriber = tracing_subscriber::registry().with(layers);
         ::tracing::subscriber::set_global_default(subscriber)
             .expect("unable to initialize tracing subscriber");
@@ -469,46 +471,52 @@ impl TelemetryConfig {
                 log: log_filter_handle,
                 trace: trace_filter_handle,
                 file_output,
+                sampler,
             },
         )
     }
 }
 
+// Like Sampler::TraceIdRatioBased, but can be updated at runtime
+#[derive(Debug, Clone)]
 struct SamplingFilter {
-    counter: AtomicUsize,
-    sample_nth: usize,
-    target_prefix: Option<String>,
+    // Sampling filter needs to be fast, so we avoid a mutex.
+    sample_rate: Arc<AtomicF64>,
 }
 
 impl SamplingFilter {
-    fn new(sample_nth: usize, target_prefix: Option<String>) -> Self {
+    fn new(sample_rate: f64) -> Self {
         SamplingFilter {
-            counter: AtomicUsize::new(0),
-            sample_nth,
-            target_prefix,
+            sample_rate: Arc::new(AtomicF64::new(Self::clamp(sample_rate))),
         }
     }
 
-    fn is_sampled(&self) -> bool {
-        self.counter.fetch_add(1, Ordering::Relaxed) % self.sample_nth == 0
+    fn clamp(sample_rate: f64) -> f64 {
+        // clamp sample rate to between 0.0001 and 1.0
+        sample_rate.max(0.0001).min(1.0)
+    }
+
+    fn update_sampling_rate(&self, sample_rate: f64) {
+        // clamp sample rate to between 0.0001 and 1.0
+        let sample_rate = Self::clamp(sample_rate);
+        self.sample_rate.store(sample_rate, Ordering::Relaxed);
     }
 }
 
-impl<S> Layer<S> for SamplingFilter
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-{
-    fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
-        Interest::sometimes()
-    }
+impl ShouldSample for SamplingFilter {
+    fn should_sample(
+        &self,
+        parent_context: Option<&Context>,
+        trace_id: TraceId,
+        name: &str,
+        span_kind: &SpanKind,
+        attributes: &OrderMap<Key, Value, RandomState>,
+        links: &[Link],
+    ) -> SamplingResult {
+        let sample_rate = self.sample_rate.load(Ordering::Relaxed);
+        let sampler = Sampler::TraceIdRatioBased(sample_rate);
 
-    fn enabled(&self, metadata: &Metadata<'_>, _: Context<'_, S>) -> bool {
-        if let Some(ref prefix) = self.target_prefix {
-            if metadata.target().starts_with(prefix) {
-                return self.is_sampled();
-            }
-        }
-        true
+        sampler.should_sample(parent_context, trace_id, name, span_kind, attributes, links)
     }
 }
 

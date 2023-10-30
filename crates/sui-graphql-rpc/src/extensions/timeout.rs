@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 // 10s
-const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_millis(10_000);
+const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_millis(20_000);
 
 #[derive(Clone, Debug, Copy)]
 pub(crate) struct TimeoutConfig {

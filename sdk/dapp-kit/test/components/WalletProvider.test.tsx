@@ -27,7 +27,7 @@ describe('WalletProvider', () => {
 			{ wrapper },
 		);
 
-		expect(result.current.currentWallet).toBeFalsy();
+		expect(result.current.currentWallet.isConnected).toBeFalsy();
 		expect(result.current.currentAccount).toBeFalsy();
 		expect(result.current.wallets).toHaveLength(0);
 	});
@@ -131,7 +131,6 @@ describe('WalletProvider', () => {
 			() => ({
 				connectWallet: useConnectWallet(),
 				currentAccount: useCurrentAccount(),
-				currentWallet: useCurrentWallet(),
 				accounts: useAccounts(),
 			}),
 			{ wrapper },
@@ -186,8 +185,10 @@ describe('WalletProvider', () => {
 				{ wrapper },
 			);
 
-			await waitFor(() => expect(updatedResult.current.currentWallet).toBeTruthy());
-			expect(updatedResult.current.currentWallet!.name).toStrictEqual('Mock Wallet 1');
+			await waitFor(() => expect(updatedResult.current.currentWallet.isConnected).toBe(true));
+			expect(updatedResult.current.currentWallet.currentWallet!.name).toStrictEqual(
+				'Mock Wallet 1',
+			);
 
 			expect(updatedResult.current.currentAccount).toBeTruthy();
 			expect(updatedResult.current.currentAccount!.address).toStrictEqual(
@@ -209,7 +210,6 @@ describe('WalletProvider', () => {
 				() => ({
 					connectWallet: useConnectWallet(),
 					disconnectWallet: useDisconnectWallet(),
-					currentWallet: useCurrentWallet(),
 					currentAccount: useCurrentAccount(),
 				}),
 				{ wrapper },
@@ -229,7 +229,7 @@ describe('WalletProvider', () => {
 
 			// Render our component tree again and assert that we weren't able to auto-connect.
 			const { result: updatedResult } = renderHook(() => useCurrentWallet(), { wrapper });
-			expect(updatedResult.current).toBeFalsy();
+			expect(updatedResult.current.isConnected).toBeFalsy();
 
 			act(() => unregister());
 		});

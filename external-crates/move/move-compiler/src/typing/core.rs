@@ -337,6 +337,12 @@ impl<'env> Context<'env> {
         self.is_current_module(m) && matches!(&self.current_function, Some(curf) if curf == f)
     }
 
+    pub fn current_package(&self) -> Option<Symbol> {
+        self.current_module
+            .as_ref()
+            .and_then(|mident| self.module_info(mident).package)
+    }
+
     // `loc` indicates the location that caused the add to occur
     fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
         if matches!(self.current_module, Some(current_mident) if m != &current_mident) {

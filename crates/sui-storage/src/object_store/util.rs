@@ -5,6 +5,8 @@ use anyhow::{anyhow, Context};
 use backoff::future::retry;
 use bytes::Bytes;
 use futures::StreamExt;
+use futures::TryStreamExt;
+use indicatif::ProgressBar;
 use object_store::path::Path;
 use object_store::{DynObjectStore, Error};
 use std::collections::BTreeMap;
@@ -12,6 +14,7 @@ use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::time::Instant;
 use tracing::{error, warn};
 use url::Url;
 
@@ -71,17 +74,31 @@ pub async fn copy_files(
     from: Arc<DynObjectStore>,
     to: Arc<DynObjectStore>,
     concurrency: NonZeroUsize,
+    progress_bar: Option<ProgressBar>,
 ) -> Result<Vec<()>, object_store::Error> {
-    let results: Vec<Result<(), object_store::Error>> =
-        futures::stream::iter(files_in.iter().zip(files_out.iter()))
-            .map(|(path_in, path_out)| {
-                copy_file(path_in.clone(), path_out.clone(), from.clone(), to.clone())
-            })
-            .boxed()
-            .buffer_unordered(concurrency.get())
-            .collect()
-            .await;
-    results.into_iter().collect()
+    let mut instant = Instant::now();
+    let progress_bar_clone = progress_bar.clone();
+    let results = futures::stream::iter(files_in.iter().zip(files_out.iter()))
+        .map(|(path_in, path_out)| {
+            let from_clone = from.clone();
+            let to_clone = to.clone();
+            async move {
+                let ret = copy_file(path_in.clone(), path_out.clone(), from_clone, to_clone).await;
+                Ok((path_out.clone(), ret))
+            }
+        })
+        .boxed()
+        .buffer_unordered(concurrency.get())
+        .try_for_each(|(path, ret)| {
+            if let Some(progress_bar_clone) = &progress_bar_clone {
+                progress_bar_clone.inc(1);
+                progress_bar_clone.set_message(format!("file: {}", path));
+                instant = Instant::now();
+            }
+            futures::future::ready(ret)
+        })
+        .await;
+    Ok(results.into_iter().collect())
 }
 
 pub async fn copy_recursively(
@@ -107,6 +124,7 @@ pub async fn copy_recursively(
         from.clone(),
         to.clone(),
         concurrency,
+        None,
     )
     .await
 }

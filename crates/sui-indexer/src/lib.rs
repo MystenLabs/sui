@@ -403,7 +403,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         http_client.clone(),
         config.migrated_methods.clone(),
     ))?;
-    builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;
+    builder.register_module(WriteApi::new(http_client.clone()))?;
     builder.register_module(ExtendedApi::new(state.clone()))?;
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(

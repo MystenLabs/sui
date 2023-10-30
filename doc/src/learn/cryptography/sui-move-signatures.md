@@ -190,7 +190,7 @@ Public key in hex: $PK
     let msg = x"$MSG";
     let pk = x"$PK";
     let sig = x"$SIG";
-    let verified = bls12381::bls12381_min_sig_verify(&sig, &msg);
+    let verified = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
     assert!(verified == true, 0);
 ```
 
@@ -217,6 +217,6 @@ Public key in hex: $PK
     let msg = x"$MSG";
     let pk = x"$PK";
     let sig = x"$SIG";
-    let verified = bls12381::bls12381_min_pk_verify(&sig, &msg);
+    let verified = bls12381::bls12381_min_pk_verify(&sig, &pk, &msg);
     assert!(verified == true, 0);
 ```

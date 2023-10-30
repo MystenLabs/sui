@@ -20,7 +20,7 @@ export function UnderlyingObjectCard({
 	name,
 	dynamicFieldType,
 }: UnderlyingObjectCardProps) {
-	const { data, isLoading, isError, isFetched } = useSuiClientQuery('getDynamicFieldObject', {
+	const { data, isPending, isError, isFetched } = useSuiClientQuery('getDynamicFieldObject', {
 		parentId,
 		name,
 	});
@@ -35,14 +35,14 @@ export function UnderlyingObjectCard({
 	const {
 		data: normalizedStruct,
 		isFetched: normalizedStructFetched,
-		isLoading: loadingNormalizedStruct,
+		isPending: loadingNormalizedStruct,
 	} = useSuiClientQuery('getNormalizedMoveStruct', {
 		package: packageId,
 		module: moduleName,
 		struct: functionName,
 	});
 
-	const isDataLoading = isLoading || loadingNormalizedStruct;
+	const isDataLoading = isPending || loadingNormalizedStruct;
 
 	// Check for error first before showing the loading spinner to avoid infinite loading if GetDynamicFieldObject fails
 	if (

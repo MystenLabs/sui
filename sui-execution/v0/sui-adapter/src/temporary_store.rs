@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::language_storage::StructTag;
+use move_core_types::resolver::ResourceResolver;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
@@ -1002,35 +1000,6 @@ impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> ModuleResolver for TemporaryStore<'backing> {
-    type Error = SuiError;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        let package_obj;
-        let package = match self.read_object(package_id) {
-            Some(object) => object,
-            None => match self.store.get_package_object(package_id)? {
-                Some(object) => {
-                    package_obj = object;
-                    &package_obj
-                }
-                None => {
-                    return Ok(None);
-                }
-            },
-        };
-        match &package.data {
-            Data::Package(c) => Ok(c
-                .serialized_module_map()
-                .get(module_id.name().as_str())
-                .cloned()),
-            _ => Err(SuiError::BadObjectType {
-                error: "Expected module object".to_string(),
-            }),
-        }
-    }
-}
-
 impl<'backing> ResourceResolver for TemporaryStore<'backing> {
     type Error = SuiError;
 
@@ -1075,28 +1044,5 @@ impl<'backing> ParentSync for TemporaryStore<'backing> {
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref_deprecated(object_id)
-    }
-}
-
-impl<'backing> GetModule for TemporaryStore<'backing> {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(
-                obj.data
-                    .try_as_package()
-                    .expect("Bad object type--expected package")
-                    .deserialize_module(
-                        &module_id.name().to_owned(),
-                        self.protocol_config.move_binary_format_version(),
-                        self.protocol_config.no_extraneous_module_bytes(),
-                    )?,
-            ))
-        } else {
-            self.store.get_module_by_id(module_id)
-        }
     }
 }

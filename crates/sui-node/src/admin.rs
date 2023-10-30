@@ -103,9 +103,15 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
 
 #[derive(Deserialize)]
 struct EnableTracing {
-    filter: String,
-    duration: String,
+    // These params change the filter, and reset it after the duration expires.
+    filter: Option<String>,
+    duration: Option<String>,
+
+    // Change the trace output file (if file output was enabled at program start)
     trace_file: Option<String>,
+
+    // Change the tracing sample rate
+    sample_rate: Option<f64>,
 }
 
 async fn enable_tracing(
@@ -116,21 +122,50 @@ async fn enable_tracing(
         filter,
         duration,
         trace_file,
+        sample_rate,
     }) = query;
 
-    let Ok(duration) = parse_duration(&duration) else {
-        return (StatusCode::BAD_REQUEST, "invalid duration".into());
+    let mut response = Vec::new();
+
+    if let Some(sample_rate) = sample_rate {
+        state.tracing_handle.update_sampling_rate(sample_rate);
+        response.push(format!("sample rate set to {:?}", sample_rate));
+    }
+
+    if let Some(trace_file) = trace_file {
+        if let Err(err) = state.tracing_handle.update_trace_file(&trace_file) {
+            response.push(format!("can't update trace file: {:?}", err));
+            return (StatusCode::BAD_REQUEST, response.join("\n"));
+        } else {
+            response.push(format!("trace file set to {:?}", trace_file));
+        }
+    }
+
+    let Some(filter) = filter else {
+        return (StatusCode::OK, response.join("\n"));
     };
 
-    match state
-        .tracing_handle
-        .update_trace(filter, trace_file, duration)
-    {
-        Ok(()) => (
-            StatusCode::OK,
-            format!("tracing enabled for {:?}", duration),
-        ),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    // Duration is required if filter is set
+    let Some(duration) = duration else {
+        response.push("can't update filter: missing duration".into());
+        return (StatusCode::BAD_REQUEST, response.join("\n"));
+    };
+
+    let Ok(duration) = parse_duration(&duration) else {
+        response.push("can't update filter: invalid duration".into());
+        return (StatusCode::BAD_REQUEST, response.join("\n"));
+    };
+
+    match state.tracing_handle.update_trace_filter(&filter, duration) {
+        Ok(()) => {
+            response.push(format!("filter set to {:?}", filter));
+            response.push(format!("filter will be reset after {:?}", duration));
+            (StatusCode::OK, response.join("\n"))
+        }
+        Err(err) => {
+            response.push(format!("can't update filter: {:?}", err));
+            (StatusCode::BAD_REQUEST, response.join("\n"))
+        }
     }
 }
 

@@ -11,15 +11,30 @@ interface CollapsibleProps {
 	defaultOpen?: boolean;
 	children: ReactNode | ReactNode[];
 	shade?: 'lighter' | 'darker';
+	isOpen?: boolean;
+	onOpenChange?: (isOpen: boolean) => void;
 }
 
-export function Collapsible({ title, children, defaultOpen, shade = 'lighter' }: CollapsibleProps) {
-	const [open, setOpen] = useState(defaultOpen ?? false);
+export function Collapsible({
+	title,
+	children,
+	defaultOpen,
+	isOpen,
+	onOpenChange,
+	shade = 'lighter',
+}: CollapsibleProps) {
+	const [open, setOpen] = useState(isOpen ?? defaultOpen ?? false);
+
+	const handleOpenChange = (isOpen: boolean) => {
+		setOpen(isOpen);
+		onOpenChange?.(isOpen);
+	};
+
 	return (
 		<CollapsiblePrimitive.Root
 			className="flex flex-shrink-0 justify-start flex-col w-full gap-3"
-			open={open}
-			onOpenChange={setOpen}
+			open={isOpen ?? open}
+			onOpenChange={handleOpenChange}
 		>
 			<CollapsiblePrimitive.Trigger className="flex items-center gap-2 w-full bg-transparent border-none p-0 cursor-pointer group">
 				<div

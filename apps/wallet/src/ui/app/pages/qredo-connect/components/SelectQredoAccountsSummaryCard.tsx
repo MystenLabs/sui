@@ -26,7 +26,7 @@ export function SelectQredoAccountsSummaryCard({
 	selectedAccounts,
 	onChange,
 }: SelectQredoAccountsSummaryCardProps) {
-	const { data, isLoading, error } = useFetchQredoAccounts(qredoID, fetchAccountsEnabled);
+	const { data, isPending, error } = useFetchQredoAccounts(qredoID, fetchAccountsEnabled);
 	const { data: allAccounts } = useAccounts();
 	const qredoConnectedAccounts = useMemo(
 		() => allAccounts?.filter(isQredoAccountSerializedUI) || null,
@@ -64,7 +64,7 @@ export function SelectQredoAccountsSummaryCard({
 		<SummaryCard
 			header="Select Qredo accounts"
 			body={
-				<Loading loading={isLoading}>
+				<Loading loading={isPending}>
 					{error ? (
 						<Alert>Failed to fetch accounts. Please try again later.</Alert>
 					) : data?.length ? (

@@ -23,10 +23,10 @@ function NftsPage() {
 	const {
 		data: ownedAssets,
 		hasNextPage,
-		isInitialLoading,
+		isLoading,
 		isFetchingNextPage,
 		error,
-		isLoading,
+		isPending,
 		fetchNextPage,
 		isError,
 	} = useGetNFTs(accountAddress);
@@ -50,7 +50,7 @@ function NftsPage() {
 	}, [ownedAssets, filterType]);
 	const { hiddenAssetIds } = useHiddenAssets();
 
-	if (isInitialLoading) {
+	if (isLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
 				<LoadingSpinner />
@@ -69,7 +69,7 @@ function NftsPage() {
 			{!!ownedAssets?.other.length && (
 				<FiltersPortal firstLastMargin tags={tags} callback={handleFilterChange} />
 			)}
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{isError ? (
 					<Alert>
 						<div>

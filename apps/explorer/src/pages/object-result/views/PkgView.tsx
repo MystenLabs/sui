@@ -31,9 +31,9 @@ function PkgView({ data }: { data: DataType }) {
 		splitPanelsOrientation[1].value,
 	);
 
-	const { data: txnData, isLoading } = useGetTransaction(data.data.tx_digest!);
+	const { data: txnData, isPending } = useGetTransaction(data.data.tx_digest!);
 
-	if (isLoading) {
+	if (isPending) {
 		return <LoadingIndicator text="Loading data" />;
 	}
 	const viewedData = {

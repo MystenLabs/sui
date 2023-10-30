@@ -1,9 +1,11 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     certificate_fetcher::CertificateFetcher,
     certifier::Certifier,
+    consensus::{ConsensusRound, LeaderSchedule},
     metrics::{initialise_metrics, PrimaryMetrics},
     proposer::{OurDigestMessage, Proposer},
     state_handler::StateHandler,
@@ -26,7 +28,6 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
-use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use crypto::{traits::EncodeDecodeBase64, RandomnessPrivateKey};
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
 use fastcrypto::{
