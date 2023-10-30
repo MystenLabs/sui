@@ -9,6 +9,9 @@ type Address implements ObjectOwner {
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	Lists the stakes corresponding to the StakedSui objects owned by the given address
+	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
@@ -505,6 +508,9 @@ type Object implements ObjectOwner {
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	Lists the stakes corresponding to the StakedSui objects owned by the given object
+	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
@@ -586,6 +592,9 @@ type Owner implements ObjectOwner {
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	The stake objects for the given address
+	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
@@ -685,12 +694,34 @@ type ServiceConfig {
 }
 
 type Stake {
+	"""
+	Stake object address
+	"""
 	id: ID!
+	"""
+	The estimated reward for this stake object, computed as the
+	value of multiplying the principal value with the ratio between the initial stake rate and the current rate
+	"""
 	estimatedReward: BigInt
+	"""
+	The amount of SUI that is used to stake
+	"""
 	principal: BigInt
+	"""
+	The status of this stake object: Active, Pending, Unstaked
+	"""
 	status: StakeStatus
+	"""
+	The epoch at which this stake became active
+	"""
 	activeEpoch: Epoch
+	"""
+	The epoch at which this object was requested to join a stake pool
+	"""
 	requestEpoch: Epoch
+	"""
+	The corresponding StakedSui Move object
+	"""
 	asMoveObject: MoveObject
 }
 
@@ -724,8 +755,17 @@ type StakeEdge {
 }
 
 enum StakeStatus {
+	"""
+	The stake object is active in a staking pool and it is generating rewards
+	"""
 	ACTIVE
+	"""
+	The stake awaits to join a staking pool in the next epoch
+	"""
 	PENDING
+	"""
+	The stake is no longer active in any staking pool
+	"""
 	UNSTAKED
 }
 
