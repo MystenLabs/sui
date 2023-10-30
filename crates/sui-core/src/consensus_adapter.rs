@@ -450,7 +450,6 @@ impl ConsensusAdapter {
 
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
-        let latency = latency * 2;
         let latency = self.override_by_throughput_profiler(position, latency);
         let (delay_step, position) =
             self.override_by_max_submit_position_settings(latency, position);
@@ -470,10 +469,18 @@ impl ConsensusAdapter {
     // According to the throughput profile we want to either allow some transaction duplication or not)
     // When throughput profile is Low and the validator is in position = 1, then it will submit to consensus with much lower latency.
     // When throughput profile is High then we go back to default operation and no-one co-submits.
-    fn override_by_throughput_profiler(&self, position: usize, latency: Duration) -> Duration {
+    fn override_by_throughput_profiler(
+        &self,
+        position: usize,
+        measured_latency: Duration,
+    ) -> Duration {
+        let delay_step = measured_latency * 2; // This is the delay step we want to return if latency is perceived as really high
         const LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 0;
         const MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 2_500;
-        const HIGH_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 3_500;
+
+        // If the measured latency from our node is high, then we want to back off to err on having less
+        // amplification in case our system is under stress.
+        let amplification_cut_off_latency = Duration::from_millis(5_000);
 
         let p = self.consensus_throughput_profiler.load();
 
@@ -484,24 +491,25 @@ impl ConsensusAdapter {
             // position = 0. We also enable this only when the feature is enabled on the protocol config.
             if self.protocol_config.throughput_aware_consensus_submission() && position == 1 {
                 return match level {
-                    Level::Low => Duration::from_millis(LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS),
-                    Level::Medium => {
-                        Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
-                    }
-                    Level::High => {
-                        let l = Duration::from_millis(HIGH_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS);
-
-                        // back off according to recorded latency if it's significantly higher
-                        if latency >= 2 * l {
-                            latency
+                    Level::Low => {
+                        if measured_latency >= amplification_cut_off_latency {
+                            delay_step
                         } else {
-                            l
+                            Duration::from_millis(LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
                         }
                     }
+                    Level::Medium => {
+                        if measured_latency >= amplification_cut_off_latency {
+                            delay_step
+                        } else {
+                            Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
+                        }
+                    }
+                    Level::High => delay_step, // under high load just go with default latency as measured by node
                 };
             }
         }
-        latency
+        delay_step
     }
 
     /// Overrides the latency and the position if there are defined settings for `max_submit_position` and
