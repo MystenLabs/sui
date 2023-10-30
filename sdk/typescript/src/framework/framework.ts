@@ -10,7 +10,7 @@ import type {
 	SuiMoveObject,
 	SuiObjectData,
 	SuiObjectInfo,
-	SuiObjectResponse,
+	SuiObjectResponse
 } from '../types/objects.js';
 import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
 import type { Option } from '../types/option.js';
@@ -77,7 +77,8 @@ export class Coin {
 	}
 
 	static getCoinSymbol(coinTypeArg: string) {
-		return coinTypeArg.substring(coinTypeArg.lastIndexOf(':') + 1);
+		const type = Coin.getCoinType(coinTypeArg)
+		return type ? type.substring(type.lastIndexOf(':') + 1) : null;
 	}
 
 	static getCoinStructTag(coinTypeArg: string): StructTag {
