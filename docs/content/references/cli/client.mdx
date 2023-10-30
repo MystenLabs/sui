@@ -104,14 +104,14 @@ $ sui client active-address
 
 ### Get objects owned by an address
 
-Use `sui client objects` to list summary information about the objects the current active address owns. You can provide a Sui address value to the command to list objects for a particular address. This example lists objects for the defined Sui address.
+Use `sui client objects` to list summary information about the objects the current active address owns. You can provide a Sui address value to the command to list objects for a particular address. This example lists objects for the current active address.
 
 ```
 $ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0aaf6b69
 
 ╭───────────────────────────────────────────────────────────────────────────────────────╮
 | ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
-│ │ objectId   │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f  │ │       |
+│ │ objectId   │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f  │ │
 │ │ version	   │  33363559                                                        	  │ │
 │ │ digest 	   │  IY7/qsIJhliQL0uxwSzNYu0SMcn5AMsqQklSGngn1V0=                    	  │ │
 │ │ objectType │  0x0000..0002::coin::Coin                                        	  │ │
@@ -127,7 +127,7 @@ $ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0
 
 ### Get complete object information
 
-Use `sui client object <OBJECT-ID>` to output complete details for the object with the ID you provide. This example checks the details for a Coin object.
+Use `sui client object <OBJECT-ID>` to list object information for the ID you provide. This example displays the information for a Coin object.
 
 ```
 $ sui client object 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f
