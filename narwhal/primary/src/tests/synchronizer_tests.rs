@@ -98,11 +98,11 @@ async fn accept_certificates() {
     // The first messages are the Synchronizer letting us know about the round of parent certificates
     for _i in 0..3 {
         let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
+        assert_eq!(received, (vec![], 0));
     }
     // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();
-    assert_eq!(received, (certificates.clone(), 1, 0));
+    assert_eq!(received, (certificates.clone(), 1));
 
     // Ensure the Synchronizer sends the certificates to the consensus.
     for x in certificates.clone() {
@@ -330,7 +330,6 @@ async fn synchronizer_recover_basic() {
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.1, 1);
-    assert_eq!(received.2, 0);
     assert_eq!(received.0.len(), certificates.len());
     for c in &certificates {
         assert!(received.0.contains(c));
@@ -453,13 +452,12 @@ async fn synchronizer_recover_partial_certs() {
 
     for _ in 0..2 {
         let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
+        assert_eq!(received, (vec![], 0));
     }
 
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.1, 1);
-    assert_eq!(received.2, 0);
     assert_eq!(received.0.len(), certificates.len());
     for c in &certificates {
         assert!(received.0.contains(c));
@@ -581,7 +579,6 @@ async fn synchronizer_recover_previous_round() {
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.0.len(), round_1_certificates.len());
     assert_eq!(received.1, 1);
-    assert_eq!(received.2, 0);
     for c in &round_1_certificates {
         assert!(received.0.contains(c));
     }
