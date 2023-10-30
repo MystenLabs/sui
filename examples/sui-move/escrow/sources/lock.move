@@ -78,5 +78,14 @@ module escrow::lock {
         ts::end(ts);
     }
 
-    // TODO: key mismatch
+    #[test]
+    #[expected_failure(abort_code = ELockKeyMismatch)]
+    fun test_lock_key_mismatch() {
+        let ts = ts::begin(@0xA);
+        let (l, _k) = lock(42, ts::ctx(&mut ts));
+        let (_l, k) = lock(43, ts::ctx(&mut ts));
+
+        unlock(l, k);
+        abort 1337
+    }
 }
