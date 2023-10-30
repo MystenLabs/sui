@@ -23,7 +23,7 @@ Quick reference on best practices for Sui Network developers.
 ```
 Choose the right Sui move collection decision tree:
 
-Q: The collection does not require third-party addition, the number of items are known upfront and <1000?  
+Q: The collection does not require third-party addition, the number of items are known upfront, from the same type (homogenous) and <1000?  
 Yes: use a `vector`-backed collection (`vector`, `VecSet`, `VecMap`, `PriorityQueue`)
     Sui Move objects have a maximum size of 250KB—any attempt to create a larger object will lead to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
 
@@ -45,8 +45,8 @@ No: use a dynamic field-backed collection (`Table`, `Bag`, `ObjectBag`, `ObjectT
   Q: Do you know at compile time that the items will be of the same type?
   Yes: use a homogeneous collection (`Table`, `ObjectTable`, `LinkedTable`, `TableVec`)
 
-    Q: Do you require a collection in which the order of the keys is relevant?
-    Yes: use `LinkedTable`
+    Q: Do you require a map collection that you can loop over or a map collection of which the order of the keys is relevant?
+    Yes: use `LinkedTable` ([loop example](https://forums.sui.io/t/how-to-loop-over-a-table-collection/45087))
 
     Q: Do you require the values (objects) in the collection to be directly accessible in Sui storage?
     Yes: use `ObjectTable`
