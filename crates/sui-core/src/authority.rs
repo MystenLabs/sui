@@ -37,7 +37,7 @@ use std::{
     fs,
     pin::Pin,
     sync::Arc,
-    thread,
+    thread, vec,
 };
 use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
@@ -82,8 +82,8 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
 use sui_types::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+    InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
+    TransactionEvents, VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
@@ -1169,7 +1169,7 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let output_keys: Vec<_> = inner_temporary_store
+        let mut output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
             .map(|(id, obj)| {
@@ -1183,6 +1183,39 @@ impl AuthorityState {
                 }
             })
             .collect();
+
+        let deleted: HashMap<_, _> = effects
+            .deleted()
+            .iter()
+            .map(|oref| (oref.0, oref.1))
+            .collect();
+
+        // add deleted shared objects to the outputkeys that then get sent to notify_commit
+        let deleted_output_keys = deleted
+            .iter()
+            .filter(|(id, _)| {
+                inner_temporary_store
+                    .input_objects
+                    .get(id)
+                    .is_some_and(|obj| obj.is_shared())
+            })
+            .map(|(id, seq)| InputKey::VersionedObject {
+                id: *id,
+                version: *seq,
+            });
+        output_keys.extend(deleted_output_keys);
+
+        // For any previously deleted shared objects that appeared mutably in the transaction,
+        // synthesize a notification for the next version of the object.
+        let smeared_version = inner_temporary_store.lamport_version;
+        let deleted_accessed_objects = effects.deleted_mutably_accessed_shared_objects();
+        for object_id in deleted_accessed_objects.into_iter() {
+            let key = InputKey::VersionedObject {
+                id: object_id,
+                version: smeared_version,
+            };
+            output_keys.push(key);
+        }
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
@@ -1260,6 +1293,7 @@ impl AuthorityState {
             certificate,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
+            epoch_store.epoch(),
         )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
@@ -1495,6 +1529,7 @@ impl AuthorityState {
             protocol_config,
             &transaction_kind,
             gas_object,
+            epoch_store.epoch(),
         )?;
 
         let gas_budget = max_tx_gas;
@@ -4505,9 +4540,14 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for (obj_ref, _kind) in effects.input_shared_objects() {
-            if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
-                shared_objects.push(w)
+        for kind in effects.input_shared_objects() {
+            match kind {
+                InputSharedObject::Mutate(obj_ref) | InputSharedObject::ReadOnly(obj_ref) => {
+                    if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
+                        shared_objects.push(w)
+                    }
+                }
+                InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
             }
         }
 

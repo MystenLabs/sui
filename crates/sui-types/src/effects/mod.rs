@@ -7,9 +7,12 @@ use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
 };
-use crate::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use crate::digests::{
+    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
+};
 use crate::error::{SuiError, SuiResult};
 use crate::event::Event;
+use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{
@@ -27,7 +30,11 @@ use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
 
 mod effects_v1;
-mod effects_v2;
+// TODO: effects_v2 needs to be public because we need to generate examples of `UnchangedSharedKind`
+// values in order to properly generate the layout for these in generate-format. We should look at
+// seeing if we can make this private and fix the issue with generate-format turn this module
+// private.
+pub mod effects_v2;
 mod object_change;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
@@ -156,7 +163,7 @@ impl TransactionEffects {
         status: ExecutionStatus,
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
-        shared_objects: Vec<ObjectRef>,
+        shared_objects: Vec<SharedInput>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
@@ -312,9 +319,29 @@ impl TransactionEffects {
     }
 }
 
-pub enum InputSharedObjectKind {
-    Mutate,
-    ReadOnly,
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum InputSharedObject {
+    Mutate(ObjectRef),
+    ReadOnly(ObjectRef),
+    ReadDeleted(ObjectID, SequenceNumber),
+    MutateDeleted(ObjectID, SequenceNumber),
+}
+
+impl InputSharedObject {
+    pub fn id_and_version(&self) -> (ObjectID, SequenceNumber) {
+        let oref = self.object_ref();
+        (oref.0, oref.1)
+    }
+
+    pub fn object_ref(&self) -> ObjectRef {
+        match self {
+            InputSharedObject::Mutate(oref) | InputSharedObject::ReadOnly(oref) => *oref,
+            InputSharedObject::ReadDeleted(id, version)
+            | InputSharedObject::MutateDeleted(id, version) => {
+                (*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED)
+            }
+        }
+    }
 }
 
 #[enum_dispatch]
@@ -334,7 +361,7 @@ pub trait TransactionEffectsAPI {
     /// for shared objects. Their version and digest can only be figured out after sequencing.
     /// Also provides the use kind to indicate whether the object was mutated or read-only.
     /// Down the road it could also indicate use-of-deleted.
-    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)>;
+    fn input_shared_objects(&self) -> Vec<InputSharedObject>;
     fn created(&self) -> Vec<(ObjectRef, Owner)>;
     fn mutated(&self) -> Vec<(ObjectRef, Owner)>;
     fn unwrapped(&self) -> Vec<(ObjectRef, Owner)>;
@@ -354,17 +381,25 @@ pub trait TransactionEffectsAPI {
 
     fn gas_cost_summary(&self) -> &GasCostSummary;
 
+    fn deleted_mutably_accessed_shared_objects(&self) -> Vec<ObjectID> {
+        self.input_shared_objects()
+            .into_iter()
+            .filter_map(|kind| match kind {
+                InputSharedObject::MutateDeleted(id, _) => Some(id),
+                InputSharedObject::Mutate(..)
+                | InputSharedObject::ReadOnly(..)
+                | InputSharedObject::ReadDeleted(..) => None,
+            })
+            .collect()
+    }
+
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;
     fn gas_cost_summary_mut_for_testing(&mut self) -> &mut GasCostSummary;
     fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;
-    fn unsafe_add_input_shared_object_for_testing(
-        &mut self,
-        obj_ref: ObjectRef,
-        kind: InputSharedObjectKind,
-    );
+    fn unsafe_add_input_shared_object_for_testing(&mut self, kind: InputSharedObject);
     fn unsafe_add_deleted_object_for_testing(&mut self, obj_ref: ObjectRef);
 }
 

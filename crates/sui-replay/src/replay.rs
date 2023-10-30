@@ -45,7 +45,7 @@ use sui_types::{
     authenticator_state::get_authenticator_state_obj_initial_shared_version,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
-    digests::{ChainIdentifier, CheckpointDigest, TransactionDigest},
+    digests::{ChainIdentifier, CheckpointDigest, ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError, SuiResult},
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
@@ -706,8 +706,8 @@ impl LocalExec {
         // Get the input objects
         let input_objects = self.initialize_execution_env_state(tx_info).await?;
         assert_eq!(
-            &input_objects.filter_shared_objects(),
-            &tx_info.shared_object_refs
+            &input_objects.filter_shared_objects().len(),
+            &tx_info.shared_object_refs.len()
         );
         assert_eq!(
             input_objects.transaction_dependencies(),
@@ -1417,7 +1417,19 @@ impl LocalExec {
         // Download the objects at the version right before the execution of this TX
         let modified_at_versions: Vec<(ObjectID, SequenceNumber)> = effects.modified_at_versions();
 
-        let shared_obj_refs = effects.shared_objects();
+        let shared_object_refs: Vec<ObjectRef> = effects
+            .shared_objects()
+            .iter()
+            .map(|so_ref| {
+                if so_ref.digest == ObjectDigest::OBJECT_DIGEST_DELETED {
+                    unimplemented!(
+                        "Replay of deleted shared object transactions is not supported yet"
+                    );
+                } else {
+                    so_ref.to_object_ref()
+                }
+            })
+            .collect();
         let gas_data = match tx_info.clone().transaction.unwrap().data {
             sui_json_rpc_types::SuiTransactionBlockData::V1(tx) => tx.gas_data,
         };
@@ -1438,7 +1450,7 @@ impl LocalExec {
             sender,
             modified_at_versions,
             input_objects: input_objs,
-            shared_object_refs: shared_obj_refs.iter().map(|r| r.to_object_ref()).collect(),
+            shared_object_refs,
             gas: gas_object_refs,
             gas_budget: gas_data.budget,
             gas_price: gas_data.price,
@@ -1484,7 +1496,19 @@ impl LocalExec {
         // Download the objects at the version right before the execution of this TX
         let modified_at_versions: Vec<(ObjectID, SequenceNumber)> = effects.modified_at_versions();
 
-        let shared_obj_refs = effects.shared_objects();
+        let shared_object_refs: Vec<ObjectRef> = effects
+            .shared_objects()
+            .iter()
+            .map(|so_ref| {
+                if so_ref.digest == ObjectDigest::OBJECT_DIGEST_DELETED {
+                    unimplemented!(
+                        "Replay of deleted shared object transactions is not supported yet"
+                    );
+                } else {
+                    so_ref.to_object_ref()
+                }
+            })
+            .collect();
         let gas_data = orig_tx.transaction_data().gas_data();
         let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
 
@@ -1503,7 +1527,7 @@ impl LocalExec {
             sender,
             modified_at_versions,
             input_objects: input_objs,
-            shared_object_refs: shared_obj_refs.iter().map(|r| r.to_object_ref()).collect(),
+            shared_object_refs,
             gas: gas_object_refs,
             gas_budget: gas_data.budget,
             gas_price: gas_data.price,
@@ -1521,11 +1545,25 @@ impl LocalExec {
     async fn resolve_download_input_objects(
         &mut self,
         tx_info: &OnChainTransactionInfo,
-    ) -> Result<Vec<(InputObjectKind, Object)>, ReplayEngineError> {
+        deleted_shared_objects: Vec<ObjectRef>,
+    ) -> Result<InputObjects, ReplayEngineError> {
         // Download the input objects
         let mut package_inputs = vec![];
         let mut imm_owned_inputs = vec![];
         let mut shared_inputs = vec![];
+        let mut deleted_shared_info_map = BTreeMap::new();
+        let mut deleted_objects_mutability = BTreeMap::new();
+
+        // for deleted shared objects, we need to look at the transaction dependencies to find the
+        // correct transaction dependency for a deleted shared object.
+        if !deleted_shared_objects.is_empty() {
+            for tx_digest in tx_info.dependencies.iter() {
+                let tx_info = self.resolve_tx_components(tx_digest).await?;
+                for (obj_id, _, _) in tx_info.shared_object_refs.iter() {
+                    deleted_shared_info_map.insert(*obj_id, tx_info.tx_digest);
+                }
+            }
+        }
 
         tx_info
             .input_objects
@@ -1543,7 +1581,7 @@ impl LocalExec {
                     id,
                     initial_shared_version: _,
                     mutable: _,
-                } => {
+                } if !deleted_shared_info_map.contains_key(id) => {
                     // We already downloaded
                     if let Some(o) = self.storage.live_objects_store.get(id) {
                         shared_inputs.push(o.clone());
@@ -1554,6 +1592,10 @@ impl LocalExec {
                             version: None,
                         })
                     }
+                }
+                InputObjectKind::SharedMoveObject { id, mutable, .. } => {
+                    deleted_objects_mutability.insert(*id, *mutable);
+                    Ok(())
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -1576,10 +1618,10 @@ impl LocalExec {
         let resolved_input_objs = tx_info
             .input_objects
             .iter()
-            .map(|kind| match kind {
+            .flat_map(|kind| match kind {
                 InputObjectKind::MovePackage(i) => {
                     // Okay to unwrap since we downloaded it
-                    (
+                    Some((
                         *kind,
                         self.storage
                             .package_cache
@@ -1593,9 +1635,9 @@ impl LocalExec {
                                     .expect("Object not found on chain"),
                             )
                             .clone(),
-                    )
+                    ))
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => (
+                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some((
                     *kind,
                     self.storage
                         .object_version_cache
@@ -1604,22 +1646,37 @@ impl LocalExec {
                         .get(&(o_ref.0, o_ref.1))
                         .unwrap()
                         .clone(),
-                ),
+                )),
                 InputObjectKind::SharedMoveObject {
                     id,
                     initial_shared_version: _,
                     mutable: _,
-                } => {
+                } if !deleted_shared_info_map.contains_key(id) => {
                     // we already downloaded
-                    (
+                    Some((
                         *kind,
                         self.storage.live_objects_store.get(id).unwrap().clone(),
-                    )
+                    ))
                 }
+                InputObjectKind::SharedMoveObject { .. } => None,
             })
             .collect();
 
-        Ok(resolved_input_objs)
+        // Use the transaction dependency info that we computed above for the deleted shared
+        // objects to populated the deleted shared objects list for transaction inputs.
+        let mut deleted_objects = vec![];
+        for (obj_id, seqno, _) in deleted_shared_objects.iter() {
+            if let Some(tx_digest) = deleted_shared_info_map.get(obj_id) {
+                let object_mut = deleted_objects_mutability
+                    .get(obj_id)
+                    .expect("Deleted shared object must have a mutability entry");
+                deleted_objects.push((*obj_id, *seqno, *object_mut, *tx_digest));
+            } else {
+                panic!("Was unable to find the transaction dependency for the deleted shared object {}", obj_id);
+            }
+        }
+
+        Ok(InputObjects::new(resolved_input_objs, deleted_objects))
     }
 
     /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
@@ -1635,12 +1692,13 @@ impl LocalExec {
         self.multi_download_and_store(&tx_info.modified_at_versions)
             .await?;
 
-        // Download shared objects at the version right before the execution of this TX
-        let shared_refs: Vec<_> = tx_info
+        let (shared_refs, deleted_shared_refs): (Vec<ObjectRef>, Vec<ObjectRef>) = tx_info
             .shared_object_refs
             .iter()
-            .map(|r| (r.0, r.1))
-            .collect();
+            .partition(|r| r.2 != ObjectDigest::OBJECT_DIGEST_DELETED);
+
+        // Download shared objects at the version right before the execution of this TX
+        let shared_refs: Vec<_> = shared_refs.iter().map(|r| (r.0, r.1)).collect();
         self.multi_download_and_store(&shared_refs).await?;
 
         // Download gas (although this should already be in cache from modified at versions?)
@@ -1648,7 +1706,9 @@ impl LocalExec {
         self.multi_download_and_store(&gas_refs).await?;
 
         // Fetch the input objects we know from the raw transaction
-        let input_objs = self.resolve_download_input_objects(tx_info).await?;
+        let input_objs = self
+            .resolve_download_input_objects(tx_info, deleted_shared_refs)
+            .await?;
 
         // Prep the object runtime for dynamic fields
         // Download the child objects accessed at the version right before the execution of this TX
@@ -1657,7 +1717,7 @@ impl LocalExec {
         self.multi_download_and_store(&loaded_child_refs).await?;
         tokio::task::yield_now().await;
 
-        Ok(InputObjects::new(input_objs))
+        Ok(input_objs)
     }
 }
 

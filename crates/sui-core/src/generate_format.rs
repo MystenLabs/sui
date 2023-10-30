@@ -13,7 +13,6 @@ use rand::SeedableRng;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::{fs::File, io::Write};
-use sui_types::effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects};
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
     TypeArgumentError,
@@ -42,6 +41,12 @@ use sui_types::{
     storage::DeleteKind,
     transaction::{
         Argument, CallArg, Command, EndOfEpochTransactionKind, ObjectArg, TransactionKind,
+    },
+};
+use sui_types::{
+    base_types::{random_object_ref, SequenceNumber},
+    effects::{
+        effects_v2::UnchangedSharedKind, IDOperation, ObjectIn, ObjectOut, TransactionEffects,
     },
 };
 use typed_store::rocks::TypedStoreError;
@@ -133,6 +138,16 @@ fn get_registry() -> Result<Registry> {
 
     let ccd = CheckpointDigest::random();
     tracer.trace_value(&mut samples, &ccd)?;
+
+    let usor = UnchangedSharedKind::ReadDeleted(SequenceNumber::from_u64(42));
+    let usow = UnchangedSharedKind::MutateDeleted(SequenceNumber::from_u64(42));
+    let usorr = {
+        let oref = random_object_ref();
+        UnchangedSharedKind::ReadOnlyRoot((oref.1, oref.2))
+    };
+    tracer.trace_value(&mut samples, &usor)?;
+    tracer.trace_value(&mut samples, &usow)?;
+    tracer.trace_value(&mut samples, &usorr)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Owner>(&samples)?;
