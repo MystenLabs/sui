@@ -10,8 +10,8 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-move-binary-format = { path = "../../move-binary-format" }
-move-core-types = { path = "../../move-core/types" }
-petgraph = "0.5.1"
-serde-reflection = "0.3.2"
+anyhow.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+petgraph.workspace = true
+serde-reflection.workspace = true

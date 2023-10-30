@@ -16,24 +16,20 @@ move-vm-config.workspace = true
 
 sui-adapter-latest = { path = "latest/sui-adapter" }
 sui-adapter-v0 = { path = "v0/sui-adapter" }
-sui-adapter-vm-rework = { path = "vm-rework/sui-adapter" }
 # sui-adapter-$CUT = { path = "$CUT/sui-adapter" }
 sui-move-natives-latest = { path = "latest/sui-move-natives" }
 sui-move-natives-v0 = { path = "v0/sui-move-natives" }
-sui-move-natives-vm-rework = { path = "vm-rework/sui-move-natives" }
 # sui-move-natives-$CUT = { path = "$CUT/sui-move-natives" }
 sui-verifier-latest = { path = "latest/sui-verifier" }
 sui-verifier-v0 = { path = "v0/sui-verifier" }
-sui-verifier-vm-rework = { path = "vm-rework/sui-verifier" }
 # sui-verifier-$CUT = { path = "$CUT/sui-verifier" }
 
 move-bytecode-verifier-latest = { path = "../external-crates/move/move-bytecode-verifier", package = "move-bytecode-verifier" }
-move-bytecode-verifier-v0 = { path = "../external-crates/move-execution/v0/move-bytecode-verifier" }
-move-bytecode-verifier-vm-rework = { path = "../external-crates/move-execution/vm-rework/move-bytecode-verifier" }
-# move-bytecode-verifier-$CUT = { path = "../external-crates/move-execution/$CUT/move-bytecode-verifier" }
+move-bytecode-verifier-v0 = { path = "../external-crates/move/move-execution/v0/move-bytecode-verifier" }
+# move-bytecode-verifier-$CUT = { path = "../external-crates/move/move-execution/$CUT/move-bytecode-verifier" }
 move-vm-runtime-latest = { path = "../external-crates/move/move-vm/runtime", package = "move-vm-runtime" }
-move-vm-runtime-v0 = { path = "../external-crates/move-execution/v0/move-vm/runtime" }
-move-vm-runtime-vm-rework = { path = "../external-crates/move-execution/vm-rework/move-vm/runtime" }
+move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/move-vm/runtime" }
+# move-vm-runtime-$CUT = { path = "../external-crates/move/move-execution/$CUT/move-vm/runtime" }
 workspace-hack.workspace = true
 
 [dev-dependencies]

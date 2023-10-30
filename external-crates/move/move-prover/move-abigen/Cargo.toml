@@ -8,26 +8,26 @@ license = "Apache-2.0"
 
 [dependencies]
 # Move dependencies
-move-model = { path = "../../move-model" }
-move-core-types = { path = "../../move-core/types" }
-move-binary-format = { path = "../../move-binary-format" }
-move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
-move-command-line-common = { path = "../../move-command-line-common" }
+move-model.workspace = true
+move-core-types.workspace = true
+move-binary-format.workspace = true
+move-bytecode-verifier.workspace = true
+move-command-line-common.workspace = true
 
 bcs.workspace = true
 
 # external dependencies
-log = "0.4.14"
-anyhow = "1.0.52"
-heck = "0.3.2"
-serde = { version = "1.0.124", features = ["derive"] }
+log.workspace = true
+anyhow.workspace = true
+heck.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
-codespan-reporting = "0.11.1"
-move-prover = { path = ".." }
-datatest-stable = "0.1.1"
-tempfile = "3.2.0"
-move-prover-test-utils = { path = "../test-utils" }
+codespan-reporting.workspace = true
+move-prover.workspace = true
+datatest-stable.workspace = true
+tempfile.workspace = true
+move-prover-test-utils.workspace = true
 
 [[test]]
 name = "testsuite"

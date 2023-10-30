@@ -10,17 +10,17 @@ publish = false
 edition = "2021"
 
 [dependencies]
-petgraph = "0.5.1"
+petgraph.workspace = true
 
-move-borrow-graph = { path = "../move-borrow-graph" }
-move-binary-format = { path = "../move-binary-format" }
-move-core-types = { path = "../move-core/types" }
-move-vm-config = { path = "../move-vm/config" }
-move-abstract-stack = { path = "../move-abstract-stack" }
+move-borrow-graph.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+move-abstract-stack.workspace = true
 
 [dev-dependencies]
-hex-literal = "0.3.4"
-invalid-mutations = { path = "invalid-mutations" }
+hex-literal.workspace = true
+invalid-mutations.workspace = true
 
 [features]
 default = []

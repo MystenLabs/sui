@@ -10,11 +10,8 @@ use std::{iter, mem, thread};
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use sui_protocol_config::ProtocolConfig;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
@@ -23,8 +20,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey,
-    ObjectStore, ReceivedMarkerQuery,
+    get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
+    ReceivedMarkerQuery,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -588,14 +585,6 @@ impl AuthorityStore {
         }
     }
 
-    pub fn check_input_objects(
-        &self,
-        objects: &[InputObjectKind],
-        protocol_config: &ProtocolConfig,
-    ) -> Result<Vec<Object>, SuiError> {
-        sui_transaction_checks::check_input_objects(self, objects, protocol_config)
-    }
-
     /// Gets the input object keys and lock modes from input object kinds, by determining the
     /// versions and types of owned, shared and package objects.
     /// When making changes, please see if check_sequenced_input_objects() below needs
@@ -648,6 +637,7 @@ impl AuthorityStore {
     /// packages i.e. when version is None. If the input object doesn't exist and it's a receiving
     /// object, we also check if the object exists in the object marker table and view it as
     /// existing if it is in the table.
+    #[instrument(level = "trace", skip_all)]
     pub fn multi_input_objects_available(
         &self,
         keys: impl Iterator<Item = InputKey> + Clone,
@@ -735,55 +725,6 @@ impl AuthorityStore {
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
         self.execution_lock.write().await
-    }
-
-    /// When making changes, please see if get_input_object_keys() above needs
-    /// similar changes as well.
-    ///
-    /// Before this function is invoked, TransactionManager must ensure all depended
-    /// objects are present. Thus any missing object will panic.
-    pub fn check_sequenced_input_objects(
-        &self,
-        digest: &TransactionDigest,
-        objects: &[InputObjectKind],
-        epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<Vec<Object>, SuiError> {
-        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
-
-        let mut result = Vec::new();
-        for kind in objects {
-            let obj = match kind {
-                InputObjectKind::SharedMoveObject { id, .. } => {
-                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
-                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-                            epoch_store.get_shared_locks(digest)?.into_iter().collect(),
-                        )
-                    })?;
-                    // If we can't find the locked version, it means
-                    // 1. either we have a bug that skips shared object version assignment
-                    // 2. or we have some DB corruption
-                    let version = shared_locks.get(id).unwrap_or_else(|| {
-                        panic!(
-                        "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
-                        digest, id
-                    )
-                    });
-                    self.get_object_by_key(id, *version)?.unwrap_or_else(|| {
-                        panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
-                    })
-                }
-                InputObjectKind::MovePackage(id) => self.get_object(id)?.unwrap_or_else(|| {
-                    panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
-                }),
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
-                        panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
-                    })
-                }
-            };
-            result.push(obj);
-        }
-        Ok(result)
     }
 
     // Methods to mutate the store
@@ -928,6 +869,10 @@ impl AuthorityStore {
         }
         let sha3_digest = hasher.finalize().digest;
         if *expected_sha3_digest != sha3_digest {
+            error!(
+                "Sha does not match! expected: {:?}, actual: {:?}",
+                expected_sha3_digest, sha3_digest
+            );
             return Err(SuiError::from("Sha does not match"));
         }
         batch.write()?;
@@ -1546,8 +1491,9 @@ impl AuthorityStore {
                             .perpetual_tables
                             .object(
                                 &key,
-                                obj_opt
-                                    .expect(&format!("Older object version not found: {:?}", key)),
+                                obj_opt.unwrap_or_else(|| {
+                                    panic!("Older object version not found: {:?}", key)
+                                }),
                             )
                             .expect("Matching indirect object not found")?;
 
@@ -2046,44 +1992,13 @@ impl ParentSync for AuthorityStore {
     }
 }
 
-impl ModuleResolver for AuthorityStore {
-    type Error = SuiError;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        // TODO: We should cache the deserialized modules to avoid
-        // fetching from the store / re-deserializing them every time.
-        // https://github.com/MystenLabs/sui/issues/809
-        Ok(self
-            .get_package_object(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                // unwrap safe since get_package() ensures it's a package object.
-                package
-                    .data
-                    .try_as_package()
-                    .unwrap()
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
-    }
-}
-
-impl GetModule for AuthorityStore {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        get_module_by_id(self, id)
-    }
-}
-
 /// A wrapper to make Orphan Rule happy
-pub struct ResolverWrapper<T: ModuleResolver> {
+pub struct ResolverWrapper<T: BackingPackageStore> {
     pub resolver: Arc<T>,
     pub metrics: Arc<ResolverMetrics>,
 }
 
-impl<T: ModuleResolver> ResolverWrapper<T> {
+impl<T: BackingPackageStore> ResolverWrapper<T> {
     pub fn new(resolver: Arc<T>, metrics: Arc<ResolverMetrics>) -> Self {
         metrics.module_cache_size.set(0);
         ResolverWrapper { resolver, metrics }
@@ -2096,11 +2011,11 @@ impl<T: ModuleResolver> ResolverWrapper<T> {
     }
 }
 
-impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
-    type Error = T::Error;
+impl<T: BackingPackageStore> ModuleResolver for ResolverWrapper<T> {
+    type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
-        self.resolver.get_module(module_id)
+        get_module(&self.resolver, module_id)
     }
 }
 

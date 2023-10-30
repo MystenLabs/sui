@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
 
+pub mod downloader;
 pub mod util;
 
 /// Object-store type.
@@ -52,6 +53,10 @@ pub struct ObjectStoreConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub aws_secret_access_key: Option<String>,
+    /// When using Amazon S3 as the object store, set this to bucket endpoint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub aws_endpoint: Option<String>,
     /// When using Amazon S3 as the object store, set this to the region
     /// that goes with the specified bucket
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -124,6 +129,11 @@ impl ObjectStoreConfig {
         }
         if let Some(secret) = &self.aws_secret_access_key {
             builder = builder.with_secret_access_key(secret);
+        }
+        if let Some(endpoint) = &self.aws_endpoint {
+            builder = builder
+                .with_endpoint(endpoint)
+                .with_virtual_hosted_style_request(true);
         }
         // if let Some(profile) = &self.aws_profile {
         //     builder = builder.with_profile(profile);

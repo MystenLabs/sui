@@ -14,7 +14,7 @@ export function Counter({ id }: { id: string }) {
   const currentAccount = useCurrentAccount();
   const counterPackageId = useNetworkVariable("counterPackageId");
   const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
-  const { data, isLoading, error, refetch } = useSuiClientQuery("getObject", {
+  const { data, isPending, error, refetch } = useSuiClientQuery("getObject", {
     id,
     options: {
       showContent: true,
@@ -55,7 +55,7 @@ export function Counter({ id }: { id: string }) {
     );
   };
 
-  if (isLoading) return <Text>Loading...</Text>;
+  if (isPending) return <Text>Loading...</Text>;
 
   if (error) return <Text>Error: {error.message}</Text>;
 

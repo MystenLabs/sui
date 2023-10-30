@@ -34,7 +34,7 @@ export function SelectValidatorCard() {
 	const [selectedValidator, setSelectedValidator] = useState<Validator | null>(null);
 	const [sortKey, setSortKey] = useState<SortKeys | null>(null);
 	const [sortAscending, setSortAscending] = useState(true);
-	const { data, isLoading, isError } = useSuiClientQuery('getLatestSuiSystemState');
+	const { data, isPending, isError } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 
@@ -92,7 +92,7 @@ export function SelectValidatorCard() {
 		return sortedAsc;
 	}, [validatorsRandomOrder, sortAscending, rollingAverageApys, totalStake, sortKey]);
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

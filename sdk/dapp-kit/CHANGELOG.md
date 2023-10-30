@@ -1,5 +1,27 @@
 # @mysten/dapp-kit
 
+## 0.6.0
+
+### Minor Changes
+
+- d4d9c9218: Upgrade dapp-kit and the scaffold applications to react-query v5
+- fb0ce3485: Add global connection status info and change the hook interface of `useCurrentWallet` to
+  return an object to encapsulate connection info together. To migrate:
+
+  Before:
+  const currentWallet = useCurrentWallet();
+
+  After:
+  const { currentWallet } = useCurrentWallet();
+
+### Patch Changes
+
+- 09c103002: fix pagination in useSuiClientInfiniteQuery
+- e0578094b: Fix typing of data for useSuiClientInfiniteQuery
+- Updated dependencies [b9afb5567]
+  - @mysten/sui.js@0.45.0
+  - @mysten/wallet-standard@0.8.6
+
 ## 0.5.0
 
 ### Minor Changes

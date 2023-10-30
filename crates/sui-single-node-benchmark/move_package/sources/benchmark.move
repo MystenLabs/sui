@@ -5,8 +5,6 @@ module move_benchmark::benchmark {
     use std::ascii;
     use std::ascii::String;
     use std::vector;
-    use sui::balance;
-    use sui::coin;
     use sui::coin::Coin;
     use sui::dynamic_field;
     use sui::object;
@@ -16,16 +14,8 @@ module move_benchmark::benchmark {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
-    public fun merge_input_coins(coins: vector<Coin<SUI>>, ctx: &mut TxContext): Coin<SUI> {
-        let result = coin::zero<SUI>(ctx);
-        let result_balance = coin::balance_mut(&mut result);
-        while (!vector::is_empty(&coins)) {
-            let coin = vector::pop_back(&mut coins);
-            let balance = coin::into_balance(coin);
-            balance::join(result_balance, balance);
-        };
-        vector::destroy_empty(coins);
-        result
+    public fun transfer_coin(coin: Coin<SUI>, ctx: &TxContext) {
+        transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 
     public fun run_computation(num: u64) {

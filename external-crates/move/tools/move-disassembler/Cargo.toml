@@ -8,20 +8,20 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-colored = "2.0.0"
+anyhow.workspace = true
+colored.workspace = true
 
-move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }
-move-command-line-common = { path = "../../move-command-line-common" }
-move-core-types = { path = "../../move-core/types" }
-move-ir-types = { path = "../../move-ir/types" }
-move-binary-format = { path = "../../move-binary-format" }
-move-coverage = { path = "../move-coverage" }
-move-compiler = { path = "../../move-compiler" }
+move-bytecode-source-map.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-binary-format.workspace = true
+move-coverage.workspace = true
+move-compiler.workspace = true
 
 bcs.workspace = true
 clap.workspace = true
-hex = "0.4.3"
+hex.workspace = true
 
 [features]
 default = []

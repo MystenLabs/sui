@@ -707,8 +707,7 @@ impl TypeIdentToken {
 
         segments.reverse();
         let mut cursor = segments.pop().unwrap();
-        while !segments.is_empty() {
-            let next = segments.pop().unwrap();
+        while let Some(next) = segments.pop() {
             cursor = format!("ConcatVec({}, {})", cursor, next);
         }
         cursor

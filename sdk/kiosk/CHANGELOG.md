@@ -1,5 +1,12 @@
 # @mysten/kiosk
 
+## 0.7.7
+
+### Patch Changes
+
+- Updated dependencies [b9afb5567]
+  - @mysten/sui.js@0.45.0
+
 ## 0.7.6
 
 ### Patch Changes

@@ -13,6 +13,6 @@ export function useProductAnalyticsConfig() {
 		queryKey: ['apps-backend', 'product-analytics-config'],
 		queryFn: () => request<ProductAnalyticsConfigResponse>('product-analytics'),
 		staleTime: 24 * 60 * 60 * 1000,
-		cacheTime: Infinity,
+		gcTime: Infinity,
 	});
 }

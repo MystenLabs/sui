@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { type CheckpointPage } from '@mysten/sui.js/client';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 
 export const DEFAULT_CHECKPOINTS_LIMIT = 20;
 
@@ -10,20 +11,19 @@ export const DEFAULT_CHECKPOINTS_LIMIT = 20;
 export function useGetCheckpoints(cursor?: string, limit = DEFAULT_CHECKPOINTS_LIMIT) {
 	const client = useSuiClient();
 
-	return useInfiniteQuery(
-		['get-checkpoints', limit, cursor],
-		async ({ pageParam }) =>
+	return useInfiniteQuery<CheckpointPage>({
+		queryKey: ['get-checkpoints', limit, cursor],
+		queryFn: async ({ pageParam }) =>
 			await client.getCheckpoints({
 				descendingOrder: true,
-				cursor: pageParam ?? cursor,
+				cursor: (pageParam as string | null) ?? cursor,
 				limit,
 			}),
-		{
-			getNextPageParam: (lastPage) => (lastPage?.hasNextPage ? lastPage.nextCursor : false),
-			staleTime: 10 * 1000,
-			cacheTime: 24 * 60 * 60 * 1000,
-			retry: false,
-			keepPreviousData: true,
-		},
-	);
+		initialPageParam: null,
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
+		staleTime: 10 * 1000,
+		gcTime: 24 * 60 * 60 * 1000,
+		retry: false,
+		placeholderData: keepPreviousData,
+	});
 }

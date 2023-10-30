@@ -3,6 +3,7 @@
 	"useAccounts": "useAccounts",
 	"useCurrentWallet": "useCurrentWallet",
 	"useCurrentAccount": "useCurrentAccount",
+	"useAutoConnectionStatus": "useAutoConnectionStatus",
 	"useConnectWallet": "useConnectWallet",
 	"useDisconnectWallet": "useDisconnectWallet",
 	"useSwitchAccount": "useSwitchAccount",

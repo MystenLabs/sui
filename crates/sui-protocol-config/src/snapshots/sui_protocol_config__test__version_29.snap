@@ -35,10 +35,7 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
-  narwhal_header_v2: true
-  random_beacon: true
   enable_effects_v2: true
-  narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
@@ -210,5 +207,4 @@ execution_version: 1
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
-random_beacon_reduction_allowed_delta: 800
 

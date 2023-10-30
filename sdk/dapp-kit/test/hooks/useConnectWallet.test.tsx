@@ -37,7 +37,7 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isError).toBe(true));
-		expect(result.current.currentWallet).toBeFalsy();
+		expect(result.current.currentWallet.isDisconnected).toBe(true);
 		expect(result.current.currentAccount).toBeFalsy();
 
 		act(() => {
@@ -62,8 +62,8 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.currentWallet).toBeTruthy();
-		expect(result.current.currentWallet!.name).toBe('Mock Wallet 1');
+		expect(result.current.currentWallet.isConnected).toBe(true);
+		expect(result.current.currentWallet.currentWallet!.name).toBe('Mock Wallet 1');
 		expect(result.current.accounts).toHaveLength(1);
 		expect(result.current.currentAccount).toBeTruthy();
 
@@ -92,8 +92,8 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.currentWallet).toBeTruthy();
-		expect(result.current.currentWallet!.name).toBe('Mock Wallet 1');
+		expect(result.current.currentWallet.isConnected).toBe(true);
+		expect(result.current.currentWallet.currentWallet!.name).toBe('Mock Wallet 1');
 		expect(result.current.accounts).toHaveLength(1);
 		expect(result.current.currentAccount).toBeTruthy();
 

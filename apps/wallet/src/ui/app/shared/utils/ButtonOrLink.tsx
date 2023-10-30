@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import clsx from 'classnames';
 import { forwardRef, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 
@@ -70,6 +71,7 @@ export const ButtonOrLink = forwardRef<HTMLAnchorElement | HTMLButtonElement, Bu
 			<WithTooltip title={title}>
 				<button
 					{...props}
+					className={clsx(!isDisabled && 'cursor-pointer', props.className)}
 					type={props.type || 'button'}
 					ref={ref as Ref<HTMLButtonElement>}
 					disabled={isDisabled}

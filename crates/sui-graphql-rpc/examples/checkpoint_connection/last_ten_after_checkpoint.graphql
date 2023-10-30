@@ -1,0 +1,9 @@
+# Fetch the digest and the sequence number of the last 20 checkpoints before the cursor
+{
+  checkpointConnection(last: 20, before: "100") {
+    nodes {
+      sequenceNumber
+      digest
+    }
+  }
+}

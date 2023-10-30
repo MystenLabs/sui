@@ -314,6 +314,7 @@ pub async fn verify_archive_with_genesis_config(
     remote_store_config: ObjectStoreConfig,
     concurrency: usize,
     interactive: bool,
+    num_retries: u32,
 ) -> Result<()> {
     let genesis = Genesis::load(genesis).unwrap();
     let genesis_committee = genesis.committee()?;
@@ -331,7 +332,23 @@ pub async fn verify_archive_with_genesis_config(
         VerifiedCheckpointContents::new_unchecked(fullcheckpoint_contents),
         genesis_committee,
     );
-    verify_archive_with_local_store(store, remote_store_config, concurrency, interactive).await
+
+    let mut retries = 0;
+    while retries < num_retries {
+        retries += 1;
+        if let Ok(()) = verify_archive_with_local_store(
+            store.clone(),
+            remote_store_config.clone(),
+            concurrency,
+            interactive,
+        )
+        .await
+        {
+            break;
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn verify_archive_with_checksums(
@@ -418,6 +435,22 @@ where
         });
         Some(progress_bar)
     } else {
+        let cloned_store = store.clone();
+        tokio::spawn(async move {
+            loop {
+                let latest_checkpoint = cloned_store
+                    .get_highest_synced_checkpoint()
+                    .map_err(|_| anyhow!("Failed to read highest synced checkpoint"))?
+                    .sequence_number;
+                let percent = (latest_checkpoint * 100) / latest_checkpoint_in_archive;
+                info!("done = {percent}%");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if percent >= 100 {
+                    break;
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        });
         None
     };
     archive_reader

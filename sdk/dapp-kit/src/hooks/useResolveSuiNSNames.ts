@@ -9,23 +9,22 @@ import { useSuiClientQuery } from './useSuiClientQuery.js';
 export function useResolveSuiNSName(
 	address?: string | null,
 	options?: Omit<
-		UseQueryOptions<ResolvedNameServiceNames, Error, ResolvedNameServiceNames, unknown[]>,
-		'queryFn'
+		UseQueryOptions<ResolvedNameServiceNames, Error, string | null, unknown[]>,
+		'queryFn' | 'queryKey'
 	>,
 ) {
-	const { data, ...rest } = useSuiClientQuery(
+	return useSuiClientQuery(
 		'resolveNameServiceNames',
 		{
 			address: address!,
 			limit: 1,
 		},
 		{
+			...options,
 			refetchOnWindowFocus: false,
 			retry: false,
-			...options,
+			select: (data) => (data.data.length > 0 ? data.data[0] : null),
 			enabled: !!address && options?.enabled !== false,
 		},
 	);
-
-	return { data: data?.data?.[0] ?? null, ...rest };
 }

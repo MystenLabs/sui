@@ -1,5 +1,12 @@
 # @mysten/zklogin
 
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [b9afb5567]
+  - @mysten/sui.js@0.45.0
+
 ## 0.3.2
 
 ### Patch Changes

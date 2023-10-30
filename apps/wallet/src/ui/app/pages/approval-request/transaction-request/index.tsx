@@ -43,13 +43,13 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 		}
 		return tx;
 	}, [txRequest.tx.data, addressForTransaction]);
-	const { isLoading, isError } = useTransactionData(addressForTransaction, transaction);
+	const { isPending, isError } = useTransactionData(addressForTransaction, transaction);
 	const [isConfirmationVisible, setConfirmationVisible] = useState(false);
 
 	const {
 		data,
 		isError: isDryRunError,
-		isLoading: isDryRunLoading,
+		isPending: isDryRunLoading,
 	} = useTransactionDryRun(addressForTransaction, transaction);
 	const recognizedPackagesList = useRecognizedPackages();
 
@@ -70,7 +70,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 				approveTitle="Approve"
 				rejectTitle="Reject"
 				onSubmit={async (approved: boolean) => {
-					if (isLoading) return;
+					if (isPending) return;
 					if (approved && isError) {
 						setConfirmationVisible(true);
 						return;
@@ -92,7 +92,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 					}
 				}}
 				address={addressForTransaction}
-				approveLoading={isLoading || isConfirmationVisible}
+				approveLoading={isPending || isConfirmationVisible}
 				checkAccountLock
 			>
 				<PageMainLayoutTitle title="Approve Transaction" />

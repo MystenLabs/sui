@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::context_ext::DataProviderContextExt;
 use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
@@ -46,8 +45,8 @@ impl SuiSystemStateSummary {
 
     async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<Option<ProtocolConfigs>> {
         Ok(Some(
-            ctx.data_provider()
-                .fetch_protocol_config(Some(self.protocol_version))
+            ctx.data_unchecked::<PgManager>()
+                .fetch_protocol_configs(Some(self.protocol_version))
                 .await?,
         ))
     }

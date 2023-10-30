@@ -358,7 +358,7 @@ def cut_command(f):
     return [
         *["./target/debug/cut", "--feature", f],
         *["-d", f"sui-execution/latest:sui-execution/{f}:-latest"],
-        *["-d", f"external-crates/move:external-crates/move-execution/{f}"],
+        *["-d", f"external-crates/move:external-crates/move/move-execution/{f}"],
         *["-p", "sui-adapter-latest"],
         *["-p", "sui-move-natives-latest"],
         *["-p", "sui-verifier-latest"],
@@ -390,9 +390,9 @@ def cut_directories(f):
     else:
         crates.extend(
             [
-                external / "move-execution" / f / "move-bytecode-verifier",
-                external / "move-execution" / f / "move-stdlib",
-                external / "move-execution" / f / "move-vm" / "runtime",
+                external / "move" / "move-execution" / f / "move-bytecode-verifier",
+                external / "move" / "move-execution" / f / "move-stdlib",
+                external / "move" / "move-execution" / f / "move-vm" / "runtime",
             ]
         )
 
@@ -406,7 +406,7 @@ def impl(feature):
 
 def clean_up_cut(feature):
     """Remove some special-case files/directories from a given cut"""
-    move_exec = Path() / "external-crates" / "move-execution" / feature
+    move_exec = Path() / "external-crates" / "move" / "move-execution" / feature
     rmtree(move_exec / "move-bytecode-verifier" / "transactional-tests")
     remove(move_exec / "move-stdlib" / "src" / "main.rs")
     rmtree(move_exec / "move-stdlib" / "tests")

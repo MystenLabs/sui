@@ -78,7 +78,8 @@ use sui_types::messages_consensus::{
     ConsensusTransactionKind,
 };
 use sui_types::storage::{
-    transaction_input_object_keys, transaction_receiving_object_keys, ObjectKey, ObjectStore,
+    transaction_input_object_keys, transaction_receiving_object_keys, GetSharedLocks, ObjectKey,
+    ObjectStore,
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -560,7 +561,8 @@ impl AuthorityPerEpochStore {
         );
 
         let zklogin_env = match chain_identifier.chain() {
-            Chain::Mainnet => ZkLoginEnv::Prod,
+            // Testnet and mainnet are treated the same since it is permanent.
+            Chain::Mainnet | Chain::Testnet => ZkLoginEnv::Prod,
             _ => ZkLoginEnv::Test,
         };
 
@@ -945,18 +947,6 @@ impl AuthorityPerEpochStore {
 
     pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
         self.tables.get_all_pending_consensus_transactions()
-    }
-
-    /// Read shared object locks / versions for a specific transaction.
-    pub fn get_shared_locks(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
-        Ok(self
-            .tables
-            .assigned_shared_object_versions
-            .get(transaction_digest)?
-            .unwrap_or_default())
     }
 
     #[cfg(test)]
@@ -1806,6 +1796,7 @@ impl AuthorityPerEpochStore {
         self.db_batch()
     }
 
+    #[instrument(level = "debug", skip_all)]
     pub(crate) async fn process_consensus_transactions_and_commit_boundary<
         'a,
         C: CheckpointServiceNotify,
@@ -1951,6 +1942,8 @@ impl AuthorityPerEpochStore {
     /// - Verify and initialize the state to execute the certificates.
     ///   Return VerifiedCertificates for each executable certificate
     /// - Or update the state for checkpoint or epoch change protocol.
+    #[instrument(level = "debug", skip_all)]
+    #[allow(clippy::type_complexity)]
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
@@ -2101,6 +2094,7 @@ impl AuthorityPerEpochStore {
         Ok(ret)
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
@@ -2537,6 +2531,19 @@ impl AuthorityPerEpochStore {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             self.signature_verifier.insert_jwk(jwk_id, jwk);
         }
+    }
+}
+
+impl GetSharedLocks for AuthorityPerEpochStore {
+    fn get_shared_locks(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+        Ok(self
+            .tables
+            .assigned_shared_object_versions
+            .get(transaction_digest)?
+            .unwrap_or_default())
     }
 }
 

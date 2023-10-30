@@ -30,7 +30,7 @@ export function useSwitchAccount({
 	mutationKey,
 	...mutationOptions
 }: UseSwitchAccountMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+	const { currentWallet } = useCurrentWallet();
 	const setAccountSwitched = useWalletStore((state) => state.setAccountSwitched);
 
 	return useMutation({

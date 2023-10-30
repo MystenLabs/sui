@@ -35,8 +35,8 @@ use sui_types::{
 };
 
 use self::epoch_state::EpochState;
-pub use self::store::InMemoryStore;
 use self::store::KeyStore;
+pub use self::store::{InMemoryStore, SimulatorStore};
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 
 mod epoch_state;
@@ -51,12 +51,12 @@ mod store;
 /// See [module level][mod] documentation for more details.
 ///
 /// [mod]: index.html
-pub struct Simulacrum<R = OsRng> {
+pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     rng: R,
     keystore: KeyStore,
     #[allow(unused)]
     genesis: genesis::Genesis,
-    store: InMemoryStore,
+    store: Store,
     checkpoint_builder: MockCheckpointBuilder,
 
     // Epoch specific data

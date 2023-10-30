@@ -3,7 +3,7 @@
 
 import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
-import { cva, type VariantProps } from 'class-variance-authority';
+import { cva, cx, type VariantProps } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
 import type { ComponentProps, ReactNode } from 'react';
 import { forwardRef } from 'react';
@@ -127,6 +127,8 @@ type InputWithActionZodFormProps = VariantProps<typeof styles> &
 	ActionButtonProps & {
 		errorString?: string;
 		suffix?: ReactNode;
+		prefix?: ReactNode;
+		onActionClicked?: PillProps['onClick'];
 	};
 
 export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActionZodFormProps>(
@@ -143,40 +145,49 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 			errorString,
 			value,
 			suffix,
+			prefix,
 			...props
 		},
 		forwardRef,
 	) => {
+		const prefixContent = prefix ? (
+			<span>
+				<Text variant="body" color="steel">
+					{prefix}
+				</Text>
+			</span>
+		) : null;
+
 		return (
 			<>
-				<div className="flex flex-row flex-nowrap items-center relative">
+				<div className={cx(styles({ rounded }), 'relative')}>
+					{prefixContent}
 					<input
 						{...props}
 						type={type}
-						className={styles({ rounded })}
+						className="border-none p-0 text-body text-steel-darker font-semibold"
 						disabled={disabled}
 						ref={forwardRef}
 					/>
 					{suffix && value && (
-						<div className="absolute z-0 flex h-full max-w-full items-center pl-3">
-							<span className="invisible max-w-full text-sm">{value}</span>
-							<span>
-								<Text variant="body" color="steel">
-									{suffix}
-								</Text>
-							</span>
+						<div className="absolute z-0 flex h-full max-w-full items-center border border-transparent">
+							{prefixContent}
+							<span className="invisible max-w-full text-body">{value}</span>
+							<span className="ml-2 font-medium text-body text-steel">{suffix}</span>
 						</div>
 					)}
 
-					<div className="flex items-center justify-end absolute right-0 max-w-[20%] mx-3 overflow-hidden">
-						<Pill
-							text={actionText}
-							type={actionType}
-							disabled={disabled}
-							onClick={onActionClicked}
-							dark={dark}
-						/>
-					</div>
+					{onActionClicked && (
+						<div className="flex items-center justify-end absolute right-0 max-w-[20%] mx-3 overflow-hidden">
+							<Pill
+								text={actionText}
+								type={actionType}
+								disabled={disabled}
+								onClick={onActionClicked}
+								dark={dark}
+							/>
+						</div>
+					)}
 				</div>
 
 				{errorString ? (

@@ -49,7 +49,7 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, error_span, info, warn, Instrument};
+use tracing::{debug, error, info, instrument, warn};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -554,6 +554,16 @@ impl CheckpointStore {
         Ok(checkpoint)
     }
 
+    pub fn insert_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> SuiResult {
+        self.epoch_last_checkpoint_map
+            .insert(&epoch_id, checkpoint.sequence_number())?;
+        Ok(())
+    }
+
     /// Given the epoch ID, and the last checkpoint of the epoch, derive a few statistics of the epoch.
     pub fn get_epoch_stats(
         &self,
@@ -717,6 +727,7 @@ impl CheckpointBuilder {
         info!("Shutting down CheckpointBuilder");
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn make_checkpoint(
         &self,
         height: CheckpointCommitHeight,
@@ -741,6 +752,7 @@ impl CheckpointBuilder {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn write_checkpoints(
         &self,
         height: CheckpointCommitHeight,
@@ -847,6 +859,7 @@ impl CheckpointBuilder {
         Ok(chunks)
     }
 
+    #[instrument(level = "debug", skip_all)]
     async fn create_checkpoints(
         &self,
         all_effects: Vec<TransactionEffects>,
@@ -976,7 +989,6 @@ impl CheckpointBuilder {
                         &mut signatures,
                         sequence_number,
                     )
-                    .instrument(error_span!("augment_epoch_last_checkpoint"))
                     .await?;
 
                 let committee = system_state_obj.get_current_epoch_committee().committee;
@@ -1082,6 +1094,7 @@ impl CheckpointBuilder {
         }
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn augment_epoch_last_checkpoint(
         &self,
         epoch_total_gas_cost: &GasCostSummary,
@@ -1107,6 +1120,7 @@ impl CheckpointBuilder {
 
     /// For the given roots return complete list of effects to include in checkpoint
     /// This list includes the roots and all their dependencies, which are not part of checkpoint already
+    #[instrument(level = "debug", skip_all)]
     fn complete_checkpoint_effects(
         &self,
         mut roots: Vec<TransactionEffects>,

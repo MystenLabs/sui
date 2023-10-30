@@ -12,7 +12,7 @@ module 0x42::test {
     }
 
     #[lint_allow(self_transfer)]
-    public fun custom_transfer_bad(o: S1, ctx: &mut TxContext) {
+    public fun custom_transfer_bad(o: S1, ctx: &TxContext) {
         transfer::transfer(o, tx_context::sender(ctx))
     }
 

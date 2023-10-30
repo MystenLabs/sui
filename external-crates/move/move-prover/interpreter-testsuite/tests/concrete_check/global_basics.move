@@ -56,7 +56,7 @@ module 0x2::A {
         borrow_global<R>(b).f2
     }
 
-    #[test, expected_failure]
+    #[test, expected_failure, allow(unused_mut_ref)]
     public fun borrow_mut_err(): u64 acquires R {
         let b = @0x2;
         borrow_global_mut<R>(b).f2

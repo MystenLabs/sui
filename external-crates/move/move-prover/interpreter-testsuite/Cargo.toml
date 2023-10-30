@@ -9,16 +9,18 @@ license = "Apache-2.0"
 [dev-dependencies]
 
 # diem dependencies
-move-stackless-bytecode-interpreter = { path = "../interpreter" }
-move-command-line-common = { path = "../../move-command-line-common" }
-move-prover-test-utils = { path = "../test-utils" }
-move-stdlib = { path = "../../move-stdlib" }
-move-unit-test = { path = "../../tools/move-unit-test" }
+move-stackless-bytecode-interpreter.workspace = true
+move-command-line-common.workspace = true
+move-prover-test-utils.workspace = true
+move-stdlib.workspace = true
+move-unit-test.workspace = true
 
 # external dependencies
-anyhow = "1.0.52"
-datatest-stable = "0.1.1"
+anyhow.workspace = true
+datatest-stable.workspace = true
 
 [[test]]
 name = "concrete_check_testsuite"
 harness = false
+
+[dependencies]

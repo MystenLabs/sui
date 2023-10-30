@@ -1,24 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, path::PathBuf};
-
+use crate::error::Error as SuiGraphQLError;
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeSet, path::PathBuf};
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
 
+// TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
+const MAX_DB_QUERY_COST: u64 = 50000; // Max DB query cost (normally f64) truncated
+const MAX_QUERY_VARIABLES: u32 = 50;
+const MAX_QUERY_FRAGMENTS: u32 = 50;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
-    // TODO: remove rpc 1.0 dependency once DB work done
-    pub(crate) rpc_url: String,
     pub(crate) db_url: String,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
@@ -45,6 +47,12 @@ pub struct Limits {
     pub(crate) max_query_depth: u32,
     #[serde(default)]
     pub(crate) max_query_nodes: u32,
+    #[serde(default)]
+    pub(crate) max_db_query_cost: u64,
+    #[serde(default)]
+    pub(crate) max_query_variables: u32,
+    #[serde(default)]
+    pub(crate) max_query_fragments: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -60,7 +68,6 @@ impl ConnectionConfig {
     pub fn new(
         port: Option<u16>,
         host: Option<String>,
-        rpc_url: Option<String>,
         db_url: Option<String>,
         prom_url: Option<String>,
         prom_port: Option<u16>,
@@ -69,7 +76,6 @@ impl ConnectionConfig {
         Self {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
-            rpc_url: rpc_url.unwrap_or(default.rpc_url),
             db_url: db_url.unwrap_or(default.db_url),
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
@@ -81,6 +87,14 @@ impl ConnectionConfig {
             db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
             ..Default::default()
         }
+    }
+
+    pub fn db_url(&self) -> String {
+        self.db_url.clone()
+    }
+
+    pub fn server_address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
     }
 }
 
@@ -122,7 +136,6 @@ impl Default for ConnectionConfig {
         Self {
             port: 8000,
             host: "127.0.0.1".to_string(),
-            rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
             db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
             prom_url: "0.0.0.0".to_string(),
             prom_port: 9184,
@@ -135,6 +148,9 @@ impl Default for Limits {
         Self {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
+            max_db_query_cost: MAX_DB_QUERY_COST,
+            max_query_variables: MAX_QUERY_VARIABLES,
+            max_query_fragments: MAX_QUERY_FRAGMENTS,
         }
     }
 }
@@ -169,29 +185,43 @@ impl Default for InternalFeatureConfig {
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
 pub struct ServerConfig {
     #[serde(default)]
-    pub(crate) service: ServiceConfig,
+    pub service: ServiceConfig,
     #[serde(default)]
-    pub(crate) connection: ConnectionConfig,
+    pub connection: ConnectionConfig,
     #[serde(default)]
-    pub(crate) internal_features: InternalFeatureConfig,
+    pub internal_features: InternalFeatureConfig,
     #[serde(default)]
     pub name_service: NameServiceConfig,
 }
 
 #[allow(dead_code)]
 impl ServerConfig {
-    pub fn from_yaml(path: &str) -> Self {
-        let contents = std::fs::read_to_string(path).unwrap();
-        serde_yaml::from_str::<Self>(&contents).unwrap()
+    pub fn from_yaml(path: &str) -> Result<Self, SuiGraphQLError> {
+        let contents = std::fs::read_to_string(path).map_err(|e| {
+            SuiGraphQLError::Internal(format!(
+                "Failed to read service cfg yaml file at {}, err: {}",
+                path, e
+            ))
+        })?;
+        serde_yaml::from_str::<Self>(&contents).map_err(|e| {
+            SuiGraphQLError::Internal(format!(
+                "Failed to deserialize service cfg from yaml: {}",
+                e
+            ))
+        })
     }
 
-    pub fn to_yaml(&self) -> String {
-        serde_yaml::to_string(&self).unwrap()
+    pub fn to_yaml(&self) -> Result<String, SuiGraphQLError> {
+        serde_yaml::to_string(&self).map_err(|e| {
+            SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
+        })
     }
 
-    pub fn to_yaml_file(&self, path: PathBuf) {
-        let config = self.to_yaml();
-        std::fs::write(path, config).unwrap();
+    pub fn to_yaml_file(&self, path: PathBuf) -> Result<(), SuiGraphQLError> {
+        let config = self.to_yaml()?;
+        std::fs::write(path, config).map_err(|e| {
+            SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
+        })
     }
 }
 
@@ -212,6 +242,9 @@ mod tests {
             r#" [limits]
                 max-query-depth = 100
                 max-query-nodes = 300
+                max-db-query-cost = 50
+                max-query-variables = 45
+                max-query-fragments = 32
             "#,
         )
         .unwrap();
@@ -220,6 +253,9 @@ mod tests {
             limits: Limits {
                 max_query_depth: 100,
                 max_query_nodes: 300,
+                max_db_query_cost: 50,
+                max_query_variables: 45,
+                max_query_fragments: 32,
             },
             ..Default::default()
         };
@@ -273,6 +309,9 @@ mod tests {
                 [limits]
                 max-query-depth = 42
                 max-query-nodes = 320
+                max-db-query-cost = 20
+                max-query-variables = 34
+                max-query-fragments = 31
 
                 [experiments]
                 test-flag = true
@@ -284,6 +323,9 @@ mod tests {
             limits: Limits {
                 max_query_depth: 42,
                 max_query_nodes: 320,
+                max_db_query_cost: 20,
+                max_query_variables: 34,
+                max_query_fragments: 31,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

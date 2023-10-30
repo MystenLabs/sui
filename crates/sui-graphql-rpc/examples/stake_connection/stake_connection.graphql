@@ -1,19 +1,33 @@
+# Get all the staked objects for this address and all the active validators at the epoch when the stake became active
 {
   address(
-    address: "0x5f63d0b78e14d054568564c34023cde0f862271d587df7bd308b1aa7c46b8940"
+    address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
   ) {
-    balanceConnection {
-      edges {
-        node {
-          coinType
-          totalBalance
-        }
-      }
+    location
+    balance(type: "0x2::sui::SUI") {
+      coinType
+      totalBalance
     }
     stakeConnection {
-      edges {
-        node {
-          status
+      nodes {
+        id
+        status
+        principal
+        estimatedReward
+        activeEpoch {
+          epochId
+          referenceGasPrice
+          validatorSet {
+            activeValidators {
+              name
+              description
+              exchangeRatesSize
+            }
+            totalStake
+          }
+        }
+        requestEpoch {
+          epochId
         }
       }
     }

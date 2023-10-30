@@ -19,7 +19,7 @@ export type QredoTransactionProps = {
 export function QredoTransaction({ qredoID, qredoTransactionID }: QredoTransactionProps) {
 	const transactionElementRef = useRef<HTMLDivElement>(null);
 	const { isIntersecting } = useOnScreen(transactionElementRef);
-	const { data, isLoading, error } = useGetQredoTransaction({
+	const { data, isPending, error } = useGetQredoTransaction({
 		qredoID,
 		qredoTransactionID,
 		forceDisabled: !isIntersecting,
@@ -43,11 +43,11 @@ export function QredoTransaction({ qredoID, qredoTransactionID }: QredoTransacti
 			<div>
 				<TxnIcon
 					txnFailed={!!error}
-					variant={isLoading ? 'Loading' : isSignMessage ? 'PersonalMessage' : 'Send'}
+					variant={isPending ? 'Loading' : isSignMessage ? 'PersonalMessage' : 'Send'}
 				/>
 			</div>
 			<div className="flex flex-col gap-1 overflow-hidden">
-				{isLoading ? (
+				{isPending ? (
 					<>
 						<div className="bg-sui-lightest h-3 w-20 rounded" />
 						<div className="bg-sui-lightest h-3 w-16 rounded" />

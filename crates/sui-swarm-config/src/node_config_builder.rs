@@ -9,6 +9,7 @@ use narwhal_config::{NetworkAdminServerParameters, PrometheusMetricsParameters};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
+use sui_config::node::default_zklogin_oauth_providers;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
@@ -168,6 +169,8 @@ impl ValidatorConfigBuilder {
                 .jwk_fetch_interval
                 .map(|i| i.as_secs())
                 .unwrap_or(3600),
+            zklogin_oauth_providers: default_zklogin_oauth_providers(),
+            overload_threshold_config: Default::default(),
         }
     }
 
@@ -403,6 +406,8 @@ impl FullnodeConfigBuilder {
             enable_experimental_rest_api: true,
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
+            zklogin_oauth_providers: default_zklogin_oauth_providers(),
+            overload_threshold_config: Default::default(),
         }
     }
 }

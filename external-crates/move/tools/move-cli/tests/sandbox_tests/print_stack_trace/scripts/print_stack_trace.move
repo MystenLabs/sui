@@ -3,6 +3,7 @@ use std::debug;
 use std::vector;
 use 0x2::N;
 
+#[allow(unused_mut_ref)]
 fun print_stack_trace() {
     let v = vector::empty();
     vector::push_back(&mut v, true);

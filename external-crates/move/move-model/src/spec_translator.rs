@@ -110,7 +110,7 @@ impl TranslatedSpec {
                         .mk_join_opt_bool(
                             Operation::And,
                             Some(exp.clone()),
-                            code.as_ref().map(|c| eq_code(c)),
+                            code.as_ref().map(eq_code),
                         )
                         .unwrap()
                 })
@@ -118,7 +118,7 @@ impl TranslatedSpec {
                     self.aborts_with
                         .iter()
                         .flat_map(|(_, codes)| codes.iter())
-                        .map(|c| eq_code(c)),
+                        .map(eq_code),
                 ),
         )
     }
