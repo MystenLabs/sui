@@ -23,7 +23,7 @@ Quick reference on best practices for Sui Network developers.
 ```
 Choose the right Sui move collection decision tree:
 
-Q: The collection does not require third-party addition, the number of items are known upfront, from the same type (homogenous) and <1000?  
+Q: The collection does not require third-party addition, the number of items are known upfront, from the same type (homogeneous) and <1000?  
 Yes: use a `vector`-backed collection (`vector`, `VecSet`, `VecMap`, `PriorityQueue`)
     Sui Move objects have a maximum size of 250KB—any attempt to create a larger object will lead to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
 
