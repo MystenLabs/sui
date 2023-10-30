@@ -46,7 +46,7 @@ The following represents the template the `init` function defines:
 module examples::my_hero {
     use sui::tx_context::{sender, TxContext};
     use std::string::{utf8, String};
-    use sui::transfer::transfer;
+    use sui::transfer::public_transfer;
     use sui::object::{Self, UID};
 
     // The creator bundle: these two packages often go together.
@@ -106,8 +106,8 @@ module examples::my_hero {
         // Commit first version of `Display` to apply changes.
         display::update_version(&mut display);
 
-        transfer(publisher, sender(ctx));
-        transfer(display, sender(ctx));
+        public_transfer(publisher, sender(ctx));
+        public_transfer(display, sender(ctx));
     }
 
     /// Anyone can mint their `Hero`!
