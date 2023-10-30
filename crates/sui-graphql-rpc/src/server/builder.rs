@@ -94,7 +94,7 @@ impl Server {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout::default());
+            builder = builder.extension(Timeout);
         }
 
         builder.build()
@@ -242,7 +242,7 @@ pub mod tests {
         config::{ConnectionConfig, Limits, ServiceConfig},
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
-        extensions::timeout::{Timeout, TimeoutConfig},
+        extensions::timeout::Timeout,
         metrics::RequestMetrics,
     };
     use async_graphql::{
@@ -306,16 +306,16 @@ pub mod tests {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader, Limits::default());
+            let mut cfg = ServiceConfig::default();
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
+                .context_data(cfg)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout {
-                    config: TimeoutConfig {
-                        request_timeout: timeout,
-                    },
-                })
+                .extension(Timeout)
                 .build_schema();
             schema.execute("{ chainIdentifier }").await
         }
@@ -448,7 +448,7 @@ pub mod tests {
     pub async fn test_query_complexity_metrics_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
-        let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         let metrics = RequestMetrics::new(&registry);
         let metrics = Arc::new(metrics);
