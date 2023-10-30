@@ -4,7 +4,7 @@ title: Immutable
 
 Objects in Sui can have different types of ownership, with two broad categories: immutable objects and mutable objects. An immutable object is an object that can't be mutated, transferred, or deleted. Immutable objects have no owner, so anyone can use them.
 
-## Create immutable object 
+## Create immutable object
 
 To convert an object into an immutable object, call the `public_freeze_object` function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
@@ -14,7 +14,7 @@ public native fun public_freeze_object<T: key>(obj: T);
 
 This call makes the specified object immutable. This is a non-reversible operation. You should freeze an object only when you are certain that you don't need to mutate it.
 
-You can see this function's use in one of the [color_object example module](https://github.com/MystenLabs/sui/blob/main/examples/sui-move/color_object/sources/example.move) tests. The test creates a new (owned) `ColorObject`, then calls `public_freeze_object` to turn it into an immutable object.
+You can see this function's use in one of the [color_object example module](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move) tests. The test creates a new (owned) `ColorObject`, then calls `public_freeze_object` to turn it into an immutable object.
 
 ```rust
 {
@@ -41,7 +41,7 @@ public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxCont
 
 This function creates a new `ColorObject` and immediately makes it immutable before it has an owner.
 
-## Use immutable object 
+## Use immutable object
 
 After an object becomes immutable, the rules of who can use this object in Sui Move calls change:
 You can only pass an immutable object as a read-only, immutable reference to Sui Move entry functions as `&T`.
@@ -57,7 +57,7 @@ public entry fun copy_into(from: &ColorObject, into: &mut ColorObject);
 In this function, anyone can pass an immutable object as the first argument, `from`, but not the second argument.
 Because you can never mutate immutable objects, there's no data race, even when multiple transactions are using the same immutable object at the same time. Hence, the existence of immutable objects does not pose any requirement on consensus.
 
-## Test immutable object 
+## Test immutable object
 
 You can interact with immutable objects in unit tests using `test_scenario::take_immutable<T>` to take an immutable object wrapper from global storage, and `test_scenario::return_immutable` to return the wrapper back to the global storage.
 
@@ -113,7 +113,7 @@ public entry fun update(
 
 As you have learned, the function fails when the `ColorObject` is immutable.
 
-## On-chain interactions 
+## On-chain interactions
 
 First, view the objects you own:
 
@@ -126,13 +126,13 @@ sui client objects $ADDR
 Publish the `ColorObject` code on-chain using the Sui Client CLI:
 
 ```shell
-sui client publish $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>
 ```
 
-Set the package object ID to the `$PACKAGE` environment variable as described in previous chapters. Then create a new `ColorObject`:
+Set the package object ID to the `$PACKAGE` environment variable, if you have it set. Then create a new `ColorObject`:
 
 ```shell
-sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 
 Set the newly created object ID to `$OBJECT`. To view the objects in the current active address:
@@ -144,7 +144,7 @@ sui client objects $ADDR
 You should see an object with the ID you used for `$OBJECT`. To turn it into an immutable object:
 
 ```shell
-sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
+sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
 ```
 
 View the list of objects again:
@@ -168,7 +168,7 @@ Owner: Immutable
 If you try to mutate it:
 
 ```shell
-sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
+sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
 ```
 
 The response indicates that you can't pass an immutable object to a mutable argument.
