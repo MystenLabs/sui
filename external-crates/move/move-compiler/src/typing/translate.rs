@@ -4,7 +4,7 @@
 
 use super::{
     core::{self, Context, Local, Subst},
-    expand, globals, infinite_instantiations, recursive_structs,
+    expand, infinite_instantiations, recursive_structs,
 };
 use crate::{
     diag,
@@ -233,7 +233,6 @@ fn function(
         entry,
         mut signature,
         body: n_body,
-        acquires,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
@@ -260,7 +259,7 @@ fn function(
     }
     expand::function_signature(context, &mut signature);
 
-    let body = function_body(context, &acquires, n_body);
+    let body = function_body(context, n_body);
     unused_let_muts(context);
     context.current_function = None;
     context.env.pop_warning_filter_scope();
@@ -271,7 +270,6 @@ fn function(
         visibility,
         entry,
         signature,
-        acquires,
         body,
     }
 }
@@ -292,11 +290,7 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
     core::solve_constraints(context);
 }
 
-fn function_body(
-    context: &mut Context,
-    acquires: &BTreeMap<StructName, Loc>,
-    sp!(loc, nb_): N::FunctionBody,
-) -> T::FunctionBody {
+fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::FunctionBody {
     assert!(context.constraints.is_empty());
     let mut b_ = match nb_ {
         N::FunctionBody_::Native => T::FunctionBody_::Native,
@@ -317,7 +311,6 @@ fn function_body(
     };
     core::solve_constraints(context);
     expand::function_body_(context, &mut b_);
-    globals::function_body_(context, acquires, &b_);
     // freeze::function_body_(context, &mut b_);
     sp(loc, b_)
 }
@@ -2224,7 +2217,7 @@ fn method_call(
             return None;
         }
     };
-    let (_defined_loc, m, f, targs, parameters, acquires, ret_ty) =
+    let (_defined_loc, m, f, targs, parameters, ret_ty) =
         core::make_method_call_type(context, loc, &edotted_ty, tn, method, ty_args_opt)?;
 
     let first_arg = match &parameters[0].1.value {
@@ -2250,9 +2243,7 @@ fn method_call(
         _ => exp_dotted_to_owned_value(context, loc, edotted, edotted_ty),
     };
     args.insert(0, first_arg);
-    let call = module_call_impl(
-        context, loc, m, f, targs, parameters, acquires, argloc, args,
-    );
+    let call = module_call_impl(context, loc, m, f, targs, parameters, argloc, args);
     Some((ret_ty, TE::ModuleCall(Box::new(call))))
 }
 
@@ -2277,11 +2268,9 @@ fn module_call(
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> (Type, T::UnannotatedExp_) {
-    let (_, ty_args, parameters, acquires, ret_ty) =
+    let (_, ty_args, parameters, ret_ty) =
         core::make_function_type(context, loc, &m, &f, ty_args_opt);
-    let call = module_call_impl(
-        context, loc, m, f, ty_args, parameters, acquires, argloc, args,
-    );
+    let call = module_call_impl(context, loc, m, f, ty_args, parameters, argloc, args);
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2292,7 +2281,6 @@ fn module_call_impl(
     f: FunctionName,
     ty_args: Vec<Type>,
     parameters: Vec<(N::Var, Type)>,
-    acquires: BTreeMap<StructName, Loc>,
     argloc: Loc,
     args: Vec<T::Exp>,
 ) -> T::ModuleCall {
@@ -2321,7 +2309,6 @@ fn module_call_impl(
         type_arguments: ty_args,
         arguments,
         parameter_types: params_ty_list,
-        acquires,
     };
     context
         .used_module_members
@@ -2346,55 +2333,6 @@ fn builtin_call(
     };
     let (b_, params_ty, ret_ty);
     match nb_ {
-        NB::MoveTo(ty_arg_opt) => {
-            let ty_arg = mk_ty_arg(ty_arg_opt);
-            b_ = TB::MoveTo(ty_arg.clone());
-            context.add_ability_constraint(
-                loc,
-                Some(format!("Invalid call of '{}'", &b_)),
-                ty_arg.clone(),
-                Ability_::Key,
-            );
-            let signer_ = Box::new(Type_::signer(bloc));
-            params_ty = vec![sp(bloc, Type_::Ref(false, signer_)), ty_arg];
-            ret_ty = sp(loc, Type_::Unit);
-        }
-        NB::MoveFrom(ty_arg_opt) => {
-            let ty_arg = mk_ty_arg(ty_arg_opt);
-            b_ = TB::MoveFrom(ty_arg.clone());
-            context.add_ability_constraint(
-                loc,
-                Some(format!("Invalid call of '{}'", &b_)),
-                ty_arg.clone(),
-                Ability_::Key,
-            );
-            params_ty = vec![Type_::address(bloc)];
-            ret_ty = ty_arg;
-        }
-        NB::BorrowGlobal(mut_, ty_arg_opt) => {
-            let ty_arg = mk_ty_arg(ty_arg_opt);
-            b_ = TB::BorrowGlobal(mut_, ty_arg.clone());
-            context.add_ability_constraint(
-                loc,
-                Some(format!("Invalid call of '{}'", &b_)),
-                ty_arg.clone(),
-                Ability_::Key,
-            );
-            params_ty = vec![Type_::address(bloc)];
-            ret_ty = sp(loc, Type_::Ref(mut_, Box::new(ty_arg)));
-        }
-        NB::Exists(ty_arg_opt) => {
-            let ty_arg = mk_ty_arg(ty_arg_opt);
-            b_ = TB::Exists(ty_arg.clone());
-            context.add_ability_constraint(
-                loc,
-                Some(format!("Invalid call of '{}'", &b_)),
-                ty_arg,
-                Ability_::Key,
-            );
-            params_ty = vec![Type_::address(bloc)];
-            ret_ty = Type_::bool(loc);
-        }
         NB::Freeze(ty_arg_opt) => {
             let ty_arg = mk_ty_arg(ty_arg_opt);
             b_ = TB::Freeze(ty_arg.clone());

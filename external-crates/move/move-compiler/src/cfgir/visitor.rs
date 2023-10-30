@@ -379,12 +379,6 @@ pub trait SimpleAbsInt: Sized {
                 self.exp(context, state, e);
                 default_values(1)
             }
-            E::Builtin(_, args) => {
-                for arg in args {
-                    self.exp(context, state, arg);
-                }
-                default_values_for_ty(&parent_e.ty)
-            }
             E::Vector(_, n, _, args) => {
                 for arg in args {
                     self.exp(context, state, arg);

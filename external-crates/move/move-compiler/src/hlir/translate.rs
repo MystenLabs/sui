@@ -4,7 +4,7 @@
 
 use crate::{
     diag,
-    expansion::ast::{self as E, AbilitySet, Fields, ModuleIdent},
+    expansion::ast::{self as E, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     naming::ast as N,
     parser::ast::{BinOp_, ConstantName, Field, FunctionName, StructName},
@@ -303,7 +303,6 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         visibility: evisibility,
         entry,
         signature,
-        acquires,
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
@@ -317,7 +316,6 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         visibility: visibility(evisibility),
         entry,
         signature,
-        acquires,
         body,
     }
 }
@@ -1328,7 +1326,6 @@ fn exp_impl(
                 type_arguments,
                 arguments,
                 parameter_types,
-                acquires,
             } = *call;
             let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
             let htys = base_types(context, type_arguments);
@@ -1338,7 +1335,6 @@ fn exp_impl(
                 name,
                 type_arguments: htys,
                 arguments: hargs,
-                acquires,
             };
             HE::ModuleCall(Box::new(call))
         }
@@ -1647,42 +1643,12 @@ fn builtin(
     context: &mut Context,
     result: &mut Block,
     _eloc: Loc,
-    sp!(loc, tb_): T::BuiltinFunction,
+    sp!(_, tb_): T::BuiltinFunction,
     targ: Box<T::Exp>,
 ) -> H::UnannotatedExp_ {
-    use H::{BuiltinFunction_ as HB, UnannotatedExp_ as E};
+    use H::UnannotatedExp_ as E;
     use T::BuiltinFunction_ as TB;
     match tb_ {
-        TB::MoveTo(bt) => {
-            let texpected_tys = vec![
-                sp(loc, N::Type_::Ref(false, Box::new(N::Type_::signer(loc)))),
-                bt.clone(),
-            ];
-            let texpected_ty_ = N::Type_::Apply(
-                Some(AbilitySet::empty()), // Should be unused
-                sp(loc, N::TypeName_::Multiple(texpected_tys.len())),
-                texpected_tys,
-            );
-            let expected_ty = type_(context, sp(loc, texpected_ty_));
-            let args = exp_list(context, result, Some(&expected_ty), *targ);
-            let ty = base_type(context, bt);
-            E::Builtin(Box::new(sp(loc, HB::MoveTo(ty))), args)
-        }
-        TB::MoveFrom(bt) => {
-            let ty = base_type(context, bt);
-            let args = exp_list(context, result, None, *targ);
-            E::Builtin(Box::new(sp(loc, HB::MoveFrom(ty))), args)
-        }
-        TB::BorrowGlobal(mut_, bt) => {
-            let ty = base_type(context, bt);
-            let args = exp_list(context, result, None, *targ);
-            E::Builtin(Box::new(sp(loc, HB::BorrowGlobal(mut_, ty))), args)
-        }
-        TB::Exists(bt) => {
-            let ty = base_type(context, bt);
-            let args = exp_list(context, result, None, *targ);
-            E::Builtin(Box::new(sp(loc, HB::Exists(ty))), args)
-        }
         TB::Freeze(_bt) => {
             let arg = exp(context, result, None, *targ);
             E::Freeze(arg)

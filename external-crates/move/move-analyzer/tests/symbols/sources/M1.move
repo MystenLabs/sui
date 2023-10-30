@@ -32,9 +32,9 @@ module Symbols::M1 {
         M2::some_other_struct(7)
     }
 
-    fun acq(addr: address): u64 acquires SomeStruct {
-        let val = borrow_global<SomeStruct>(addr);
-        val.some_field
+    fun acq(uint: u64): u64 {
+        uint +
+        1
     }
 
     fun multi_arg_call(): u64 {

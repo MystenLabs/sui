@@ -515,14 +515,12 @@ fn constant_(
         parameters: vec![],
         return_type: H::Type_::base(signature),
     };
-    let fake_acquires = BTreeMap::new();
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
         module,
         member: cfgir::MemberName::Constant(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
         signature: &fake_signature,
-        acquires: &fake_acquires,
         locals: &locals,
         infinite_loop_starts: &fake_infinite_loop_starts,
     };
@@ -613,11 +611,10 @@ fn function(
         visibility,
         entry,
         signature,
-        acquires,
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let body = function_body(context, module, name, &signature, &acquires, body);
+    let body = function_body(context, module, name, &signature, body);
     context.env.pop_warning_filter_scope();
     G::Function {
         warning_filter,
@@ -626,7 +623,6 @@ fn function(
         visibility,
         entry,
         signature,
-        acquires,
         body,
     }
 }
@@ -636,7 +632,6 @@ fn function_body(
     module: Option<ModuleIdent>,
     name: FunctionName,
     signature: &H::FunctionSignature,
-    acquires: &BTreeMap<StructName, Loc>,
     sp!(loc, tb_): H::FunctionBody,
 ) -> G::FunctionBody {
     use G::FunctionBody_ as GB;
@@ -665,7 +660,6 @@ fn function_body(
                 member: cfgir::MemberName::Function(name.0),
                 struct_declared_abilities: &context.struct_declared_abilities,
                 signature,
-                acquires,
                 locals: &locals,
                 infinite_loop_starts: &infinite_loop_starts,
             };
@@ -943,7 +937,6 @@ fn visit_function(
         visibility: _,
         entry: _,
         signature,
-        acquires,
         body,
     } = fdef;
     let G::FunctionBody_::Defined {
@@ -962,7 +955,6 @@ fn visit_function(
         member: cfgir::MemberName::Function(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
         signature,
-        acquires,
         locals,
         infinite_loop_starts: &infinite_loop_starts,
     };

@@ -833,7 +833,6 @@ pub fn make_method_call_type(
     FunctionName,
     Vec<Type>,
     Vec<(Var, Type)>,
-    BTreeMap<StructName, Loc>,
     Type,
 )> {
     let target_function_opt = context
@@ -916,18 +915,10 @@ pub fn make_method_call_type(
         .unused
         .remove(&(tn.clone(), method));
 
-    let (defined_loc, ty_args, params, acquires, return_ty) =
+    let (defined_loc, ty_args, params, return_ty) =
         make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
 
-    Some((
-        defined_loc,
-        target_m,
-        target_f,
-        ty_args,
-        params,
-        acquires,
-        return_ty,
-    ))
+    Some((defined_loc, target_m, target_f, ty_args, params, return_ty))
 }
 
 pub fn make_function_type(
@@ -936,13 +927,7 @@ pub fn make_function_type(
     m: &ModuleIdent,
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
-) -> (
-    Loc,
-    Vec<Type>,
-    Vec<(Var, Type)>,
-    BTreeMap<StructName, Loc>,
-    Type,
-) {
+) -> (Loc, Vec<Type>, Vec<(Var, Type)>, Type) {
     let in_current_module = match &context.current_module {
         Some(current) => m == current,
         None => false,
@@ -981,11 +966,6 @@ pub fn make_function_type(
         .map(|(_, n, t)| (*n, subst_tparams(tparam_subst, t.clone())))
         .collect();
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
-    let acquires = if in_current_module {
-        finfo.acquires.clone()
-    } else {
-        BTreeMap::new()
-    };
 
     let defined_loc = finfo.defined_loc;
     match finfo.visibility {
@@ -1050,7 +1030,7 @@ pub fn make_function_type(
         }
         Visibility::Public(_) => (),
     };
-    (defined_loc, ty_args, params, acquires, return_ty)
+    (defined_loc, ty_args, params, return_ty)
 }
 
 //**************************************************************************************************

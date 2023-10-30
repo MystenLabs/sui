@@ -1,3 +1,0 @@
-[backend]
-use_cvc5 = true
-vector_theory = "BoogieArray"

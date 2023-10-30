@@ -1,17 +1,11 @@
 //# init --addresses A=42
 
-
-
-//# run --signers A
+//# run --args @A
 script {
-    use std::signer;
-
-    fun main(s: signer) {
-        assert!(signer::address_of(&s) == @42, 1000);
+    fun main(a: &address) {
+        assert!(*a == @42, 1000);
     }
 }
-
-
 
 //# publish
 module A::M {
@@ -19,23 +13,9 @@ module A::M {
         x: u64,
     }
 
-    public fun publish_foo(s: &signer) {
-        move_to<Foo>(s, Foo { x: 500 })
+    public fun test(): Foo {
+        Foo { x: 42 }
     }
 }
 
-
-
-//# run --signers A
-script {
-    use A::M;
-
-    fun main(s: signer) {
-        M::publish_foo(&s);
-    }
-}
-
-
-
-// Note: named addresses are not supported in resource names yet.
-//# view --address A --resource 0x2a::M::Foo
+//# run 42::M::test

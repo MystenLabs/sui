@@ -453,16 +453,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         bail!("Scripts are not supported")
     }
 
-    async fn view_data(
-        &mut self,
-        _address: AccountAddress,
-        _module: &ModuleId,
-        _resource: &IdentStr,
-        _type_args: Vec<TypeTag>,
-    ) -> anyhow::Result<String> {
-        bail!("Resource viewing is not supported")
-    }
-
     async fn handle_subcommand(
         &mut self,
         task: TaskInput<Self::Subcommand>,

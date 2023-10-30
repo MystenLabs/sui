@@ -138,10 +138,3 @@ pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
     /* code */ 9,
     "invalid private transfer call",
 );
-pub const GLOBAL_STORAGE_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
-    Severity::NonblockingError,
-    /* category */ TYPING,
-    /* code */ 9,
-    "global storage is not supported in Sui",
-);

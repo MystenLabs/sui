@@ -21,16 +21,14 @@ use crate::{
     shared::{unique_map::UniqueMap, CompilationEnv, Name},
 };
 use cfg::*;
-use move_ir_types::location::*;
 use optimize::optimize;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
     pub module: Option<ModuleIdent>,
     pub member: MemberName,
     pub struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
     pub signature: &'a FunctionSignature,
-    pub acquires: &'a BTreeMap<StructName, Loc>,
     pub locals: &'a UniqueMap<Var, SingleType>,
     pub infinite_loop_starts: &'a BTreeSet<Label>,
 }

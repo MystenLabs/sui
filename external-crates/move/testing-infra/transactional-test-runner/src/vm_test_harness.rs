@@ -26,11 +26,9 @@ use move_compiler::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::MoveResolver,
+    language_storage::{ModuleId, TypeTag},
     value::MoveValue,
 };
-use move_resource_viewer::MoveValueAnnotator;
 use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
@@ -47,28 +45,6 @@ struct SimpleVMTestAdapter<'a> {
     compiled_state: CompiledState<'a>,
     storage: InMemoryStorage,
     default_syntax: SyntaxChoice,
-}
-
-pub fn view_resource_in_move_storage(
-    storage: &impl MoveResolver,
-    address: AccountAddress,
-    module: &ModuleId,
-    resource: &IdentStr,
-    type_args: Vec<TypeTag>,
-) -> Result<String> {
-    let tag = StructTag {
-        address: *module.address(),
-        module: module.name().to_owned(),
-        name: resource.to_owned(),
-        type_params: type_args,
-    };
-    match storage.get_resource(&address, &tag).unwrap() {
-        None => Ok("[No Resource Exists]".to_owned()),
-        Some(data) => {
-            let annotated = MoveValueAnnotator::new(storage).view_resource(&tag, &data)?;
-            Ok(format!("{}", annotated))
-        }
-    }
 }
 
 #[derive(Debug, Parser)]
@@ -297,16 +273,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                 )
             })?;
         Ok((None, serialized_return_values))
-    }
-
-    async fn view_data(
-        &mut self,
-        address: AccountAddress,
-        module: &ModuleId,
-        resource: &IdentStr,
-        type_args: Vec<TypeTag>,
-    ) -> Result<String> {
-        view_resource_in_move_storage(&self.storage, address, module, resource, type_args)
     }
 
     #[allow(clippy::diverging_sub_expression)]

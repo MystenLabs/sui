@@ -51,20 +51,6 @@ module 0x8675309::M {
         x + 1
     }
 
-    spec with_multiple_conditions_and_acquires {
-        aborts_if y == 0;
-        aborts_if 0 == y;
-        ensures RET == x/y;
-        ensures x/y == RET;
-    }
-
-    fun with_multiple_conditions_and_acquires(addr: address, x: u64, y: u64): u64
-    acquires T, R {
-        let _ = borrow_global_mut<T>(addr);
-        let _ = borrow_global_mut<R>(addr);
-        x / y
-    }
-
     spec using_block {
         ensures RET = {let y = x; y + 1};
     }

@@ -4,7 +4,6 @@
 
 pub mod bcs;
 pub mod debug;
-pub mod event;
 pub mod hash;
 pub mod signer;
 pub mod string;
@@ -132,18 +131,12 @@ pub fn all_natives(
 
 #[derive(Debug, Clone)]
 pub struct NurseryGasParameters {
-    event: event::GasParameters,
     debug: debug::GasParameters,
 }
 
 impl NurseryGasParameters {
     pub fn zeros() -> Self {
         Self {
-            event: event::GasParameters {
-                write_to_event_store: event::WriteToEventStoreGasParameters {
-                    unit_cost: 0.into(),
-                },
-            },
             debug: debug::GasParameters {
                 print: debug::PrintGasParameters {
                     base_cost: 0.into(),
@@ -171,7 +164,6 @@ pub fn nursery_natives(
         };
     }
 
-    add_natives!("event", event::make_all(gas_params.event));
     add_natives!(
         "debug",
         debug::make_all(silent, gas_params.debug, move_std_addr)

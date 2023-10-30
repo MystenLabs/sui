@@ -1,7 +1,10 @@
-processed 4 tasks
+processed 5 tasks
 
-task 1 'run'. lines 75-83:
-Error: Script execution failed with VMError: {
+task 1 'run'. lines 75-75:
+return values: { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { { true } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } } }
+
+task 2 'run'. lines 77-77:
+Error: Function execution failed with VMError: {
     major_status: VM_MAX_VALUE_DEPTH_REACHED,
     sub_status: None,
     location: 0x42::M,
@@ -9,8 +12,8 @@ Error: Script execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(6), 2)],
 }
 
-task 2 'run'. lines 85-92:
-Error: Script execution failed with VMError: {
+task 3 'run'. lines 79-79:
+Error: Function execution failed with VMError: {
     major_status: VM_MAX_VALUE_DEPTH_REACHED,
     sub_status: None,
     location: 0x42::M,
@@ -18,8 +21,8 @@ Error: Script execution failed with VMError: {
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 3 'run'. lines 95-103:
-Error: Script execution failed with VMError: {
+task 4 'run'. lines 81-81:
+Error: Function execution failed with VMError: {
     major_status: VM_MAX_VALUE_DEPTH_REACHED,
     sub_status: None,
     location: 0x42::M,

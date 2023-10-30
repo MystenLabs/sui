@@ -98,9 +98,6 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
                         they have no fields (or a single boolean field), \
                         they have no type parameters, \
                         and they have only the 'drop' ability.";
-const GLOBAL_NOTE: &str = "Global storage is not used in Sui. \
-                        Instead objects (structs with the 'key' ability) are used with \
-                        programmable transaction blocks and the 'sui::transfer' functions.";
 
 //**************************************************************************************************
 // Entry
@@ -268,7 +265,6 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
         visibility,
         signature,
-        acquires,
         body,
         warning_filter: _,
         index: _,
@@ -285,13 +281,6 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
         )
     }) {
         context.in_test = true;
-    }
-    if let Some(acquire_loc) = acquires.values().next() {
-        global_storage_error(
-            context,
-            *acquire_loc,
-            "Global storage acquires are not supported in Sui",
-        )
     }
     if name.0.value == INIT_FUNCTION_NAME {
         init_visibility(context, name, *visibility, *entry);
@@ -928,17 +917,6 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 check_private_transfer(context, e.exp.loc, mcall)
             }
         }
-        T::UnannotatedExp_::Builtin(b, _) => match &b.value {
-            T::BuiltinFunction_::MoveTo(_)
-            | T::BuiltinFunction_::MoveFrom(_)
-            | T::BuiltinFunction_::BorrowGlobal(_, _)
-            | T::BuiltinFunction_::Exists(_) => global_storage_error(
-                context,
-                e.exp.loc,
-                format!("Global storage primitive '{}' is not supported in Sui", b),
-            ),
-            T::BuiltinFunction_::Freeze(_) | T::BuiltinFunction_::Assert(_) => (),
-        },
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
                 && !context
@@ -1064,18 +1042,4 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
         }
         context.env.add_diag(diag)
     }
-}
-
-fn global_storage_error(context: &mut Context, loc: Loc, msg: impl ToString) {
-    let mut diag = diag!(GLOBAL_STORAGE_DIAG, (loc, msg));
-    let sui_transfer_loc = context
-        .sui_transfer_ident
-        .as_ref()
-        .map(|m| *context.info.modules.get_loc(m).unwrap());
-    if let Some(tloc) = sui_transfer_loc {
-        diag.add_secondary_label((tloc, GLOBAL_NOTE.to_string()))
-    } else {
-        diag.add_note(GLOBAL_NOTE)
-    }
-    context.env.add_diag(diag)
 }

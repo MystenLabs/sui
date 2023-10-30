@@ -23,7 +23,6 @@ pub struct FunctionInfo {
     pub defined_loc: Loc,
     pub visibility: Visibility,
     pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +57,6 @@ macro_rules! program_info {
                 defined_loc: fname.loc(),
                 visibility: fdef.visibility.clone(),
                 signature: fdef.signature.clone(),
-                acquires: fdef.acquires.clone(),
             });
             let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
                 defined_loc: cname.loc(),

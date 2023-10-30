@@ -9,7 +9,7 @@ use clap::*;
 use move_command_line_common::{
     address::ParsedAddress,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
-    types::{ParsedStructType, ParsedType},
+    types::ParsedType,
     values::{ParsableValue, ParsedValue},
 };
 use move_compiler::shared::NumericalAddress;
@@ -262,14 +262,6 @@ pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     pub name: Option<(ParsedAddress, Identifier, Identifier)>,
 }
 
-#[derive(Debug, Parser)]
-pub struct ViewCommand {
-    #[clap(long = "address", value_parser = ParsedAddress::parse)]
-    pub address: ParsedAddress,
-    #[clap(long = "resource", value_parser = ParsedStructType::parse)]
-    pub resource: ParsedStructType,
-}
-
 #[derive(Debug)]
 pub enum TaskCommand<
     ExtraInitArgs: Parser,
@@ -282,7 +274,6 @@ pub enum TaskCommand<
     PrintBytecode(PrintBytecodeCommand),
     Publish(PublishCommand, ExtraPublishArgs),
     Run(RunCommand<ExtraValueArgs>, ExtraRunArgs),
-    View(ViewCommand),
     Subcommand(SubCommands),
 }
 
@@ -312,9 +303,6 @@ impl<
                 FromArgMatches::from_arg_matches(matches)?,
                 FromArgMatches::from_arg_matches(matches)?,
             ),
-            Some(("view", matches)) => {
-                TaskCommand::View(FromArgMatches::from_arg_matches(matches)?)
-            }
             _ => TaskCommand::Subcommand(SubCommands::from_arg_matches(matches)?),
         })
     }
@@ -343,7 +331,6 @@ impl<
             .subcommand(
                 RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("run"),
             )
-            .subcommand(ViewCommand::command().name("view"))
     }
 
     fn command_for_update() -> Command {

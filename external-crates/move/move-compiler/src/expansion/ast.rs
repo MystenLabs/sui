@@ -254,7 +254,6 @@ pub struct Function {
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
-    pub acquires: Vec<ModuleAccess>,
     pub body: FunctionBody,
     pub specs: BTreeMap<SpecId, SpecBlock>,
 }
@@ -1413,7 +1412,6 @@ impl AstDebug for (FunctionName, &Function) {
                 visibility,
                 entry,
                 signature,
-                acquires,
                 body,
                 specs: _specs,
                 warning_filter,
@@ -1430,11 +1428,6 @@ impl AstDebug for (FunctionName, &Function) {
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        if !acquires.is_empty() {
-            w.write(" acquires ");
-            w.comma(acquires, |w, m| m.ast_debug(w));
-            w.write(" ");
-        }
         match &body.value {
             FunctionBody_::Defined(body) => body.ast_debug(w),
             FunctionBody_::Native => w.writeln(";"),

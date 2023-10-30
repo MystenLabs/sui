@@ -21,11 +21,4 @@ module 0x8675309::M {
         *f + u
     }
 
-    public fun bg(a: address) acquires R {
-        // implicit freeze creates a temp local.
-        // If the temp is inlined, the borrow global won't fail
-        let (f, u): (&R, &R) = (borrow_global_mut<R>(a), borrow_global<R>(a));
-        f;
-        u;
-    }
 }

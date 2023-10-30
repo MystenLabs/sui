@@ -75,14 +75,7 @@ pub(crate) fn prepare_with_override(
     // build mapping for named addresses
     let mut named_addresses = BTreeMap::new();
     if !options.no_default_named_addresses {
-        let default_mapping = [
-            ("std", "0x1"),
-            ("DiemFramework", "0x1"),
-            ("DiemRoot", "0xA550C18"),
-            ("CurrencyInfo", "0xA550C18"),
-            ("TreasuryCompliance", "0xB1E55ED"),
-            ("VMReserved", "0x0"),
-        ];
+        let default_mapping = [("std", "0x1"), ("VMReserved", "0x0")];
         named_addresses.extend(
             default_mapping
                 .iter()

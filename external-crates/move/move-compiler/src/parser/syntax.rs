@@ -2178,7 +2178,6 @@ fn parse_function_decl(
         visibility: visibility.unwrap_or(Visibility::Internal),
         entry,
         signature,
-        acquires,
         name,
         body,
     })

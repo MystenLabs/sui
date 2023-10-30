@@ -104,7 +104,6 @@ pub struct Function {
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
     pub body: FunctionBody,
 }
 
@@ -338,7 +337,6 @@ impl AstDebug for (FunctionName, &Function) {
                 visibility,
                 entry,
                 signature,
-                acquires,
                 body,
             },
         ) = self;
@@ -353,11 +351,6 @@ impl AstDebug for (FunctionName, &Function) {
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        if !acquires.is_empty() {
-            w.write(" acquires ");
-            w.comma(acquires.keys(), |w, s| w.write(&format!("{}", s)));
-            w.write(" ");
-        }
         match &body.value {
             FunctionBody_::Defined {
                 locals,

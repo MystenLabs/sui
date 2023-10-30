@@ -617,16 +617,11 @@ fn function(
         visibility: v,
         entry,
         signature,
-        acquires,
         body,
     } = fdef;
     let v = visibility(v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
-    let acquires = acquires
-        .into_keys()
-        .map(|s| context.struct_definition_name(m.unwrap(), s))
-        .collect();
     let body = match body.value {
         G::FunctionBody_::Native => IR::FunctionBody::Native,
         G::FunctionBody_::Defined {
@@ -653,7 +648,6 @@ fn function(
         visibility: v,
         is_entry: entry.is_some(),
         signature,
-        acquires,
         specifications: vec![],
         body,
     };
@@ -1082,13 +1076,6 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             );
         }
 
-        E::Builtin(b, args) => {
-            for arg in args {
-                exp(context, code, arg);
-            }
-            builtin(context, code, *b);
-        }
-
         E::Freeze(er) => {
             exp(context, code, *er);
             code.push(sp(loc, B::FreezeRef));
@@ -1198,36 +1185,6 @@ fn module_call(
             code.push(sp(loc, B::Call(m, n, base_types(context, tys))))
         }
     }
-}
-
-fn builtin(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, b_): H::BuiltinFunction) {
-    use H::BuiltinFunction_ as HB;
-    use IR::Bytecode_ as B;
-    code.push(sp(
-        loc,
-        match b_ {
-            HB::MoveTo(bt) => {
-                let (n, tys) = struct_definition_name_base(context, bt);
-                B::MoveTo(n, tys)
-            }
-            HB::MoveFrom(bt) => {
-                let (n, tys) = struct_definition_name_base(context, bt);
-                B::MoveFrom(n, tys)
-            }
-            HB::BorrowGlobal(false, bt) => {
-                let (n, tys) = struct_definition_name_base(context, bt);
-                B::ImmBorrowGlobal(n, tys)
-            }
-            HB::BorrowGlobal(true, bt) => {
-                let (n, tys) = struct_definition_name_base(context, bt);
-                B::MutBorrowGlobal(n, tys)
-            }
-            HB::Exists(bt) => {
-                let (n, tys) = struct_definition_name_base(context, bt);
-                B::Exists(n, tys)
-            }
-        },
-    ))
 }
 
 fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {

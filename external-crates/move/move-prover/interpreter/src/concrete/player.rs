@@ -56,8 +56,6 @@ pub type ExecResult<T> = ::std::result::Result<T, AbortInfo>;
 // Constants
 //**************************************************************************************************
 
-const DIEM_CORE_ADDR: AccountAddress = CORE_CODE_ADDRESS;
-
 // TODO(mengxu): these constants are defined in values_impl.rs which are currently not exposed.
 const INDEX_OUT_OF_BOUNDS: u64 = sub_status::NFE_VECTOR_ERROR_BASE + 1;
 const POP_EMPTY_VEC: u64 = sub_status::NFE_VECTOR_ERROR_BASE + 2;
@@ -185,28 +183,28 @@ impl<'env> FunctionContext<'env> {
 
         // dispatch
         match (addr, module_name.as_str(), function_name.as_str()) {
-            (DIEM_CORE_ADDR, "vector", "empty") => {
+            (CORE_CODE_ADDRESS, "vector", "empty") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 0);
                 }
                 let res = self.native_vector_empty();
                 Ok(vec![res])
             }
-            (DIEM_CORE_ADDR, "vector", "length") => {
+            (CORE_CODE_ADDRESS, "vector", "length") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
                 let res = self.native_vector_length(dummy_state.del_value(0));
                 Ok(vec![res])
             }
-            (DIEM_CORE_ADDR, "vector", "borrow") => {
+            (CORE_CODE_ADDRESS, "vector", "borrow") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 2);
                 }
                 self.native_vector_borrow(dummy_state.del_value(0), dummy_state.del_value(1))
                     .map(|res| vec![res])
             }
-            (DIEM_CORE_ADDR, "vector", "borrow_mut") => {
+            (CORE_CODE_ADDRESS, "vector", "borrow_mut") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 2);
                 }
@@ -217,7 +215,7 @@ impl<'env> FunctionContext<'env> {
                 )
                 .map(|res| vec![res])
             }
-            (DIEM_CORE_ADDR, "vector", "push_back") => {
+            (CORE_CODE_ADDRESS, "vector", "push_back") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 2);
                 }
@@ -226,7 +224,7 @@ impl<'env> FunctionContext<'env> {
                 local_state.put_value_override(*srcs.first().unwrap(), res);
                 Ok(vec![])
             }
-            (DIEM_CORE_ADDR, "vector", "pop_back") => {
+            (CORE_CODE_ADDRESS, "vector", "pop_back") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
@@ -239,7 +237,7 @@ impl<'env> FunctionContext<'env> {
                     Err(e) => Err(e),
                 }
             }
-            (DIEM_CORE_ADDR, "vector", "destroy_empty") => {
+            (CORE_CODE_ADDRESS, "vector", "destroy_empty") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
@@ -252,7 +250,7 @@ impl<'env> FunctionContext<'env> {
                     Err(e) => Err(e),
                 }
             }
-            (DIEM_CORE_ADDR, "vector", "swap") => {
+            (CORE_CODE_ADDRESS, "vector", "swap") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 3);
                 }
@@ -269,35 +267,35 @@ impl<'env> FunctionContext<'env> {
                     Err(e) => Err(e),
                 }
             }
-            (DIEM_CORE_ADDR, "signer", "borrow_address") => {
+            (CORE_CODE_ADDRESS, "signer", "borrow_address") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
                 let res = self.native_signer_borrow_address(dummy_state.del_value(0));
                 Ok(vec![res])
             }
-            (DIEM_CORE_ADDR, "hash", "sha2_256") => {
+            (CORE_CODE_ADDRESS, "hash", "sha2_256") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
                 let res = self.native_hash_sha2_256(dummy_state.del_value(0));
                 Ok(vec![res])
             }
-            (DIEM_CORE_ADDR, "hash", "sha3_256") => {
+            (CORE_CODE_ADDRESS, "hash", "sha3_256") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
                 let res = self.native_hash_sha3_256(dummy_state.del_value(0));
                 Ok(vec![res])
             }
-            (DIEM_CORE_ADDR, "bcs", "to_bytes") => {
+            (CORE_CODE_ADDRESS, "bcs", "to_bytes") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
                 self.native_bcs_to_bytes(dummy_state.del_value(0))
                     .map(|res| vec![res])
             }
-            (DIEM_CORE_ADDR, "event", "write_to_event_store") => {
+            (CORE_CODE_ADDRESS, "event", "write_to_event_store") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 3);
                 }
@@ -309,14 +307,14 @@ impl<'env> FunctionContext<'env> {
                 );
                 Ok(vec![])
             }
-            (DIEM_CORE_ADDR, "Signature", "ed25519_validate_pubkey") => {
+            (CORE_CODE_ADDRESS, "Signature", "ed25519_validate_pubkey") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
                 }
                 let res = self.native_signature_ed25519_validate_pubkey(dummy_state.del_value(0));
                 Ok(vec![res])
             }
-            (DIEM_CORE_ADDR, "Signature", "ed25519_verify") => {
+            (CORE_CODE_ADDRESS, "Signature", "ed25519_verify") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 3);
                 }
@@ -325,13 +323,6 @@ impl<'env> FunctionContext<'env> {
                     dummy_state.del_value(1),
                     dummy_state.del_value(2),
                 );
-                Ok(vec![res])
-            }
-            (DIEM_CORE_ADDR, "DiemAccount", "create_signer") => {
-                if cfg!(debug_assertions) {
-                    assert_eq!(srcs.len(), 1);
-                }
-                let res = self.native_diem_account_create_signer(dummy_state.del_value(0));
                 Ok(vec![res])
             }
             _ => unreachable!(),
@@ -2330,13 +2321,6 @@ impl<'env> FunctionContext<'env> {
             .collect();
         let verified = ed25519_verify_signature(&key, &sig, &msg_bytes).is_ok();
         TypedValue::mk_bool(verified)
-    }
-
-    fn native_diem_account_create_signer(&self, addr: TypedValue) -> TypedValue {
-        if cfg!(debug_assertions) {
-            assert_eq!(self.ty_args.len(), 0);
-        }
-        TypedValue::mk_signer(addr.into_address())
     }
 
     //

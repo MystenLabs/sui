@@ -315,58 +315,6 @@ impl fmt::Debug for AbortLocation {
 
 impl std::error::Error for VMStatus {}
 
-pub mod known_locations {
-    use crate::{
-        ident_str,
-        identifier::IdentStr,
-        language_storage::{ModuleId, CORE_CODE_ADDRESS},
-        vm_status::AbortLocation,
-    };
-    use once_cell::sync::Lazy;
-
-    /// The Identifier for the Account module.
-    pub const CORE_ACCOUNT_MODULE_IDENTIFIER: &IdentStr = ident_str!("Account");
-    /// The ModuleId for the Account module.
-    pub static CORE_ACCOUNT_MODULE: Lazy<ModuleId> =
-        Lazy::new(|| ModuleId::new(CORE_CODE_ADDRESS, CORE_ACCOUNT_MODULE_IDENTIFIER.to_owned()));
-    /// Location for an abort in the Account module
-    pub fn core_account_module_abort() -> AbortLocation {
-        AbortLocation::Module(CORE_ACCOUNT_MODULE.clone())
-    }
-
-    /// The Identifier for the Account module.
-    pub const DIEM_ACCOUNT_MODULE_IDENTIFIER: &IdentStr = ident_str!("DiemAccount");
-    /// The ModuleId for the Account module.
-    pub static DIEM_ACCOUNT_MODULE: Lazy<ModuleId> =
-        Lazy::new(|| ModuleId::new(CORE_CODE_ADDRESS, DIEM_ACCOUNT_MODULE_IDENTIFIER.to_owned()));
-    /// Location for an abort in the Account module
-    pub fn diem_account_module_abort() -> AbortLocation {
-        AbortLocation::Module(DIEM_ACCOUNT_MODULE.clone())
-    }
-
-    /// The Identifier for the Diem module.
-    pub const DIEM_MODULE_IDENTIFIER: &IdentStr = ident_str!("Diem");
-    /// The ModuleId for the Diem module.
-    pub static DIEM_MODULE: Lazy<ModuleId> =
-        Lazy::new(|| ModuleId::new(CORE_CODE_ADDRESS, DIEM_MODULE_IDENTIFIER.to_owned()));
-    pub fn diem_module_abort() -> AbortLocation {
-        AbortLocation::Module(DIEM_MODULE.clone())
-    }
-
-    /// The Identifier for the Designated Dealer module.
-    pub const DESIGNATED_DEALER_MODULE_IDENTIFIER: &IdentStr = ident_str!("DesignatedDealer");
-    /// The ModuleId for the Designated Dealer module.
-    pub static DESIGNATED_DEALER_MODULE: Lazy<ModuleId> = Lazy::new(|| {
-        ModuleId::new(
-            CORE_CODE_ADDRESS,
-            DESIGNATED_DEALER_MODULE_IDENTIFIER.to_owned(),
-        )
-    });
-    pub fn designated_dealer_module_abort() -> AbortLocation {
-        AbortLocation::Module(DESIGNATED_DEALER_MODULE.clone())
-    }
-}
-
 macro_rules! derive_status_try_from_repr {
     (
         #[repr($repr_ty:ident)]

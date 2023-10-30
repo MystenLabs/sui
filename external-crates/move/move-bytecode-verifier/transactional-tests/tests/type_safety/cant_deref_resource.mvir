@@ -19,20 +19,14 @@ module 0x1.Token {
         return move(res);
     }
 
-    public exists(addr: address): bool {
-        let yes: bool;
-    label b0:
-        yes = exists<T>(move(addr));
-        return move(yes);
-    }
-
     public publish(account: &signer, t: Self.T) {
     label b0:
-        move_to<T>(move(account), move(t));
-        return;
+        abort(0);
     }
 
-    public test(account: &signer) acquires T {
+    fake(addr: address): &mut Self.T { label b0: abort(0); }
+
+    public test(account: &signer) {
         let addr: address;
         let t: Self.T;
         let tref: &mut Self.T;
@@ -41,7 +35,7 @@ module 0x1.Token {
         addr = signer.address_of(copy(account));
         t = Self.new(0);
         Self.publish(copy(account), move(t));
-        tref = borrow_global_mut<T>(move(addr));
+        tref = Self.fake(move(addr));
         y = *move(tref);
         return;
     }
