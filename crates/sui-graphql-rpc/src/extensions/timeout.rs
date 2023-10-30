@@ -16,7 +16,7 @@ pub(crate) struct Timeout;
 
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(Timeout {})
+        Arc::new(Timeout)
     }
 }
 
