@@ -216,7 +216,7 @@ module deepbook::clob_v2 {
         open_orders: LinkedTable<u64, Order>,
     }
 
-    struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
+    struct Pool<phantom BaseAsset, phantom QuoteAsset> has key, store {
         // The key to the following Critbit Tree are order prices.
         id: UID,
         // All open bid orders.
@@ -269,43 +269,16 @@ module deepbook::clob_v2 {
         creation_fee: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
-        let base_type_name = type_name::get<BaseAsset>();
-        let quote_type_name = type_name::get<QuoteAsset>();
-
-        assert!(clob_math::unsafe_mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
-        assert!(base_type_name != quote_type_name, EInvalidPair);
-        assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
-
-        let pool_uid = object::new(ctx);
-        let pool_id = *object::uid_as_inner(&pool_uid);
         transfer::share_object(
-            Pool<BaseAsset, QuoteAsset> {
-                id: pool_uid,
-                bids: critbit::new(ctx),
-                asks: critbit::new(ctx),
-                next_bid_order_id: MIN_BID_ORDER_ID,
-                next_ask_order_id: MIN_ASK_ORDER_ID,
-                usr_open_orders: table::new(ctx),
+            create_pool_with_return_<BaseAsset, QuoteAsset>(
                 taker_fee_rate,
                 maker_rebate_rate,
                 tick_size,
                 lot_size,
-                base_custodian: custodian::new<BaseAsset>(ctx),
-                quote_custodian: custodian::new<QuoteAsset>(ctx),
                 creation_fee,
-                base_asset_trading_fees: balance::zero(),
-                quote_asset_trading_fees: balance::zero(),
-            }
+                ctx
+            )
         );
-        event::emit(PoolCreated {
-            pool_id,
-            base_asset: base_type_name,
-            quote_asset: quote_type_name,
-            taker_fee_rate,
-            maker_rebate_rate,
-            tick_size,
-            lot_size,
-        })
     }
 
     public fun create_pool<BaseAsset, QuoteAsset>(
@@ -314,7 +287,6 @@ module deepbook::clob_v2 {
         creation_fee: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
         create_customized_pool<BaseAsset, QuoteAsset>(
             tick_size,
             lot_size,
@@ -325,9 +297,9 @@ module deepbook::clob_v2 {
         );
     }
 
-    // Function for creating pool with customized taker fee rate and maker rebate rate.
-    // The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
-    // Taker_fee_rate of 0.25% should be 2_500_000 for example
+    /// Function for creating pool with customized taker fee rate and maker rebate rate.
+    /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
+    /// Taker_fee_rate of 0.25% should be 2_500_000 for example
     public fun create_customized_pool<BaseAsset, QuoteAsset>(
         tick_size: u64,
         lot_size: u64,
@@ -336,8 +308,94 @@ module deepbook::clob_v2 {
         creation_fee: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
         create_pool_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            coin::into_balance(creation_fee),
+            ctx
+        )
+    }
+
+    /// Helper function that all the create pools now call to create pools.
+    fun create_pool_with_return_<BaseAsset, QuoteAsset>(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Balance<SUI>,
+        ctx: &mut TxContext,
+    ) : Pool<BaseAsset, QuoteAsset> {
+        assert!(balance::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+
+        let base_type_name = type_name::get<BaseAsset>();
+        let quote_type_name = type_name::get<QuoteAsset>();
+
+        assert!(clob_math::unsafe_mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
+        assert!(base_type_name != quote_type_name, EInvalidPair);
+        assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
+
+        let pool_uid = object::new(ctx);
+        let pool_id = *object::uid_as_inner(&pool_uid);
+    
+        event::emit(PoolCreated {
+            pool_id,
+            base_asset: base_type_name,
+            quote_asset: quote_type_name,
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+        });
+        Pool<BaseAsset, QuoteAsset> {
+            id: pool_uid,
+            bids: critbit::new(ctx),
+            asks: critbit::new(ctx),
+            next_bid_order_id: MIN_BID_ORDER_ID,
+            next_ask_order_id: MIN_ASK_ORDER_ID,
+            usr_open_orders: table::new(ctx),
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            base_custodian: custodian::new<BaseAsset>(ctx),
+            quote_custodian: custodian::new<QuoteAsset>(ctx),
+            creation_fee,
+            base_asset_trading_fees: balance::zero(),
+            quote_asset_trading_fees: balance::zero(),
+        }
+    }
+
+    /// Function for creating an external pool. This API can be used to wrap deepbook pools into other objects.
+    public fun create_pool_with_return<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) : Pool<BaseAsset, QuoteAsset> {
+        create_customized_pool_with_return<BaseAsset, QuoteAsset>(
+            tick_size,
+            lot_size,
+            REFERENCE_TAKER_FEE_RATE,
+            REFERENCE_MAKER_REBATE_RATE,
+            creation_fee,
+            ctx,
+        )
+    }
+
+    /// Function for creating pool with customized taker fee rate and maker rebate rate.
+    /// The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
+    /// Taker_fee_rate of 0.25% should be 2_500_000 for example
+    public fun create_customized_pool_with_return<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) : Pool<BaseAsset, QuoteAsset> {
+        create_pool_with_return_<BaseAsset, QuoteAsset>(
             taker_fee_rate,
             maker_rebate_rate,
             tick_size,
@@ -1804,6 +1862,53 @@ module deepbook::clob_v2 {
         };
     }
 
+    // Test wrapped pool struct
+    #[test_only]
+    struct WrappedPool<phantom BaseAsset, phantom QuoteAsset> has key, store {
+        id: UID,
+        pool: Pool<BaseAsset, QuoteAsset>,
+    }
+
+    #[test_only]
+    public fun borrow_mut_pool<BaseAsset, QuoteAsset>(
+        wpool: &mut WrappedPool<BaseAsset, QuoteAsset>
+    ): &mut Pool<BaseAsset, QuoteAsset> {
+        &mut wpool.pool
+    }
+
+    #[test_only]
+    public fun setup_test_with_tick_lot_and_wrapped_pool(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        // tick size with scaling
+        tick_size: u64,
+        lot_size: u64,
+        scenario: &mut Scenario,
+        sender: address,
+    ) {
+        test_scenario::next_tx(scenario, sender);
+        {
+            clock::share_for_testing(clock::create_for_testing(test_scenario::ctx(scenario)));
+        };
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            let pool = create_pool_with_return_<SUI, USD>(
+                taker_fee_rate,
+                maker_rebate_rate,
+                tick_size,
+                lot_size,
+                balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
+                test_scenario::ctx(scenario)
+            );
+            // let pool = 
+            transfer::share_object(WrappedPool {
+                id: object::new(test_scenario::ctx(scenario)),
+                pool
+            });
+        };
+    }
+
     #[test_only]
     public fun setup_test(
         taker_fee_rate: u64,
@@ -1812,6 +1917,23 @@ module deepbook::clob_v2 {
         sender: address,
     ) {
         setup_test_with_tick_lot(
+            taker_fee_rate,
+            maker_rebate_rate,
+            1 * FLOAT_SCALING,
+            1,
+            scenario,
+            sender,
+        );
+    }
+
+    #[test_only]
+    public fun setup_test_wrapped_pool(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        scenario: &mut Scenario,
+        sender: address,
+    ) {
+        setup_test_with_tick_lot_and_wrapped_pool(
             taker_fee_rate,
             maker_rebate_rate,
             1 * FLOAT_SCALING,
