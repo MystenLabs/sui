@@ -478,32 +478,26 @@ impl ConsensusAdapter {
         const LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 0;
         const MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS: u64 = 2_500;
 
-        // If the measured latency from our node is high, then we want to back off to err on having less
-        // amplification in case our system is under stress.
-        let amplification_cut_off_latency = Duration::from_millis(5_000);
-
         let p = self.consensus_throughput_profiler.load();
 
         if let Some(profiler) = p.as_ref() {
             let (level, _) = profiler.throughput_level();
 
+            // If the measured latency for the submissions from our node is high, then we want to
+            // back off to err on having less amplification in case our system is under stress.
+            // Aggressively amplifying the traffic when our node doesn't sequence fast enough won't help.
+            let amplification_cut_off_latency = Duration::from_millis(5_000);
+            if measured_latency >= amplification_cut_off_latency {
+                return delay_step;
+            }
+
             // we only run this for the position = 1 validator to co-submit with the validator of
             // position = 0. We also enable this only when the feature is enabled on the protocol config.
             if self.protocol_config.throughput_aware_consensus_submission() && position == 1 {
                 return match level {
-                    Level::Low => {
-                        if measured_latency >= amplification_cut_off_latency {
-                            delay_step
-                        } else {
-                            Duration::from_millis(LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
-                        }
-                    }
+                    Level::Low => Duration::from_millis(LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS),
                     Level::Medium => {
-                        if measured_latency >= amplification_cut_off_latency {
-                            delay_step
-                        } else {
-                            Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
-                        }
+                        Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
                     }
                     Level::High => delay_step, // under high load just go with default latency as measured by node
                 };
