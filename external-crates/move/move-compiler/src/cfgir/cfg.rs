@@ -325,7 +325,7 @@ fn unreachable_loc_exp(parent_e: &Exp) -> Option<Loc> {
         E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)
-        | E::Borrow(_, e, _)
+        | E::Borrow(_, e, _, _)
         | E::Cast(e, _) => unreachable_loc_exp(e),
 
         E::BinopExp(e1, _, e2) => unreachable_loc_exp(e1).or_else(|| unreachable_loc_exp(e2)),

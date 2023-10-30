@@ -785,13 +785,14 @@ fn assign(
                 };
                 H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
             };
+            let from_unpack = Some(loc);
             let fields = assign_fields(context, &m, &s, tfields)
                 .into_iter()
                 .enumerate();
             for (idx, (decl_idx, f, bt, tfa)) in fields {
                 assert!(idx == decl_idx);
                 let floc = tfa.loc;
-                let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f);
+                let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
                 let borrow = H::exp(borrow_ty, sp(floc, borrow_));
                 assign_command(context, &mut after, floc, sp(floc, vec![tfa]), borrow);
@@ -1446,7 +1447,7 @@ fn exp_impl(
                     .or_default()
                     .insert(f.value());
             }
-            HE::Borrow(mut_, e, f)
+            HE::Borrow(mut_, e, f, None)
         }
         TE::TempBorrow(mut_, te) => {
             let eb = exp_(context, result, None, *te);

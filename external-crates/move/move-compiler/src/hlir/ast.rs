@@ -274,6 +274,8 @@ pub struct ModuleCall {
     pub arguments: Vec<Exp>,
 }
 
+pub type FromUnpack = Option<Loc>;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value_ {
     // @<address>
@@ -335,7 +337,7 @@ pub enum UnannotatedExp_ {
     Pack(StructName, Vec<BaseType>, Vec<(Field, BaseType, Exp)>),
     Multiple(Vec<Exp>),
 
-    Borrow(bool, Box<Exp>, Field),
+    Borrow(bool, Box<Exp>, Field, FromUnpack),
     BorrowLocal(bool, Var),
 
     Cast(Box<Exp>, BuiltinTypeName),
@@ -1309,8 +1311,11 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(" ");
                 r.ast_debug(w)
             }
-            E::Borrow(mut_, e, f) => {
+            E::Borrow(mut_, e, f, from_unpack) => {
                 w.write("&");
+                if from_unpack.is_some() {
+                    w.write("#from_unpack ");
+                }
                 if *mut_ {
                     w.write("mut ");
                 }

@@ -237,9 +237,12 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             context.add_diags(errors);
             vec![value]
         }
-        E::Borrow(mut_, e, f) => {
+        E::Borrow(mut_, e, f, shared_borrow) => {
             let evalue = assert_single_value(exp(context, e));
-            let (diags, value) = context.borrow_state.borrow_field(*eloc, *mut_, evalue, f);
+            let (diags, value) =
+                context
+                    .borrow_state
+                    .borrow_field(*eloc, *mut_, evalue, f, *shared_borrow);
             context.add_diags(diags);
             vec![value]
         }
