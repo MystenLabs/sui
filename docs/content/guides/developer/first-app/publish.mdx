@@ -10,18 +10,18 @@ To publish your package to the Sui network, you can use the `sui client publish`
 
 Each module in a package can include a special initializer function that runs at publication time. The goal of an initializer function is to pre-initialize module-specific data (for example, to create singleton objects). The initializer function must have the following properties for it to execute at publication:
 
-    - Function name must be `init`
-    - The parameter list must end with either a `&mut TxContext` or a `&TxContext` type
-    - No return values
-    - Private visibility
-    - Optionally, the parameter list starts by accepting the module's one-time witness by value
+- Function name must be `init`
+- The parameter list must end with either a `&mut TxContext` or a `&TxContext` type
+- No return values
+- Private visibility
+- Optionally, the parameter list starts by accepting the module's one-time witness by value
 
 For example, the following `init` functions are all valid:
 
-    - `fun init(ctx: &TxContext)`
-    - `fun init(ctx: &mut TxContext)`
-    - `fun init(otw: EXAMPLE, ctx: &TxContext)`
-    - `fun init(otw: EXAMPLE, ctx: &mut TxContext)`
+- `fun init(ctx: &TxContext)`
+- `fun init(ctx: &mut TxContext)`
+- `fun init(otw: EXAMPLE, ctx: &TxContext)`
+- `fun init(otw: EXAMPLE, ctx: &mut TxContext)`
 
 While the `sui move` command does not support publishing explicitly, you can still test module initializers using the testing framework by dedicating the first transaction to executing the initializer function.
 
