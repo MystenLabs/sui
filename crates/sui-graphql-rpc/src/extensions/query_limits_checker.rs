@@ -3,9 +3,7 @@
 
 use crate::config::Limits;
 use crate::config::ServiceConfig;
-use crate::error::code::BAD_USER_INPUT;
 use crate::error::code::INTERNAL_SERVER_ERROR;
-use crate::error::graphql_error;
 use crate::error::graphql_error_at_pos;
 use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
@@ -81,6 +79,17 @@ struct ComponentCost {
     pub depth: u32,
 }
 
+impl std::ops::Add for ComponentCost {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            num_nodes: self.num_nodes + rhs.num_nodes,
+            depth: self.depth + rhs.depth,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl Extension for QueryLimitsChecker {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
@@ -141,40 +150,33 @@ impl Extension for QueryLimitsChecker {
             ));
         }
 
-        // Only allow one operation
-        match doc.operations.iter().count() {
-            0 => {
-                return Err(graphql_error(BAD_USER_INPUT, "One operation is required"));
-            }
-            1 => {}
-            _ => {
-                return Err(graphql_error_at_pos(
-                    BAD_USER_INPUT,
-                    "Query has too many operations. The maximum allowed is 1",
-                    doc.operations.iter().next().unwrap().1.pos,
-                ));
-            }
-        }
-
         // TODO: Limit the complexity of fragments early on
 
-        // Okay to unwrap since we checked for 1 operation
-        let (_name, oper) = doc.operations.iter().next().unwrap();
+        let mut running_costs = ComponentCost {
+            depth: 0,
+            num_nodes: 0,
+        };
 
-        let ComponentCost { num_nodes, depth } =
-            self.analyze_selection_set(&cfg.limits, &doc.fragments, &oper.node.selection_set)?;
+        for (_name, oper) in doc.operations.iter() {
+            self.analyze_selection_set(
+                &cfg.limits,
+                &doc.fragments,
+                &oper.node.selection_set,
+                &mut running_costs,
+            )?;
+        }
 
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
-                num_nodes,
-                depth,
+                num_nodes: running_costs.num_nodes,
+                depth: running_costs.depth,
                 num_variables: variables.len() as u32,
                 num_fragments: doc.fragments.len() as u32,
             });
         }
         if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
-            metrics.num_nodes.observe(num_nodes as f64);
-            metrics.query_depth.observe(depth as f64);
+            metrics.num_nodes.observe(running_costs.num_nodes as f64);
+            metrics.query_depth.observe(running_costs.depth as f64);
             metrics.query_payload_size.observe(query.len() as f64);
         }
         Ok(doc)
@@ -187,20 +189,17 @@ impl QueryLimitsChecker {
         limits: &Limits,
         fragment_defs: &HashMap<Name, Positioned<FragmentDefinition>>,
         sel_set: &Positioned<SelectionSet>,
-    ) -> ServerResult<ComponentCost> {
+        cost: &mut ComponentCost,
+    ) -> ServerResult<()> {
         // Use BFS to analyze the query and count the number of nodes and the depth of the query
 
         // Queue to store the nodes at each level
         let mut que = VecDeque::new();
-        // Number of nodes in the query
-        let mut num_nodes: u32 = 0;
-        // Depth of the query
-        let mut depth: u32 = 0;
 
         for top_level_sel in sel_set.node.items.iter() {
             que.push_back(top_level_sel);
-            num_nodes += 1;
-            check_limits(limits, num_nodes, depth, Some(top_level_sel.pos))?;
+            cost.num_nodes += 1;
+            check_limits(limits, cost.num_nodes, cost.depth, Some(top_level_sel.pos))?;
         }
 
         // Track the number of nodes at first level if any
@@ -208,8 +207,8 @@ impl QueryLimitsChecker {
 
         while !que.is_empty() {
             // Signifies the start of a new level
-            depth += 1;
-            check_limits(limits, num_nodes, depth, None)?;
+            cost.depth += 1;
+            check_limits(limits, cost.num_nodes, cost.depth, None)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -219,8 +218,8 @@ impl QueryLimitsChecker {
                     Selection::Field(f) => {
                         for field_sel in f.node.selection_set.node.items.iter() {
                             que.push_back(field_sel);
-                            num_nodes += 1;
-                            check_limits(limits, num_nodes, depth, Some(field_sel.pos))?;
+                            cost.num_nodes += 1;
+                            check_limits(limits, cost.num_nodes, cost.depth, Some(field_sel.pos))?;
                         }
                     }
                     Selection::FragmentSpread(fs) => {
@@ -241,15 +240,20 @@ impl QueryLimitsChecker {
                         // Will do as enhancement
                         for frag_sel in frag_def.node.selection_set.node.items.iter() {
                             que.push_back(frag_sel);
-                            num_nodes += 1;
-                            check_limits(limits, num_nodes, depth, Some(frag_sel.pos))?;
+                            cost.num_nodes += 1;
+                            check_limits(limits, cost.num_nodes, cost.depth, Some(frag_sel.pos))?;
                         }
                     }
                     Selection::InlineFragment(fs) => {
                         for in_frag_sel in fs.node.selection_set.node.items.iter() {
                             que.push_back(in_frag_sel);
-                            num_nodes += 1;
-                            check_limits(limits, num_nodes, depth, Some(in_frag_sel.pos))?;
+                            cost.num_nodes += 1;
+                            check_limits(
+                                limits,
+                                cost.num_nodes,
+                                cost.depth,
+                                Some(in_frag_sel.pos),
+                            )?;
                         }
                     }
                 }
@@ -257,7 +261,7 @@ impl QueryLimitsChecker {
             }
             level_len = que.len();
         }
-        Ok(ComponentCost { num_nodes, depth })
+        Ok(())
     }
 }
 
