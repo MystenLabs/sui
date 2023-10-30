@@ -16,6 +16,19 @@ use tracing::error;
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
+        Command::GenerateConfig { path } => {
+            let cfg = ServerConfig::default();
+            if let Some(file) = path {
+                println!("Write config to file: {:?}", file);
+                cfg.to_yaml_file(file)
+                    .expect("Failed writing config to file");
+            } else {
+                println!(
+                    "{}",
+                    &cfg.to_yaml().expect("Failed serializing config to yaml")
+                );
+            }
+        }
         Command::GenerateSchema { file } => {
             let out = schema_sdl_export();
             if let Some(file) = file {
