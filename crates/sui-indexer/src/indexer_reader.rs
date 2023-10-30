@@ -47,7 +47,7 @@ use sui_json_rpc_types::{
     Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI,
 };
-use sui_types::dynamic_field::DynamicFieldName;
+use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -1543,13 +1543,42 @@ impl IndexerReader {
         &self,
         coin_struct: StructTag,
     ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
-        let coin_metadata_obj_id = get_coin_metadata_obj_id(self, coin_struct)?;
+        let package_id = coin_struct.address.into();
+        let coin_metadata_type = CoinMetadata::type_(coin_struct).to_string();
+        let coin_metadata_obj_id =
+            get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type)?;
         if let Some(id) = coin_metadata_obj_id {
             let metadata_object = self.get_object(&id, None)?;
             Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
         } else {
             Ok(None)
         }
+    }
+
+    pub async fn get_total_supply_in_blocking_task(
+        &self,
+        coin_struct: StructTag,
+    ) -> Result<Supply, IndexerError> {
+        self.spawn_blocking(move |this| this.get_total_supply(coin_struct))
+            .await
+    }
+
+    fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
+        let package_id = coin_struct.address.into();
+        let treasury_cap_type = TreasuryCap::type_(coin_struct).to_string();
+        let treasury_cap_obj_id =
+            get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())?
+                .ok_or(IndexerError::GenericError(format!(
+                    "Cannot find treasury cap for type {}",
+                    treasury_cap_type
+                )))?;
+        let treasury_cap_obj_object =
+            self.get_object(&treasury_cap_obj_id, None)?
+                .ok_or(IndexerError::GenericError(format!(
+                    "Cannot find treasury cap object with id {}",
+                    treasury_cap_obj_id
+                )))?;
+        Ok(TreasuryCap::try_from(treasury_cap_obj_object)?.total_supply)
     }
 }
 
@@ -1629,14 +1658,14 @@ impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
 #[cached(
     type = "SizedCache<String, Option<ObjectID>>",
     create = "{ SizedCache::with_size(10000) }",
-    convert = r#"{ format!("{}", coin_struct) }"#,
+    convert = r#"{ format!("{}{}", package_id, obj_type) }"#,
     result = true
 )]
-fn get_coin_metadata_obj_id(
+fn get_single_obj_id_from_package_publish(
     reader: &IndexerReader,
-    coin_struct: StructTag,
+    package_id: ObjectID,
+    obj_type: String,
 ) -> Result<Option<ObjectID>, IndexerError> {
-    let package_id = coin_struct.address.into();
     let publish_txn_effects_opt = if is_system_package(package_id) {
         Some(reader.get_transaction_effects_with_sequence_number(0))
     } else {
@@ -1651,19 +1680,18 @@ fn get_coin_metadata_obj_id(
             .iter()
             .map(|o| o.object_id())
             .collect::<Vec<_>>();
-        let coin_metadata_type = CoinMetadata::type_(coin_struct).to_string();
-        let metadata_ids =
-            reader.filter_object_id_with_type(created_objs, coin_metadata_type.clone())?;
-        if metadata_ids.len() == 1 {
-            Ok(Some(metadata_ids[0]))
-        } else if metadata_ids.is_empty() {
-            // The package exists but no coin metadata object is created in that transaction. Or maybe it is wrapped and we don't know.
+        let obj_ids_with_type =
+            reader.filter_object_id_with_type(created_objs, obj_type.clone())?;
+        if obj_ids_with_type.len() == 1 {
+            Ok(Some(obj_ids_with_type[0]))
+        } else if obj_ids_with_type.is_empty() {
+            // The package exists but no such object is created in that transaction. Or maybe it is wrapped and we don't know yet.
             Ok(None)
         } else {
-            // This really should never happen since there should only be one coin metadata object per coin type.
+            // We expect there to be only one object of this type created by the package but more than one is found.
             tracing::error!(
-                "There are more than one coin metadata objects for type {}",
-                coin_metadata_type
+                "There are more than one objects found for type {}",
+                obj_type
             );
             Ok(None)
         }
