@@ -64,7 +64,7 @@ Append the `--json` flag to commands to format responses in JSON instead of the 
 
 The following examples demonstrate some of the most often used commands. 
 
-### List the keypairs in the local wallet
+### List the key pairs in the local wallet
 
 Use the `sui keytool list` command to output all the Sui addresses that exist in the `~/.sui/sui_config/sui.keystore` file in a readable format. 
 
@@ -91,7 +91,7 @@ $ sui keytool list
 
 ### Generate a new key pair and store it in a file
 
-To generate a new key pair with the `ed25519` scheme, use the `sui keytool generate ed25519` command. For other schemes, see `sui keytool generate –help`. The keypair file is saved to the current directory with its filename being the address. The content of the file is a Base64 encoded string of 33-byte `flag || privkey`. 
+To generate a new key pair with the `ed25519` scheme, use the `sui keytool generate ed25519` command. For other schemes, see `sui keytool generate –help`. The key pair file is saved to the current directory with its filename being the address. The content of the file is a Base64 encoded string of 33-byte `flag || privkey`. 
 
 ```shell
 $ sui keytool generate ed25519
