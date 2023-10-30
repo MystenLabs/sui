@@ -23,6 +23,7 @@ const styles = cva(
 				google: 'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
 				facebook: 'bg-facebook border-none text-white',
 				twitch: 'bg-twitch border-none text-white',
+				kakao: 'bg-kakao border-none text-black/85',
 			},
 		},
 	},
@@ -56,6 +57,10 @@ const socialSignInProviderInfo: Record<
 	twitch: {
 		icon: TwitchLogo,
 		label: 'Sign in with Twitch',
+	},
+	kakao: {
+		icon: TwitchLogo,
+		label: 'Sign in with Kakao',
 	},
 };
 

@@ -27,6 +27,7 @@ const providerToAmpli: Record<
 	google: 'Google',
 	twitch: 'Twitch',
 	facebook: 'Facebook',
+	kakao: 'Kakao',
 };
 
 export type ZkLoginButtonsProps = {

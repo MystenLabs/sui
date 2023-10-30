@@ -109,8 +109,9 @@ export class ZkLoginAccount
 		provider: ZkLoginProvider;
 	}): Promise<Omit<ZkLoginAccountSerialized, 'id'>> {
 		const jwt = await zkLoginAuthenticate({ provider, prompt: true });
-		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
+		console.log(decodedJWT);
+		const salt = await fetchSalt(jwt);
 		if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
 			throw new Error('Missing jwt data');
 		}

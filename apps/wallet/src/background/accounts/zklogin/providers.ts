@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export type ZkLoginProvider = 'google' | 'twitch' | 'facebook';
+import Browser from 'webextension-polyfill';
+
+export type ZkLoginProvider = 'google' | 'twitch' | 'facebook' | 'kakao';
 
 export interface ZkLoginProviderData {
 	clientID: string;
@@ -15,6 +17,7 @@ export interface ZkLoginProviderData {
 	enabled: boolean;
 	hidden?: boolean;
 	mfaLink?: string;
+	extractJWT?: (authResponseURL: URL) => Promise<string>;
 }
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -71,5 +74,39 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		enabled: isDev,
 		hidden: !isDev,
 		mfaLink: 'https://www.facebook.com/help/148233965247823',
+	},
+	kakao: {
+		clientID: '5dea1191b184e641d271af1fff43fc44',
+		url: 'https://kauth.kakao.com/oauth/authorize',
+		extraParams: {
+			response_type: 'code',
+		},
+		buildExtraParams: ({ prompt, loginHint, params }) => {
+			if (prompt) {
+				params.append('prompt', 'select_account');
+			}
+			if (loginHint) {
+				params.append('login_hint', loginHint);
+			}
+		},
+		enabled: isDev,
+		hidden: !isDev,
+		mfaLink: 'https://cs.kakao.com/helps?service=52&locale=en&category=561',
+		extractJWT: async (responseURL) => {
+			const code = responseURL.searchParams.get('code');
+			if (!code) {
+				throw new Error('Code not found');
+			}
+			const res = await fetch('https://kauth.kakao.com/oauth/token', {
+				method: 'POST',
+				body: new URLSearchParams({
+					grant_type: 'authorization_code',
+					client_id: zkLoginProviderDataMap.kakao.clientID,
+					redirect_uri: Browser.identity.getRedirectURL(),
+					code,
+				}),
+			});
+			return (await res.json())?.id_token;
+		},
 	},
 };
