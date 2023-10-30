@@ -1,5 +1,6 @@
 ---
 title: Package Upgrades
+description: Sui provides a method of upgrading your packages while still retaining their immutable properties.
 ---
 
 Sui smart contracts are represented by immutable package objects consisting of a collection of Move modules. Because the packages are immutable, transactions can safely access smart contracts without full consensus (fast-path transactions). If someone could change these packages, they would become [shared objects](../../../concepts/object-ownership/shared.mdx#shared), which would require full consensus before completing a transaction. 
@@ -12,7 +13,7 @@ This topic examines how to upgrade packages using the Sui Client CLI. Move devel
 
 There are some details of the process that you should consider before upgrading your packages.
 
-For example, [module initializers](../init.mdx) do not re-run with package upgrades. When you publish your initial package, Sui Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored.
+For example, [module initializers](../init.mdx) do not re-run with package upgrades. When you publish your initial package, Move runs the `init` function you define for the package once (and only once) at the time of the publish event. Any `init` functions you might include in subsequent versions of your package are ignored.
 
 As alluded to previously, all packages on the Sui network are immutable. Because of this fact, you cannot delete old packages from the chain. As a result, there is nothing that prevents other packages from accessing the methods and types defined in the old versions of your upgraded packages. By default, users can choose to keep using the old version of a package, as well. As a package developer, you must be aware of and account for this possibility.
 
