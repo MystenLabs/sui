@@ -171,6 +171,9 @@ pub(crate) struct ObjectEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) bcs: String,
+
+    pub(crate) coin_type: Option<String>,
+    pub(crate) coin_balance: Option<u64>,
 }
 
 // Objects used and manipulated in a transaction.
