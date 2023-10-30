@@ -162,7 +162,7 @@ impl Extension for QueryLimitsChecker {
         let (_name, oper) = doc.operations.iter().next().unwrap();
 
         let ComponentCost { num_nodes, depth } =
-            self.analyze_selection_set(cfg, &doc.fragments, &oper.node.selection_set)?;
+            self.analyze_selection_set(&cfg.limits, &doc.fragments, &oper.node.selection_set)?;
 
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
@@ -184,12 +184,11 @@ impl Extension for QueryLimitsChecker {
 impl QueryLimitsChecker {
     fn analyze_selection_set(
         &self,
-        cfg: &ServiceConfig,
+        limits: &Limits,
         fragment_defs: &HashMap<Name, Positioned<FragmentDefinition>>,
         sel_set: &Positioned<SelectionSet>,
     ) -> ServerResult<ComponentCost> {
-        // Use BFS to analyze the query and
-        // count the number of nodes and the depth of the query
+        // Use BFS to analyze the query and count the number of nodes and the depth of the query
 
         // Queue to store the nodes at each level
         let mut que = VecDeque::new();
@@ -201,7 +200,7 @@ impl QueryLimitsChecker {
         for top_level_sel in sel_set.node.items.iter() {
             que.push_back(top_level_sel);
             num_nodes += 1;
-            check_limits(&cfg.limits, num_nodes, depth, Some(top_level_sel.pos))?;
+            check_limits(limits, num_nodes, depth, Some(top_level_sel.pos))?;
         }
 
         // Track the number of nodes at first level if any
@@ -210,7 +209,7 @@ impl QueryLimitsChecker {
         while !que.is_empty() {
             // Signifies the start of a new level
             depth += 1;
-            check_limits(&cfg.limits, num_nodes, depth, None)?;
+            check_limits(limits, num_nodes, depth, None)?;
             while level_len > 0 {
                 // Ok to unwrap since we checked for empty queue
                 // and level_len > 0
@@ -221,7 +220,7 @@ impl QueryLimitsChecker {
                         for field_sel in f.node.selection_set.node.items.iter() {
                             que.push_back(field_sel);
                             num_nodes += 1;
-                            check_limits(&cfg.limits, num_nodes, depth, Some(field_sel.pos))?;
+                            check_limits(limits, num_nodes, depth, Some(field_sel.pos))?;
                         }
                     }
                     Selection::FragmentSpread(fs) => {
@@ -243,14 +242,14 @@ impl QueryLimitsChecker {
                         for frag_sel in frag_def.node.selection_set.node.items.iter() {
                             que.push_back(frag_sel);
                             num_nodes += 1;
-                            check_limits(&cfg.limits, num_nodes, depth, Some(frag_sel.pos))?;
+                            check_limits(limits, num_nodes, depth, Some(frag_sel.pos))?;
                         }
                     }
                     Selection::InlineFragment(fs) => {
                         for in_frag_sel in fs.node.selection_set.node.items.iter() {
                             que.push_back(in_frag_sel);
                             num_nodes += 1;
-                            check_limits(&cfg.limits, num_nodes, depth, Some(in_frag_sel.pos))?;
+                            check_limits(limits, num_nodes, depth, Some(in_frag_sel.pos))?;
                         }
                     }
                 }
