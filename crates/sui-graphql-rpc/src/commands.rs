@@ -13,6 +13,11 @@ use std::path::PathBuf;
     version
 )]
 pub enum Command {
+    GenerateConfig {
+        /// Path to output the YAML config, otherwise stdout.
+        #[clap(short, long)]
+        path: Option<PathBuf>,
+    },
     GenerateSchema {
         /// Path to output GraphQL schema to, in SDL format.
         #[clap(short, long)]
