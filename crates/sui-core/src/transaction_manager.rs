@@ -12,17 +12,16 @@ use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, TransactionDigest},
+    base_types::{ObjectID, SequenceNumber},
     committee::EpochId,
     digests::TransactionEffectsDigest,
     error::SuiError,
-    error::SuiResult,
-    executable_transaction::VerifiedExecutableTransaction,
-    fp_ensure,
-    transaction::{SenderSignedData, TransactionDataAPI, VerifiedCertificate},
+    transaction::{TransactionDataAPI, VerifiedCertificate},
 };
-use tap::TapOptional;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, instrument, trace, warn};
 
 use crate::authority::{
@@ -30,7 +29,8 @@ use crate::authority::{
     authority_store::{InputKey, LockMode},
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
-use crate::execution_driver::ExecutionDispatcher;
+use sui_types::transaction::SenderSignedData;
+use tap::TapOptional;
 
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
@@ -56,7 +56,10 @@ pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    pub(crate) execution_dispatcher: Arc<ExecutionDispatcher>,
+    tx_ready_certificates: UnboundedSender<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -378,14 +381,17 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        execution_dispatcher: Arc<ExecutionDispatcher>,
+        tx_ready_certificates: UnboundedSender<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
-            execution_dispatcher,
             metrics: metrics.clone(),
             inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
+            tx_ready_certificates,
         };
         transaction_manager
             .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
@@ -828,9 +834,11 @@ impl TransactionManager {
             .executing_certificates
             .insert(*cert.digest(), pending_certificate.acquired_locks)
             .is_none());
-        self.execution_dispatcher
-            .dispatch_certificate(cert, expected_effects_digest);
+        let _ = self
+            .tx_ready_certificates
+            .send((cert, expected_effects_digest));
         self.metrics.transaction_manager_num_ready.inc();
+        self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.

@@ -221,6 +221,22 @@ jobs:
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
+
+  # This job ensures that Move unit tests are run if there are changes
+  # to Move code but not Rust code (If there are Rust changes, they
+  # will be run as part of a larger test suite).
+  move-test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
+    timeout-minutes: 10
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: taiki-e/install-action@nextest
+      - name: Run move tests
+        run: |
+          cargo nextest run -p sui-framework-tests -- unit_tests::
+
   # # Disabled
   # rosetta-validation:
   #   needs: diff

@@ -84,7 +84,10 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 30: Enable Narwhal CertificateV2
 //             Add support for random beacon.
 //             Enable transaction effects v2 in testnet.
-//             Deprecate supported oauth providers from protocol config and rely on node config instead.
+//             Deprecate supported oauth providers from protocol config and rely on node config
+//             instead.
+//             Enable throughput aware submission for Devnet & Testnet
+//             In execution, has_public_transfer is recomputed when loading the object.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -318,6 +321,14 @@ struct FeatureFlags {
     // If true, allow verify with legacy zklogin address
     #[serde(skip_serializing_if = "is_false")]
     verify_legacy_zklogin_address: bool,
+
+    // Enable throughput aware consensus submission
+    #[serde(skip_serializing_if = "is_false")]
+    throughput_aware_consensus_submission: bool,
+
+    // If true, recompute has_public_transfer from the type instead of what is stored in the object
+    #[serde(skip_serializing_if = "is_false")]
+    recompute_has_public_transfer_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -973,6 +984,11 @@ impl ProtocolConfig {
         ret
     }
 
+    pub fn recompute_has_public_transfer_in_execution(&self) -> bool {
+        self.feature_flags
+            .recompute_has_public_transfer_in_execution
+    }
+
     // this function only exists for readability in the genesis code.
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
@@ -1001,6 +1017,10 @@ impl ProtocolConfig {
 
     pub fn verify_legacy_zklogin_address(&self) -> bool {
         self.feature_flags.verify_legacy_zklogin_address
+    }
+
+    pub fn throughput_aware_consensus_submission(&self) -> bool {
+        self.feature_flags.throughput_aware_consensus_submission
     }
 }
 
@@ -1573,6 +1593,7 @@ impl ProtocolConfig {
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
+
                     // Only enable effects v2 on devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1582,8 +1603,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.verify_legacy_zklogin_address = true;
                 }
                 30 => {
-                    // Only enable nw certificate v2 on devnet.
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    // Only enable nw certificate v2 on testnet.
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.narwhal_certificate_v2 = true;
                     }
 
@@ -1602,7 +1623,14 @@ impl ProtocolConfig {
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
                     cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.throughput_aware_consensus_submission = true;
+                    }
+
+                    cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
+
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

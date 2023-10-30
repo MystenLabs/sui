@@ -11,8 +11,8 @@ outputs:
     description: True when changes happened to the Move code
     value: "${{ steps.diff.outputs.isMove }}"
   isReleaseNotesEligible:
-    description: True when changes happened in Release Notes eligible paths 
-    value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"    
+    description: True when changes happened in Release Notes eligible paths
+    value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"
 
 runs:
   using: composite
@@ -42,6 +42,7 @@ runs:
           - 'crates/sui-framework-tests/**'
           - 'crates/sui_move/**'
           - 'Cargo.toml'
+          - 'examples/**'
           - 'sui_programmability/**'
         isReleaseNotesEligible:
           - 'crates/**'

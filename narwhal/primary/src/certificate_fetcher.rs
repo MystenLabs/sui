@@ -28,6 +28,7 @@ use tokio::{
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
+use types::CertificateDigest;
 use types::{
     error::{DagError, DagResult},
     validate_received_certificate_version, Certificate, CertificateAPI,
@@ -50,10 +51,13 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 // Batch size is chosen so that verifying a batch takes non-trival
 // time (verifying a batch of 200 certificates should take > 100ms).
 const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
-// Number of leaf certificates to verify in a batch. Verifications in each
-// batch run serially. Smaller batch size is chosen as there are significantly
-// less certificates we are verifying when verifiying leaves only
-const VERIFY_LEAF_CERTIFICATES_BATCH_SIZE: usize = 10;
+// Number of certificates to verify in a batch. Verifications in each batch run serially.
+// Batch size is chosen so that verifying a batch takes non-trival
+// time (verifying a batch of 50 certificates should take > 25ms).
+const VERIFY_CERTIFICATES_V2_BATCH_SIZE: usize = 50;
+// Number of rounds to force verfication of certificates by signature, to bound the maximum
+// number of certificates with bad signatures in storage.
+const CERTIFICATE_VERIFICATION_ROUND_INTERVAL: u64 = 50;
 
 #[derive(Clone, Debug)]
 pub enum CertificateFetcherCommand {
@@ -317,7 +321,7 @@ impl CertificateFetcher {
                         );
                     }
                     Err(e) => {
-                        warn!("Error from task to fetch certificates: {e}");
+                        warn!("Error from fetch certificates task: {e}");
                     }
                 };
 
@@ -544,23 +548,18 @@ async fn process_certificates_v2_helper(
     metrics: Arc<PrimaryMetrics>,
 ) -> DagResult<()> {
     let mut all_certificates = vec![];
-    let mut all_parents = HashSet::new();
+    let mut all_parents = HashSet::<CertificateDigest>::new();
     for cert in response.certificates {
+        all_parents.extend(cert.header().parents().iter());
         // We should not be getting mixed versions of certificates from a
         // validator, so any individual certificate with mismatched versions
         // should cancel processing for the entire batch of fetched certificates.
         all_certificates.push(
-            validate_received_certificate_version(cert.clone(), protocol_config).map_err(
-                |err| {
-                    error!("fetched certficate processing error: {err}");
-                    DagError::InvalidCertificateVersion
-                },
-            )?,
+            validate_received_certificate_version(cert, protocol_config).map_err(|err| {
+                error!("fetched certficate processing error: {err}");
+                DagError::InvalidCertificateVersion
+            })?,
         );
-
-        for parent_digest in cert.header().parents() {
-            all_parents.insert(*parent_digest);
-        }
     }
 
     let all_certificates_count = all_certificates.len() as u64;
@@ -568,23 +567,28 @@ async fn process_certificates_v2_helper(
     // Identify leaf certs and preemptively set the parent certificates
     // as verified indirectly. This is safe because any leaf certs that
     // fail verification will cancel processing for all fetched certs.
-    let mut leaf_certs = Vec::new();
+    let mut direct_verification_certs = Vec::new();
     for (idx, c) in all_certificates.iter_mut().enumerate() {
         if !all_parents.contains(&c.digest()) {
-            leaf_certs.push((idx, c.clone()));
-        } else {
-            c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
-                c.aggregated_signature()
-                    .ok_or(DagError::InvalidSignature)?
-                    .clone(),
-            ))
+            direct_verification_certs.push((idx, c.clone()));
+            continue;
         }
+        if c.header().round() % CERTIFICATE_VERIFICATION_ROUND_INTERVAL == 0 {
+            direct_verification_certs.push((idx, c.clone()));
+            continue;
+        }
+        // TODO: add dedicated Certificate API for VerifiedIndirectly.
+        c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
+            c.aggregated_signature()
+                .ok_or(DagError::InvalidSignature)?
+                .clone(),
+        ));
     }
-    let leaves_count = leaf_certs.len() as u64;
+    let direct_verification_count = direct_verification_certs.len() as u64;
 
     // Create verify tasks only for leaf certs as parent certs can skip this completely.
-    let leaf_verify_tasks = leaf_certs
-        .chunks(VERIFY_LEAF_CERTIFICATES_BATCH_SIZE)
+    let verify_tasks = direct_verification_certs
+        .chunks(VERIFY_CERTIFICATES_V2_BATCH_SIZE)
         .map(|chunk| {
             let certs = chunk.to_vec();
             let sync = synchronizer.clone();
@@ -605,7 +609,7 @@ async fn process_certificates_v2_helper(
 
     // We ensure sanitization of certificates completes for all leaves
     // fetched certificates before accepting any certficates.
-    for task in leaf_verify_tasks.into_iter() {
+    for task in verify_tasks.into_iter() {
         // Any certificates that fail to be verified should cancel the entire
         // batch of fetched certficates.
         let idx_and_certs = task.await.map_err(|err| {
@@ -619,10 +623,10 @@ async fn process_certificates_v2_helper(
 
     metrics
         .fetched_certificates_verified_directly
-        .inc_by(leaves_count);
+        .inc_by(direct_verification_count);
     metrics
         .fetched_certificates_verified_indirectly
-        .inc_by(all_certificates_count.saturating_sub(leaves_count));
+        .inc_by(all_certificates_count.saturating_sub(direct_verification_count));
 
     // Accept verified certificates in the same order as received.
     for cert in all_certificates {

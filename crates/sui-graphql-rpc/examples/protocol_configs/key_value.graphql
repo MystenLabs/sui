@@ -3,7 +3,7 @@
   protocolConfig {
     configs {
       key
-	    value
+      value
     }
   }
 }

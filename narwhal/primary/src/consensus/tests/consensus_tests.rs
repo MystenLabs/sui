@@ -8,7 +8,7 @@ use prometheus::Registry;
 use storage::NodeStorage;
 use sui_protocol_config::ProtocolConfig;
 use telemetry_subscribers::TelemetryGuards;
-use test_utils::{get_protocol_config, latest_protocol_version};
+use test_utils::latest_protocol_version;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
@@ -32,21 +32,8 @@ use crate::NUM_SHUTDOWN_RECEIVERS;
 /// * no forks created
 #[tokio::test]
 async fn test_consensus_recovery_with_bullshark() {
-    let _guard = setup_tracing();
-
-    // TODO: remove once the new leader schedule has been enabled.
-    // Run with default config settings where the new leader schedule is disabled
-    let config: ProtocolConfig = get_protocol_config(19);
-    test_consensus_recovery_with_bullshark_with_config(config).await;
-
-    // Run with the new leader election schedule enabled
-    let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_consensus_bad_nodes_stake_threshold(33);
-    test_consensus_recovery_with_bullshark_with_config(config).await;
-}
-
-async fn test_consensus_recovery_with_bullshark_with_config(config: ProtocolConfig) {
     // GIVEN
+    let _guard = setup_tracing();
     let num_sub_dags_per_schedule = 3;
     let storage = NodeStorage::reopen(temp_dir(), None);
 
@@ -56,6 +43,9 @@ async fn test_consensus_recovery_with_bullshark_with_config(config: ProtocolConf
     // AND Setup consensus
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
+
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_consensus_bad_nodes_stake_threshold(33);
 
     // AND make certificates for rounds 1 to 7 (inclusive)
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();

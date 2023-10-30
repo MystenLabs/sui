@@ -23,7 +23,7 @@
           storageRebate
         }
         ... on GenesisTransaction {
-          objects 
+          objects
         }
       }
     }
