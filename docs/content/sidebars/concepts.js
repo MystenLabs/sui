@@ -44,22 +44,22 @@ const concepts = [
 						items: [
 							'concepts/dynamic-fields/dynamic-object-fields',
 							'concepts/dynamic-fields/tables-bags',
+							'concepts/dynamic-fields/events',
+							{
+								type: 'category',
+								label: 'Transfers',
+								link: {
+									type: 'doc',
+									id: 'concepts/dynamic-fields/transfers',
+								},
+								items: [
+									'concepts/dynamic-fields/transfers/custom-rules',
+									'concepts/dynamic-fields/transfers/transfer-to-object',
+								],
+							},
+							'concepts/dynamic-fields/versioning',
 						],
 					},
-					'concepts/dynamic-fields/events',
-					{
-						type: 'category',
-						label: 'Transfers',
-						link: {
-							type: 'doc',
-							id: 'concepts/dynamic-fields/transfers',
-						},
-						items: [
-							'concepts/dynamic-fields/transfers/custom-rules',
-							'concepts/dynamic-fields/transfers/transfer-to-object',
-						],
-					},
-					'concepts/dynamic-fields/versioning',
 				],
 			},
 			{
