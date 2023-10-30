@@ -8,7 +8,6 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
-use fastcrypto::traits::KeyPair;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -42,13 +41,12 @@ use std::{
 };
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
-use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     DevInspectResults, EventFilter, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
 };
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -57,22 +55,20 @@ use sui_types::crypto::get_authority_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::DEEPBOOK_ADDRESS;
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
+use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
+    base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
     object::{self, Object, ObjectFormatOptions},
-    object::{MoveObject, Owner},
     transaction::{Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction},
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
-use sui_types::{id::UID, DEEPBOOK_ADDRESS};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg},
@@ -145,77 +141,6 @@ struct TxnSummary {
     gas_summary: GasCostSummary,
 }
 
-static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
-static GENESIS_PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> =
-    Lazy::new(ProtocolConfig::get_for_min_version);
-
-struct Genesis {
-    pub objects: Vec<Object>,
-    pub packages: Vec<Object>,
-    pub modules: Vec<Vec<CompiledModule>>,
-}
-
-pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
-    GENESIS.modules.clone()
-}
-
-pub fn clone_genesis_objects() -> Vec<Object> {
-    GENESIS.objects.clone()
-}
-
-fn genesis_module_objects_for_protocol_version(protocol_version: ProtocolVersion) -> Vec<Object> {
-    if protocol_version == ProtocolVersion::max() {
-        return GENESIS.packages.clone();
-    }
-    sui_framework_snapshot::load_bytecode_snapshot(protocol_version.as_u64())
-        .expect("Unable to load bytecode snapshot")
-        .into_iter()
-        .map(|pkg| pkg.genesis_object())
-        .collect()
-}
-
-/// Create and return objects wrapping the genesis modules for sui
-fn create_genesis_module_objects() -> Genesis {
-    Genesis {
-        objects: vec![create_clock()],
-        packages: BuiltInFramework::genesis_objects().collect(),
-        modules: BuiltInFramework::iter_system_packages()
-            .map(|p| p.modules())
-            .collect(),
-    }
-}
-
-fn create_clock() -> Object {
-    // SAFETY: unwrap safe because genesis objects should be serializable
-    let contents = bcs::to_bytes(&Clock {
-        id: UID::new(SUI_CLOCK_OBJECT_ID),
-        timestamp_ms: 0,
-    })
-    .unwrap();
-
-    // SAFETY: Whether `Clock` has public transfer or not is statically known, and unwrap safe
-    // because genesis objects should never exceed max size
-    let move_object = unsafe {
-        let has_public_transfer = false;
-        MoveObject::new_from_execution(
-            Clock::type_().into(),
-            has_public_transfer,
-            SUI_CLOCK_OBJECT_SHARED_VERSION,
-            contents,
-            &GENESIS_PROTOCOL_CONSTANTS,
-        )
-        .unwrap()
-    };
-
-    Object::new_move(
-        move_object,
-        Owner::Shared {
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        },
-        TransactionDigest::genesis(),
-    )
-}
-
 #[async_trait]
 impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     type ExtraPublishArgs = SuiPublishArgs;
@@ -279,11 +204,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         };
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
-
-        let mut objects = genesis_module_objects_for_protocol_version(protocol_config.version);
-        objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
         let mut accounts = BTreeMap::new();
+        let mut objects = vec![];
         let mut mk_account = || {
             let (address, key_pair) = get_key_pair_from_rng(&mut rng);
             let obj = Object::with_id_owner_gas_for_testing(
@@ -1596,27 +1519,12 @@ async fn create_validator_fullnode(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>) {
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-    let genesis = &genesis;
-    let authority_key = &keypair;
-    let state = TestAuthorityBuilder::new()
-        .with_genesis_and_keypair(genesis, authority_key)
+    let builder = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config.clone())
-        .build()
-        .await;
+        .with_starting_objects(objects);
+    let state = builder.clone().build().await;
     let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = TestAuthorityBuilder::new()
-        .with_keypair(&fullnode_key_pair)
-        .with_protocol_config(protocol_config.clone())
-        .build()
-        .await;
-    state.insert_genesis_objects(objects).await;
-    fullnode.insert_genesis_objects(objects).await;
+    let fullnode = builder.with_keypair(&fullnode_key_pair).build().await;
     (state, fullnode)
 }
 
