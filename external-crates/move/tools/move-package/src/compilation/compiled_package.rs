@@ -29,7 +29,7 @@ use move_compiler::{
         self, AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule, NamedCompiledScript,
     },
     diagnostics::FilesSourceText,
-    shared::{Flags, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
+    shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
     Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
@@ -570,11 +570,7 @@ impl CompiledPackage {
             &resolved_package,
             transitive_dependencies,
         )?;
-        let flags = if resolution_graph.build_options.test_mode {
-            Flags::testing()
-        } else {
-            Flags::empty()
-        };
+        let flags = resolution_graph.build_options.compiler_flags();
         // invoke the compiler
         let mut paths = deps_package_paths.clone();
         paths.push(sources_package_paths.clone());

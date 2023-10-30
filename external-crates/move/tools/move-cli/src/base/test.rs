@@ -7,7 +7,7 @@ use anyhow::Result;
 use clap::*;
 use move_command_line_common::files::{FileHash, MOVE_COVERAGE_MAP_EXTENSION};
 use move_compiler::{
-    diagnostics::{self, codes::Severity},
+    diagnostics::{self},
     shared::{NumberFormat, NumericalAddress},
     unit_test::{plan_builder::construct_test_plan, TestPlan},
     PASS_CFGIR,
@@ -38,7 +38,7 @@ compile_error!("Unsupported OS, currently we only support windows and unix famil
 #[clap(name = "test")]
 pub struct Test {
     /// Bound the amount of gas used by any one test.
-    #[clap(name = "gas_limit", short = 'i', long = "gas_limit")]
+    #[clap(name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
     /// An optional filter string to determine which unit tests to run. A unit test will be run only if it
     /// contains this string in its fully qualified (<addr>::<module_name>::<fn_name>) name.
@@ -49,22 +49,15 @@ pub struct Test {
     pub list: bool,
     /// Number of threads to use for running tests.
     #[clap(
-        name = "num_threads",
+        name = "num-threads",
         default_value = "8",
         short = 't',
         long = "threads"
     )]
     pub num_threads: usize,
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
-    #[clap(name = "report_statistics", short = 's', long = "statistics")]
+    #[clap(name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
-    /// Show the storage state at the end of execution of a failing test
-    #[clap(name = "global_state_on_error", short = 'g', long = "state_on_error")]
-    pub report_storage_on_error: bool,
-
-    /// Ignore compiler's warning, and continue run tests
-    #[clap(name = "ignore_compile_warnings", long = "ignore_compile_warnings")]
-    pub ignore_compile_warnings: bool,
 
     /// Use the stackless bytecode interpreter to run the tests and cross check its results with
     /// the execution result from Move VM.
@@ -93,8 +86,6 @@ impl Test {
             list,
             num_threads,
             report_statistics,
-            report_storage_on_error,
-            ignore_compile_warnings,
             check_stackless_vm,
             verbose_mode,
             compute_coverage,
@@ -105,11 +96,8 @@ impl Test {
             list,
             num_threads,
             report_statistics,
-            report_storage_on_error,
             check_stackless_vm,
             verbose: verbose_mode,
-            ignore_compile_warnings,
-
             ..UnitTestingConfig::default_with_bound(None)
         };
         let result = run_move_unit_tests(
@@ -198,19 +186,11 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
-        if let Err(diags) = compilation_env.check_diags_at_or_above_severity(
-            if unit_test_config.ignore_compile_warnings {
-                Severity::NonblockingError
-            } else {
-                Severity::Warning
-            },
-        ) {
-            diagnostics::report_diagnostics(&files, diags);
-        }
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
-
-        let (units, _) = diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
+        let (units, warnings) =
+            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
+        diagnostics::report_warnings(&files, warnings);
         test_plan = Some((built_test_plan, files.clone(), units.clone()));
         Ok((files, units))
     })?;

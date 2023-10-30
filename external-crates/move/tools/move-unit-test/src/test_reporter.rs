@@ -54,7 +54,6 @@ pub struct TestFailure {
     pub test_run_info: TestRunInfo,
     pub vm_error: Option<VMError>,
     pub failure_reason: FailureReason,
-    pub storage_state: Option<String>,
 }
 
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
@@ -140,18 +139,16 @@ impl TestFailure {
         failure_reason: FailureReason,
         test_run_info: TestRunInfo,
         vm_error: Option<VMError>,
-        storage_state: Option<String>,
     ) -> Self {
         Self {
             test_run_info,
             vm_error,
             failure_reason,
-            storage_state,
         }
     }
 
     pub fn render_error(&self, test_plan: &TestPlan) -> String {
-        let error_string = match &self.failure_reason {
+        match &self.failure_reason {
             FailureReason::NoError(message) => message.to_string(),
             FailureReason::Timeout(message) => message.to_string(),
             FailureReason::WrongError(message, expected, actual) => {
@@ -216,21 +213,6 @@ impl TestFailure {
                 )
             }
             FailureReason::Property(message) => message.clone(),
-        };
-
-        match &self.storage_state {
-            None => error_string,
-            Some(storage_state) => {
-                format!(
-                    "{}\n────── Storage state at point of failure ──────\n{}",
-                    error_string,
-                    if storage_state.is_empty() {
-                        "<empty>"
-                    } else {
-                        storage_state
-                    }
-                )
-            }
         }
     }
 

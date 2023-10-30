@@ -136,7 +136,7 @@ module sui_system::staking_pool {
     public(friend) fun request_withdraw_stake(
         pool: &mut StakingPool,
         staked_sui: StakedSui,
-        ctx: &mut TxContext
+        ctx: &TxContext
     ) : Balance<SUI> {
         let (pool_token_withdraw_amount, principal_withdraw) =
             withdraw_from_principal(pool, staked_sui);
@@ -162,7 +162,7 @@ module sui_system::staking_pool {
     /// tokens using exchange rate at staking epoch.
     /// Returns values are amount of pool tokens withdrawn and withdrawn principal portion of SUI.
     public(friend) fun withdraw_from_principal(
-        pool: &mut StakingPool,
+        pool: &StakingPool,
         staked_sui: StakedSui,
     ) : (u64, Balance<SUI>) {
 
@@ -198,7 +198,7 @@ module sui_system::staking_pool {
         balance::join(&mut pool.rewards_pool, rewards);
     }
 
-    public(friend) fun process_pending_stakes_and_withdraws(pool: &mut StakingPool, ctx: &mut TxContext) {
+    public(friend) fun process_pending_stakes_and_withdraws(pool: &mut StakingPool, ctx: &TxContext) {
         let new_epoch = tx_context::epoch(ctx) + 1;
         process_pending_stake_withdraw(pool);
         process_pending_stake(pool);

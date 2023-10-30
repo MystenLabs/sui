@@ -391,6 +391,11 @@ impl DiagnosticInfo {
         (string_code, message)
     }
 
+    pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
+    }
+
     pub fn severity(&self) -> Severity {
         self.severity
     }

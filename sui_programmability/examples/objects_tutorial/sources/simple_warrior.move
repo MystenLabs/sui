@@ -49,7 +49,7 @@ module tutorial::simple_warrior {
         transfer::transfer(warrior, tx_context::sender(ctx))
     }
 
-    public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
+    public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &TxContext) {
         if (option::is_some(&warrior.sword)) {
             let old_sword = option::extract(&mut warrior.sword);
             transfer::transfer(old_sword, tx_context::sender(ctx));
@@ -57,7 +57,7 @@ module tutorial::simple_warrior {
         option::fill(&mut warrior.sword, sword);
     }
 
-    public entry fun equip_shield(warrior: &mut SimpleWarrior, shield: Shield, ctx: &mut TxContext) {
+    public entry fun equip_shield(warrior: &mut SimpleWarrior, shield: Shield, ctx: &TxContext) {
         if (option::is_some(&warrior.shield)) {
             let old_shield = option::extract(&mut warrior.shield);
             transfer::transfer(old_shield, tx_context::sender(ctx));

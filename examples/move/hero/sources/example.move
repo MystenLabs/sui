@@ -112,6 +112,7 @@ module hero::example {
     /// The hero is too tired to fight
     const EHeroTired: u64 = 2;
 
+    #[test_only]
     /// Trying to initialize from a non-admin account
     const ENotAdmin: u64 = 3;
 
@@ -311,6 +312,7 @@ module hero::example {
 
     // === Payments ===
 
+    #[test_only]
     /// The owner of the `Admin` object can extract payment from the `Game`.
     fun take_payment(
         admin: &Admin,

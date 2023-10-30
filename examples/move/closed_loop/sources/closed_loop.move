@@ -131,7 +131,7 @@ module closed_loop::closed_loop {
     /// Transfer a `Token` to a `recipient`. Creates an `ActionRequest` for the
     /// "transfer" action.
     public fun transfer<T>(
-        t: Token<T>, recipient: address, ctx: &mut TxContext
+        t: Token<T>, recipient: address, ctx: &TxContext
     ): ActionRequest<T> {
         let amount = balance::value(&t.balance);
         transfer::transfer(t, recipient);
@@ -147,7 +147,7 @@ module closed_loop::closed_loop {
 
     /// Spend a `Token` by "burning" it and storing in the `ActionRequest` for
     /// the "spend" action.
-    public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
+    public fun spend<T>(t: Token<T>, ctx: &TxContext): ActionRequest<T> {
         let Token { id, balance } = t;
         object::delete(id);
         new_request(
@@ -233,7 +233,7 @@ module closed_loop::closed_loop {
     }
 
     /// Transfer the `Token` to the transaction sender.
-    public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
+    public fun keep<T>(token: Token<T>, ctx: &TxContext) {
         transfer::transfer(token, tx_context::sender(ctx))
     }
 

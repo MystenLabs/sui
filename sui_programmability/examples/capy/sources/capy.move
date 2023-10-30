@@ -279,6 +279,7 @@ module capy::capy {
         transfer::public_transfer(breed(reg, c1, c2, ctx), tx_context::sender(ctx))
     }
 
+    #[allow(unused_mut_ref)]
     /// Breed two Capys together. Perform a gene science algorithm and select
     /// genes for the newborn based on the parents' genes.
     public fun breed(

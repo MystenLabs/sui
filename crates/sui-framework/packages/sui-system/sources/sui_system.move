@@ -166,6 +166,7 @@ module sui_system::sui_system {
         sui_system_state_inner::request_remove_validator_candidate(self, ctx)
     }
 
+    #[allow(unused_mut_ref)]
     /// Called by a validator candidate to add themselves to the active validator set beginning next epoch.
     /// Aborts if the validator is a duplicate with one of the pending or active validators, or if the amount of
     /// stake the validator has doesn't meet the min threshold, or if the number of new validators for the next
@@ -178,6 +179,7 @@ module sui_system::sui_system {
         sui_system_state_inner::request_add_validator(self, ctx)
     }
 
+    #[allow(unused_mut_ref)]
     /// A validator can call this function to request a removal in the next epoch.
     /// We use the sender of `ctx` to look up the validator
     /// (i.e. sender must match the sui_address in the validator).
@@ -212,6 +214,7 @@ module sui_system::sui_system {
         sui_system_state_inner::set_candidate_validator_gas_price(self, cap, new_gas_price)
     }
 
+    #[allow(unused_mut_ref)]
     /// A validator can call this entry function to set a new commission rate, updated at the end of
     /// the epoch.
     public entry fun request_set_commission_rate(
@@ -223,6 +226,7 @@ module sui_system::sui_system {
         sui_system_state_inner::request_set_commission_rate(self, new_commission_rate, ctx)
     }
 
+    #[allow(unused_mut_ref)]
     /// This entry function is used to set new commission rate for candidate validators
     public entry fun set_candidate_validator_commission_rate(
         wrapper: &mut SuiSystemState,
@@ -278,6 +282,7 @@ module sui_system::sui_system {
         transfer::public_transfer(coin::from_balance(withdrawn_stake, ctx), tx_context::sender(ctx));
     }
 
+    #[allow(unused_mut_ref)]
     /// Non-entry version of `request_withdraw_stake` that returns the withdrawn SUI instead of transferring it to the sender.
     public fun request_withdraw_stake_non_entry(
         wrapper: &mut SuiSystemState,
@@ -676,7 +681,7 @@ module sui_system::sui_system {
     public fun request_add_validator_for_testing(
         wrapper: &mut SuiSystemState,
         min_joining_stake_for_testing: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_add_validator_for_testing(self, min_joining_stake_for_testing, ctx)

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_cli::sandbox::commands::test;
-use std::{env, path::PathBuf, process::Command};
+use std::{env, path::PathBuf};
 
 pub const CLI_METATEST_PATH: [&str; 3] = ["tests", "metatests", "args.txt"];
 

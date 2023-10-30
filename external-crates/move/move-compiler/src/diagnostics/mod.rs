@@ -376,6 +376,11 @@ impl Diagnostic {
         self
     }
 
+    pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
+        self.info = self.info.set_severity(severity);
+        self
+    }
+
     #[allow(unused)]
     pub fn add_secondary_labels(
         &mut self,

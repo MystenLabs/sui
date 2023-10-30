@@ -3,8 +3,7 @@
 
 module color_object::example {
     use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     struct ColorObject has key, store {
         id: UID,
@@ -57,6 +56,8 @@ module color_object::example {
 
     // === Tests ===
     #[test_only] use sui::test_scenario as ts;
+    #[test_only] use sui::transfer;
+    #[test_only] use sui::tx_context;
 
     // === Tests covered in Chapter 1 ===
 

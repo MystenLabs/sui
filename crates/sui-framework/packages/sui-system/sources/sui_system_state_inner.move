@@ -418,7 +418,7 @@ module sui_system::sui_system_state_inner {
     /// epoch has already reached the maximum.
     public(friend) fun request_add_validator(
         self: &mut SuiSystemStateInnerV2,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         assert!(
             validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
@@ -435,7 +435,7 @@ module sui_system::sui_system_state_inner {
     /// of the validator.
     public(friend) fun request_remove_validator(
         self: &mut SuiSystemStateInnerV2,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         // Only check min validator condition if the current number of validators satisfy the constraint.
         // This is so that if we somehow already are in a state where we have less than min validators, it no longer matters
@@ -484,7 +484,7 @@ module sui_system::sui_system_state_inner {
     public(friend) fun request_set_commission_rate(
         self: &mut SuiSystemStateInnerV2,
         new_commission_rate: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         validator_set::request_set_commission_rate(
             &mut self.validators,
@@ -497,7 +497,7 @@ module sui_system::sui_system_state_inner {
     public(friend) fun set_candidate_validator_commission_rate(
         self: &mut SuiSystemStateInnerV2,
         new_commission_rate: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let candidate = validator_set::get_validator_mut_with_ctx_including_candidates(&mut self.validators, ctx);
         validator::set_candidate_commission_rate(candidate, new_commission_rate)
@@ -534,7 +534,7 @@ module sui_system::sui_system_state_inner {
     public(friend) fun request_withdraw_stake(
         self: &mut SuiSystemStateInnerV2,
         staked_sui: StakedSui,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) : Balance<SUI> {
         assert!(
             stake_activation_epoch(&staked_sui) <= tx_context::epoch(ctx),
@@ -1113,7 +1113,7 @@ module sui_system::sui_system_state_inner {
     public(friend) fun request_add_validator_for_testing(
         self: &mut SuiSystemStateInnerV2,
         min_joining_stake_for_testing: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         assert!(
             validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,

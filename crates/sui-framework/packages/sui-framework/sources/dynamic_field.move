@@ -39,6 +39,7 @@ module sui::dynamic_field {
         value: Value,
     }
 
+    #[allow(unused_mut_ref)]
     /// Adds a dynamic field to the object `object: &mut UID` at field specified by `name: Name`.
     /// Aborts with `EFieldAlreadyExists` if the object already has that field with that name.
     public fun add<Name: copy + drop + store, Value: store>(
@@ -111,6 +112,7 @@ module sui::dynamic_field {
         aborts_if [abstract] !prover::uid_has_field(object, name);
     }
 
+    #[allow(unused_mut_ref)]
     /// Removes the `object`s dynamic field with the name specified by `name: Name` and returns the
     /// bound value.
     /// Aborts with `EFieldDoesNotExist` if the object does not have a field with that name.

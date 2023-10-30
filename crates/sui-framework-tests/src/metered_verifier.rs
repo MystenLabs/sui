@@ -6,10 +6,19 @@ use prometheus::Registry;
 use std::{path::PathBuf, sync::Arc, time::Instant};
 use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
 use sui_framework::BuiltInFramework;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{error::SuiError, metrics::BytecodeVerifierMetrics};
+use sui_types::{
+    error::{SuiError, SuiResult},
+    metrics::BytecodeVerifierMetrics,
+};
 use sui_verifier::meter::SuiVerifierMeter;
+
+fn build(path: PathBuf) -> SuiResult<CompiledPackage> {
+    let mut config = sui_move_build::BuildConfig::new_for_testing();
+    config.config.warnings_are_errors = true;
+    config.build(path)
+}
 
 #[test]
 #[cfg_attr(msim, ignore)]
@@ -17,7 +26,7 @@ fn test_metered_move_bytecode_verifier() {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
-    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+    let compiled_package = build(path).unwrap();
     let compiled_modules: Vec<_> = compiled_package.get_modules().cloned().collect();
 
     let mut metered_verifier_config = default_verifier_config(
@@ -203,13 +212,13 @@ fn test_metered_move_bytecode_verifier() {
     let with_unpublished_deps = false;
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
-    let package = BuildConfig::new_for_testing().build(path).unwrap();
+    let package = build(path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../sui_programmability/examples/fungible_tokens");
-    let package = BuildConfig::new_for_testing().build(path).unwrap();
+    let package = build(path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
     let is_metered = true;
@@ -324,10 +333,7 @@ fn test_build_and_verify_programmability_examples() {
             continue;
         };
 
-        let modules = BuildConfig::new_for_testing()
-            .build(path)
-            .unwrap()
-            .into_modules();
+        let modules = build(path).unwrap().into_modules();
 
         let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
         run_metered_move_bytecode_verifier(

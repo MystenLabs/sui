@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(unused_const)]
 module sui::transfer {
 
     use sui::object::{Self, ID, UID};
@@ -21,7 +22,6 @@ module sui::transfer {
         version: u64,
     }
 
-    #[allow(unused_const)]
     /// Shared an object that was previously created. Shared objects must currently
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
@@ -100,6 +100,7 @@ module sui::transfer {
         share_object_impl(obj)
     }
 
+    #[allow(unused_mut_ref)]
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
     /// referencing an object of type `T` owned by `parent` use the `to_receive`
     /// argument to receive and return the referenced owned object of type `T`.

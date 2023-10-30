@@ -372,9 +372,16 @@ impl CompilationEnv {
             })
             .collect();
 
+        let warning_filter = if flags.silence_warnings() {
+            let mut f = WarningFilters::new_for_source();
+            f.add(WarningFilter::All(None));
+            vec![f]
+        } else {
+            vec![]
+        };
         Self {
             flags,
-            warning_filter: vec![],
+            warning_filter,
             diags: Diagnostics::new(),
             visitors: Rc::new(Visitors::new(visitors)),
             package_configs,
@@ -403,6 +410,9 @@ impl CompilationEnv {
                         filter_info.name.as_str()
                     );
                     diag.add_note(help)
+                }
+                if self.flags().warnings_are_errors() {
+                    diag = diag.set_severity(Severity::NonblockingError)
                 }
             }
             self.diags.add(diag)
@@ -629,16 +639,23 @@ pub struct Flags {
 
     /// Compile in verification mode
     #[clap(
-    short = cli::VERIFY_SHORT,
-    long = cli::VERIFY,
+        short = cli::VERIFY_SHORT,
+        long = cli::VERIFY,
     )]
     verify: bool,
 
-    /// Bytecode version.
+    /// If set, warnings become errors.
     #[clap(
-        long = cli::BYTECODE_VERSION,
+        long = cli::WARNINGS_ARE_ERRORS,
     )]
-    bytecode_version: Option<u32>,
+    warnings_are_errors: bool,
+
+    /// If set, all warnings are silenced
+    #[clap(
+        long = cli::SILENCE_WARNINGS,
+        short = cli::SILENCE_WARNINGS_SHORT,
+    )]
+    silence_warnings: bool,
 
     /// If set, source files will not shadow dependency files. If the same file is passed to both,
     /// an error will be raised
@@ -648,6 +665,12 @@ pub struct Flags {
         long = cli::SHADOW,
     )]
     shadow: bool,
+
+    /// Bytecode version.
+    #[clap(
+        long = cli::BYTECODE_VERSION,
+    )]
+    bytecode_version: Option<u32>,
 
     /// Internal flag used by the model builder to maintain functions which would be otherwise
     /// included only in tests, without creating the unit test code regular tests do.
@@ -662,6 +685,8 @@ impl Flags {
             verify: false,
             shadow: false,
             bytecode_version: None,
+            warnings_are_errors: false,
+            silence_warnings: false,
             keep_testing_functions: false,
         }
     }
@@ -672,6 +697,8 @@ impl Flags {
             verify: false,
             shadow: false,
             bytecode_version: None,
+            warnings_are_errors: false,
+            silence_warnings: false,
             keep_testing_functions: false,
         }
     }
@@ -682,6 +709,8 @@ impl Flags {
             verify: true,
             shadow: true, // allows overlapping between sources and deps
             bytecode_version: None,
+            warnings_are_errors: false,
+            silence_warnings: false,
             keep_testing_functions: false,
         }
     }
@@ -696,6 +725,20 @@ impl Flags {
     pub fn set_sources_shadow_deps(self, sources_shadow_deps: bool) -> Self {
         Self {
             shadow: sources_shadow_deps,
+            ..self
+        }
+    }
+
+    pub fn set_warnings_are_errors(self, value: bool) -> Self {
+        Self {
+            warnings_are_errors: value,
+            ..self
+        }
+    }
+
+    pub fn set_silence_warnings(self, value: bool) -> Self {
+        Self {
+            silence_warnings: value,
             ..self
         }
     }
@@ -722,6 +765,14 @@ impl Flags {
 
     pub fn bytecode_version(&self) -> Option<u32> {
         self.bytecode_version
+    }
+
+    pub fn warnings_are_errors(&self) -> bool {
+        self.warnings_are_errors
+    }
+
+    pub fn silence_warnings(&self) -> bool {
+        self.silence_warnings
     }
 }
 
