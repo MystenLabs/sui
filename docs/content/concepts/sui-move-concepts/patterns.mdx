@@ -24,6 +24,6 @@ A hot potato is a struct that has no capabilities, therefore you can only pack a
 
 ## ID pointer
 
-ID pointer is a technique that separates the main data (an object) and its accessors/capabilities by linking the latter to the original.
+Objects can refer to each other by using their IDs as pointers.  For example a capability that guards access to another object may store that object's `ID` to perform an authorization check.
 
 - [ID Pointer](./patterns/id-pointer)
