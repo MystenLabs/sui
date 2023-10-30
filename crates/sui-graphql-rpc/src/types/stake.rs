@@ -9,8 +9,11 @@ use sui_types::base_types::ObjectID;
 
 #[derive(Copy, Clone, Enum, PartialEq, Eq)]
 pub(crate) enum StakeStatus {
+    /// The stake object is active in a staking pool and it is generating rewards
     Active,
+    /// The stake awaits to join a staking pool in the next epoch
     Pending,
+    /// The stake is no longer active in any staking pool
     Unstaked,
 }
 
@@ -19,14 +22,14 @@ pub(crate) enum StakeStatus {
 pub(crate) struct Stake {
     /// Stake object address
     pub id: ID,
-    /// The epoch at which the stake became actives
+    /// The epoch at which the stake became active
     #[graphql(skip)]
     pub active_epoch_id: Option<u64>,
-    /// The estimated reward for this stake object
+    /// The estimated reward for this stake object, computed as the
+    /// value of multiplying the principal value with the ratio between the initial stake rate and the current rate
     pub estimated_reward: Option<BigInt>,
-    /// The principal value of this stake
+    /// The amount of SUI that is used to stake
     pub principal: Option<BigInt>,
-
     #[graphql(skip)]
     pub request_epoch_id: Option<u64>,
     /// The status of this stake object: Active, Pending, Unstaked
@@ -51,7 +54,7 @@ impl Stake {
         }
     }
 
-    /// The epoch at which this object was requested to stake
+    /// The epoch at which this object was requested to join a stake pool
     async fn request_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         if let Some(epoch_id) = self.request_epoch_id {
             let epoch = ctx

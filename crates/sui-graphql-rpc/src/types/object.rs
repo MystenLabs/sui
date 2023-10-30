@@ -201,7 +201,7 @@ impl Object {
             .extend()
     }
 
-    /// The stake objects for the given address
+    /// Lists the stakes corresponding to the StakedSui objects owned by the given object
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,
