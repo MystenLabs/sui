@@ -64,7 +64,7 @@ Append the `--json` flag to commands to format responses in JSON instead of the 
 
 The following examples demonstrate some of the most often used commands. 
 
-### List the keypairs in the local wallet
+### List the key pairs in the local wallet
 
 Use the `sui keytool list` command to output all the Sui addresses that exist in the `~/.sui/sui_config/sui.keystore` file in a readable format. 
 
@@ -91,7 +91,7 @@ $ sui keytool list
 
 ### Generate a new key pair and store it in a file
 
-To generate a new key pair with the `ed25519` scheme, use the `sui keytool generate ed25519` command. For other schemes, see `sui keytool generate –help`. The key pair file is output to the current directory with its filename being the address. The content of the file is a Base64 encoded string of 33-byte `flag || privkey`. 
+To generate a new key pair with the `ed25519` scheme, use the `sui keytool generate ed25519` command. For other schemes, see `sui keytool generate –help`. The key pair file is saved to the current directory with its filename being the address. The content of the file is a Base64 encoded string of 33-byte `flag || privkey`. 
 
 ```shell
 $ sui keytool generate ed25519
@@ -110,13 +110,13 @@ $ sui keytool generate ed25519
 Use `sui keytool show [filename]` to show the key pair data that is stored in a file. For example, the previous command generated a file named `0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25.key`. 
 
 ```shell
-$ sui keytool show 0xf8e34ed4f055eb9a2e48ad44eca734ab07befd34a3c5a9acd965d8dbdd6bdf14.key
+$ sui keytool show 0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25.key
 ╭─────────────────┬──────────────────────────────────────────────────────────────────────╮
-│ suiAddress  	  │  0xf8e34ed4f055eb9a2e48ad44eca734ab07befd34a3c5a9acd965d8dbdd6bdf14  │
-│ publicBase64Key │  AC+r6tVoCFcRSUir3PRojQBaCQbqRYPrSEsME8kaEHKF                    	 │
+│ suiAddress  	  │  0x5d8aa70f17d9343813d3ba6a59ecf5e8a23ffb487938e860999a722989eaef25  │
+│ publicBase64Key │  AC+AKTAGf9iv0JqeLXXlsr4PUzBXb9VY8lK7xiZMS50GSu6                   │
 │ keyScheme   	  │  ed25519                                                         	 │
 │ flag        	  │  0                                                               	 │
-│ peerId      	  │  2fabead5680857114948abdcf4688d005a0906ea4583eb484b0c13c91a107285	 │
+│ peerId      	  │  a4c019ff62bf426a78b5d796caf83d4cc15dbf5563c94aef1899312e74192bba	 │
 ╰─────────────────┴──────────────────────────────────────────────────────────────────────╯
 ```
 
