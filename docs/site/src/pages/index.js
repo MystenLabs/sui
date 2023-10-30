@@ -93,13 +93,16 @@ export default function Home() {
               className={`${cardlinks} text-2xl`}
               to="./concepts/tokenomics"
             >
-              Sui tokenomics
+              Tokenomics
             </Link>
             <Link
               className={`${cardlinks} text-2xl`}
               to="./concepts/cryptography"
             >
-              Sui cryptography
+              Cryptography
+            </Link>
+            <Link className={`${cardlinks} text-2xl`} to="standards">
+              Standards
             </Link>
           </HomeCard>
           <HomeCard title="Developers">
@@ -119,7 +122,7 @@ export default function Home() {
               className={`${cardlinks} text-2xl`}
               to="./concepts/sui-move-concepts"
             >
-              Move language on Sui
+              Move
             </Link>
           </HomeCard>
           <HomeCard title="Validators and Node operators">
