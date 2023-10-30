@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_types::digests::TransactionDigest;
+use tabled::{builder::Builder as TableBuilder, settings::Style as TableStyle};
 use tracing::{error, info};
 pub mod config;
 mod data_fetcher;
@@ -367,7 +368,12 @@ pub async fn execute_replay_command(
                 println!("{:#?}", sandbox_state.pre_exec_diag);
             }
             if show_effects {
-                println!("{:#?}", sandbox_state.local_exec_effects);
+                let mut builder = TableBuilder::default();
+                builder.push_record(vec![sandbox_state.local_exec_effects.to_string()]);
+                let mut table = builder.build();
+                table.with(TableStyle::rounded().horizontals([]));
+                // let effects_string = sandbox_state.local_exec_effects.to_string();
+                println!("{}", table);
             }
 
             sandbox_state.check_effects()?;

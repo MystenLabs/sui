@@ -673,7 +673,7 @@ impl SuiClientCommands {
                     executor_version_override: None,
                     protocol_version_override: None,
                 };
-                // todo: automatically get non pruning fullnode url
+
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc_url), false, false, None, cmd)
                         .await;
@@ -689,7 +689,7 @@ impl SuiClientCommands {
                     terminate_early,
                     batch_size: 16,
                 };
-                // todo: automatically get non pruning fullnode url
+
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc_url), false, false, None, cmd)
                         .await;
@@ -707,7 +707,7 @@ impl SuiClientCommands {
                     terminate_early,
                     max_tasks: 16,
                 };
-                // todo: automatically get non pruning fullnode url
+
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc_url), false, false, None, cmd)
                         .await;
