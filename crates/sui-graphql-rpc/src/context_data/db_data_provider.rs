@@ -555,7 +555,7 @@ impl PgManager {
     /// Takes a query_builder_fn that returns Result<QueryFragment> and a lambda to execute the query
     /// Spawns a blocking task that determines the cost of the query fragment
     /// And if within limits, then executes the query
-    async fn run_query_async_with_cost_v2<T, Q, QResult, EF, E, F>(
+    async fn run_query_async_with_cost<T, Q, QResult, EF, E, F>(
         &self,
         mut query_builder_fn: Q,
         execute_fn: EF,
@@ -615,7 +615,7 @@ impl PgManager {
 /// Implement methods to query db and return StoredData
 impl PgManager {
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
-        self.run_query_async_with_cost_v2(
+        self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_tx_by_digest(digest.clone())),
             |query| move |conn| query.get_result::<StoredTransaction>(conn).optional(),
         )
@@ -627,7 +627,7 @@ impl PgManager {
         address: Vec<u8>,
         version: Option<i64>,
     ) -> Result<Option<StoredObject>, Error> {
-        self.run_query_async_with_cost_v2(
+        self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_obj(address.clone(), version)),
             |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
         )
@@ -642,7 +642,7 @@ impl PgManager {
             })
         };
 
-        self.run_query_async_with_cost_v2(query_fn, |query| {
+        self.run_query_async_with_cost(query_fn, |query| {
             move |conn| query.get_result::<StoredEpochInfo>(conn).optional()
         })
         .await
@@ -666,7 +666,7 @@ impl PgManager {
             })
         };
 
-        self.run_query_async_with_cost_v2(query, |query| {
+        self.run_query_async_with_cost(query, |query| {
             move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
         })
         .await
@@ -703,7 +703,7 @@ impl PgManager {
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredObject>> = self
-            .run_query_async_with_cost_v2(
+            .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_coins(
                         cursor.clone(),
@@ -734,7 +734,7 @@ impl PgManager {
         address: Vec<u8>,
         coin_type: String,
     ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
-        self.run_query_async_with_cost_v2(
+        self.run_query_async_with_cost(
             move || {
                 Ok(QueryBuilder::get_balance(
                     address.clone(),
@@ -760,7 +760,7 @@ impl PgManager {
             return Err(DbValidationError::PaginationDisabledOnBalances.into());
         }
 
-        self.run_query_async_with_cost_v2(
+        self.run_query_async_with_cost(
             move || Ok(QueryBuilder::multi_get_balances(address.clone())),
             |query| move |conn| query.load(conn).optional(),
         )
@@ -832,7 +832,7 @@ impl PgManager {
         };
 
         let result: Option<Vec<StoredTransaction>> = self
-            .run_query_async_with_cost_v2(query, |query| move |conn| query.load(conn).optional())
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
             .await?;
 
         result
@@ -863,7 +863,7 @@ impl PgManager {
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredCheckpoint>> = self
-            .run_query_async_with_cost_v2(
+            .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
                         cursor,
@@ -915,7 +915,7 @@ impl PgManager {
         };
 
         let result: Option<Vec<StoredObject>> = self
-            .run_query_async_with_cost_v2(query, |query| move |conn| query.load(conn).optional())
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
             .await?;
         result
             .map(|mut stored_objs| {
