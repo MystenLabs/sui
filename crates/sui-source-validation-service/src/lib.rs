@@ -60,7 +60,7 @@ pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 pub const WS_PING_INTERVAL: Duration = Duration::from_millis(20_000);
 
 pub const METRICS_ROUTE: &str = "/metrics";
-pub const METRICS_HOST_PORT: &str = "127.0.0.1:9814";
+pub const METRICS_HOST_PORT: &str = "127.0.0.1:9184";
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
