@@ -46,7 +46,7 @@ Expect the `Clock` timestamp to change **every 2 to 3 seconds**, at the rate the
 
 Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), but timestamps from `Clock` are otherwise monotonic across transactions that touch the same shared objects: Successive transactions seeing a greater or equal timestamp to their predecessors.
 
-Any transaction that requires access to a `Clock` must go through consensus because the only available instance is a shared object. As a result, this technique is not suitable for transactions that must use the single-owner fast-path (see Epoch timestamps for a single-owner-compatible source of timestamps).
+Any transaction that requires access to a `Clock` must go through consensus because the only available instance is a shared object. As a result, this technique is not suitable for transactions that must use the single-owner fastpath (see Epoch timestamps for a single-owner-compatible source of timestamps).
 
 Transactions that use the clock must accept it as an **immutable reference** (not a mutable reference or value). This prevents contention, as transactions that access the `Clock` can only read it, so do not need to be sequenced relative to each other. Validators refuse to sign transactions that do not meet this requirement and packages that include entry functions that accept a `Clock` or `&mut Clock` fail to publish.
 

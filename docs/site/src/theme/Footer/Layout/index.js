@@ -5,8 +5,8 @@ import Link from "@docusaurus/Link";
 export default function FooterLayout({ style, links, logo, copyright }) {
   return (
     <footer className="px-2 pb-2 bg-sui-black">
-      <div className="bg-sui-card-dark text-white rounded-sui flex flex-row items-end">
-        <div className="w-1/3 ml-8 pb-8">
+      <div className="bg-sui-card-dark text-white rounded-sui flex flex-row flex-wrap-reverse">
+        <div className="flex-0 lg:w-1/3 pl-8 pb-8 pt-12 lg:text-left">
           <div className="discord-icon inline p-2">
             <Link to="https://discord.gg/Sui">
               <svg
@@ -119,7 +119,7 @@ export default function FooterLayout({ style, links, logo, copyright }) {
             </div>
           )}
         </div>
-        <div className="w-2/3 text-8xl text-right">
+        <div className="flex-0 lg:w-2/3 w-full xl:text-8xl text-6xl lg:text-right text-center">
           <p className="p-8 mb-0">Sui Documentation</p>
         </div>
       </div>
