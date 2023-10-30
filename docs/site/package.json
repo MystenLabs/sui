@@ -19,6 +19,7 @@
     "@docusaurus/core": "^2.4.1",
     "@docusaurus/plugin-google-tag-manager": "^2.4.1",
     "@docusaurus/preset-classic": "^2.4.1",
+    "@docusaurus/remark-plugin-npm2yarn": "^2.4.3",
     "@docusaurus/theme-common": "^2.4.3",
     "@docusaurus/theme-mermaid": "^2.4.3",
     "@emotion/react": "^11.11.1",
