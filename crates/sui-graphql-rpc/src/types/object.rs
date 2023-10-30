@@ -38,7 +38,7 @@ pub(crate) enum ObjectKind {
     Immutable,
 }
 
-#[derive(InputObject, Default)]
+#[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
     pub package: Option<SuiAddress>,
     pub module: Option<String>,
@@ -49,7 +49,7 @@ pub(crate) struct ObjectFilter {
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Clone)]
 pub(crate) struct ObjectKey {
     object_id: SuiAddress,
     version: u64,
