@@ -422,7 +422,8 @@ pub async fn watch_for_upgrades(
             watch_ids,
             "suix_unsubscribeTransaction",
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Failed to open websocket connection for {}: {}", network, e))?;
 
     info!("Listening for upgrades on {num_packages} package(s) on {websocket_url}...");
     loop {
