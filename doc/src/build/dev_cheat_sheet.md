@@ -45,8 +45,8 @@ No: use a dynamic field-backed collection (`Table`, `Bag`, `ObjectBag`, `ObjectT
   Q: Do you know at compile time that the items will be of the same type?
   Yes: use a homogeneous collection (`Table`, `ObjectTable`, `LinkedTable`, `TableVec`)
 
-    Q: Do you require a map collection that you can loop over or a map collection of which the order of the keys is relevant?
-    Yes: use `LinkedTable` ([loop example](https://forums.sui.io/t/how-to-loop-over-a-table-collection/45087))
+    Q: Do you require a map collection that you can loop over or a map collection in which the order of the keys is relevant?
+    Yes: use `LinkedTable` (see below for a loop example)
 
     Q: Do you require the values (objects) in the collection to be directly accessible in Sui storage?
     Yes: use `ObjectTable`
@@ -73,6 +73,11 @@ No: use a dynamic field-backed collection (`Table`, `Bag`, `ObjectBag`, `ObjectT
     | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/table.move) 
     | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/table.md)
     )  
+`LinkedTable` (
+    [loop example](https://forums.sui.io/t/how-to-loop-over-a-table-collection/45087)
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/linked_table.move) 
+    | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/linked_table.md)
+)  
 `Bag` (
     [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/3_heterogeneous_collections.md#heterogeneous-collections) 
     | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/bag.move) 
