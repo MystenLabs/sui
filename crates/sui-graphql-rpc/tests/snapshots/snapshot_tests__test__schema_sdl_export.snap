@@ -34,7 +34,7 @@ type AuthenticatorStateUpdate {
 
 type Balance {
 	"""
-	Coin type for the balance
+	Coin type for the balance, such as 0x2::sui::SUI
 	"""
 	coinType: MoveType
 	"""
