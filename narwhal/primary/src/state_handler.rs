@@ -89,7 +89,7 @@ impl RandomnessState {
     // In this case, narwhal will continue to function normally and simpluy not run
     // the random beacon protocol during the current epoch.
     fn try_new(
-        _chain: &ChainIdentifier,
+        chain: &ChainIdentifier,
         protocol_config: &ProtocolConfig,
         committee: Committee,
         authority_id: AuthorityIdentifier,
@@ -137,8 +137,7 @@ impl RandomnessState {
         );
         let total_weight = nodes.n();
         let num_nodes = nodes.num_nodes();
-        // TODO: revert the change in the next line
-        let prefix_str = "dkg".to_string(); // format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch());
+        let prefix_str = format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch());
         let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
