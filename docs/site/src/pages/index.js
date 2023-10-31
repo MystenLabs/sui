@@ -81,8 +81,8 @@ export default function Home() {
       <div className="bg-sui-black overflow-hidden">
         <div className="w-full mt-24 mb-12 mx-auto bg-sui-black">
           <div className="text-center">
-            <p className="lg:text-8xl text-6xl text-white">Sui Documentation</p>
-            <p className="xs:text-md sm:text-xl lg:text-3xl mb-0 w-1/3 m-x-auto text-sui-blue-lighter inline-block">
+            <p className="lg:text-8xl md:text-6xl text-4xl text-white">Sui Documentation</p>
+            <p className="text-lg sm:text-xl lg:text-3xl mb-0 px-8 md:w-1/2 w-auto mx-auto text-sui-blue-lighter inline-block">
               Discover the power of Sui through examples, guides, and concepts
             </p>
           </div>
@@ -185,19 +185,19 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="lg:w-[1066px] w-auto mt-24 text-white mx-auto">
-          <h1 className="mb-4 text-8xl font-normal text-center">Why Sui?</h1>
-          <p className="text-3xl mb-8 text-sui-blue-lighter inline-block text-center w-full">
-            <span className="inline-block sm:w-[578px] w-[500px] mb-6">
+        <div className="lg:w-[1066px] w-auto my-8 md:mt-24 text-white mx-auto text-center">
+          <h1 className="mb-4 lg:text-8xl md:text-6xl text-4xl font-normal">Why Sui?</h1>
+          <p className="text-lg sm:text-xl lg:text-3xl mb-0 px-8 md:w-1/2 w-auto mx-auto text-sui-blue-lighter inline-block">
+            
               Sui is the first internet-scale programmable blockchain platform
-            </span>
+            
           </p>
         </div>
-        <div className="lg:w-[1066px] width-auto mx-auto flex flex-row items-center">
-          <div className="lg:w-[350px] w-[250px] mx-auto lg:mx-0 ">
-            <img src="/img/index/blocks.png"/>
+        <div className="lg:w-[1066px] width-auto mx-auto flex-none md:flex md:flex-row items-center">
+          <div className="text-center mx-auto mb-8 md:mb-0">
+            <img className="lg:w-[350px] w-[250px]" src="/img/index/blocks.png"/>
           </div>
-          <div className="lg:w-[676px] ml-8 lg:block hidden">
+          <div className="lg:w-[676px] mx-8 md:ml-8 md:mr-0 lg:block sm:block md:hidden">
             <p className="text-xl text-sui-blue-lighter border-solid border-0 border-t border-sui-white/50">
               <span className="inline-block mt-7 mb-3 ml-4">
                 Unmatched scalability, instant settlement
@@ -221,7 +221,7 @@ export default function Home() {
             </p>
           </div>
         </div>
-        <div className="sm:w-[840] lg:w-[1066px] w-auto my-24 text-white mx-auto">
+        <div className="sm:w-[840] lg:w-[1066px] w-auto my-12 text-white mx-auto md:block hidden">
           <ContentItem title="Scalability">
             Sui scales horizontally to meet the demands of applications. Network
             capacity grows in proportion to the increase in Sui validators'
