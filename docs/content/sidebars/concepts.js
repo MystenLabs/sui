@@ -171,20 +171,6 @@ const concepts = [
 			'concepts/cryptography/zklogin',
 			{
 				type: 'category',
-				label: 'Smart Contracts',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/smart-contracts',
-				},
-				items: [
-					'concepts/cryptography/smart-contracts/signing',
-					'concepts/cryptography/smart-contracts/groth16',
-					'concepts/cryptography/smart-contracts/hashing',
-					'concepts/cryptography/smart-contracts/ecvrf',
-				],
-			},
-			{
-				type: 'category',
 				label: 'System',
 				link: {
 					type: 'doc',
