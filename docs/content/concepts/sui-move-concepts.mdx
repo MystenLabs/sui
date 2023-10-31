@@ -54,14 +54,13 @@ On Sui, the `key` ability indicates that a struct is an object type and comes wi
 
 ### Module initializers {#module-initializers}
 
-As described in [Object-centric global storage](#global-storage), you publish Move modules into Sui storage. The Sui runtime executes a special [initializer function](init.mdx) you optionally define in a module only once at the time of module publication to pre-initialize module-specific data (for example, creating singleton objects).
+As described in [Object-centric global storage](#global-storage), you publish Move modules into Sui storage. The Sui runtime executes a special [initializer function](./sui-move-concepts/init.mdx) you optionally define in a module only once at the time of module publication to pre-initialize module-specific data (for example, creating singleton objects).
 
 ### Entry points take object references as input {#entry-points}
 
 You can call public functions from Sui transactions (called programmable transaction blocks). These functions can take objects by value, by immutable reference, or by mutable reference. If taken by value, you can destroy the object, wrap it (in another object), or transfer it (to a Sui ID specified by an address). If taken by mutable reference, the modified version of the object saves to storage without any change in ownership. In any case, the Sui network authenticates the object and declares it's usage as a part of the transaction.
->>>>>>> 64180bf4b9 ([Docs/Move] Reword)
 
-In addition to calling public functions, you can call a function that is marked [entry](entry-functions.mdx) even if it is private as long as other non-`entry` functions have not used its inputs.
+In addition to calling public functions, you can call a function that is marked [entry](./sui-move-concepts/entry-functions.mdx) even if it is private as long as other non-`entry` functions have not used its inputs.
 
 
 ## Explore concepts
@@ -78,12 +77,12 @@ The `entry` modifier for functions enables safe and direct invocation of module 
 
 ### Strings
 
-Move does not have a native type for strings, but it has a useful wrapper. See [Strings](./sui-move-concepts/strings) for examples.
+Move does not have a native type for strings, but it has a useful wrapper. See [Strings](./sui-move-concepts/strings.mdx) for examples.
 
 ### One-time witness
 
-A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness) for an example.
+A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness.mdx) for an example.
 
 ### Patterns
 
-Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. See the [Patterns](./sui-move-concepts/patterns) section for a list of documented coding patterns.
+Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. See the [Patterns](./sui-move-concepts/patterns.mdx) section for a list of documented coding patterns.
