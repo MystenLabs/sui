@@ -198,6 +198,7 @@ impl Query {
             .extend()
     }
 
+    /// Resolves the owner address of the provided domain name
     async fn resolve_name_service_address(
         &self,
         ctx: &Context<'_>,

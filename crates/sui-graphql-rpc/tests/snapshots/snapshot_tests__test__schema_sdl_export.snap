@@ -380,6 +380,10 @@ type MoveData =
 """
 scalar MoveData
 
+"""
+Represents a module in Move, a library that defines struct types
+and functions that operate on these types.
+"""
 type MoveModule {
 	fileFormatVersion: Int!
 }
@@ -415,6 +419,9 @@ type MoveModuleEdge {
 
 type MoveModuleId {
 	name: String!
+	"""
+	Fetches the package that this Move module was defined in
+	"""
 	package: MovePackage!
 }
 
@@ -444,7 +451,15 @@ type MoveObject {
 }
 
 type MovePackage {
+	"""
+	Given a module name, attempts to deserialize the module from the package
+	The result is a representation of a module in Move that defines struct types
+	and functions that operate on these types.
+	"""
 	module(name: String!): MoveModule
+	"""
+	Paginate through the MoveModules defined in this package.
+	"""
 	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	The transitive dependencies of this package.
@@ -536,24 +551,81 @@ type MoveValue {
 }
 
 type Object implements ObjectOwner {
+	"""
+	If this object is a MoveObject, this is a number that increases each time a tx takes this object as a mutable input
+	This is a lamport timestamp, not a sequentially increasing version
+	If this object is a MovePackage, the version is increased every time the package is upgraded
+	Note that packages are referred to by move calls using just their ID, and they are always loaded at their latest version
+	"""
 	version: Int!
+	"""
+	The object digest is a 32-byte hash of the sui_type::Object struct
+	This uniquely identifies the object
+	"""
 	digest: String!
+	"""
+	The amount of SUI we would rebate if this object gets deleted
+	This number is recalculated each time the object is mutated based on
+	the present storage gas price
+	"""
 	storageRebate: BigInt
+	"""
+	This is the Base64 encoded bcs serialization of the sui_type::Object struct
+	"""
 	bcs: Base64
+	"""
+	This is the transaction block that created or most recently mutated this object
+	"""
 	previousTransactionBlock: TransactionBlock
+	"""
+	Objects can either be immutable, shared, owned by another address,
+	or are the dynamic child objects of a parent object
+	"""
 	kind: ObjectKind
+	"""
+	If the object is a dynamic child object, the owner field returns the object owner
+	Which is an object with dynamic fields including the current object
+	If the object is owned by an address or object, the owner field returns
+	the owner address or object
+	Immutable objects do not have an owner
+	Shared objects also do not have an owner
+	"""
 	owner: Owner
+	"""
+	Attempts to convert the object into a MoveObject
+	"""
 	asMoveObject: MoveObject
+	"""
+	Attempts to convert the object into a MovePackage
+	"""
 	asMovePackage: MovePackage
+	"""
+	The address of the object, named as such to avoid conflict w/ the address type
+	"""
 	location: SuiAddress!
+	"""
+	Fetches the objects owned by this object
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	Fetches the balance of a particular coin type
+	"""
 	balance(type: String): Balance
+	"""
+	Fetches the sum balance of coin objects owned by the object
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	Lists the coins corresponding to the Coin objects owned by the given object
+	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
 	Lists the stakes corresponding to the StakedSui objects owned by the given object
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	"""
+	The domain that a user address has explicitly configured as their default domain
+	"""
 	defaultNameServiceName: String
 }
 
@@ -734,6 +806,9 @@ type Query {
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	"""
+	Resolves the owner address of the provided domain name
+	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
 }

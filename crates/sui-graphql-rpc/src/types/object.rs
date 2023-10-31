@@ -59,22 +59,33 @@ pub(crate) struct ObjectKey {
 #[allow(unused_variables)]
 #[Object]
 impl Object {
+    /// If this object is a MoveObject, this is a number that increases each time a tx takes this object as a mutable input
+    /// This is a lamport timestamp, not a sequentially increasing version
+    /// If this object is a MovePackage, the version is increased every time the package is upgraded
+    /// Note that packages are referred to by move calls using just their ID, and they are always loaded at their latest version
     async fn version(&self) -> u64 {
         self.version
     }
 
+    /// The object digest is a 32-byte hash of the sui_type::Object struct
+    /// This uniquely identifies the object
     async fn digest(&self) -> &str {
         &self.digest
     }
 
+    /// The amount of SUI we would rebate if this object gets deleted
+    /// This number is recalculated each time the object is mutated based on
+    /// the present storage gas price
     async fn storage_rebate(&self) -> Option<&BigInt> {
         self.storage_rebate.as_ref()
     }
 
+    /// This is the Base64 encoded bcs serialization of the sui_type::Object struct
     async fn bcs(&self) -> Option<&Base64> {
         self.bcs.as_ref()
     }
 
+    /// This is the transaction block that created or most recently mutated this object
     async fn previous_transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -89,14 +100,23 @@ impl Object {
         }
     }
 
+    /// Objects can either be immutable, shared, owned by another address,
+    /// or are the dynamic child objects of a parent object
     async fn kind(&self) -> Option<ObjectKind> {
         self.kind
     }
 
+    /// If the object is a dynamic child object, the owner field returns the object owner
+    /// Which is an object with dynamic fields including the current object
+    /// If the object is owned by an address or object, the owner field returns
+    /// the owner address or object
+    /// Immutable objects do not have an owner
+    /// Shared objects also do not have an owner
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
     }
 
+    /// Attempts to convert the object into a MoveObject
     async fn as_move_object(&self) -> Result<Option<MoveObject>> {
         let Some(bcs) = &self.bcs else {
             return Ok(None);
@@ -118,6 +138,7 @@ impl Object {
         )
     }
 
+    /// Attempts to convert the object into a MovePackage
     async fn as_move_package(&self) -> Result<Option<MovePackage>> {
         let Some(bcs) = &self.bcs else {
             return Ok(None);
@@ -141,10 +162,12 @@ impl Object {
 
     // =========== Owner interface methods =============
 
+    /// The address of the object, named as such to avoid conflict w/ the address type
     pub async fn location(&self) -> SuiAddress {
         self.address
     }
 
+    /// Fetches the objects owned by this object
     pub async fn object_connection(
         &self,
         ctx: &Context<'_>,
@@ -160,6 +183,7 @@ impl Object {
             .extend()
     }
 
+    /// Fetches the balance of a particular coin type
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -171,6 +195,7 @@ impl Object {
             .extend()
     }
 
+    /// Fetches the sum balance of coin objects owned by the object
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,
@@ -185,6 +210,7 @@ impl Object {
             .extend()
     }
 
+    /// Lists the coins corresponding to the Coin objects owned by the given object
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -215,6 +241,7 @@ impl Object {
             .extend()
     }
 
+    /// The domain that a user address has explicitly configured as their default domain
     pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
             .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)

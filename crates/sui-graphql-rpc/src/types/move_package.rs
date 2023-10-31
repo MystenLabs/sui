@@ -53,6 +53,9 @@ struct TypeOrigin {
 #[allow(unused_variables)]
 #[Object]
 impl MovePackage {
+    /// Given a module name, attempts to deserialize the module from the package
+    /// The result is a representation of a module in Move that defines struct types
+    /// and functions that operate on these types.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
         let identifier = Identifier::new(name).map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -70,6 +73,7 @@ impl MovePackage {
         Ok(None)
     }
 
+    /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
         ctx: &Context<'_>,
