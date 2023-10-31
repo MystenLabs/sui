@@ -18,7 +18,6 @@ type Address implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -521,7 +520,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -529,42 +528,11 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
 	json: JSON!
-}
-
-scalar NameService
-
-type NameServiceConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [NameServiceEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [NameService!]!
-}
-
-"""
-An edge in a connection.
-"""
-type NameServiceEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: NameService!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
 }
 
 type Object implements ObjectOwner {
@@ -587,7 +555,6 @@ type Object implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type ObjectChange {
@@ -655,7 +622,6 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type Owner implements ObjectOwner {
@@ -671,7 +637,6 @@ type Owner implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 """
@@ -924,7 +889,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-	
+
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
