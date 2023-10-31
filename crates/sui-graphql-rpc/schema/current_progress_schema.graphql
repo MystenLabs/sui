@@ -813,7 +813,8 @@ type StakeSubsidy {
 	"""
 	balance: BigInt
 	"""
-	Number of times stake subsidies have been distributed.
+	Number of times stake subsidies have been distributed subsidies are distributed with other
+	staking rewards, at the end of the epoch.
 	"""
 	distributionCounter: Int
 	"""
@@ -1084,9 +1085,22 @@ type ValidatorCredentials {
 	workerAddress: String
 }
 
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
 type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
 	totalStake: BigInt
+	"""
+	The current list of active validators.
+	"""
 	activeValidators: [Validator!]
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
 	pendingRemovals: [Int!]
 	pendingActiveValidatorsSize: Int
 	stakePoolMappingsSize: Int

@@ -11,7 +11,8 @@ pub(crate) struct StakeSubsidy {
     /// time.
     pub balance: Option<BigInt>,
 
-    /// Number of times stake subsidies have been distributed.
+    /// Number of times stake subsidies have been distributed subsidies are distributed with other
+    /// staking rewards, at the end of the epoch.
     pub distribution_counter: Option<u64>,
 
     /// Amount of stake subsidy deducted from the balance per distribution -- decays over time.
