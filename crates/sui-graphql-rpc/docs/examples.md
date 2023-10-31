@@ -43,27 +43,29 @@
 #### &emsp;&emsp;[Key Value Feature Flag](#786421)
 #### &emsp;&emsp;[Specific Config](#786422)
 #### &emsp;&emsp;[Specific Feature Flag](#786423)
-### [Stake Connection](#13)
-#### &emsp;&emsp;[Stake Connection](#851955)
-### [Sui System State Summary](#14)
-#### &emsp;&emsp;[Sui System State Summary](#917490)
-### [Transaction Block](#15)
-#### &emsp;&emsp;[Transaction Block Kind](#983025)
-### [Transaction Block Connection](#16)
-#### &emsp;&emsp;[Before After Checkpoint](#1048560)
-#### &emsp;&emsp;[Changed Object Filter](#1048561)
-#### &emsp;&emsp;[Input Object Filter](#1048562)
-#### &emsp;&emsp;[Input Object Sent Addr Filter](#1048563)
-#### &emsp;&emsp;[Package Filter](#1048564)
-#### &emsp;&emsp;[Package Module Filter](#1048565)
-#### &emsp;&emsp;[Package Module Func Filter](#1048566)
-#### &emsp;&emsp;[Recv Addr Filter](#1048567)
-#### &emsp;&emsp;[Sent Addr Filter](#1048568)
-#### &emsp;&emsp;[Tx Ids Filter](#1048569)
-#### &emsp;&emsp;[Tx Kind Filter](#1048570)
-#### &emsp;&emsp;[With Defaults Ascending](#1048571)
-### [Transaction Block Effects](#17)
-#### &emsp;&emsp;[Transaction Block Effects](#1114095)
+### [Service Config](#13)
+#### &emsp;&emsp;[Service Config](#851955)
+### [Stake Connection](#14)
+#### &emsp;&emsp;[Stake Connection](#917490)
+### [Sui System State Summary](#15)
+#### &emsp;&emsp;[Sui System State Summary](#983025)
+### [Transaction Block](#16)
+#### &emsp;&emsp;[Transaction Block Kind](#1048560)
+### [Transaction Block Connection](#17)
+#### &emsp;&emsp;[Before After Checkpoint](#1114095)
+#### &emsp;&emsp;[Changed Object Filter](#1114096)
+#### &emsp;&emsp;[Input Object Filter](#1114097)
+#### &emsp;&emsp;[Input Object Sent Addr Filter](#1114098)
+#### &emsp;&emsp;[Package Filter](#1114099)
+#### &emsp;&emsp;[Package Module Filter](#1114100)
+#### &emsp;&emsp;[Package Module Func Filter](#1114101)
+#### &emsp;&emsp;[Recv Addr Filter](#1114102)
+#### &emsp;&emsp;[Sent Addr Filter](#1114103)
+#### &emsp;&emsp;[Tx Ids Filter](#1114104)
+#### &emsp;&emsp;[Tx Kind Filter](#1114105)
+#### &emsp;&emsp;[With Defaults Ascending](#1114106)
+### [Transaction Block Effects](#18)
+#### &emsp;&emsp;[Transaction Block Effects](#1179630)
 ## <a id=0></a>
 ## Address
 ### <a id=0></a>
@@ -897,8 +899,23 @@
 >}</pre>
 
 ## <a id=13></a>
-## Stake Connection
+## Service Config
 ### <a id=851955></a>
+### Service Config
+####  Get the configuration of the running service
+
+><pre>{
+>  serviceConfig {
+>    isEnabled(feature: ANALYTICS)
+>    enabledFeatures
+>    maxQueryDepth
+>    maxQueryNodes
+>  }
+>}</pre>
+
+## <a id=14></a>
+## Stake Connection
+### <a id=917490></a>
 ### Stake Connection
 ####  Get all the staked objects for this address and all the active validators at the epoch when the stake became active
 
@@ -937,9 +954,9 @@
 >  }
 >}</pre>
 
-## <a id=14></a>
+## <a id=15></a>
 ## Sui System State Summary
-### <a id=917490></a>
+### <a id=983025></a>
 ### Sui System State Summary
 
 ><pre>{
@@ -986,9 +1003,9 @@
 >  }
 >}</pre>
 
-## <a id=15></a>
+## <a id=16></a>
 ## Transaction Block
-### <a id=983025></a>
+### <a id=1048560></a>
 ### Transaction Block Kind
 
 ><pre>{
@@ -1023,9 +1040,9 @@
 >  }
 >}</pre>
 
-## <a id=16></a>
+## <a id=17></a>
 ## Transaction Block Connection
-### <a id=1048560></a>
+### <a id=1114095></a>
 ### Before After Checkpoint
 ####  Filter on before_ and after_checkpoint. If both are provided, before must be greater than after
 
@@ -1045,7 +1062,7 @@
 >  }
 >}</pre>
 
-### <a id=1048561></a>
+### <a id=1114096></a>
 ### Changed Object Filter
 ####  Filter on changedObject
 
@@ -1067,7 +1084,7 @@
 >  }
 >}</pre>
 
-### <a id=1048562></a>
+### <a id=1114097></a>
 ### Input Object Filter
 ####  Filter on inputObject
 
@@ -1089,7 +1106,7 @@
 >  }
 >}</pre>
 
-### <a id=1048563></a>
+### <a id=1114098></a>
 ### Input Object Sent Addr Filter
 ####  multiple filters
 
@@ -1119,7 +1136,7 @@
 >  }
 >}</pre>
 
-### <a id=1048564></a>
+### <a id=1114099></a>
 ### Package Filter
 ####  Filtering on package
 
@@ -1141,7 +1158,7 @@
 >  }
 >}</pre>
 
-### <a id=1048565></a>
+### <a id=1114100></a>
 ### Package Module Filter
 ####  Filtering on package and module
 
@@ -1164,7 +1181,7 @@
 >  }
 >}</pre>
 
-### <a id=1048566></a>
+### <a id=1114101></a>
 ### Package Module Func Filter
 ####  Filtering on package, module and function
 
@@ -1188,7 +1205,7 @@
 >  }
 >}</pre>
 
-### <a id=1048567></a>
+### <a id=1114102></a>
 ### Recv Addr Filter
 ####  Filter on recvAddress
 
@@ -1210,7 +1227,7 @@
 >  }
 >}</pre>
 
-### <a id=1048568></a>
+### <a id=1114103></a>
 ### Sent Addr Filter
 ####  Filter on sign or sentAddress
 
@@ -1232,7 +1249,7 @@
 >  }
 >}</pre>
 
-### <a id=1048569></a>
+### <a id=1114104></a>
 ### Tx Ids Filter
 ####  Filter on transactionIds
 
@@ -1252,7 +1269,7 @@
 >  }
 >}</pre>
 
-### <a id=1048570></a>
+### <a id=1114105></a>
 ### Tx Kind Filter
 ####  Filter on TransactionKind (only SYSTEM_TX or PROGRAMMABLE_TX)
 
@@ -1270,7 +1287,7 @@
 >  }
 >}</pre>
 
-### <a id=1048571></a>
+### <a id=1114106></a>
 ### With Defaults Ascending
 ####  Fetch some default amount of transactions, ascending
 
@@ -1307,9 +1324,9 @@
 >  }
 >}</pre>
 
-## <a id=17></a>
+## <a id=18></a>
 ## Transaction Block Effects
-### <a id=1114095></a>
+### <a id=1179630></a>
 ### Transaction Block Effects
 
 ><pre>{
