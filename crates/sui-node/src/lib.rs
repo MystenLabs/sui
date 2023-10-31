@@ -76,7 +76,6 @@ use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::consensus_manager::narwhal_manager::{NarwhalManager, NarwhalManagerMetrics, NarwhalConfiguration };
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -121,7 +120,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
-use sui_core::consensus_manager::ConsensusManager;
+use sui_core::consensus_manager::{Manager};
 
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
@@ -131,7 +130,7 @@ pub mod metrics;
 
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
-    narwhal_manager: NarwhalManager,
+    consensus_manager: Manager,
     narwhal_epoch_data_remover: EpochDataRemover,
     consensus_adapter: Arc<ConsensusAdapter>,
     // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
@@ -993,11 +992,10 @@ impl SuiNode {
             &registry_service.default_registry(),
             epoch_store.protocol_config().clone(),
         ));
-        let narwhal_manager =
-            Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
+        let consensus_manager = Manager::narwhal(config, consensus_config, registry_service);
 
         let mut narwhal_epoch_data_remover =
-            EpochDataRemover::new(narwhal_manager.get_storage_base_path());
+            EpochDataRemover::new(consensus_manager.get_storage_base_path());
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
         narwhal_epoch_data_remover.run().await;
@@ -1021,7 +1019,7 @@ impl SuiNode {
             checkpoint_store,
             epoch_store,
             state_sync_handle,
-            narwhal_manager,
+            consensus_manager,
             narwhal_epoch_data_remover,
             accumulator,
             validator_server_handle,
@@ -1039,7 +1037,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
-        narwhal_manager: NarwhalManager,
+        consensus_manager: Manager,
         narwhal_epoch_data_remover: EpochDataRemover,
         accumulator: Arc<StateAccumulator>,
         validator_server_handle: JoinHandle<Result<()>>,
@@ -1096,19 +1094,17 @@ impl SuiNode {
             )
         };
 
-        narwhal_manager
-            .start(
-                config,
+        consensus_manager.start(
+            config,
+            epoch_store.clone(),
+            consensus_handler_initializer,
+            SuiTxValidator::new(
                 epoch_store.clone(),
-                consensus_handler_initializer,
-                SuiTxValidator::new(
-                    epoch_store.clone(),
-                    checkpoint_service.clone(),
-                    state.transaction_manager().clone(),
-                    sui_tx_validator_metrics.clone(),
-                ),
-            )
-            .await;
+                checkpoint_service.clone(),
+                state.transaction_manager().clone(),
+                sui_tx_validator_metrics.clone(),
+            ),
+        ).await;
 
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
@@ -1122,7 +1118,7 @@ impl SuiNode {
 
         Ok(ValidatorComponents {
             validator_server_handle,
-            narwhal_manager,
+            consensus_manager,
             narwhal_epoch_data_remover,
             consensus_adapter,
             checkpoint_service_exit,
@@ -1177,25 +1173,6 @@ impl SuiNode {
             max_tx_per_checkpoint,
             max_checkpoint_size_bytes,
         )
-    }
-
-    fn construct_narwhal_manager(
-        config: &NodeConfig,
-        consensus_config: &ConsensusConfig,
-        registry_service: &RegistryService,
-    ) -> Result<NarwhalManager> {
-        let narwhal_config = NarwhalConfiguration {
-            primary_keypair: config.protocol_key_pair().copy(),
-            network_keypair: config.network_key_pair().copy(),
-            worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
-            storage_base_path: consensus_config.db_path().to_path_buf(),
-            parameters: consensus_config.narwhal_config().to_owned(),
-            registry_service: registry_service.clone(),
-        };
-
-        let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
-
-        Ok(NarwhalManager::new(narwhal_config, metrics))
     }
 
     fn construct_consensus_adapter(
@@ -1412,7 +1389,7 @@ impl SuiNode {
             // in the new epoch.
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
-                narwhal_manager,
+                                                           consensus_manager,
                 narwhal_epoch_data_remover,
                 consensus_adapter,
                 checkpoint_service_exit,
@@ -1424,7 +1401,7 @@ impl SuiNode {
                 // Stop the old checkpoint service.
                 drop(checkpoint_service_exit);
 
-                narwhal_manager.shutdown().await;
+                consensus_manager.shutdown().await;
 
                 let new_epoch_store = self
                     .reconfigure_state(
@@ -1450,7 +1427,7 @@ impl SuiNode {
                             self.checkpoint_store.clone(),
                             new_epoch_store.clone(),
                             self.state_sync.clone(),
-                            narwhal_manager,
+                            consensus_manager,
                             narwhal_epoch_data_remover,
                             self.accumulator.clone(),
                             validator_server_handle,
