@@ -2,22 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
+use crate::consensus_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use bytes::Bytes;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
-use narwhal_test_utils::latest_protocol_version;
 use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::digests::ChainIdentifier;
-use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::broadcast;
@@ -130,16 +127,15 @@ async fn test_narwhal_manager() {
         };
 
         let metrics = NarwhalManagerMetrics::new(&Registry::new());
+        let epoch_store = state.epoch_store_for_testing();
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
         // start narwhal
         narwhal_manager
             .start(
-                narwhal_committee.clone(),
-                ChainIdentifier::from(CheckpointDigest::default()),
-                latest_protocol_version(),
-                worker_cache.clone(),
+                config,
+                epoch_store.clone(),
                 execution_state,
                 TrivialTransactionValidator,
             )
@@ -173,7 +169,10 @@ async fn test_narwhal_manager() {
     }
     let mut shutdown_senders = Vec::new();
 
-    for (narwhal_manager, state, transactions_addr, name) in narwhal_managers {
+    for ((narwhal_manager, state, transactions_addr, name), config) in narwhal_managers
+        .into_iter()
+        .zip(configs.validator_configs())
+    {
         // stop narwhal instance
         narwhal_manager.shutdown().await;
 
@@ -196,13 +195,13 @@ async fn test_narwhal_manager() {
             epoch: narwhal_committee.epoch(),
         };
 
+        let epoch_store = state.epoch_store_for_testing();
+
         // start narwhal with advanced epoch
         narwhal_manager
             .start(
-                narwhal_committee.clone(),
-                ChainIdentifier::from(CheckpointDigest::default()),
-                latest_protocol_version(),
-                worker_cache.clone(),
+                config,
+                epoch_store.clone(),
                 execution_state,
                 TrivialTransactionValidator,
             )

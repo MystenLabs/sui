@@ -76,7 +76,7 @@ use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
+use sui_core::consensus_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -1095,19 +1095,10 @@ impl SuiNode {
             )
         };
 
-        let transactions_addr = &config
-            .consensus_config
-            .as_ref()
-            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
-            .address;
-        let worker_cache = new_epoch_start_state.get_narwhal_worker_cache(transactions_addr);
-
         narwhal_manager
             .start(
-                new_epoch_start_state.get_narwhal_committee(),
-                epoch_store.get_chain_identifier(),
-                epoch_store.protocol_config().clone(),
-                worker_cache,
+                config,
+                epoch_store,
                 consensus_handler_initializer,
                 SuiTxValidator::new(
                     epoch_store.clone(),

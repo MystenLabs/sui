@@ -5,9 +5,11 @@
 #[path = "../unit_tests/narwhal_manager_tests.rs"]
 pub mod narwhal_manager_tests;
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use narwhal_config::{Committee, Epoch, Parameters, WorkerCache, WorkerId};
+use narwhal_config::{Epoch, Parameters, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_network::client::NetworkClient;
 use narwhal_node::primary_node::PrimaryNode;
@@ -16,11 +18,29 @@ use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_config::NodeConfig;
+use sui_protocol_config::ProtocolVersion;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
-use sui_types::digests::ChainIdentifier;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::Mutex;
+
+/// Any consensus engine manager should implement this interface to handle via the sui node.
+#[async_trait]
+pub trait ConsensusManager {
+    async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
+        &self,
+        config: &NodeConfig,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        execution_state: StateInitializer,
+        tx_validator: TxValidator,
+    ) where
+        State: ExecutionState + Send + Sync + 'static,
+        StateInitializer: Fn() -> State;
+
+    async fn shutdown(&self);
+}
 
 #[derive(PartialEq)]
 enum Running {
@@ -124,16 +144,26 @@ impl NarwhalManager {
     // start of EACH epoch.
     pub async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
         &self,
-        committee: Committee,
-        chain: ChainIdentifier,
-        protocol_config: ProtocolConfig,
-        worker_cache: WorkerCache,
+        config: &NodeConfig,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         execution_state: StateInitializer,
         tx_validator: TxValidator,
     ) where
         State: ExecutionState + Send + Sync + 'static,
         StateInitializer: Fn() -> State,
     {
+        let chain = epoch_store.get_chain_identifier();
+        let system_state = epoch_store.epoch_start_state();
+        let committee = system_state.get_narwhal_committee();
+        let protocol_config = epoch_store.protocol_config();
+
+        let transactions_addr = &config
+            .consensus_config
+            .as_ref()
+            .expect("Validator is missing consensus config")
+            .address;
+        let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
+
         let mut running = self.running.lock().await;
 
         if let Running::True(epoch, version) = *running {
