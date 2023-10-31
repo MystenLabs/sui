@@ -76,6 +76,20 @@ const guides = [
 			},
 			{
 				type: 'category',
+				label: 'Cryptography',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/cryptography',
+				},
+				items: [
+					'guides/developer/cryptography/signing',
+					'guides/developer/cryptography/groth16',
+					'guides/developer/cryptography/hashing',
+					'guides/developer/cryptography/ecvrf',
+				],
+			},
+			{
+				type: 'category',
 				label: 'Advanced Topics',
 				link: {
 					type: 'doc',
