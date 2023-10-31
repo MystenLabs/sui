@@ -137,7 +137,8 @@ impl RandomnessState {
         );
         let total_weight = nodes.n();
         let num_nodes = nodes.num_nodes();
-        let prefix_str = format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch());
+        // TODO: revert the change in the next line
+        let prefix_str = "dkg".to_string(); // format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch());
         let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
@@ -264,6 +265,7 @@ impl RandomnessState {
             }
             // Begin randomness generation.
             if self.dkg_output.is_some() {
+                info!("random beacon: start randomness generation");
                 self.send_partial_signatures().await;
             }
         }
