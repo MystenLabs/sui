@@ -23,26 +23,24 @@ pub(crate) struct CheckpointId {
 #[graphql(complex)]
 pub(crate) struct Checkpoint {
     // id: ID1
-    /// The digest of the checkpoint is the 32-byte hash of the CheckpointSummary struct.
+    /// The digest of the checkpoint is a hash of the checkpoint contents and can be used to verify the blockchain.
     pub digest: String,
-    /// This number is set by validators as new checkpoint proposals are built.
-    /// This is set to be 1 greater than the previous checkpoint's sequence number.
+    /// This number is set by validators and is 1 greater than the previous checkpoint's sequence number.
     pub sequence_number: u64,
-    /// This can be understood as the timestamp of the transactions and effects in the checkpoint.
-    /// Internally, this timestamp is taken from the consensus commit which the checkpoint is based on.
+    /// Timestamp of transactions and effects in the checkpoint, taken from the consensus commit which the checkpoint is based on.
     pub timestamp: Option<DateTime>,
-    /// This is an aggregation of signatures from 2f+1 validators for that checkpoint proposal.
+    /// This is an aggregation of signatures from 2f+1 validators for the checkpoint proposal.
     pub validator_signature: Option<Base64>,
     /// The digest of the checkpoint at the previous sequence number.
     pub previous_checkpoint_digest: Option<String>,
     /// This is a commitment by the committee at the end of epoch
     /// on the contents of the live object set at that time.
-    /// It's currently used for verifying state snapshots.
+    /// This can be used to verify state snapshots.
     pub live_object_set_digest: Option<String>,
     /// Tracks the total number of transaction blocks in the network at the time of the checkpoint.
     pub network_total_transactions: Option<u64>,
     /// The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint.
-    /// These values should increase through the checkpoints.
+    /// These values should increase throughout the checkpoints.
     pub rolling_gas_summary: Option<GasCostSummary>,
     #[graphql(skip)]
     pub epoch_id: u64,
