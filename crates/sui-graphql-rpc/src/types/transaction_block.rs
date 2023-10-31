@@ -31,8 +31,6 @@ use sui_types::digests::TransactionDigest;
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
 pub(crate) struct TransactionBlock {
-    /// The digest of a transaction block is represented as a 32-byte array
-    /// This is returned to callers as a Base58 encoded string
     #[graphql(skip)]
     pub digest: Digest,
     /// The transaction block effects provide information such as gas cost and object changes
@@ -43,8 +41,6 @@ pub(crate) struct TransactionBlock {
     pub bcs: Option<Base64>,
     /// The gas input of the transaction block
     pub gas_input: Option<GasInput>,
-    /// The epoch id of the expiration of the transaction block
-    /// Note that this is a user-set value
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
@@ -77,10 +73,14 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
 
 #[ComplexObject]
 impl TransactionBlock {
+    /// The digest of a transaction block is represented as a 32-byte array
+    /// This is returned to callers as a Base58 encoded string
     async fn digest(&self) -> String {
         self.digest.to_string()
     }
 
+    /// Resolves to the expiration epoch of the transaction block
+    /// Note that this is a value set by the one who executes the transaction block
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         match self.epoch_id {
             None => Ok(None),

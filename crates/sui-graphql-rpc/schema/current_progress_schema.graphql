@@ -1125,7 +1125,15 @@ type TransactionBlock {
 	2. Signature order does not matter
 	"""
 	signatures: [TransactionSignature]
+	"""
+	The digest of a transaction block is represented as a 32-byte array
+	This is returned to callers as a Base58 encoded string
+	"""
 	digest: String!
+	"""
+	Resolves to the expiration epoch of the transaction block
+	Note that this is a value set by the one who executes the transaction block
+	"""
 	expiration: Epoch
 }
 
