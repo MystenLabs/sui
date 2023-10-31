@@ -2833,11 +2833,11 @@
               "name": "past_objects",
               "value": [
                 {
-                  "objectId": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
+                  "objectId": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449",
                   "version": "4"
                 },
                 {
-                  "objectId": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5",
+                  "objectId": "0xe81109dc075f537067726d63dd5287100e177404a969989215da2abfbfc098cf",
                   "version": "12"
                 }
               ]
@@ -2861,14 +2861,14 @@
               {
                 "status": "VersionFound",
                 "details": {
-                  "objectId": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
+                  "objectId": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449",
                   "version": "4",
-                  "digest": "J66shUHEGAe7eHtiw1bz5rvvjZcwpvnUTMEkxThxR3Kg",
+                  "digest": "F34PCnEHm5GAP5ksDKPSdRMKz49JiqrvLUTZsiojqJS2",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "owner": {
-                    "AddressOwner": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
+                    "AddressOwner": "0xfde53941b2a08a8bf752c20979842732ac019f52835282744318d6d84f3c52b3"
                   },
-                  "previousTransaction": "GcteyqtLYTc7Fig8CKtspCafwf6muuDgMtDUA1jrYKae",
+                  "previousTransaction": "EMLrFqmDkZtFvidxKy1T8bwAiHnUiLqramE58kSUcAf8",
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
@@ -2877,7 +2877,7 @@
                     "fields": {
                       "balance": "10000",
                       "id": {
-                        "id": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
+                        "id": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
                       }
                     }
                   }
@@ -2886,14 +2886,14 @@
               {
                 "status": "VersionFound",
                 "details": {
-                  "objectId": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5",
+                  "objectId": "0xe81109dc075f537067726d63dd5287100e177404a969989215da2abfbfc098cf",
                   "version": "12",
-                  "digest": "2HJk4eT4Jmekwf1nNeokfibZnuaUmMFS1JYcPJdw6eB9",
+                  "digest": "FvrqyqH5yA85sziA2NoPGJ8N23kmTxeXQh4HyJAbB7c2",
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "owner": {
-                    "AddressOwner": "0xc65dfd6586b7d295a16b97bd4318995d4a920239e4c5d856bdbf1944a063a3ef"
+                    "AddressOwner": "0x13090a95287cde98d711fc27217b81e08d494bdb70c3b42f0fe27be8eb500568"
                   },
-                  "previousTransaction": "F34PCnEHm5GAP5ksDKPSdRMKz49JiqrvLUTZsiojqJS2",
+                  "previousTransaction": "6XEirxRenmgbeg4tviP43bAKsosqgySXwoBxGEWQVTii",
                   "storageRebate": "100",
                   "content": {
                     "dataType": "moveObject",
@@ -2902,7 +2902,7 @@
                     "fields": {
                       "balance": "20000",
                       "id": {
-                        "id": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
+                        "id": "0x5056aa3325512c8af40b9f5fd7065c83ded900657eac70a7979c2541646fa449"
                       }
                     }
                   }
@@ -3151,14 +3151,12 @@
           "result": {
             "name": "Result",
             "value": {
-              "id": {
-                "id": "0x6d907beaa3a49db57bdfdb3557e6d405cbf01c293a53e01457d65e92b5d8dd68"
-              },
               "decimals": 9,
               "name": "Usdc",
               "symbol": "USDC",
               "description": "Stable coin.",
-              "icon_url": null
+              "iconUrl": null,
+              "id": "0x6d907beaa3a49db57bdfdb3557e6d405cbf01c293a53e01457d65e92b5d8dd68"
             }
           }
         }
@@ -3744,34 +3742,42 @@
           ],
           "result": {
             "name": "Result",
-            "value": {
-              "validatorAddress": "0x034462b6064a08845e2ae2942fe7c4ee816d754eb2eed23e6c6bb32c89fe1f21",
-              "stakingPool": "0xab588374445e72e0402aea014b295610579963ee67e81398729f87d81d62f399",
-              "stakes": [
-                {
-                  "stakedSuiId": "0xc041b0f8d0938923ea7e3917608ee62df4376710024f81dd33ab6833482ee803",
-                  "stakeRequestEpoch": "62",
-                  "stakeActiveEpoch": "63",
-                  "principal": "200000000000",
-                  "status": "Active",
-                  "estimatedReward": "520000000"
-                },
-                {
-                  "stakedSuiId": "0x4e779a48e6ef635c7f856df4905022458bfbd22bbb46f892c42d9ec0ae4de93e",
-                  "stakeRequestEpoch": "142",
-                  "stakeActiveEpoch": "143",
-                  "principal": "200000000000",
-                  "status": "Pending"
-                },
-                {
-                  "stakedSuiId": "0x02c75973a51c17180798237326a58694a2cf5cd6fa76ed1d18f05f15e3507525",
-                  "stakeRequestEpoch": "244",
-                  "stakeActiveEpoch": "245",
-                  "principal": "200000000000",
-                  "status": "Unstaked"
-                }
-              ]
-            }
+            "value": [
+              {
+                "validatorAddress": "0x034462b6064a08845e2ae2942fe7c4ee816d754eb2eed23e6c6bb32c89fe1f21",
+                "stakingPool": "0xab588374445e72e0402aea014b295610579963ee67e81398729f87d81d62f399",
+                "stakes": [
+                  {
+                    "stakedSuiId": "0xc041b0f8d0938923ea7e3917608ee62df4376710024f81dd33ab6833482ee803",
+                    "stakeRequestEpoch": "62",
+                    "stakeActiveEpoch": "63",
+                    "principal": "200000000000",
+                    "status": "Active",
+                    "estimatedReward": "520000000"
+                  },
+                  {
+                    "stakedSuiId": "0x4e779a48e6ef635c7f856df4905022458bfbd22bbb46f892c42d9ec0ae4de93e",
+                    "stakeRequestEpoch": "142",
+                    "stakeActiveEpoch": "143",
+                    "principal": "200000000000",
+                    "status": "Pending"
+                  }
+                ]
+              },
+              {
+                "validatorAddress": "0x02c75973a51c17180798237326a58694a2cf5cd6fa76ed1d18f05f15e3507525",
+                "stakingPool": "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
+                "stakes": [
+                  {
+                    "stakedSuiId": "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c",
+                    "stakeRequestEpoch": "244",
+                    "stakeActiveEpoch": "245",
+                    "principal": "200000000000",
+                    "status": "Unstaked"
+                  }
+                ]
+              }
+            ]
           }
         }
       ]
@@ -3813,19 +3819,19 @@
             {
               "name": "staked_sui_ids",
               "value": [
-                "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
-                "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c"
+                "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
+                "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4"
               ]
             }
           ],
           "result": {
             "name": "Result",
             "value": {
-              "validatorAddress": "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
-              "stakingPool": "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4",
+              "validatorAddress": "0xfb1b51ef9f3ed66000c0e45697dbee0954790a7b5c15ad7354f23b968be8bb06",
+              "stakingPool": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38",
               "stakes": [
                 {
-                  "stakedSuiId": "0x2ddec4fb83621d55952d9172fcfcb72feae238b3186a7bb26a1ab2c982a0a9b4",
+                  "stakedSuiId": "0xb2a5bea2e681ea5af4e59bd1abb0bb4fcb2747866ff92885a3c21a7703f56472",
                   "stakeRequestEpoch": "62",
                   "stakeActiveEpoch": "63",
                   "principal": "200000000000",
@@ -3833,7 +3839,7 @@
                   "estimatedReward": "520000000"
                 },
                 {
-                  "stakedSuiId": "0x82aa70f5a010fffc60f20194ef0f597474e8ceaf9ee4582d3a233101e322a22c",
+                  "stakedSuiId": "0x1c198308aa0c71b771ada6b96c16fc9c0fa754b3c61936f77fcfdaa213c2f7b4",
                   "stakeRequestEpoch": "244",
                   "stakeActiveEpoch": "245",
                   "principal": "200000000000",
@@ -4204,7 +4210,7 @@
           ],
           "result": {
             "name": "Result",
-            "value": "0xfb1b51ef9f3ed66000c0e45697dbee0954790a7b5c15ad7354f23b968be8bb06"
+            "value": "0x70f2d83f980fe0996a92d351d6749a0a0b47998aaf3d11da24c49e014d4ccb1d"
           }
         }
       ]
@@ -4254,11 +4260,11 @@
           "params": [
             {
               "name": "address",
-              "value": "0x70f2d83f980fe0996a92d351d6749a0a0b47998aaf3d11da24c49e014d4ccb1d"
+              "value": "0xb01f2f3f227a90090e6777f19aa10fd9e64e29dd4e8da119481d1a7c3c050dc5"
             },
             {
               "name": "cursor",
-              "value": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38"
+              "value": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739"
             },
             {
               "name": "limit",
@@ -4271,7 +4277,7 @@
               "data": [
                 "example.sui"
               ],
-              "nextCursor": "0x03d47b901cb7b3177a791cd29bb5304037fea6ced287081357950315a8842c38",
+              "nextCursor": "0x7d0cd09d3cc1679290f1df2803b32b76ba0395dbb635e3fb7390f04e6567f739",
               "hasNextPage": false
             }
           }
