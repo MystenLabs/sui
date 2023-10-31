@@ -59,33 +59,27 @@ pub(crate) struct ObjectKey {
 #[allow(unused_variables)]
 #[Object]
 impl Object {
-    /// If this object is a MoveObject, this is a number that increases each time a tx takes this object as a mutable input
-    /// This is a lamport timestamp, not a sequentially increasing version
-    /// If this object is a MovePackage, the version is increased every time the package is upgraded
-    /// Note that packages are referred to by move calls using just their ID, and they are always loaded at their latest version
     async fn version(&self) -> u64 {
         self.version
     }
 
-    /// The object digest is a 32-byte hash of the sui_type::Object struct
-    /// This uniquely identifies the object
+    /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
     async fn digest(&self) -> &str {
         &self.digest
     }
 
-    /// The amount of SUI we would rebate if this object gets deleted
-    /// This number is recalculated each time the object is mutated based on
-    /// the present storage gas price
+    /// The amount of SUI we would rebate if this object gets deleted or mutated.
+    /// This number is recalculated based on the present storage gas price.    
     async fn storage_rebate(&self) -> Option<&BigInt> {
         self.storage_rebate.as_ref()
     }
 
-    /// This is the Base64 encoded bcs serialization of the sui_type::Object struct
+    /// The Base64 encoded bcs serialization of the object's content.    
     async fn bcs(&self) -> Option<&Base64> {
         self.bcs.as_ref()
     }
 
-    /// This is the transaction block that created or most recently mutated this object
+    /// The transaction block that created this version of the object.    
     async fn previous_transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -100,18 +94,13 @@ impl Object {
         }
     }
 
-    /// Objects can either be immutable, shared, owned by another address,
-    /// or are the dynamic child objects of a parent object
+    /// Objects can either be immutable, shared, owned by an address,
+    /// or are child objects (part of a dynamic field)
     async fn kind(&self) -> Option<ObjectKind> {
         self.kind
     }
 
-    /// If the object is a dynamic child object, the owner field returns the object owner
-    /// Which is an object with dynamic fields including the current object
-    /// If the object is owned by an address or object, the owner field returns
-    /// the owner address or object
-    /// Immutable objects do not have an owner
-    /// Shared objects also do not have an owner
+    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
     }
@@ -162,12 +151,12 @@ impl Object {
 
     // =========== Owner interface methods =============
 
-    /// The address of the object, named as such to avoid conflict w/ the address type
+    /// The address of the object, named as such to avoid conflict with the address type.
     pub async fn location(&self) -> SuiAddress {
         self.address
     }
 
-    /// Fetches the objects owned by this object
+    /// The objects owned by this object
     pub async fn object_connection(
         &self,
         ctx: &Context<'_>,
@@ -183,7 +172,7 @@ impl Object {
             .extend()
     }
 
-    /// Fetches the balance of a particular coin type
+    /// The balance of coin objects of a particular coin type owned by the object.
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -195,7 +184,7 @@ impl Object {
             .extend()
     }
 
-    /// Fetches the sum balance of coin objects owned by the object
+    /// The sum balance of coin objects owned by the object.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,
@@ -210,7 +199,7 @@ impl Object {
             .extend()
     }
 
-    /// Lists the coins corresponding to the Coin objects owned by the given object
+    /// The coin objects owned by the given object.
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -226,7 +215,7 @@ impl Object {
             .extend()
     }
 
-    /// Lists the stakes corresponding to the StakedSui objects owned by the given object
+    /// The Stakes owned by the given object.
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,

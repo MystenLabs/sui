@@ -58,7 +58,7 @@ pub(crate) struct MoveModuleId {
 
 #[ComplexObject]
 impl MoveModuleId {
-    /// Fetches the package that this Move module was defined in
+    /// The package that this Move module was defined in
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
         let result = ctx
             .data_unchecked::<PgManager>()
