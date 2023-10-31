@@ -613,7 +613,7 @@ pub enum SuiClientCommands {
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
-        /// The rpc url for a non-pruning fullnode to use for fetching the transaction dependencies
+        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
         #[arg(long = "rpc")]
         rpc_url: Option<String>,
 
@@ -625,7 +625,7 @@ pub enum SuiClientCommands {
     /// Replay transactions listed in a file.
     #[clap(name = "replay-batch")]
     ReplayBatch {
-        /// The rpc url for a non-pruning fullnode to use for fetching the transaction dependencies
+        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
         #[arg(long = "rpc")]
         rpc_url: Option<String>,
 
@@ -641,15 +641,15 @@ pub enum SuiClientCommands {
     /// Replay all transactions in a range of checkpoints.
     #[command(name = "replay-checkpoint")]
     ReplayCheckpoints {
-        /// The rpc url for a non-pruning fullnode to use for fetching the transaction dependencies
+        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
         #[arg(long = "rpc")]
         rpc_url: Option<String>,
 
-        /// The start value of the range of checkpoints to replay
+        /// The starting checkpoint sequence number of the range of checkpoints to replay
         #[arg(long, short)]
         start: u64,
 
-        /// The end value of the range of checkpoints to replay
+        /// The ending checkpoint sequence number of the range of checkpoints to replay
         #[arg(long, short)]
         end: u64,
 
