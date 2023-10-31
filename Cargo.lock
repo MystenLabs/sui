@@ -10132,26 +10132,35 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
+ "eyre",
  "fastcrypto",
+ "move-binary-format",
+ "move-bytecode-utils",
  "move-core-types",
  "mysten-metrics",
  "num_enum",
  "object_store",
  "parquet",
  "prometheus",
+ "rocksdb",
  "serde",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "sui-analytics-indexer-derive",
  "sui-indexer",
+ "sui-json-rpc-types",
+ "sui-package-resolver",
  "sui-rest-api",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-stream",
  "tracing",
+ "typed-store",
+ "typed-store-derive",
  "url",
  "workspace-hack",
 ]
@@ -10720,6 +10729,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
  "sui-sdk",
@@ -11250,6 +11260,21 @@ dependencies = [
  "tokio",
  "tracing",
  "workspace-hack",
+]
+
+[[package]]
+name = "sui-package-resolver"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "expect-test",
+ "move-binary-format",
+ "move-compiler",
+ "move-core-types",
+ "sui-move-build",
+ "sui-types",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

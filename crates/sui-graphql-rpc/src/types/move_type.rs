@@ -6,11 +6,9 @@ use std::str::FromStr;
 use async_graphql::*;
 use move_core_types::{language_storage::TypeTag, value};
 use serde::{Deserialize, Serialize};
+use sui_package_resolver::cache::PackageCache;
 
-use crate::{
-    context_data::package_cache::PackageCache,
-    error::{code, graphql_error},
-};
+use crate::error::{code, graphql_error};
 
 /// Represents concrete types (no type parameters, no references)
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]

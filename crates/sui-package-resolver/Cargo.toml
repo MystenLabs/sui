@@ -1,0 +1,20 @@
+[package]
+name = "sui-package-resolver"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+sui-types.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+expect-test.workspace = true
+move-compiler.workspace = true
+sui-move-build.workspace = true

@@ -3,7 +3,7 @@
 
 use crate::{
     config::ServerConfig,
-    context_data::{db_data_provider::PgManager, package_cache::PackageCache},
+    context_data::db_data_provider::PgManager,
     error::Error,
     extensions::{
         feature_gate::FeatureGate,
@@ -27,6 +27,7 @@ use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use sui_package_resolver::cache::PackageCache;
 use tokio::sync::OnceCell;
 
 pub struct Server {
