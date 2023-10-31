@@ -7,7 +7,7 @@ use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct Balance {
-    /// Coin type for the balance
+    /// Coin type for the balance, such as 0x2::sui::SUI
     pub(crate) coin_type: Option<MoveType>,
     /// How many coins of this type constitute the balance
     pub(crate) coin_object_count: Option<u64>,
