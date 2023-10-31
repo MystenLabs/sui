@@ -14,7 +14,8 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     get_module_by_id, load_package_object_from_object_store, BackingPackageStore,
-    ChildObjectResolver, GetSharedLocks, MarkerTableQuery, ObjectStore, ParentSync,
+    ChildObjectResolver, GetSharedLocks, MarkerTableQuery, ObjectStore, PackageObjectArc,
+    ParentSync,
 };
 
 #[derive(Clone)]

@@ -21,7 +21,7 @@ use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
     get_module, load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
-    MarkerTableQuery, MarkerValue, ObjectKey, ObjectStore,
+    MarkerTableQuery, MarkerValue, ObjectKey, ObjectStore, PackageObjectArc,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -1088,7 +1088,7 @@ impl AuthorityStore {
 
         // We record any received or deleted objects since they could be pruned, and smear shared
         // object deletions in the marker table. For deleted entries in the marker table we need to
-        // make sure we don't accidentally overwite entries.
+        // make sure we don't accidentally overwrite entries.
         let markers_to_place = {
             let received = received_objects.iter().map(|(object_id, version, _)| {
                 (
