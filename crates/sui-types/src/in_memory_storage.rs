@@ -4,7 +4,9 @@
 use crate::base_types::VersionNumber;
 use crate::committee::EpochId;
 use crate::inner_temporary_store::WrittenObjects;
-use crate::storage::{get_module, get_module_by_id, get_package_object, PackageObjectArc};
+use crate::storage::{
+    get_module, get_module_by_id, load_package_object_from_object_store, PackageObjectArc,
+};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
@@ -25,7 +27,7 @@ pub struct InMemoryStorage {
 
 impl BackingPackageStore for InMemoryStorage {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
-        get_package_object(self, package_id)
+        load_package_object_from_object_store(self, package_id)
     }
 }
 

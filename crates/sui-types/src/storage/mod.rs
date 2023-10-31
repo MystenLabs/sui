@@ -194,7 +194,7 @@ impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
     }
 }
 
-pub fn get_package_object(
+pub fn load_package_object_from_object_store(
     store: &impl ObjectStore,
     package_id: &ObjectID,
 ) -> SuiResult<Option<PackageObjectArc>> {

@@ -20,8 +20,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, get_package_object, BackingPackageStore, ChildObjectResolver, MarkerTableQuery,
-    MarkerValue, ObjectKey, ObjectStore,
+    get_module, load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
+    MarkerTableQuery, MarkerValue, ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -1992,7 +1992,7 @@ impl MarkerTableQuery for AuthorityStore {
 
 impl BackingPackageStore for AuthorityStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
-        get_package_object(self, package_id)
+        load_package_object_from_object_store(self, package_id)
     }
 }
 
