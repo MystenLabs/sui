@@ -13,7 +13,7 @@ function sortCoins(balances: CoinBalanceType[]) {
 			return -1;
 		}
 
-		return a.coinType.toLowerCase().localeCompare(b.coinType);
+		return a.coinType.toLowerCase().localeCompare(b.coinType.toLowerCase());
 	});
 }
 

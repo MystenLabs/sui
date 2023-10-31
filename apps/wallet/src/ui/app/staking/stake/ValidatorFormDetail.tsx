@@ -9,7 +9,7 @@ import {
 	DELEGATED_STAKES_QUERY_STALE_TIME,
 } from '_src/shared/constants';
 import { Text } from '_src/ui/app/shared/text';
-import { IconTooltip, Tooltip } from '_src/ui/app/shared/tooltip';
+import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import {
 	calculateStakeShare,
 	formatPercentageDisplay,
@@ -17,7 +17,6 @@ import {
 	useGetValidatorsApy,
 } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
-import { Info16 } from '@mysten/icons';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
