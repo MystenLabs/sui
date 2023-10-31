@@ -9,7 +9,7 @@ This is a beta version providing a READ ONLY snapshot of the Sui Mainnet and Tes
 
 :::
 
-GraphQL is an open-source data query and manipulation language designed to facilitate building expressive APIs and services that require complex data querying. 
+GraphQL is an open-source data query and manipulation language designed to facilitate building expressive APIs and services that require complex data querying.
 
 We are providing an early beta version (feature development continues) of the envisioned RPC 2.0, for `mainnet` and `testnet`, where users have access to a READ-ONLY snapshot of the two networks. This is not intended for production-ready applications, but more as a playground to get familiar with the upcoming GraphQL RPC. The [Appendix](#appendix) provides a description on the GraphQL schema. For examples, see the [Query Examples](#query-examples) section.
 
@@ -27,31 +27,97 @@ An extensive list of query examples is available in the Sui repository: https://
 
 Any existing addresses/object IDs in these examples refer to data served by the `graphql-beta.mainnet.sui.io` service only.
 
-## Limitations and unsupported features
+## Limits
 
-Due to the query richness and highly flexible nature of writing queries, there are limits on the maximum depth and number of nodes in a query. Use the `serviceConfig` field to get the exact values. 
+To accommodate the rich and flexible nature of GraphQL queries, the service applies various constraints to make sure each request does not use too many resources.  The following limits are in place for the beta:
+
+- **Rate limiting** prevents too many requests in quick succession from the same address.
+- There are limits on the **number of nodes (field names)** a query can have, and the **depth (nesting level of the query)** as queries with more nodes, or deeply nested nodes can lead to more database queries.
+- Before the service sends a database query, it **estimates the cost of that DB query**, and imposes a limit on this, to catch small GraphQL queries that have an outsized impact on the database.
+- There is an overall **timeout** on how long a query can take.
+
+### Limits Introspection
+
+The `serviceConfig` query field can be queried to return the exact limits imposed by the service:
 
 ```graphql
-{
-    serviceConfig 
-    {
+query {
+    serviceConfig {
         maxQueryDepth
         maxQueryNodes
-  }
+        maxDbQueryCost
+        maxQueryVariables
+        maxQueryFragments
+        requestTimeoutMs
+    }
 }
 ```
 
-By default, there is a query timeout of 20s. If the time limit is exceeded, the query is stopped and an error is returned.
+Passing the `X-Sui-RPC-Show-Usage` header will prompt the service to add a `usage` extension to the response which includes details on how many of each resource the query did use.  At the time of writing, this is supported for the query's depth, node count, variable count and fragment count.
+
+### Future Limits
+
+As with other parts of the system we expect the limits we employ to evolve as we productionise the service:
+
+- A limit will be added on the total number of output nodes, to limit the negative consequences of small queries that are cheap to run but produce a lot of data.
+- Support for estimating the cost to the database will be extended from per-query to cumulative, to account for GraphQL's ability to send multiple queries in one.
+
+There are also a number of areas of active exploration:
+
+- Extending the node count and depth limits to a more sophisticated calculation that limits the number of database roundtrips on the critical path.
+- Revisiting the limits on query variables and fragments to be more generous or non-existent.
+
+## Unsupported Features and Known Issues
 
 As this is only a beta version, there are a few unsupported features and/or limitations:
 - There are no performance optimizations, thus some queries may be slower than expected
-- Subscriptions are not supported
 - Executing transactions and other information on-chain is not possible - the beta release is a READ-ONLY service
 - Queries requesting stake related information might be a bit slower or fail the first time, depending on an internal cache. If it fails, try again after a couple of minutes.
 
+The following parts of the draft schema are are not available at the time of writing (2023-10-31), either because they are under development or out of scope for this beta.  For a list of supported features, please consult the documentation in the [online IDE](https://graphql-beta.mainnet.sui.io/):
+
+### Top-level
+- `Query.availableRange`
+- `Query.coinMetadata`
+
+### TransactionBlock
+- `kind` is missing structured data for certain kinds of transaction
+
+### TransactionBlockEffects
+- `objectReads`
+
+### ObjectOwner
+Object Owner refers to any type (`Address`, `Owner`, `Object`) that could own other objects.  The following fields are not supported on these types:
+
+- `nameServiceConnection`
+- `dynamicField`
+- `dynamicFieldConnection`
+
+### Validator
+- `apy`
+
+### Filters
+All filters do not support combination (`any`, `all`, `not`) filters, and the following specific filters are to be implemented:
+
+- `ObjectFilter`: Filtering by package, module and type, and filtering by object key (ID and version).
+- `EventFilter`: Filtering by event package, module or type.
+- `TransactionBlockFilter`: Filtering by the address that paid for the transaction, the start or end time.
+
+### Executing Transactions
+Execution is unsupported and out of scope for this beta.
+
+- `Query.dryRunTransactionBlock`
+- `Mutation.executeTransactionBlock`
+
+### Subscriptions
+Subscription APIs are unsupported and out of scope for this beta.
+
+- `Subscription.events`
+- `Subscription.transactions`
+
 # Feedback
 
-We are happy to hear your feedback. Please reply in this thread (link to forums.sui.io post) or in this GitHub issue (link to GitHub RPC issue feedback). 
+We are happy to hear your feedback. Please share your thoughts in a reply to [the announcement post](https://forums.sui.io/t/launching-the-beta-graphql-rpc-service/45104), or in our usual social channels.
 
 ## Appendix
 
