@@ -7,8 +7,6 @@ publish = false
 edition = "2021"
 
 [dependencies]
-json_to_table.workspace = true
-tabled.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 prometheus.workspace = true

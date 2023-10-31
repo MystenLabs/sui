@@ -21,6 +21,8 @@ sui-protocol-config.workspace = true
 sui-macros.workspace = true
 sui-enum-compat-util.workspace = true
 enum_dispatch.workspace = true
+json_to_table.workspace = true
+tabled.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
