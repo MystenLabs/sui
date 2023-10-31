@@ -39,6 +39,7 @@ const guides = [
 					id: 'guides/developer/first-app',
 				},
 				items: [
+					'guides/developer/first-app/write-package',
 					'guides/developer/first-app/build-test',
 					'guides/developer/first-app/publish',
 					'guides/developer/first-app/debug',
