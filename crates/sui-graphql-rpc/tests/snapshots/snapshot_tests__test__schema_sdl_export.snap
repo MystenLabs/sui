@@ -18,7 +18,6 @@ type Address implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -536,37 +535,6 @@ type MoveValue {
 	json: JSON!
 }
 
-scalar NameService
-
-type NameServiceConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [NameServiceEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [NameService!]!
-}
-
-"""
-An edge in a connection.
-"""
-type NameServiceEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: NameService!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
-}
-
 type Object implements ObjectOwner {
 	version: Int!
 	digest: String!
@@ -587,7 +555,6 @@ type Object implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type ObjectChange {
@@ -655,7 +622,6 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type Owner implements ObjectOwner {
@@ -671,7 +637,6 @@ type Owner implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 """
