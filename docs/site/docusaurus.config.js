@@ -108,8 +108,8 @@ const config = {
       announcementBar: {
         id: "search_notice",
         content:
-          "Sui Foundation is updating the documentation site. Site search will be unreliable for the first 48 hours during initial indexing.",
-        backgroundColor: "#e1f3ff",
+          "Welcome to the new implementation of the Sui documentation site. Apologies for the inconvenience, but expect site search to be unreliable  during initial indexing (~48 hours).",
+        backgroundColor: "yellow",
         textColor: "#091E42",
         isCloseable: true,
       },
