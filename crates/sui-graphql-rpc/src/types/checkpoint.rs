@@ -31,9 +31,9 @@ pub(crate) struct Checkpoint {
     pub timestamp: Option<DateTime>,
     /// The aggregate authority signature
     pub validator_signature: Option<Base64>,
-    /// The digest of the previous checkpoint
+    /// The digest of the checkpoint at the previous sequence number
     pub previous_checkpoint_digest: Option<String>,
-    /// A single commitment of ECMHLiveObjectSetDigest
+    /// The digest of a hash committing the live object set of the current checkpoint
     pub live_object_set_digest: Option<String>,
     /// Tracks the total number of transaction blocks in the network at the time of the checkpoint
     pub network_total_transactions: Option<u64>,

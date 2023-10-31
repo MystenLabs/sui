@@ -33,13 +33,17 @@ use sui_types::digests::TransactionDigest;
 pub(crate) struct TransactionBlock {
     #[graphql(skip)]
     pub digest: Digest,
-    /// The transaction block effects provide information such as gas cost and object changes
+    /// The effects field captures the results to the chain of executing this transaction
     pub effects: Option<TransactionBlockEffects>,
-    /// Sender of the transaction block
+    /// The address of the user sending this transaction block
     pub sender: Option<Address>,
-    /// The raw transaction block in BCS format
+    /// The SenderSignedData in BCS format
+    /// This is a struct that contains the transaction data
+    /// And a list of signatures of the signers of the transaction
     pub bcs: Option<Base64>,
-    /// The gas input of the transaction block
+    /// The gas input field provides information on what objects were used as gas
+    /// As well as the owner of the gas object(s) and information on the gas price and budget
+    /// If the owner of the gas object(s) is not the same as the sender, the tx block is a sponsored tx
     pub gas_input: Option<GasInput>,
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
@@ -73,14 +77,16 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
 
 #[ComplexObject]
 impl TransactionBlock {
-    /// The digest of a transaction block is represented as a 32-byte array
-    /// This is returned to callers as a Base58 encoded string
+    /// The digest of a transaction block is a hashed 32-byte array of the TransactionData struct
+    /// This serves as a unique id for the block on chain
     async fn digest(&self) -> String {
         self.digest.to_string()
     }
 
-    /// Resolves to the expiration epoch of the transaction block
-    /// Note that this is a value set by the one who executes the transaction block
+
+    /// This field is set by senders of a transaction block
+    /// It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
+    /// By default, there is no deadline for when a txn must execute
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         match self.epoch_id {
             None => Ok(None),
