@@ -97,7 +97,7 @@ export function TokenRow({
 }) {
 	const coinType = coinBalance.coinType;
 	const balance = BigInt(coinBalance.totalBalance);
-	const [formatted, symbol] = useFormatCoin(balance, coinType);
+	const [formatted, symbol, { data: coinMeta }] = useFormatCoin(balance, coinType);
 	const Tag = onClick ? 'button' : 'div';
 	const params = new URLSearchParams({
 		type: coinBalance.coinType,
@@ -117,12 +117,18 @@ export function TokenRow({
 			<div className="flex gap-2.5">
 				<CoinIcon coinType={coinType} size="md" />
 				<div className="flex flex-col gap-1 items-start">
-					<Text variant="body" color="gray-90" weight="semibold">
-						{symbol}
+					<Text variant="body" color="gray-90" weight="semibold" truncate>
+						{coinMeta?.name || symbol}
 					</Text>
 
+					<div className="group-hover:hidden">
+						<Text variant="subtitle" color="steel-dark" weight="medium">
+							{symbol}
+						</Text>
+					</div>
+
 					{renderActions ? (
-						<div className="group-hover:visible invisible gap-2.5 items-center flex">
+						<div className="group-hover:flex hidden gap-2.5 items-center">
 							<TokenRowButton
 								coinBalance={coinBalance}
 								to={`/send?${params.toString()}`}

@@ -382,11 +382,10 @@ export function SwapPageContent() {
 									<div className="mt-4">
 										<InputWithActionButton
 											{...register('amount')}
-											dark
 											suffix={isAsk ? baseCoinSymbol : quoteCoinSymbol}
+											noBorder={isValid}
 											value={amount}
 											type="number"
-											paddingY={2}
 											errorString={errors.amount?.message}
 											actionText="Max"
 											actionType="button"

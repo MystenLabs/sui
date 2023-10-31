@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useRecognizedCoins } from '_app/hooks/deepbook';
-import { Heading } from '_app/shared/heading';
+import { InputWithActionButton } from '_app/shared/InputWithAction';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import { AssetData } from '_pages/swap/AssetData';
@@ -13,7 +13,7 @@ import {
 } from '_pages/swap/constants';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
 import { ToAssets } from '_pages/swap/ToAssets';
-import { getUSDCurrency, useSwapData } from '_pages/swap/utils';
+import { useSwapData } from '_pages/swap/utils';
 import { useDeepBookContext } from '_shared/deepBook/context';
 import { type BalanceChange } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -101,35 +101,22 @@ export function ToAssetSection({
 					setToAssetOpen(true);
 				}}
 			/>
-			<div
-				className={clsx(
-					'pr-2 pl-3 py-2 rounded-lg bg-gray-40 flex items-center',
-					isValid && 'border-solid border-hero-darkest/10',
-				)}
-			>
-				{isValid && toAssetAmountAsNum ? (
-					<>
-						<div className="flex gap-2 items-center">
-							<Heading variant="heading5" weight="semibold" color="steel-darker">
-								{toAssetAmountAsNum}
-							</Heading>
-							<Text variant="body" weight="semibold" color="steel">
-								{toAssetSymbol}
-							</Text>
-						</div>
 
-						<div className="ml-auto mr-2">
-							<Text variant="subtitleSmall" color="steel-dark">
-								{getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
-							</Text>
-						</div>
-					</>
-				) : (
-					<Heading variant="heading5" weight="semibold" color="steel">
-						--
-					</Heading>
-				)}
-			</div>
+			<InputWithActionButton
+				name="output-amount"
+				type="number"
+				disabled
+				noBorder={!isValid}
+				placeholder="--"
+				value={toAssetAmountAsNum || '--'}
+				suffix={
+					!!toAssetAmountAsNum && (
+						<Text variant="body" weight="semibold" color="steel">
+							{toAssetSymbol}
+						</Text>
+					)
+				}
+			/>
 
 			{isValid && toAssetAmountAsNum && amount ? (
 				<div className="ml-3">
