@@ -44,6 +44,10 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -678,53 +682,106 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
     }
 }
 
+fn owned_objref_string(obj: &OwnedObjectRef) -> String {
+    format!(
+        " ┌──\n | ID: {} \n | Owner: {} \n | Version: {} \n | Digest: {}\n └──",
+        obj.reference.object_id, obj.owner, obj.reference.version, obj.reference.digest
+    )
+}
+
+fn objref_string(obj: &SuiObjectRef) -> String {
+    format!(
+        " ┌──\n | ID: {} \n | Version: {} \n | Digest: {}\n └──",
+        obj.object_id, obj.version, obj.digest
+    )
+}
+
 impl Display for SuiTransactionBlockEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Status : {:?}", self.status())?;
+        let mut builder = TableBuilder::default();
+
+        builder.push_record(vec![format!("Digest: {}", self.transaction_digest())]);
+        builder.push_record(vec![format!("Status: {:?}", self.status())]);
+        builder.push_record(vec![format!("Executed Epoch: {}", self.executed_epoch())]);
+
         if !self.created().is_empty() {
-            writeln!(writer, "Created Objects:")?;
+            builder.push_record(vec![format!("\nCreated Objects: ")]);
+
             for oref in self.created() {
-                writeln!(
-                    writer,
-                    "  - ID: {} , Owner: {}",
-                    oref.reference.object_id, oref.owner
-                )?;
+                builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
+
         if !self.mutated().is_empty() {
-            writeln!(writer, "Mutated Objects:")?;
+            builder.push_record(vec![format!("\nMutated Objects: ")]);
             for oref in self.mutated() {
-                writeln!(
-                    writer,
-                    "  - ID: {} , Owner: {}",
-                    oref.reference.object_id, oref.owner
-                )?;
+                builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
+
+        if !self.shared_objects().is_empty() {
+            builder.push_record(vec![format!("\nShared Objects: ")]);
+            for oref in self.shared_objects() {
+                builder.push_record(vec![objref_string(oref)]);
+            }
+        }
+
         if !self.deleted().is_empty() {
-            writeln!(writer, "Deleted Objects:")?;
+            builder.push_record(vec![format!("\nDeleted Objects: ")]);
+
             for oref in self.deleted() {
-                writeln!(writer, "  - ID: {}", oref.object_id)?;
+                builder.push_record(vec![objref_string(oref)]);
             }
         }
+
         if !self.wrapped().is_empty() {
-            writeln!(writer, "Wrapped Objects:")?;
+            builder.push_record(vec![format!("\nWrapped Objects: ")]);
+
             for oref in self.wrapped() {
-                writeln!(writer, "  - ID: {}", oref.object_id)?;
+                builder.push_record(vec![objref_string(oref)]);
             }
         }
+
         if !self.unwrapped().is_empty() {
-            writeln!(writer, "Unwrapped Objects:")?;
+            builder.push_record(vec![format!("\nUnwrapped Objects: ")]);
             for oref in self.unwrapped() {
-                writeln!(
-                    writer,
-                    "  - ID: {} , Owner: {}",
-                    oref.reference.object_id, oref.owner
-                )?;
+                builder.push_record(vec![owned_objref_string(oref)]);
             }
         }
-        write!(f, "{}", writer)
+
+        builder.push_record(vec![format!(
+            "\nGas Object: \n{}",
+            owned_objref_string(self.gas_object())
+        )]);
+
+        let gas_cost_summary = self.gas_cost_summary();
+        builder.push_record(vec![format!(
+            "\nGas Cost Summary:\n   \
+             Storage Cost: {}\n   \
+             Computation Cost: {}\n   \
+             Storage Rebate: {}\n   \
+             Non-refundable Storage Fee: {}",
+            gas_cost_summary.storage_cost,
+            gas_cost_summary.computation_cost,
+            gas_cost_summary.storage_rebate,
+            gas_cost_summary.non_refundable_storage_fee,
+        )]);
+
+        let dependencies = self.dependencies();
+        if !dependencies.is_empty() {
+            builder.push_record(vec![format!("\nTransaction Dependencies:")]);
+            for dependency in dependencies {
+                builder.push_record(vec![format!("   {}\n", dependency)]);
+            }
+        }
+
+        let mut table = builder.build();
+        table.with(TablePanel::header("Transaction Effects"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "{}", table)
     }
 }
 

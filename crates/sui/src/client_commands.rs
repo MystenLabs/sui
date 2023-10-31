@@ -1734,8 +1734,6 @@ impl Display for SuiClientCommandResult {
                 table.with(tabled::settings::style::BorderSpanCorrection);
                 writeln!(f, "{}", table)?;
             }
-            // todo: for all replay commands format results using tabular structure instead of
-            // todo: println statements in original command
             SuiClientCommandResult::ReplayTransaction => {}
             SuiClientCommandResult::ReplayBatch => {}
             SuiClientCommandResult::ReplayCheckpoints => {}
