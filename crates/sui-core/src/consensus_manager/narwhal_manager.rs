@@ -132,7 +132,7 @@ impl NarwhalManager {
         tx_validator: TxValidator,
     ) where
         State: ExecutionState + Send + Sync + 'static,
-        StateInitializer: Fn() -> State + Send + Sync,
+        StateInitializer: Fn() -> State,
     {
         let chain = epoch_store.get_chain_identifier();
         let system_state = epoch_store.epoch_start_state();

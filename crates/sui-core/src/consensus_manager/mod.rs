@@ -60,7 +60,11 @@ impl Manager {
                     .start(config, epoch_store, execution_state, tx_validator)
                     .await
             }
-            Manager::Mysticeti(_mysticeti_manager) => todo!(),
+            Manager::Mysticeti(mysticeti_manager) => {
+                mysticeti_manager
+                    .start(config, epoch_store, execution_state, tx_validator)
+                    .await
+            }
         }
     }
 
