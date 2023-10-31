@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_manager::mysticeti_manager::MysticetiManager;
 use crate::consensus_manager::narwhal_manager::{
     NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
 };
@@ -12,12 +13,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
 
+pub mod mysticeti_manager;
 pub mod narwhal_manager;
 
 /// An enum to easily differentiate between the chosen consensus engine
 pub enum Manager {
     Narwhal(NarwhalManager),
-    Mysticeti,
+    Mysticeti(MysticetiManager),
 }
 
 impl Manager {
@@ -58,7 +60,7 @@ impl Manager {
                     .start(config, epoch_store, execution_state, tx_validator)
                     .await
             }
-            Manager::Mysticeti => todo!(),
+            Manager::Mysticeti(_mysticeti_manager) => todo!(),
         }
     }
 
@@ -66,14 +68,14 @@ impl Manager {
     pub async fn shutdown(&self) {
         match self {
             Manager::Narwhal(manager) => manager.shutdown().await,
-            Manager::Mysticeti => todo!(),
+            Manager::Mysticeti(manager) => manager.shutdown().await,
         }
     }
 
     pub fn get_storage_base_path(&self) -> PathBuf {
         match self {
             Manager::Narwhal(manager) => manager.get_storage_base_path(),
-            Manager::Mysticeti => PathBuf::default(),
+            Manager::Mysticeti(manager) => manager.get_storage_base_path(),
         }
     }
 }
