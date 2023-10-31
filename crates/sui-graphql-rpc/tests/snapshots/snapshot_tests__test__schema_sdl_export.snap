@@ -33,8 +33,17 @@ type AuthenticatorStateUpdate {
 }
 
 type Balance {
-	coinType: String
+	"""
+	Coin type for the balance
+	"""
+	coinType: MoveType
+	"""
+	How many coins of this type constitute the balance
+	"""
 	coinObjectCount: Int
+	"""
+	Total balance across all coin objects of the coin type
+	"""
 	totalBalance: BigInt
 }
 
@@ -135,7 +144,13 @@ input CheckpointId {
 
 type Coin {
 	id: ID!
+	"""
+	Balance of the coin object
+	"""
 	balance: BigInt
+	"""
+	Convert the coin object into a Move object
+	"""
 	asMoveObject: MoveObject
 }
 
@@ -203,11 +218,26 @@ type Epoch {
 
 type Event {
 	id: ID!
+	"""
+	Package id and module name of Move module that the event was emitted in
+	"""
 	sendingModuleId: MoveModuleId
+	"""
+	Package, module, and type of the event
+	"""
 	eventType: MoveType
 	senders: [Address!]
+	"""
+	UTC timestamp in milliseconds since epoch (1/1/1970)
+	"""
 	timestamp: DateTime
+	"""
+	JSON string representation of the event
+	"""
 	json: String
+	"""
+	Base58 encoded bcs bytes of the Move event
+	"""
 	bcs: Base64
 }
 
