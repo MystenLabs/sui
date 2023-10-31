@@ -89,7 +89,7 @@ impl RandomnessState {
     // In this case, narwhal will continue to function normally and simpluy not run
     // the random beacon protocol during the current epoch.
     fn try_new(
-        chain: &ChainIdentifier,
+        _chain: &ChainIdentifier,
         protocol_config: &ProtocolConfig,
         committee: Committee,
         authority_id: AuthorityIdentifier,
