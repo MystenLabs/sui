@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_manager::ConsensusManager;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, Parameters, WorkerId};
@@ -19,6 +20,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::Mutex;
+use async_trait::async_trait;
 
 #[cfg(test)]
 #[path = "../unit_tests/narwhal_manager_tests.rs"]
@@ -116,6 +118,19 @@ impl NarwhalManager {
         }
     }
 
+    fn get_store_path(&self, epoch: Epoch) -> PathBuf {
+        let mut store_path = self.storage_base_path.clone();
+        store_path.push(format!("{}", epoch));
+        store_path
+    }
+
+    pub fn get_storage_base_path(&self) -> PathBuf {
+        self.storage_base_path.clone()
+    }
+}
+
+#[async_trait]
+impl ConsensusManager for NarwhalManager {
     // Starts the Narwhal (primary & worker(s)) - if not already running.
     // Note: After a binary is updated with the new protocol version and the node
     // is restarted, the protocol config does not take effect until we have a quorum
@@ -124,7 +139,7 @@ impl NarwhalManager {
     // is not recreated which is why we pass protocol config in at start and not at creation.
     // To ensure correct behavior an updated protocol config must be passed in at the
     // start of EACH epoch.
-    pub async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
+    async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
         &self,
         config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
@@ -132,7 +147,7 @@ impl NarwhalManager {
         tx_validator: TxValidator,
     ) where
         State: ExecutionState + Send + Sync + 'static,
-        StateInitializer: Fn() -> State,
+        StateInitializer: Fn() -> State + Send + Sync,
     {
         let chain = epoch_store.get_chain_identifier();
         let system_state = epoch_store.epoch_start_state();
@@ -265,7 +280,7 @@ impl NarwhalManager {
 
     // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
     // have shutdown.
-    pub async fn shutdown(&self) {
+    async fn shutdown(&self) {
         let mut running = self.running.lock().await;
 
         match *running {
@@ -295,15 +310,5 @@ impl NarwhalManager {
         }
 
         *running = Running::False;
-    }
-
-    fn get_store_path(&self, epoch: Epoch) -> PathBuf {
-        let mut store_path = self.storage_base_path.clone();
-        store_path.push(format!("{}", epoch));
-        store_path
-    }
-
-    pub fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
     }
 }

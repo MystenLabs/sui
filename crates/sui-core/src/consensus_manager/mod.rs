@@ -20,7 +20,7 @@ pub trait ConsensusManager {
         tx_validator: TxValidator,
     ) where
         State: ExecutionState + Send + Sync + 'static,
-        StateInitializer: Fn() -> State;
+        StateInitializer: Fn() -> State + Send + Sync;
 
     async fn shutdown(&self);
 }

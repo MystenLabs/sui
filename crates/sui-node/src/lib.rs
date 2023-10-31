@@ -121,6 +121,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
+use sui_core::consensus_manager::ConsensusManager;
 
 use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
@@ -1098,7 +1099,7 @@ impl SuiNode {
         narwhal_manager
             .start(
                 config,
-                epoch_store,
+                epoch_store.clone(),
                 consensus_handler_initializer,
                 SuiTxValidator::new(
                     epoch_store.clone(),

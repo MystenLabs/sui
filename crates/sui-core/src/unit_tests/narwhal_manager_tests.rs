@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::consensus_manager::narwhal_manager::{
+use crate::consensus_manager::{ConsensusManager, narwhal_manager::{
     NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
+}
 };
 use bytes::Bytes;
 use fastcrypto::bls12381;
