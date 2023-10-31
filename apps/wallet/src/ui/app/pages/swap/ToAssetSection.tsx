@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useRecognizedCoins } from '_app/hooks/deepbook';
+import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import { AssetData } from '_pages/swap/AssetData';
@@ -102,33 +103,36 @@ export function ToAssetSection({
 			/>
 			<div
 				className={clsx(
-					'py-2 pr-2 pl-3 rounded-lg bg-gray-40 flex gap-2',
+					'pr-2 pl-3 py-2 rounded-lg bg-gray-40 flex items-center',
 					isValid && 'border-solid border-hero-darkest/10',
 				)}
 			>
 				{isValid && toAssetAmountAsNum ? (
 					<>
-						<Text variant="body" weight="semibold" color="steel-darker">
-							{toAssetAmountAsNum}
-						</Text>
-						<Text variant="body" weight="semibold" color="steel">
-							{toAssetSymbol}
-						</Text>
+						<div className="flex gap-2 items-center">
+							<Heading variant="heading5" weight="semibold" color="steel-darker">
+								{toAssetAmountAsNum}
+							</Heading>
+							<Text variant="body" weight="semibold" color="steel">
+								{toAssetSymbol}
+							</Text>
+						</div>
+
+						<div className="ml-auto mr-2">
+							<Text variant="subtitleSmall" color="steel-dark">
+								{getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
+							</Text>
+						</div>
 					</>
 				) : (
-					<Text variant="body" weight="semibold" color="steel">
+					<Heading variant="heading5" weight="semibold" color="steel">
 						--
-					</Text>
+					</Heading>
 				)}
 			</div>
+
 			{isValid && toAssetAmountAsNum && amount ? (
 				<div className="ml-3">
-					<Text variant="bodySmall" color="steel-dark">
-						{getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
-					</Text>
-
-					<div className="h-px w-full bg-hero-darkest/10 my-3" />
-
 					<MaxSlippage onOpen={() => setSlippageModalOpen(true)} />
 
 					{slippageErrorString && (

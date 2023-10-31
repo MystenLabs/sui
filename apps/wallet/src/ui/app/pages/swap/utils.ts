@@ -130,8 +130,8 @@ export function getAverageFromBalanceChanges({
 
 	if (!baseCoins.length || !quoteCoins.length) {
 		return {
-			averageBaseToQuote: '1',
-			averageQuoteToBase: '1',
+			averageBaseToQuote: '0',
+			averageQuoteToBase: '0',
 		};
 	}
 

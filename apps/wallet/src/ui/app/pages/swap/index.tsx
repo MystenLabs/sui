@@ -8,6 +8,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Button } from '_app/shared/ButtonUI';
 import { Form } from '_app/shared/forms/Form';
 import { InputWithActionButton } from '_app/shared/InputWithAction';
+import { Text } from '_app/shared/text';
 import { ButtonOrLink } from '_app/shared/utils/ButtonOrLink';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
@@ -52,7 +53,7 @@ import { AssetData } from './AssetData';
 import { GasFeeSection } from './GasFeeSection';
 import { ToAssetSection } from './ToAssetSection';
 
-const MIN_INPUT = 0.2;
+const MIN_INPUT = 0.1;
 
 enum ErrorStrings {
 	MISSING_DATA = 'Missing data',
@@ -265,6 +266,7 @@ export function SwapPageContent() {
 		baseBalance,
 		quoteBalance,
 		isAsk,
+		isPayAll,
 	});
 
 	const recognizedPackagesList = useRecognizedPackages();
@@ -360,7 +362,7 @@ export function SwapPageContent() {
 							<Form form={form} onSubmit={handleOnsubmit}>
 								<div
 									className={clsx(
-										'flex flex-col border border-hero-darkest/20 rounded-xl pt-5 pb-6 px-5 border-solid',
+										'flex flex-col border border-hero-darkest/20 rounded-xl p-5 border-solid',
 										isValid && 'bg-gradients-graph-cards',
 									)}
 								>
@@ -381,11 +383,21 @@ export function SwapPageContent() {
 											suffix={isAsk ? baseCoinSymbol : quoteCoinSymbol}
 											value={amount}
 											type="number"
+											paddingY={2}
 											errorString={errors.amount?.message}
 											actionText="Max"
 											actionType="button"
 											actionDisabled={isPayAll}
 											prefix={isPayAll ? '~' : undefined}
+											info={
+												isValid &&
+												!!amount && (
+													<Text variant="subtitleSmall" color="steel-dark">
+														{isPayAll ? '~ ' : ''}
+														{getUSDCurrency(isAsk ? formattedBalance : Number(amount))}
+													</Text>
+												)
+											}
 											onActionClicked={() => {
 												setValue(
 													'amount',
@@ -397,15 +409,6 @@ export function SwapPageContent() {
 											}}
 										/>
 									</div>
-
-									{isValid && !!amount && (
-										<div className="ml-3 mt-3">
-											<div className="text-bodySmall font-medium text-hero-darkest/40">
-												{isPayAll ? '~ ' : ''}
-												{getUSDCurrency(isAsk ? formattedBalance : Number(amount))}
-											</div>
-										</div>
-									)}
 								</div>
 
 								<ButtonOrLink

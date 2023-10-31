@@ -13,7 +13,7 @@ import { Pill, type PillProps } from './Pill';
 
 const styles = cva(
 	[
-		'transition flex flex-row items-center p-3 bg-white text-body font-semibold',
+		'transition flex flex-row items-center px-3 bg-white text-body font-semibold',
 		'placeholder:text-gray-60 w-full pr-[calc(20%_+_24px)] shadow-button',
 		'border-solid border border-gray-45 text-steel-darker hover:border-steel focus:border-steel',
 		'disabled:border-gray-40 disabled:text-gray-55',
@@ -29,10 +29,15 @@ const styles = cva(
 				true: '',
 				false: '',
 			},
+			paddingY: {
+				3: 'py-3',
+				2: 'py-2',
+			},
 		},
 		defaultVariants: {
 			rounded: 'lg',
 			dark: false,
+			paddingY: 3,
 		},
 	},
 );
@@ -129,6 +134,7 @@ type InputWithActionZodFormProps = VariantProps<typeof styles> &
 		suffix?: ReactNode;
 		prefix?: ReactNode;
 		onActionClicked?: PillProps['onClick'];
+		info?: ReactNode;
 	};
 
 export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActionZodFormProps>(
@@ -145,7 +151,9 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 			errorString,
 			value,
 			suffix,
+			paddingY,
 			prefix,
+			info,
 			...props
 		},
 		forwardRef,
@@ -160,32 +168,37 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 
 		return (
 			<>
-				<div className={cx(styles({ rounded }), 'relative')}>
+				<div className={cx(styles({ rounded, paddingY }), 'relative')}>
 					{prefixContent}
 					<input
 						{...props}
+						value={value}
+						autoFocus
 						type={type}
-						className="border-none p-0 text-body text-steel-darker font-semibold"
+						className="bg-transparent z-10 border-none p-0 text-heading5 text-steel-darker font-semibold"
 						disabled={disabled}
 						ref={forwardRef}
 					/>
 					{suffix && value && (
 						<div className="absolute z-0 flex h-full max-w-full items-center border border-transparent">
 							{prefixContent}
-							<span className="invisible max-w-full text-body">{value}</span>
+							<span className="invisible max-w-full text-heading5">{value}</span>
 							<span className="ml-2 font-medium text-body text-steel">{suffix}</span>
 						</div>
 					)}
 
-					{onActionClicked && (
-						<div className="flex items-center justify-end absolute right-0 max-w-[20%] mx-3 overflow-hidden">
-							<Pill
-								text={actionText}
-								type={actionType}
-								disabled={disabled}
-								onClick={onActionClicked}
-								dark={dark}
-							/>
+					{(onActionClicked || info) && (
+						<div className="flex gap-2 items-center justify-end absolute right-0 mx-3 overflow-hidden">
+							{info}
+							{onActionClicked && (
+								<Pill
+									text={actionText}
+									type={actionType}
+									disabled={disabled}
+									onClick={onActionClicked}
+									dark={dark}
+								/>
+							)}
 						</div>
 					)}
 				</div>

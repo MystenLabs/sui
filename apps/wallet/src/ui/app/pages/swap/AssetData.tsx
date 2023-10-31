@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { Heading } from '_app/shared/heading';
+import { Text } from '_app/shared/text';
 import { ButtonOrLink } from '_app/shared/utils/ButtonOrLink';
 import { CoinIcon } from '_components/coin-icon';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
@@ -41,8 +42,11 @@ export function AssetData({
 			}
 		>
 			{!!tokenBalance && (
-				<div className="text-bodySmall font-medium text-hero-darkest/40">
-					{tokenBalance} {symbol}
+				<div className="flex gap-1">
+					<div className="text-bodySmall font-medium text-hero-darkest/40">Balance</div>{' '}
+					<Text variant="bodySmall" weight="medium" color="steel-darker">
+						{tokenBalance} {symbol}
+					</Text>
 				</div>
 			)}
 		</DescriptionItem>

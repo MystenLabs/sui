@@ -68,6 +68,7 @@ export function MaxSlippageModal({ isOpen, onClose }: { onClose: () => void; isO
 								value={allowedMaxSlippagePercentage}
 								placeholder="0.0"
 								suffix="%"
+								paddingY={2}
 							/>
 							{errorString ? (
 								<div className="mt-3">

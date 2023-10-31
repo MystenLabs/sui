@@ -52,7 +52,7 @@ export function GasFeeSection({
 	const formattedEstimatedFees = getUSDCurrency(convertedRawValue);
 
 	return (
-		<div className="flex flex-col border border-hero-darkest/20 rounded-xl p-5 gap-4 border-solid">
+		<div className="flex flex-col border border-hero-darkest/20 rounded-xl px-5 py-3 gap-2 border-solid">
 			<DescriptionItem
 				title={
 					<Text variant="bodySmall" weight="medium" color="steel-dark">

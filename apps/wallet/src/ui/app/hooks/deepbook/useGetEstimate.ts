@@ -76,6 +76,13 @@ function formatBalanceToLotSize(balance: string, lotSize: number) {
 	return roundedDownBalance.abs().toString();
 }
 
+function getWalletFees(balance: string) {
+	return new BigNumber(balance)
+		.times(WALLET_FEES_PERCENTAGE / 100)
+		.integerValue(BigNumber.ROUND_DOWN)
+		.toString();
+}
+
 async function getPlaceMarketOrderTxn({
 	deepBookClient,
 	poolId,
@@ -87,6 +94,7 @@ async function getPlaceMarketOrderTxn({
 	quoteBalance,
 	quoteCoins,
 	walletFeeAddress,
+	isPayAll,
 }: {
 	deepBookClient: DeepBookClient;
 	poolId: string;
@@ -99,6 +107,7 @@ async function getPlaceMarketOrderTxn({
 	baseCoins: CoinStruct[];
 	quoteCoins: CoinStruct[];
 	walletFeeAddress: string;
+	isPayAll: boolean;
 }) {
 	const txb = new TransactionBlock();
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
@@ -108,14 +117,14 @@ async function getPlaceMarketOrderTxn({
 	let txnResult;
 
 	if (isAsk) {
-		balanceToSwap = new BigNumber(baseBalance);
+		const actualBalance = isPayAll
+			? new BigNumber(baseBalance).minus(getWalletFees(baseBalance))
+			: baseBalance;
 
-		const walletFee = balanceToSwap
-			.times(WALLET_FEES_PERCENTAGE / 100)
-			.integerValue(BigNumber.ROUND_DOWN)
-			.toString();
+		const walletFee = getWalletFees(actualBalance.toString());
 
-		balanceToSwap = formatBalanceToLotSize(balanceToSwap.minus(walletFee).toString(), lotSize);
+		balanceToSwap = formatBalanceToLotSize(actualBalance.toString(), lotSize);
+
 		const swapCoin = txb.splitCoins(txb.gas, [balanceToSwap]);
 		walletFeeCoin = txb.splitCoins(txb.gas, [walletFee]);
 		txnResult = await deepBookClient.placeMarketOrder(
@@ -140,12 +149,13 @@ async function getPlaceMarketOrderTxn({
 			);
 		}
 
-		const walletFee = new BigNumber(quoteBalance)
-			.times(WALLET_FEES_PERCENTAGE / 100)
-			.integerValue(BigNumber.ROUND_DOWN)
-			.toString();
+		const actualBalance = isPayAll
+			? new BigNumber(quoteBalance).minus(getWalletFees(quoteBalance))
+			: quoteBalance;
 
-		balanceToSwap = new BigNumber(quoteBalance).minus(walletFee).toString();
+		const walletFee = getWalletFees(actualBalance.toString());
+
+		balanceToSwap = actualBalance.toString();
 
 		const [swapCoin, walletCoin] = txb.splitCoins(primaryCoinInput, [balanceToSwap, walletFee]);
 
@@ -178,6 +188,7 @@ export function useGetEstimate({
 	baseBalance,
 	quoteBalance,
 	isAsk,
+	isPayAll,
 }: {
 	accountCapId: string;
 	signer: WalletSigner | null;
@@ -186,6 +197,7 @@ export function useGetEstimate({
 	baseBalance: string;
 	quoteBalance: string;
 	isAsk: boolean;
+	isPayAll: boolean;
 }) {
 	const walletFeeAddress = useDeepBookContext().walletFeeAddress;
 	const queryClient = useQueryClient();
@@ -208,6 +220,7 @@ export function useGetEstimate({
 			quoteBalance,
 			isAsk,
 			lotSize,
+			isPayAll,
 		],
 		queryFn: async () => {
 			const [baseCoins, quoteCoins] = await Promise.all([
@@ -241,6 +254,7 @@ export function useGetEstimate({
 				baseBalance,
 				quoteBalance,
 				walletFeeAddress,
+				isPayAll,
 			});
 
 			if (!accountCapId) {
