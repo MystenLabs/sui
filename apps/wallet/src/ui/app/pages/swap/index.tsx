@@ -266,7 +266,10 @@ export function SwapPageContent() {
 		baseBalance,
 		quoteBalance,
 		isAsk,
-		isPayAll,
+		totalBaseBalance: formattedBaseTokenBalance,
+		totalQuoteBalance: formattedQuoteTokenBalance,
+		baseConversionRate: USDC_CONVERSION_RATE,
+		quoteConversionRate: SUI_CONVERSION_RATE,
 	});
 
 	const recognizedPackagesList = useRecognizedPackages();

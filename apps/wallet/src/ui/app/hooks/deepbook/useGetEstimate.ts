@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useLotSize } from '_app/hooks/deepbook/useLotSize';
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
 import { DEEPBOOK_KEY, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
@@ -63,10 +62,10 @@ async function getCoinsByBalance({
 	return coins;
 }
 
-function formatBalanceToLotSize(balance: string, lotSize: number) {
+function formatBalance(balance: string, conversionRate: number) {
 	const balanceBigNumber = new BigNumber(balance);
-	const lotSizeBigNumber = new BigNumber(lotSize);
-	const remainder = balanceBigNumber.mod(lotSizeBigNumber);
+	const oneUnit = new BigNumber(1).shiftedBy(conversionRate);
+	const remainder = balanceBigNumber.mod(oneUnit);
 
 	if (remainder.isEqualTo(0)) {
 		return balanceBigNumber.toString();
@@ -76,11 +75,36 @@ function formatBalanceToLotSize(balance: string, lotSize: number) {
 	return roundedDownBalance.abs().toString();
 }
 
-function getWalletFees(balance: string) {
+function getWalletFee(balance: string) {
 	return new BigNumber(balance)
 		.times(WALLET_FEES_PERCENTAGE / 100)
 		.integerValue(BigNumber.ROUND_DOWN)
 		.toString();
+}
+
+function getBalanceAndWalletFees(balance: string, totalBalance: string, conversionRate: number) {
+	const bigNumberTotalBalance = new BigNumber(totalBalance).shiftedBy(conversionRate);
+	const bigNumberBalance = new BigNumber(formatBalance(balance, conversionRate));
+	const walletFees = getWalletFee(bigNumberBalance.toString());
+	const balanceAndWalletFees = bigNumberBalance.plus(walletFees);
+
+	if (balanceAndWalletFees.isGreaterThan(bigNumberTotalBalance)) {
+		const remainingBalance = formatBalance(
+			bigNumberTotalBalance.minus(walletFees).toString(),
+			conversionRate,
+		);
+		const newWalletFee = getWalletFee(remainingBalance.toString());
+
+		return {
+			actualBalance: remainingBalance.toString(),
+			actualWalletFee: newWalletFee,
+		};
+	}
+
+	return {
+		actualBalance: bigNumberBalance.toString(),
+		actualWalletFee: walletFees,
+	};
 }
 
 async function getPlaceMarketOrderTxn({
@@ -89,48 +113,49 @@ async function getPlaceMarketOrderTxn({
 	accountCapId,
 	address,
 	isAsk,
-	lotSize,
 	baseBalance,
 	quoteBalance,
 	quoteCoins,
 	walletFeeAddress,
-	isPayAll,
+	totalBaseBalance,
+	totalQuoteBalance,
+	baseConversionRate,
+	quoteConversionRate,
 }: {
 	deepBookClient: DeepBookClient;
 	poolId: string;
 	accountCapId: string;
 	address: string;
 	isAsk: boolean;
-	lotSize: number;
 	baseBalance: string;
 	quoteBalance: string;
 	baseCoins: CoinStruct[];
 	quoteCoins: CoinStruct[];
 	walletFeeAddress: string;
-	isPayAll: boolean;
+	totalBaseBalance: string;
+	totalQuoteBalance: string;
+	baseConversionRate: number;
+	quoteConversionRate: number;
 }) {
 	const txb = new TransactionBlock();
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
 
-	let balanceToSwap;
 	let walletFeeCoin;
 	let txnResult;
 
 	if (isAsk) {
-		const actualBalance = isPayAll
-			? new BigNumber(baseBalance).minus(getWalletFees(baseBalance))
-			: baseBalance;
+		const { actualBalance, actualWalletFee } = getBalanceAndWalletFees(
+			baseBalance,
+			totalBaseBalance,
+			baseConversionRate,
+		);
 
-		const walletFee = getWalletFees(actualBalance.toString());
-
-		balanceToSwap = formatBalanceToLotSize(actualBalance.toString(), lotSize);
-
-		const swapCoin = txb.splitCoins(txb.gas, [balanceToSwap]);
-		walletFeeCoin = txb.splitCoins(txb.gas, [walletFee]);
+		const swapCoin = txb.splitCoins(txb.gas, [actualBalance]);
+		walletFeeCoin = txb.splitCoins(txb.gas, [actualWalletFee]);
 		txnResult = await deepBookClient.placeMarketOrder(
 			accountCap,
 			poolId,
-			BigInt(balanceToSwap),
+			BigInt(actualBalance),
 			'ask',
 			swapCoin,
 			undefined,
@@ -149,20 +174,21 @@ async function getPlaceMarketOrderTxn({
 			);
 		}
 
-		const actualBalance = isPayAll
-			? new BigNumber(quoteBalance).minus(getWalletFees(quoteBalance))
-			: quoteBalance;
+		const { actualBalance, actualWalletFee } = getBalanceAndWalletFees(
+			quoteBalance,
+			totalQuoteBalance,
+			quoteConversionRate,
+		);
 
-		const walletFee = getWalletFees(actualBalance.toString());
-
-		balanceToSwap = actualBalance.toString();
-
-		const [swapCoin, walletCoin] = txb.splitCoins(primaryCoinInput, [balanceToSwap, walletFee]);
+		const [swapCoin, walletCoin] = txb.splitCoins(primaryCoinInput, [
+			actualBalance,
+			actualWalletFee,
+		]);
 
 		txnResult = await deepBookClient.swapExactQuoteForBase(
 			poolId,
 			swapCoin,
-			BigInt(balanceToSwap),
+			BigInt(actualBalance),
 			address,
 			undefined,
 			txb,
@@ -188,7 +214,10 @@ export function useGetEstimate({
 	baseBalance,
 	quoteBalance,
 	isAsk,
-	isPayAll,
+	totalBaseBalance,
+	totalQuoteBalance,
+	baseConversionRate,
+	quoteConversionRate,
 }: {
 	accountCapId: string;
 	signer: WalletSigner | null;
@@ -197,7 +226,10 @@ export function useGetEstimate({
 	baseBalance: string;
 	quoteBalance: string;
 	isAsk: boolean;
-	isPayAll: boolean;
+	totalBaseBalance: string;
+	totalQuoteBalance: string;
+	baseConversionRate: number;
+	quoteConversionRate: number;
 }) {
 	const walletFeeAddress = useDeepBookContext().walletFeeAddress;
 	const queryClient = useQueryClient();
@@ -205,7 +237,6 @@ export function useGetEstimate({
 	const activeAccount = useActiveAccount();
 	const activeAddress = activeAccount?.address;
 	const deepBookClient = useDeepBookContext().client;
-	const lotSize = useLotSize(poolId);
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
@@ -219,8 +250,10 @@ export function useGetEstimate({
 			baseBalance,
 			quoteBalance,
 			isAsk,
-			lotSize,
-			isPayAll,
+			totalBaseBalance,
+			totalQuoteBalance,
+			baseConversionRate,
+			quoteConversionRate,
 		],
 		queryFn: async () => {
 			const [baseCoins, quoteCoins] = await Promise.all([
@@ -248,13 +281,15 @@ export function useGetEstimate({
 				accountCapId,
 				address: activeAddress!,
 				isAsk,
-				lotSize: Number(lotSize),
 				baseCoins,
 				quoteCoins,
 				baseBalance,
 				quoteBalance,
 				walletFeeAddress,
-				isPayAll,
+				totalBaseBalance,
+				totalQuoteBalance,
+				baseConversionRate,
+				quoteConversionRate,
 			});
 
 			if (!accountCapId) {
