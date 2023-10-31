@@ -634,100 +634,17 @@ impl Synchronizer {
     /// process_certificate_internal() which is non-batched.
     pub async fn try_accept_fetched_certificates(
         &self,
-        mut certificates: Vec<Certificate>,
+        certificates: Vec<Certificate>,
     ) -> DagResult<()> {
-        // Number of certificates to verify in a batch. Verifications in each batch run serially.
-        // Batch size is chosen so that verifying a batch takes non-trival
-        // time (verifying a batch of 50 certificates should take > 25ms).
-        const VERIFY_CERTIFICATES_V2_BATCH_SIZE: usize = 50;
-        // Number of rounds to force verfication of certificates by signature, to bound the maximum
-        // number of certificates with bad signatures in storage.
-        const CERTIFICATE_VERIFICATION_ROUND_INTERVAL: u64 = 50;
-
         if certificates.is_empty() {
             return Ok(());
         }
 
         let _scope = monitored_scope("Synchronizer::try_accept_fetched_certificates");
 
-        let mut highest_round = 0;
-        let mut all_digests = HashSet::<CertificateDigest>::new();
-        let mut all_parents = HashSet::<CertificateDigest>::new();
-        for cert in &certificates {
-            highest_round = highest_round.max(cert.header().round());
-            all_digests.insert(cert.digest());
-            all_parents.extend(cert.header().parents().iter());
-        }
+        let certificates = self.sanitize_fetched_certificates(certificates).await?;
 
-        // TODO: extract batch signature verification into a separate function.
-
-        // Identify leaf certs and preemptively set the parent certificates
-        // as verified indirectly. This is safe because any leaf certs that
-        // fail verification will cancel processing for all fetched certs.
-        let mut direct_verification_certs = Vec::new();
-        for (idx, c) in certificates.iter_mut().enumerate() {
-            if !all_parents.contains(&c.digest()) {
-                direct_verification_certs.push((idx, c.clone()));
-                continue;
-            }
-            if c.header().round() % CERTIFICATE_VERIFICATION_ROUND_INTERVAL == 0 {
-                direct_verification_certs.push((idx, c.clone()));
-                continue;
-            }
-            // TODO: add dedicated Certificate API for VerifiedIndirectly.
-            c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
-                c.aggregated_signature()
-                    .ok_or(DagError::InvalidSignature)?
-                    .clone(),
-            ));
-        }
-
-        // Start verify tasks only for certificates requiring direct verifications.
-        let verify_tasks = direct_verification_certs
-            .chunks(VERIFY_CERTIFICATES_V2_BATCH_SIZE)
-            .map(|chunk| {
-                let certs = chunk.to_vec();
-                let inner = self.inner.clone();
-                spawn_blocking(move || {
-                    let now = Instant::now();
-                    let mut sanitized_certs = Vec::new();
-                    for (idx, c) in certs {
-                        sanitized_certs.push((idx, inner.sanitize_certificate(c)?));
-                    }
-                    inner
-                        .metrics
-                        .certificate_fetcher_total_verification_us
-                        .inc_by(now.elapsed().as_micros() as u64);
-                    Ok::<Vec<(usize, Certificate)>, DagError>(sanitized_certs)
-                })
-            })
-            .collect_vec();
-
-        // We ensure sanitization of certificates completes for all leaves
-        // fetched certificates before accepting any certficates.
-        for task in verify_tasks.into_iter() {
-            // Any certificates that fail to be verified should cancel the entire
-            // batch of fetched certficates.
-            let idx_and_certs = task.await.map_err(|err| {
-                error!("Cancelling due to {err:?}");
-                DagError::Canceled
-            })??;
-            for (idx, cert) in idx_and_certs {
-                certificates[idx] = cert;
-            }
-        }
-
-        let certificates_count = certificates.len() as u64;
-        let direct_verification_count = direct_verification_certs.len() as u64;
-        self.inner
-            .metrics
-            .fetched_certificates_verified_directly
-            .inc_by(direct_verification_count);
-        self.inner
-            .metrics
-            .fetched_certificates_verified_indirectly
-            .inc_by(certificates_count.saturating_sub(direct_verification_count));
-
+        let highest_round = certificates.iter().map(|c| c.round()).max().unwrap();
         let certificate_source = "other";
         let highest_received_round = self
             .inner
@@ -863,6 +780,95 @@ impl Synchronizer {
     /// Checks if the certificate is valid and can potentially be accepted into the DAG.
     pub fn sanitize_certificate(&self, certificate: Certificate) -> DagResult<Certificate> {
         self.inner.sanitize_certificate(certificate)
+    }
+
+    async fn sanitize_fetched_certificates(
+        &self,
+        mut certificates: Vec<Certificate>,
+    ) -> DagResult<Vec<Certificate>> {
+        // Number of certificates to verify in a batch. Verifications in each batch run serially.
+        // Batch size is chosen so that verifying a batch takes non-trival
+        // time (verifying a batch of 50 certificates should take > 25ms).
+        const VERIFY_CERTIFICATES_V2_BATCH_SIZE: usize = 50;
+        // Number of rounds to force verfication of certificates by signature, to bound the maximum
+        // number of certificates with bad signatures in storage.
+        const CERTIFICATE_VERIFICATION_ROUND_INTERVAL: u64 = 50;
+
+        let mut all_digests = HashSet::<CertificateDigest>::new();
+        let mut all_parents = HashSet::<CertificateDigest>::new();
+        for cert in &certificates {
+            all_digests.insert(cert.digest());
+            all_parents.extend(cert.header().parents().iter());
+        }
+
+        // Identify leaf certs and preemptively set the parent certificates
+        // as verified indirectly. This is safe because any leaf certs that
+        // fail verification will cancel processing for all fetched certs.
+        let mut direct_verification_certs = Vec::new();
+        for (idx, c) in certificates.iter_mut().enumerate() {
+            if !all_parents.contains(&c.digest()) {
+                direct_verification_certs.push((idx, c.clone()));
+                continue;
+            }
+            if c.header().round() % CERTIFICATE_VERIFICATION_ROUND_INTERVAL == 0 {
+                direct_verification_certs.push((idx, c.clone()));
+                continue;
+            }
+            // TODO: add dedicated Certificate API for VerifiedIndirectly.
+            c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
+                c.aggregated_signature()
+                    .ok_or(DagError::InvalidSignature)?
+                    .clone(),
+            ));
+        }
+
+        // Start verify tasks only for certificates requiring direct verifications.
+        let verify_tasks = direct_verification_certs
+            .chunks(VERIFY_CERTIFICATES_V2_BATCH_SIZE)
+            .map(|chunk| {
+                let certs = chunk.to_vec();
+                let inner = self.inner.clone();
+                spawn_blocking(move || {
+                    let now = Instant::now();
+                    let mut sanitized_certs = Vec::new();
+                    for (idx, c) in certs {
+                        sanitized_certs.push((idx, inner.sanitize_certificate(c)?));
+                    }
+                    inner
+                        .metrics
+                        .certificate_fetcher_total_verification_us
+                        .inc_by(now.elapsed().as_micros() as u64);
+                    Ok::<Vec<(usize, Certificate)>, DagError>(sanitized_certs)
+                })
+            })
+            .collect_vec();
+
+        // We ensure sanitization of certificates completes for all leaves
+        // fetched certificates before accepting any certficates.
+        for task in verify_tasks.into_iter() {
+            // Any certificates that fail to be verified should cancel the entire
+            // batch of fetched certficates.
+            let idx_and_certs = task.await.map_err(|err| {
+                error!("Cancelling due to {err:?}");
+                DagError::Canceled
+            })??;
+            for (idx, cert) in idx_and_certs {
+                certificates[idx] = cert;
+            }
+        }
+
+        let certificates_count = certificates.len() as u64;
+        let direct_verification_count = direct_verification_certs.len() as u64;
+        self.inner
+            .metrics
+            .fetched_certificates_verified_directly
+            .inc_by(direct_verification_count);
+        self.inner
+            .metrics
+            .fetched_certificates_verified_indirectly
+            .inc_by(certificates_count.saturating_sub(direct_verification_count));
+
+        Ok(certificates)
     }
 
     /// NOTE: when making changes to this function, check if the same change needs to be made to
