@@ -90,14 +90,42 @@ type ChangeEpochTransaction {
 }
 
 type Checkpoint {
+	"""
+	The digest of the checkpoint
+	"""
 	digest: String!
+	"""
+	Sequence number of the checkpoint
+	"""
 	sequenceNumber: Int!
+	"""
+	Timestamp of the checkpoint
+	"""
 	timestamp: DateTime
+	"""
+	The aggregate authority signature
+	"""
 	validatorSignature: Base64
+	"""
+	The digest of the previous checkpoint
+	"""
 	previousCheckpointDigest: String
+	"""
+	A single commitment of ECMHLiveObjectSetDigest
+	"""
 	liveObjectSetDigest: String
+	"""
+	Tracks the total number of transactions in the network at the time of the checkpoint
+	"""
 	networkTotalTransactions: Int
+	"""
+	The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint
+	These values should increase throughout the epoch
+	"""
 	rollingGasSummary: GasCostSummary
+	"""
+	End of epoch data is only available on the final checkpoint of an epoch
+	"""
 	endOfEpoch: EndOfEpochData
 	epoch: Epoch
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
@@ -554,7 +582,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -562,7 +590,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -1074,11 +1102,28 @@ type SystemParameters {
 }
 
 type TransactionBlock {
+	"""
+	The transaction block effects provide information such as gas cost and object changes
+	"""
 	effects: TransactionBlockEffects
+	"""
+	Sender of the transaction block
+	"""
 	sender: Address
+	"""
+	The raw transaction block in BCS format
+	"""
 	bcs: Base64
+	"""
+	The gas input of the transaction block
+	"""
 	gasInput: GasInput
 	kind: TransactionBlockKind
+	"""
+	A list of signatures signed by all transaction participants.
+	1. non-participant signatures must not be present.
+	2. Signature order does not matter
+	"""
 	signatures: [TransactionSignature]
 	digest: String!
 	expiration: Epoch

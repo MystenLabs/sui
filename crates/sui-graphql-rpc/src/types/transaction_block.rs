@@ -31,15 +31,26 @@ use sui_types::digests::TransactionDigest;
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
 pub(crate) struct TransactionBlock {
+    /// The digest of a transaction block is represented as a 32-byte array
+    /// This is returned to callers as a Base58 encoded string
     #[graphql(skip)]
     pub digest: Digest,
+    /// The transaction block effects provide information such as gas cost and object changes
     pub effects: Option<TransactionBlockEffects>,
+    /// Sender of the transaction block
     pub sender: Option<Address>,
+    /// The raw transaction block in BCS format
     pub bcs: Option<Base64>,
+    /// The gas input of the transaction block
     pub gas_input: Option<GasInput>,
+    /// The epoch id of the expiration of the transaction block
+    /// Note that this is a user-set value
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
+    /// A list of signatures signed by all transaction participants.
+    /// 1. non-participant signatures must not be present.
+    /// 2. Signature order does not matter
     pub signatures: Option<Vec<Option<TransactionSignature>>>,
 }
 

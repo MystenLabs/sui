@@ -22,20 +22,28 @@ pub(crate) struct CheckpointId {
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Checkpoint {
-    // id: ID1,
+    // id: ID1
+    /// The digest of the checkpoint
     pub digest: String,
+    /// Sequence number of the checkpoint
     pub sequence_number: u64,
+    /// Timestamp of the checkpoint
     pub timestamp: Option<DateTime>,
+    /// The aggregate authority signature
     pub validator_signature: Option<Base64>,
+    /// The digest of the previous checkpoint
     pub previous_checkpoint_digest: Option<String>,
+    /// A single commitment of ECMHLiveObjectSetDigest
     pub live_object_set_digest: Option<String>,
+    /// Tracks the total number of transactions in the network at the time of the checkpoint
     pub network_total_transactions: Option<u64>,
+    /// The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint
+    /// These values should increase throughout the epoch
     pub rolling_gas_summary: Option<GasCostSummary>,
     #[graphql(skip)]
     pub epoch_id: u64,
+    /// End of epoch data is only available on the final checkpoint of an epoch
     pub end_of_epoch: Option<EndOfEpochData>,
-    // transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
-    // address_metrics: AddressMetrics,
 }
 
 #[ComplexObject]
