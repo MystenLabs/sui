@@ -62,7 +62,7 @@ impl headers::Header for ShowUsage {
     }
 
     fn encode<E: Extend<HeaderValue>>(&self, _: &mut E) {
-        // unimplemented!()
+        unimplemented!()
     }
 }
 

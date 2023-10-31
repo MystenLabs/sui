@@ -41,7 +41,7 @@ impl headers::Header for SuiRpcVersion {
     }
 
     fn encode<E: Extend<HeaderValue>>(&self, _values: &mut E) {
-        // unimplemented!()
+        unimplemented!()
     }
 }
 
