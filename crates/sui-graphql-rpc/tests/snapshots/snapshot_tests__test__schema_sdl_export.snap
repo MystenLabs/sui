@@ -119,7 +119,7 @@ type Checkpoint {
 	"""
 	liveObjectSetDigest: String
 	"""
-	Tracks the total number of transactions in the network at the time of the checkpoint
+	Tracks the total number of transaction blocks in the network at the time of the checkpoint
 	"""
 	networkTotalTransactions: Int
 	"""
@@ -1125,7 +1125,7 @@ type TransactionBlock {
 	kind: TransactionBlockKind
 	"""
 	A list of signatures signed by all transaction participants.
-	1. non-participant signatures must not be present.
+	1. Non-participant signatures must not be present.
 	2. Signature order does not matter
 	"""
 	signatures: [TransactionSignature]

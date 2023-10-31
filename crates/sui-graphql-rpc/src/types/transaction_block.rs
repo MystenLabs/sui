@@ -45,7 +45,7 @@ pub(crate) struct TransactionBlock {
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
     /// A list of signatures signed by all transaction participants.
-    /// 1. non-participant signatures must not be present.
+    /// 1. Non-participant signatures must not be present.
     /// 2. Signature order does not matter
     pub signatures: Option<Vec<Option<TransactionSignature>>>,
 }

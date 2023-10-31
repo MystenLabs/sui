@@ -35,7 +35,7 @@ pub(crate) struct Checkpoint {
     pub previous_checkpoint_digest: Option<String>,
     /// A single commitment of ECMHLiveObjectSetDigest
     pub live_object_set_digest: Option<String>,
-    /// Tracks the total number of transactions in the network at the time of the checkpoint
+    /// Tracks the total number of transaction blocks in the network at the time of the checkpoint
     pub network_total_transactions: Option<u64>,
     /// The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint
     /// These values should increase throughout the epoch
