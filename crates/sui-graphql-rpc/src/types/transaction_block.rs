@@ -48,9 +48,7 @@ pub(crate) struct TransactionBlock {
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
-    /// A list of signatures signed by all transaction participants.
-    /// 1. Non-participant signatures must not be present.
-    /// 2. Signature order does not matter
+    /// A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored tx
     pub signatures: Option<Vec<Option<TransactionSignature>>>,
 }
 
