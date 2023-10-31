@@ -102,7 +102,6 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
 
     async fn get_estimated_count(&self, table: &str) -> IndexerResult<i64> {
         let row_count_estimation = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(format!("ANALYZE {};", table)).execute(conn)?;
             diesel::sql_query(format!(
                 "SELECT reltuples::bigint AS estimated_count FROM pg_class WHERE relname='{}';",
                 table
