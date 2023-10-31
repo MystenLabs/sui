@@ -1309,7 +1309,7 @@ impl PgManager {
                 (Some(balance), Some(count), Some(coin_type)) => Ok(Some(Balance {
                     coin_object_count: Some(count as u64),
                     total_balance: Some(BigInt::from(balance)),
-                    coin_type: Some(coin_type),
+                    coin_type: Some(MoveType::new(coin_type)),
                 })),
                 (None, None, None) => Ok(None),
                 _ => Err(Error::Internal(
@@ -1343,7 +1343,7 @@ impl PgManager {
                         Balance {
                             coin_object_count: Some(count as u64),
                             total_balance: Some(BigInt::from(balance)),
-                            coin_type: Some(coin_type),
+                            coin_type: Some(MoveType::new(coin_type)),
                         },
                     ));
                 } else {
