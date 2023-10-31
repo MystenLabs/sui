@@ -30,15 +30,6 @@ async fn dkg() {
         let network = test_utils::test_network(authority.network_keypair(), authority.address());
         let vss_key_output = Arc::new(OnceLock::new());
 
-        // TODO-DNS is connection to other networks necessary for test?
-        // let address = committee.primary(&authority.public_key()).unwrap();
-        // let address = address.to_anemo_address().unwrap();
-        // let peer_id = anemo::PeerId(primary.network_keypair().public().0.to_bytes());
-        // network
-        //     .connect_with_peer_id(address, peer_id)
-        //     .await
-        //     .unwrap();
-
         let (tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
 
         let randomness_private_key = RandomnessPrivateKey::from(

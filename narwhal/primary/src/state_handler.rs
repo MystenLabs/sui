@@ -79,6 +79,7 @@ struct RandomnessState {
     randomness_round: u64,
     last_narwhal_round_sent: Round,
     narhwal_round: Round,
+    cached_sigs: Option<(u64, Vec<RandomnessPartialSignature>)>,
     // Partial sig storage is keyed on (randomness round, authority ID).
     partial_sigs: BTreeMap<(u64, AuthorityIdentifier), Vec<RandomnessPartialSignature>>,
     partial_sig_sender: Option<JoinHandle<()>>,
@@ -169,6 +170,7 @@ impl RandomnessState {
             randomness_round: 0,
             last_narwhal_round_sent: 0,
             narhwal_round: 0,
+            cached_sigs: None,
             partial_sigs: BTreeMap::new(),
             partial_sig_sender: None,
         })
@@ -253,11 +255,9 @@ impl RandomnessState {
                     if let Err(e) = self.vss_key_output.set(output.vss_pk.clone()) {
                         error!("random beacon: unable to write VSS key to output: {e:?}")
                     }
+                    let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
                     self.dkg_output = Some(output);
-                    info!(
-                        "random beacon: DKG complete with Output {:?}",
-                        self.dkg_output
-                    );
+                    info!("random beacon: DKG complete with {num_shares} shares for this node");
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
@@ -306,10 +306,19 @@ impl RandomnessState {
             "random beacon: sending partial signatures for round {}",
             self.randomness_round
         );
-        let sigs = ThresholdBls12381MinSig::partial_sign_batch(
-            shares,
-            self.randomness_round.to_be_bytes().as_slice(),
-        );
+        if self.cached_sigs.is_none()
+            || self.cached_sigs.as_ref().unwrap().0 != self.randomness_round
+        {
+            self.cached_sigs = Some((
+                self.randomness_round,
+                ThresholdBls12381MinSig::partial_sign_batch(
+                    shares,
+                    self.randomness_round.to_be_bytes().as_slice(),
+                ),
+            ));
+        }
+        let sigs = self.cached_sigs.as_ref().unwrap().1.clone();
+
         let next_leader_narwhal_round = self.narhwal_round + (self.narhwal_round % 2);
         self.last_narwhal_round_sent = next_leader_narwhal_round;
 
@@ -368,6 +377,9 @@ impl RandomnessState {
             );
             return;
         }
+        // We may get newer partial signatures if this node is behind relative to others.
+        // Instead of throwing them away, we store up to a couple rounds ahead so they can
+        // be used if we catch up.
         const MAX_ROUND_DELTA: u64 = 2;
         if round > self.randomness_round + MAX_ROUND_DELTA {
             debug!(
