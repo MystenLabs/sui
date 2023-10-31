@@ -223,7 +223,7 @@ Upon successful redirection the ID Provider will attach the JWT token as a URL p
 http://host/auth?id_token=tokenPartA.tokenPartB.tokenPartC&authuser=0&prompt=none
 ```
 
-The `id_token` param is the JWT token in encoded format. You can validate the correctness of the encoded token and investigate its structure by pasting it in the [jwt.io](jwt.io) website.
+The `id_token` param is the JWT token in encoded format. You can validate the correctness of the encoded token and investigate its structure by pasting it in the [jwt.io](https://jwt.io) website.
 
 To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
 
