@@ -95,40 +95,43 @@ type ChangeEpochTransaction {
 
 type Checkpoint {
 	"""
-	The digest of the checkpoint
+	The digest of the checkpoint is a hash of the checkpoint contents and can be used to verify the blockchain.
 	"""
 	digest: String!
 	"""
-	Sequence number of the checkpoint
+	This number is set by validators and is 1 greater than the previous checkpoint's sequence number.
 	"""
 	sequenceNumber: Int!
 	"""
-	Timestamp of the checkpoint
+	Timestamp of transactions and effects in the checkpoint, taken from the consensus commit which the checkpoint is based on.
 	"""
 	timestamp: DateTime
 	"""
-	The aggregate authority signature
+	This is an aggregation of signatures from 2f+1 validators for the checkpoint proposal.
 	"""
 	validatorSignature: Base64
 	"""
-	The digest of the previous checkpoint
+	The digest of the checkpoint at the previous sequence number.
 	"""
 	previousCheckpointDigest: String
 	"""
-	A single commitment of ECMHLiveObjectSetDigest
+	This is a commitment by the committee at the end of epoch
+	on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
 	"""
-	Tracks the total number of transaction blocks in the network at the time of the checkpoint
+	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
 	"""
 	networkTotalTransactions: Int
 	"""
-	The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint
-	These values should increase throughout the epoch
+	The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint.
+	These values should increase throughout the checkpoints.
 	"""
 	rollingGasSummary: GasCostSummary
 	"""
-	End of epoch data is only available on the final checkpoint of an epoch
+	End of epoch data is only available on the final checkpoint of an epoch.
+	This field provides information on the new committee and protocol version for the next epoch.
 	"""
 	endOfEpoch: EndOfEpochData
 	epoch: Epoch
@@ -382,9 +385,21 @@ type GasEffects {
 }
 
 type GasInput {
+	"""
+	Address of the owner of the gas object(s) used
+	"""
 	gasSponsor: Address
+	"""
+	Objects used to pay for a transaction's execution and storage
+	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+	"""
 	gasPrice: BigInt
+	"""
+	The maximum number of gas units that can be expended by executing this transaction
+	"""
 	gasBudget: BigInt
 }
 
@@ -586,7 +601,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-
+	
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -594,7 +609,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-
+	
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -1107,36 +1122,39 @@ type SystemParameters {
 
 type TransactionBlock {
 	"""
-	The transaction block effects provide information such as gas cost and object changes
+	The effects field captures the results to the chain of executing this transaction
 	"""
 	effects: TransactionBlockEffects
 	"""
-	Sender of the transaction block
+	The address of the user sending this transaction block
 	"""
 	sender: Address
 	"""
-	The raw transaction block in BCS format
+	The SenderSignedData in BCS format
+	This is a struct that contains the transaction data
+	And a list of signatures of the signers of the transaction
 	"""
 	bcs: Base64
 	"""
-	The gas input of the transaction block
+	The gas input field provides information on what objects were used as gas
+	As well as the owner of the gas object(s) and information on the gas price and budget
+	If the owner of the gas object(s) is not the same as the sender, the tx block is a sponsored tx
 	"""
 	gasInput: GasInput
 	kind: TransactionBlockKind
 	"""
-	A list of signatures signed by all transaction participants.
-	1. Non-participant signatures must not be present.
-	2. Signature order does not matter
+	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored tx
 	"""
 	signatures: [TransactionSignature]
 	"""
-	The digest of a transaction block is represented as a 32-byte array
-	This is returned to callers as a Base58 encoded string
+	The digest of a transaction block is a hashed 32-byte array of the TransactionData struct
+	This serves as a unique id for the block on chain
 	"""
 	digest: String!
 	"""
-	Resolves to the expiration epoch of the transaction block
-	Note that this is a value set by the one who executes the transaction block
+	This field is set by senders of a transaction block
+	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
+	By default, there is no deadline for when a txn must execute
 	"""
 	expiration: Epoch
 }
@@ -1295,3 +1313,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+
