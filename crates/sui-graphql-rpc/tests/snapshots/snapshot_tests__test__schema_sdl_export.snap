@@ -773,8 +773,19 @@ type Query {
 	latestSuiSystemState: SuiSystemStateSummary!
 }
 
+"""
+Information about whether epoch changes are using safe mode.
+"""
 type SafeMode {
+	"""
+	Whether safe mode was used for the last epoch change.  The system will retry a full epoch
+	change on every epoch boundary and automatically reset this flag if so.
+	"""
 	enabled: Boolean
+	"""
+	Accumulated fees for computation and cost that have not been added to the various reward
+	pools, because the full epoch change did not happen.
+	"""
 	gasSummary: GasCostSummary
 }
 
@@ -873,43 +884,146 @@ enum StakeStatus {
 	UNSTAKED
 }
 
+"""
+Parameters related to subsiding staking rewards
+"""
 type StakeSubsidy {
+	"""
+	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over
+	time.
+	"""
 	balance: BigInt
+	"""
+	Number of times stake subsidies have been distributed subsidies are distributed with other
+	staking rewards, at the end of the epoch.
+	"""
 	distributionCounter: Int
+	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
 	currentDistributionAmount: BigInt
+	"""
+	Maximum number of stake subsidy distributions that occur with the same distribution amount
+	(before the amount is reduced).
+	"""
 	periodLength: Int
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy
+	period, expressed in basis points.
+	"""
 	decreaseRate: Int
 }
 
+"""
+SUI set aside to account for objects stored on-chain.
+"""
 type StorageFund {
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
 	totalObjectStorageRebates: BigInt
+	"""
+	The portion of the storage fund that will never be refunded through storage rebates.
+	
+	The system maintains an invariant that the sum of all storage fees into the storage fund is
+	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
+	non-refundable balance.
+	"""
 	nonRefundableBalance: BigInt
 }
 
 
 scalar SuiAddress
 
+"""
+Aspects that affect the running of the system that are managed by the validators either
+directly, or through system transactions.
+"""
 type SuiSystemStateSummary {
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
+	version changes whenever the fields contained in the system state object (held in a dynamic
+	field attached to `0x5`) change.
+	"""
 	systemStateVersion: BigInt
+	"""
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
+	"""
 	referenceGasPrice: BigInt
+	"""
+	Details of the system that are decided during genesis.
+	"""
 	systemParameters: SystemParameters
+	"""
+	Parameters related to subsiding staking rewards
+	"""
 	stakeSubsidy: StakeSubsidy
+	"""
+	Details of the currently active validators and pending changes to that set.
+	"""
 	validatorSet: ValidatorSet
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	"""
 	storageFund: StorageFund
+	"""
+	Information about whether last epoch change used safe mode, which happens if the full epoch
+	change logic fails for some reason.
+	"""
 	safeMode: SafeMode
+	"""
+	The start of the current epoch.
+	"""
 	startTimestamp: DateTime
+	"""
+	The epoch for which this is the system state.
+	"""
 	epoch: Epoch
+	"""
+	Configuration for how the chain operates that can change from epoch to epoch (due to a
+	protocol version upgrade).
+	"""
 	protocolConfigs: ProtocolConfigs
 }
 
+"""
+Details of the system that are decided during genesis.
+"""
 type SystemParameters {
+	"""
+	Target duration of an epoch, in milliseconds.
+	"""
 	durationMs: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
 	stakeSubsidyStartEpoch: Int
+	"""
+	The minimum number of active validators that the system supports.
+	"""
 	minValidatorCount: Int
+	"""
+	The maximum number of active validators that the system supports.
+	"""
 	maxValidatorCount: Int
+	"""
+	Minimum stake needed to become a new validator.
+	"""
 	minValidatorJoiningStake: BigInt
+	"""
+	Validators with stake below this threshold will enter the grace period (see
+	`validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+	"""
 	validatorLowStakeThreshold: BigInt
+	"""
+	Validators with stake below this threshold will be removed from the the active validator set
+	at the next epoch boundary, without a grace period.
+	"""
 	validatorVeryLowStakeThreshold: BigInt
+	"""
+	The number of epochs that a validator has to recover from having less than
+	`validatorLowStakeThreshold` stake.
+	"""
 	validatorLowStakeGracePeriod: BigInt
 }
 
@@ -1052,9 +1166,22 @@ type ValidatorCredentials {
 	workerAddress: String
 }
 
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
 type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
 	totalStake: BigInt
+	"""
+	The current list of active validators.
+	"""
 	activeValidators: [Validator!]
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
 	pendingRemovals: [Int!]
 	pendingActiveValidatorsSize: Int
 	stakePoolMappingsSize: Int
