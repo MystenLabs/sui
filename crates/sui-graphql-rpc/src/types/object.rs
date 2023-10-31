@@ -8,7 +8,6 @@ use super::big_int::BigInt;
 use super::digest::Digest;
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
-use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -223,16 +222,17 @@ impl Object {
             .extend()
     }
 
-    pub async fn name_service_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, NameService>>> {
-        unimplemented!()
-    }
+    // TODO disabled-for-rpc-1.5
+    // pub async fn name_service_connection(
+    //     &self,
+    //     ctx: &Context<'_>,
+    //     first: Option<u64>,
+    //     after: Option<String>,
+    //     last: Option<u64>,
+    //     before: Option<String>,
+    // ) -> Result<Option<Connection<String, NameService>>> {
+    //     unimplemented!()
+    // }
 }
 
 impl From<&NativeSuiObject> for Object {
