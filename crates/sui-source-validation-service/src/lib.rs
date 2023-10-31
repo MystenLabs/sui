@@ -27,9 +27,7 @@ use mysten_metrics::RegistryService;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tower_http::LatencyUnit;
-use tracing::{debug, error, info, Level};
+use tracing::{debug, error, info};
 use url::Url;
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
@@ -617,16 +615,7 @@ pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
 
     let app = Router::new()
         .route(METRICS_ROUTE, get(mysten_metrics::metrics))
-        .layer(Extension(registry_service.clone()))
-        .layer(
-            ServiceBuilder::new().layer(
-                TraceLayer::new_for_http().on_response(
-                    DefaultOnResponse::new()
-                        .level(Level::INFO)
-                        .latency_unit(LatencyUnit::Seconds),
-                ),
-            ),
-        );
+        .layer(Extension(registry_service.clone()));
 
     tokio::spawn(async move {
         axum::Server::from_tcp(addr)
