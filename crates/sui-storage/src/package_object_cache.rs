@@ -33,6 +33,15 @@ impl PackageObjectCache {
         // We cannot use `get` here because it requires a mut reference and that would
         // require unnecessary lock contention on the mutex, which defeats the purpose.
         if let Some(p) = self.cache.read().peek(package_id) {
+            #[cfg(debug_assertions)]
+            {
+                assert_eq!(
+                    store.get_object(package_id).unwrap().unwrap().digest(),
+                    p.object().digest(),
+                    "Package object cache is inconsistent for package {:?}",
+                    package_id
+                )
+            }
             return Ok(Some(p.clone()));
         }
         if let Some(p) = store.get_object(package_id)? {
@@ -67,6 +76,8 @@ impl PackageObjectCache {
                     .write()
                     .push(package_id, PackageObjectArc::new(p));
             }
+            // It's possible that a package is not found if it's newly added system package ID
+            // that hasn't got created yet. This should be very very rare though.
         }
     }
 }

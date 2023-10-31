@@ -833,7 +833,9 @@ impl AuthorityStore {
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
     pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.bulk_insert_genesis_objects(objects).await
+        self.bulk_insert_genesis_objects(objects).await?;
+        self.force_reload_system_packages_into_cache();
+        Ok(())
     }
 
     /// This function should only be used for initializing genesis and should remain private.
@@ -1006,11 +1008,10 @@ impl AuthorityStore {
         // Commit.
         write_batch.write()?;
 
-        if transaction.transaction_data().is_change_epoch_tx() {
+        if transaction.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
             // reload them in the cache.
-            self.package_cache
-                .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
+            self.force_reload_system_packages_into_cache();
         }
 
         // test crashing before notifying
@@ -1022,6 +1023,12 @@ impl AuthorityStore {
             .notify(transaction_digest, effects);
 
         Ok(())
+    }
+
+    fn force_reload_system_packages_into_cache(&self) {
+        info!("Reload all system packages in the cache");
+        self.package_cache
+            .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
     }
 
     /// Acquires read locks for affected indirect objects
