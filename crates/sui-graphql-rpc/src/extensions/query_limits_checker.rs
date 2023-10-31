@@ -156,14 +156,17 @@ impl Extension for QueryLimitsChecker {
             depth: 0,
             num_nodes: 0,
         };
+        let mut max_depth_seen = 0;
 
         for (_name, oper) in doc.operations.iter() {
+            running_costs.depth = 0;
             self.analyze_selection_set(
                 &cfg.limits,
                 &doc.fragments,
                 &oper.node.selection_set,
                 &mut running_costs,
             )?;
+            max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
 
         if ctx.data_opt::<ShowUsage>().is_some() {
