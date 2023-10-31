@@ -1421,20 +1421,18 @@ impl RpcExampleProvider {
                         status: StakeStatus::Pending,
                     },
                 ],
-            }    ,
+            },
             DelegatedStake {
                 validator_address: SuiAddress::from(ObjectID::new(self.rng.gen())),
                 staking_pool: ObjectID::new(self.rng.gen()),
-                stakes: vec![
-                    Stake {
-                        staked_sui_id: ObjectID::new(self.rng.gen()),
-                        stake_request_epoch: 244,
-                        stake_active_epoch: 245,
-                        principal,
-                        status: StakeStatus::Unstaked,
-                    },
-                ],
-            }
+                stakes: vec![Stake {
+                    staked_sui_id: ObjectID::new(self.rng.gen()),
+                    stake_request_epoch: 244,
+                    stake_active_epoch: 245,
+                    principal,
+                    status: StakeStatus::Unstaked,
+                }],
+            },
         ];
 
         Examples::new(
