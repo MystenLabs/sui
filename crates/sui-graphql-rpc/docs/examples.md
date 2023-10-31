@@ -74,11 +74,13 @@
 
 ><pre>{
 >  address(
->    address: "0x341fa71e4e58d63668034125c3152f935b00b0bb5c68069045d8c646d017fae1"
+>    address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9"
 >  ) {
 >    location
 >    balance {
->      coinType
+>      coinType {
+>        repr
+>      }
 >      coinObjectCount
 >      totalBalance
 >    }
@@ -92,7 +94,7 @@
 >            }
 >          }
 >        }
->        
+>
 >      }
 >    }
 >  }
@@ -147,7 +149,9 @@
 >    }
 >    balanceConnection {
 >      nodes {
->        coinType
+>        coinType {
+>          repr
+>        }
 >        coinObjectCount
 >        totalBalance
 >      }
@@ -733,7 +737,9 @@
 >  ) {
 >    location
 >    balance(type: "0x2::sui::SUI") {
->      coinType
+>      coinType {
+>        repr
+>      }
 >      coinObjectCount
 >      totalBalance
 >    }
@@ -925,7 +931,9 @@
 >  ) {
 >    location
 >    balance(type: "0x2::sui::SUI") {
->      coinType
+>      coinType {
+>        repr
+>      }
 >      totalBalance
 >    }
 >    stakeConnection {

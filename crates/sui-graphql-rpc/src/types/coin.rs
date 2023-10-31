@@ -19,6 +19,7 @@ pub(crate) struct Coin {
 
 #[ComplexObject]
 impl Coin {
+    /// Balance of the coin object
     async fn balance(&self) -> Option<BigInt> {
         if let Some(existing_balance) = &self.balance {
             return Some(existing_balance.clone());
@@ -41,6 +42,7 @@ impl Coin {
             .map(BigInt::from)
     }
 
+    /// Convert the coin object into a Move object
     async fn as_move_object(&self) -> Option<MoveObject> {
         Some(self.move_obj.clone())
     }

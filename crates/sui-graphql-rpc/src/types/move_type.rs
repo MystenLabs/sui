@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// Represents concrete types (no type parameters, no references)
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 #[graphql(complex)]
 pub(crate) struct MoveType {
     /// Flat representation of the type signature, as a displayable string.

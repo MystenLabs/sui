@@ -22,6 +22,8 @@ pub(crate) struct MoveObject {
 #[allow(unused_variables)]
 #[Object]
 impl MoveObject {
+    /// Displays the contents of the MoveObject in a json string and through graphql types
+    /// Also provides the flat representation of the type signature, and the bcs of the corresponding data
     async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
         let resolver = ctx.data_unchecked::<PgManager>();
 
@@ -46,6 +48,7 @@ impl MoveObject {
         Ok(None)
     }
 
+    /// Determines whether a tx can transfer this object
     async fn has_public_transfer(&self) -> Option<bool> {
         self.native_object
             .data
@@ -53,10 +56,13 @@ impl MoveObject {
             .map(|x| x.has_public_transfer())
     }
 
+    /// Attempts to convert the Move object into an Object
+    /// This provides additional information such as version and digest on the top-level
     async fn as_object(&self) -> Option<Object> {
         Some(Object::from(&self.native_object))
     }
 
+    /// Attempts to convert the Move object into a Coin
     async fn as_coin(&self) -> Option<Coin> {
         let move_object = self.native_object.data.try_as_move()?;
 
@@ -71,7 +77,7 @@ impl MoveObject {
         })
     }
 
-    // TODO implement this properly, it is missing estimate reward
+    /// Attempts to convert the Move object into a Stake
     async fn as_stake(&self, ctx: &Context<'_>) -> Result<Option<Stake>> {
         let Some(move_object) = self.native_object.data.try_as_move() else {
             return Ok(None);
