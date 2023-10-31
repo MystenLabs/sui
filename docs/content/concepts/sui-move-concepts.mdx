@@ -9,15 +9,15 @@ You can use Move to define, create, and manage programmable Sui objects represen
 
 ## Move on Sui
 
-The Move language on the Sui blockchain contains some important differences from Move on other blockchain frameworks. Sui takes advantage of Move's security and flexibility and enhances it with the features described in the following sections to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
+Move on Sui contains some important differences from Move on other blockchains. Sui takes advantage of Move's security and flexibility and enhances it with the features described in the following sections to vastly improve throughput, reduce delays in finality, and make Move programming more approachable. For full details, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
 
 :::tip
 
-Where the Sui documentation refers to the Move language, the content is documenting the specific Move implementation on the Sui blockchain. If relevant, the documentation expressly refers to the original use case for the Move language as Diem-style Move.
+Where the Sui documentation refers to the Move language, the content is documenting the specific Move implementation on the Sui blockchain. If relevant, the documentation expressly refers to the original use case for the Move language as Move on Diem.
 
 :::
 
-In general, Diem-style Move code written for other systems works in Sui with these exceptions:
+In general, Move on Diem code written for other systems works in Sui with these exceptions:
 
 - [Global storage operators](https://move-language.github.io/move/global-storage-operators.html)
 - [Key abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.mdx)
@@ -25,7 +25,7 @@ In general, Diem-style Move code written for other systems works in Sui with the
 ## Key differences
 
 Key differences with Move on Sui include:
-    
+
 - Sui uses its own [object-centric global storage](#global-storage)
 - Addresses represent [Object IDs](#object-ids)
 - Sui objects have [globally unique IDs](#global-unique)
@@ -34,25 +34,23 @@ Key differences with Move on Sui include:
 
 ### Object-centric global storage {#global-storage}
 
-In Diem-style Move, global storage is part of the programming model that you can access through special operations, such as `move_to`, `move_from`, and more global storage operators. Core Move stores both resources and modules in global storage. When you publish a module, it's stored into a newly generated module address inside Move. When you create a new object (resource), it's usually stored into some address, as well. This approach creates a problem, however, as on-chain storage is expensive and limited (not optimized for storage and indexing). Current blockchains cannot scale effectively to handle storage-heavy applications, such as marketplaces and social apps.
+In Move on Diem, global storage is part of the programming model. Resources and modules are held in global storage, owned by an account which has an address. Transactions are free to access resources from any account in global storage when they run, using special operations such as `move_to` and `move_from`.
 
-Move on Sui addresses the scaling issue by not having global storage. Consequently, Move doesn't allow any of the global storage-related operations (there is a bytecode verifier to detect violations for this). Instead, storage happens exclusively within Sui. When you publish a module, the newly published module is stored in Sui storage, instead of Move storage. Similarly, newly created objects are stored in Sui storage.
+This approach introduces a scaling issue, as it is not possible to statically determine which transactions are contending over the same resource and which are not.  This is similar to the scaling issues faced by other blockchains where smart contracts typically store account information in large, internal mappings, which limit throughput.
 
-:::info
-
-When you need to read an object in Move, you cannot rely on global storage operations. Instead, Sui must explicitly pass all objects that you need to access into Move.
-
-:::
+Move on Sui addresses the scaling issue by not having global storage, or its related operations. When objects (in contrast to resources) and packages (sets of modules) are stored on Sui, they are each given unique identifiers.  All a transaction's inputs are explicitly specified up-front using these unique identifiers, to allow the chain to schedule transactions with non-overlapping inputs in parallel.
 
 ### Addresses represent Object IDs {#object-ids}
 
-In Move, there is a special address type. This type is used to represent addresses in Diem-style Move. Core Move needs to know the address of an account when dealing with the global storage. The address type is 16 bytes, which is sufficient for the Diem-style Move security model.
+In Move on Diem, there is a 16-byte `address` type used to represent account addresses in global storage. A 16 byte address is sufficient for the Move on Diem security model.
 
-In Sui, because it doesn't support the global storage that's in Diem-style Move, the address type is repurposed to represent a unique, 32-byte ID of either an object or an account. You can access the address of the sender of a transaction from the transaction context. Object IDs also have their address values wrapped in the structs `ID` and `UID`.  Refer to the [object.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) file in Sui framework for an understanding of address use. 
+Sui doesn't have global storage, so `address` is re-purposed as a 32-byte identifier used for both objects and accounts. Each transaction is signed by an account (the "sender") that is accessible from the transactioon context, and each object stores its `address` wrapped in its `id: UID` field. (Refer to [object.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) in the Sui framework for details).
 
 ### Object with key ability, globally unique IDs {#global-unique}
 
-In Diem-style Move, the `key` ability is used to tell that the type can be used as a key for global storage. In Sui, this ability has been repurposed to declare a struct as an object. Objects owned by an account are passed in as arguments to transactions, and other objects (using the dynamic fields API dynamic_fields.move) can be accessed dynamically during the transaction. Sui requires that any struct with key ability must start with an `id` field with the UID type. The UID type contains both the `ObjectID`. Other metadata (such as the sequence number) is managed by the Sui network outside of Move. Sui has a bytecode verifier in place to make sure that the UID field cannot be transferred to other objects (the IDs of objects cannot be re-used once the object is destructured).
+In Move on Diem, the `key` ability indicates that the type is a resource, meaning it (along with an account address) can be used as a key in global storage.
+
+On Sui, the `key` ability indicates that a struct is an object type and comes with an additional requirement that the first field of the struct has signature `id: UID`, to contain the object's unique address on-chain. Sui's bytecode verifier ensures that new objects are always assigned fresh `UID`s (identifiers are never re-used).
 
 ### Module initializers {#module-initializers}
 
@@ -60,9 +58,9 @@ As described in [Object-centric global storage](#global-storage), you publish Mo
 
 ### Entry points take object references as input {#entry-points}
 
-You can call public functions from Sui transactions (called programmable transaction blocks). These functions can take objects by value, by immutable reference, or by mutable reference. If taken by value, you can destroy the object, wrap it (in another object), or transfer it (to a Sui ID specified by an address). If taken by mutable reference, the modified version of the object saves to storage without any change in ownership. In any case, the Sui network authenticates the object and declares it's usage as a part of the transaction. 
+You can call public functions from Sui transactions (called programmable transaction blocks). These functions can take objects by value, by immutable reference, or by mutable reference. If taken by value, you can destroy the object, wrap it (in another object), or transfer it (to a Sui ID specified by an address). If taken by mutable reference, the modified version of the object saves to storage without any change in ownership. In any case, the Sui network authenticates the object and declares it's usage as a part of the transaction.
 
-In addition to calling public functions, you can call a function that is marked `entry` even if it is private. As long as other public functions have not used its inputs. 
+In addition to calling public functions, you can call a function that is marked [entry](./sui-move-concepts/entry-functions.mdx) even if it is private as long as other non-`entry` functions have not used its inputs.
 
 
 ## Explore concepts
@@ -79,13 +77,12 @@ The `entry` modifier for functions enables safe and direct invocation of module 
 
 ### Strings
 
-Move does not have a native type for strings, but it has a useful wrapper. See [Strings](./sui-move-concepts/strings) for examples.
+Move does not have a native type for strings, but it has a useful wrapper. See [Strings](./sui-move-concepts/strings.mdx) for examples.
 
 ### One-time witness
 
-A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness) for an example.
+A one-time witness (OTW) is a special instance of a type created in the module initializer and guaranteed to be unique with only one instance. See [One-Time Witness](./sui-move-concepts/one-time-witness.mdx) for an example.
 
 ### Patterns
 
-Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. See the [Patterns](./sui-move-concepts/patterns) section for a list of documented coding patterns.
-
+Move coding patterns, or techniques, solve logic problems you encounter when developing Move packages for the Sui blockchain. See the [Patterns](./sui-move-concepts/patterns.mdx) section for a list of documented coding patterns.
