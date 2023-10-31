@@ -3,14 +3,13 @@
 
 use std::str::FromStr;
 
+use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
 use move_core_types::{language_storage::TypeTag, value};
 use serde::{Deserialize, Serialize};
+use sui_package_resolver::Resolver;
 
-use crate::{
-    context_data::package_cache::PackageCache,
-    error::{code, graphql_error},
-};
+use crate::error::{code, graphql_error};
 
 /// Represents concrete types (no type parameters, no references)
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
@@ -107,14 +106,14 @@ impl MoveType {
 
     /// Structured representation of the "shape" of values that match this type.
     async fn layout(&self, ctx: &Context<'_>) -> Result<MoveTypeLayout> {
-        let cache = ctx.data().map_err(|_| {
+        let resolver: &Resolver<PackageCache> = ctx.data().map_err(|_| {
             graphql_error(
                 code::INTERNAL_SERVER_ERROR,
                 "Unable to fetch Package Cache.",
             )
         })?;
 
-        MoveTypeLayout::try_from(self.layout_impl(cache).await?)
+        MoveTypeLayout::try_from(self.layout_impl(resolver).await?)
     }
 }
 
@@ -127,8 +126,11 @@ impl MoveType {
         MoveTypeSignature::try_from(self.native_type_tag()?)
     }
 
-    pub(crate) async fn layout_impl(&self, cache: &PackageCache) -> Result<value::MoveTypeLayout> {
-        cache
+    pub(crate) async fn layout_impl(
+        &self,
+        resolver: &Resolver<PackageCache>,
+    ) -> Result<value::MoveTypeLayout> {
+        resolver
             .type_layout(self.native_type_tag()?)
             .await
             .map_err(|e| {

@@ -59,6 +59,7 @@ test-cluster.workspace = true
 sui-protocol-config.workspace = true
 move-bytecode-utils.workspace = true
 workspace-hack.workspace = true
+sui-package-resolver.workspace = true
 
 [dev-dependencies]
 expect-test.workspace = true

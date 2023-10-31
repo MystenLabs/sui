@@ -5,6 +5,7 @@ use async_graphql::*;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{self, MoveStruct, MoveTypeLayout};
 use sui_indexer::models_v2::objects::StoredObject;
+use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::{dynamic_field::DynamicFieldType, TypeTag};
 
@@ -37,14 +38,14 @@ pub(crate) struct DynamicFieldName {
 #[Object]
 impl DynamicField {
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
-        let cache: &PackageCache = ctx.data().map_err(|_| {
+        let resolver: &Resolver<PackageCache> = ctx.data().map_err(|_| {
             graphql_error(
                 code::INTERNAL_SERVER_ERROR,
                 "Unable to fetch Package Cache.",
             )
         })?;
         let (struct_tag, move_struct) =
-            deserialize_move_struct(&self.stored_object.serialized_object, cache)
+            deserialize_move_struct(&self.stored_object.serialized_object, resolver)
                 .await
                 .extend()?;
 
@@ -89,14 +90,14 @@ impl DynamicField {
                 .extend()?;
             Ok(obj.map(DynamicFieldValue::MoveObject))
         } else {
-            let cache: &PackageCache = ctx.data().map_err(|_| {
+            let resolver: &Resolver<PackageCache> = ctx.data().map_err(|_| {
                 graphql_error(
                     code::INTERNAL_SERVER_ERROR,
                     "Unable to fetch Package Cache.",
                 )
             })?;
             let (struct_tag, move_struct) =
-                deserialize_move_struct(&self.stored_object.serialized_object, cache)
+                deserialize_move_struct(&self.stored_object.serialized_object, resolver)
                     .await
                     .extend()?;
 
@@ -118,7 +119,7 @@ impl DynamicField {
 
 pub(crate) async fn deserialize_move_struct(
     serialized_object: &[u8],
-    cache: &PackageCache,
+    resolver: &Resolver<PackageCache>,
 ) -> Result<(StructTag, MoveStruct)> {
     let native_object: NativeSuiObject = bcs::from_bytes(serialized_object)
         .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")).extend())?;
@@ -131,7 +132,7 @@ pub(crate) async fn deserialize_move_struct(
         .ok_or_else(|| Error::Internal("StructTag missing on object".to_string()).extend())?;
     let contents = move_object.contents();
     let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
-    let move_type_layout = cache.type_layout(type_tag.clone()).await?;
+    let move_type_layout = resolver.type_layout(type_tag.clone()).await?;
     let move_struct = match move_type_layout {
         MoveTypeLayout::Struct(move_struct_layout) => {
             MoveStruct::simple_deserialize(contents, &move_struct_layout)
