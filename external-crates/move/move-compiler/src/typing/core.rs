@@ -995,11 +995,11 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
-    let is_public_for_testing =
-        is_public_for_testing(context.env, context.current_package, f, finfo.entry);
+    let public_for_testing =
+        public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
     match finfo.visibility {
-        _ if is_testing_context && is_public_for_testing.is_some() => (),
+        _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
             let internal_msg = format!(
@@ -1011,7 +1011,7 @@ pub fn make_function_type(
             );
             visibility_error(
                 context,
-                is_public_for_testing,
+                public_for_testing,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (defined_loc, internal_msg),
             );
@@ -1044,7 +1044,7 @@ pub fn make_function_type(
             );
             visibility_error(
                 context,
-                is_public_for_testing,
+                public_for_testing,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (vis_loc, internal_msg),
             );
@@ -1057,7 +1057,7 @@ pub fn make_function_type(
             );
             visibility_error(
                 context,
-                is_public_for_testing,
+                public_for_testing,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (vis_loc, internal_msg),
             );
@@ -1075,7 +1075,7 @@ pub enum PublicForTesting {
     // SuiInit(Loc),
 }
 
-pub fn is_public_for_testing(
+pub fn public_testing_visibility(
     env: &CompilationEnv,
     _package: Option<Symbol>,
     _callee_name: &FunctionName,
@@ -1094,7 +1094,7 @@ pub fn is_public_for_testing(
 
 fn visibility_error(
     context: &mut Context,
-    is_public_for_testing: Option<PublicForTesting>,
+    public_for_testing: Option<PublicForTesting>,
     (call_loc, call_msg): (Loc, impl ToString),
     (vis_loc, vis_msg): (Loc, impl ToString),
 ) {
@@ -1104,7 +1104,7 @@ fn visibility_error(
         (vis_loc, vis_msg),
     );
     if context.env.flags().is_testing() {
-        if let Some(case) = is_public_for_testing {
+        if let Some(case) = public_for_testing {
             let (test_loc, test_msg) = match case {
                 PublicForTesting::Entry(entry_loc) => {
                     let entry_msg = format!(

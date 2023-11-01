@@ -44,6 +44,7 @@ impl<'a> Context<'a> {
         }
     }
 
+    #[allow(unused)]
     pub fn current_package(&self) -> Option<Symbol> {
         self.current_package
     }

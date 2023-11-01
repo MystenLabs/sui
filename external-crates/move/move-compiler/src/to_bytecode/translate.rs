@@ -21,7 +21,6 @@ use crate::{
         StructName, UnaryOp, UnaryOp_,
     },
     shared::{unique_map::UniqueMap, *},
-    typing::core::is_public_for_testing,
     FullyCompiledProgram,
 };
 use move_binary_format::file_format as F;
@@ -620,7 +619,7 @@ fn function(
         signature,
         body,
     } = fdef;
-    let v = visibility(context, &f, entry, v);
+    let v = visibility(context, v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
     let body = match body.value {
@@ -658,23 +657,8 @@ fn function(
     )
 }
 
-fn visibility(
-    context: &mut Context,
-    function_name: &FunctionName,
-    entry: Option<Loc>,
-    v: Visibility,
-) -> IR::FunctionVisibility {
+fn visibility(_context: &mut Context, v: Visibility) -> IR::FunctionVisibility {
     match v {
-        _ if is_public_for_testing(
-            context.env,
-            context.current_package(),
-            function_name,
-            entry,
-        )
-        .is_some() =>
-        {
-            IR::FunctionVisibility::Public
-        }
         Visibility::Public(_) => IR::FunctionVisibility::Public,
         Visibility::Friend(_) => IR::FunctionVisibility::Friend,
         Visibility::Internal => IR::FunctionVisibility::Internal,
