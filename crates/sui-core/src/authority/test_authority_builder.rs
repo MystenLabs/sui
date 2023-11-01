@@ -248,11 +248,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let overload_threshold_config = self.overload_threshold_config.unwrap_or_default();
         let mut pruning_config = AuthorityStorePruningConfig::default();
-        if epoch_store
+        if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
-            pruning_config.set_enable_pruning_tombstones(true);
+            pruning_config.set_enable_pruning_tombstones(false);
         }
         let state = AuthorityState::new(
             name,

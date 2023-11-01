@@ -12,7 +12,7 @@ use prometheus::{
 };
 use rocksdb::LiveFile;
 use std::cmp::{max, min};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
 use sui_archival::reader::ArchiveReaderBalancer;
@@ -109,33 +109,40 @@ impl AuthorityStorePruner {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
 
-        // Get live object keys to prune. It is used to conduct ref counting for indirect objects, so we shouldn't add object tombstone here.
-        let mut object_keys_to_prune = BTreeSet::new();
+        // Collect objects keys that need to be deleted from `transaction_effects`.
+        let mut live_object_keys_to_prune = vec![];
+        let mut object_tombstones_to_prune = vec![];
         for effects in &transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
-                object_keys_to_prune.insert(ObjectKey(object_id, seq_number));
+                live_object_keys_to_prune.push(ObjectKey(object_id, seq_number));
             }
 
-            if enable_pruning_tombstones {
+            // Indirect object is not being used when pruning tombstone is developed. Therefore, to not further
+            // complicate the code, tombstone pruning is only enabled when indirect object is not turned on.
+            // TODO: re-evaluate the need for indirect object.
+            if enable_pruning_tombstones
+                && (indirect_objects_threshold == 0 || indirect_objects_threshold == usize::MAX)
+            {
                 for deleted_object_ref in effects
                     .all_removed_objects()
                     .into_iter()
                     .map(|(obj_ref, _)| obj_ref)
                 {
-                    object_keys_to_prune
-                        .insert(ObjectKey(deleted_object_ref.0, deleted_object_ref.1));
+                    object_tombstones_to_prune
+                        .push(ObjectKey(deleted_object_ref.0, deleted_object_ref.1));
                 }
             }
         }
+
         metrics
             .num_pruned_objects
-            .inc_by(object_keys_to_prune.len() as u64);
-        let mut indirect_objects: HashMap<_, i64> = HashMap::new();
+            .inc_by((live_object_keys_to_prune.len() + object_tombstones_to_prune.len()) as u64);
 
+        let mut indirect_objects: HashMap<_, i64> = HashMap::new();
         if indirect_objects_threshold > 0 && indirect_objects_threshold < usize::MAX {
             for object in perpetual_db
                 .objects
-                .multi_get(object_keys_to_prune.iter())?
+                .multi_get(live_object_keys_to_prune.iter())?
                 .into_iter()
                 .flatten()
             {
@@ -148,16 +155,11 @@ impl AuthorityStorePruner {
         }
 
         let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
-        for ObjectKey(object_id, seq_number) in object_keys_to_prune {
-            let current_min = if enable_pruning_tombstones {
-                VersionNumber::MIN
-            } else {
-                seq_number
-            };
+        for ObjectKey(object_id, seq_number) in live_object_keys_to_prune {
             updates
                 .entry(object_id)
-                .and_modify(|range| *range = (min(range.0, current_min), max(range.1, seq_number)))
-                .or_insert((current_min, seq_number));
+                .and_modify(|range| *range = (min(range.0, seq_number), max(range.1, seq_number)))
+                .or_insert((seq_number, seq_number));
         }
 
         for (object_id, (min_version, max_version)) in updates {
@@ -168,6 +170,26 @@ impl AuthorityStorePruner {
             let start_range = ObjectKey(object_id, min_version);
             let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
             wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+        }
+
+        // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
+        // for the deleted objects and then do point deletes to delete all the existing keys. This is because to improve read
+        // performance, we set `ignore_range_deletions` on all read options, and using range delete to delete tombstones
+        // may leak object (imagine a tombstone is compacted away, but earlier version is still not). Using point deletes
+        // guarantees that all earlier versions are deleted in the database.
+        if !object_tombstones_to_prune.is_empty() {
+            let mut object_keys_to_delete = vec![];
+            for ObjectKey(object_id, seq_number) in object_tombstones_to_prune {
+                for (object_key, _object_value) in perpetual_db.objects.iter_with_bounds(
+                    Some(ObjectKey(object_id, VersionNumber::MIN)),
+                    Some(ObjectKey(object_id, seq_number.next())),
+                ) {
+                    assert_eq!(object_key.0, object_id);
+                    object_keys_to_delete.push(object_key);
+                }
+            }
+
+            wb.delete_batch(&perpetual_db.objects, object_keys_to_delete)?;
         }
 
         if !indirect_objects.is_empty() {
@@ -1001,7 +1023,6 @@ mod pprof_tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn ensure_no_tombstone_fragmentation_in_stack_frame_with_ignore_tombstones(
     ) -> Result<(), anyhow::Error> {
         // This test writes a bunch of objects to objects table, invokes pruning on it and

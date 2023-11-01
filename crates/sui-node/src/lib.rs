@@ -563,11 +563,11 @@ impl SuiNode {
         )?;
 
         let mut pruning_config = config.authority_store_pruning_config;
-        if epoch_store
+        if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
-            pruning_config.set_enable_pruning_tombstones(true);
+            pruning_config.set_enable_pruning_tombstones(false);
         }
 
         let state = AuthorityState::new(
