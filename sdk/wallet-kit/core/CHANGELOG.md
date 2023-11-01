@@ -1,5 +1,13 @@
 # @mysten/wallet-kit-core
 
+## 0.6.10
+
+### Patch Changes
+
+- Updated dependencies [30b47b758]
+  - @mysten/sui.js@0.45.1
+  - @mysten/wallet-standard@0.8.7
+
 ## 0.6.9
 
 ### Patch Changes
