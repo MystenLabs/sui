@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::Error as SuiGraphQLError;
+use crate::{error::Error as SuiGraphQLError, types::big_int::BigInt};
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
@@ -111,27 +111,48 @@ impl ServiceConfig {
 #[Object]
 impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
-    async fn is_enabled(&self, feature: FunctionalGroup) -> Result<bool> {
-        Ok(!self.disabled_features.contains(&feature))
+    async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
+        !self.disabled_features.contains(&feature)
     }
 
     /// List of all features that are enabled on this GraphQL service.
-    async fn enabled_features(&self) -> Result<Vec<FunctionalGroup>> {
-        Ok(FunctionalGroup::all()
+    async fn enabled_features(&self) -> Vec<FunctionalGroup> {
+        FunctionalGroup::all()
             .iter()
             .filter(|g| !self.disabled_features.contains(g))
             .copied()
-            .collect())
+            .collect()
     }
 
     /// The maximum depth a GraphQL query can be to be accepted by this service.
-    async fn max_query_depth(&self) -> Result<u32> {
-        Ok(self.limits.max_query_depth)
+    async fn max_query_depth(&self) -> u32 {
+        self.limits.max_query_depth
     }
 
     /// The maximum number of nodes (field names) the service will accept in a single query.
-    async fn max_query_nodes(&self) -> Result<u32> {
-        Ok(self.limits.max_query_nodes)
+    async fn max_query_nodes(&self) -> u32 {
+        self.limits.max_query_nodes
+    }
+
+    /// Maximum estimated cost of a database query used to serve a GraphQL request.  This is
+    /// measured in the same units that the database uses in EXPLAIN queries.
+    async fn max_db_query_cost(&self) -> BigInt {
+        BigInt::from(self.limits.max_db_query_cost)
+    }
+
+    /// Maximum number of variables a query can define
+    async fn max_query_variables(&self) -> u32 {
+        self.limits.max_query_variables
+    }
+
+    /// Maximum number of fragments a query can define
+    async fn max_query_fragments(&self) -> u32 {
+        self.limits.max_query_fragments
+    }
+
+    /// Maximum time in milliseconds that will be spent to serve one request.
+    async fn request_timeout_ms(&self) -> BigInt {
+        BigInt::from(self.limits.request_timeout_ms)
     }
 }
 
