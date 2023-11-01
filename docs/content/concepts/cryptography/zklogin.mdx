@@ -723,10 +723,16 @@ The key differentiators that zkLogin brings to Sui are:
 
 4. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
 
-### There are errors when submitting the zkLogin signature, how do I debug?
+## How to verify a zkLogin signature offchain?
 
-The following command runs the same signature verify function that is used in Sui validators. You can examine a zkLogin signature with its transaction bytes (both in Base64) to validate. `$EPOCH` is the current epoch of the network and it should be smaller than the max_epoch specified in the signature.
+The following options support a zkLogin signature over either transaction data or personal message. 
+
+1. Use keytool: See usage in keytool. 
 
 ```bash
-$SUI_BINARY keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --tx-bytes $TX_BYTES --provider Google --curr-epoch $EPOCH
+$SUI_BINARY keytool zk-login-sig-verify -h
 ```
+
+2. Use a self hosted server endpoint: See usage in [here](https://github.com/MystenLabs/zklogin-verifier). 
+
+3. Use Sui RPC endpoint: In progress.
