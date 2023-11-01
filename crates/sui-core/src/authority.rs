@@ -4256,6 +4256,23 @@ impl AuthorityState {
             .send(())
             .unwrap();
     }
+
+    pub async fn prune_objects_and_compact_for_testing(&self) {
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.database.perpetual_tables,
+            &self.checkpoint_store,
+            &self.database.objects_lock_table,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+            usize::MAX,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.database.perpetual_tables);
+    }
 }
 
 #[async_trait]

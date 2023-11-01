@@ -587,6 +587,8 @@ impl CheckpointExecutor {
                     )
                     .await;
 
+                    fail_point_async!("prune-and-compact");
+
                     // For finalizing the checkpoint, we need to pass in all checkpoint
                     // transaction effects, not just the change_epoch tx effects. However,
                     // we have already notify awaited all tx effects separately (once

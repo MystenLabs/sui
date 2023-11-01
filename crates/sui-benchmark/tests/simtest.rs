@@ -23,9 +23,10 @@ mod test {
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
+    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
-    use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
+    use sui_macros::{clear_fail_point, register_fail_point_async, register_fail_points, sim_test};
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::base_types::{ObjectRef, SuiAddress};
@@ -164,6 +165,17 @@ mod test {
         }
     }
 
+    // Runs object pruning and compaction for object table in `state` probabistically.
+    async fn handle_failpoint_prune_and_compact(state: Arc<AuthorityState>, probability: f64) {
+        {
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) > probability {
+                return;
+            }
+        }
+        state.prune_objects_and_compact_for_testing().await;
+    }
+
     async fn delay_failpoint<R>(range_ms: R, probability: f64)
     where
         R: SampleRange<u64>,
@@ -180,6 +192,22 @@ mod test {
         if let Some(duration) = duration {
             tokio::time::sleep(duration).await;
         }
+    }
+
+    // Tests load with aggressive pruning and compaction.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_reconfig_with_prune_and_compact() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 1000).await;
+
+        let node_state = test_cluster.fullnode_handle.sui_node.clone().state();
+        register_fail_point_async("prune-and-compact", move || {
+            handle_failpoint_prune_and_compact(node_state.clone(), 0.5)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        // The fail point holds a reference to `node_state`, which we need to release before the test ends.
+        clear_fail_point("prune-and-compact");
     }
 
     #[sim_test(config = "test_config()")]
