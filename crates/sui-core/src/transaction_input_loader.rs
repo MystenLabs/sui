@@ -245,6 +245,7 @@ impl TransactionInputLoader {
                         input_object_kind: *input,
                         object: ObjectReadResultKind::Object(package.into()),
                     });
+                    continue;
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => object_keys.push(objref.into()),
                 InputObjectKind::SharedMoveObject { id, .. } => {
