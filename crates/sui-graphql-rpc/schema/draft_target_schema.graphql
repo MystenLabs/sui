@@ -457,7 +457,6 @@ enum ObjectKind {
 }
 
 type Object implements ObjectOwner {
-  id: ID!
   version: Int!
   digest: String!
   owner: Owner
@@ -666,7 +665,6 @@ type SafeMode {
 }
 
 type Checkpoint {
-  id: ID!
   digest: String!
   sequenceNumber: Int!
 
@@ -709,7 +707,6 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
-  id: ID
   digest: String!
 
   senders: [Address]
@@ -892,8 +889,6 @@ type BalanceChange {
 }
 
 type Event {
-  id: ID!
-
   # Module that the event was emitted by
   sendingModuleId: MoveModuleId
 
@@ -908,14 +903,12 @@ type Event {
 }
 
 type Balance {
-  id: ID!
   coinType: MoveType
   coinObjectCount: Int
   totalBalance: BigInt
 }
 
 type Coin {
-  id: ID!
   balance: BigInt
   asMoveObject: MoveObject!
 }
@@ -955,7 +948,6 @@ input DynamicFieldName {
 }
 
 type DynamicField {
-  id: ID!
   name: MoveValue
   value: DynamicFieldValue
 }
@@ -1020,7 +1012,6 @@ type MoveFunctionTypeParameter {
 }
 
 type MoveModule {
-  id: ID!
   fileFormatVersion: Int!
 
   moduleId: MoveModuleId!
@@ -1061,7 +1052,6 @@ type MoveField {
 }
 
 type MoveFunction {
-  id: ID!
   module: MoveModule!
   name: String!
 
@@ -1104,9 +1094,7 @@ type OpenMoveType {
 # Metrics (omitted for brevity)
 type NetworkMetrics
 type MoveCallMetrics
-type AddressMetrics {
-  id: ID!
-}
+type AddressMetrics
 
 # Execution
 
