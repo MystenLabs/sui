@@ -364,7 +364,7 @@ pub async fn execute_replay_command(
                 println!("{:#?}", sandbox_state.pre_exec_diag);
             }
             if show_effects {
-                println!("{}", sandbox_state.local_exec_effects.to_string());
+                println!("{}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;
