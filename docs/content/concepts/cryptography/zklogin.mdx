@@ -27,20 +27,21 @@ More questions? See [the FAQ section](#faq).
 
 The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
-| Provider     | Can support? | Comments |
-| ------------ | ------------ | -------- |
-| Facebook     | Yes          |          |
-| Google       | Yes          |          |
-| Twitch       | Yes          |          |
-| Slack        | Yes          |          |
-| Apple        | Yes          |          |
-| RedBull      | Under review |          |
-| Microsoft    | Under review |          |
-| AWS (Tenant) | Under review |          |
-| Amazon       | Under review |          |
-| WeChat       | Under review |          |
-| Auth0        | Under review |          |
-| Okta         | Under review |          |
+| Provider     | Can support? | Devnet   | Testnet  | Mainnet  |
+| ------------ | ----------   | -------- | -------- | -------- |
+| Facebook     | Yes          |	 Yes    |  Yes     | Yes      |
+| Google       | Yes          |   Yes    |  Yes     | Yes      |
+| Twitch       | Yes          |   Yes    |  Yes     | Yes      |
+| Slack        | Yes          |   Yes    |  No      | No       |
+| Kakao        | Yes          |   Yes    |  No      | No       |
+| Apple        | Yes          |   Yes    |  No      | No       |
+| RedBull      | Under review |   No     |  No      | No       |
+| Microsoft    | Under review |   No     |  No      | No       |
+| AWS (Tenant) | Under review |   No     |  No      | No       |
+| Amazon       | Under review |   No     |  No      | No       |
+| WeChat       | Under review |   No     |  No      | No       |
+| Auth0        | Under review |   No     |  No      | No       |
+| Okta         | Under review |   No     |  No      | No       |
 
 ## Integration guide
 
@@ -127,17 +128,59 @@ _Go to Settings_
 
 1. Go to "Register Your Application" then "Application" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
-![1](images/zklogin-twitch1.png 'Sign up for Twitch developer account')
+![1](images/zklogin-twitch1.png "Sign up for Twitch developer account")
 
-_Sign up for Twitch developer account_
+*Sign up for Twitch developer account*
 
-<p>&nbsp;</p>
+![2](images/zklogin-twitch2.png "Go to Console")
 
-![2](images/zklogin-twitch2.png 'Go to Console')
+*Go to Console*
 
-_Go to Console_
+### Kakao
 
-## Set Up OAuth Flow
+1. Register for a Kakao developer account. Access the [dashboard](https://developers.kakao.com/console/app) and add an application. 
+
+![1](images/zklogin-kakao1.png "Add applications to Kakao")
+
+*Add applications to Kakao*
+
+1. Go to "App Keys" where you can find the corresponding client ID for different platforms. 
+
+- Native app key: Used to call APIs through the Android or iOS SDK.
+- JavaScript key: Used to call APIs through the JavaScript SDK.
+- REST API key: Used to call APIs through the REST API.
+
+![2](images/zklogin-kakao2.png "Find Client ID")
+
+*Find client ID*
+
+1. Toggle on "Kakao Login Activation" and "OpenID Connect Activation". Set the redirect URL in "Kakao Login" under "Product Settings". This should be the wallet or application frontend.
+
+![1](images/zklogin-kakao3.png "Set Redirect URL")
+
+*Set redirect URL*
+
+### Slack
+
+1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch". 
+
+	![1](images/zklogin-slack1.png "Create app in Slack")
+	
+	*Create app in Slack*
+
+1. Find the Client ID and Client Secret under "App Credentials". 
+
+	![1](images/zklogin-slack2.png "Find Client ID and Client Secret")
+	
+	*Find Client ID and Client Secret*
+
+1. Set Redirect URL in "OAuth & Permissions" under "Features". This should be the wallet or application frontend.
+
+	![1](images/zklogin-slack3.png "Set Redirect URL")
+	
+	*Set Redirect URL*
+
+## Get JWT Token
 
 1. Generate an ephemeral KeyPair. Follow the same process as you would generating a KeyPair in a traditional wallet. See [Sui SDK](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs) for details.
 
@@ -157,46 +200,51 @@ const ephemeralKeyPair = new Ed25519Keypair();
 const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 ```
+The auth flow URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$NONCE`.
 
-The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce` as follows:
+For some providers ("Yes" for "Auth Flow Only"), the JWT token can be found immediately in the redirect URL after the auth flow. 
 
-| Provider | URL                                                                                                                                                                                 |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Google   | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                     |
-| Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                      |
-| Twitch   | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` |
+For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT token, an additional POST call is required with "Token Exchange URL".
+
+| Provider | Auth Flow URL | Token Exchange URL | Auth Flow Only | 
+| ----------- | ----------- | ----------- | ----------- |
+| Google | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE` | N/A | Yes |
+| Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` | N/A | Yes |
+| Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL& response_type=id_token&scope=openid&nonce=$NONCE` | N/A | Yes |
+| Kakao | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE` | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No |
+| Apple | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE` | N/A | Yes |
+| Slack | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid` | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET` | No | 
 
 ## Decoding JWT
 
 Upon successful redirection the ID Provider will attach the JWT token as a URL parameter (Using the Google Flow as an example)
 
 ```
-http://host/auth#state=redirect_url_______&id_token=tokenPartA.tokenPartB.tokenPartC_______&authuser=0&prompt=none
+http://host/auth?id_token=tokenPartA.tokenPartB.tokenPartC&authuser=0&prompt=none
 ```
 
-The `id_token` param is actually the JWT token in encoded format. You can validate the correctness of the encoded token
-and investigate its structure by pasting it in the [jwt.io](https://jwt.io) website.
+The `id_token` param is the JWT token in encoded format. You can validate the correctness of the encoded token and investigate its structure by pasting it in the [jwt.io](https://jwt.io) website.
 
 To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
 
 ```typescript
+
 const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
 
 export interface JwtPayload {
-	iss?: string;
-	sub?: string; //Subject ID
-	aud?: string[] | string;
-	exp?: number;
-	nbf?: number;
-	iat?: number;
-	jti?: string;
+   iss?: string;  
+   sub?: string;  //Subject ID
+   aud?: string[] | string;
+   exp?: number;
+   nbf?: number;
+   iat?: number;
+   jti?: string;
 }
 ```
 
 ## User Salt Management
 
-User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
-
+User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). The salt is required to be a 16-bytes value or a integer smaller than `2n**128n`. There are several options for the application to maintain the user salt:
 1. Client Side:
    - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
    - Option 2: Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
@@ -230,10 +278,25 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service. If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+There are two options:  
+1. Call the Mysten Labs-maintained proving service
+1. Run the proving service in your backend using the provided Docker images. 
+
+### Call the Mysten Labs-maintained proving service
+
+If you wish to use the Mysten ran ZK Proving Service for Mainnet, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+
+To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet fails.  
+
+| Network | Prover URL |
+| ------- | ---------- |
+| Mainnet | https://prover.mystenlabs.com/v1 | 
+| Devnet, Testnet | https://prover-dev.mystenlabs.com/v1 | 
+
+You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
 ```bash
-curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
 "extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544", \
 "maxEpoch":"10", \
@@ -241,36 +304,44 @@ curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json
 "salt":"248191903847969014646285995941615069143", \
 "keyClaimName":"sub" \
 }'
+
+curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=", \
+"maxEpoch":"10", \
+"jwtRandomness":"S76Qi8c/SZlmmotnFMr13Q==", \
+"salt":"urgFnwIxJ++Ooswtf0Nn1w==", \
+"keyClaimName":"sub" \
+}'
 ```
 
 Response:
 
-```shell
+```json
 {
-    "proofPoints": {
-        "a":["17267520948013237176538401967633949796808964318007586959472021003187557716854",
-            "14650660244262428784196747165683760208919070184766586754097510948934669736103",
-            "1"],
-        "b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443",
-        "10547097602625638823059992458926868829066244356588080322181801706465994418281"],
-        ["12744153306027049365027606189549081708414309055722206371798414155740784907883",
-        "17883388059920040098415197241200663975335711492591606641576557652282627716838"],
-        ["1","0"]],
-
-        "c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
-        "19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]
-    },
-    "issBase64Details": {
-        "value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw",
-        "indexMod4": 2 
-    },
-    "headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"
+	"proofPoints":{
+		"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854",
+			"14650660244262428784196747165683760208919070184766586754097510948934669736103",
+			"1"],
+		"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443",
+		"10547097602625638823059992458926868829066244356588080322181801706465994418281"],
+		["12744153306027049365027606189549081708414309055722206371798414155740784907883",
+		"17883388059920040098415197241200663975335711492591606641576557652282627716838"],
+		["1","0"]],
+		
+		"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
+		"19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]
+		},
+		"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw", "indexMod4": 2 },
+		"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"
 }
 ```
 
-To avoid possible CORS errors in frontend apps, it is suggested to delegate this call to a backend service.
+### How to handle CORS error
 
-The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK.
+To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
+
+The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK. 
 
 ```typescript
 const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
@@ -282,22 +353,67 @@ export type PartialZkLoginSignature = Omit<
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ```
 
+### Run the proving service in your backend
+
+1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
+
+1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
+
+	```bash
+	wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-zkey.sh | bash
+	```
+
+	To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum zkLogin.zkey`.
+
+1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64). Further, we recommended using at least 16 vcpu, preferably an AMD cpu and at least 16gb ram for production use. Whereas 8 vcpu, 8gb ram works for testing (but its not fast).
+
+	```bash
+	docker run \
+	-e ZKEY=/app/binaries/zkLogin.zkey \
+	-e WITNESS_BINARIES=/app/binaries \
+	-v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
+	-p PORT1:8080 \
+	<prover-image>
+	```
+
+1. Run `prover-fe` at `PORT2`:
+
+	```bash
+	docker run \
+		-e PROVER_URI='http://localhost:PORT1/input' \
+		-e NODE_ENV=production \
+		-e DEBUG=zkLogin:info,jwks \
+		-p PORT2:8080 \
+		<prover-fe-image>
+	```
+
+1. Expose the `prover-fe` service appropriately and keep the prover service internal.
+1. To call the proving service, the following two endpoints are supported:
+   - `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`.
+   - `/v1`: The request and response are the same as the Mysten Labs maintained service.
+
+A few things to note:
+
+- If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
+
+- Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
+
 ## Assemble the zkLogin signature and submit the transaction
 
 First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).Make sure that the transaction `sender ` is also defined.
 
 ```typescript
-const ephemeralKeyPair = new Ed25519Keypair();
+ const ephemeralKeyPair = new Ed25519Keypair();
 
-const client = new SuiClient({ url: '<YOUR_RPC_URL>' });
+const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
 
 txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
-	client,
-	signer: ephemeralKeyPair,
+   client,
+   signer: ephemeralKeyPair,
 });
 ```
 
@@ -309,22 +425,17 @@ You can now serialize the zkLogin signature by combining the ZK proof (`inputs`)
 the `maxEpoch`, and the ephemeral signature (`userSignature`).
 
 ```typescript
-import { genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
+import { genAddressSeed, getZkLoginSignature } from "@mysten/zklogin";
 
-const addressSeed: string = genAddressSeed(
-	BigInt(userSalt!),
-	'sub',
-	decodedJwt.sub,
-	decodedJwt.aud,
-).toString();
+const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
 
-const zkLoginSignature: SerializedSignature = getZkLoginSignature({
-	inputs: {
-		...partialZkLoginSignature,
-		addressSeed,
-	},
-	maxEpoch,
-	userSignature,
+const zkLoginSignature : SerializedSignature = getZkLoginSignature({
+   inputs: {
+      ...partialZkLoginSignature,
+      addressSeed
+   },
+   maxEpoch,
+   userSignature,
 });
 ```
 
@@ -336,16 +447,6 @@ client.executeTransactionBlock({
 	signature: zkLoginSignature,
 });
 ```
-
-## Add sponsored transaction support
-
-This is optional, but it enhances user experience by allowing zkLogin address holders to skip acquiring SUI prior to transaction initiation.
-
-Coming Soon
-
-## Example integration
-
-Coming Soon
 
 # How zkLogin Works
 
@@ -479,7 +580,7 @@ Since the MPC is sequential, each contributor needed to wait till the previous c
 
 Participants had two options to contribute: through a browser or a docker. The browser option was more user-friendly for contributors to participate as everything happens in the browser. The Docker option required Docker setup but is more transparent—the Dockerfile and contributor source code are open-sourced and the whole process is verifiable. Moreover, the browser option utilizes [snarkjs](https://github.com/iden3/snarkjs) while the Docker option utilizes [Kobi's implementation](https://github.com/iseriohn/phase2-bn254). This provided software variety and contributors could choose to contribute by whichever method they trust. In addition, participants could generate entropy via entering random text or making random cursor movements.
 
-The zkLogin [circuit](https://github.com/sui-foundation/zklogin-circuit) and the ceremony client [code](https://github.com/sui-foundation/zk-ceremony-client) were made open source and the links were made available to the participants to review before the ceremony, if they chose to do so. In addition, we also posted developer [docs](https://docs.sui.io/build/zk_login) and an audit [report](https://github.com/sui-foundation/security-audits/blob/main/zksecurity_zklogin-circuits.pdf) on the circuit from zkSecurity. We adopted [challenge #0081](https://pse-trusted-setup-ppot.s3.eu-central-1.amazonaws.com/challenge_0081) (resulting from 80 community contributions) from [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master/0080_carter_response) in phase 1, which is circuit agnostic. We applied the output of the [Drand](http://drand.love) random beacon at epoch #3298000 to remove bias. For phase 2, our ceremony had 111 contributions, 82 from browser and 29 from docker. Finally, we applied the output of the Drand random beacon at epoch #3320606 to remove bias from contributions. All intermediate files can be reproduced following instructions [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase1/README.md) for phase 1 and [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/README.md) for phase 2.
+The zkLogin circuit and the ceremony client [code](https://github.com/sui-foundation/zk-ceremony-client) were made open source and the links were made available to the participants to review before the ceremony. In addition, we also posted developer [docs](https://docs.sui.io/build/zk_login) and an audit [report](https://github.com/sui-foundation/security-audits/blob/main/zksecurity_zklogin-circuits.pdf) on the circuit from zkSecurity. We adopted [challenge #0081](https://pse-trusted-setup-ppot.s3.eu-central-1.amazonaws.com/challenge_0081) (resulting from 80 community contributions) from [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master/0080_carter_response) in phase 1, which is circuit agnostic. We applied the output of the [Drand](http://drand.love) random beacon at epoch #3298000 to remove bias. For phase 2, our ceremony had 111 contributions, 82 from browser and 29 from docker. Finally, we applied the output of the Drand random beacon at epoch #3320606 to remove bias from contributions. All intermediate files can be reproduced following instructions [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase1/README.md) for phase 1 and [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/README.md) for phase 2.
 
 ## Finalization
 
@@ -522,17 +623,17 @@ In the future, the user can opt in to verify their OAuth identity associated wit
 
 ## FAQ
 
-## What providers is zkLogin compatible with?
+### What providers is zkLogin compatible with?
 
 zkLogin can support providers that work with OpenID Connect built on top of the OAuth 2.0 framework. This is a subset of OAuth 2.0 compatible providers. Sui currently supports Google, Facebook and Twitch. Other compatible providers will be enabled via protocol upgrades in the future.
 
-## How is a zkLogin Wallet different from a traditional private key wallet?
+### How is a zkLogin Wallet different from a traditional private key wallet?
 
 Traditional private key wallets demand users to consistently recall mnemonics and passphrases, necessitating secure storage to prevent fund loss from private key compromise.
 
 On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. Forgetting an ephemeral key does not result in loss of funds, because a user can always sign in again to generate a new ephemeral key and a new ZK proof.
 
-## How is zkLogin different from MPC or Multisig wallets?
+### How is zkLogin different from MPC or Multisig wallets?
 
 Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or distributing multiple key shares and then defining a threshold value for accepting a signature.
 
@@ -542,15 +643,15 @@ You can think of zkLogin as a 2FA scheme for an address, where the first part is
 
 Furthermore, because Sui native supports Multisig wallets, one can always include one or more zkLogin signers inside a Multisig wallet for additional security, such as using the zkLogin part as 2FA in k-of-N settings.
 
-## If my OAuth account is compromised, what happens to my zkLogin address?
+### If my OAuth account is compromised, what happens to my zkLogin address?
 
 Because zkLogin is a 2FA system, an attacker that has compromised your OAuth account cannot access your zkLogin address unless they have separately compromised your salt.
 
-## If I lose access to my OAuth account, do I lose access to my zkLogin address?
+### If I lose access to my OAuth account, do I lose access to my zkLogin address?
 
 Yes. You must be able to log into your OAuth account and produce a current JWT in order to use zkLogin.
 
-## Does losing my OAuth credential mean the loss of funds in the zkLogin wallet?
+### Does losing my OAuth credential mean the loss of funds in the zkLogin wallet?
 
 A forgotten OAuth credential can typically be recovered by resetting the password in that provider.
 In the unfortunate event where user's OAuth credentials get compromised, an adversary will still require to obtain `user_salt`, but also learn which wallet is used in order to take over that account. Note that modern `user_salt` providers may have additional 2FA security measures in place to prevent provision of user's salt even to entities that present a valid, non-expired JWT.
@@ -558,11 +659,11 @@ In the unfortunate event where user's OAuth credentials get compromised, an adve
 It's also important to highlight that due to the fact that zkLogin addresses do not expose any information about the user's identity or wallet used, targeted attacks by just monitoring the blockchain are more difficult.
 Finally, on the unfortunate event where one loses access to their OAuth account permanently, access to that wallet is lost. But if recovery from a lost OAuth account is desired, a good suggestion for wallet providers is to support the native Sui Multisig functionality and add a backup method. Note that it's even possible to have a Multisig wallet that all signers are using zkLogin, i.e. an 1-of-2 Multisig zkLogin wallet where the first part is Google and the second Facebook OAuth, respectively.
 
-## Can I convert or merge a traditional private key wallet into a zkLogin one, or vice versa?
+### Can I convert or merge a traditional private key wallet into a zkLogin one, or vice versa?
 
 No. The zkLogin wallet address is derived differently compared to a private key address.
 
-## Will my zkLogin address ever change?
+### Will my zkLogin address ever change?
 
 zkLogin address is derived from `sub`, `iss`, `aud` and `user_salt`.
 
@@ -574,11 +675,11 @@ In addition, each wallet or application maintains its own `user_salt`, so loggin
 
 See more on address [definition](#address-definition).
 
-## Can I have multiple addresses with the same OAuth provider?
+### Can I have multiple addresses with the same OAuth provider?
 
 Yes, this is possible by using a different wallet provider or different `user_salt` for each account. This is useful for separating funds between different accounts.
 
-## Is a zkLogin Wallet custodial?
+### Is a zkLogin Wallet custodial?
 
 A zkLogin wallet is a non-custodial or unhosted wallet.
 
@@ -586,31 +687,23 @@ A custodial or hosted wallet is where a third party (the custodian) controls the
 
 Instead, a zkLogin wallet can be viewed as a 2-out-of-2 Multisig where the two credentials are the user's OAuth credentials (maintained by the user) and the salt. In other words, neither the OAuth provider, the wallet vendor, the ZK proving service or the salt service provider is a custodian.
 
-## Generating a ZK proof is expensive, is a new proof required to be generated for every transaction?
+### Generating a ZK proof is expensive, is a new proof required to be generated for every transaction?
 
 No. Proof generation is only required when ephemeral KeyPair expires. Since the nonce is defined by the ephemeral public key (`eph_pk`) and expiry (`max_epoch`), the ZK proof is valid until what the expiry is committed to nonce in the JWT token. The ZK proof can be cached and the same ephemeral key can be used to sign transactions till it expires.
 
-## Does zkLogin work on mobile?
+### Does zkLogin work on mobile?
 
 zkLogin is a Sui native primitive and not a feature of a particular application or wallet. It can be used by any Sui developer, including on mobile.
 
-## Can I run my own ZK Proving Service?
-
-Yes, you can choose to run the server binary on premise and generate ZK proofs yourself instead of calling a provider. Please contact us for more instructions.
-
-## What RPC providers support the ZK Proving Service?
-
-The application can currently call the Mysten Labs-maintained ZK Proving Service. Please reach out to whitelist the application's registered client ID to use the service.
-
-## Is account recovery possible if the user loses the OAuth credentials?
+### Is account recovery possible if the user loses the OAuth credentials?
 
 Yes, the user can follow the OAuth providers' recovery flow. The ephemeral private key can be refreshed and after completing a new OAuth login flow, the user can obtain new ZK proof and sign transactions with the refreshed key.
 
-## What are some assumptions for the zkLogin circuit?
+### What are some assumptions for the zkLogin circuit?
 
 Due to the way Groth16 works, we impose length restrictions on several fields in the JWT. Some of the fields that are length-restricted include aud, iss, the JWT's header and payload. For example, zkLogin can currently only work with aud values of up to length 120 (this value is not yet final). In general, we tried to make sure that the restrictions are as generous as possible. We have decided on these values after looking at as many JWTs that we could get our hands on.
 
-## How is zkLogin different from other solutions that support social login?
+### How is zkLogin different from other solutions that support social login?
 
 While providing social login with Web2 credentials for Web3 wallet is not a new concept, the existing solutions have one or more of the trust assumptions:
 
@@ -623,6 +716,23 @@ Some of the existing deployed solutions rely on some of these assumptions. Web3A
 The key differentiators that zkLogin brings to Sui are:
 
 1. Native Support in Sui: Unlike other solutions that are blockchain agnostic, zkLogin is deployed just for Sui. This means a zkLogin transaction can be combined with Multisig and sponsored transactions seamlessly.
-1. Self-Custodial without additional trust: We leverage the nonce field in JWT token to commit to ephemeral public key, so no persistent private key management is required with any trusted parties. In addition, the JWK itself is an oracle agreed upon by the quorum of stakes by the validators with trusting any source of authority.
-1. Full privacy: Nothing is required to submit on-chain except the ZK proof and the ephemeral signature.
-1. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
+
+2. Self-Custodial without additional trust: We leverage the nonce field in JWT token to commit to ephemeral public key, so no persistent private key management is required with any trusted parties. In addition, the JWK itself is an oracle agreed upon by the quorum of stakes by the validators with trusting any source of authority.
+
+3. Full privacy: Nothing is required to submit on-chain except the ZK proof and the ephemeral signature.
+
+4. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
+
+## How to verify a zkLogin signature offchain?
+
+The following options support a zkLogin signature over either transaction data or personal message. 
+
+1. Use keytool: See usage in keytool. 
+
+```bash
+$SUI_BINARY keytool zk-login-sig-verify -h
+```
+
+2. Use a self hosted server endpoint: See usage in [here](https://github.com/MystenLabs/zklogin-verifier). 
+
+3. Use Sui RPC endpoint: In progress.
