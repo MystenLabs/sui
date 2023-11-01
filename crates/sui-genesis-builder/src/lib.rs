@@ -838,7 +838,7 @@ fn create_genesis_transaction(
     let (effects, events, objects) = {
         let silent = true;
         let paranoid_checks = false;
-        let executor = sui_execution::executor(protocol_config, paranoid_checks, silent)
+        let executor = sui_execution::executor(protocol_config, paranoid_checks, silent, None)
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
@@ -898,7 +898,7 @@ fn create_genesis_objects(
     let silent = true;
     // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
     let paranoid_checks = false;
-    let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
+    let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent, None)
         .expect("Creating an executor should not fail here");
 
     for system_package in system_packages.into_iter() {

@@ -5,6 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use std::path::PathBuf;
     use std::{collections::BTreeMap, sync::Arc};
 
     use anyhow::Result;
@@ -12,6 +13,7 @@ mod checked {
     use move_bytecode_verifier::meter::Meter;
     use move_bytecode_verifier::verify_module_with_config_metered;
     use move_core_types::account_address::AccountAddress;
+    use move_vm_config::runtime::{VMProfilerConfig, DEFAULT_PROFILE_OUTPUT_PATH};
     use move_vm_config::{
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
@@ -83,6 +85,7 @@ mod checked {
     pub fn new_move_vm(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
         MoveVM::new_with_config(
             natives,
@@ -103,7 +106,22 @@ mod checked {
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
                 #[cfg(debug_assertions)]
-                profiler_config: std::default::Default::default(),
+                profiler_config: VMProfilerConfig {
+                    enabled: enable_profiler.is_some(),
+                    base_path: (*match enable_profiler {
+                        Some(ref p) => p.clone().to_path_buf(),
+                        None => std::path::PathBuf::from("."),
+                    })
+                    .to_owned(),
+                    full_path: enable_profiler.filter(|p| {
+                        !matches!(
+                            p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
+                            Some(std::cmp::Ordering::Equal)
+                        )
+                    }),
+                    track_bytecode_instructions: false,
+                    use_long_function_name: false,
+                },
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
             },

@@ -141,7 +141,14 @@ async fn execute_replay(url: &str, tx: &TransactionDigest) -> Result<(), ReplayE
         .await?
         .init_for_execution()
         .await?
-        .execute_transaction(tx, ExpensiveSafetyCheckConfig::default(), true, None, None)
+        .execute_transaction(
+            tx,
+            ExpensiveSafetyCheckConfig::default(),
+            true,
+            None,
+            None,
+            None,
+        )
         .await?
         .check_effects()?;
     tokio::task::yield_now().await;
@@ -149,7 +156,14 @@ async fn execute_replay(url: &str, tx: &TransactionDigest) -> Result<(), ReplayE
         .await?
         .init_for_execution()
         .await?
-        .execute_transaction(tx, ExpensiveSafetyCheckConfig::default(), false, None, None)
+        .execute_transaction(
+            tx,
+            ExpensiveSafetyCheckConfig::default(),
+            false,
+            None,
+            None,
+            None,
+        )
         .await?
         .check_effects()?;
     tokio::task::yield_now().await;

@@ -6179,6 +6179,7 @@ name = "move-vm-config"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
+ "once_cell",
 ]
 
 [[package]]
@@ -11563,6 +11564,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-vm-config",
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",

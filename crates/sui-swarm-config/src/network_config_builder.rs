@@ -436,7 +436,7 @@ mod test {
 
         let silent = true;
         let paranoid_checks = false;
-        let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
+        let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent, None)
             .expect("Creating an executor should not fail here");
 
         // Use a throwaway metrics registry for genesis transaction execution.

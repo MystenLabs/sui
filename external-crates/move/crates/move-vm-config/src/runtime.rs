@@ -3,8 +3,12 @@
 
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::file_format_common::VERSION_MAX;
+use once_cell::sync::Lazy;
+use std::path::PathBuf;
 
 pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
+
+pub static DEFAULT_PROFILE_OUTPUT_PATH: Lazy<PathBuf> = Lazy::new(|| std::path::PathBuf::from("."));
 
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
@@ -63,8 +67,11 @@ impl Default for VMRuntimeLimitsConfig {
 #[cfg(debug_assertions)]
 #[derive(Clone, Debug)]
 pub struct VMProfilerConfig {
+    pub enabled: bool,
     /// Base path for files
     pub base_path: std::path::PathBuf,
+    /// User configured full path override
+    pub full_path: Option<std::path::PathBuf>,
     /// Whether or not to track bytecode instructions
     pub track_bytecode_instructions: bool,
     /// Whether or not to use the long name for functions
@@ -75,7 +82,9 @@ pub struct VMProfilerConfig {
 impl std::default::Default for VMProfilerConfig {
     fn default() -> Self {
         Self {
+            enabled: false,
             base_path: std::path::PathBuf::from("."),
+            full_path: None,
             track_bytecode_instructions: false,
             use_long_function_name: false,
         }

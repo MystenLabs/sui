@@ -609,6 +609,18 @@ pub enum SuiClientCommands {
         address_override: Option<ObjectID>,
     },
 
+    /// Profile the gas usage of a transaction. Outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
+    #[clap(name = "profile-transaction")]
+    ProfileTransaction {
+        /// The digest of the transaction to replay
+        #[arg(long, short)]
+        tx_digest: String,
+
+        /// If specified, overrides the filepath of the output profile, for example -- /temp/my_profile.json
+        #[clap(name = "profile_output_filepath")]
+        profile_output_filepath: Option<PathBuf>,
+    },
+
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
@@ -652,6 +664,24 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
+            SuiClientCommands::ProfileTransaction {
+                tx_digest,
+                profile_output_filepath,
+            } => {
+                let cmd = ReplayToolCommand::ProfileTransaction {
+                    tx_digest,
+                    show_effects: false,
+                    diag: false,
+                    executor_version_override: None,
+                    protocol_version_override: None,
+                    profile_output_filepath_override: profile_output_filepath,
+                };
+                let rpc = context.config.get_active_env()?.rpc.clone();
+                let _command_result =
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
+
+                SuiClientCommandResult::ProfileTransaction
+            }
             SuiClientCommands::ReplayTransaction { tx_digest } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
@@ -1716,6 +1746,7 @@ impl Display for SuiClientCommandResult {
                 table.with(tabled::settings::style::BorderSpanCorrection);
                 writeln!(f, "{}", table)?;
             }
+            SuiClientCommandResult::ProfileTransaction => {}
             SuiClientCommandResult::ReplayTransaction => {}
             SuiClientCommandResult::ReplayBatch => {}
             SuiClientCommandResult::ReplayCheckpoints => {}
@@ -1997,6 +2028,7 @@ pub enum SuiClientCommandResult {
         used_module_ticks: u128,
     },
     VerifySource,
+    ProfileTransaction,
     ReplayTransaction,
     ReplayBatch,
     ReplayCheckpoints,

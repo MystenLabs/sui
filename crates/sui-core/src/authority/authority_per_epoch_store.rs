@@ -2820,6 +2820,7 @@ impl ExecutionComponents {
             protocol_config,
             expensive_safety_check_config.enable_move_vm_paranoid_checks(),
             silent,
+            None,
         )
         .expect("Creating an executor should not fail here");
 

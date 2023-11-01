@@ -7,6 +7,7 @@ use config::ReplayableNetworkConfigSet;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
 use fuzz_mutations::base_fuzzers;
+use move_vm_config::runtime::DEFAULT_PROFILE_OUTPUT_PATH;
 use sui_types::digests::get_mainnet_chain_identifier;
 use sui_types::digests::get_testnet_chain_identifier;
 use sui_types::message_envelope::Message;
@@ -60,6 +61,23 @@ pub enum ReplayToolCommand {
     ReplaySandbox {
         #[arg(long, short)]
         path: PathBuf,
+    },
+
+    /// Replay transaction
+    #[command(name = "rp")]
+    ProfileTransaction {
+        #[arg(long, short)]
+        tx_digest: String,
+        #[arg(long, short)]
+        show_effects: bool,
+        #[arg(long, short)]
+        diag: bool,
+        #[arg(long, short, allow_hyphen_values = true)]
+        executor_version_override: Option<i64>,
+        #[arg(long, short, allow_hyphen_values = true)]
+        protocol_version_override: Option<i64>,
+        #[arg(long, short, allow_hyphen_values = true)]
+        profile_output_filepath_override: Option<PathBuf>,
     },
 
     /// Replay transaction
@@ -178,6 +196,7 @@ pub async fn execute_replay_command(
                 use_authority,
                 None,
                 None,
+                None,
             )
             .await?;
 
@@ -258,6 +277,7 @@ pub async fn execute_replay_command(
                             tx_digest,
                             safety,
                             use_authority,
+                            None,
                             None,
                             None,
                         )
@@ -343,6 +363,42 @@ pub async fn execute_replay_command(
             // TODO: clean this up
             Some((0u64, 0u64))
         }
+        ReplayToolCommand::ProfileTransaction {
+            tx_digest,
+            show_effects,
+            diag,
+            executor_version_override,
+            protocol_version_override,
+            profile_output_filepath_override,
+        } => {
+            let tx_digest = TransactionDigest::from_str(&tx_digest)?;
+            info!("Executing tx: {}", tx_digest);
+            let sandbox_state = LocalExec::replay_with_network_config(
+                rpc_url,
+                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                tx_digest,
+                safety,
+                use_authority,
+                executor_version_override,
+                protocol_version_override,
+                profile_output_filepath_override
+                    .or(Some((*DEFAULT_PROFILE_OUTPUT_PATH.clone()).to_path_buf())),
+            )
+            .await?;
+
+            if diag {
+                println!("{:#?}", sandbox_state.pre_exec_diag);
+            }
+            if show_effects {
+                println!("{}", sandbox_state.local_exec_effects);
+            }
+
+            sandbox_state.check_effects()?;
+
+            println!("Execution finished successfully. Local and on-chain effects match.");
+            Some((1u64, 1u64))
+        }
+
         ReplayToolCommand::ReplayTransaction {
             tx_digest,
             show_effects,
@@ -360,6 +416,7 @@ pub async fn execute_replay_command(
                 use_authority,
                 executor_version_override,
                 protocol_version_override,
+                None,
             )
             .await?;
 
