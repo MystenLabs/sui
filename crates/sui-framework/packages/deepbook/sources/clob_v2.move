@@ -16,7 +16,7 @@ module deepbook::clob_v2 {
     use sui::sui::SUI;
     use sui::table::{Self, Table, contains, add, borrow_mut};
     use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     use deepbook::critbit::{Self, CritbitTree, is_empty, borrow_mut_leaf_by_index, min_leaf, remove_leaf_by_index, max_leaf, next_leaf, previous_leaf, borrow_leaf_by_index, borrow_leaf_by_key, find_leaf, insert_leaf};
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
@@ -248,6 +248,25 @@ module deepbook::clob_v2 {
         quote_asset_trading_fees: Balance<QuoteAsset>,
     }
 
+    /// Capability granting permission to access an entry in `Pool.quote_asset_trading_fees`.
+    struct PoolOwnerCap has key, store {
+        id: UID,
+        /// The owner of this AccountCap. Note: this is
+        /// derived from an object ID, not a user address
+        owner: address
+    }
+
+    /// Function to withdraw fees created from a pool
+    public fun withdraw_fees<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        _pool_owner_cap: &PoolOwnerCap,
+        ctx: &mut TxContext,
+    ): Coin<QuoteAsset> {
+        let quanity = quote_asset_trading_fees_value(pool);
+        let to_withdraw = balance::split(&mut pool.quote_asset_trading_fees, quanity);
+        coin::from_balance(to_withdraw, ctx)
+    }
+
     fun destroy_empty_level(level: TickLevel) {
         let TickLevel {
             price: _,
@@ -338,6 +357,15 @@ module deepbook::clob_v2 {
 
         let pool_uid = object::new(ctx);
         let pool_id = *object::uid_as_inner(&pool_uid);
+
+        // Creates the capability to mark a pool owner.
+        let id = object::new(ctx);
+        let owner = object::uid_to_address(&id);
+        let pool_owner_cap = PoolOwnerCap { 
+            id, 
+            owner
+        };
+        transfer::public_transfer(pool_owner_cap, tx_context::sender(ctx));
 
         event::emit(PoolCreated {
             pool_id,
@@ -1807,6 +1835,10 @@ module deepbook::clob_v2 {
         order.expire_timestamp
     }
 
+    public fun quote_asset_trading_fees_value<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        balance::value(&pool.quote_asset_trading_fees)
+    }
+
     public(friend) fun clone_order(order: &Order): Order {
         Order {
             order_id: order.order_id,
@@ -2024,7 +2056,7 @@ module deepbook::clob_v2 {
 
     #[test_only]
     public fun borrow_custodian<BaseAsset, QuoteAsset>(
-        pool: & Pool<BaseAsset, QuoteAsset>
+        pool: &Pool<BaseAsset, QuoteAsset>
     ): (&Custodian<BaseAsset>, &Custodian<QuoteAsset>) {
         (&pool.base_custodian, &pool.quote_custodian)
     }
