@@ -4,12 +4,18 @@
 /// This is a simple example of a permissionless module for an imaginary game
 /// that sells swords for Gems. Gems are an in-game currency that can be bought
 /// with SUI.
-module 0x0::sword {
+module examples::sword {
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
 
     use closed_loop::closed_loop::{Self as cl, Token, ActionRequest};
     use examples::gem::GEM;
+
+    /// Trying to purchase a sword with an incorrect amount.
+    const EWrongAmount: u64 = 0;
+
+    /// The price of a sword in Gems.
+    const SWORD_PRICE: u64 = 10;
 
     /// A game item that can be purchased with Gems.
     struct Sword has key, store { id: UID }
@@ -18,6 +24,7 @@ module 0x0::sword {
     public fun buy_sword(
         gems: Token<GEM>, ctx: &mut TxContext
     ): (Sword, ActionRequest<GEM>) {
+        assert!(SWORD_PRICE == cl::value(&gems), EWrongAmount);
         (
             Sword { id: object::new(ctx) },
             cl::spend(gems, ctx)

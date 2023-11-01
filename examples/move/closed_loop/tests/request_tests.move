@@ -53,10 +53,10 @@ module closed_loop::request_tests {
         test::return_policy(policy, cap)
     }
 
-    #[test, expected_failure(abort_code = cl::ESizeMismatch)]
+    #[test]
     /// Scenario: Policy requires only Rule1 but request gets approval from
     /// Rule2 and Rule1
-    fun test_request_confirm_size_mismatch_fail() {
+    fun test_request_confirm_excessive_approvals_pass() {
         let ctx = &mut test::ctx();
         let (policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");

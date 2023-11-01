@@ -32,8 +32,8 @@ module examples::denylist_rule {
     /// The Rule witness.
     struct Denylist has drop {}
 
-    /// Adds a limiter rule to the `TokenPolicy` with the given limit per
-    /// operation.
+    /// Adds Denylist Rule for a specific action.
+    /// If there's no config yet - creates one.
     public fun add_for<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,

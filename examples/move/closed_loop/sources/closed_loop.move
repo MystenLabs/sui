@@ -27,18 +27,16 @@ module closed_loop::closed_loop {
 
     /// The action is not allowed (defined) in the policy.
     const EUnknownAction: u64 = 0;
-    /// The number of approvals does not match the number of rules.
-    const ESizeMismatch: u64 = 1;
     /// The rule was not approved.
-    const ENotApproved: u64 = 2;
+    const ENotApproved: u64 = 1;
     /// Trying to perform an admin action with a wrong cap.
-    const ENotAuthorized: u64 = 3;
+    const ENotAuthorized: u64 = 2;
     /// The balance is too low to perform the action.
-    const EBalanceTooLow: u64 = 4;
+    const EBalanceTooLow: u64 = 3;
     /// The balance is not zero.
-    const ENotZero: u64 = 5;
+    const ENotZero: u64 = 4;
     /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
-    const ECantConsumeBalance: u64 = 6;
+    const ECantConsumeBalance: u64 = 5;
 
     /// A Tag for the `spend` action.
     const SPEND: vector<u8> = b"spend";
@@ -273,8 +271,6 @@ module closed_loop::closed_loop {
         let rules = &vec_set::into_keys(*vec_map::get(&policy.rules, &name));
         let rules_len = vector::length(rules);
         let i = 0;
-
-        assert!(vec_set::size(&approvals) == rules_len, ESizeMismatch);
 
         while (i < rules_len) {
             let rule = vector::borrow(rules, i);
