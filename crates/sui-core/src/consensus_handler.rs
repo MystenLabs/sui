@@ -63,6 +63,22 @@ impl ConsensusHandlerInitializer {
         }
     }
 
+    pub fn new_for_testing(
+        state: Arc<AuthorityState>,
+        checkpoint_service: Arc<CheckpointService>,
+    ) -> Self {
+        Self {
+            state: state.clone(),
+            checkpoint_service,
+            epoch_store: state.epoch_store_for_testing().clone(),
+            low_scoring_authorities: Arc::new(Default::default()),
+            throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
+                None,
+                state.metrics.clone(),
+            )),
+        }
+    }
+
     pub fn new_consensus_handler(
         &self,
     ) -> ConsensusHandler<Arc<AuthorityStore>, CheckpointService> {
