@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::collections::HashMap;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointService;
@@ -16,6 +15,7 @@ use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};

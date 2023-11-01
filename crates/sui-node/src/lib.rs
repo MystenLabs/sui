@@ -65,7 +65,9 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::consensus_manager::{ConsensusHandlerInitializer, ConsensusManager, ConsensusManagerTrait};
+use sui_core::consensus_manager::{
+    ConsensusHandlerInitializer, ConsensusManager, ConsensusManagerTrait,
+};
 use sui_core::consensus_throughput_calculator::{
     ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
 };
@@ -991,7 +993,8 @@ impl SuiNode {
             &registry_service.default_registry(),
             epoch_store.protocol_config().clone(),
         ));
-        let consensus_manager = ConsensusManager::new_narwhal(config, consensus_config, registry_service);
+        let consensus_manager =
+            ConsensusManager::new_narwhal(config, consensus_config, registry_service);
 
         let mut consensus_epoch_data_remover =
             EpochDataRemover::new(consensus_manager.get_storage_base_path());
