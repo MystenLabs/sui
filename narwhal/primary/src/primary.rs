@@ -76,7 +76,7 @@ use types::{
 pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
-pub const CHANNEL_CAPACITY: usize = 1_000;
+pub const CHANNEL_CAPACITY: usize = 10_000;
 
 /// The number of shutdown receivers to create on startup. We need one per component loop.
 pub const NUM_SHUTDOWN_RECEIVERS: u64 = 27;
@@ -841,8 +841,9 @@ impl PrimaryReceiverHandler {
         Ok(())
     }
 
-    /// Gets parent certificate digests not known before, in storage, among suspended certificates,
-    /// or being requested from other header proposers.
+    /// Gets parent certificate digests not known before.
+    /// Digests that are in storage, suspended, or being requested from other proposers
+    /// are considered to be known.
     async fn get_unknown_parent_digests(
         &self,
         header: &Header,
