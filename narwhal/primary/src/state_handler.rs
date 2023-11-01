@@ -24,7 +24,7 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 use types::{
     Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, PrimaryToPrimaryClient,
-    Round, SendRandomnessPartialSignaturesRequest, SystemMessage,
+    RandomnessRound, Round, SendRandomnessPartialSignaturesRequest, SystemMessage,
 };
 
 type PkG = groups::bls12381::G2Element;
@@ -45,8 +45,11 @@ pub struct StateHandler {
     /// Channel to signal when the round changes.
     rx_narwhal_round_updates: WatchStream<Round>,
     /// Channel to recieve partial signatures for randomness generation.
-    rx_randomness_partial_signatures:
-        Receiver<(AuthorityIdentifier, u64, Vec<RandomnessPartialSignature>)>,
+    rx_randomness_partial_signatures: Receiver<(
+        AuthorityIdentifier,
+        RandomnessRound,
+        Vec<RandomnessPartialSignature>,
+    )>,
     /// A channel to update the committed rounds
     tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
@@ -75,13 +78,13 @@ struct RandomnessState {
     authority_id: AuthorityIdentifier,
     leader_schedule: LeaderSchedule,
     network: anemo::Network,
-    last_randomness_round_sent: Option<u64>,
-    randomness_round: u64,
+    last_randomness_round_sent: Option<RandomnessRound>,
+    randomness_round: RandomnessRound,
     last_narwhal_round_sent: Round,
     narhwal_round: Round,
-    cached_sigs: Option<(u64, Vec<RandomnessPartialSignature>)>,
+    cached_sigs: Option<(RandomnessRound, Vec<RandomnessPartialSignature>)>,
     // Partial sig storage is keyed on (randomness round, authority ID).
-    partial_sigs: BTreeMap<(u64, AuthorityIdentifier), Vec<RandomnessPartialSignature>>,
+    partial_sigs: BTreeMap<(RandomnessRound, AuthorityIdentifier), Vec<RandomnessPartialSignature>>,
     partial_sig_sender: Option<JoinHandle<()>>,
 }
 
@@ -167,7 +170,7 @@ impl RandomnessState {
             leader_schedule,
             network,
             last_randomness_round_sent: None,
-            randomness_round: 0,
+            randomness_round: RandomnessRound(0),
             last_narwhal_round_sent: 0,
             narhwal_round: 0,
             cached_sigs: None,
@@ -279,7 +282,7 @@ impl RandomnessState {
         }
     }
 
-    async fn update_randomness_round(&mut self, round: u64) {
+    async fn update_randomness_round(&mut self, round: RandomnessRound) {
         if round <= self.randomness_round {
             // Don't go backwards.
             return;
@@ -313,7 +316,7 @@ impl RandomnessState {
                 self.randomness_round,
                 ThresholdBls12381MinSig::partial_sign_batch(
                     shares,
-                    self.randomness_round.to_be_bytes().as_slice(),
+                    &self.randomness_round.signature_message(),
                 ),
             ));
         }
@@ -360,7 +363,7 @@ impl RandomnessState {
     async fn receive_partial_signatures(
         &mut self,
         authority_id: AuthorityIdentifier,
-        round: u64,
+        round: RandomnessRound,
         sigs: Vec<RandomnessPartialSignature>,
     ) {
         let dkg_output = match &self.dkg_output {
@@ -398,7 +401,7 @@ impl RandomnessState {
         }
         if let Err(e) = ThresholdBls12381MinSig::partial_verify_batch(
             &dkg_output.vss_pk,
-            round.to_be_bytes().as_slice(),
+            &round.signature_message(),
             sigs.as_slice(),
             &mut rand::thread_rng(),
         ) {
@@ -454,7 +457,7 @@ impl StateHandler {
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_randomness_partial_signatures: Receiver<(
             AuthorityIdentifier,
-            u64,
+            RandomnessRound,
             Vec<RandomnessPartialSignature>,
         )>,
         rx_shutdown: ConditionalBroadcastReceiver,
@@ -528,7 +531,7 @@ impl StateHandler {
                             randomness_state.add_confirmation(conf.clone())
                         }
                         SystemMessage::RandomnessSignature(round, _sig) => {
-                            randomness_state.update_randomness_round(round + 1).await;
+                            randomness_state.update_randomness_round(*round + 1).await;
                         }
                     }
                 }

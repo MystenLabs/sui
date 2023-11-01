@@ -70,10 +70,11 @@ use types::{
     error::{DagError, DagResult},
     now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
     FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SendRandomnessPartialSignaturesRequest, SystemMessage, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RandomnessRound,
+    RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
+    SendCertificateResponse, SendRandomnessPartialSignaturesRequest, SystemMessage, Vote,
+    VoteInfoAPI, WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 #[cfg(test)]
@@ -585,8 +586,11 @@ struct PrimaryReceiverHandler {
     /// Stores the randomness VSS public key when available.
     randomness_vss_key_lock: Arc<OnceLock<PublicVssKey>>,
     /// Sends randomness partial signatures to the state handler.
-    tx_randomness_partial_signatures:
-        Sender<(AuthorityIdentifier, u64, Vec<RandomnessPartialSignature>)>,
+    tx_randomness_partial_signatures: Sender<(
+        AuthorityIdentifier,
+        RandomnessRound,
+        Vec<RandomnessPartialSignature>,
+    )>,
     /// Known parent digests that are being fetched from header proposers.
     /// Values are where the digests are first known from.
     /// TODO: consider limiting maximum number of digests from one authority, allow timeout
@@ -752,7 +756,7 @@ impl PrimaryReceiverHandler {
                         .get()
                         .ok_or(DagError::RandomnessUnavailable)?
                         .c0(),
-                    round.to_be_bytes().as_slice(),
+                    &round.signature_message(),
                     sig,
                 )
                 .map_err(|_| DagError::InvalidRandomnessSignature)?;
