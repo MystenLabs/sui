@@ -1750,7 +1750,6 @@ pub trait TransactionDataAPI {
     fn check_sponsorship(&self) -> UserInputResult;
 
     fn is_system_tx(&self) -> bool;
-    fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
     /// returns true if the transaction is one that is specially sequenced to run at the very end
@@ -1885,12 +1884,11 @@ impl TransactionDataAPI for TransactionDataV1 {
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    fn is_change_epoch_tx(&self) -> bool {
-        matches!(self.kind, TransactionKind::ChangeEpoch(_))
-    }
-
     fn is_end_of_epoch_tx(&self) -> bool {
-        self.is_change_epoch_tx() || matches!(self.kind, TransactionKind::EndOfEpochTransaction(_))
+        matches!(
+            self.kind,
+            TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+        )
     }
 
     fn is_system_tx(&self) -> bool {
