@@ -16,12 +16,12 @@ use async_graphql::*;
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Epoch {
-    /// The epoch's id
+    /// The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
     pub epoch_id: u64,
     /// The epoch's protocol version
     #[graphql(skip)]
     pub protocol_version: u64,
-    /// The reference gas price for this epoch
+    /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
     pub reference_gas_price: Option<BigInt>,
     /// Validator related properties, including the active validators
     pub validator_set: Option<ValidatorSet>,
