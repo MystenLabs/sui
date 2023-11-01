@@ -3,7 +3,6 @@
 
 use crate::command::Component;
 use crate::mock_account::{batch_create_account_and_gas, Account};
-// use crate::mock_storage::InMemoryObjectStore;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
 use crate::workload::Workload;
@@ -14,12 +13,12 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-// use sui_types::committee::Committee;
-// use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
+use sui_types::object::Object;
 use sui_types::transaction::{CertifiedTransaction, SignedTransaction, Transaction};
+use tokio::sync::mpsc::Sender;
 use tracing::info;
 
 pub struct BenchmarkContext {
@@ -27,10 +26,11 @@ pub struct BenchmarkContext {
     user_accounts: BTreeMap<SuiAddress, Account>,
     admin_account: Account,
     benchmark_component: Component,
+    genesis_objects: Vec<Object>,
 }
 
 impl BenchmarkContext {
-    pub(crate) async fn new(
+    pub async fn new(
         workload: Workload,
         benchmark_component: Component,
         checkpoint_size: usize,
@@ -50,6 +50,11 @@ impl BenchmarkContext {
         assert_eq!(genesis_gas_objects.len() as u64, total);
         let (_, admin_account) = user_accounts.pop_last().unwrap();
 
+        // Serialize and write the genesis gas objects to a file.
+        // let file_name = "genesis.test";
+        // let file = File::create(file_name).unwrap();
+        // bincode::serialize_into(file, &genesis_gas_objects).unwrap();
+
         info!("Initializing validator");
         let validator =
             SingleValidator::new(&genesis_gas_objects, benchmark_component, checkpoint_size).await;
@@ -59,11 +64,16 @@ impl BenchmarkContext {
             user_accounts,
             admin_account,
             benchmark_component,
+            genesis_objects: genesis_gas_objects,
         }
     }
 
     pub(crate) fn validator(&self) -> SingleValidator {
         self.validator.clone()
+    }
+
+    pub fn get_genesis_objects(&self) -> &Vec<Object> {
+        &self.genesis_objects
     }
 
     pub(crate) async fn publish_package(&mut self) -> ObjectRef {
@@ -129,7 +139,7 @@ impl BenchmarkContext {
         root_objects
     }
 
-    pub(crate) async fn generate_transactions(
+    pub async fn generate_transactions(
         &self,
         tx_generator: Arc<dyn TxGenerator>,
     ) -> Vec<Transaction> {
@@ -244,6 +254,17 @@ impl BenchmarkContext {
             tx_count as f64 / elapsed,
             in_memory_store.get_num_object_reads() as f64 / tx_count as f64
         );
+    }
+
+    pub async fn benchmark_transaction_execution_with_channel(
+        &self,
+        transactions: Vec<Transaction>,
+        out_channel: Sender<Transaction>,
+    ) {
+        println!("Sending transactions to channel");
+        for tx in transactions {
+            out_channel.send(tx).await.unwrap();
+        }
     }
 
     /// Print out a sample transaction and its effects so that we can get a rough idea

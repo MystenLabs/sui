@@ -106,7 +106,7 @@ async fn main() {
                     .expect("Transaction effects exist")
                     .expect("Transaction effects exist");
 
-                let full_tx = Transaction {
+                let full_tx = TransactionWithEffects {
                     tx,
                     ground_truth_effects,
                     checkpoint_seq,

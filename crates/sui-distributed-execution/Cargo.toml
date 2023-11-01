@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.2.17", features = ["derive"] }
 tokio = { version = "1.28.1", features = ["full"] }
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 git-version = "0.3.5"
@@ -26,6 +25,7 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
+sui-single-node-benchmark = { path = "../sui-single-node-benchmark" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-adapter-latest = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
@@ -33,6 +33,7 @@ move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 network = { path = "network" }
 
 typed-store.workspace = true
+clap.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true

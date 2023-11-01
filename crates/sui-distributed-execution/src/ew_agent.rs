@@ -56,16 +56,33 @@ impl Agent<SailfishMessage> for EWAgent {
         let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));
         let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
         let store = DashMemoryBackedStore::new();
-        let mut ew_state = exec_worker::ExecutionWorkerState::new(store, genesis.clone());
-        ew_state.init_store(genesis);
-        let execute = my_attrs.get("execute").unwrap().parse().unwrap();
-        println!("Execute watermark: {:?}", execute);
+
+        let mode = {
+            if my_attrs["mode"] == "channel" {
+                ExecutionMode::Channel
+            } else {
+                ExecutionMode::Database
+            }
+        };
+
+        let tx_count = {
+            if my_attrs["mode"] == "channel" {
+                my_attrs.get("tx_count").unwrap().parse().unwrap()
+            } else {
+                0
+            }
+        };
+
+        let mut ew_state = exec_worker::ExecutionWorkerState::new(store, genesis.clone(), mode);
+        if my_attrs["mode"] == "database" {
+            ew_state.init_store(genesis);
+        }
 
         // Run Sequence Worker asynchronously
         ew_state
             .run(
                 metrics,
-                execute,
+                tx_count,
                 &mut self.in_channel,
                 &self.out_channel,
                 ew_ids,
@@ -73,8 +90,5 @@ impl Agent<SailfishMessage> for EWAgent {
                 self.id,
             )
             .await;
-
-        // Await for workers (EWs and SW) to finish.
-        // sw_handler.await.expect("sw failed");
     }
 }

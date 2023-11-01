@@ -7,10 +7,14 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
+use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
+use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
+use sui_single_node_benchmark::workload::Workload;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::committee::EpochId;
 use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
@@ -32,6 +36,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tokio::time::{sleep, Duration};
 
+use crate::seqn_worker::{COMPONENT, WORKLOAD};
 use crate::storage::WritableObjectStore;
 
 use super::types::*;
@@ -39,13 +44,14 @@ use super::types::*;
 const MANAGER_CHANNEL_SIZE: usize = 1024;
 
 pub struct QueuesManager {
-    tx_store: HashMap<TransactionDigest, Transaction>,
+    tx_store: HashMap<TransactionDigest, TransactionWithEffects>,
     writing_tx: HashMap<ObjectID, TransactionDigest>,
     wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
     reverse_wait_table: HashMap<TransactionDigest, HashSet<TransactionDigest>>,
     ready: mpsc::Sender<TransactionDigest>,
 }
 
+// The methods of the QueuesManager are called from a single thread, so no need for locks
 impl QueuesManager {
     fn new(manager_sender: mpsc::Sender<TransactionDigest>) -> QueuesManager {
         QueuesManager {
@@ -58,7 +64,7 @@ impl QueuesManager {
     }
 
     /// Enqueues a transaction on the manager
-    async fn queue_tx(&mut self, full_tx: Transaction) {
+    async fn queue_tx(&mut self, full_tx: TransactionWithEffects) {
         let txid = full_tx.tx.digest();
 
         // Get RW set
@@ -118,7 +124,7 @@ impl QueuesManager {
         }
     }
 
-    fn get_tx(&self, txid: &TransactionDigest) -> &Transaction {
+    fn get_tx(&self, txid: &TransactionDigest) -> &TransactionWithEffects {
         self.tx_store.get(txid).unwrap()
     }
 }
@@ -145,6 +151,7 @@ pub struct ExecutionWorkerState<
     pub received_child_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
     pub locked_exec_count: DashMap<TransactionDigest, u8>,
     pub genesis_digest: CheckpointDigest,
+    pub mode: ExecutionMode,
 }
 
 impl<
@@ -159,7 +166,7 @@ impl<
             + 'static,
     > ExecutionWorkerState<S>
 {
-    pub fn new(new_store: S, genesis: Arc<&Genesis>) -> Self {
+    pub fn new(new_store: S, genesis: Arc<&Genesis>, mode: ExecutionMode) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             ready_txs: DashMap::new(),
@@ -168,6 +175,7 @@ impl<
             received_child_objs: DashMap::new(),
             locked_exec_count: DashMap::new(),
             genesis_digest: *genesis.checkpoint().digest(),
+            mode,
         }
     }
 
@@ -267,13 +275,13 @@ impl<
         }
     }
 
-    fn check_effects_match(full_tx: &Transaction, effects: &TransactionEffects) -> bool {
-        let ground_truth_effects = &full_tx.ground_truth_effects;
+    fn check_effects_match(full_tx: &TransactionWithEffects, effects: &TransactionEffects) -> bool {
+        let ground_truth_effects = &full_tx.ground_truth_effects.as_ref().unwrap();
         if effects.digest() != ground_truth_effects.digest() {
             println!(
                 "EW effects mismatch for tx {} (CP {})",
                 full_tx.tx.digest(),
-                full_tx.checkpoint_seq
+                full_tx.checkpoint_seq.unwrap()
             );
             let old_effects = ground_truth_effects.clone();
             println!("Past effects: {:?}", old_effects);
@@ -286,7 +294,7 @@ impl<
     /// Executes a transaction, used for sequential, in-order execution
     pub async fn execute_tx(
         &mut self,
-        full_tx: &Transaction,
+        full_tx: &TransactionWithEffects,
         protocol_config: &ProtocolConfig,
         move_vm: &Arc<MoveVM>,
         epoch_data: &EpochData,
@@ -341,12 +349,13 @@ impl<
     }
 
     async fn async_exec(
-        full_tx: Transaction,
+        full_tx: TransactionWithEffects,
         memory_store: Arc<S>,
         child_inputs: HashSet<ObjectID>,
         move_vm: Arc<MoveVM>,
         reference_gas_price: u64,
-        epoch_data: EpochData,
+        epoch_id: EpochId,
+        epoch_start_timestamp: u64,
         protocol_config: ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         my_id: u8,
@@ -383,8 +392,8 @@ impl<
                 txid,
                 transaction_dependencies,
                 &move_vm,
-                &epoch_data.epoch_id(),
-                epoch_data.epoch_start_timestamp(),
+                &epoch_id,
+                epoch_start_timestamp,
                 &protocol_config,
                 metrics.clone(),
                 false,
@@ -467,7 +476,7 @@ impl<
             .expect("Sending doesn't work");
 
         // Then wait for start epoch message from sequence worker and update local state
-        let msg = in_channel.recv().await.expect("Receiving doesn't work");
+        let _ = in_channel.recv().await.expect("Receiving doesn't work");
         let (new_move_vm, protocol_config, epoch_data, reference_gas_price) =
             self.process_epoch_start(in_channel).await;
 
@@ -479,15 +488,48 @@ impl<
         );
     }
 
+    // async fn process_genesis_objects(&self, in_channel: &mut mpsc::Receiver<NetworkMessage>) {
+    //     let msg = in_channel.recv().await.expect("Receiving doesn't work");
+    //     let SailfishMessage::GenesisObjects(genesis_objects) = msg.payload
+    //     else {
+    //         eprintln!("EW got unexpected message: {:?}", msg.payload);
+    //         panic!("unexpected message");
+    //     };
+    //     println!("EW got genesis objects message");
+
+    //     for obj in genesis_objects {
+    //         self.memory_store
+    //             .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+    //     }
+    // }
+
+    async fn init_genesis_objects(&self, tx_count: u64) {
+        let workload = Workload::new(tx_count, WORKLOAD);
+        println!("Setting up accounts and gas...");
+        let start_time = std::time::Instant::now();
+        let ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
+        let elapsed = start_time.elapsed().as_millis() as f64;
+        println!(
+            "Benchmark setup finished in {}ms at a rate of {} accounts/s",
+            elapsed,
+            1000f64 * workload.num_accounts() as f64 / elapsed
+        );
+        let genesis_objects = ctx.get_genesis_objects();
+        for obj in genesis_objects {
+            self.memory_store
+                .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
+        }
+    }
+
     /// ExecutionWorker main
     pub async fn run(
         &mut self,
         metrics: Arc<LimitsMetrics>,
-        exec_watermark: u64,
+        tx_count: u64,
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
         out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
-        sw_id: UniqueId,
+        _sw_id: UniqueId,
         my_id: UniqueId,
     ) {
         // Initialize channels
@@ -505,15 +547,40 @@ impl<
             4. Reset semaphore after epoch change
         */
         let mut epoch_txs_semaphore = 0;
-        let mut epoch_change_tx: Option<Transaction> = None;
+        let mut epoch_change_tx: Option<TransactionWithEffects> = None;
 
         // Start timer for TPS computation
-        let mut num_tx: usize = 0;
+        let mut num_tx: u64 = 0;
         let now = Instant::now();
 
-        // Start the initial epoch
+        if self.mode == ExecutionMode::Channel {
+            // self.process_genesis_objects(in_channel).await;
+            self.init_genesis_objects(tx_count).await;
+        }
+
+        // if we execute in channel mode, there is no need to wait for epoch start
         let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price) =
-            self.process_epoch_start(in_channel).await;
+            match self.mode {
+                ExecutionMode::Database => self.process_epoch_start(in_channel).await,
+                ExecutionMode::Channel => {
+                    let native_functions = sui_move_natives::all_natives(/* silent */ true);
+                    let validator = TestAuthorityBuilder::new().build().await;
+                    let epoch_store = validator.epoch_store_for_testing().clone();
+                    let protocol_config = epoch_store.protocol_config();
+                    let move_vm = Arc::new(
+                        adapter::new_move_vm(native_functions, protocol_config, false)
+                            .expect("We defined natives to not fail here"),
+                    );
+                    let epoch_data = EpochData::new_test();
+                    let reference_gas_price = epoch_store.reference_gas_price();
+                    (
+                        move_vm,
+                        protocol_config.clone(),
+                        epoch_data,
+                        reference_gas_price,
+                    )
+                }
+            };
 
         // Main loop
         loop {
@@ -534,7 +601,7 @@ impl<
                                 missing_objects: tx_with_results.missing_objs.clone()
                             }};
                             if out_channel.send(msg).await.is_err() {
-                                eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
+                                eprintln!("EW {} could not send MissingObjects; EW {} already stopped.", my_id, ew_id);
                             }
                         }
                         continue;
@@ -550,13 +617,15 @@ impl<
                     assert!(epoch_txs_semaphore >= 0);
 
                     let full_tx = &tx_with_results.full_tx;
-                    // if full_tx.checkpoint_seq % 10_000 == 0 {
-                        println!("EW {} executed {}", my_id, full_tx.checkpoint_seq);
-                    // }
+                    if full_tx.checkpoint_seq.is_some() {
+                        println!("EW {} executed {}", my_id, full_tx.checkpoint_seq.unwrap());
+                    }
 
                     // 1. Critical check: are the effects the same?
-                    let tx_effects = &tx_with_results.tx_effects;
-                    Self::check_effects_match(full_tx, tx_effects);
+                    if full_tx.ground_truth_effects.is_some() {
+                        let tx_effects = &tx_with_results.tx_effects;
+                        Self::check_effects_match(full_tx, tx_effects);
+                    }
 
                     // 2. Update object queues
                     manager.clean_up(&txid).await;
@@ -575,11 +644,8 @@ impl<
                             eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
                         }
                     }
-
-                    // Stop executing when I hit the watermark
-                    // Note that this is the high watermark; there may be lower txns not
-                    // completed still left in the tasks_queue
-                    if full_tx.checkpoint_seq == exec_watermark-1 {
+                    if num_tx == tx_count {
+                        println!("EW {} executed {} txs", my_id, num_tx);
                         break;
                     }
                 },
@@ -698,7 +764,8 @@ impl<
                                     child_inputs,
                                     move_vm,
                                     reference_gas_price,
-                                    epoch_data,
+                                    epoch_data.epoch_id(),
+                                    epoch_data.epoch_start_timestamp(),
                                     protocol_config,
                                     metrics,
                                     my_id as u8,
@@ -713,6 +780,10 @@ impl<
                             }
                             manager.clean_up(&txid).await;
                             num_tx += 1;
+                            if num_tx == tx_count {
+                                println!("EW {} executed {} txs", my_id, num_tx);
+                                break;
+                            }
                             epoch_txs_semaphore -= 1;
                             assert!(epoch_txs_semaphore >= 0);
                         } else {
@@ -755,13 +826,14 @@ impl<
                         .await;
 
                         num_tx += 1;
-                        if full_tx.checkpoint_seq % 10_000 == 0 {
-                            println!("EW {} executed {}", my_id, full_tx.checkpoint_seq);
+                        if full_tx.checkpoint_seq.unwrap() % 10_000 == 0 {
+                            println!("EW {} executed {}", my_id, full_tx.checkpoint_seq.unwrap());
                         }
 
                         println!(
                             "EW {} END OF EPOCH at checkpoint {}",
-                            my_id, full_tx.checkpoint_seq
+                            my_id,
+                            full_tx.checkpoint_seq.unwrap()
                         );
                         (move_vm, protocol_config, epoch_data, reference_gas_price) = self
                             .process_epoch_change(out_channel, in_channel, my_id)
@@ -794,7 +866,7 @@ impl<
 
 fn select_ew_for_execution(
     txid: TransactionDigest,
-    tx: &Transaction,
+    tx: &TransactionWithEffects,
     ew_ids: &Vec<UniqueId>,
 ) -> UniqueId {
     if tx.is_epoch_change() || tx.get_read_set().contains(&ObjectID::from_single_byte(5)) {
@@ -804,6 +876,6 @@ fn select_ew_for_execution(
     }
 }
 
-fn select_ew_for_object(obj_id: ObjectID, ew_ids: &Vec<UniqueId>) -> UniqueId {
+fn select_ew_for_object(_obj_id: ObjectID, ew_ids: &Vec<UniqueId>) -> UniqueId {
     ew_ids[0]
 }

@@ -6,8 +6,7 @@
         "attrs" : {
             "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9184",
-            "download": "100",
-            "execute": "100"
+            "mode": "channel"
         }
     },
     "1" : {
@@ -17,7 +16,8 @@
         "attrs" : {
             "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9185",
-            "execute": "100"
+            "execute": "100",
+            "mode": "channel"
         }
     },
     "2" : {
@@ -27,7 +27,8 @@
         "attrs" : {
             "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9186",
-            "execute": "100"
+            "execute": "100",
+            "mode": "channel"
         }
     },
     "3" : {
@@ -37,7 +38,8 @@
         "attrs" : {
             "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9187",
-            "execute": "100"
+            "execute": "100",
+            "mode": "channel"
         }
     },
     "4" : {
@@ -47,7 +49,8 @@
         "attrs" : {
             "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9188",
-            "execute": "100"
+            "execute": "100",
+            "mode": "channel"
         }
     }
 }

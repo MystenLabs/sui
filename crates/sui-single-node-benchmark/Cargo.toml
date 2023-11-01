@@ -17,6 +17,7 @@ sui-types = { workspace = true, features = ["test-utils"] }
 
 async-trait.workspace = true
 bcs.workspace = true
+rand.workspace = true
 clap.workspace = true
 futures.workspace = true
 prometheus.workspace = true

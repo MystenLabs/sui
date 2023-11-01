@@ -20,11 +20,11 @@ impl Workload {
         }
     }
 
-    pub(crate) fn num_accounts(&self) -> u64 {
+    pub fn num_accounts(&self) -> u64 {
         self.tx_count
     }
 
-    pub(crate) fn gas_object_num_per_account(&self) -> u64 {
+    pub fn gas_object_num_per_account(&self) -> u64 {
         match self.workload_kind {
             WorkloadKind::NoMove => 1,
             WorkloadKind::Move {
@@ -33,10 +33,7 @@ impl Workload {
         }
     }
 
-    pub(crate) async fn create_tx_generator(
-        &self,
-        ctx: &mut BenchmarkContext,
-    ) -> Arc<dyn TxGenerator> {
+    pub async fn create_tx_generator(&self, ctx: &mut BenchmarkContext) -> Arc<dyn TxGenerator> {
         match self.workload_kind {
             WorkloadKind::NoMove => Arc::new(NonMoveTxGenerator::new()),
             WorkloadKind::Move {

@@ -75,8 +75,7 @@ pub enum SailfishMessage {
     EpochEnd {
         new_epoch_start_state: EpochStartSystemState,
     },
-    ProposeExec(Transaction),
-
+    ProposeExec(TransactionWithEffects),
     // Execution Worker <-> Execution Worker
     //LockedExec { tx: TransactionDigest, objects: Vec<(ObjectRef, Object)> },
     LockedExec {
@@ -114,14 +113,14 @@ impl Message for SailfishMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Transaction {
+pub struct TransactionWithEffects {
     pub tx: SenderSignedData,
-    pub ground_truth_effects: TransactionEffects, // full effects of tx, as ground truth exec result
-    pub child_inputs: Vec<ObjectID>,              // TODO: mark mutable
-    pub checkpoint_seq: u64,
+    pub ground_truth_effects: Option<TransactionEffects>, // full effects of tx, as ground truth exec result
+    pub child_inputs: Option<Vec<ObjectID>>,              // TODO: mark mutable
+    pub checkpoint_seq: Option<u64>,
 }
 
-impl Transaction {
+impl TransactionWithEffects {
     pub fn is_epoch_change(&self) -> bool {
         match self.tx.transaction_data().kind() {
             TransactionKind::ChangeEpoch(_) => true,
@@ -166,33 +165,39 @@ impl Transaction {
     /// it is not something that is known a-priori before execution.
     /// Returns the write set of a transction.
     pub fn get_write_set(&self) -> HashSet<ObjectID> {
-        let TransactionEffects::V1(tx_effects) = &self.ground_truth_effects;
-        let total_writes = tx_effects.created.len()
-            + tx_effects.mutated.len()
-            + tx_effects.unwrapped.len()
-            + tx_effects.deleted.len()
-            + tx_effects.unwrapped_then_deleted.len()
-            + tx_effects.wrapped.len();
-        let mut write_set: HashSet<ObjectID> = HashSet::with_capacity(total_writes);
+        match &self.ground_truth_effects {
+            Some(fx) => {
+                let TransactionEffects::V1(tx_effects) = fx;
+                let total_writes = tx_effects.created.len()
+                    + tx_effects.mutated.len()
+                    + tx_effects.unwrapped.len()
+                    + tx_effects.deleted.len()
+                    + tx_effects.unwrapped_then_deleted.len()
+                    + tx_effects.wrapped.len();
+                let mut write_set: HashSet<ObjectID> = HashSet::with_capacity(total_writes);
 
-        write_set.extend(
-            tx_effects
-                .created
-                .iter()
-                .chain(tx_effects.mutated.iter())
-                .chain(tx_effects.unwrapped.iter())
-                .map(|(object_ref, _)| object_ref.0),
-        );
-        write_set.extend(
-            tx_effects
-                .deleted
-                .iter()
-                .chain(tx_effects.unwrapped_then_deleted.iter())
-                .chain(tx_effects.wrapped.iter())
-                .map(|object_ref| object_ref.0),
-        );
+                write_set.extend(
+                    tx_effects
+                        .created
+                        .iter()
+                        .chain(tx_effects.mutated.iter())
+                        .chain(tx_effects.unwrapped.iter())
+                        .map(|(object_ref, _)| object_ref.0),
+                );
+                write_set.extend(
+                    tx_effects
+                        .deleted
+                        .iter()
+                        .chain(tx_effects.unwrapped_then_deleted.iter())
+                        .chain(tx_effects.wrapped.iter())
+                        .map(|object_ref| object_ref.0),
+                );
 
-        return write_set;
+                write_set
+            }
+            None => self.get_read_set(),
+        }
+        // assert!(self.ground_truth_effects.is_some());
     }
 
     /// Returns the read-write set of the transaction.
@@ -217,9 +222,15 @@ impl Transaction {
 }
 
 pub struct TransactionWithResults {
-    pub full_tx: Transaction,
+    pub full_tx: TransactionWithEffects,
     pub tx_effects: TransactionEffects, // determined after execution
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     pub written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
     pub missing_objs: HashSet<ObjectID>,
+}
+
+#[derive(PartialEq)]
+pub enum ExecutionMode {
+    Channel,
+    Database,
 }

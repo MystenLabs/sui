@@ -161,7 +161,7 @@ impl SingleValidator {
                     .await;
                 response.signed_effects.into_data()
             }
-            Component::TxnSigning | Component::ExecutionOnly => {
+            Component::TxnSigning | Component::ExecutionOnly | Component::PipeTxsToChannel => {
                 unreachable!()
             }
         };

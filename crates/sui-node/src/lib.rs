@@ -21,6 +21,7 @@ use futures::TryFutureExt;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
 use sui_core::authority::CHAIN_IDENTIFIER;
+use sui_core::authority_server::ValidatorServiceMetrics;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::digests::ChainIdentifier;
@@ -1074,8 +1075,11 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
         prometheus_registry: &Registry,
     ) -> Result<tokio::task::JoinHandle<Result<()>>> {
-        let validator_service =
-            ValidatorService::new(state.clone(), consensus_adapter, prometheus_registry).await?;
+        let validator_service = ValidatorService::new(
+            state.clone(),
+            consensus_adapter,
+            Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
+        );
 
         let mut server_conf = mysten_network::config::Config::new();
         server_conf.global_concurrency_limit = config.grpc_concurrency_limit;

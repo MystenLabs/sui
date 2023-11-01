@@ -1,5 +1,4 @@
 use std::cmp;
-use std::process::exit;
 use std::sync::Arc;
 
 use prometheus::Registry;
@@ -18,6 +17,9 @@ use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
+use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
+use sui_single_node_benchmark::command::{Component, WorkloadKind};
+use sui_single_node_benchmark::workload::Workload;
 use sui_types::digests::ChainIdentifier;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -28,6 +30,9 @@ use tokio::time::{sleep, Duration};
 use typed_store::rocks::default_db_options;
 
 use super::types::*;
+
+pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
+pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub struct SequenceWorkerState {
     pub config: NodeConfig,
@@ -113,6 +118,14 @@ impl SequenceWorkerState {
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
+        let download = match attrs.get("download") {
+            Some(watermark) => Some(watermark.parse().unwrap()),
+            None => None,
+        };
+        let execute = match attrs.get("execute") {
+            Some(watermark) => Some(watermark.parse().unwrap()),
+            None => None,
+        };
         Self {
             config,
             store,
@@ -121,8 +134,8 @@ impl SequenceWorkerState {
             committee_store,
             prometheus_registry,
             metrics,
-            download: Some(attrs.get("download").unwrap().parse().unwrap()),
-            execute: Some(attrs.get("execute").unwrap().parse().unwrap()),
+            download,
+            execute,
         }
     }
 
@@ -363,11 +376,11 @@ impl SequenceWorkerState {
                         .expect("Transaction effects exist");
 
                     let _ = tx.digest();
-                    let full_tx = Transaction {
+                    let full_tx = TransactionWithEffects {
                         tx: tx.data().clone(),
-                        ground_truth_effects: tx_effects.clone(),
-                        child_inputs: Vec::new(),
-                        checkpoint_seq,
+                        ground_truth_effects: Some(tx_effects.clone()),
+                        child_inputs: None,
+                        checkpoint_seq: Some(checkpoint_seq),
                     };
 
                     for ew_id in &ew_ids {
@@ -455,5 +468,65 @@ impl SequenceWorkerState {
         }
         println!("Sequence worker finished");
         sleep(Duration::from_millis(100_000)).await;
+    }
+
+    pub async fn run_with_channel(
+        out_to_network: &mpsc::Sender<NetworkMessage>,
+        ew_ids: Vec<UniqueId>,
+        tx_count: u64,
+    ) {
+        let workload = Workload::new(tx_count, WORKLOAD);
+        println!("Setting up benchmark...");
+        let start_time = std::time::Instant::now();
+        let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
+        let elapsed = start_time.elapsed().as_millis() as f64;
+        println!(
+            "Benchmark setup finished in {}ms at a rate of {} accounts/s",
+            elapsed,
+            1000f64 * workload.num_accounts() as f64 / elapsed
+        );
+        // first send genesis objects to all EWs
+        // let genesis_objects = ctx.get_genesis_objects();
+        // for ew_id in &ew_ids {
+        //     println!("SW sending genesis objects to {}", ew_id);
+        //     out_to_network
+        //         .send(NetworkMessage {
+        //             src: 0,
+        //             dst: *ew_id,
+        //             payload: SailfishMessage::GenesisObjects(genesis_objects.clone()),
+        //         })
+        //         .await
+        //         .expect("sending failed");
+        // }
+
+        // then generate transactions and send them to all EWs
+        let start_time = std::time::Instant::now();
+        let tx_generator = workload.create_tx_generator(&mut ctx).await;
+        let transactions = ctx.generate_transactions(tx_generator).await;
+        let elapsed = start_time.elapsed().as_millis() as f64;
+        println!(
+            "Tx generation finished in {}ms at a rate of {} TPS",
+            elapsed,
+            1000f64 * workload.tx_count as f64 / elapsed,
+        );
+
+        for tx in transactions {
+            let full_tx = TransactionWithEffects {
+                tx: tx.data().clone(),
+                ground_truth_effects: None,
+                child_inputs: None,
+                checkpoint_seq: None,
+            };
+            for ew_id in &ew_ids {
+                out_to_network
+                    .send(NetworkMessage {
+                        src: 0,
+                        dst: *ew_id,
+                        payload: SailfishMessage::ProposeExec(full_tx.clone()),
+                    })
+                    .await
+                    .expect("sending failed");
+            }
+        }
     }
 }

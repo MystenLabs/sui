@@ -2,13 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::stream::FuturesUnordered;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::crypto::{
+    deterministic_random_account_key, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
+};
 use sui_types::object::Object;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Account {
     pub sender: SuiAddress,
     pub keypair: Arc<AccountKeyPair>,
@@ -21,22 +25,36 @@ pub async fn batch_create_account_and_gas(
     num_accounts: u64,
     gas_object_num_per_account: u64,
 ) -> (BTreeMap<SuiAddress, Account>, Vec<Object>) {
-    let tasks: FuturesUnordered<_> = (0..num_accounts)
-        .map(|idx| {
-            let starting_id = idx * gas_object_num_per_account;
-            tokio::spawn(async move {
-                let (sender, keypair) = get_account_key_pair();
-                let objects = (0..gas_object_num_per_account)
-                    .map(|i| new_gas_object(starting_id + i, sender))
-                    .collect::<Vec<_>>();
-                (sender, keypair, objects)
-            })
-        })
-        .collect();
+    // let tasks: FuturesUnordered<_> = (0..num_accounts)
+    //     .map(|idx| {
+    //         let starting_id = idx * gas_object_num_per_account;
+    //         tokio::spawn(async move {
+    //             let (sender, keypair) = get_account_key_pair();
+    //             // let (sender, keypair) = get_key_pair_from_rng(&mut rng);
+    //             let objects = (0..gas_object_num_per_account)
+    //                 .map(|i| new_gas_object(starting_id + i, sender))
+    //                 .collect::<Vec<_>>();
+    //             (sender, keypair, objects)
+    //         })
+    //     })
+    //     .collect();
+
+    // deterministically generate accounts and gas
+    let mut rng = StdRng::from_seed([0; 32]);
+    let mut tasks = vec![];
+    // TODO: is there a way to do this in parallel, while maintaining determinism?
+    for idx in 0..num_accounts {
+        let starting_id = idx * gas_object_num_per_account;
+        let (sender, keypair) = get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
+        let objects = (0..gas_object_num_per_account)
+            .map(|i| new_gas_object(starting_id + i, sender))
+            .collect::<Vec<_>>();
+        tasks.push((sender, keypair, objects));
+    }
     let mut accounts = BTreeMap::new();
     let mut genesis_gas_objects = vec![];
-    for task in tasks {
-        let (sender, keypair, gas_objects) = task.await.unwrap();
+    for (sender, keypair, gas_objects) in tasks {
+        // let (sender, keypair, gas_objects) = task.await.unwrap();
         let gas_object_refs: Vec<_> = gas_objects
             .iter()
             .map(|o| o.compute_object_reference())
@@ -51,6 +69,18 @@ pub async fn batch_create_account_and_gas(
         );
         genesis_gas_objects.extend(gas_objects);
     }
+
+    // // print object reference of each genesis gas object
+    // for gas_object in &genesis_gas_objects {
+    //     println!(
+    //         "gas object reference: {:?}",
+    //         gas_object.compute_object_reference()
+    //     );
+    // }
+    // // print account addresses
+    // for account in accounts.keys() {
+    //     println!("account address: {:?}", account);
+    // }
     (accounts, genesis_gas_objects)
 }
 

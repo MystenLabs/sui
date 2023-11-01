@@ -1,7 +1,12 @@
+use std::time::Duration;
+
 use super::agents::*;
-use crate::{seqn_worker, types::*};
+use crate::{
+    seqn_worker::{self, SequenceWorkerState},
+    types::*,
+};
 use async_trait::async_trait;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::sleep};
 
 pub struct SWAgent {
     id: UniqueId,
@@ -38,16 +43,23 @@ impl Agent<SailfishMessage> for SWAgent {
 
         // extract my attrs from the global config
         let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
-        let mut sw_state = seqn_worker::SequenceWorkerState::new(0, my_attrs).await;
-        println!("Download watermark: {:?}", sw_state.download);
-        println!("Execute watermark: {:?}", sw_state.execute);
+        if my_attrs["mode"] == "channel" {
+            // Run Sequence Worker asynchronously
+            let tx_count = my_attrs["tx_count"].parse::<u64>().unwrap();
+            SequenceWorkerState::run_with_channel(&self.out_channel, ew_ids, tx_count).await;
+            println!("SW finished");
+            loop {
+                sleep(Duration::from_millis(1_000)).await;
+            }
+        } else {
+            let mut sw_state = seqn_worker::SequenceWorkerState::new(0, my_attrs).await;
+            println!("Download watermark: {:?}", sw_state.download);
+            println!("Execute watermark: {:?}", sw_state.execute);
 
-        // Run Sequence Worker asynchronously
-        sw_state
-            .run(&mut self.in_channel, &self.out_channel, ew_ids)
-            .await;
-
-        // Await for workers (EWs and SW) to finish.
-        // sw_handler.await.expect("sw failed");
+            // Run Sequence Worker asynchronously
+            sw_state
+                .run(&mut self.in_channel, &self.out_channel, ew_ids)
+                .await;
+        }
     }
 }

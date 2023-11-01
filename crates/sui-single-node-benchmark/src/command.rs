@@ -57,6 +57,8 @@ pub enum Component {
     // /// Benchmark the checkpoint executor by constructing a full epoch of checkpoints, execute
     // /// all transactions in them and measure time.
     // CheckpointExecutor,
+    /// Send transactions to a channel instead of executing them.
+    PipeTxsToChannel,
 }
 
 #[derive(Subcommand, Clone, Copy)]
