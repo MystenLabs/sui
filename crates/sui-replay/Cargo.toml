@@ -29,6 +29,7 @@ shellexpand.workspace = true
 tempfile.workspace = true
 http.workspace = true
 
+move-vm-config.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true

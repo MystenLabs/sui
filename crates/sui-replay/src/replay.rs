@@ -237,6 +237,8 @@ pub struct LocalExec {
     // -1 implies use latest version
     // None implies use the protocol version at the time of execution
     pub protocol_version_override: Option<i64>,
+    // Whether or not to enable the gas profiler
+    pub enable_profiler: Option<PathBuf>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
     pub sleep_period_for_timeout: std::time::Duration,
@@ -320,6 +322,7 @@ impl LocalExec {
         use_authority: bool,
         executor_version_override: Option<i64>,
         protocol_version_override: Option<i64>,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         async fn inner_exec(
             rpc_url: String,
@@ -328,6 +331,7 @@ impl LocalExec {
             use_authority: bool,
             executor_version_override: Option<i64>,
             protocol_version_override: Option<i64>,
+            enable_profiler: Option<PathBuf>,
         ) -> Result<ExecutionSandboxState, ReplayEngineError> {
             LocalExec::new_from_fn_url(&rpc_url)
                 .await?
@@ -339,6 +343,7 @@ impl LocalExec {
                     use_authority,
                     executor_version_override,
                     protocol_version_override,
+                    enable_profiler,
                 )
                 .await
         }
@@ -352,6 +357,7 @@ impl LocalExec {
                 use_authority,
                 executor_version_override,
                 protocol_version_override,
+                enable_profiler.clone(),
             )
             .await
             {
@@ -378,6 +384,7 @@ impl LocalExec {
                 use_authority,
                 executor_version_override,
                 protocol_version_override,
+                enable_profiler.clone(),
             )
             .await
             {
@@ -437,6 +444,7 @@ impl LocalExec {
             diag: Default::default(),
             executor_version_override: None,
             protocol_version_override: None,
+            enable_profiler: None,
         })
     }
 
@@ -479,6 +487,7 @@ impl LocalExec {
             diag: Default::default(),
             executor_version_override: None,
             protocol_version_override: None,
+            enable_profiler: None,
         })
     }
 
@@ -661,6 +670,7 @@ impl LocalExec {
                     use_authority,
                     None,
                     None,
+                    None,
                 )
                 .await
                 .map(|q| q.check_effects())
@@ -733,7 +743,12 @@ impl LocalExec {
         let ov = self.executor_version_override;
 
         // We could probably cache the executor per protocol config
-        let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
+        let executor = get_executor(
+            ov,
+            protocol_config,
+            expensive_safety_check_config,
+            self.enable_profiler.clone(),
+        );
 
         // All prep done
         let expensive_checks = true;
@@ -988,9 +1003,11 @@ impl LocalExec {
         use_authority: bool,
         executor_version_override: Option<i64>,
         protocol_version_override: Option<i64>,
+        enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         self.executor_version_override = executor_version_override;
         self.protocol_version_override = protocol_version_override;
+        self.enable_profiler = enable_profiler;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
                 .await
@@ -2047,6 +2064,7 @@ pub fn get_executor(
     executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
     _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    enable_profiler: Option<PathBuf>,
 ) -> Arc<dyn Executor + Send + Sync> {
     let protocol_config = executor_version_override
         .map(|q| {
@@ -2063,7 +2081,7 @@ pub fn get_executor(
         .unwrap_or(protocol_config.clone());
 
     let silent = true;
-    sui_execution::executor(&protocol_config, silent)
+    sui_execution::executor(&protocol_config, silent, enable_profiler)
         .expect("Creating an executor should not fail here")
 }
 
