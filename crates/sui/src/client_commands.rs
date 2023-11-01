@@ -613,22 +613,18 @@ pub enum SuiClientCommands {
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
-        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: Option<String>,
-
         /// The digest of the transaction to replay
         #[arg(long, short)]
         tx_digest: String,
+
+        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
+        #[arg(long = "rpc")]
+        rpc_url: Option<String>,
     },
 
     /// Replay transactions listed in a file.
     #[clap(name = "replay-batch")]
     ReplayBatch {
-        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: Option<String>,
-
         /// The path to the file of transaction digests to replay, with one digest per line
         #[arg(long, short)]
         path: PathBuf,
@@ -636,15 +632,15 @@ pub enum SuiClientCommands {
         /// If an error is encountered during a transaction, this specifies whether to terminate or continue
         #[arg(long, short)]
         terminate_early: bool,
+
+        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
+        #[arg(long = "rpc")]
+        rpc_url: Option<String>,
     },
 
     /// Replay all transactions in a range of checkpoints.
     #[command(name = "replay-checkpoint")]
     ReplayCheckpoints {
-        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: Option<String>,
-
         /// The starting checkpoint sequence number of the range of checkpoints to replay
         #[arg(long, short)]
         start: u64,
@@ -656,6 +652,10 @@ pub enum SuiClientCommands {
         /// If an error is encountered during a transaction, this specifies whether to terminate or continue
         #[arg(long, short)]
         terminate_early: bool,
+
+        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
+        #[arg(long = "rpc")]
+        rpc_url: Option<String>,
     },
 }
 

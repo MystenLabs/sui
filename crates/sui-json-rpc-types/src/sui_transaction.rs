@@ -684,14 +684,14 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
 
 fn owned_objref_string(obj: &OwnedObjectRef) -> String {
     format!(
-        " ┌──\n | ID: {} \n | Owner: {} \n | Version: {} \n | Digest: {}\n └──",
+        " ┌──\n │ ID: {} \n │ Owner: {} \n │ Version: {:?} \n │ Digest: {}\n └──",
         obj.reference.object_id, obj.owner, obj.reference.version, obj.reference.digest
     )
 }
 
 fn objref_string(obj: &SuiObjectRef) -> String {
     format!(
-        " ┌──\n | ID: {} \n | Version: {} \n | Digest: {}\n └──",
+        " ┌──\n │ ID: {} \n │ Version: {:?} \n │ Digest: {}\n └──",
         obj.object_id, obj.version, obj.digest
     )
 }
