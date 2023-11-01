@@ -11,6 +11,12 @@ Kiosk is a decentralized system for commerce applications on Sui. It consists of
 
 Practically, Kiosk is a part of the Sui framework, and it is native to the system and available to everyone out of the box.
 
+:::info
+
+See the [Kiosk SDK documentation](https://sui-typescript-docs.vercel.app/kiosk) for examples of working with Kiosk using TypeScript.
+
+:::
+
 ## Sui Kiosk owners
 
 Anyone can create a Sui Kiosk. Ownership of a kiosk is determined by the owner of the `KioskOwnerCap`, a special object that grants full access to a single kiosk. As the owner, you can sell any asset with a type (T) that has a shared `TransferPolicy` available, or you can use a kiosk to store assets even without a shared policy. You can’t sell or transfer any assets from your kiosk that do not have an associated transfer policy available.
@@ -441,6 +447,3 @@ let coin = tx.moveCall({
 
 Due to the function being PTB friendly, it is not currently supported in the CLI environment.
 
-## Kiosk SDK
-
-[See the Kiosk SDK documentation for examples on how to easily work with Kiosk using Typescript](https://sui-typescript-docs.vercel.app/kiosk)
