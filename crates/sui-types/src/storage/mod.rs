@@ -151,40 +151,73 @@ pub trait Storage {
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
-pub trait BackingPackageStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<MovePackage>> {
-        self.get_package_object(package_id)
-            .map(|opt_obj| opt_obj.and_then(|obj| obj.data.try_into_package()))
+pub struct PackageObjectArc {
+    package_object: Arc<Object>,
+}
+
+impl PackageObjectArc {
+    pub fn new(package_object: Object) -> Self {
+        assert!(package_object.is_package());
+        Self {
+            package_object: Arc::new(package_object),
+        }
+    }
+
+    pub fn object(&self) -> &Object {
+        &self.package_object
+    }
+
+    pub fn move_package(&self) -> &MovePackage {
+        self.package_object.data.try_as_package().unwrap()
     }
 }
 
-impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+pub trait BackingPackageStore {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>>;
+}
+
+impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
-/// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
+pub fn load_package_object_from_object_store(
+    store: &impl ObjectStore,
+    package_id: &ObjectID,
+) -> SuiResult<Option<PackageObjectArc>> {
+    let package = store.get_object(package_id)?;
+    if let Some(obj) = &package {
+        fp_ensure!(
+            obj.is_package(),
+            SuiError::BadObjectType {
+                error: format!("Package expected, Move object found: {package_id}"),
+            }
+        );
+    }
+    Ok(package.map(PackageObjectArc::new))
+}
+
+/// Returns Ok(<package object for each package id in `package_ids`>) if all package IDs in
 /// `package_id` were found. If any package in `package_ids` was not found it returns a list
 /// of any package ids that are unable to be found>).
 pub fn get_package_objects<'a>(
     store: &impl BackingPackageStore,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
-) -> SuiResult<PackageFetchResults<Object>> {
-    let package_objects: Vec<Result<Object, ObjectID>> = package_ids
+) -> SuiResult<PackageFetchResults<PackageObjectArc>> {
+    let packages: Vec<Result<_, _>> = package_ids
         .into_iter()
         .map(|id| match store.get_package_object(id) {
             Ok(None) => Ok(Err(*id)),
@@ -193,8 +226,7 @@ pub fn get_package_objects<'a>(
         })
         .collect::<SuiResult<_>>()?;
 
-    let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) =
-        package_objects.into_iter().partition_result();
+    let (fetched, failed_to_fetch): (Vec<_>, Vec<_>) = packages.into_iter().partition_result();
     if !failed_to_fetch.is_empty() {
         Ok(Err(failed_to_fetch))
     } else {
@@ -202,35 +234,15 @@ pub fn get_package_objects<'a>(
     }
 }
 
-pub fn get_packages<'a>(
-    store: &impl BackingPackageStore,
-    package_ids: impl IntoIterator<Item = &'a ObjectID>,
-) -> SuiResult<PackageFetchResults<MovePackage>> {
-    let objects = get_package_objects(store, package_ids)?;
-    Ok(objects.and_then(|objects| {
-        let (packages, failed): (Vec<_>, Vec<_>) = objects
-            .into_iter()
-            .map(|obj| {
-                let obj_id = obj.id();
-                obj.data.try_into_package().ok_or(obj_id)
-            })
-            .partition_result();
-        if !failed.is_empty() {
-            Err(failed)
-        } else {
-            Ok(packages)
-        }
-    }))
-}
-
 pub fn get_module<S: BackingPackageStore>(
     store: S,
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
     Ok(store
-        .get_package(&ObjectID::from(*module_id.address()))?
+        .get_package_object(&ObjectID::from(*module_id.address()))?
         .and_then(|package| {
             package
+                .move_package()
                 .serialized_module_map()
                 .get(module_id.name().as_str())
                 .cloned()

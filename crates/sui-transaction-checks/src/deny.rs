@@ -173,15 +173,14 @@ fn check_package_dependencies(
                 dependencies.push(*package_id);
             }
             Command::MoveCall(call) => {
-                let package =
-                    package_store
-                        .get_package(&call.package)?
-                        .ok_or(SuiError::UserInputError {
-                            error: UserInputError::ObjectNotFound {
-                                object_id: call.package,
-                                version: None,
-                            },
-                        })?;
+                let package = package_store.get_package_object(&call.package)?.ok_or(
+                    SuiError::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: call.package,
+                            version: None,
+                        },
+                    },
+                )?;
                 // linkage_table maps from the original package ID to the upgraded ID for each
                 // dependency. Here we only check the upgraded (i.e. the latest) ID against the
                 // deny list. This means that we only make sure that the denied package is not
@@ -189,11 +188,12 @@ fn check_package_dependencies(
                 // package but permits the use of a newer version.
                 dependencies.extend(
                     package
+                        .move_package()
                         .linkage_table()
                         .values()
                         .map(|upgrade_info| upgrade_info.upgraded_id),
                 );
-                dependencies.push(package.id());
+                dependencies.push(package.move_package().id());
             }
             Command::TransferObjects(..)
             | &Command::SplitCoins(..)

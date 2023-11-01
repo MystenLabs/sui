@@ -47,6 +47,7 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
+    use sui_types::storage::PackageObjectArc;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -271,7 +272,7 @@ mod checked {
             let package = package_for_linkage(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(&package)
+            self.linkage_view.set_linkage(package.move_package())
         }
 
         /// Load a type using the context's current session.
@@ -999,11 +1000,11 @@ mod checked {
     fn package_for_linkage(
         linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<MovePackage> {
+    ) -> VMResult<PackageObjectArc> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
-        match linkage_view.get_package(&package_id) {
+        match linkage_view.get_package_object(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
@@ -1039,11 +1040,13 @@ mod checked {
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view.set_linkage(&package).map_err(|e| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(e.to_string())
-                .finish(Location::Undefined)
-        })?;
+        let original_address = linkage_view
+            .set_linkage(package.move_package())
+            .map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(e.to_string())
+                    .finish(Location::Undefined)
+            })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
