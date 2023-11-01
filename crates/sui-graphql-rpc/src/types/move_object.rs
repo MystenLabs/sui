@@ -71,7 +71,6 @@ impl MoveObject {
         }
 
         Some(Coin {
-            id: ID::from(self.native_object.id().to_string()),
             move_obj: self.clone(),
             balance: None, // Defer to resolver
         })

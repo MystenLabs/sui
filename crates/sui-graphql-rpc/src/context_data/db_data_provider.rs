@@ -1381,7 +1381,7 @@ impl PgManager {
                     Coin::try_from(stored_obj)
                         .map_err(|e| eprintln!("Error converting object to coin: {:?}", e))
                         .ok()
-                        .map(|coin| Edge::new(coin.id.to_string(), coin))
+                        .map(|coin| Edge::new(coin.move_obj.native_object.id().to_string(), coin))
                 }));
             Ok(Some(connection))
         } else {
@@ -1627,7 +1627,6 @@ impl PgManager {
             connection.edges.extend(results.into_iter().map(|e| {
                 let cursor = String::from(e.id);
                 let event = Event {
-                    id: ID::from(cursor.clone()),
                     sending_module_id: Some(MoveModuleId {
                         package: SuiAddress::from_array(**e.package_id),
                         name: e.transaction_module.to_string(),
@@ -2047,18 +2046,10 @@ impl TryFrom<StoredObject> for Coin {
     type Error = Error;
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
-        let object_id = SuiAddress::try_from(o.object_id.clone()).map_err(|_| {
-            Error::Internal(format!(
-                "Failed to convert object_id {:?} to SuiAddress",
-                o.object_id
-            ))
-        })?;
-        let id = ID(object_id.to_string());
         let balance = o.coin_balance.map(BigInt::from);
         let native_object: SuiObject = o.try_into()?;
 
         Ok(Self {
-            id,
             balance,
             move_obj: MoveObject { native_object },
         })
