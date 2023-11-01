@@ -18,14 +18,14 @@ jobs:
         uses: './.github/actions/diffs'
         id: diff
 
-  spelling:
-    name: Lint documentation
+  old-doc-folder-notice:
+    name: Old doc folder notice
     needs: diff
     if: needs.diff.outputs.isDoc == 'true'
     runs-on: [ubuntu-latest]
+
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-      - name: Spell Check Docs
-        uses: crate-ci/typos@v1.16.11
-        with:
-          files: ./doc ./*.md
+      - name: Output error
+        run: |
+          echo "::error::Sui documentation has moved from doc/* to docs/content/* folder."
+          exit 1
