@@ -43,7 +43,7 @@ const UNICODE_TEXT_DIRECTIONALITY_CONTROL_CHARS: &[char] = &[
 ];
 
 /// Is some other non-whitespace unicode character
-pub fn is_permitted_unicode(c: char) -> bool {
+pub fn is_permitted_non_ascii_unicode(c: char) -> bool {
     !c.is_ascii() && !c.is_whitespace() && !UNICODE_TEXT_DIRECTIONALITY_CONTROL_CHARS.contains(&c)
 }
 
@@ -52,7 +52,9 @@ pub fn is_permitted_unicode(c: char) -> bool {
 /// A permitted character is either a permitted printable character, or a permitted
 /// newline. Any other characters are disallowed from appearing in the file.
 pub fn is_permitted_char(c: char) -> bool {
-    is_permitted_printable_char(c) || is_permitted_newline_lf_char(c) || is_permitted_unicode(c)
+    is_permitted_printable_char(c)
+        || is_permitted_newline_lf_char(c)
+        || is_permitted_non_ascii_unicode(c)
 }
 
 /// Determine if the characters is permitted characters.
@@ -69,7 +71,7 @@ pub fn is_permitted_chars(chars: &[char], idx: usize) -> bool {
         return false;
     }
 
-    let c2 = chars[idx + 1] as char;
+    let c2 = chars[idx + 1];
     is_permitted_newline_crlf_chars(c1, c2)
 }
 
