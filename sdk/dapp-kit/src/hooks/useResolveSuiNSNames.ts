@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { ResolvedNameServiceNames } from '@mysten/sui.js/client';
-import type { UseQueryOptions } from '@tanstack/react-query';
+import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 
 import { useSuiClientQuery } from './useSuiClientQuery.js';
 
@@ -12,7 +12,7 @@ export function useResolveSuiNSName(
 		UseQueryOptions<ResolvedNameServiceNames, Error, string | null, unknown[]>,
 		'queryFn' | 'queryKey'
 	>,
-) {
+): UseQueryResult<ResolvedNameServiceNames, Error> {
 	return useSuiClientQuery(
 		'resolveNameServiceNames',
 		{
