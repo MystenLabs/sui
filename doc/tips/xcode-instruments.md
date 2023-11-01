@@ -4,7 +4,7 @@ title: Profiling Sui on macOS using XCode Instruments
 
 To profile on macOS:
 
-1. Install XCode: https://apps.apple.com/us/app/xcode/id497799835?mt=12
+1. Install Xcode: https://apps.apple.com/us/app/xcode/id497799835?mt=12
 1. Make sure you have the command line tools by running `xcode-select install`. If it says they are already installed, you may want to go directly to https://developer.apple.com/download/more/ and download the `.pkg` for the command line tools to make sure they are up to date.
 1. Add `/Applications/Xcode.app/Contents/Developer/usr/bin` to your `$PATH`.
 1. Build whatever Sui component you want to run normally with `cargo build` - these docs assume `target/debug/sui`.
