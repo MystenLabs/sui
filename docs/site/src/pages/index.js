@@ -200,7 +200,7 @@ export default function Home() {
             <img
               className="lg:w-[350px] w-[250px]"
               src="/img/index/blocks.png"
-              alt="Visual for decoration"
+              alt="Decorative visual"
             />
           </div>
           <div className="lg:w-[676px] mx-8 md:ml-8 md:mr-0 lg:block sm:block md:hidden">
