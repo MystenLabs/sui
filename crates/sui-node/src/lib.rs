@@ -65,9 +65,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::consensus_manager::{
-    ConsensusHandlerInitializer, ConsensusManager, ConsensusManagerTrait,
-};
+use sui_core::consensus_manager::{ConsensusManager, ConsensusManagerTrait};
 use sui_core::consensus_throughput_calculator::{
     ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
 };
@@ -198,6 +196,7 @@ use simulator::*;
 
 #[cfg(msim)]
 pub use simulator::set_jwk_injector;
+use sui_core::consensus_handler::ConsensusHandlerInitializer;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -1080,13 +1079,13 @@ impl SuiNode {
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
 
-        let consensus_handler_initializer = ConsensusHandlerInitializer {
-            state: state.clone(),
-            checkpoint_service: checkpoint_service.clone(),
-            epoch_store: epoch_store.clone(),
+        let consensus_handler_initializer = ConsensusHandlerInitializer::new(
+            state.clone(),
+            checkpoint_service.clone(),
+            epoch_store.clone(),
             low_scoring_authorities,
             throughput_calculator,
-        };
+        );
 
         consensus_manager
             .start(

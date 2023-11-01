@@ -4,10 +4,10 @@
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
 use crate::checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop};
+use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::narwhal_manager::{
     NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
 };
-use crate::consensus_manager::ConsensusHandlerInitializer;
 use crate::consensus_manager::ConsensusManagerTrait;
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -160,16 +160,16 @@ async fn test_narwhal_manager() {
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
-        let consensus_handler_initializer = ConsensusHandlerInitializer {
-            state: state.clone(),
-            checkpoint_service: checkpoint_service_for_testing(state.clone()),
-            epoch_store: epoch_store.clone(),
-            low_scoring_authorities: Arc::new(Default::default()),
-            throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
+        let consensus_handler_initializer = ConsensusHandlerInitializer::new(
+            state.clone(),
+            checkpoint_service_for_testing(state.clone()),
+            epoch_store.clone(),
+            Arc::new(Default::default()),
+            Arc::new(ConsensusThroughputCalculator::new(
                 None,
                 state.metrics.clone(),
             )),
-        };
+        );
 
         // start narwhal
         narwhal_manager
@@ -238,16 +238,16 @@ async fn test_narwhal_manager() {
 
         let epoch_store = state.epoch_store_for_testing();
 
-        let consensus_handler_initializer = ConsensusHandlerInitializer {
-            state: state.clone(),
-            checkpoint_service: checkpoint_service_for_testing(state.clone()),
-            epoch_store: epoch_store.clone(),
-            low_scoring_authorities: Arc::new(Default::default()),
-            throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
+        let consensus_handler_initializer = ConsensusHandlerInitializer::new(
+            state.clone(),
+            checkpoint_service_for_testing(state.clone()),
+            epoch_store.clone(),
+            Arc::new(Default::default()),
+            Arc::new(ConsensusThroughputCalculator::new(
                 None,
                 state.metrics.clone(),
             )),
-        };
+        );
 
         // start narwhal with advanced epoch
         narwhal_manager

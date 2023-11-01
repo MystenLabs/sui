@@ -1,26 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::{AuthorityState, AuthorityStore};
-use crate::checkpoints::CheckpointService;
-use crate::consensus_handler::ConsensusHandler;
+use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::mysticeti_manager::MysticetiManager;
 use crate::consensus_manager::narwhal_manager::{
     NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
 };
-use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_validator::SuiTxValidator;
-use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::{ConsensusConfig, NodeConfig};
-use sui_types::base_types::AuthorityName;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 
 pub mod mysticeti_manager;
 pub mod narwhal_manager;
@@ -67,31 +60,5 @@ impl ConsensusManager {
         let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
 
         Self::Narwhal(NarwhalManager::new(narwhal_config, metrics))
-    }
-}
-
-pub struct ConsensusHandlerInitializer {
-    pub state: Arc<AuthorityState>,
-    pub checkpoint_service: Arc<CheckpointService>,
-    pub epoch_store: Arc<AuthorityPerEpochStore>,
-    pub low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    pub throughput_calculator: Arc<ConsensusThroughputCalculator>,
-}
-
-impl ConsensusHandlerInitializer {
-    fn new_consensus_handler(&self) -> ConsensusHandler<Arc<AuthorityStore>, CheckpointService> {
-        let new_epoch_start_state = self.epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
-
-        ConsensusHandler::new(
-            self.epoch_store.clone(),
-            self.checkpoint_service.clone(),
-            self.state.transaction_manager().clone(),
-            self.state.db(),
-            self.low_scoring_authorities.clone(),
-            committee,
-            self.state.metrics.clone(),
-            self.throughput_calculator.clone(),
-        )
     }
 }
