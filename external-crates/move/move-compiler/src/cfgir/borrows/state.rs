@@ -44,9 +44,6 @@ pub enum Value {
 }
 pub type Values = Vec<Value>;
 
-// Unique identifier based on label + command + number in that command
-// This is used for uniquely identifying references based on their creation site,
-// which is used for identifying unused mutable references
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ExpBasedID {
     block: Option<H::Label>,
@@ -740,6 +737,7 @@ impl BorrowState {
         mut_: bool,
         rvalue: Value,
         field: &Field,
+        from_unpack: FromUnpack,
     ) -> (Diagnostics, Value) {
         let id = match rvalue {
             Value::NonRef => {
@@ -754,7 +752,9 @@ impl BorrowState {
         };
 
         let diags = if mut_ {
-            self.mark_mutably_used(id);
+            if from_unpack.is_none() {
+                self.mark_mutably_used(id);
+            }
             let msg = || format!("Invalid mutable borrow at field '{}'.", field);
             let (full_borrows, _field_borrows) = self.borrows.borrowed_by(id);
             // Any field borrows will be factored out
@@ -771,7 +771,12 @@ impl BorrowState {
             let msg = || format!("Invalid immutable borrow at field '{}'.", field);
             self.readable(loc, ReferenceSafety::RefTrans, msg, id, Some(field))
         };
-        let field_borrow_id = self.declare_new_ref(loc, mut_);
+        let copy_parent = if from_unpack.is_some() {
+            Some(id)
+        } else {
+            None
+        };
+        let field_borrow_id = self.declare_new_ref_impl(loc, mut_, copy_parent);
         self.add_field_borrow(loc, id, *field, field_borrow_id);
         self.release(id);
         (diags, Value::Ref(field_borrow_id))

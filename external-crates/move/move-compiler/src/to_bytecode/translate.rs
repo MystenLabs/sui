@@ -1130,7 +1130,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             }
         }
 
-        E::Borrow(mut_, el, f) => {
+        E::Borrow(mut_, el, f, _) => {
             let (n, tys) = struct_definition_name(context, el.ty.clone());
             exp(context, code, *el);
             let instr = if mut_ {
