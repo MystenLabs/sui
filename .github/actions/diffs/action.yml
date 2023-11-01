@@ -35,7 +35,6 @@ runs:
         isDoc:
           - 'doc/**'
           - '*.md'
-          - '.github/workflows/docs.yml'
         isMove:
           - 'crates/sui-framework/**'
           - 'crates/sui-framework-build/**'

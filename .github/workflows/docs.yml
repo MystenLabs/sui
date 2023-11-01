@@ -27,5 +27,5 @@ jobs:
     steps:
       - name: Output error
         run: |
-          echo "::error::Sui documentation has moved from doc/* to docs/content/* folder."
+          echo "::error::Sui documentation has moved from doc/* to docs/content/* folder. (*.md files are now *.mdx)"
           exit 1
