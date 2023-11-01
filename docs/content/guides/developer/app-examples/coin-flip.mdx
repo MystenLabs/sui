@@ -251,7 +251,7 @@ module satoshi_flip::counter_nft {
 
 This might look familiar from the house module. You set the module name, import functions from the standard library, and initialize the `Counter` object. The `Counter` object has the `key` ability, but does not have `store` - this prevents the object from being transferable.
 
-In addition, you create `mint` and `transfer_to_sender` functions used when the game is set up to create the `Counter` object (with an inital count of `0`) and transfer the object to the sender of the transaction. And finally a `burn` function to allow deletion of the `Counter`.
+In addition, you create `mint` and `transfer_to_sender` functions used when the game is set up to create the `Counter` object (with an initial count of `0`) and transfer the object to the sender of the transaction. And finally a `burn` function to allow deletion of the `Counter`.
 
 You have a `Counter` object, as well as functions that initialize and burn the object, but you need a way to increment the counter. Add the following code to the module:
 
