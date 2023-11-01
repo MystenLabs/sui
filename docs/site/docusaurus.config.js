@@ -120,7 +120,7 @@ const config = {
         // Public API key: it is safe to commit it
         apiKey: "7f24db6c4ec06d6905592deb228f4460",
 
-        indexName: "Index",
+        indexName: "sui",
 
         // Optional: see doc section below
         contextualSearch: true,
