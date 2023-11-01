@@ -22,6 +22,7 @@ use crate::object::Owner;
 use crate::storage::WriteKind;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
 use effects_v1::TransactionEffectsV1;
+pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
 pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
@@ -30,11 +31,7 @@ use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
 
 mod effects_v1;
-// TODO: effects_v2 needs to be public because we need to generate examples of `UnchangedSharedKind`
-// values in order to properly generate the layout for these in generate-format. We should look at
-// seeing if we can make this private and fix the issue with generate-format turn this module
-// private.
-pub mod effects_v2;
+mod effects_v2;
 mod object_change;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
