@@ -166,7 +166,7 @@ impl<
             + 'static,
     > ExecutionWorkerState<S>
 {
-    pub fn new(new_store: S, genesis: Arc<&Genesis>, mode: ExecutionMode) -> Self {
+    pub fn new(new_store: S, genesis_digest: CheckpointDigest, mode: ExecutionMode) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             ready_txs: DashMap::new(),
@@ -174,7 +174,7 @@ impl<
             received_objs: DashMap::new(),
             received_child_objs: DashMap::new(),
             locked_exec_count: DashMap::new(),
-            genesis_digest: *genesis.checkpoint().digest(),
+            genesis_digest,
             mode,
         }
     }
@@ -371,10 +371,10 @@ impl<
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
         let mut gas_charger = GasCharger::new(tx.digest(), gas, gas_status, &protocol_config);
-        println!(
-            "Dependencies for tx {}: {:?}",
-            txid, transaction_dependencies
-        );
+        // println!(
+        //     "Dependencies for tx {}: {:?}",
+        //     txid, transaction_dependencies
+        // );
         let temporary_store = TemporaryStore::new(
             memory_store.clone(),
             input_objects.clone(),
@@ -593,7 +593,7 @@ impl<
                     if !tx_with_results.missing_objs.is_empty() {
                         self.waiting_child_objs.entry(txid).or_default().extend(tx_with_results.missing_objs.iter());
                         self.ready_txs.insert(txid, ());
-                        println!("Sending MissingObjects message for tx {}", txid);
+                        // println!("Sending MissingObjects message for tx {}", txid);
                         for ew_id in &ew_ids {
                             let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::MissingObjects {
                                 txid,
@@ -630,7 +630,7 @@ impl<
                     // 2. Update object queues
                     manager.clean_up(&txid).await;
 
-                    println!("Sending TxResults message for tx {}", txid);
+                    // println!("Sending TxResults message for tx {}", txid);
                     for ew_id in &ew_ids {
                         if *ew_id == my_id {
                             continue;
@@ -673,7 +673,7 @@ impl<
                         src:0,
                         dst:execute_on_ew as u16,
                         payload: SailfishMessage::LockedExec { txid, objects: locked_objs.clone(), child_objects: Vec::new() }};
-                    println!("Sending LockedExec for tx {} to EW {}", txid, execute_on_ew);
+                    // println!("Sending LockedExec for tx {} to EW {}", txid, execute_on_ew);
                     if out_channel.send(msg).await.is_err() {
                         eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, execute_on_ew);
                     }
@@ -695,7 +695,7 @@ impl<
                                 locked_objs.push(None);
                             }
                         }
-                        println!("Sending LockedExec for tx {} in response to MissingObjects", txid);
+                        // println!("Sending LockedExec for tx {} in response to MissingObjects", txid);
                         let msg = NetworkMessage{
                             src:0,
                             dst:ew as u16,
@@ -710,7 +710,7 @@ impl<
 
                         let mut ctr = self.locked_exec_count.entry(txid).or_insert(0);
                         *ctr += 1;
-                        println!("EW {} received LockedExec for tx {} (ctr={})", my_id, txid, *ctr);
+                        // println!("EW {} received LockedExec for tx {} (ctr={})", my_id, txid, *ctr);
 
                         let mut child_list = self.received_child_objs.entry(txid).or_default();
                         child_list.append(&mut child_objects);
@@ -757,7 +757,7 @@ impl<
                                     }
                                 }
 
-                                println!("EW {} executing tx {}", my_id, txid);
+                                // println!("EW {} executing tx {}", my_id, txid);
                                 Self::async_exec(
                                     tx,
                                     mem_store,

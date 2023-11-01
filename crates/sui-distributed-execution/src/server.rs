@@ -175,7 +175,6 @@ impl NetworkManager {
                 message.src = self.my_id; // set source to self
                 let dst = message.dst;
                 if dst == self.my_id {
-                    println!("Sending to self");
                     self.application_in
                         .send(message)
                         .await

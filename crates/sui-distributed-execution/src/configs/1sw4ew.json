@@ -4,7 +4,6 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5001,
         "attrs" : {
-            "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9184",
             "mode": "channel"
         }
@@ -14,7 +13,6 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5002,
         "attrs" : {
-            "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9185",
             "execute": "100",
             "mode": "channel"
@@ -25,7 +23,6 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5003,
         "attrs" : {
-            "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9186",
             "execute": "100",
             "mode": "channel"
@@ -36,7 +33,6 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5004,
         "attrs" : {
-            "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9187",
             "execute": "100",
             "mode": "channel"
@@ -47,7 +43,6 @@
         "ip_addr" : "127.0.0.1", 
         "port" : 5005,
         "attrs" : {
-            "config": "benchmarking/data/config/simple_16_1000.yaml",
             "metrics-address": "0.0.0.0:9188",
             "execute": "100",
             "mode": "channel"

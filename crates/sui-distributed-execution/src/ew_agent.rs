@@ -1,11 +1,15 @@
 use std::sync::Arc;
 
 use super::agents::*;
-use crate::{dash_store::DashMemoryBackedStore, exec_worker, types::*};
+use crate::{
+    dash_store::DashMemoryBackedStore,
+    exec_worker::{self},
+    types::*,
+};
 use async_trait::async_trait;
 use sui_config::{Config, NodeConfig};
 use sui_node::metrics;
-use sui_types::metrics::LimitsMetrics;
+use sui_types::{messages_checkpoint::CheckpointDigest, metrics::LimitsMetrics};
 use tokio::sync::mpsc;
 
 pub struct EWAgent {
@@ -48,13 +52,10 @@ impl Agent<SailfishMessage> for EWAgent {
 
         // extract my attrs from the global config
         let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
-        let config_path = my_attrs.get("config").unwrap();
         let metrics_address = my_attrs.get("metrics-address").unwrap().parse().unwrap();
-        let config = NodeConfig::load(config_path).unwrap();
         let registry_service = { metrics::start_prometheus_server(metrics_address) };
         let prometheus_registry = registry_service.default_registry();
         let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));
-        let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
         let store = DashMemoryBackedStore::new();
 
         let mode = {
@@ -73,10 +74,24 @@ impl Agent<SailfishMessage> for EWAgent {
             }
         };
 
-        let mut ew_state = exec_worker::ExecutionWorkerState::new(store, genesis.clone(), mode);
-        if my_attrs["mode"] == "database" {
-            ew_state.init_store(genesis);
-        }
+        let mut ew_state = {
+            if my_attrs["mode"] == "database" {
+                let config_path = my_attrs.get("config").unwrap();
+                let config = NodeConfig::load(config_path).unwrap();
+                let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
+                let mut ew_state = exec_worker::ExecutionWorkerState::new(
+                    store,
+                    *genesis.checkpoint().digest(),
+                    mode,
+                );
+                ew_state.init_store(genesis);
+                ew_state
+            } else {
+                let ew_state =
+                    exec_worker::ExecutionWorkerState::new(store, CheckpointDigest::random(), mode);
+                ew_state
+            }
+        };
 
         // Run Sequence Worker asynchronously
         ew_state
