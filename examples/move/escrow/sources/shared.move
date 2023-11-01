@@ -27,8 +27,6 @@
 ///
 ///    - The key supplied in the swap unlocks the `Locked<U>`.
 module escrow::shared {
-    use std::option::{Self, Option};
-
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -51,7 +49,7 @@ module escrow::shared {
 
         /// the escrowed object that we store into an option because it could
         /// already be taken
-        escrowed: Option<T>,
+        escrowed: T,
     }
 
     // === Error codes ===
@@ -61,9 +59,6 @@ module escrow::shared {
 
     /// The `exchange_for` fields of the two escrowed objects do not match
     const EMismatchedExchangeObject: u64 = 1;
-
-    /// The escrow has already been exchanged or returned to the original sender
-    const EAlreadyExchangedOrReturned: u64 = 2;
 
     // === Public Functions ===
 
@@ -78,7 +73,7 @@ module escrow::shared {
             sender: tx_context::sender(ctx),
             recipient,
             exchange_key,
-            escrowed: option::some(escrowed),
+            escrowed,
         };
 
         transfer::public_share_object(escrow);
@@ -86,31 +81,45 @@ module escrow::shared {
 
     /// The `recipient` of the escrow can exchange `obj` with the escrowed item
     public fun swap<T: key + store, U: key + store>(
-        escrow: &mut Escrow<T>,
+        escrow: Escrow<T>,
         key: Key,
         locked: Locked<U>,
         ctx: &TxContext,
     ): T {
-        assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrReturned);
-        assert!(escrow.recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
-        assert!(escrow.exchange_key == object::id(&key), EMismatchedExchangeObject);
+        let Escrow {
+            id,
+            sender,
+            recipient,
+            exchange_key,
+            escrowed,
+        } = escrow;
 
-        let escrowed1 = option::extract<T>(&mut escrow.escrowed);
-        let escrowed2 = lock::unlock(locked, key);
+        assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+        assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
 
         // Do the actual swap
-        transfer::public_transfer(escrowed2, escrow.sender);
-        escrowed1
+        transfer::public_transfer(lock::unlock(locked, key), sender);
+        object::delete(id);
+
+        escrowed
     }
 
     /// The `creator` can cancel the escrow and get back the escrowed item
     public fun return_to_sender<T: key + store>(
-        escrow: &mut Escrow<T>,
+        escrow: Escrow<T>,
         ctx: &TxContext
     ): T {
-        assert!(escrow.sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
-        assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrReturned);
-        option::extract<T>(&mut escrow.escrowed)
+        let Escrow {
+            id,
+            sender,
+            recipient: _,
+            exchange_key: _,
+            escrowed,
+        } = escrow;
+
+        assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
+        object::delete(id);
+        escrowed
     }
 
     // === Tests ===
@@ -161,14 +170,13 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
             );
 
             transfer::public_transfer(c, BOB);
-            ts::return_shared(escrow);
         };
 
         // Commit effects from the swap
@@ -218,7 +226,7 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
@@ -261,7 +269,7 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
@@ -310,7 +318,7 @@ module escrow::shared {
 
             let escrow = ts::take_shared(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k,
                 l,
                 ts::ctx(&mut ts),
@@ -340,10 +348,9 @@ module escrow::shared {
         {
             ts::next_tx(&mut ts, ALICE);
             let escrow = ts::take_shared(&ts);
-            let c = return_to_sender<Coin<SUI>>(&mut escrow, ts::ctx(&mut ts));
+            let c = return_to_sender<Coin<SUI>>(escrow, ts::ctx(&mut ts));
 
             transfer::public_transfer(c, ALICE);
-            ts::return_shared(escrow);
         };
 
         ts::next_tx(&mut ts, @0x0);
@@ -358,7 +365,7 @@ module escrow::shared {
     }
 
     #[test]
-    #[expected_failure(abort_code = EAlreadyExchangedOrReturned)]
+    #[expected_failure]
     fun test_return_to_sender_failed_swap() {
         let ts = ts::begin(@0x0);
 
@@ -385,9 +392,8 @@ module escrow::shared {
         {
             ts::next_tx(&mut ts, ALICE);
             let escrow = ts::take_shared(&ts);
-            let c = return_to_sender<Coin<SUI>>(&mut escrow, ts::ctx(&mut ts));
+            let c = return_to_sender<Coin<SUI>>(escrow, ts::ctx(&mut ts));
             transfer::public_transfer(c, ALICE);
-            ts::return_shared(escrow);
         };
 
         // Bob's attempt to complete the swap will now fail.
@@ -397,7 +403,7 @@ module escrow::shared {
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
             let c = swap<Coin<SUI>, Coin<SUI>>(
-                &mut escrow,
+                escrow,
                 k2,
                 l2,
                 ts::ctx(&mut ts),
