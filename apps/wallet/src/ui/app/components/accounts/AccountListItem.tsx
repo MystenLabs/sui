@@ -54,8 +54,8 @@ export function AccountListItem({
 			}
 			accountID={account.id}
 			editable={editable}
-			hideCopy={hideCopy}
-			hideExplorerLink={hideExplorerLink}
+			hideCopy={account.isLocked || hideCopy}
+			hideExplorerLink={account.isLocked || hideExplorerLink}
 		/>
 	);
 }
