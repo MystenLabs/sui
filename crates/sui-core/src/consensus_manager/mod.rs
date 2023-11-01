@@ -13,6 +13,7 @@ use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_validator::SuiTxValidator;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use std::path::PathBuf;
@@ -24,8 +25,16 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 pub mod mysticeti_manager;
 pub mod narwhal_manager;
 
+/// An enum to easily differentiate between the chosen consensus engine
+#[enum_dispatch]
+pub enum ConsensusManager {
+    Narwhal(NarwhalManager),
+    Mysticeti(MysticetiManager),
+}
+
 #[async_trait]
-trait ConsensusManager {
+#[enum_dispatch(ConsensusManager)]
+pub trait ConsensusManagerTrait {
     async fn start(
         &self,
         config: &NodeConfig,
@@ -39,13 +48,7 @@ trait ConsensusManager {
     fn get_storage_base_path(&self) -> PathBuf;
 }
 
-/// An enum to easily differentiate between the chosen consensus engine
-pub enum Manager {
-    Narwhal(NarwhalManager),
-    Mysticeti(MysticetiManager),
-}
-
-impl Manager {
+impl ConsensusManager {
     /// Create a new narwhal manager and wrap it around the Manager enum
     pub fn new_narwhal(
         config: &NodeConfig,
@@ -63,54 +66,7 @@ impl Manager {
 
         let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
 
-        Manager::Narwhal(NarwhalManager::new(narwhal_config, metrics))
-    }
-
-    // Starts the underneath consensus manager by the given inputs
-    pub async fn start(
-        &self,
-        config: &NodeConfig,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        consensus_handler_initializer: ConsensusHandlerInitializer,
-        tx_validator: SuiTxValidator,
-    ) {
-        match self {
-            Manager::Narwhal(narwhal_manager) => {
-                narwhal_manager
-                    .start(
-                        config,
-                        epoch_store,
-                        consensus_handler_initializer,
-                        tx_validator,
-                    )
-                    .await
-            }
-            Manager::Mysticeti(mysticeti_manager) => {
-                mysticeti_manager
-                    .start(
-                        config,
-                        epoch_store,
-                        consensus_handler_initializer,
-                        tx_validator,
-                    )
-                    .await
-            }
-        }
-    }
-
-    // Shutting down the underneath consensus manager
-    pub async fn shutdown(&self) {
-        match self {
-            Manager::Narwhal(manager) => manager.shutdown().await,
-            Manager::Mysticeti(manager) => manager.shutdown().await,
-        }
-    }
-
-    pub fn get_storage_base_path(&self) -> PathBuf {
-        match self {
-            Manager::Narwhal(manager) => manager.get_storage_base_path(),
-            Manager::Mysticeti(manager) => manager.get_storage_base_path(),
-        }
+        Self::Narwhal(NarwhalManager::new(narwhal_config, metrics))
     }
 }
 

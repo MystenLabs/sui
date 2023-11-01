@@ -8,7 +8,7 @@ use crate::consensus_manager::narwhal_manager::{
     NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
 };
 use crate::consensus_manager::ConsensusHandlerInitializer;
-use crate::consensus_manager::ConsensusManager;
+use crate::consensus_manager::ConsensusManagerTrait;
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use crate::state_accumulator::StateAccumulator;

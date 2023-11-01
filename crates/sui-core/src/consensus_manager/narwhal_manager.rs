@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_manager::{ConsensusHandlerInitializer, ConsensusManager};
+use crate::consensus_manager::{ConsensusHandlerInitializer, ConsensusManagerTrait};
 use crate::consensus_validator::SuiTxValidator;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
@@ -125,7 +125,7 @@ impl NarwhalManager {
 }
 
 #[async_trait]
-impl ConsensusManager for NarwhalManager {
+impl ConsensusManagerTrait for NarwhalManager {
     // Starts the Narwhal (primary & worker(s)) - if not already running.
     // Note: After a binary is updated with the new protocol version and the node
     // is restarted, the protocol config does not take effect until we have a quorum

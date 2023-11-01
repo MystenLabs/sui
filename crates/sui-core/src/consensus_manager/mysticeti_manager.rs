@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_manager::{ConsensusHandlerInitializer, ConsensusManager};
+use crate::consensus_manager::{ConsensusHandlerInitializer, ConsensusManagerTrait};
 use crate::consensus_validator::SuiTxValidator;
 use async_trait::async_trait;
 use narwhal_config::Epoch;
@@ -25,7 +25,7 @@ impl MysticetiManager {
 }
 
 #[async_trait]
-impl ConsensusManager for MysticetiManager {
+impl ConsensusManagerTrait for MysticetiManager {
     #[allow(unused)]
     async fn start(
         &self,
