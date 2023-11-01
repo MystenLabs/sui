@@ -105,14 +105,6 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: "search_notice",
-        content:
-          "Welcome to the new implementation of the Sui documentation site. Please expect site search to be unreliable during initial indexing (~48 hours).",
-        backgroundColor: "#4ca2ff",
-        textColor: "#111111",
-        isCloseable: true,
-      },
       algolia: {
         // The application ID provided by Algolia
         appId: "ZF283DJAYX",
