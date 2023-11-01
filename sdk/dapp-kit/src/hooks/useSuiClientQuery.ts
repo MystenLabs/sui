@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
-import type { UseQueryOptions } from '@tanstack/react-query';
+import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 
 import type { PartialBy } from '../types/utilityTypes.js';
@@ -42,7 +42,7 @@ export function useSuiClientQuery<
 	...args: undefined extends SuiRpcMethods[T]['params']
 		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T, TData>]
 		: [method: T, params: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T, TData>]
-) {
+): UseQueryResult<SuiRpcMethods[T]['result'], Error> {
 	const [method, params, { queryKey = [], ...options } = {}] = args as [
 		method: T,
 		params?: SuiRpcMethods[T]['params'],

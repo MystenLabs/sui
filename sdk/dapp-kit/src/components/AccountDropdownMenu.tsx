@@ -35,7 +35,7 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				<DropdownMenu.Trigger asChild>
 					<Button size="lg" className={styles.connectedAccount}>
 						<Text mono weight="bold">
-							{currentAccount.label ?? domain ?? formatAddress(currentAccount.address)}
+							{currentAccount.label ?? domain?.data ?? formatAddress(currentAccount.address)}
 						</Text>
 						<ChevronIcon />
 					</Button>
@@ -80,7 +80,7 @@ export function AccountDropdownMenuItem({
 			className={clsx(styles.menuItem, styles.switchAccountMenuItem)}
 			onSelect={() => switchAccount({ account })}
 		>
-			<Text mono>{account.label ?? domain ?? formatAddress(account.address)}</Text>
+			<Text mono>{account.label ?? domain?.data ?? formatAddress(account.address)}</Text>
 			{active ? <CheckIcon /> : null}
 		</DropdownMenu.Item>
 	);
