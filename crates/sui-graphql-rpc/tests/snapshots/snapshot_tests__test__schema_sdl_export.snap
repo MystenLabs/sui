@@ -95,19 +95,22 @@ type ChangeEpochTransaction {
 
 type Checkpoint {
 	"""
-	The digest of the checkpoint is a hash of the checkpoint contents and can be used to verify the blockchain.
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
+	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
 	"""
 	digest: String!
 	"""
-	This number is set by validators and is 1 greater than the previous checkpoint's sequence number.
+	This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
 	"""
 	sequenceNumber: Int!
 	"""
-	Timestamp of transactions and effects in the checkpoint, taken from the consensus commit which the checkpoint is based on.
+	The timestamp at which the checkpoint is agreed to have happened according to consensus.
+	Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
 	"""
-	This is an aggregation of signatures from 2f+1 validators for the checkpoint proposal.
+	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
 	"""
 	validatorSignature: Base64
 	"""
@@ -125,8 +128,9 @@ type Checkpoint {
 	"""
 	networkTotalTransactions: Int
 	"""
-	The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint.
-	These values should increase throughout the checkpoints.
+	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
+	during this epoch, up to and including this checkpoint.
+	These values increase monotonically across checkpoints in the same epoch.
 	"""
 	rollingGasSummary: GasCostSummary
 	"""
@@ -1130,31 +1134,31 @@ type TransactionBlock {
 	"""
 	sender: Address
 	"""
-	The SenderSignedData in BCS format
-	This is a struct that contains the transaction data
-	And a list of signatures of the signers of the transaction
+	The transaction block data in BCS format.
+	This includes data on the sender, inputs, sponsor, gas inputs, individual transactions, and user signatures.
 	"""
 	bcs: Base64
 	"""
 	The gas input field provides information on what objects were used as gas
 	As well as the owner of the gas object(s) and information on the gas price and budget
-	If the owner of the gas object(s) is not the same as the sender, the tx block is a sponsored tx
+	If the owner of the gas object(s) is not the same as the sender,
+	the transaction block is a sponsored transaction block.
 	"""
 	gasInput: GasInput
 	kind: TransactionBlockKind
 	"""
-	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored tx
+	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
 	"""
 	signatures: [TransactionSignature]
 	"""
-	The digest of a transaction block is a hashed 32-byte array of the TransactionData struct
+	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
 	This serves as a unique id for the block on chain
 	"""
 	digest: String!
 	"""
 	This field is set by senders of a transaction block
 	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
-	By default, there is no deadline for when a txn must execute
+	By default, there is no deadline for when a transaction must execute
 	"""
 	expiration: Epoch
 }

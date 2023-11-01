@@ -23,13 +23,16 @@ pub(crate) struct CheckpointId {
 #[graphql(complex)]
 pub(crate) struct Checkpoint {
     // id: ID1
-    /// The digest of the checkpoint is a hash of the checkpoint contents and can be used to verify the blockchain.
+    /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
+    /// This hash can be used to verify checkpoint contents by checking signatures against the committee,
+    /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.    
     pub digest: String,
-    /// This number is set by validators and is 1 greater than the previous checkpoint's sequence number.
+    /// This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
     pub sequence_number: u64,
-    /// Timestamp of transactions and effects in the checkpoint, taken from the consensus commit which the checkpoint is based on.
+    /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
+    /// Transactions that access time in this checkpoint will observe this timestamp.
     pub timestamp: Option<DateTime>,
-    /// This is an aggregation of signatures from 2f+1 validators for the checkpoint proposal.
+    /// This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
     pub validator_signature: Option<Base64>,
     /// The digest of the checkpoint at the previous sequence number.
     pub previous_checkpoint_digest: Option<String>,
@@ -39,8 +42,9 @@ pub(crate) struct Checkpoint {
     pub live_object_set_digest: Option<String>,
     /// Tracks the total number of transaction blocks in the network at the time of the checkpoint.
     pub network_total_transactions: Option<u64>,
-    /// The computation and storage cost, storage rebate, and nonrefundable storage fee of the checkpoint.
-    /// These values should increase throughout the checkpoints.
+    /// The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
+    /// during this epoch, up to and including this checkpoint.
+    /// These values increase monotonically across checkpoints in the same epoch.
     pub rolling_gas_summary: Option<GasCostSummary>,
     #[graphql(skip)]
     pub epoch_id: u64,
