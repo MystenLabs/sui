@@ -61,24 +61,24 @@ where
                 .iter()
                 .map(|cp| (cp.sequence_number, cp.epoch))
                 .collect::<HashMap<_, _>>();
-            let txs = self
+            let tx_checkpoints = self
                 .store
-                .get_transactions_in_checkpoint_range(
+                .get_tx_checkpoints_in_checkpoint_range(
                     last_end_cp_seq + 1,
                     end_cp.sequence_number + 1,
                 )
                 .await?;
-            let tx_cp_map = txs
+            let tx_cp_map = tx_checkpoints
                 .iter()
                 .map(|tx| (tx.tx_sequence_number, tx.checkpoint_sequence_number))
                 .collect::<HashMap<_, _>>();
-            let start_tx_seq = txs
+            let start_tx_seq = tx_checkpoints
                 .first()
                 .ok_or(IndexerError::PostgresReadError(
                     "Cannot read first tx from PG for move call metrics".to_string(),
                 ))?
                 .tx_sequence_number;
-            let end_tx_seq = txs
+            let end_tx_seq = tx_checkpoints
                 .last()
                 .ok_or(IndexerError::PostgresReadError(
                     "Cannot read last tx from PG for move call metrics".to_string(),

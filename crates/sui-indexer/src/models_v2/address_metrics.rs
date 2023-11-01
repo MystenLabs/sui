@@ -103,3 +103,9 @@ pub fn dedup_addresses(addrs_to_commit: Vec<AddressInfoToCommit>) -> Vec<StoredA
     }
     compressed_addr_map.values().cloned().collect()
 }
+
+#[derive(Clone, Debug)]
+pub struct TxTimestampInfo {
+    pub tx_seq: i64,
+    pub timestamp_ms: i64,
+}

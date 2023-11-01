@@ -58,27 +58,26 @@ where
 
             // +1 b/c get_tx_indices_in_checkpoint_range is left-inclusive, right-exclusive,
             // but we want left-exclusive, right-inclusive, as latest_address_metrics has been processed.
-            let txs = self
+            let tx_timestamps = self
                 .store
-                .get_transactions_in_checkpoint_range(
+                .get_tx_timestamps_in_checkpoint_range(
                     latest_address_metrics.checkpoint + 1,
                     end_cp.sequence_number + 1,
                 )
                 .await?;
-            let start_tx_seq = txs
+            let start_tx_seq = tx_timestamps
                 .first()
                 .ok_or(IndexerError::PostgresReadError(
                     "Cannot read first tx from PG for address metrics".to_string(),
                 ))?
                 .tx_sequence_number;
-            let end_tx_seq = txs
+            let end_tx_seq = tx_timestamps
                 .last()
                 .ok_or(IndexerError::PostgresReadError(
                     "Cannot read last tx from PG for address metrics".to_string(),
                 ))?
                 .tx_sequence_number;
-
-            let tx_timestamp_map = txs
+            let tx_timestamp_map = tx_timestamps
                 .iter()
                 .map(|tx| (tx.tx_sequence_number, tx.timestamp_ms))
                 .collect::<HashMap<_, _>>();

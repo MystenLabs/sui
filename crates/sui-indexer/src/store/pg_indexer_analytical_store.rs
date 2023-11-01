@@ -19,7 +19,9 @@ use crate::models_v2::move_call_metrics::{
     StoredMoveCallMetrics,
 };
 use crate::models_v2::network_metrics::{RowCountEstimation, StoredNetworkMetrics};
-use crate::models_v2::transactions::StoredTransaction;
+use crate::models_v2::transactions::{
+    StoredTransaction, StoredTransactionCheckpoint, StoredTransactionTimestamp,
+};
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
 use crate::models_v2::tx_indices::{StoredTxCalls, StoredTxRecipients, StoredTxSenders};
 use crate::schema_v2::{
@@ -80,13 +82,53 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
     ) -> IndexerResult<Vec<StoredTransaction>> {
         let tx_batch = read_only_blocking!(&self.blocking_cp, |conn| {
             transactions::dsl::transactions
-                .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
-                .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
-                .order(transactions::dsl::tx_sequence_number.asc())
+                .filter(transactions::checkpoint_sequence_number.ge(start_checkpoint))
+                .filter(transactions::checkpoint_sequence_number.lt(end_checkpoint))
+                .order(transactions::tx_sequence_number.asc())
                 .load::<StoredTransaction>(conn)
         })
         .context("Failed reading transactions from PostgresDB")?;
         Ok(tx_batch)
+    }
+
+    async fn get_tx_timestamps_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionTimestamp>> {
+        let tx_timestamps = read_only_blocking!(&self.blocking_cp, |conn| {
+            transactions::dsl::transactions
+                .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
+                .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
+                .order(transactions::dsl::tx_sequence_number.asc())
+                .select((
+                    transactions::dsl::tx_sequence_number,
+                    transactions::dsl::timestamp_ms,
+                ))
+                .load::<StoredTransactionTimestamp>(conn)
+        })
+        .context("Failed reading transaction timestamps from PostgresDB")?;
+        Ok(tx_timestamps)
+    }
+
+    async fn get_tx_checkpoints_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionCheckpoint>> {
+        let tx_checkpoints = read_only_blocking!(&self.blocking_cp, |conn| {
+            transactions::dsl::transactions
+                .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
+                .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
+                .order(transactions::dsl::tx_sequence_number.asc())
+                .select((
+                    transactions::dsl::tx_sequence_number,
+                    transactions::dsl::checkpoint_sequence_number,
+                ))
+                .load::<StoredTransactionCheckpoint>(conn)
+        })
+        .context("Failed reading transaction checkpoints from PostgresDB")?;
+        Ok(tx_checkpoints)
     }
 
     async fn get_peak_network_peak_tps(&self, epoch: i64, day: i64) -> IndexerResult<f64> {
@@ -131,6 +173,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             |conn| {
                 diesel::insert_into(tx_count_metrics::table)
                     .values(tx_count_metrics.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
@@ -148,6 +191,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             |conn| {
                 diesel::insert_into(network_metrics::table)
                     .values(network_metrics.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
@@ -295,6 +339,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             |conn| {
                 diesel::insert_into(address_metrics::table)
                     .values(address_metrics.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
@@ -336,6 +381,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                 for move_call_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
                     diesel::insert_into(move_calls::table)
                         .values(move_call_chunk)
+                        .on_conflict_do_nothing()
                         .execute(conn)?;
                 }
                 Ok::<(), IndexerError>(())
@@ -408,6 +454,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             |conn| {
                 diesel::insert_into(move_call_metrics::table)
                     .values(move_call_metrics.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
