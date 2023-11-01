@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::collections::HashMap;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointService;
