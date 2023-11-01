@@ -184,7 +184,7 @@ impl Object {
             .extend()
     }
 
-    /// The sum balance of coin objects owned by the object.
+    /// The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,
@@ -199,7 +199,7 @@ impl Object {
             .extend()
     }
 
-    /// The coin objects owned by the given object.
+    /// The `0x2::sui::Coin` objects owned by the given object.
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -215,7 +215,7 @@ impl Object {
             .extend()
     }
 
-    /// The Stakes owned by the given object.
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,

@@ -14,7 +14,7 @@ type Address implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	The stakes corresponding to the StakedSui objects owned by the given address.
+	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -598,15 +598,15 @@ type Object implements ObjectOwner {
 	"""
 	balance(type: String): Balance
 	"""
-	The sum balance of coin objects owned by the object.
+	The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
 	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The coin objects owned by the given object.
+	The `0x2::sui::Coin` objects owned by the given object.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	The Stakes owned by the given object.
+	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	"""
