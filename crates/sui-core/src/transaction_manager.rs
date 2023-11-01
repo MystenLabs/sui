@@ -289,7 +289,7 @@ impl Inner {
         &mut self,
         input_key: InputKey,
         update_cache: bool,
-        metrics: Arc<AuthorityMetrics>,
+        metrics: &Arc<AuthorityMetrics>,
     ) -> Vec<PendingCertificate> {
         if update_cache {
             self.available_objects_cache.insert(&input_key);
@@ -759,8 +759,7 @@ impl TransactionManager {
 
         for input_key in input_keys {
             trace!(?input_key, "object available");
-            for ready_cert in inner.try_acquire_lock(input_key, update_cache, self.metrics.clone())
-            {
+            for ready_cert in inner.try_acquire_lock(input_key, update_cache, &self.metrics) {
                 self.certificate_ready(inner, ready_cert);
             }
         }
@@ -811,7 +810,7 @@ impl TransactionManager {
                     "Certificate {:?} not found among readonly lock holders",
                     digest
                 );
-                for ready_cert in inner.try_acquire_lock(key, true, self.metrics.clone()) {
+                for ready_cert in inner.try_acquire_lock(key, true, &self.metrics) {
                     self.certificate_ready(&mut inner, ready_cert);
                 }
             }
