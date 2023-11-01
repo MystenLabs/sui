@@ -332,8 +332,8 @@ impl Inner {
             // The digest of the transaction must be inside the map.
             assert!(age_opt.is_some());
             metrics
-                .transaction_manager_transaction_queue_age_ms
-                .observe(age_opt.unwrap().elapsed().as_millis() as u64);
+                .transaction_manager_transaction_queue_age_s
+                .observe(age_opt.unwrap().elapsed().as_secs_f64());
         }
 
         if input_txns.is_empty() {

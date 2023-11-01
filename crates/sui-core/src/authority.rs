@@ -17,7 +17,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveStructLayout;
-use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -215,7 +214,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_package_cache_hits: IntCounter,
     pub(crate) transaction_manager_package_cache_misses: IntCounter,
     pub(crate) transaction_manager_package_cache_evictions: IntCounter,
-    pub(crate) transaction_manager_transaction_queue_age_ms: MystenHistogram,
+    pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
@@ -472,11 +471,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            transaction_manager_transaction_queue_age_ms: MystenHistogram::new_in_registry(
-                "transaction_manager_transaction_queue_age_ms",
+            transaction_manager_transaction_queue_age_s: register_histogram_with_registry!(
+                "transaction_manager_transaction_queue_age_s",
                 "Time spent in waiting for transaction in the queue",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
