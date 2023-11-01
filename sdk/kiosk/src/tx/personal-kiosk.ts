@@ -4,7 +4,6 @@
 import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
 
 import { ObjectArgument } from '../types';
-import { objArg } from '../utils';
 
 export function convertToPersonalTx(
 	tx: TransactionBlock,
@@ -14,7 +13,7 @@ export function convertToPersonalTx(
 ): TransactionObjectArgument {
 	const personalKioskCap = tx.moveCall({
 		target: `${packageId}::personal_kiosk::new`,
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskOwnerCap)],
+		arguments: [tx.object(kiosk), tx.object(kioskOwnerCap)],
 	});
 
 	return personalKioskCap;

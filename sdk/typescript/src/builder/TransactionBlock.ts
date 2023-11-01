@@ -159,6 +159,8 @@ export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
 	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 }
 
+export type TransactionObjectInput = string | ObjectCallArg | TransactionObjectArgument;
+
 /**
  * Transaction Builder
  */
@@ -303,7 +305,11 @@ export class TransactionBlock {
 	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: string | ObjectCallArg) {
+	object(value: TransactionObjectInput) {
+		if (typeof value === 'object' && 'kind' in value) {
+			return value;
+		}
+
 		const id = getIdFromCallArg(value);
 		// deduplicate
 		const inserted = this.#blockData.inputs.find(
