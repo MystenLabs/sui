@@ -28,6 +28,7 @@ const E_RECEIVING_OBJECT_TYPE_MISMATCH: u64 = 2;
 // Represents both the case where the object does not exist and the case where the object is not
 // able to be accessed through the parent that is passed-in.
 const E_UNABLE_TO_RECEIVE_OBJECT: u64 = 3;
+pub const E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED: u64 = 4;
 
 #[derive(Clone, Debug)]
 pub struct TransferReceiveObjectInternalCostParams {
@@ -103,8 +104,6 @@ pub fn receive_object_internal(
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
 }
-
-pub const E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED: u64 = 1;
 
 #[derive(Clone, Debug)]
 pub struct TransferInternalCostParams {
