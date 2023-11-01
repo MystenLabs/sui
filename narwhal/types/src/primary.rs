@@ -173,6 +173,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
 pub trait BatchAPI {
     fn transactions(&self) -> &Vec<Transaction>;
     fn transactions_mut(&mut self) -> &mut Vec<Transaction>;
+    fn into_transactions(self) -> Vec<Transaction>;
     fn metadata(&self) -> &Metadata;
     fn metadata_mut(&mut self) -> &mut Metadata;
 
@@ -195,6 +196,10 @@ impl BatchAPI for BatchV1 {
 
     fn transactions_mut(&mut self) -> &mut Vec<Transaction> {
         &mut self.transactions
+    }
+
+    fn into_transactions(self) -> Vec<Transaction> {
+        self.transactions
     }
 
     fn metadata(&self) -> &Metadata {
@@ -241,6 +246,10 @@ impl BatchAPI for BatchV2 {
 
     fn transactions_mut(&mut self) -> &mut Vec<Transaction> {
         &mut self.transactions
+    }
+
+    fn into_transactions(self) -> Vec<Transaction> {
+        self.transactions
     }
 
     fn metadata(&self) -> &Metadata {
@@ -1435,7 +1444,7 @@ pub enum SignatureVerificationState {
     // and has not been verified yet.
     Unverified(AggregateSignatureBytes),
     // This state occurs when a certificate was either created locally, received
-    // via brodacast, or fetched but was not the parent of another certifiate.
+    // via brodacast, or fetched but was not the parent of another certificate.
     // Therefore this certificate had to be verified directly.
     VerifiedDirectly(AggregateSignatureBytes),
     // This state occurs when the cert was a parent of another fetched certificate

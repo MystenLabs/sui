@@ -230,7 +230,6 @@ pub struct AuthorityMetrics {
     pending_notify_read: IntGauge,
 
     /// Consensus handler metrics
-    pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
@@ -524,11 +523,6 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
-            consensus_handler_processed_batches: register_int_counter_with_registry!(
-                "consensus_handler_processed_batches",
-                "Number of batches processed by consensus_handler",
-                registry
-            ).unwrap(),
             consensus_handler_processed_bytes: register_int_counter_with_registry!(
                 "consensus_handler_processed_bytes",
                 "Number of bytes processed by consensus_handler",
