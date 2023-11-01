@@ -130,7 +130,7 @@ One distinction dynamic fields have to wrapped objects is that if a transaction 
 
 Adding a new dynamic field to a parent object also creates a `Field` object, responsible for associating the field name and value with that parent. Unlike other newly created objects, the ID for the resulting instance of `Field` is not created using `sui::object::new`. Instead, it is computed as a hash of the parent object ID and the type and value of the field name, so that you can use it to look-up the `Field` via its parent and name.
 
-When you remove a field, Sui deletes its associated `Field`, and if you add a new field with the same name, Sui creates a new instance with the same ID. Versioning using Lamport timestamps, coupled with dynamic fields being only accessable through their parent object, ensures that (ID, version) pairs are not reused in the process:
+When you remove a field, Sui deletes its associated `Field`, and if you add a new field with the same name, Sui creates a new instance with the same ID. Versioning using Lamport timestamps, coupled with dynamic fields being only accessible through their parent object, ensures that (ID, version) pairs are not reused in the process:
 
 - The transaction that deletes the original field increments the parent's version to be greater than the deleted field's version.
 - The transaction that creates the new version of the same field creates the field with a version that is greater than the parent's version.
