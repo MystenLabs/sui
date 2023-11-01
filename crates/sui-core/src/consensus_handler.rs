@@ -8,19 +8,18 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
+use crate::consensus_types::committee_api::CommitteeAPI;
 use crate::consensus_types::consensus_output_api::ConsensusOutputAPI;
+use crate::consensus_types::AuthorityIndex;
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use fastcrypto::hash::Hash as _Hash;
-use fastcrypto::traits::ToFromBytes;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_test_utils::latest_protocol_version;
-use narwhal_types::{BatchAPI, Certificate, CertificateAPI, ConsensusOutput, HeaderAPI};
+use narwhal_types::ConsensusOutput;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -142,7 +141,23 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
+        self.handle_consensus_output_internal(consensus_output)
+            .await;
+    }
 
+    async fn last_executed_sub_dag_index(&self) -> u64 {
+        self.last_consensus_stats.index.sub_dag_index
+    }
+}
+
+impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
+    ConsensusHandler<T, C>
+{
+    #[instrument(level = "debug", skip_all)]
+    async fn handle_consensus_output_internal(
+        &mut self,
+        consensus_output: impl ConsensusOutputAPI,
+    ) {
         // This code no longer supports old protocol versions.
         assert!(self
             .epoch_store
@@ -151,7 +166,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        let round = consensus_output.sub_dag.leader_round();
+        let round = consensus_output.leader_round();
 
         assert!(round >= last_committed_round);
         if last_committed_round == round {
@@ -167,8 +182,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        let timestamp = consensus_output.sub_dag.commit_timestamp();
-        let leader_author = consensus_output.sub_dag.leader.header().author();
+        let timestamp = consensus_output.commit_timestamp_ms();
+        let leader_author = consensus_output.leader_author_index();
+        let commit_sub_dag_index = consensus_output.commit_sub_dag_index();
 
         let epoch_start = self
             .epoch_store
@@ -187,7 +203,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} epoch {}",
             consensus_output.digest(),
             round,
-            consensus_output.sub_dag.sub_dag_index,
+            commit_sub_dag_index,
             timestamp,
             self.epoch_store.epoch(),
         );
@@ -196,7 +212,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
         transactions.push((
             vec![],
             SequencedConsensusTransactionKind::System(prologue_transaction),
-            Arc::new(consensus_output.sub_dag.leader.clone()),
+            consensus_output.leader_author_index(),
         ));
 
         // Load all jwks that became active in the previous round, and commit them in this round.
@@ -219,7 +235,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             transactions.push((
                 vec![],
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
-                Arc::new(consensus_output.sub_dag.leader.clone()),
+                consensus_output.leader_author_index(),
             ));
         }
 
@@ -239,47 +255,20 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .inc();
 
         let mut bytes = 0usize;
-        for (cert, batches) in consensus_output
-            .sub_dag
-            .certificates
-            .iter()
-            .zip(consensus_output.batches.iter())
         {
-            let span = trace_span!("process_consensus_cert");
+            let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
-
-            assert_eq!(cert.header().payload().len(), batches.len());
-            let author = cert.header().author();
-            let num_certs = self
-                .last_consensus_stats
-                .stats
-                .inc_narwhal_certificates(author.0 as usize);
-            self.metrics
-                .consensus_committed_certificates
-                .with_label_values(&[&author.to_string()])
-                .set(num_certs as i64);
-            let output_cert = Arc::new(cert.clone());
-            for batch in batches {
-                let span = trace_span!("process_consensus_batch");
-                let _guard = span.enter();
-
-                assert!(output_cert.header().payload().contains_key(&batch.digest()));
-                self.metrics.consensus_handler_processed_batches.inc();
-                for serialized_transaction in batch.transactions() {
+            for (authority_index, authority_transactions) in consensus_output.into_transactions() {
+                let num_certs = self
+                    .last_consensus_stats
+                    .stats
+                    .inc_narwhal_certificates(authority_index as usize);
+                self.metrics
+                    .consensus_committed_certificates
+                    .with_label_values(&[&authority_index.to_string()])
+                    .set(num_certs as i64);
+                for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
-
-                    let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                        serialized_transaction,
-                    ) {
-                        Ok(transaction) => transaction,
-                        Err(err) => {
-                            // This should have been prevented by Narwhal batch verification.
-                            panic!(
-                                "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
-                                err, output_cert, batch.digest(), serialized_transaction
-                            );
-                        }
-                    };
                     self.metrics
                         .consensus_handler_processed
                         .with_label_values(&[classify(&transaction)])
@@ -291,17 +280,17 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                         let num_txns = self
                             .last_consensus_stats
                             .stats
-                            .inc_user_transactions(author.0 as usize);
+                            .inc_user_transactions(authority_index as usize);
                         self.metrics
                             .consensus_committed_user_transactions
-                            .with_label_values(&[&author.to_string()])
+                            .with_label_values(&[&authority_index.to_string()])
                             .set(num_txns as i64);
                     }
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
                     transactions.push((
                         serialized_transaction.clone(),
                         transaction,
-                        output_cert.clone(),
+                        authority_index,
                     ));
                 }
             }
@@ -316,12 +305,12 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             // entries while we're iterating over the sequenced transactions.
             let mut processed_set = HashSet::new();
 
-            for (seq, (serialized, transaction, output_cert)) in
+            for (seq, (serialized, transaction, cert_origin)) in
                 transactions.into_iter().enumerate()
             {
                 let index = ExecutionIndices {
                     last_committed_round: round,
-                    sub_dag_index: consensus_output.sub_dag.sub_dag_index,
+                    sub_dag_index: commit_sub_dag_index,
                     transaction_index: seq as u64,
                 };
 
@@ -335,17 +324,13 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                     continue;
                 };
 
-                let certificate_author = AuthorityName::from_bytes(
-                    self.committee
-                        .authority_safe(&output_cert.header().author())
-                        .protocol_key_bytes()
-                        .0
-                        .as_ref(),
-                )
-                .unwrap();
+                let certificate_author = self
+                    .committee
+                    .authority_pubkey_by_index(cert_origin)
+                    .unwrap();
 
                 let sequenced_transaction = SequencedConsensusTransaction {
-                    certificate: output_cert.clone(),
+                    certificate_author_index: cert_origin,
                     certificate_author,
                     consensus_index: index_with_stats.index,
                     transaction,
@@ -388,10 +373,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
-    }
-
-    async fn last_executed_sub_dag_index(&self) -> u64 {
-        self.last_consensus_stats.index.sub_dag_index
     }
 }
 
@@ -484,7 +465,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
 }
 
 pub struct SequencedConsensusTransaction {
-    pub certificate: Arc<narwhal_types::Certificate>,
+    pub certificate_author_index: AuthorityIndex,
     pub certificate_author: AuthorityName,
     pub consensus_index: ExecutionIndices,
     pub transaction: SequencedConsensusTransactionKind,
@@ -593,10 +574,10 @@ impl VerifiedSequencedConsensusTransaction {
 impl SequencedConsensusTransaction {
     pub fn new_test(transaction: ConsensusTransaction) -> Self {
         Self {
-            transaction: SequencedConsensusTransactionKind::External(transaction),
-            certificate: Arc::new(Certificate::default(&latest_protocol_version())),
+            certificate_author_index: 0,
             certificate_author: AuthorityName::ZERO,
             consensus_index: Default::default(),
+            transaction: SequencedConsensusTransactionKind::External(transaction),
         }
     }
 }
