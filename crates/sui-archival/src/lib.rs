@@ -35,7 +35,7 @@ use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
 use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
-use tracing::info;
+use tracing::{error, info};
 
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
 /// by duration or file size. Committed files are synced with the remote store continuously. Files are
@@ -333,10 +333,9 @@ pub async fn verify_archive_with_genesis_config(
         genesis_committee,
     );
 
-    let mut retries = 0;
-    while retries < num_retries {
-        retries += 1;
-        if let Ok(()) = verify_archive_with_local_store(
+    let num_retries = std::cmp::max(num_retries, 1);
+    for _ in 0..num_retries {
+        match verify_archive_with_local_store(
             store.clone(),
             remote_store_config.clone(),
             concurrency,
@@ -344,11 +343,18 @@ pub async fn verify_archive_with_genesis_config(
         )
         .await
         {
-            break;
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                error!("Error while verifying archive: {}", e);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
         }
     }
 
-    Ok(())
+    Err::<(), anyhow::Error>(anyhow!(
+        "Failed to verify archive after {} retries",
+        num_retries
+    ))
 }
 
 pub async fn verify_archive_with_checksums(
