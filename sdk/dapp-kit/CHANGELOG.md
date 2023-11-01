@@ -1,5 +1,18 @@
 # @mysten/dapp-kit
 
+## 0.7.0
+
+### Minor Changes
+
+- b359868e3: Fix how esm types are built
+- 5d7055365: Fix bug where style resets were being applied to custom trigger buttons
+
+### Patch Changes
+
+- Updated dependencies [30b47b758]
+  - @mysten/sui.js@0.45.1
+  - @mysten/wallet-standard@0.8.7
+
 ## 0.6.0
 
 ### Minor Changes
