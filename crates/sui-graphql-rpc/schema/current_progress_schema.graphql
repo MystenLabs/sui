@@ -202,13 +202,37 @@ type EndOfEpochTransaction {
 }
 
 type Epoch {
+	"""
+	The epoch's id
+	"""
 	epochId: Int!
+	"""
+	The reference gas price for this epoch
+	"""
 	referenceGasPrice: BigInt
+	"""
+	Validator related properties, including the active validators
+	"""
 	validatorSet: ValidatorSet
+	"""
+	The epoch's starting timestamp
+	"""
 	startTimestamp: DateTime
+	"""
+	The epoch's ending timestamp
+	"""
 	endTimestamp: DateTime
+	"""
+	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+	"""
 	protocolConfigs: ProtocolConfigs
+	"""
+	The epoch's corresponding checkpoints
+	"""
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	"""
+	The epoch's corresponding transaction blocks
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
