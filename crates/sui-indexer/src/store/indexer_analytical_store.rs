@@ -22,11 +22,6 @@ pub trait IndexerAnalyticalStore {
         start_checkpoint: i64,
         end_checkpoint: i64,
     ) -> IndexerResult<Vec<StoredCheckpoint>>;
-    async fn get_transactions_in_checkpoint_range(
-        &self,
-        start_checkpoint: i64,
-        end_checkpoint: i64,
-    ) -> IndexerResult<Vec<StoredTransaction>>;
     async fn get_tx_timestamps_in_checkpoint_range(
         &self,
         start_checkpoint: i64,

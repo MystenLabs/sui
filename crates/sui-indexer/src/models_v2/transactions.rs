@@ -7,12 +7,12 @@ use sui_json_rpc_types::BalanceChange;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlock;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
@@ -36,6 +36,7 @@ pub struct StoredTransaction {
     pub balance_changes: Vec<Option<Vec<u8>>>,
     pub events: Vec<Option<Vec<u8>>>,
     pub transaction_kind: i16,
+    pub success_command_count: i16,
 }
 
 #[derive(Debug, Queryable)]
@@ -236,21 +237,5 @@ impl StoredTransaction {
         })?;
         let effects = SuiTransactionBlockEffects::try_from(effects)?;
         Ok(effects)
-    }
-
-    pub fn get_successful_tx_num(&self) -> IndexerResult<u64> {
-        let tx_cmd_num = self
-            .try_into_sender_signed_data()?
-            .intent_message()
-            .value
-            .execution_parts()
-            .0
-            .num_commands() as u64;
-
-        if self.try_into_sui_transaction_effects()?.status().is_ok() {
-            Ok(tx_cmd_num)
-        } else {
-            Ok(0)
-        }
     }
 }

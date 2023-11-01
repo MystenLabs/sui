@@ -85,22 +85,6 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(cps)
     }
 
-    async fn get_transactions_in_checkpoint_range(
-        &self,
-        start_checkpoint: i64,
-        end_checkpoint: i64,
-    ) -> IndexerResult<Vec<StoredTransaction>> {
-        let tx_batch = read_only_blocking!(&self.blocking_cp, |conn| {
-            transactions::dsl::transactions
-                .filter(transactions::checkpoint_sequence_number.ge(start_checkpoint))
-                .filter(transactions::checkpoint_sequence_number.lt(end_checkpoint))
-                .order(transactions::tx_sequence_number.asc())
-                .load::<StoredTransaction>(conn)
-        })
-        .context("Failed reading transactions from PostgresDB")?;
-        Ok(tx_batch)
-    }
-
     async fn get_tx_timestamps_in_checkpoint_range(
         &self,
         start_checkpoint: i64,

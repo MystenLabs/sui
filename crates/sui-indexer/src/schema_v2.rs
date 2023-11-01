@@ -173,6 +173,7 @@ diesel::table! {
         balance_changes -> Array<Nullable<Bytea>>,
         events -> Array<Nullable<Bytea>>,
         transaction_kind -> Int2,
+        success_command_count -> Int2,
     }
 }
 
