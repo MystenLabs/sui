@@ -108,7 +108,7 @@ const config = {
       announcementBar: {
         id: "search_notice",
         content:
-          "Welcome to the new implementation of the Sui documentation site. Apologies for the inconvenience, but expect site search to be unreliable  during initial indexing (~48 hours).",
+          "Welcome to the new implementation of the Sui documentation site. Please expect site search to be unreliable during initial indexing (~48 hours).",
         backgroundColor: "#4ca2ff",
         textColor: "#111111",
         isCloseable: true,
