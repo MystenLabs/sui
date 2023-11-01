@@ -2,9 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
+use crate::authority::AuthorityState;
+use crate::checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop};
 use crate::consensus_manager::narwhal_manager::{
     NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
 };
+use crate::consensus_manager::ConsensusHandlerInitializer;
+use crate::consensus_manager::ConsensusManager;
+use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
+use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+use crate::state_accumulator::StateAccumulator;
 use bytes::Bytes;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
@@ -12,14 +19,16 @@ use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
 use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
-use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tokio::time::{interval, sleep};
 
 #[derive(Clone)]
@@ -87,6 +96,28 @@ async fn send_transactions(
     assert!(succeeded_once);
 }
 
+fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
+    let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
+    let accumulator = StateAccumulator::new(state.database.clone());
+    let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
+
+    let epoch_store = state.epoch_store_for_testing();
+
+    let (checkpoint_service, _) = CheckpointService::spawn(
+        state.clone(),
+        state.get_checkpoint_store().clone(),
+        epoch_store.clone(),
+        Box::new(state.db()),
+        Arc::new(accumulator),
+        Box::new(output),
+        Box::new(certified_output),
+        CheckpointMetrics::new_for_tests(),
+        3,
+        100_000,
+    );
+    checkpoint_service
+}
+
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_narwhal_manager() {
     let configs = ConfigBuilder::new_with_temp_dir()
@@ -115,10 +146,6 @@ async fn test_narwhal_manager() {
         let narwhal_committee = system_state.get_narwhal_committee();
         let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
-        let execution_state = || NoOpExecutionState {
-            epoch: narwhal_committee.epoch(),
-        };
-
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
             network_keypair: config.network_key_pair().copy(),
@@ -133,13 +160,29 @@ async fn test_narwhal_manager() {
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
+        let consensus_handler_initializer = ConsensusHandlerInitializer {
+            state: state.clone(),
+            checkpoint_service: checkpoint_service_for_testing(state.clone()),
+            epoch_store: epoch_store.clone(),
+            low_scoring_authorities: Arc::new(Default::default()),
+            throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
+                None,
+                state.metrics.clone(),
+            )),
+        };
+
         // start narwhal
         narwhal_manager
             .start(
                 config,
                 epoch_store.clone(),
-                execution_state,
-                TrivialTransactionValidator,
+                consensus_handler_initializer,
+                SuiTxValidator::new(
+                    epoch_store.clone(),
+                    Arc::new(CheckpointServiceNoop {}),
+                    state.transaction_manager().clone(),
+                    SuiTxValidatorMetrics::new(&Registry::new()),
+                ),
             )
             .await;
 
@@ -193,19 +236,31 @@ async fn test_narwhal_manager() {
         let narwhal_committee = system_state.get_narwhal_committee();
         let worker_cache = system_state.get_narwhal_worker_cache(&transactions_addr);
 
-        let execution_state = || NoOpExecutionState {
-            epoch: narwhal_committee.epoch(),
-        };
-
         let epoch_store = state.epoch_store_for_testing();
+
+        let consensus_handler_initializer = ConsensusHandlerInitializer {
+            state: state.clone(),
+            checkpoint_service: checkpoint_service_for_testing(state.clone()),
+            epoch_store: epoch_store.clone(),
+            low_scoring_authorities: Arc::new(Default::default()),
+            throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
+                None,
+                state.metrics.clone(),
+            )),
+        };
 
         // start narwhal with advanced epoch
         narwhal_manager
             .start(
                 config,
                 epoch_store.clone(),
-                execution_state,
-                TrivialTransactionValidator,
+                consensus_handler_initializer,
+                SuiTxValidator::new(
+                    epoch_store.clone(),
+                    Arc::new(CheckpointServiceNoop {}),
+                    state.transaction_manager().clone(),
+                    SuiTxValidatorMetrics::new(&Registry::new()),
+                ),
             )
             .await;
 

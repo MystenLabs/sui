@@ -65,8 +65,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::consensus_handler::ConsensusHandler;
-use sui_core::consensus_manager::Manager;
+use sui_core::consensus_manager::{ConsensusHandlerInitializer, Manager};
 use sui_core::consensus_throughput_calculator::{
     ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
 };
@@ -992,7 +991,7 @@ impl SuiNode {
             &registry_service.default_registry(),
             epoch_store.protocol_config().clone(),
         ));
-        let consensus_manager = Manager::narwhal(config, consensus_config, registry_service);
+        let consensus_manager = Manager::new_narwhal(config, consensus_config, registry_service);
 
         let mut consensus_epoch_data_remover =
             EpochDataRemover::new(consensus_manager.get_storage_base_path());
@@ -1063,9 +1062,6 @@ impl SuiNode {
 
         consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
-        let new_epoch_start_state = epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
-
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
             state.metrics.clone(),
@@ -1081,17 +1077,12 @@ impl SuiNode {
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
 
-        let consensus_handler_initializer = || {
-            ConsensusHandler::new(
-                epoch_store.clone(),
-                checkpoint_service.clone(),
-                state.transaction_manager().clone(),
-                state.db(),
-                low_scoring_authorities.clone(),
-                committee.clone(),
-                state.metrics.clone(),
-                throughput_calculator.clone(),
-            )
+        let consensus_handler_initializer = ConsensusHandlerInitializer {
+            state: state.clone(),
+            checkpoint_service: checkpoint_service.clone(),
+            epoch_store: epoch_store.clone(),
+            low_scoring_authorities,
+            throughput_calculator,
         };
 
         consensus_manager
