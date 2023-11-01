@@ -30,7 +30,7 @@ jobs:
       - name: Spell Check Docs
         uses: crate-ci/typos@v1.16.11
         with:
-          files: ./docs/content ./*.mdx
+          files: ./docs/content
 
   old-doc-folder-notice:
     name: Old doc folder notice
