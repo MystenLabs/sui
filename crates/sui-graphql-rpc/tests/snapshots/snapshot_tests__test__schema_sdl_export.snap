@@ -903,6 +903,23 @@ type ServiceConfig {
 	The maximum number of nodes (field names) the service will accept in a single query.
 	"""
 	maxQueryNodes: Int!
+	"""
+	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
+	measured in the same units that the database uses in EXPLAIN queries.
+	"""
+	maxDbQueryCost: BigInt!
+	"""
+	Maximum number of variables a query can define
+	"""
+	maxQueryVariables: Int!
+	"""
+	Maximum number of fragments a query can define
+	"""
+	maxQueryFragments: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one request.
+	"""
+	requestTimeoutMs: BigInt!
 }
 
 type Stake {
