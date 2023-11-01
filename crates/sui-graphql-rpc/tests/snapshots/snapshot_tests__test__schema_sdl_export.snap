@@ -94,14 +94,49 @@ type ChangeEpochTransaction {
 }
 
 type Checkpoint {
+	"""
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
+	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
+	"""
 	digest: String!
+	"""
+	This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+	"""
 	sequenceNumber: Int!
+	"""
+	The timestamp at which the checkpoint is agreed to have happened according to consensus.
+	Transactions that access time in this checkpoint will observe this timestamp.
+	"""
 	timestamp: DateTime
+	"""
+	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
 	validatorSignature: Base64
+	"""
+	The digest of the checkpoint at the previous sequence number.
+	"""
 	previousCheckpointDigest: String
+	"""
+	This is a commitment by the committee at the end of epoch
+	on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
 	liveObjectSetDigest: String
+	"""
+	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+	"""
 	networkTotalTransactions: Int
+	"""
+	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
+	during this epoch, up to and including this checkpoint.
+	These values increase monotonically across checkpoints in the same epoch.
+	"""
 	rollingGasSummary: GasCostSummary
+	"""
+	End of epoch data is only available on the final checkpoint of an epoch.
+	This field provides information on the new committee and protocol version for the next epoch.
+	"""
 	endOfEpoch: EndOfEpochData
 	epoch: Epoch
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
@@ -354,9 +389,21 @@ type GasEffects {
 }
 
 type GasInput {
+	"""
+	Address of the owner of the gas object(s) used
+	"""
 	gasSponsor: Address
+	"""
+	Objects used to pay for a transaction's execution and storage
+	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+	"""
 	gasPrice: BigInt
+	"""
+	The maximum number of gas units that can be expended by executing this transaction
+	"""
 	gasBudget: BigInt
 }
 
@@ -1078,13 +1125,41 @@ type SystemParameters {
 }
 
 type TransactionBlock {
+	"""
+	The effects field captures the results to the chain of executing this transaction
+	"""
 	effects: TransactionBlockEffects
+	"""
+	The address of the user sending this transaction block
+	"""
 	sender: Address
+	"""
+	The transaction block data in BCS format.
+	This includes data on the sender, inputs, sponsor, gas inputs, individual transactions, and user signatures.
+	"""
 	bcs: Base64
+	"""
+	The gas input field provides information on what objects were used as gas
+	As well as the owner of the gas object(s) and information on the gas price and budget
+	If the owner of the gas object(s) is not the same as the sender,
+	the transaction block is a sponsored transaction block.
+	"""
 	gasInput: GasInput
 	kind: TransactionBlockKind
+	"""
+	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
+	"""
 	signatures: [TransactionSignature]
+	"""
+	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
+	This serves as a unique id for the block on chain
+	"""
 	digest: String!
+	"""
+	This field is set by senders of a transaction block
+	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
+	By default, there is no deadline for when a transaction must execute
+	"""
 	expiration: Epoch
 }
 
