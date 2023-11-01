@@ -11,13 +11,15 @@ use sui_types::messages_consensus::ConsensusTransaction;
 /// For each transaction, returns the serialized transaction and the deserialized transaction.
 type ConsensusOutputTransactions = Vec<(AuthorityIndex, Vec<(Vec<u8>, ConsensusTransaction)>)>;
 
-pub(crate) trait ConsensusOutputAPI {
+const DIGEST_SIZE: usize = 32;
+
+pub(crate) trait ConsensusOutputAPI: Hash<DIGEST_SIZE> {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>>;
     fn leader_round(&self) -> u64;
     fn leader_author_index(&self) -> AuthorityIndex;
 
     /// Returns epoch UNIX timestamp in milliseconds
-    fn commit_timestamp(&self) -> u64;
+    fn commit_timestamp_ms(&self) -> u64;
 
     /// Returns a unique global index for each committed sub-dag.
     fn commit_sub_dag_index(&self) -> u64;
@@ -49,7 +51,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
         self.sub_dag.leader.origin().0
     }
 
-    fn commit_timestamp(&self) -> u64 {
+    fn commit_timestamp_ms(&self) -> u64 {
         self.sub_dag.commit_timestamp()
     }
 

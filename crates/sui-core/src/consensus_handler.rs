@@ -15,7 +15,6 @@ use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use fastcrypto::hash::{Digest, Hash as _Hash};
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
@@ -142,8 +141,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
-        let digest = consensus_output.digest();
-        self.handle_consensus_output_internal(consensus_output, digest.into())
+        self.handle_consensus_output_internal(consensus_output)
             .await;
     }
 
@@ -159,7 +157,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
     async fn handle_consensus_output_internal(
         &mut self,
         consensus_output: impl ConsensusOutputAPI,
-        digest: Digest<32>,
     ) {
         // This code no longer supports old protocol versions.
         assert!(self
@@ -185,7 +182,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        let timestamp = consensus_output.commit_timestamp();
+        let timestamp = consensus_output.commit_timestamp_ms();
         let leader_author = consensus_output.leader_author_index();
         let commit_sub_dag_index = consensus_output.commit_sub_dag_index();
 
@@ -204,7 +201,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
 
         info!(
             "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} epoch {}",
-            digest,
+            consensus_output.digest(),
             round,
             commit_sub_dag_index,
             timestamp,
