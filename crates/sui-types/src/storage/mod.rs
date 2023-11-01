@@ -151,6 +151,7 @@ pub trait Storage {
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
+#[derive(Clone)]
 pub struct PackageObjectArc {
     package_object: Arc<Object>,
 }
