@@ -8,6 +8,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
+use crate::consensus_types::consensus_output_api::ConsensusOutputAPI;
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
@@ -225,7 +226,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
             &self.committee,
-            consensus_output.sub_dag.reputation_score.clone(),
+            consensus_output.reputation_score_sorted_desc(),
             &self.metrics,
             self.epoch_store
                 .protocol_config()

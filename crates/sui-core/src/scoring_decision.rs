@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::AuthorityMetrics;
+use crate::consensus_types::committee_api::CommitteeAPI;
+use crate::consensus_types::AuthorityIndex;
 use arc_swap::ArcSwap;
-use narwhal_config::{Authority, Committee, Stake};
-use narwhal_types::ReputationScores;
+use narwhal_config::Stake;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
@@ -16,37 +17,37 @@ use tracing::debug;
 /// submission side with the Narwhal leader election schedule. Practically we don't want to submit
 /// transactions for sequencing to validators that have low scores and are not part of the leader
 /// schedule since the chances of getting them sequenced are lower.
-pub fn update_low_scoring_authorities(
+pub(crate) fn update_low_scoring_authorities(
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    committee: &Committee,
-    reputation_scores: ReputationScores,
+    committee: &impl CommitteeAPI,
+    reputation_score_sorted_desc: Option<Vec<(AuthorityIndex, u64)>>,
     metrics: &Arc<AuthorityMetrics>,
     consensus_bad_nodes_stake_threshold: u64,
 ) {
     assert!((0..=33).contains(&consensus_bad_nodes_stake_threshold), "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected {}", consensus_bad_nodes_stake_threshold);
 
-    if !reputation_scores.final_of_schedule {
+    let Some(reputation_scores) = reputation_score_sorted_desc else {
         return;
-    }
+    };
 
     // We order the authorities by score ascending order in the exact same way as the reputation
     // scores do - so we keep complete alignment between implementations
-    let scores_per_authority_order_asc: Vec<(AuthorityName, u64, &Authority)> = reputation_scores
-        .authorities_by_score_desc()
-        .iter()
+    let scores_per_authority_order_asc: Vec<_> = reputation_scores
+        .into_iter()
         .rev() // we reverse so we get them in asc order
-        .map(|(authority_id, score)| {
-            let authority = committee.authority(authority_id).unwrap();
-            let name: AuthorityName = authority.protocol_key().into();
-
-            (name, *score, authority)
-        })
         .collect();
 
     let mut final_low_scoring_map = HashMap::new();
     let mut total_stake = 0;
-    for (authority_name, score, authority) in scores_per_authority_order_asc {
-        total_stake += authority.stake();
+    for (authority_index, score) in scores_per_authority_order_asc {
+        let authority_name = committee
+            .authority_pubkey_by_index(authority_index)
+            .unwrap();
+        let hostname = committee
+            .authority_hostname_by_index(authority_index)
+            .unwrap();
+        let stake = committee.authority_stake_by_index(authority_index);
+        total_stake += stake;
 
         let included = if total_stake
             <= (consensus_bad_nodes_stake_threshold * committee.total_stake()) / 100 as Stake
@@ -57,17 +58,15 @@ pub fn update_low_scoring_authorities(
             false
         };
 
-        if !authority.hostname().is_empty() {
+        if !hostname.is_empty() {
             debug!(
                 "authority {} has score {}, is low scoring: {}",
-                authority.hostname(),
-                score,
-                included
+                hostname, score, included
             );
 
             metrics
                 .consensus_handler_scores
-                .with_label_values(&[authority.hostname()])
+                .with_label_values(&[hostname])
                 .set(score as i64);
         }
     }
@@ -136,8 +135,14 @@ mod tests {
 
         update_low_scoring_authorities(
             low_scoring.clone(),
-            &committee,
-            reputation_scores.clone(),
+            committee.as_ref(),
+            Some(
+                reputation_scores
+                    .authorities_by_score_desc()
+                    .into_iter()
+                    .map(|(id, score)| (id.0, score))
+                    .collect(),
+            ),
             &metrics,
             consensus_bad_nodes_stake_threshold,
         );
@@ -158,8 +163,14 @@ mod tests {
         let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 maximum
         update_low_scoring_authorities(
             low_scoring.clone(),
-            &committee,
-            reputation_scores,
+            committee.as_ref(),
+            Some(
+                reputation_scores
+                    .authorities_by_score_desc()
+                    .into_iter()
+                    .map(|(id, score)| (id.0, score))
+                    .collect(),
+            ),
             &metrics,
             consensus_bad_nodes_stake_threshold,
         );

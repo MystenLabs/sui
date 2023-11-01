@@ -12,6 +12,7 @@ pub mod checkpoints;
 pub mod consensus_adapter;
 pub mod consensus_handler;
 pub mod consensus_throughput_calculator;
+pub(crate) mod consensus_types;
 pub mod consensus_validator;
 pub mod db_checkpoint_handler;
 pub mod epoch;
