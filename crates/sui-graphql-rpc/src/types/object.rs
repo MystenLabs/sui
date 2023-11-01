@@ -63,18 +63,23 @@ impl Object {
         self.version
     }
 
+    /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
     async fn digest(&self) -> &str {
         &self.digest
     }
 
+    /// The amount of SUI we would rebate if this object gets deleted or mutated.
+    /// This number is recalculated based on the present storage gas price.    
     async fn storage_rebate(&self) -> Option<&BigInt> {
         self.storage_rebate.as_ref()
     }
 
+    /// The Base64 encoded bcs serialization of the object's content.    
     async fn bcs(&self) -> Option<&Base64> {
         self.bcs.as_ref()
     }
 
+    /// The transaction block that created this version of the object.    
     async fn previous_transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -89,14 +94,18 @@ impl Object {
         }
     }
 
+    /// Objects can either be immutable, shared, owned by an address,
+    /// or are child objects (part of a dynamic field)
     async fn kind(&self) -> Option<ObjectKind> {
         self.kind
     }
 
+    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
     }
 
+    /// Attempts to convert the object into a MoveObject
     async fn as_move_object(&self) -> Result<Option<MoveObject>> {
         let Some(bcs) = &self.bcs else {
             return Ok(None);
@@ -118,6 +127,7 @@ impl Object {
         )
     }
 
+    /// Attempts to convert the object into a MovePackage
     async fn as_move_package(&self) -> Result<Option<MovePackage>> {
         let Some(bcs) = &self.bcs else {
             return Ok(None);
@@ -141,10 +151,12 @@ impl Object {
 
     // =========== Owner interface methods =============
 
+    /// The address of the object, named as such to avoid conflict with the address type.
     pub async fn location(&self) -> SuiAddress {
         self.address
     }
 
+    /// The objects owned by this object
     pub async fn object_connection(
         &self,
         ctx: &Context<'_>,
@@ -160,6 +172,7 @@ impl Object {
             .extend()
     }
 
+    /// The balance of coin objects of a particular coin type owned by the object.
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -171,6 +184,7 @@ impl Object {
             .extend()
     }
 
+    /// The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,
@@ -185,6 +199,7 @@ impl Object {
             .extend()
     }
 
+    /// The `0x2::sui::Coin` objects owned by the given object.
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -200,7 +215,7 @@ impl Object {
             .extend()
     }
 
-    /// Lists the stakes corresponding to the StakedSui objects owned by the given object
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,
@@ -215,6 +230,7 @@ impl Object {
             .extend()
     }
 
+    /// The domain that a user address has explicitly configured as their default domain
     pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
             .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)

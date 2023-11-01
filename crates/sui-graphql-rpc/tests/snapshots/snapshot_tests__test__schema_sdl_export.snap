@@ -14,7 +14,7 @@ type Address implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	Lists the stakes corresponding to the StakedSui objects owned by the given address
+	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -404,6 +404,10 @@ type MoveData =
 """
 scalar MoveData
 
+"""
+Represents a module in Move, a library that defines struct types
+and functions that operate on these types.
+"""
 type MoveModule {
 	fileFormatVersion: Int!
 }
@@ -439,6 +443,9 @@ type MoveModuleEdge {
 
 type MoveModuleId {
 	name: String!
+	"""
+	The package that this Move module was defined in
+	"""
 	package: MovePackage!
 }
 
@@ -468,7 +475,14 @@ type MoveObject {
 }
 
 type MovePackage {
+	"""
+	A representation of the module called `name` in this package, including the
+	structs and functions it defines.
+	"""
 	module(name: String!): MoveModule
+	"""
+	Paginate through the MoveModules defined in this package.
+	"""
 	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	The transitive dependencies of this package.
@@ -561,23 +575,67 @@ type MoveValue {
 
 type Object implements ObjectOwner {
 	version: Int!
+	"""
+	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
+	"""
 	digest: String!
+	"""
+	The amount of SUI we would rebate if this object gets deleted or mutated.
+	This number is recalculated based on the present storage gas price.
+	"""
 	storageRebate: BigInt
+	"""
+	The Base64 encoded bcs serialization of the object's content.
+	"""
 	bcs: Base64
+	"""
+	The transaction block that created this version of the object.
+	"""
 	previousTransactionBlock: TransactionBlock
+	"""
+	Objects can either be immutable, shared, owned by an address,
+	or are child objects (part of a dynamic field)
+	"""
 	kind: ObjectKind
+	"""
+	The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
+	"""
 	owner: Owner
+	"""
+	Attempts to convert the object into a MoveObject
+	"""
 	asMoveObject: MoveObject
+	"""
+	Attempts to convert the object into a MovePackage
+	"""
 	asMovePackage: MovePackage
+	"""
+	The address of the object, named as such to avoid conflict with the address type.
+	"""
 	location: SuiAddress!
+	"""
+	The objects owned by this object
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	The balance of coin objects of a particular coin type owned by the object.
+	"""
 	balance(type: String): Balance
+	"""
+	The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The `0x2::sui::Coin` objects owned by the given object.
+	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	Lists the stakes corresponding to the StakedSui objects owned by the given object
+	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	"""
+	The domain that a user address has explicitly configured as their default domain
+	"""
 	defaultNameServiceName: String
 }
 
@@ -758,6 +816,9 @@ type Query {
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	"""
+	Resolves the owner address of the provided domain name
+	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
 }
