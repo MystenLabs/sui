@@ -84,8 +84,8 @@ struct Inner {
     // Send missing certificates to the `CertificateFetcher`.
     tx_certificate_fetcher: Sender<CertificateFetcherCommand>,
     // Send certificates to be accepted into a separate task that runs
-    // `process_certificate_with_lock()` in a loop.
-    // See comment above `process_certificate_with_lock()` for why this is necessary.
+    // `process_certificates_with_lock()` in a loop.
+    // See comment above `process_certificates_with_lock()` for why this is necessary.
     tx_certificate_acceptor: Sender<(Vec<Certificate>, oneshot::Sender<DagResult<()>>, bool)>,
     // Output all certificates to the consensus layer. Must send certificates in causal order.
     tx_new_certificates: Sender<Certificate>,
@@ -180,6 +180,19 @@ impl Inner {
         debug!("Accepting certificate {:?}", certificate);
 
         let digest = certificate.digest();
+
+        // Validate that certificates are accepted in causal order.
+        // This should be relatively cheap because of certificate store caching.
+        if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
+            let existence = self
+                .certificate_store
+                .multi_contains(certificate.header().parents().iter())?;
+            for (digest, exists) in certificate.header().parents().iter().zip(existence.iter()) {
+                if !*exists {
+                    panic!("Parent {digest:?} not found for {certificate:?}!")
+                }
+            }
+        }
 
         if self.protocol_config.narwhal_certificate_v2()
             && !matches!(
@@ -492,7 +505,7 @@ impl Synchronizer {
             "Synchronizer::GarbageCollection"
         );
 
-        // Start a task to accept certificates. See comment above `process_certificate_with_lock()`
+        // Start a task to accept certificates. See comment above `process_certificates_with_lock()`
         // for why this task is needed.
         let weak_inner = Arc::downgrade(&inner);
         spawn_logged_monitored_task!(
@@ -524,7 +537,7 @@ impl Synchronizer {
                     };
                     // Ignore error if receiver has been dropped.
                     let _ = result_sender.send(
-                        Self::process_certificate_with_lock(&inner, certificates, early_suspend)
+                        Self::process_certificates_with_lock(&inner, certificates, early_suspend)
                             .await,
                     );
                 }
@@ -806,11 +819,9 @@ impl Synchronizer {
         // fail verification will cancel processing for all fetched certs.
         let mut direct_verification_certs = Vec::new();
         for (idx, c) in certificates.iter_mut().enumerate() {
-            if !all_parents.contains(&c.digest()) {
-                direct_verification_certs.push((idx, c.clone()));
-                continue;
-            }
-            if c.header().round() % CERTIFICATE_VERIFICATION_ROUND_INTERVAL == 0 {
+            if !all_parents.contains(&c.digest())
+                || c.header().round() % CERTIFICATE_VERIFICATION_ROUND_INTERVAL == 0
+            {
                 direct_verification_certs.push((idx, c.clone()));
                 continue;
             }
@@ -986,24 +997,27 @@ impl Synchronizer {
     /// Because of the atomicity requirement, this function cannot be made cancellation safe.
     /// So it is run in a loop inside a separate task, connected to `Synchronizer` via a channel.
     #[instrument(level = "debug", skip_all)]
-    async fn process_certificate_with_lock(
+    async fn process_certificates_with_lock(
         inner: &Inner,
         certificates: Vec<Certificate>,
         early_suspend: bool,
     ) -> DagResult<()> {
-        let _scope = monitored_scope("Synchronizer::process_certificate_with_lock");
+        let _scope = monitored_scope("Synchronizer::process_certificates_with_lock");
 
         // We re-check here in case we already have in pipeline the same certificate for processing
         // more that once.
+        let digests = certificates.iter().map(|c| c.digest()).collect_vec();
+        let exists = inner.certificate_store.multi_contains(digests.iter())?;
         let certificates = certificates
             .into_iter()
-            .filter(|c| {
-                if inner.certificate_store.contains(&c.digest()).unwrap() {
+            .zip(exists.into_iter())
+            .filter_map(|(c, exist)| {
+                if exist {
                     debug!("Skip processing certificate {:?}", c);
                     inner.metrics.duplicate_certificates_processed.inc();
-                    return false;
+                    return None;
                 }
-                true
+                Some(c)
             })
             .collect_vec();
         if certificates.is_empty() {
@@ -1016,6 +1030,14 @@ impl Synchronizer {
         // and certificates are sent to consensus in causal order.
         // It is possible to reduce the critical section below, but it seems unnecessary for now.
         let mut state = inner.state.lock().await;
+
+        // Returns Ok(()) if all input certificates are accepted, or a suspended error for the last
+        // suspended certificate. It is ok to not return all suspended errors for suspended
+        // certificates, because the accept notification is only used when trying to accept a
+        // single certificate.
+        //
+        // TODO: simplify the logic here by separating try_accept_certificate() and notify_accept().        let mut result = Ok(());
+        let mut result = Ok(());
 
         for certificate in certificates {
             debug!("Processing certificate {:?} with lock", certificate);
@@ -1033,7 +1055,8 @@ impl Synchronizer {
                         .certificates_suspended
                         .with_label_values(&["dedup_locked"])
                         .inc();
-                    return Err(DagError::Suspended(notify));
+                    result = Err(DagError::Suspended(notify));
+                    continue;
                 }
             }
 
@@ -1058,7 +1081,8 @@ impl Synchronizer {
                         .metrics
                         .certificates_currently_suspended
                         .set(state.num_suspended() as i64);
-                    return Err(DagError::Suspended(notify));
+                    result = Err(DagError::Suspended(notify));
+                    continue;
                 }
             }
 
@@ -1080,7 +1104,7 @@ impl Synchronizer {
             .certificates_currently_suspended
             .set(state.num_suspended() as i64);
 
-        Ok(())
+        result
     }
 
     /// Pushes new certificates received from the rx_own_certificate_broadcast channel
