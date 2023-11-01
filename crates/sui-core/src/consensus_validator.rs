@@ -11,6 +11,8 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
+use mysticeti_core::block_validator::BlockValidator;
+use mysticeti_core::types::StatementBlock;
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
@@ -44,44 +46,16 @@ impl SuiTxValidator {
             metrics,
         }
     }
-}
 
-fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
-    bcs::from_bytes::<ConsensusTransaction>(tx)
-        .wrap_err("Malformed transaction (failed to deserialize)")
-}
-
-#[async_trait]
-impl TransactionValidator for SuiTxValidator {
-    type Error = eyre::Report;
-
-    fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
-        // We only accept transactions from local sui instance so no need to re-verify it
-        Ok(())
-    }
-
-    async fn validate_batch(
+    async fn validate_transactions(
         &self,
-        b: &narwhal_types::Batch,
-        protocol_config: &ProtocolConfig,
-    ) -> Result<(), Self::Error> {
-        let _scope = monitored_scope("ValidateBatch");
-
-        // TODO: Remove once we have removed BatchV1 from the codebase.
-        validate_batch_version(b, protocol_config)
-            .map_err(|err| eyre::eyre!(format!("Invalid Batch: {err}")))?;
-
-        let txs = b
-            .transactions()
-            .iter()
-            .map(|tx| tx_from_bytes(tx))
-            .collect::<Result<Vec<_>, _>>()?;
-
+        txs: Vec<ConsensusTransactionKind>,
+    ) -> Result<(), eyre::Report> {
         let mut cert_batch = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.into_iter() {
-            match tx.kind {
+            match tx {
                 ConsensusTransactionKind::UserTransaction(certificate) => {
                     cert_batch.push(*certificate);
 
@@ -133,6 +107,55 @@ impl TransactionValidator for SuiTxValidator {
         // self.transaction_manager
         //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
         //     .wrap_err("Failed to schedule certificates for execution")
+    }
+}
+
+fn tx_from_bytes(tx: &[u8]) -> Result<ConsensusTransaction, eyre::Report> {
+    bcs::from_bytes::<ConsensusTransaction>(tx)
+        .wrap_err("Malformed transaction (failed to deserialize)")
+}
+
+#[async_trait]
+impl TransactionValidator for SuiTxValidator {
+    type Error = eyre::Report;
+
+    fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
+        // We only accept transactions from local sui instance so no need to re-verify it
+        Ok(())
+    }
+
+    async fn validate_batch(
+        &self,
+        b: &narwhal_types::Batch,
+        protocol_config: &ProtocolConfig,
+    ) -> Result<(), Self::Error> {
+        let _scope = monitored_scope("ValidateBatch");
+
+        // TODO: Remove once we have removed BatchV1 from the codebase.
+        validate_batch_version(b, protocol_config)
+            .map_err(|err| eyre::eyre!(format!("Invalid Batch: {err}")))?;
+
+        let txs = b
+            .transactions()
+            .iter()
+            .map(|tx| tx_from_bytes(tx).map(|tx| tx.kind))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.validate_transactions(txs).await
+    }
+}
+
+#[async_trait]
+impl BlockValidator for SuiTxValidator {
+    type Error = eyre::Report;
+
+    async fn verify(&self, b: &StatementBlock) -> Result<(), Self::Error> {
+        let txs = b
+            .shared_transactions()
+            .map(|(_locator, tx)| tx_from_bytes(tx.data()).map(|tx| tx.kind))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.validate_transactions(txs).await
     }
 }
 

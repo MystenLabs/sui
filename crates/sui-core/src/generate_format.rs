@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
 use move_core_types::{
-    language_storage::TypeTag,
+    language_storage::{StructTag, TypeTag},
     value::{MoveStructLayout, MoveTypeLayout},
     vm_status::AbortLocation,
 };
@@ -12,6 +12,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use std::str::FromStr;
 use std::{fs::File, io::Write};
 use sui_types::effects::{
     IDOperation, ObjectIn, ObjectOut, TransactionEffects, UnchangedSharedKind,
@@ -61,7 +62,6 @@ fn get_registry() -> Result<Registry> {
     // or involving generics (see [serde_reflection documentation](https://novifinancial.github.io/serde-reflection/serde_reflection/index.html)).
     let (addr, kp): (_, AuthorityKeyPair) = get_key_pair();
     let (s_addr, s_kp): (_, AccountKeyPair) = get_key_pair();
-
     let pk: AuthorityPublicKeyBytes = kp.public().into();
     tracer.trace_value(&mut samples, &addr)?;
     tracer.trace_value(&mut samples, &kp)?;
@@ -132,6 +132,9 @@ fn get_registry() -> Result<Registry> {
 
     let ccd = CheckpointContentsDigest::random();
     tracer.trace_value(&mut samples, &ccd)?;
+
+    let struct_tag = StructTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap();
+    tracer.trace_value(&mut samples, &struct_tag)?;
 
     let ccd = CheckpointDigest::random();
     tracer.trace_value(&mut samples, &ccd)?;
