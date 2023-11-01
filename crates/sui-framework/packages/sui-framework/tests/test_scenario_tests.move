@@ -5,7 +5,7 @@
 module sui::test_scenario_tests {
     use sui::dynamic_field as df;
     use sui::object;
-    use sui::test_scenario::Self as ts;
+    use sui::test_scenario as ts;
     use sui::transfer;
     use sui::tx_context;
 
@@ -718,7 +718,7 @@ module sui::test_scenario_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4)]
+    #[expected_failure(abort_code = df::ESharedObjectOperationNotSupported)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
