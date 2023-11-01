@@ -42,7 +42,7 @@ export function useSuiClientQuery<
 	...args: undefined extends SuiRpcMethods[T]['params']
 		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T, TData>]
 		: [method: T, params: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T, TData>]
-): UseQueryResult<SuiRpcMethods[T]['result'], Error> {
+): UseQueryResult<TData, Error> {
 	const [method, params, { queryKey = [], ...options } = {}] = args as [
 		method: T,
 		params?: SuiRpcMethods[T]['params'],
