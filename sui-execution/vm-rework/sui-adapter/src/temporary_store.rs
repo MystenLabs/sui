@@ -113,6 +113,7 @@ impl<'backing> TemporaryStore<'backing> {
             events: TransactionEvents {
                 data: results.user_events,
             },
+            aux_data: None,
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
@@ -226,6 +227,7 @@ impl<'backing> TemporaryStore<'backing> {
             } else {
                 Some(inner.events.digest())
             },
+            None,
             transaction_dependencies.into_iter().collect(),
         );
         (inner, effects)

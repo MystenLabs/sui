@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
-use sui_types::digests::TransactionEventsDigest;
-use sui_types::effects::TransactionEffects;
+use sui_types::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
+use sui_types::effects::{EffectsAuxDataInStorage, TransactionEffects};
 use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
@@ -91,6 +91,9 @@ pub struct AuthorityPerpetualTables {
     // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
     #[default_options_override_fn = "events_table_default_config"]
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+
+    /// Auxiliary data in transaction effects.
+    pub(crate) aux_data: DBMap<EffectsAuxDataDigest, EffectsAuxDataInStorage>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.

@@ -151,6 +151,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, (obj, _))| (id, obj))
                 .collect(),
             events: TransactionEvents { data: self.events },
+            aux_data: None,
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_runtime_objects: self.loaded_child_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),

@@ -262,6 +262,10 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         self.events_digest.as_ref()
     }
 
+    fn aux_data_digest(&self) -> Option<&EffectsAuxDataDigest> {
+        self.aux_data_digest.as_ref()
+    }
+
     fn dependencies(&self) -> &[TransactionDigest] {
         &self.dependencies
     }
@@ -349,6 +353,7 @@ impl TransactionEffectsV2 {
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
         gas_object: Option<ObjectID>,
         events_digest: Option<TransactionEventsDigest>,
+        aux_data_digest: Option<EffectsAuxDataDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
         let unchanged_shared_objects = shared_objects
@@ -391,7 +396,7 @@ impl TransactionEffectsV2 {
             gas_object_index,
             events_digest,
             dependencies,
-            aux_data_digest: None,
+            aux_data_digest,
         };
         #[cfg(debug_assertions)]
         result.check_invariant();

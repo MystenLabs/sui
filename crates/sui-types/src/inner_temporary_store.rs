@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{SequenceNumber, VersionDigest};
-use crate::effects::TransactionEvents;
+use crate::effects::{EffectsAuxDataInStorage, TransactionEvents};
 use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::{
     base_types::ObjectID,
@@ -18,7 +18,7 @@ pub type WrittenObjects = BTreeMap<ObjectID, Object>;
 pub type ObjectMap = BTreeMap<ObjectID, Object>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
@@ -26,6 +26,7 @@ pub struct InnerTemporaryStore {
     pub written: WrittenObjects,
     pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     pub events: TransactionEvents,
+    pub aux_data: Option<EffectsAuxDataInStorage>,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
