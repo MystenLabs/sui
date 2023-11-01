@@ -616,10 +616,6 @@ pub enum SuiClientCommands {
         /// The digest of the transaction to replay
         #[arg(long, short)]
         tx_digest: String,
-
-        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: Option<String>,
     },
 
     /// Replay transactions listed in a file.
@@ -632,10 +628,6 @@ pub enum SuiClientCommands {
         /// If an error is encountered during a transaction, this specifies whether to terminate or continue
         #[arg(long, short)]
         terminate_early: bool,
-
-        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: Option<String>,
     },
 
     /// Replay all transactions in a range of checkpoints.
@@ -652,10 +644,6 @@ pub enum SuiClientCommands {
         /// If an error is encountered during a transaction, this specifies whether to terminate or continue
         #[arg(long, short)]
         terminate_early: bool,
-
-        /// (Optional) The rpc url for a fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: Option<String>,
     },
 }
 
@@ -665,7 +653,7 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
-            SuiClientCommands::ReplayTransaction { rpc_url, tx_digest } => {
+            SuiClientCommands::ReplayTransaction { tx_digest } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
@@ -673,13 +661,12 @@ impl SuiClientCommands {
                     executor_version_override: None,
                     protocol_version_override: None,
                 };
-                let rpc = rpc_url.unwrap_or(context.config.get_active_env()?.rpc.clone());
+                let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await;
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayTransaction
             }
             SuiClientCommands::ReplayBatch {
-                rpc_url,
                 path,
                 terminate_early,
             } => {
@@ -688,13 +675,12 @@ impl SuiClientCommands {
                     terminate_early,
                     batch_size: 16,
                 };
-                let rpc = rpc_url.unwrap_or(context.config.get_active_env()?.rpc.clone());
+                let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await;
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayBatch
             }
             SuiClientCommands::ReplayCheckpoints {
-                rpc_url,
                 start,
                 end,
                 terminate_early,
@@ -705,9 +691,9 @@ impl SuiClientCommands {
                     terminate_early,
                     max_tasks: 16,
                 };
-                let rpc = rpc_url.unwrap_or(context.config.get_active_env()?.rpc.clone());
+                let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await;
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayCheckpoints
             }
             SuiClientCommands::Addresses => {

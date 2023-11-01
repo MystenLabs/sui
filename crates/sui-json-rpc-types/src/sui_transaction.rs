@@ -684,15 +684,20 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
 
 fn owned_objref_string(obj: &OwnedObjectRef) -> String {
     format!(
-        " ┌──\n │ ID: {} \n │ Owner: {} \n │ Version: {:?} \n │ Digest: {}\n └──",
-        obj.reference.object_id, obj.owner, obj.reference.version, obj.reference.digest
+        " ┌──\n │ ID: {} \n │ Owner: {} \n │ Version: {} \n │ Digest: {}\n └──",
+        obj.reference.object_id,
+        obj.owner,
+        u64::from(obj.reference.version),
+        obj.reference.digest
     )
 }
 
 fn objref_string(obj: &SuiObjectRef) -> String {
     format!(
-        " ┌──\n │ ID: {} \n │ Version: {:?} \n │ Digest: {}\n └──",
-        obj.object_id, obj.version, obj.digest
+        " ┌──\n │ ID: {} \n │ Version: {} \n │ Digest: {}\n └──",
+        obj.object_id,
+        u64::from(obj.version),
+        obj.digest
     )
 }
 
@@ -771,7 +776,7 @@ impl Display for SuiTransactionBlockEffects {
         if !dependencies.is_empty() {
             builder.push_record(vec![format!("\nTransaction Dependencies:")]);
             for dependency in dependencies {
-                builder.push_record(vec![format!("   {}\n", dependency)]);
+                builder.push_record(vec![format!("   {}", dependency)]);
             }
         }
 
