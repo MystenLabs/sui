@@ -4,11 +4,13 @@
 
 use crate::{
     diag,
+    editions::Flavor,
     expansion::ast::{self as E, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     naming::ast as N,
-    parser::ast::{BinOp_, ConstantName, Field, FunctionName, StructName},
+    parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName},
     shared::{ast_debug::AstDebug, unique_map::UniqueMap, *},
+    sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -80,6 +82,7 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
+    current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
     function_locals: UniqueMap<H::Var, H::SingleType>,
     signature: Option<H::FunctionSignature>,
@@ -126,6 +129,7 @@ impl<'env> Context<'env> {
         }
         Context {
             env,
+            current_package: None,
             structs,
             function_locals: UniqueMap::new(),
             signature: None,
@@ -226,6 +230,7 @@ fn module(
         constants: tconstants,
         spec_dependencies: _,
     } = mdef;
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
 
@@ -234,6 +239,7 @@ fn module(
 
     gen_unused_warnings(context, is_source_module, &structs);
 
+    context.current_package = None;
     context.env.pop_warning_filter_scope();
     (
         module_ident,
@@ -274,9 +280,11 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
         function: tfunction,
         spec_dependencies: _,
     } = tscript;
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = tconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, tfunction);
+    context.current_package = None;
     context.env.pop_warning_filter_scope();
     H::Script {
         warning_filter,
@@ -785,13 +793,14 @@ fn assign(
                 };
                 H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
             };
+            let from_unpack = Some(loc);
             let fields = assign_fields(context, &m, &s, tfields)
                 .into_iter()
                 .enumerate();
             for (idx, (decl_idx, f, bt, tfa)) in fields {
                 assert!(idx == decl_idx);
                 let floc = tfa.loc;
-                let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f);
+                let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
                 let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
                 let borrow = H::exp(borrow_ty, sp(floc, borrow_));
                 assign_command(context, &mut after, floc, sp(floc, vec![tfa]), borrow);
@@ -1446,7 +1455,7 @@ fn exp_impl(
                     .or_default()
                     .insert(f.value());
             }
-            HE::Borrow(mut_, e, f)
+            HE::Borrow(mut_, e, f, None)
         }
         TE::TempBorrow(mut_, te) => {
             let eb = exp_(context, result, None, *te);
@@ -2031,14 +2040,21 @@ fn gen_unused_warnings(
         // cannot be analyzed in this pass
         return;
     }
+    let is_sui_mode = context.env.package_config(context.current_package).flavor == Flavor::Sui;
 
     for (_, sname, sdef) in structs {
         context
             .env
             .add_warning_filter_scope(sdef.warning_filter.clone());
 
+        let has_key = sdef.abilities.has_ability_(Ability_::Key);
+
         if let H::StructFields::Defined(fields) = &sdef.fields {
             for (f, _) in fields {
+                // skip for Sui ID fields
+                if is_sui_mode && has_key && f.value() == ID_FIELD_NAME {
+                    continue;
+                }
                 if !context
                     .used_fields
                     .get(sname)

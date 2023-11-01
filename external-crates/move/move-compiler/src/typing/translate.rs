@@ -2589,7 +2589,7 @@ fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T:
             // vis-a-vis ideas around package-private
             let msg = format!(
                 "The non-'public', non-'entry' function '{name}' is never called. \
-                           Consider removing it."
+                Consider removing it."
             );
             context
                 .env

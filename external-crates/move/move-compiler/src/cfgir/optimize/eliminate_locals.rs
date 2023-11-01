@@ -171,7 +171,7 @@ mod count {
             E::Freeze(e)
             | E::Dereference(e)
             | E::UnaryExp(_, e)
-            | E::Borrow(_, e, _)
+            | E::Borrow(_, e, _, _)
             | E::Cast(e, _) => exp(context, e),
 
             E::BinopExp(e1, _, e2) => {
@@ -208,7 +208,7 @@ mod count {
             | E::Dereference(_)
             | E::ModuleCall(_)
             | E::Move { .. }
-            | E::Borrow(_, _, _) => false,
+            | E::Borrow(_, _, _, _) => false,
 
             E::Unit { .. } | E::Value(_) | E::Constant(_) => true,
 
@@ -359,7 +359,7 @@ mod eliminate {
             E::Freeze(e)
             | E::Dereference(e)
             | E::UnaryExp(_, e)
-            | E::Borrow(_, e, _)
+            | E::Borrow(_, e, _, _)
             | E::Cast(e, _) => exp(context, e),
 
             E::BinopExp(e1, _, e2) => {
