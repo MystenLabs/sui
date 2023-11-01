@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // $GENERATED_MESSAGE
-
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use sui_protocol_config::ProtocolConfig;
@@ -23,6 +23,7 @@ mod tests;
 pub fn executor(
     protocol_config: &ProtocolConfig,
     silent: bool,
+    enable_profiler: Option<PathBuf>,
 ) -> SuiResult<Arc<dyn Executor + Send + Sync>> {
     let version = protocol_config.execution_version_as_option().unwrap_or(0);
     Ok(match version {

@@ -44,7 +44,7 @@ impl EpochState {
         let registry = prometheus::Registry::new();
         let limits_metrics = Arc::new(LimitsMetrics::new(&registry));
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
-        let executor = sui_execution::executor(&protocol_config, true).unwrap();
+        let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
 
         Self {
             epoch_start_state,

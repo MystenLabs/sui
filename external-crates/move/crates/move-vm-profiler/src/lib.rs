@@ -154,7 +154,7 @@ impl GasProfiler {
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
-        if !*PROFILER_ENABLED || self.start_gas == 0 {
+        if !(self.config.enabled || *PROFILER_ENABLED) || self.start_gas == 0 {
             return;
         }
 
@@ -169,7 +169,7 @@ impl GasProfiler {
     }
 
     pub fn close_frame(&mut self, frame_name: String, metadata: String, gas_end: u64) {
-        if !*PROFILER_ENABLED || self.start_gas == 0 {
+        if !(self.config.enabled || *PROFILER_ENABLED) || self.start_gas == 0 {
             return;
         }
         let frame_idx = self.add_frame(metadata.clone(), frame_name, metadata);
@@ -184,18 +184,23 @@ impl GasProfiler {
     }
 
     pub fn to_file(&self) {
-        if !*PROFILER_ENABLED || !self.is_metered() {
+        if !(self.config.enabled || *PROFILER_ENABLED) || !self.is_metered() {
             return;
         }
-        // Get the unix timestamp
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Clock may have gone backwards")
-            .as_nanos();
 
         let mut p = self.config.base_path.clone();
-        p.push(format!("gas_profile_{}_{}.json", self.profile_name(), now));
+        if let Some(f) = &self.config.full_path {
+            p = f.clone();
+        } else {
+            // Get the unix timestamp
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Clock may have gone backwards")
+                .as_nanos();
+            p.push(format!("gas_profile_{}_{}.json", self.profile_name(), now));
+        }
         let path_str = p.as_os_str().to_string_lossy().to_string();
+
         let mut file = std::fs::File::create(p).expect("Unable to create file");
 
         let json = serde_json::to_string_pretty(&self).expect("Unable to serialize profile");
