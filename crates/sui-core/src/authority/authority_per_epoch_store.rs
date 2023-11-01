@@ -1732,7 +1732,7 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 if transaction.sender_authority() != data.summary.auth_sig().authority {
-                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_sig().authority, transaction.certificate.origin() );
+                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_sig().authority, transaction.certificate_author_index );
                     return None;
                 }
             }
@@ -1743,8 +1743,7 @@ impl AuthorityPerEpochStore {
                 if &transaction.sender_authority() != authority {
                     warn!(
                         "EndOfPublish authority {} does not match narwhal certificate source {}",
-                        authority,
-                        transaction.certificate.origin()
+                        authority, transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -1757,7 +1756,7 @@ impl AuthorityPerEpochStore {
                     warn!(
                         "CapabilityNotification authority {} does not match narwhal certificate source {}",
                         capabilities.authority,
-                        transaction.certificate.origin()
+                        transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -1769,8 +1768,7 @@ impl AuthorityPerEpochStore {
                 if transaction.sender_authority() != *authority {
                     warn!(
                         "NewJWKFetched authority {} does not match narwhal certificate source {}",
-                        authority,
-                        transaction.certificate.origin()
+                        authority, transaction.certificate_author_index,
                     );
                     return None;
                 }
@@ -2104,7 +2102,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
-            certificate: _consensus_output,
+            certificate_author_index: _,
             certificate_author,
             consensus_index,
             transaction,
