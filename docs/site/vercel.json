@@ -69,16 +69,5 @@
       { "source": "/build/programming-with-objects/ch3-immutable-objects", "destination": "/concepts/object-ownership/immutable.html", "permanent": true },
       { "source": "/build/programming-with-objects/ch5-dynamic-fields", "destination": "/concepts/dynamic-fields.html", "permanent": true },     { "source": "/reference/sui-json", "destination": "/sui-api-ref.html", "permanent": true },
       { "source": "/reference/index", "destination": "/references.html", "permanent": true }
-    ],
-    "headers":[
-      {
-        "source": "/(.*)",
-        "headers" : [
-          {
-            "key" : "x-robots-tag",
-            "value" : "none"
-          }
-        ]
-      }
     ]
   }
