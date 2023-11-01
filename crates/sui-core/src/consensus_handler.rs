@@ -5,8 +5,8 @@ use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndicesWithStats,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
-use crate::authority::AuthorityMetrics;
-use crate::checkpoints::CheckpointServiceNotify;
+use crate::authority::{AuthorityMetrics, AuthorityState, AuthorityStore};
+use crate::checkpoints::{CheckpointService, CheckpointServiceNotify};
 use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::consensus_types::committee_api::CommitteeAPI;
 use crate::consensus_types::consensus_output_api::ConsensusOutputAPI;
@@ -33,8 +33,69 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
 use sui_types::storage::ObjectStore;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use tracing::{debug, error, info, instrument, trace_span};
+
+pub struct ConsensusHandlerInitializer {
+    state: Arc<AuthorityState>,
+    checkpoint_service: Arc<CheckpointService>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    throughput_calculator: Arc<ConsensusThroughputCalculator>,
+}
+
+impl ConsensusHandlerInitializer {
+    pub fn new(
+        state: Arc<AuthorityState>,
+        checkpoint_service: Arc<CheckpointService>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+        throughput_calculator: Arc<ConsensusThroughputCalculator>,
+    ) -> Self {
+        Self {
+            state,
+            checkpoint_service,
+            epoch_store,
+            low_scoring_authorities,
+            throughput_calculator,
+        }
+    }
+
+    pub fn new_for_testing(
+        state: Arc<AuthorityState>,
+        checkpoint_service: Arc<CheckpointService>,
+    ) -> Self {
+        Self {
+            state: state.clone(),
+            checkpoint_service,
+            epoch_store: state.epoch_store_for_testing().clone(),
+            low_scoring_authorities: Arc::new(Default::default()),
+            throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
+                None,
+                state.metrics.clone(),
+            )),
+        }
+    }
+
+    pub fn new_consensus_handler(
+        &self,
+    ) -> ConsensusHandler<Arc<AuthorityStore>, CheckpointService> {
+        let new_epoch_start_state = self.epoch_store.epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
+
+        ConsensusHandler::new(
+            self.epoch_store.clone(),
+            self.checkpoint_service.clone(),
+            self.state.transaction_manager().clone(),
+            self.state.db(),
+            self.low_scoring_authorities.clone(),
+            committee,
+            self.state.metrics.clone(),
+            self.throughput_calculator.clone(),
+        )
+    }
+}
 
 pub struct ConsensusHandler<T, C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
