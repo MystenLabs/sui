@@ -1,10 +1,11 @@
 use clap::*;
-use std::collections::HashMap;
+use prometheus::Registry;
 use std::fs;
-use sui_distributed_execution::ew_agent::*;
+use std::{collections::HashMap, sync::Arc};
 use sui_distributed_execution::server::*;
 use sui_distributed_execution::sw_agent::*;
 use sui_distributed_execution::types::*;
+use sui_distributed_execution::{ew_agent::*, metrics::Metrics};
 
 const FILE_PATH: &str = "crates/sui-distributed-execution/src/configs/1sw4ew.json";
 
@@ -32,14 +33,16 @@ async fn main() {
         &my_id
     );
 
+    let metrics = Arc::new(Metrics::new(&Registry::new()));
+
     // Initialize and run the server
     let kind = global_config.get(&my_id).unwrap().kind.as_str();
     if kind == "SW" {
         let mut server = Server::<SWAgent, SailfishMessage>::new(global_config, my_id);
-        server.run().await;
+        server.run(metrics).await;
     } else {
         // EW
         let mut server = Server::<EWAgent, SailfishMessage>::new(global_config, my_id);
-        server.run().await;
+        server.run(metrics).await;
     }
 }

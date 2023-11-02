@@ -4,12 +4,7 @@ use sui_types::{
 };
 
 pub trait WritableObjectStore {
-    fn insert(&self, 
-        k: ObjectID, 
-        v: (ObjectRef, Object)
-    ) -> Option<(ObjectRef, Object)>;
+    fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) -> Option<(ObjectRef, Object)>;
 
-    fn remove(&self,
-         k: ObjectID
-    ) -> Option<(ObjectRef, Object)>;
+    fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)>;
 }

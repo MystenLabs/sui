@@ -1,7 +1,8 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use super::agents::*;
 use crate::{
+    metrics::Metrics,
     seqn_worker::{self, SequenceWorkerState},
     types::*,
 };
@@ -22,6 +23,7 @@ impl Agent<SailfishMessage> for SWAgent {
         in_channel: mpsc::Receiver<NetworkMessage>,
         out_channel: mpsc::Sender<NetworkMessage>,
         attrs: GlobalConfig,
+        _metrics: Arc<Metrics>,
     ) -> Self {
         SWAgent {
             id,

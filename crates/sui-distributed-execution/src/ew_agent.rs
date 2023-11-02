@@ -4,6 +4,7 @@ use super::agents::*;
 use crate::{
     dash_store::DashMemoryBackedStore,
     exec_worker::{self},
+    metrics::Metrics,
     types::*,
 };
 use async_trait::async_trait;
@@ -17,6 +18,7 @@ pub struct EWAgent {
     in_channel: mpsc::Receiver<NetworkMessage>,
     out_channel: mpsc::Sender<NetworkMessage>,
     attrs: GlobalConfig,
+    metrics: Arc<Metrics>,
 }
 
 #[async_trait]
@@ -26,12 +28,14 @@ impl Agent<SailfishMessage> for EWAgent {
         in_channel: mpsc::Receiver<NetworkMessage>,
         out_channel: mpsc::Sender<NetworkMessage>,
         attrs: GlobalConfig,
+        metrics: Arc<Metrics>,
     ) -> Self {
         EWAgent {
             id,
             in_channel,
             out_channel,
             attrs,
+            metrics,
         }
     }
 
@@ -103,6 +107,7 @@ impl Agent<SailfishMessage> for EWAgent {
                 ew_ids,
                 sw_id,
                 self.id,
+                self.metrics.clone(),
             )
             .await;
     }

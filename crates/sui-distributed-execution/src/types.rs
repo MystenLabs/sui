@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::net::IpAddr;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    net::SocketAddr,
+};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
@@ -22,10 +25,43 @@ pub struct ServerConfig {
     pub kind: String,
     pub ip_addr: IpAddr,
     pub port: u16,
+    pub metrics_address: SocketAddr,
     pub attrs: HashMap<String, String>,
 }
 
 pub type GlobalConfig = HashMap<UniqueId, ServerConfig>;
+
+impl ServerConfig {
+    pub const BENCHMARK_BASE_PORT: u16 = 1500;
+
+    pub fn new_for_benchmark(ips: Vec<IpAddr>) -> GlobalConfig {
+        let benchmark_port_offset = ips.len() as u16;
+        let mut global_config = GlobalConfig::new();
+        for (i, ip) in ips.into_iter().enumerate() {
+            let network_port = Self::BENCHMARK_BASE_PORT + i as u16;
+            let metrics_port = benchmark_port_offset + network_port;
+            let kind = if i == 0 { "SW" } else { "EW" }.to_string();
+            let metrics_address = SocketAddr::new(ip, metrics_port);
+            let legacy_metrics = SocketAddr::new(ip, benchmark_port_offset + metrics_port);
+            let config = ServerConfig {
+                kind,
+                ip_addr: ip,
+                port: network_port,
+                metrics_address,
+                attrs: [
+                    ("metrics-address".to_string(), legacy_metrics.to_string()),
+                    ("execute".to_string(), 100.to_string()),
+                    ("mode".to_string(), "channel".to_string()),
+                ]
+                .iter()
+                .cloned()
+                .collect(),
+            };
+            global_config.insert(i as u16, config);
+        }
+        global_config
+    }
+}
 
 pub trait Message {
     fn serialize(&self) -> String;

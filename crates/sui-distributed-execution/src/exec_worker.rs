@@ -36,8 +36,11 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tokio::time::{sleep, Duration};
 
-use crate::seqn_worker::{COMPONENT, WORKLOAD};
 use crate::storage::WritableObjectStore;
+use crate::{
+    metrics::Metrics,
+    seqn_worker::{COMPONENT, WORKLOAD},
+};
 
 use super::types::*;
 
@@ -531,6 +534,7 @@ impl<
         ew_ids: Vec<UniqueId>,
         _sw_id: UniqueId,
         my_id: UniqueId,
+        worker_metrics: Arc<Metrics>,
     ) {
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
@@ -853,13 +857,22 @@ impl<
         }
 
         // Print TPS
-        let elapsed = now.elapsed();
-        let tps = num_tx as f64 / elapsed.as_secs_f64();
+        let elapsed = now.elapsed().as_secs_f64();
+        let tps = num_tx as f64 / elapsed;
         println!(
             "EW {} finished, executed {} txs ({:.2} tps)",
             my_id, num_tx, tps
         );
-        sleep(Duration::from_millis(10_000)).await;
+
+        // todo - hack to get metrics (we should report live metrics instead)
+        for _ in 0..num_tx {
+            worker_metrics
+                .latency_s
+                .with_label_values(&["default"])
+                .observe(elapsed);
+        }
+
+        sleep(Duration::from_millis(1_000)).await;
     }
 }
 
