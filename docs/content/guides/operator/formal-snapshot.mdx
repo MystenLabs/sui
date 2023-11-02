@@ -14,7 +14,7 @@ Formal snapshots provide a mechanism for a node to restore to a canonical state 
 1. **Agnosticism:** Formal snapshots are by nature agnostic to the underlying database choice or implementation of the protocol. As the live object set is protocol defined, so is the formal snapshot.
 1. **Verifiability:** Formal snapshots have first-class support in the core Sui protocol. As such, they must be trustless/verifiable by the node operator upon download. To support this, the protocol signs a commitment to the live object state at end of epoch, which formal snapshots are checked against at restore time. If this verification fails, the node state is moved back to the state before the snapshot restore attempt.
 
-Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more effeciently.
+Because these snapshots do not contain indexes, they are most immediately useful for validators and state sync Full nodes (SSFNs). You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you can recover from catastrophic failures in your system or hardware more efficiently.
 
 ## Enabling formal snapshots
 
