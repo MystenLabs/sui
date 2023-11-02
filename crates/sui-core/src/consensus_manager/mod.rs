@@ -9,13 +9,13 @@ use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use narwhal_config::Epoch;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_protocol_config::ProtocolVersion;
+use sui_types::committee::EpochId;
 use tokio::sync::{Mutex, MutexGuard};
 
 pub mod mysticeti_manager;
@@ -23,7 +23,7 @@ pub mod narwhal_manager;
 
 #[derive(PartialEq)]
 pub(crate) enum Running {
-    True(Epoch, ProtocolVersion),
+    True(EpochId, ProtocolVersion),
     False,
 }
 
@@ -79,6 +79,7 @@ pub struct ConsensusManagerMetrics {
     shutdown_latency: IntGauge,
     start_primary_retries: IntGauge,
     start_worker_retries: IntGauge,
+    start_mysticeti_retries: IntGauge,
 }
 
 impl ConsensusManagerMetrics {
@@ -108,6 +109,12 @@ impl ConsensusManagerMetrics {
                 registry
             )
             .unwrap(),
+            start_mysticeti_retries: register_int_gauge_with_registry!(
+                "mysticeti_manager_start_retries",
+                "The number of retries took to start Mysticeti node",
+                registry
+            )
+            .unwrap(),
         }
     }
 }
@@ -116,7 +123,7 @@ pub(crate) struct RunningLockGuard<'a> {
     state_guard: MutexGuard<'a, Running>,
     metrics: &'a ConsensusManagerMetrics,
     completed: bool,
-    epoch: Option<Epoch>,
+    epoch: Option<EpochId>,
     protocol_version: Option<ProtocolVersion>,
     start: Instant,
 }
@@ -125,7 +132,7 @@ impl<'a> RunningLockGuard<'a> {
     pub(crate) async fn acquire_start(
         metrics: &'a ConsensusManagerMetrics,
         running_mutex: &'a Mutex<Running>,
-        epoch: Epoch,
+        epoch: EpochId,
         version: ProtocolVersion,
     ) -> Option<RunningLockGuard<'a>> {
         let running = running_mutex.lock().await;

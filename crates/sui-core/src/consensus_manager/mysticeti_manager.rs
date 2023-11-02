@@ -7,24 +7,41 @@ use crate::consensus_manager::{
     ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
 };
 use crate::consensus_validator::SuiTxValidator;
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use narwhal_config::Epoch;
+use fastcrypto::traits::KeyPair;
+use itertools::Itertools;
+use mysten_metrics::{RegistryID, RegistryService};
+use mysticeti_core::committee::{Authority, Committee};
+use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
+use mysticeti_core::types::AuthorityIndex;
+use mysticeti_core::validator::Validator;
+use mysticeti_core::{PublicKey, Signer};
+use prometheus::Registry;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::NodeConfig;
+use sui_types::base_types::AuthorityName;
+use sui_types::committee::EpochId;
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::Mutex;
 
 #[allow(unused)]
 pub struct MysticetiManager {
+    keypair: AuthorityKeyPair,
+    network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     running: Mutex<Running>,
     metrics: ConsensusManagerMetrics,
+    registry_service: RegistryService,
+    validator: ArcSwapOption<(Validator, RegistryID)>,
 }
 
 impl MysticetiManager {
     #[allow(unused)]
-    fn get_store_path(&self, epoch: Epoch) -> PathBuf {
+    fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
         store_path
@@ -42,13 +59,14 @@ impl ConsensusManagerTrait for MysticetiManager {
         tx_validator: SuiTxValidator,
     ) {
         let system_state = epoch_store.epoch_start_state();
-        let committee = system_state.get_narwhal_committee();
+        let committee: narwhal_config::Committee = system_state.get_narwhal_committee();
+        let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
 
         let Some(mut guard) = RunningLockGuard::acquire_start(
             &self.metrics,
             &self.running,
-            committee.epoch(),
+            epoch,
             protocol_config.version,
         )
         .await
@@ -56,10 +74,64 @@ impl ConsensusManagerTrait for MysticetiManager {
             return;
         };
 
-        /*
-        TODO: put validator bootstrap logic here
-        */
-        guard.completed();
+        let parameters = mysticeti_parameters(&committee);
+        let committee = mysticeti_committee(&committee);
+
+        let name: AuthorityName = self.keypair.public().into();
+        let authority_index: AuthorityIndex = epoch_store
+            .committee()
+            .authority_index(&name)
+            .unwrap()
+            .into();
+        let config = PrivateConfig::new(self.get_store_path(epoch), authority_index);
+
+        // create the properties to be used
+        let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
+
+        // Start validator
+        const MAX_RETRIES: u32 = 2;
+        let mut retries = 0;
+
+        loop {
+            let private_key = self.network_keypair.copy().private();
+
+            match Validator::start(
+                authority_index,
+                committee.clone(),
+                &parameters,
+                config.clone(),
+                Some(registry.clone()),
+                Signer(Box::new(private_key.0.clone())),
+            )
+            .await
+            {
+                Ok(validator) => {
+                    let registry_id = self.registry_service.add(registry);
+
+                    self.validator
+                        .swap(Some(Arc::new((validator, registry_id))));
+
+                    guard.completed();
+
+                    break;
+                }
+                Err(err) => {
+                    retries += 1;
+
+                    self.metrics.start_mysticeti_retries.set(retries as i64);
+
+                    if retries >= MAX_RETRIES {
+                        panic!(
+                            "Failed starting Mysticeti, maxed out retries {}: {:?}",
+                            retries, err
+                        );
+                    }
+
+                    tracing::error!("Failed starting Mysticeti, retry {}: {:?}", retries, err);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
     }
 
     async fn shutdown(&self) {
@@ -69,18 +141,60 @@ impl ConsensusManagerTrait for MysticetiManager {
             return;
         };
 
-        /*
-        TODO: put validator shutdown logic here
-        */
+        // swap with empty to ensure there is no other reference to validator and we can safely do Arc unwrap
+        let r = self.validator.swap(None).unwrap();
+        let Ok((validator, registry_id)) = Arc::try_unwrap(r) else {
+            panic!("Failed to retrieve the mysticeti validator");
+        };
 
+        // shutdown the validator and wait for it
+        validator.stop().await;
+
+        // unregister the registry id
+        self.registry_service.remove(registry_id);
+
+        // mark shutdown as completed
         guard.completed();
     }
 
     async fn is_running(&self) -> bool {
-        todo!()
+        Running::False != *self.running.lock().await
     }
 
     fn get_storage_base_path(&self) -> PathBuf {
         self.storage_base_path.clone()
+    }
+}
+
+fn mysticeti_committee(committee: &narwhal_config::Committee) -> Arc<Committee> {
+    let authorities = committee
+        .authorities()
+        .map(|authority| {
+            // TODO: using the  Ed25519 network key which is compatible with Mysticeti which also uses Ed25519. Should
+            // switch to using the authority's protocol key (BLS) instead.
+            Authority::new(authority.stake(), PublicKey(authority.network_key().0))
+        })
+        .collect_vec();
+    Committee::new(authorities.clone())
+}
+
+fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
+    let identifiers = committee
+        .authorities()
+        .map(|authority| {
+            Identifier {
+                // TODO: using the  Ed25519 network key which is compatible with Mysticeti which also uses Ed25519. Should
+                // switch to using the authority's protocol key (BLS) instead.
+                public_key: PublicKey(authority.network_key().0),
+                network_address: authority.primary_address().to_socket_addr().unwrap(),
+                metrics_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0), // not relevant as it won't be used
+            }
+        })
+        .collect_vec();
+
+    //TODO: for now fallback to default parameters - will read from properties
+    Parameters {
+        identifiers,
+        ..Default::default()
     }
 }

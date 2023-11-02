@@ -14,8 +14,7 @@ use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
-use narwhal_executor::ExecutionState;
-use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
+use narwhal_types::{TransactionProto, TransactionsClient};
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,31 +26,6 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{interval, sleep};
-
-#[derive(Clone)]
-struct NoOpExecutionState {
-    epoch: Epoch,
-}
-
-#[async_trait::async_trait]
-impl ExecutionState for NoOpExecutionState {
-    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
-        for batches in consensus_output.batches {
-            for batch in batches {
-                for transaction in batch.transactions().iter() {
-                    assert_eq!(
-                        transaction.clone(),
-                        Bytes::from(self.epoch.to_be_bytes().to_vec())
-                    );
-                }
-            }
-        }
-    }
-
-    async fn last_executed_sub_dag_index(&self) -> u64 {
-        0
-    }
-}
 
 async fn send_transactions(
     name: &bls12381::min_sig::BLS12381PublicKey,

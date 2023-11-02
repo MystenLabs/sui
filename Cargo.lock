@@ -5461,6 +5461,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "minibytes"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=95cbf4c215af6af09cf26e6631171e1cab4146aa#95cbf4c215af6af09cf26e6631171e1cab4146aa"
+dependencies = [
+ "memmap2 0.7.1",
+ "serde",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6431,7 +6440,41 @@ dependencies = [
  "hyper",
  "libc",
  "memmap2 0.7.1",
- "minibytes",
+ "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=0bc1ae8f6cc5b1eb22752fa37ba64bdaf358f7cf)",
+ "parking_lot 0.12.1",
+ "prometheus",
+ "rand 0.8.5",
+ "serde",
+ "serde_yaml 0.9.21",
+ "tabled",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber",
+ "zeroize",
+]
+
+[[package]]
+name = "mysticeti-core"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=95cbf4c215af6af09cf26e6631171e1cab4146aa#95cbf4c215af6af09cf26e6631171e1cab4146aa"
+dependencies = [
+ "async-trait",
+ "axum",
+ "bincode",
+ "blake2",
+ "crc32fast",
+ "digest 0.10.6",
+ "ed25519-consensus",
+ "eyre",
+ "futures",
+ "gettid",
+ "hex",
+ "hyper",
+ "libc",
+ "memmap2 0.7.1",
+ "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=95cbf4c215af6af09cf26e6631171e1cab4146aa)",
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",
@@ -10362,7 +10405,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "mysticeti-core",
+ "mysticeti-core 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=95cbf4c215af6af09cf26e6631171e1cab4146aa)",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-executor",
@@ -14293,7 +14336,7 @@ dependencies = [
  "migrations_macros",
  "mime",
  "mime_guess",
- "minibytes",
+ "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=0bc1ae8f6cc5b1eb22752fa37ba64bdaf358f7cf)",
  "minimal-lexical",
  "miniz_oxide",
  "mio 0.7.14",
@@ -14347,7 +14390,7 @@ dependencies = [
  "multihash",
  "multihash-derive",
  "multimap",
- "mysticeti-core",
+ "mysticeti-core 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=0bc1ae8f6cc5b1eb22752fa37ba64bdaf358f7cf)",
  "named-lock",
  "nested",
  "newline-converter",

@@ -9,7 +9,7 @@ use crate::consensus_validator::SuiTxValidator;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use narwhal_config::{Epoch, Parameters, WorkerId};
+use narwhal_config::{Parameters, WorkerId};
 use narwhal_network::client::NetworkClient;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
@@ -17,6 +17,7 @@ use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::NodeConfig;
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::Mutex;
@@ -73,7 +74,7 @@ impl NarwhalManager {
         }
     }
 
-    fn get_store_path(&self, epoch: Epoch) -> PathBuf {
+    fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
         store_path.push(format!("{}", epoch));
         store_path
@@ -99,13 +100,14 @@ impl ConsensusManagerTrait for NarwhalManager {
     ) {
         let chain = epoch_store.get_chain_identifier();
         let system_state = epoch_store.epoch_start_state();
+        let epoch = epoch_store.epoch();
         let committee = system_state.get_narwhal_committee();
         let protocol_config = epoch_store.protocol_config();
 
         let Some(mut guard) = RunningLockGuard::acquire_start(
             &self.metrics,
             &self.running,
-            committee.epoch(),
+            epoch,
             protocol_config.version,
         )
         .await
@@ -121,7 +123,7 @@ impl ConsensusManagerTrait for NarwhalManager {
         let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
         // Create a new store
-        let store_path = self.get_store_path(committee.epoch());
+        let store_path = self.get_store_path(epoch);
         let store = NodeStorage::reopen(store_path, Some(self.store_cache_metrics.clone()));
 
         // Create a new client.
