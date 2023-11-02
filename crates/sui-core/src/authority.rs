@@ -743,7 +743,7 @@ impl AuthorityState {
         let (_gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
-            transaction.data().transaction_data(),
+            tx_data,
             input_objects,
             receiving_objects,
             &self.metrics.bytecode_verifier_metrics,
