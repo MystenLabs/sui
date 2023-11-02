@@ -82,6 +82,7 @@ struct RandomnessState {
     randomness_round: RandomnessRound,
     last_narwhal_round_sent: Round,
     narhwal_round: Round,
+    // Partial signatures are expensive to compute, cached in case we need to re-send.
     cached_sigs: Option<(RandomnessRound, Vec<RandomnessPartialSignature>)>,
     // Partial sig storage is keyed on (randomness round, authority ID).
     partial_sigs: BTreeMap<(RandomnessRound, AuthorityIdentifier), Vec<RandomnessPartialSignature>>,
@@ -275,9 +276,8 @@ impl RandomnessState {
 
     async fn update_narwhal_round(&mut self, round: Round) {
         self.narhwal_round = round;
-        let next_leader_narwhal_round = round + (round % 2);
         // Re-send partial signatures to new leader, in case the last one failed.
-        if self.dkg_output.is_some() && (next_leader_narwhal_round > self.last_narwhal_round_sent) {
+        if self.dkg_output.is_some() && (self.last_narwhal_round_sent <= round) {
             self.send_partial_signatures().await;
         }
     }
@@ -294,12 +294,9 @@ impl RandomnessState {
     }
 
     async fn send_partial_signatures(&mut self) {
-        let dkg_output = match &self.dkg_output {
-            Some(dkg_output) => dkg_output,
-            None => {
-                error!("random beacon: called send_partial_signatures before DKG completed");
-                return;
-            }
+        let Some(dkg_output) = &self.dkg_output else {
+            error!("random beacon: called send_partial_signatures before DKG completed");
+            return;
         };
         let shares = match &dkg_output.shares {
             Some(shares) => shares,
@@ -322,7 +319,8 @@ impl RandomnessState {
         }
         let sigs = self.cached_sigs.as_ref().unwrap().1.clone();
 
-        let next_leader_narwhal_round = self.narhwal_round + (self.narhwal_round % 2);
+        // To compute next leader round, add two to even round, and one to odd round.
+        let next_leader_narwhal_round = (self.narhwal_round + 2) & !1;
         self.last_narwhal_round_sent = next_leader_narwhal_round;
 
         let leader = self.leader_schedule.leader(next_leader_narwhal_round);
@@ -399,6 +397,8 @@ impl RandomnessState {
                 return;
             }
         }
+        // TODO: Refactor to save compute by optimistically aggregating first, and only verifying
+        // each batch if aggregated signature fails verification.
         if let Err(e) = ThresholdBls12381MinSig::partial_verify_batch(
             &dkg_output.vss_pk,
             &round.signature_message(),
