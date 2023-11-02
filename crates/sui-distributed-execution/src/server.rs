@@ -2,14 +2,16 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::SinkExt;
 use network::{MessageHandler, Receiver, ReliableSender, Writer};
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::time::{sleep, Duration};
+
+use crate::metrics::Metrics;
 
 use super::agents::*;
 use super::types::*;
@@ -36,6 +38,7 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     fn init_agent(
         id: UniqueId,
         conf: GlobalConfig,
+        metrics: Arc<Metrics>,
     ) -> (
         T,
         mpsc::Sender<NetworkMessage>,
@@ -43,12 +46,12 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     ) {
         let (in_send, in_recv) = mpsc::channel(100);
         let (out_send, out_recv) = mpsc::channel(100);
-        let agent = T::new(id, in_recv, out_send, conf);
+        let agent = T::new(id, in_recv, out_send, conf, metrics);
         return (agent, in_send, out_recv);
     }
 
     // Server main function
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self, metrics: Arc<Metrics>) {
         // Initialize map from id to address
         let mut addr_table: HashMap<UniqueId, SocketAddr> = HashMap::new();
         for (id, entry) in &self.global_config {
@@ -60,7 +63,7 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         // Network manager connects to agent through channels
         // initialize agent with global_config
         let (mut agent, in_sender, out_receiver) =
-            Self::init_agent(self.my_id, self.global_config.clone());
+            Self::init_agent(self.my_id, self.global_config.clone(), metrics);
 
         let network_manager = NetworkManager::new(self.my_id, addr_table, in_sender, out_receiver);
 
@@ -151,7 +154,7 @@ impl NetworkManager {
                     dst: 0,
                     payload: SailfishMessage::Handshake {},
                 };
-                println!("Sending handshake to {:?}", addr);
+                println!("[{}] Sending handshake to {:?}", self.my_id, addr);
                 let cancel_handler = sender
                     .send(
                         *addr,

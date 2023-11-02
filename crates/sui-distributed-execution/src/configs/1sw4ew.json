@@ -3,6 +3,7 @@
         "kind" : "SW",
         "ip_addr" : "127.0.0.1", 
         "port" : 5001,
+        "metrics_address": "0.0.0.0:9054",
         "attrs" : {
             "metrics-address": "0.0.0.0:9184",
             "mode": "channel"
@@ -12,6 +13,7 @@
         "kind" : "EW",
         "ip_addr" : "127.0.0.1", 
         "port" : 5002,
+        "metrics_address": "0.0.0.0:9055",
         "attrs" : {
             "metrics-address": "0.0.0.0:9185",
             "execute": "100",
@@ -22,6 +24,7 @@
         "kind" : "EW",
         "ip_addr" : "127.0.0.1", 
         "port" : 5003,
+        "metrics_address": "0.0.0.0:9056",
         "attrs" : {
             "metrics-address": "0.0.0.0:9186",
             "execute": "100",
@@ -32,6 +35,7 @@
         "kind" : "EW",
         "ip_addr" : "127.0.0.1", 
         "port" : 5004,
+        "metrics_address": "0.0.0.0:9057",
         "attrs" : {
             "metrics-address": "0.0.0.0:9187",
             "execute": "100",
@@ -42,6 +46,7 @@
         "kind" : "EW",
         "ip_addr" : "127.0.0.1", 
         "port" : 5005,
+        "metrics_address": "0.0.0.0:9058",
         "attrs" : {
             "metrics-address": "0.0.0.0:9188",
             "execute": "100",

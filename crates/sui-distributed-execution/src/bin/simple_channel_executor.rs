@@ -45,73 +45,75 @@ struct Args {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 12)]
 async fn main() {
-    let args = Args::parse();
-    let config = NodeConfig::load(&args.config_path).unwrap();
-    let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
-    let sw_attrs = HashMap::from([
-        (
-            "config".to_string(),
-            args.config_path.to_string_lossy().into_owned(),
-        ),
-        ("download".to_string(), args.download.to_string()),
-        ("execute".to_string(), args.execute.to_string()),
-    ]);
-    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, &sw_attrs).await;
-    println!("Download watermark: {:?}", sw_state.download);
-    println!("Execute watermark: {:?}", sw_state.execute);
+    // todo -- does not compile
 
-    // Channels from SW to EWs
-    let mut sw2ew_senders = Vec::with_capacity(NUM_EXECUTION_WORKERS);
-    // Channel from EWs to SW
-    let (ew2sw_sender, ew2sw_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
-    // Channels from EWs to other EWs
-    let mut ew2ew_senders = Vec::new();
-    let mut ew2ew_receivers = Vec::new();
-    for _ in 0..NUM_EXECUTION_WORKERS {
-        let (snd, rcv) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
-        ew2ew_senders.push(snd);
-        ew2ew_receivers.push(Some(rcv));
-    }
+    // let args = Args::parse();
+    // let config = NodeConfig::load(&args.config_path).unwrap();
+    // let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
+    // let sw_attrs = HashMap::from([
+    //     (
+    //         "config".to_string(),
+    //         args.config_path.to_string_lossy().into_owned(),
+    //     ),
+    //     ("download".to_string(), args.download.to_string()),
+    //     ("execute".to_string(), args.execute.to_string()),
+    // ]);
+    // let mut sw_state = seqn_worker::SequenceWorkerState::new(0, &sw_attrs).await;
+    // println!("Download watermark: {:?}", sw_state.download);
+    // println!("Execute watermark: {:?}", sw_state.execute);
 
-    // Run Execution Workers
-    let mut ew_handlers = Vec::new();
+    // // Channels from SW to EWs
+    // let mut sw2ew_senders = Vec::with_capacity(NUM_EXECUTION_WORKERS);
+    // // Channel from EWs to SW
+    // let (ew2sw_sender, ew2sw_receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+    // // Channels from EWs to other EWs
+    // let mut ew2ew_senders = Vec::new();
+    // let mut ew2ew_receivers = Vec::new();
+    // for _ in 0..NUM_EXECUTION_WORKERS {
+    //     let (snd, rcv) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+    //     ew2ew_senders.push(snd);
+    //     ew2ew_receivers.push(Some(rcv));
+    // }
 
-    for i in 0..NUM_EXECUTION_WORKERS {
-        let store = DashMemoryBackedStore::new();
-        let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
-        ew_state.init_store(&genesis);
-        let metrics = sw_state.metrics.clone();
+    // // Run Execution Workers
+    // let mut ew_handlers = Vec::new();
 
-        let ew2sw_sender = ew2sw_sender.clone();
-        let ew2ew_receiver = ew2ew_receivers[i].take().unwrap();
-        let ew2ew_senders = ew2ew_senders.clone();
-        let (sender, receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
-        sw2ew_senders.push(sender);
+    // for i in 0..NUM_EXECUTION_WORKERS {
+    //     let store = DashMemoryBackedStore::new();
+    //     let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
+    //     ew_state.init_store(&genesis);
+    //     let metrics = sw_state.metrics.clone();
 
-        ew_handlers.push(tokio::spawn(async move {
-            ew_state
-                .run(
-                    metrics,
-                    args.execute,
-                    receiver,
-                    ew2sw_sender,
-                    ew2ew_receiver,
-                    ew2ew_senders,
-                    i as u8,
-                )
-                .await;
-        }));
-    }
+    //     let ew2sw_sender = ew2sw_sender.clone();
+    //     let ew2ew_receiver = ew2ew_receivers[i].take().unwrap();
+    //     let ew2ew_senders = ew2ew_senders.clone();
+    //     let (sender, receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+    //     sw2ew_senders.push(sender);
 
-    // Run Sequence Worker asynchronously
-    let sw_handler = tokio::spawn(async move {
-        sw_state.run(sw2ew_senders, ew2sw_receiver).await;
-    });
+    //     ew_handlers.push(tokio::spawn(async move {
+    //         ew_state
+    //             .run(
+    //                 metrics,
+    //                 args.execute,
+    //                 receiver,
+    //                 ew2sw_sender,
+    //                 ew2ew_receiver,
+    //                 ew2ew_senders,
+    //                 i as u8,
+    //             )
+    //             .await;
+    //     }));
+    // }
 
-    // Await for workers (EWs and SW) to finish.
-    sw_handler.await.expect("sw failed");
+    // // Run Sequence Worker asynchronously
+    // let sw_handler = tokio::spawn(async move {
+    //     sw_state.run(sw2ew_senders, ew2sw_receiver).await;
+    // });
 
-    for (i, ew_handler) in ew_handlers.into_iter().enumerate() {
-        ew_handler.await.expect(&format!("ew {} failed", i));
-    }
+    // // Await for workers (EWs and SW) to finish.
+    // sw_handler.await.expect("sw failed");
+
+    // for (i, ew_handler) in ew_handlers.into_iter().enumerate() {
+    //     ew_handler.await.expect(&format!("ew {} failed", i));
+    // }
 }
