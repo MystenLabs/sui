@@ -119,6 +119,7 @@ members = [
     "crates/sui-open-rpc-macros",
     "crates/sui-oracle",
     "crates/sui-package-resolver",
+    "crates/sui-pkg-dump",
     "crates/sui-proc-macros",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",

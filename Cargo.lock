@@ -12354,6 +12354,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-pkg-dump"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap",
+ "diesel",
+ "serde_json",
+ "sui-indexer",
+ "sui-types",
+ "tokio",
+]
+
+[[package]]
 name = "sui-proc-macros"
 version = "0.7.0"
 dependencies = [

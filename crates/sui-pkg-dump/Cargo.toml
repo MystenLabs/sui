@@ -1,0 +1,18 @@
+[package]
+name = "sui-pkg-dump"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+
+[dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+clap.workspace = true
+diesel.workspace = true
+serde_json.workspace = true
+sui-indexer.workspace = true
+sui-types.workspace = true
+tokio.workspace = true
