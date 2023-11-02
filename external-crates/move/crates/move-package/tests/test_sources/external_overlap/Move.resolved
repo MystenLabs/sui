@@ -80,6 +80,8 @@ ResolvedGraph {
         default_flavor: None,
         default_edition: None,
         deps_as_root: false,
+        silence_warnings: false,
+        warnings_are_errors: false,
     },
     package_table: {
         "A": Package {
