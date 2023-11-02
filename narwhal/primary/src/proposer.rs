@@ -352,8 +352,7 @@ impl Proposer {
         // If this node is going to be the leader of the next round, we set a lower max
         // timeout value to increase its chance of being included in the dag. As leaders are elected
         // on even rounds only we apply the reduced max delay only for those ones.
-        if (self.round + 1) % 2 == 0
-            && self.leader_schedule.leader(self.round + 1).id() == self.authority_id
+        if self.leader_schedule.leader(self.round + 1).id() == self.authority_id
         {
             self.max_header_delay / 2
         } else {
@@ -370,42 +369,12 @@ impl Proposer {
         // the next leader.
         let next_round = self.round + 1;
         if self.committee.size() > 1
-            && next_round % 2 == 0
             && self.leader_schedule.leader(next_round).id() == self.authority_id
         {
             return Duration::ZERO;
         }
 
-        // Give a boost on the odd rounds to a node by using the whole committee here, not just the
-        // nodes of the leader_schedule. By doing this we keep the proposal rate as high as possible
-        // which leads to higher round rate and also acting as a score booster to the less strong nodes
-        // as well.
-        if self.committee.size() > 1
-            && next_round % 2 != 0
-            && self.committee.leader(next_round).id() == self.authority_id
-        {
-            return Duration::ZERO;
-        }
         self.min_header_delay
-    }
-
-    /// Update the last leader certificate.
-    fn update_leader(&mut self) -> bool {
-        let leader = self.leader_schedule.leader(self.round);
-        self.last_leader = self
-            .last_parents
-            .iter()
-            .find(|x| {
-                if x.origin() == leader.id() {
-                    debug!("Got leader {:?} for round {}", x, self.round);
-                    true
-                } else {
-                    false
-                }
-            })
-            .cloned();
-
-        self.last_leader.is_some()
     }
 
     /// Check whether if this validator is the leader of the round, or if we have
@@ -440,10 +409,21 @@ impl Proposer {
     /// Whether we can advance the DAG or need to wait for the leader/more votes.
     /// Note that if we timeout, we ignore this check and advance anyway.
     fn ready(&mut self) -> bool {
-        match self.round % 2 {
-            0 => self.update_leader(),
-            _ => self.enough_votes(),
-        }
+        let leader = self.leader_schedule.leader(self.round);
+        self.last_leader = self
+            .last_parents
+            .iter()
+            .find(|x| {
+                if x.origin() == leader.id() {
+                    debug!("Got leader {:?} for round {}", x, self.round);
+                    true
+                } else {
+                    false
+                }
+            })
+            .cloned();
+
+        self.last_leader.is_some()
     }
 
     /// Main loop listening to incoming messages.

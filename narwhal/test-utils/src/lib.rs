@@ -576,10 +576,6 @@ pub fn make_certificates_with_leader_configuration(
     names: &[AuthorityIdentifier],
     leader_configurations: HashMap<Round, TestLeaderConfiguration>,
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
-    for round in leader_configurations.keys() {
-        assert_eq!(round % 2, 0, "Leaders are elected only on even rounds");
-    }
-
     let mut certificates: VecDeque<Certificate> = VecDeque::new();
     let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
     let mut next_parents = BTreeSet::new();

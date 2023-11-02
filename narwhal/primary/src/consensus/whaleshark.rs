@@ -387,10 +387,9 @@ impl Whaleshark {
 
     fn report_leader_on_time_metrics(&mut self, certificate_round: Round, state: &ConsensusState) {
         if certificate_round > self.max_inserted_certificate_round
-            && certificate_round % 2 == 0
-            && certificate_round > 2
+            && certificate_round > 1
         {
-            let previous_leader_round = certificate_round - 2;
+            let previous_leader_round = certificate_round - 1;
 
             // This metric reports the leader election success for the last leader election round.
             // Our goal is to identify the rate of missed/failed leader elections which are a source
