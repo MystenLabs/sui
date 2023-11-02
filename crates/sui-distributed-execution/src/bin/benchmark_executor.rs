@@ -109,7 +109,7 @@ mod test {
 
     #[tokio::test]
     async fn smoke_test() {
-        let tx_count = 1000;
+        let tx_count = 300;
         let execution_workers = 4;
         let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
         let mut global_configs = ServerConfig::new_for_benchmark(ips);

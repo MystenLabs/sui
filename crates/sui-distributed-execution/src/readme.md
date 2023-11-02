@@ -10,6 +10,14 @@ cargo build --release --bin benchmark_executor
 - `<id>` is the logical id from the json config file. Currently, `<id>` needs to be `0` for the SW and `1` through `4` for the EWs (5 workers in total).
 - `n` is the number of transactions that will be generated and executed
 
+## Running tests
+
+Please always run tests to ensure your recent modifications did not break anything:
+
+```bash
+cargo test -p sui-distributed-execution -- --nocapture
+```
+
 ## Changing execution parameters
 
 ### The config file
