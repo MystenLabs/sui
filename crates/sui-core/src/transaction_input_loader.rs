@@ -249,7 +249,10 @@ impl TransactionInputLoader {
                     });
                     continue;
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => object_keys.push(objref.into()),
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    object_keys.push(objref.into());
+                    fetches.push((i, input));
+                }
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
