@@ -1,11 +1,5 @@
 use clap::*;
-use std::collections::HashMap;
-use std::fs;
-use sui_distributed_execution::agents::*;
-use sui_distributed_execution::server::*;
 use sui_distributed_execution::types::*;
-
-const FILE_PATH: &str = "crates/sui-distributed-execution/src/configs/simple_config.json";
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]

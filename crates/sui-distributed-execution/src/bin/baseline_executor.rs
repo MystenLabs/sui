@@ -1,17 +1,6 @@
 use clap::*;
-use std::cmp;
 use std::path::PathBuf;
-use std::time::Instant;
-use sui_config::{Config, NodeConfig};
-use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_distributed_execution::{exec_worker, seqn_worker, simple_store::MemoryBackedStore};
 use sui_types::multiaddr::Multiaddr;
-use sui_types::sui_system_state::{
-    epoch_start_sui_system_state::EpochStartSystemStateTrait, get_sui_system_state,
-    SuiSystemStateTrait,
-};
-
-use sui_distributed_execution::types::*;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {

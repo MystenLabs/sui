@@ -1,10 +1,5 @@
 use clap::*;
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
-use sui_config::{Config, NodeConfig};
-use sui_distributed_execution::{dash_store::DashMemoryBackedStore, exec_worker, seqn_worker};
-use tokio::sync::mpsc;
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -23,8 +18,8 @@ const GIT_REVISION: &str = {
 };
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
-const DEFAULT_CHANNEL_SIZE: usize = 1024;
-const NUM_EXECUTION_WORKERS: usize = 4;
+const _DEFAULT_CHANNEL_SIZE: usize = 1024;
+const _NUM_EXECUTION_WORKERS: usize = 4;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
