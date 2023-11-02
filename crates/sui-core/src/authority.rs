@@ -712,7 +712,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
         let tx_digest = transaction.digest();
-        let tx_data = &transaction.data().intent_message().value;
+        let tx_data = transaction.data().transaction_data();
 
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
@@ -956,12 +956,7 @@ impl AuthorityState {
         let input_objects = {
             let _scope = monitored_scope("Execution::load_input_objects");
             let input_objects = &certificate.data().intent_message().value.input_objects()?;
-            if certificate
-                .data()
-                .intent_message()
-                .value
-                .is_end_of_epoch_tx()
-            {
+            if certificate.data().transaction_data().is_end_of_epoch_tx() {
                 self.input_loader
                     .read_objects_for_synchronous_execution(
                         tx_digest,
@@ -972,7 +967,7 @@ impl AuthorityState {
             } else {
                 self.input_loader
                     .read_objects_for_execution(
-                        &**epoch_store,
+                        epoch_store.as_ref(),
                         tx_digest,
                         input_objects,
                         epoch_store.epoch(),
@@ -1179,7 +1174,7 @@ impl AuthorityState {
         .await?;
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
-            certificate.data().intent_message().value.kind()
+            certificate.data().transaction_data().kind()
         {
             if let Some(err) = &execution_error_opt {
                 error!("Authenticator state update failed: {err}");

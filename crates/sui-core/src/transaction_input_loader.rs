@@ -229,7 +229,7 @@ impl TransactionInputLoader {
 
         let mut results = vec![None; input_object_kinds.len()];
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
-        let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
+        let mut fetches = Vec::with_capacity(input_object_kinds.len());
 
         for (i, input) in input_object_kinds.iter().enumerate() {
             match input {
@@ -267,18 +267,19 @@ impl TransactionInputLoader {
                         )
                     });
                     object_keys.push(ObjectKey(*id, *version));
-                    fetch_indices.push(i);
+                    fetches.push((i, input));
                 }
             }
         }
 
         let objects = self.store.multi_get_object_by_key(&object_keys)?;
 
-        for (object, input, key, index) in izip!(
+        assert!(objects.len() == object_keys.len() && objects.len() == fetches.len());
+
+        for (object, key, (index, input)) in izip!(
             objects.into_iter(),
-            input_object_kinds,
             object_keys.into_iter(),
-            fetch_indices.into_iter()
+            fetches.into_iter()
         ) {
             results[index] = Some(match (object, input) {
                 (Some(obj), input_object_kind) => ObjectReadResult {

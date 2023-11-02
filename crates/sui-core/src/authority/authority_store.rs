@@ -1644,7 +1644,7 @@ impl AuthorityStore {
 
     /// Returns the latest object reference if and only if the object is still live (i.e. it does
     /// not return tombstones)
-    pub fn get_latest_object_ref(
+    pub fn get_latest_object_ref_if_alive(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<ObjectRef>, SuiError> {
