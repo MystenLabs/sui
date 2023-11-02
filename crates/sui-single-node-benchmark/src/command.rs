@@ -32,6 +32,8 @@ pub struct Command {
             This represents the amount of DB reads per transaction prior to execution."
     )]
     pub num_input_objects: u8,
+    #[arg(long, help = "Whether to print out sample transaction and effects")]
+    pub print_sample_tx: bool,
     #[arg(
         long,
         default_value = "baseline",

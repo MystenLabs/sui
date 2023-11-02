@@ -32,10 +32,14 @@ impl BenchmarkContext {
         workload: Workload,
         benchmark_component: Component,
         checkpoint_size: usize,
+        print_sample_tx: bool,
     ) -> Self {
         // Increase by 2 so that we could generate one extra sample transaction before benchmarking.
         // as well as reserve 1 account for package publishing.
-        let num_accounts = workload.num_accounts() + 2;
+        let mut num_accounts = workload.num_accounts() + 1;
+        if print_sample_tx {
+            num_accounts += 1;
+        }
         let gas_object_num_per_account = workload.gas_object_num_per_account();
         let total = num_accounts * gas_object_num_per_account;
 
@@ -170,10 +174,16 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn benchmark_transaction_execution(&self, transactions: Vec<Transaction>) {
+    pub(crate) async fn benchmark_transaction_execution(
+        &self,
+        transactions: Vec<Transaction>,
+        print_sample_tx: bool,
+    ) {
         let mut transactions = self.certify_transactions(transactions).await;
-        self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
-            .await;
+        if print_sample_tx {
+            self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
+                .await;
+        }
 
         let tx_count = transactions.len();
         let start_time = std::time::Instant::now();
@@ -206,9 +216,12 @@ impl BenchmarkContext {
     pub(crate) async fn benchmark_transaction_execution_in_memory(
         &self,
         mut transactions: Vec<Transaction>,
+        print_sample_tx: bool,
     ) {
-        self.execute_sample_transaction(transactions.pop().unwrap())
-            .await;
+        if print_sample_tx {
+            self.execute_sample_transaction(transactions.pop().unwrap())
+                .await;
+        }
 
         let tx_count = transactions.len();
         let in_memory_store = self.validator.create_in_memory_store();
@@ -257,9 +270,15 @@ impl BenchmarkContext {
     }
 
     /// Benchmark parallel signing a vector of transactions and measure the TPS.
-    pub(crate) async fn benchmark_transaction_signing(&self, transactions: Vec<Transaction>) {
-        let sample_transaction = &transactions[0];
-        info!("Sample transaction: {:?}", sample_transaction.data());
+    pub(crate) async fn benchmark_transaction_signing(
+        &self,
+        transactions: Vec<Transaction>,
+        print_sample_tx: bool,
+    ) {
+        if print_sample_tx {
+            let sample_transaction = &transactions[0];
+            info!("Sample transaction: {:?}", sample_transaction.data());
+        }
 
         let tx_count = transactions.len();
         let start_time = std::time::Instant::now();
