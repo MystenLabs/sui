@@ -104,7 +104,6 @@ impl MoveObject {
         };
 
         Ok(Some(Stake {
-            id: ID(stake.id().to_string()),
             active_epoch_id: Some(stake.activation_epoch()),
             estimated_reward: None,
             principal: Some(BigInt::from(stake.principal())),

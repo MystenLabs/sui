@@ -918,10 +918,6 @@ type ServiceConfig {
 
 type Stake {
 	"""
-	Stake object address
-	"""
-	id: ID!
-	"""
 	The estimated reward for this stake object, computed as the
 	value of multiplying the principal value with the ratio between the initial stake rate and the current rate
 	"""

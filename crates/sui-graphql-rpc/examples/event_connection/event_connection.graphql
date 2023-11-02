@@ -5,7 +5,6 @@
     }
   ) {
     nodes {
-      id
       sendingModuleId {
         name
         package {

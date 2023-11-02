@@ -40,10 +40,7 @@ use crate::{
         validator_set::ValidatorSet,
     },
 };
-use async_graphql::{
-    connection::{Connection, Edge},
-    ID,
-};
+use async_graphql::connection::{Connection, Edge};
 use diesel::{
     pg::Pg,
     query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment, QueryId},
@@ -2069,7 +2066,6 @@ impl From<SuiStake> for Stake {
         };
 
         Stake {
-            id: ID(value.staked_sui_id.to_string()),
             active_epoch_id: Some(value.stake_active_epoch),
             estimated_reward: reward,
             principal: Some(value.principal.into()),

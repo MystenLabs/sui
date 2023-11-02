@@ -13,7 +13,6 @@
     }
     coinConnection {
       nodes {
-        id
         asMoveObject {
           contents {
             type {
