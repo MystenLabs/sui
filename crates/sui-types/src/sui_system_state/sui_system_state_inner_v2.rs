@@ -231,7 +231,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV2 {
                 SystemParametersV2 {
                     stake_subsidy_start_epoch,
                     epoch_duration_ms,
-                    min_validator_count: _, // TODO: Add it to RPC layer in the future.
+                    min_validator_count,
                     max_validator_count,
                     min_validator_joining_stake,
                     validator_low_stake_threshold,
@@ -303,6 +303,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV2 {
                 .into_iter()
                 .map(|e| (e.key, e.value.contents))
                 .collect(),
+            min_validator_count,
             max_validator_count,
             min_validator_joining_stake,
             validator_low_stake_threshold,

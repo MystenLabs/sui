@@ -16,6 +16,9 @@ use crate::SUI_SYSTEM_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Minimum number of active validators at any moment.
+pub const MIN_VALIDATOR_COUNT: u64 = 4;
+
 /// Maximum number of active validators at any moment.
 /// We do not allow the number of validators in any epoch to go above this.
 pub const MAX_VALIDATOR_COUNT: u64 = 150;

@@ -8,6 +8,7 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata}
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::error::SuiError;
+use crate::governance::MIN_VALIDATOR_COUNT;
 use crate::id::ID;
 use crate::multiaddr::Multiaddr;
 use crate::storage::ObjectStore;
@@ -725,6 +726,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .into_iter()
                 .map(|e| (e.key, e.value.contents))
                 .collect(),
+            min_validator_count: MIN_VALIDATOR_COUNT,
             max_validator_count,
             min_validator_joining_stake,
             validator_low_stake_threshold,

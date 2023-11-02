@@ -89,6 +89,11 @@ pub struct SuiSystemStateSummary {
     #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub stake_subsidy_start_epoch: u64,
 
+    /// Minimum number of active validators at any moment.
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
+    pub min_validator_count: u64,
+
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     #[schemars(with = "BigInt<u64>")]
@@ -334,6 +339,7 @@ impl Default for SuiSystemStateSummary {
             epoch_start_timestamp_ms: 0,
             epoch_duration_ms: 0,
             stake_subsidy_start_epoch: 0,
+            min_validator_count: 0,
             max_validator_count: 0,
             min_validator_joining_stake: 0,
             validator_low_stake_threshold: 0,
