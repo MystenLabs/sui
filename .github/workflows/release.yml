@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           # [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
-          cd external-crates/move && cargo build -p move-analyzer --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
