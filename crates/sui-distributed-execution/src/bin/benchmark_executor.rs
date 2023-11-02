@@ -114,8 +114,6 @@ mod test {
         let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
         let mut global_configs = ServerConfig::new_for_benchmark(ips);
 
-        println!("global_configs: {:?}", global_configs);
-
         // Insert workload.
         for id in 0..execution_workers + 1 {
             global_configs.entry(id as u16).and_modify(|e| {
