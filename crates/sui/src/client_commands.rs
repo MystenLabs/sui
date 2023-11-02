@@ -405,9 +405,9 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
 
-        /// If `true`, enable linters
+        /// If `true`, disable linters
         #[clap(long, global = true)]
-        lint: bool,
+        no_lint: bool,
     },
 
     /// Split a coin object into multiple coins.
@@ -568,9 +568,9 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
 
-        /// If `true`, enable linters
+        /// If `true`, disable linters
         #[clap(long, global = true)]
-        lint: bool,
+        no_lint: bool,
     },
 
     /// Run the bytecode verifier on the package
@@ -723,7 +723,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                lint,
+                no_lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -736,7 +736,7 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
-                        lint,
+                        !no_lint,
                     )
                     .await?;
 
@@ -812,7 +812,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                lint,
+                no_lint,
             } => {
                 if build_config.test_mode {
                     return Err(SuiError::ModulePublishFailure {
@@ -839,7 +839,7 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
-                    lint,
+                    !no_lint,
                 )
                 .await?;
 
