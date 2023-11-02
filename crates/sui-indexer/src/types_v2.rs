@@ -194,7 +194,7 @@ impl IndexedEvent {
             senders: vec![event.sender],
             package: event.package_id,
             module: event.transaction_module.to_string(),
-            event_type: event.type_.to_canonical_display().to_string(),
+            event_type: event.type_.to_canonical_display(true).to_string(),
             bcs: event.contents.clone(),
             timestamp_ms,
         }
@@ -248,7 +248,7 @@ impl IndexedObject {
         let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
         let coin_type = object
             .coin_type_maybe()
-            .map(|t| t.to_canonical_display().to_string());
+            .map(|t| t.to_canonical_display(true).to_string());
         let coin_balance = if coin_type.is_some() {
             Some(object.get_coin_value_unsafe())
         } else {

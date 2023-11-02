@@ -74,7 +74,7 @@ impl From<IndexedObject> for StoredObject {
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
             owner_id: o.owner_id.map(|id| id.to_vec()),
-            object_type: o.object.type_().map(|t| t.to_canonical_string()),
+            object_type: o.object.type_().map(|t| t.to_canonical_string(true)),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),

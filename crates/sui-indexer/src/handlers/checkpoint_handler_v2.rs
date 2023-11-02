@@ -698,7 +698,7 @@ fn try_create_dynamic_field_info(
                 name,
                 bcs_name,
                 type_,
-                object_type: object_type.to_canonical_string(),
+                object_type: object_type.to_canonical_string(true),
                 object_id,
                 version,
                 digest,
@@ -709,7 +709,7 @@ fn try_create_dynamic_field_info(
             bcs_name,
             type_,
             object_type: move_object.into_type().into_type_params()[1]
-                .to_canonical_display()
+                .to_canonical_display(true)
                 .to_string(),
             object_id: o.id(),
             version: o.version(),
