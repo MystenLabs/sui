@@ -10905,6 +10905,7 @@ dependencies = [
  "enum_dispatch",
  "fastcrypto",
  "itertools",
+ "json_to_table",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -10918,6 +10919,7 @@ dependencies = [
  "sui-macros",
  "sui-protocol-config",
  "sui-types",
+ "tabled",
  "tracing",
  "workspace-hack",
 ]

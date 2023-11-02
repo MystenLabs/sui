@@ -1719,6 +1719,9 @@ impl ProtocolConfig {
     pub fn set_verify_legacy_zklogin_address(&mut self, val: bool) {
         self.feature_flags.verify_legacy_zklogin_address = val
     }
+    pub fn set_enable_effects_v2(&mut self, val: bool) {
+        self.feature_flags.enable_effects_v2 = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

@@ -1,18 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { useLotSize } from '_app/hooks/deepbook/useLotSize';
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
-import {
-	DEEPBOOK_KEY,
-	DEFAULT_WALLET_FEE_ADDRESS,
-	ESTIMATED_GAS_FEES_PERCENTAGE,
-	ONE_SUI_DEEPBOOK,
-	WALLET_FEES_PERCENTAGE,
-} from '_pages/swap/constants';
+import { DEEPBOOK_KEY, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
 import { useDeepBookContext } from '_shared/deepBook/context';
-import { FEATURES } from '_src/shared/experimentation/features';
-import { useFeatureValue } from '@growthbook/growthbook-react';
-import { useGetObject } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { TransactionBlock } from '@mysten/sui.js/builder';
@@ -71,10 +63,9 @@ async function getCoinsByBalance({
 	return coins;
 }
 
-function formatBalanceToLotSize(balance: string, lotSize: number) {
+function formatBalance(balance: string, lotSize: number) {
 	const balanceBigNumber = new BigNumber(balance);
-	const lotSizeBigNumber = new BigNumber(lotSize);
-	const remainder = balanceBigNumber.mod(lotSizeBigNumber);
+	const remainder = balanceBigNumber.mod(lotSize);
 
 	if (remainder.isEqualTo(0)) {
 		return balanceBigNumber.toString();
@@ -84,60 +75,92 @@ function formatBalanceToLotSize(balance: string, lotSize: number) {
 	return roundedDownBalance.abs().toString();
 }
 
+function getWalletFee(balance: string) {
+	return new BigNumber(balance)
+		.times(WALLET_FEES_PERCENTAGE / 100)
+		.integerValue(BigNumber.ROUND_DOWN)
+		.toString();
+}
+
+function getBalanceAndWalletFees(balance: string, totalBalance: string, conversionRate: number) {
+	const bigNumberTotalBalance = new BigNumber(totalBalance).shiftedBy(conversionRate);
+	const bigNumberBalance = new BigNumber(balance);
+	const walletFees = getWalletFee(bigNumberBalance.toString());
+	const balanceAndWalletFees = bigNumberBalance.plus(walletFees);
+
+	if (balanceAndWalletFees.isGreaterThan(bigNumberTotalBalance)) {
+		/**
+		 * If the balance + wallet fees is greater than the total balance, we need to
+		 * recalculate the balance and wallet fees.
+		 */
+		const remainingBalance = bigNumberBalance.minus(walletFees).toString();
+		const newWalletFee = getWalletFee(remainingBalance);
+
+		return {
+			actualBalance: remainingBalance,
+			actualWalletFee: newWalletFee,
+		};
+	}
+
+	return {
+		actualBalance: bigNumberBalance.toString(),
+		actualWalletFee: walletFees,
+	};
+}
+
 async function getPlaceMarketOrderTxn({
 	deepBookClient,
 	poolId,
 	accountCapId,
 	address,
 	isAsk,
-	lotSize,
 	baseBalance,
 	quoteBalance,
 	quoteCoins,
 	walletFeeAddress,
+	totalBaseBalance,
+	totalQuoteBalance,
+	baseConversionRate,
+	quoteConversionRate,
+	lotSize,
 }: {
 	deepBookClient: DeepBookClient;
 	poolId: string;
 	accountCapId: string;
 	address: string;
 	isAsk: boolean;
-	lotSize: number;
 	baseBalance: string;
 	quoteBalance: string;
 	baseCoins: CoinStruct[];
 	quoteCoins: CoinStruct[];
 	walletFeeAddress: string;
+	totalBaseBalance: string;
+	totalQuoteBalance: string;
+	baseConversionRate: number;
+	quoteConversionRate: number;
+	lotSize: string;
 }) {
 	const txb = new TransactionBlock();
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
 
-	let balanceToSwap;
 	let walletFeeCoin;
 	let txnResult;
 
 	if (isAsk) {
-		const bigNumberBaseBalance = new BigNumber(baseBalance);
+		const { actualBalance, actualWalletFee } = getBalanceAndWalletFees(
+			baseBalance,
+			totalBaseBalance,
+			baseConversionRate,
+		);
 
-		if (bigNumberBaseBalance.isLessThan(ONE_SUI_DEEPBOOK)) {
-			balanceToSwap = bigNumberBaseBalance.minus(
-				bigNumberBaseBalance.times(ESTIMATED_GAS_FEES_PERCENTAGE / 100),
-			);
-		} else {
-			balanceToSwap = bigNumberBaseBalance;
-		}
+		const actualBalanceFormatted = formatBalance(actualBalance, parseInt(lotSize));
 
-		const walletFee = balanceToSwap
-			.times(WALLET_FEES_PERCENTAGE / 100)
-			.integerValue(BigNumber.ROUND_DOWN)
-			.toString();
-
-		balanceToSwap = formatBalanceToLotSize(balanceToSwap.minus(walletFee).toString(), lotSize);
-		const swapCoin = txb.splitCoins(txb.gas, [balanceToSwap]);
-		walletFeeCoin = txb.splitCoins(txb.gas, [walletFee]);
+		const swapCoin = txb.splitCoins(txb.gas, [actualBalanceFormatted]);
+		walletFeeCoin = txb.splitCoins(txb.gas, [actualWalletFee]);
 		txnResult = await deepBookClient.placeMarketOrder(
 			accountCap,
 			poolId,
-			BigInt(balanceToSwap),
+			BigInt(actualBalanceFormatted),
 			'ask',
 			swapCoin,
 			undefined,
@@ -156,19 +179,21 @@ async function getPlaceMarketOrderTxn({
 			);
 		}
 
-		const walletFee = new BigNumber(quoteBalance)
-			.times(WALLET_FEES_PERCENTAGE / 100)
-			.integerValue(BigNumber.ROUND_DOWN)
-			.toString();
+		const { actualBalance, actualWalletFee } = getBalanceAndWalletFees(
+			quoteBalance,
+			totalQuoteBalance,
+			quoteConversionRate,
+		);
 
-		balanceToSwap = new BigNumber(quoteBalance).minus(walletFee).toString();
-
-		const [swapCoin, walletCoin] = txb.splitCoins(primaryCoinInput, [balanceToSwap, walletFee]);
+		const [swapCoin, walletCoin] = txb.splitCoins(primaryCoinInput, [
+			actualBalance,
+			actualWalletFee,
+		]);
 
 		txnResult = await deepBookClient.swapExactQuoteForBase(
 			poolId,
 			swapCoin,
-			BigInt(balanceToSwap),
+			BigInt(actualBalance),
 			address,
 			undefined,
 			txb,
@@ -194,6 +219,10 @@ export function useGetEstimate({
 	baseBalance,
 	quoteBalance,
 	isAsk,
+	totalBaseBalance,
+	totalQuoteBalance,
+	baseConversionRate,
+	quoteConversionRate,
 }: {
 	accountCapId: string;
 	signer: WalletSigner | null;
@@ -202,19 +231,18 @@ export function useGetEstimate({
 	baseBalance: string;
 	quoteBalance: string;
 	isAsk: boolean;
+	totalBaseBalance: string;
+	totalQuoteBalance: string;
+	baseConversionRate: number;
+	quoteConversionRate: number;
 }) {
-	const walletFeeAddress = useFeatureValue(FEATURES.WALLET_FEE_ADDRESS, DEFAULT_WALLET_FEE_ADDRESS);
+	const walletFeeAddress = useDeepBookContext().walletFeeAddress;
 	const queryClient = useQueryClient();
 	const suiClient = useSuiClient();
 	const activeAccount = useActiveAccount();
 	const activeAddress = activeAccount?.address;
 	const deepBookClient = useDeepBookContext().client;
-
-	const { data } = useGetObject(poolId);
-	const objectFields =
-		data?.data?.content?.dataType === 'moveObject' ? data?.data?.content?.fields : null;
-
-	const lotSize = (objectFields as Record<string, string>)?.lot_size;
+	const lotSize = useLotSize(poolId);
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
@@ -228,6 +256,10 @@ export function useGetEstimate({
 			baseBalance,
 			quoteBalance,
 			isAsk,
+			totalBaseBalance,
+			totalQuoteBalance,
+			baseConversionRate,
+			quoteConversionRate,
 			lotSize,
 		],
 		queryFn: async () => {
@@ -256,12 +288,16 @@ export function useGetEstimate({
 				accountCapId,
 				address: activeAddress!,
 				isAsk,
-				lotSize: Number(lotSize),
 				baseCoins,
 				quoteCoins,
 				baseBalance,
 				quoteBalance,
 				walletFeeAddress,
+				totalBaseBalance,
+				totalQuoteBalance,
+				baseConversionRate,
+				quoteConversionRate,
+				lotSize,
 			});
 
 			if (!accountCapId) {

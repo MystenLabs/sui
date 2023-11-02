@@ -105,14 +105,6 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: "search_notice",
-        content:
-          "Welcome to the new implementation of the Sui documentation site. Please expect site search to be unreliable during initial indexing (~48 hours).",
-        backgroundColor: "#4ca2ff",
-        textColor: "#111111",
-        isCloseable: true,
-      },
       algolia: {
         // The application ID provided by Algolia
         appId: "ZF283DJAYX",
@@ -123,7 +115,7 @@ const config = {
         indexName: "sui",
 
         // Optional: see doc section below
-        contextualSearch: true,
+        contextualSearch: false,
 
         // Optional: Specify domains where the navigation should occur through window.location instead on history.push. Useful when our Algolia config crawls multiple documentation sites and we want to navigate with window.location.href to them.
         // externalUrlRegex: "external\\.com|domain\\.com",
@@ -135,7 +127,7 @@ const config = {
         //},
 
         // Optional: Algolia search parameters
-        searchParameters: {},
+        //searchParameters: {},
 
         // Optional: path for search page that enabled by default (`false` to disable it)
         searchPagePath: "search",

@@ -528,6 +528,7 @@ mod test {
         let adversarial_weight = 0;
 
         let shared_counter_hotness_factor = 50;
+        let num_shared_counters = Some(1);
         let shared_counter_max_tip = 0;
         let gas_request_chunk_size = 100;
 
@@ -544,6 +545,7 @@ mod test {
             adversarial_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
+            num_shared_counters,
             shared_counter_max_tip,
             target_qps,
             in_flight_ratio,

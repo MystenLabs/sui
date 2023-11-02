@@ -460,7 +460,12 @@ where
         None
     };
     archive_reader
-        .read(store.clone(), 1..u64::MAX, txn_counter, checkpoint_counter)
+        .read(
+            store.clone(),
+            (latest_checkpoint + 1)..u64::MAX,
+            txn_counter,
+            checkpoint_counter,
+        )
         .await?;
     progress_bar.iter().for_each(|p| p.finish_and_clear());
     let end = store
