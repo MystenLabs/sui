@@ -105,10 +105,18 @@ where
                     })
                 })
                 .collect::<Vec<StoredMoveCall>>();
-
             let end_cp_seq = end_cp.sequence_number;
+            let move_call_count = move_calls_to_commit.len();
+            info!(
+                "Indexed {} move_calls for checkpoint: {}",
+                move_call_count, end_cp_seq
+            );
+
             self.store.persist_move_calls(move_calls_to_commit).await?;
-            info!("Persisted move_calls for checkpoint: {}", end_cp_seq);
+            info!(
+                "Persisted {} move_calls for checkpoint: {}",
+                move_call_count, end_cp_seq
+            );
 
             let move_call_metrics = self.store.calculate_move_call_metrics(end_cp).await?;
             self.store

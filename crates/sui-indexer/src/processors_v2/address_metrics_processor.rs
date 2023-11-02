@@ -82,14 +82,16 @@ where
                 .map(|tx| (tx.tx_sequence_number, tx.timestamp_ms))
                 .collect::<HashMap<_, _>>();
 
-            let stored_senders = self
+            let get_senders_handle = self
                 .store
-                .get_senders_in_tx_range(start_tx_seq, end_tx_seq + 1)
-                .await?;
-            let stored_recipients = self
+                .get_senders_in_tx_range(start_tx_seq, end_tx_seq + 1);
+            let get_recipients_handle = self
                 .store
-                .get_recipients_in_tx_range(start_tx_seq, end_tx_seq + 1)
-                .await?;
+                .get_recipients_in_tx_range(start_tx_seq, end_tx_seq + 1);
+            let (stored_senders_res, stored_recipients_res) =
+                tokio::join!(get_senders_handle, get_recipients_handle);
+            let stored_senders = stored_senders_res?;
+            let stored_recipients = stored_recipients_res?;
             // replace cp seq with its timestamp
             let senders_to_commit: Vec<AddressInfoToCommit> = stored_senders
                 .into_iter()
@@ -142,15 +144,24 @@ where
                     .collect();
             let addresses_to_commit: Vec<StoredAddress> =
                 dedup_addresses(sneders_recipients_to_commit);
-
             let end_cp_seq = end_cp.sequence_number;
-            self.store.persist_addresses(addresses_to_commit).await?;
-            self.store
-                .persist_active_addresses(active_addresses_to_commit)
-                .await?;
+            let addr_count = addresses_to_commit.len();
+            let active_addr_count = active_addresses_to_commit.len();
             info!(
-                "Persisted addresses and active addresses for checkpoint: {}",
-                end_cp_seq,
+                "Indexed {} addresses and {} active addresses for checkpoint: {}",
+                addr_count, active_addr_count, end_cp.sequence_number,
+            );
+
+            let persist_addr = self.store.persist_addresses(addresses_to_commit);
+            let persist_active_addr = self
+                .store
+                .persist_active_addresses(active_addresses_to_commit);
+            let (persist_addr_res, persist_active_addr_res) =
+                tokio::join!(persist_addr, persist_active_addr);
+            persist_addr_res.and(persist_active_addr_res)?;
+            info!(
+                "Persisted {} addresses and {} active addresses for checkpoint: {}",
+                addr_count, active_addr_count, end_cp_seq,
             );
 
             let address_metrics_to_commit = self.store.calculate_address_metrics(end_cp).await?;
