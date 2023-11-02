@@ -18,7 +18,7 @@ import { useDeepBookContext } from '_shared/deepBook/context';
 import { type BalanceChange } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 

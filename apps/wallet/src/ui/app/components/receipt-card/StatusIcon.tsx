@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ThumbUpFill32 } from '@mysten/icons';
-import cl from 'classnames';
+import cl from 'clsx';
 
 export function StatusIcon({ status }: { status: boolean }) {
 	return (

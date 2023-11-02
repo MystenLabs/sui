@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import classNames from 'classnames';
+import classNames from 'clsx';
 import { ReactNode } from 'react';
 
 import { Spinner } from './Spinner';
