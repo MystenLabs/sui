@@ -549,14 +549,13 @@ impl<
         let mut epoch_txs_semaphore = 0;
         let mut epoch_change_tx: Option<TransactionWithEffects> = None;
 
-        // Start timer for TPS computation
-        let mut num_tx: u64 = 0;
-        let now = Instant::now();
-
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
             self.init_genesis_objects(tx_count).await;
         }
+        // Start timer for TPS computation
+        let mut num_tx: u64 = 0;
+        let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
         let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price) =
