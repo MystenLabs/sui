@@ -319,6 +319,15 @@ impl MoveObjectType {
             MoveObjectType_::Other(o) => s == o,
         }
     }
+
+    /// Returns the string representation of this object's type using the canonical display.
+    /// full address with 0x prefix
+    pub fn to_canonical_string(&self) -> String {
+        let canonical_string = StructTag::from(self.clone())
+            .to_canonical_display()
+            .to_string();
+        canonical_string
+    }
 }
 
 impl From<StructTag> for MoveObjectType {

@@ -86,22 +86,29 @@ impl TypeTag {
         }
     }
 
-    /// Return the canonical string representation of the type, including the prefix '0x'
-    pub fn to_canonical_string_with_prefix(&self) -> String {
-        use TypeTag::*;
-        match self {
-            Bool => "bool".to_owned(),
-            U8 => "u8".to_owned(),
-            U16 => "u16".to_owned(),
-            U32 => "u32".to_owned(),
-            U64 => "u64".to_owned(),
-            U128 => "u128".to_owned(),
-            U256 => "u256".to_owned(),
-            Address => "address".to_owned(),
-            Signer => "signer".to_owned(),
-            Vector(t) => format!("vector<{}>", t.to_canonical_string_with_prefix()),
-            Struct(s) => s.to_canonical_string_with_prefix(),
+    /// Return the canonical string representation of the TypeTag with prefix 0x
+    pub fn to_canonical_display(&self) -> impl std::fmt::Display + '_ {
+        struct CanonicalDisplay<'a>(&'a TypeTag);
+
+        impl std::fmt::Display for CanonicalDisplay<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self.0 {
+                    TypeTag::Bool => write!(f, "bool"),
+                    TypeTag::U8 => write!(f, "u8"),
+                    TypeTag::U16 => write!(f, "u16"),
+                    TypeTag::U32 => write!(f, "u32"),
+                    TypeTag::U64 => write!(f, "u64"),
+                    TypeTag::U128 => write!(f, "u128"),
+                    TypeTag::U256 => write!(f, "u256"),
+                    TypeTag::Address => write!(f, "address"),
+                    TypeTag::Signer => write!(f, "signer"),
+                    TypeTag::Vector(t) => write!(f, "vector<{}>", t.to_canonical_display()),
+                    TypeTag::Struct(s) => write!(f, "{}", s.to_canonical_display()),
+                }
+            }
         }
+
+        CanonicalDisplay(self)
     }
 
     /// Return the abstract size we use for gas metering
@@ -199,25 +206,35 @@ impl StructTag {
         )
     }
 
-    /// Return the canonical string representation of the struct, including the prefix '0x'
-    pub fn to_canonical_string_with_prefix(&self) -> String {
-        let mut generics = String::new();
-        if let Some(first_ty) = self.type_params.first() {
-            generics.push('<');
-            generics.push_str(&first_ty.to_canonical_string_with_prefix());
-            for ty in self.type_params.iter().skip(1) {
-                generics.push(',');
-                generics.push_str(&ty.to_canonical_string_with_prefix())
+    /// Implements the canonical string representation of the StructTag with the prefix 0x
+    pub fn to_canonical_display(&self) -> impl std::fmt::Display + '_ {
+        struct CanonicalDisplay<'a>(&'a StructTag);
+
+        impl std::fmt::Display for CanonicalDisplay<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}::{}::{}",
+                    self.0.address.to_canonical_display(),
+                    self.0.module,
+                    self.0.name
+                )?;
+
+                if let Some(first_ty) = self.0.type_params.first() {
+                    write!(f, "<")?;
+                    write!(f, "{}", first_ty.to_canonical_display())?;
+                    for ty in self.0.type_params.iter().skip(1) {
+                        // Note that unlike Display for StructTag, this follows the to_canonical_string() implementation.
+                        // As such, there is no space between the comma and canonical display of the TypeTag.
+                        write!(f, ",{}", ty.to_canonical_display())?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
             }
-            generics.push('>');
         }
-        format!(
-            "{}::{}::{}{}",
-            self.address.to_canonical_string_with_prefix(),
-            self.module,
-            self.name,
-            generics
-        )
+
+        CanonicalDisplay(self)
     }
 
     /// Return the abstract size we use for gas metering

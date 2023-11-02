@@ -59,10 +59,15 @@ impl AccountAddress {
         hex::encode(self.0)
     }
 
-    /// Return a canonical string representation of the address
-    /// With the prefix '0x'
-    pub fn to_canonical_string_with_prefix(&self) -> String {
-        format!("0x{}", self.to_canonical_string())
+    /// Implements Display for the address with the prefix 0x
+    pub fn to_canonical_display(&self) -> impl fmt::Display + '_ {
+        struct HexDisplay<'a>(&'a [u8]);
+        impl<'a> fmt::Display for HexDisplay<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "0x{}", hex::encode(self.0))
+            }
+        }
+        HexDisplay(&self.0)
     }
 
     pub fn short_str_lossless(&self) -> String {
