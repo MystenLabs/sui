@@ -48,6 +48,7 @@ export function createPure(
 	pure.bool = (value: boolean) => makePure(bcs.Bool.serialize(value));
 	pure.string = (value: string) => makePure(bcs.String.serialize(value));
 	pure.address = (value: string) => makePure(bcs.Address.serialize(value));
+	pure.id = pure.address;
 
 	return pure;
 }
