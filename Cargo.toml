@@ -5,61 +5,67 @@ exclude = [
     "external-crates/move/move-execution/v0/move-bytecode-verifier",
     "external-crates/move/move-execution/v0/move-stdlib",
     "external-crates/move/move-execution/v0/move-vm/runtime",
-    "external-crates/move/move-abstract-stack",
-    "external-crates/move/move-binary-format",
-    "external-crates/move/move-binary-format/serializer-tests",
-    "external-crates/move/move-borrow-graph",
-    "external-crates/move/move-bytecode-verifier",
-    "external-crates/move/move-bytecode-verifier/bytecode-verifier-tests",
-    "external-crates/move/move-bytecode-verifier/fuzz",
-    "external-crates/move/move-bytecode-verifier/invalid-mutations",
-    "external-crates/move/move-bytecode-verifier/transactional-tests",
-    "external-crates/move/move-command-line-common",
-    "external-crates/move/move-compiler",
-    "external-crates/move/move-compiler/transactional-tests",
-    "external-crates/move/move-core/types",
-    "external-crates/move/move-ir-compiler",
-    "external-crates/move/move-ir-compiler/move-bytecode-source-map",
-    "external-crates/move/move-ir-compiler/move-ir-to-bytecode",
-    "external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax",
-    "external-crates/move/move-ir-compiler/transactional-tests",
-    "external-crates/move/move-ir/types",
-    "external-crates/move/move-model",
-    "external-crates/move/move-prover",
-    "external-crates/move/move-prover/boogie-backend",
-    "external-crates/move/move-prover/bytecode",
-    "external-crates/move/move-prover/interpreter",
-    "external-crates/move/move-prover/interpreter-testsuite",
-    "external-crates/move/move-prover/interpreter/crypto",
-    "external-crates/move/move-prover/move-abigen",
-    "external-crates/move/move-prover/move-docgen",
-    "external-crates/move/move-prover/move-errmapgen",
-    "external-crates/move/move-prover/test-utils",
-    "external-crates/move/move-stdlib",
-    "external-crates/move/move-symbol-pool",
-    "external-crates/move/move-vm/config",
-    "external-crates/move/move-vm/integration-tests",
-    "external-crates/move/move-vm/paranoid-tests",
-    "external-crates/move/move-vm/profiler",
-    "external-crates/move/move-vm/runtime",
-    "external-crates/move/move-vm/test-utils",
-    "external-crates/move/move-vm/transactional-tests",
-    "external-crates/move/move-vm/types",
-    "external-crates/move/testing-infra/enum-compat-util",
-    "external-crates/move/testing-infra/module-generation",
-    "external-crates/move/testing-infra/move-proc-macros",
-    "external-crates/move/testing-infra/test-generation",
-    "external-crates/move/testing-infra/transactional-test-runner",
-    "external-crates/move/tools/move-bytecode-utils",
-    "external-crates/move/tools/move-bytecode-viewer",
-    "external-crates/move/tools/move-cli",
-    "external-crates/move/tools/move-coverage",
-    "external-crates/move/tools/move-disassembler",
-    "external-crates/move/tools/move-explain",
-    "external-crates/move/tools/move-package",
-    "external-crates/move/tools/move-resource-viewer",
-    "external-crates/move/tools/move-unit-test",
-    "external-crates/move/tools/move-read-write-set-types",
+
+    "external-crates/move/crates/bytecode-interpreter-crypto",
+    "external-crates/move/crates/bytecode-interpreter-testsuite",
+    "external-crates/move/crates/bytecode-verifier-libfuzzer",
+    "external-crates/move/crates/bytecode-verifier-tests",
+    "external-crates/move/crates/bytecode-verifier-transactional-tests",
+    "external-crates/move/crates/enum-compat-util",
+    "external-crates/move/crates/invalid-mutations",
+    "external-crates/move/crates/language-benchmarks",
+    "external-crates/move/crates/module-generation",
+    "external-crates/move/crates/move-abigen",
+    "external-crates/move/crates/move-abstract-stack",
+    "external-crates/move/crates/move-analyzer",
+    "external-crates/move/crates/move-binary-format",
+    "external-crates/move/crates/move-borrow-graph",
+    "external-crates/move/crates/move-bytecode-source-map",
+    "external-crates/move/crates/move-bytecode-utils",
+    "external-crates/move/crates/move-bytecode-verifier",
+    "external-crates/move/crates/move-bytecode-viewer",
+    "external-crates/move/crates/move-cli",
+    "external-crates/move/crates/move-command-line-common",
+    "external-crates/move/crates/move-compiler",
+    "external-crates/move/crates/move-compiler-transactional-tests",
+    "external-crates/move/crates/move-core-types",
+    "external-crates/move/crates/move-coverage",
+    "external-crates/move/crates/move-disassembler",
+    "external-crates/move/crates/move-docgen",
+    "external-crates/move/crates/move-errmapgen",
+    "external-crates/move/crates/move-explain",
+    "external-crates/move/crates/move-ir-compiler",
+    "external-crates/move/crates/move-ir-compiler-transactional-tests",
+    "external-crates/move/crates/move-ir-to-bytecode",
+    "external-crates/move/crates/move-ir-to-bytecode-syntax",
+    "external-crates/move/crates/move-ir-types",
+    "external-crates/move/crates/move-model",
+    "external-crates/move/crates/move-package",
+    "external-crates/move/crates/move-proc-macros",
+    "external-crates/move/crates/move-prover",
+    "external-crates/move/crates/move-prover-boogie-backend",
+    "external-crates/move/crates/move-prover-test-utils",
+    "external-crates/move/crates/move-read-write-set-types",
+    "external-crates/move/crates/move-resource-viewer",
+    "external-crates/move/crates/move-stackless-bytecode",
+    "external-crates/move/crates/move-stackless-bytecode-interpreter",
+    "external-crates/move/crates/move-stdlib",
+    "external-crates/move/crates/move-symbol-pool",
+    "external-crates/move/crates/move-transactional-test-runner",
+    "external-crates/move/crates/move-unit-test",
+    "external-crates/move/crates/move-vm-config",
+    "external-crates/move/crates/move-vm-integration-tests",
+    "external-crates/move/crates/move-vm-paranoid-tests",
+    "external-crates/move/crates/move-vm-profiler",
+    "external-crates/move/crates/move-vm-runtime",
+    "external-crates/move/crates/move-vm-test-utils",
+    "external-crates/move/crates/move-vm-transactional-tests",
+    "external-crates/move/crates/move-vm-types",
+    "external-crates/move/crates/prover-mutation",
+    "external-crates/move/crates/serializer-tests",
+    "external-crates/move/crates/spec-flatten",
+    "external-crates/move/crates/test-generation",
+
     "sdk/move-binary-format-wasm",
 ]
 
@@ -293,6 +299,7 @@ duration-str = "0.5.0"
 ed25519 = { version = "1.5.0", features = ["pkcs8", "alloc", "zeroize"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 either = "1.8.0"
+petgraph = "0.5.1"
 enum_dispatch = "^0.3"
 expect-test = "1.4.0"
 eyre = "0.6.8"
@@ -492,28 +499,28 @@ zeroize = "1.6.0"
 versions = "4.1.0"
 
 # Move dependencies
-move-binary-format = { path = "external-crates/move/move-binary-format" }
-move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
-move-cli = { path = "external-crates/move/tools/move-cli" }
-move-compiler = { path = "external-crates/move/move-compiler" }
-move-core-types = { path = "external-crates/move/move-core/types" }
-move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
-move-package = { path = "external-crates/move/tools/move-package" }
-move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
-move-vm-config = { path = "external-crates/move/move-vm/config" }
-move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils", features = [
+move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
+move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
+move-cli = { path = "external-crates/move/crates/move-cli" }
+move-compiler = { path = "external-crates/move/crates/move-compiler" }
+move-core-types = { path = "external-crates/move/crates/move-core-types" }
+move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
+move-package = { path = "external-crates/move/crates/move-package" }
+move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
+move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
+move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
   "tiered-gas",
 ] }
-move-vm-types = { path = "external-crates/move/move-vm/types" }
-move-vm-profiler = { path = "external-crates/move/move-vm/profiler" }
-move-command-line-common = { path = "external-crates/move/move-command-line-common" }
-move-transactional-test-runner = { path = "external-crates/move/testing-infra/transactional-test-runner" }
-move-ir-types = { path = "external-crates/move/move-ir/types" }
-move-prover = { path = "external-crates/move/move-prover" }
-move-prover-boogie-backend = { path = "external-crates/move/move-prover/boogie-backend" }
-move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
-move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
-move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
+move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
+move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
+move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
+move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
+move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
+move-prover = { path = "external-crates/move/crates/move-prover" }
+move-prover-boogie-backend = { path = "external-crates/move/crates/move-prover-boogie-backend" }
+move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
+move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
+move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52"}
