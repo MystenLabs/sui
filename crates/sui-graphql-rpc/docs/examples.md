@@ -86,7 +86,6 @@
 >    }
 >    coinConnection {
 >      nodes {
->        id
 >        asMoveObject {
 >          contents {
 >            type {
@@ -465,7 +464,6 @@
 >  ) {
 >    coinConnection(last: 3, before: "0x13034947") {
 >      nodes {
->        id
 >        balance
 >      }
 >      pageInfo {
@@ -701,7 +699,6 @@
 >    }
 >  ) {
 >    nodes {
->      id
 >      sendingModuleId {
 >        name
 >        package {
@@ -938,7 +935,6 @@
 >    }
 >    stakeConnection {
 >      nodes {
->        id
 >        status
 >        principal
 >        estimatedReward

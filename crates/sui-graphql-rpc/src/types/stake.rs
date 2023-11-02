@@ -20,8 +20,6 @@ pub(crate) enum StakeStatus {
 #[derive(Clone, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Stake {
-    /// Stake object address
-    pub id: ID,
     /// The epoch at which the stake became active
     #[graphql(skip)]
     pub active_epoch_id: Option<u64>,
