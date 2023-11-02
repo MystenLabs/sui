@@ -1099,9 +1099,13 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
-        if let Some(obj) = self.execution_results.written_objects.get(package_id) {
-            // TODO: It's impossible to use the package that was written in the same transaction.
-            // So we should be able to remove this and replace with an unreachable assertion.
+        // We first check the objects in the temporary store because in non-production code path,
+        // it is possible to read packages that are just written in the same transaction.
+        // This can happen for example when we run the expensive conservation checks, where we may
+        // look into the types of each written object in the output, and some of them need the
+        // newly written packages for type checking.
+        // In production path though, this should never happen.
+        if let Some(obj) = self.read_object(package_id) {
             Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
