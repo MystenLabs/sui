@@ -2,19 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compiler::{as_module, as_script, compile_units};
+use crate::compiler::{as_module, compile_units};
 use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::{
     account_address::AccountAddress,
-    effects::{ChangeSet, Op},
     identifier::Identifier,
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
-    value::{serialize_values, MoveValue},
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::{DeltaStorage, InMemoryStorage};
+use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
 
 const TEST_ADDR: AccountAddress = AccountAddress::new([42; AccountAddress::LENGTH]);
