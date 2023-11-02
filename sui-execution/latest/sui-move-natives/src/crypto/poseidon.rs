@@ -17,8 +17,8 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub const NON_CANONICAL_INPUT: u64 = 1;
-pub const TOO_MANY_INPUTS: u64 = 2;
+pub const NON_CANONICAL_INPUT: u64 = 0;
+pub const TOO_MANY_INPUTS: u64 = 1;
 
 /// The maximal number of inputs the BN254 Poseidon hash function can handle.
 pub const MAX_INPUTS: u64 = 32;
