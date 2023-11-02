@@ -70,9 +70,7 @@ module tto::M1 {
 
 //# view-object 2,3
 
-// Current ownership chain: 3 => 0 => 1 => 2 => A
-
-//# run tto::M1::receive --args object(2,2) receiving(2,1) --sender A
+//# run tto::M1::receive --args object(2,3) receiving(2,2) --sender A
 
 //# view-object 2,0
 
@@ -83,7 +81,7 @@ module tto::M1 {
 
 //# view-object 2,3
 
-//# programmable --sender A --inputs object(2,2) 1 2 3
+//# programmable --sender A --inputs object(2,3) 1 2 3
 //> tto::M1::set(Input(0), Input(1), Input(2), Input(3))
 
 //# view-object 2,0
@@ -95,27 +93,27 @@ module tto::M1 {
 
 //# view-object 2,3
 
-//# programmable --sender A --inputs object(2,2)
+//# programmable --sender A --inputs object(2,3)
 //> tto::M1::remove(Input(0))
 
 // dev-inspect with 'check' and correct values
 
-//# programmable --sender A --inputs object(2,2)@3 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,3)@3 0 0 vector[0] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@4 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,3)@4 1 2 vector[3] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@5 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,3)@5 1 2 vector[] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
 // dev-inspect with 'check' and _incorrect_ values
 
-//# programmable --sender A --inputs object(2,2)@4 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,3)@4 0 0 vector[0] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@5 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,3)@5 1 2 vector[3] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,2)@3 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,3)@3 1 2 vector[] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
