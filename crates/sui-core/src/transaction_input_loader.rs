@@ -31,8 +31,10 @@ impl TransactionInputLoader {
 
 impl TransactionInputLoader {
     /// Read the inputs for a transaction that the validator was asked to sign.
+    ///
     /// tx_digest is provided so that the inputs can be cached with the tx_digest and returned with
     /// a single hash map lookup when notify_read_objects_for_execution is called later.
+    /// TODO: implement this caching
     #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_signing(
         &self,
@@ -60,13 +62,12 @@ impl TransactionInputLoader {
             let obj_ref = match kind {
                 // Packages are loaded one at a time via the cache
                 InputObjectKind::MovePackage(id) => {
-                    let package = self.store.get_package_object(id)?.map(|o| o.into());
-                    if package.is_none() {
+                    let Some(package) = self.store.get_package_object(id)?.map(|o| o.into()) else {
                         return Err(SuiError::from(kind.object_not_found_error()));
-                    }
+                    };
                     results[i] = Some(ObjectReadResult {
                         input_object_kind: *kind,
-                        object: ObjectReadResultKind::Object(package.unwrap()),
+                        object: ObjectReadResultKind::Object(package),
                     });
                     continue;
                 }
