@@ -82,8 +82,8 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          # [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cd external-crates/move && cargo build -p move-analyzer --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
+          cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
@@ -93,14 +93,13 @@ jobs:
           export system_os=$(echo ${{ matrix.os }} | cut -d- -f1)
           export os_type="${system_os}-${arch}"
           echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV
-          # mv ./target/release/sui ./target/release/sui-${os_type}
-          # mv ./target/release/sui-node ./target/release/sui-node-${os_type}
-          # mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
-          # mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
-          # mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
-          # mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
+          mv ./target/release/sui ./target/release/sui-${os_type}
+          mv ./target/release/sui-node ./target/release/sui-node-${os_type}
+          mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
+          mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
+          mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
+          mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
           mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
-          mkdir ./target/release # remove after testing
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
 
       - name: Rename binaries for Windows
@@ -110,14 +109,13 @@ jobs:
           export arch=$(uname -m)
           export os_type="windows-${arch}"
           echo "os_type=${os_type}" >> $GITHUB_ENV
-          # mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
-          # mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
-          # mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
-          # mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
-          # mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
-          # mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
+          mv ./target/release/sui.exe ./target/release/sui-${os_type}.exe
+          mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
+          mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
+          mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
+          mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
+          mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
           mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
-          mkdir ./target/release # remove after testing
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
