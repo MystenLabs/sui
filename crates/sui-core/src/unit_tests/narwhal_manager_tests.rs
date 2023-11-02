@@ -5,10 +5,8 @@ use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
 use crate::checkpoints::{CheckpointMetrics, CheckpointService, CheckpointServiceNoop};
 use crate::consensus_handler::ConsensusHandlerInitializer;
-use crate::consensus_manager::narwhal_manager::{
-    NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics,
-};
-use crate::consensus_manager::ConsensusManagerTrait;
+use crate::consensus_manager::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
+use crate::consensus_manager::{ConsensusManagerMetrics, ConsensusManagerTrait};
 use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use crate::state_accumulator::StateAccumulator;
 use bytes::Bytes;
@@ -154,7 +152,7 @@ async fn test_narwhal_manager() {
             registry_service,
         };
 
-        let metrics = NarwhalManagerMetrics::new(&Registry::new());
+        let metrics = ConsensusManagerMetrics::new(&Registry::new());
         let epoch_store = state.epoch_store_for_testing();
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
@@ -178,6 +176,8 @@ async fn test_narwhal_manager() {
                 ),
             )
             .await;
+
+        assert!(narwhal_manager.is_running().await);
 
         let name = config.protocol_key_pair().public().clone();
         narwhal_managers.push((
@@ -215,6 +215,7 @@ async fn test_narwhal_manager() {
         narwhal_manager.shutdown().await;
 
         // ensure that no primary or worker node is running
+        assert!(!narwhal_manager.is_running().await);
         assert!(!narwhal_manager.primary_node.is_running().await);
         assert!(narwhal_manager
             .worker_nodes

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::ConsensusHandlerInitializer;
-use crate::consensus_manager::ConsensusManagerTrait;
+use crate::consensus_manager::{
+    ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
+};
 use crate::consensus_validator::SuiTxValidator;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
@@ -12,12 +14,9 @@ use narwhal_network::client::NetworkClient;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
-use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
 use sui_config::NodeConfig;
-use sui_protocol_config::ProtocolVersion;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::Mutex;
@@ -25,12 +24,6 @@ use tokio::sync::Mutex;
 #[cfg(test)]
 #[path = "../unit_tests/narwhal_manager_tests.rs"]
 pub mod narwhal_manager_tests;
-
-#[derive(PartialEq)]
-enum Running {
-    True(Epoch, ProtocolVersion),
-    False,
-}
 
 pub struct NarwhalConfiguration {
     pub primary_keypair: AuthorityKeyPair,
@@ -42,44 +35,6 @@ pub struct NarwhalConfiguration {
     pub registry_service: RegistryService,
 }
 
-pub struct NarwhalManagerMetrics {
-    start_latency: IntGauge,
-    shutdown_latency: IntGauge,
-    start_primary_retries: IntGauge,
-    start_worker_retries: IntGauge,
-}
-
-impl NarwhalManagerMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            start_latency: register_int_gauge_with_registry!(
-                "narwhal_manager_start_latency",
-                "The latency of starting up narwhal nodes",
-                registry,
-            )
-            .unwrap(),
-            shutdown_latency: register_int_gauge_with_registry!(
-                "narwhal_manager_shutdown_latency",
-                "The latency of shutting down narwhal nodes",
-                registry,
-            )
-            .unwrap(),
-            start_primary_retries: register_int_gauge_with_registry!(
-                "narwhal_manager_start_primary_retries",
-                "The number of retries took to start narwhal primary node",
-                registry
-            )
-            .unwrap(),
-            start_worker_retries: register_int_gauge_with_registry!(
-                "narwhal_manager_start_worker_retries",
-                "The number of retries took to start narwhal worker node",
-                registry
-            )
-            .unwrap(),
-        }
-    }
-}
-
 pub struct NarwhalManager {
     primary_keypair: AuthorityKeyPair,
     network_keypair: NetworkKeyPair,
@@ -88,12 +43,12 @@ pub struct NarwhalManager {
     worker_nodes: WorkerNodes,
     storage_base_path: PathBuf,
     running: Mutex<Running>,
-    metrics: NarwhalManagerMetrics,
+    metrics: ConsensusManagerMetrics,
     store_cache_metrics: CertificateStoreCacheMetrics,
 }
 
 impl NarwhalManager {
-    pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
+    pub fn new(config: NarwhalConfiguration, metrics: ConsensusManagerMetrics) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node =
             PrimaryNode::new(config.parameters.clone(), config.registry_service.clone());
@@ -147,23 +102,23 @@ impl ConsensusManagerTrait for NarwhalManager {
         let committee = system_state.get_narwhal_committee();
         let protocol_config = epoch_store.protocol_config();
 
+        let Some(mut guard) = RunningLockGuard::acquire_start(
+            &self.metrics,
+            &self.running,
+            committee.epoch(),
+            protocol_config.version,
+        )
+        .await
+        else {
+            return;
+        };
+
         let transactions_addr = &config
             .consensus_config
             .as_ref()
             .expect("Validator is missing consensus config")
             .address;
         let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
-
-        let mut running = self.running.lock().await;
-
-        if let Running::True(epoch, version) = *running {
-            tracing::warn!(
-                "Narwhal node is already Running for epoch {epoch:?} & protocol version {version:?} - shutdown first before starting",
-            );
-            return;
-        }
-
-        let now = Instant::now();
 
         // Create a new store
         let store_path = self.get_store_path(committee.epoch());
@@ -173,12 +128,6 @@ impl ConsensusManagerTrait for NarwhalManager {
         let network_client = NetworkClient::new_from_keypair(&self.network_keypair);
 
         let name = self.primary_keypair.public().clone();
-
-        tracing::info!(
-            "Starting up Narwhal for epoch {} & protocol version {:?}",
-            committee.epoch(),
-            protocol_config.version
-        );
 
         // start primary
         const MAX_PRIMARY_RETRIES: u32 = 2;
@@ -252,57 +201,31 @@ impl ConsensusManagerTrait for NarwhalManager {
             }
         }
 
-        tracing::info!(
-            "Starting up Narwhal for epoch {} & protocol version {:?} is complete - took {} seconds",
-            committee.epoch(),
-            protocol_config.version,
-            now.elapsed().as_secs_f64()
-        );
-
-        self.metrics
-            .start_latency
-            .set(now.elapsed().as_secs_f64() as i64);
+        guard.completed();
 
         self.metrics
             .start_primary_retries
             .set(primary_retries as i64);
         self.metrics.start_worker_retries.set(worker_retries as i64);
-
-        *running = Running::True(committee.epoch(), protocol_config.version);
     }
 
-    // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes
-    // have shutdown.
+    // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes have shutdown.
     async fn shutdown(&self) {
-        let mut running = self.running.lock().await;
+        let Some(mut guard) =
+            RunningLockGuard::acquire_shutdown(&self.metrics, &self.running).await
+        else {
+            return;
+        };
 
-        match *running {
-            Running::True(epoch, version) => {
-                let now = Instant::now();
-                tracing::info!(
-                    "Shutting down Narwhal for epoch {epoch:?} & protocol version {version:?}"
-                );
+        self.primary_node.shutdown().await;
+        self.worker_nodes.shutdown().await;
 
-                self.primary_node.shutdown().await;
-                self.worker_nodes.shutdown().await;
+        guard.completed();
+    }
 
-                tracing::info!(
-                    "Narwhal shutdown for epoch {epoch:?} & protocol version {version:?} is complete - took {} seconds",
-                    now.elapsed().as_secs_f64()
-                );
-
-                self.metrics
-                    .shutdown_latency
-                    .set(now.elapsed().as_secs_f64() as i64);
-            }
-            Running::False => {
-                tracing::info!(
-                    "Narwhal Manager shutdown was called but Narwhal node is not running"
-                );
-            }
-        }
-
-        *running = Running::False;
+    async fn is_running(&self) -> bool {
+        let running = self.running.lock().await;
+        Running::False != *running
     }
 
     fn get_storage_base_path(&self) -> PathBuf {
