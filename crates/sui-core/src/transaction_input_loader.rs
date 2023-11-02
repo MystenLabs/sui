@@ -72,23 +72,27 @@ impl TransactionInputLoader {
                     continue;
                 }
                 InputObjectKind::SharedMoveObject { id, .. } => {
-                    let objref = self.store.get_latest_object_ref_if_alive(*id)?;
-                    if objref.is_none() {
-                        if let Some((version, digest)) = self
-                            .store
-                            .get_last_shared_object_deletion_info(id, epoch_id)?
-                        {
-                            results[i] = Some(ObjectReadResult {
-                                input_object_kind: input_object_kinds[i],
-                                object: ObjectReadResultKind::DeletedSharedObject(version, digest),
-                            });
-                        } else {
-                            return Err(SuiError::from(kind.object_not_found_error()));
+                    match self.store.get_object(id)? {
+                        Some(object) => {
+                            results[i] = Some(ObjectReadResult::new(*kind, object.into()))
                         }
-
-                        continue;
+                        None => {
+                            if let Some((version, digest)) = self
+                                .store
+                                .get_last_shared_object_deletion_info(id, epoch_id)?
+                            {
+                                results[i] = Some(ObjectReadResult {
+                                    input_object_kind: *kind,
+                                    object: ObjectReadResultKind::DeletedSharedObject(
+                                        version, digest,
+                                    ),
+                                });
+                            } else {
+                                return Err(SuiError::from(kind.object_not_found_error()));
+                            }
+                        }
                     }
-                    objref
+                    continue;
                 }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => Some(*objref),
             }
