@@ -193,7 +193,7 @@ To take an item from a kiosk you must be the kiosk owner. As the owner, call the
 ```rust
 let tx = new TransactionBlock();
 
-let itemId = tx.pure.address('<ITEM_ID>');
+let itemId = tx.pure.id('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
 let kioskOwnerCapArg = tx.object('<ID>');
 
@@ -270,7 +270,7 @@ let tx = new TransactionBlock();
 
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
-let itemId = tx.pure.address('<ID>');
+let itemId = tx.pure.id('<ID>');
 let itemType = 'ITEM_TYPE';
 let priceArg = tx.pure.u64('<price>'); // in MIST (1 SUI = 10^9 MIST)
 
@@ -307,7 +307,7 @@ When you delist an item, Sui emits a `kiosk::ItemDelisted` event that contains t
 let tx = new TransactionBlock();
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
-let itemId = tx.pure.address('<ID>');
+let itemId = tx.pure.id('<ID>');
 let itemType = 'ITEM_TYPE';
 
 tx.moveCall({
@@ -390,7 +390,7 @@ You can use the PTB-friendly kiosk::borrow_val function. It allows you to take a
 let tx = new TransactionBlock();
 
 let itemType = 'ITEM_TYPE';
-let itemId = tx.pure.address('<ITEM_ID>');
+let itemId = tx.pure.id('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
 
