@@ -41,7 +41,7 @@ use std::{
 };
 use sui_json_rpc_types::{
     AddressMetrics, CheckpointId, EpochInfo, EventFilter, MoveCallMetrics, MoveFunctionName,
-    NetworkMetrics, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
+    NetworkMetrics, SuiEvent, SuiObjectDataFilter, SuiTransactionBlockResponse, TransactionFilter,
 };
 use sui_json_rpc_types::{
     Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
@@ -555,20 +555,45 @@ impl IndexerReader {
     pub async fn get_owned_objects_in_blocking_task(
         &self,
         address: SuiAddress,
-        object_type: Option<String>,
+        filter: Option<SuiObjectDataFilter>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
+        let object_types = Self::extract_struct_filters(filter)?;
         self.spawn_blocking(move |this| {
-            this.get_owned_objects_impl(address, object_type, cursor, limit)
+            this.get_owned_objects_impl(address, object_types, cursor, limit)
         })
         .await
+    }
+
+    fn extract_struct_filters(
+        filter: Option<SuiObjectDataFilter>,
+    ) -> Result<Option<Vec<String>>, IndexerError> {
+        if filter.is_none() {
+            return Ok(None);
+        }
+        match filter.unwrap() {
+            SuiObjectDataFilter::StructType (struct_tag ) => Ok(Some(vec![struct_tag.to_string()])),
+            SuiObjectDataFilter::MatchAny(filters) => {
+                filters.iter().map(|filter| {
+                    match filter {
+                        SuiObjectDataFilter::StructType (struct_tag ) => Ok(struct_tag.to_string()),
+                        _ => Err(IndexerError::InvalidArgumentError(
+                            "Invalid filter type. Only struct filters and MatchAny of struct filters are supported.".into(),
+                        )),
+                    }
+                }).collect::<Result<Vec<_>, _>>().map(Some)
+            }
+            _ => Err(IndexerError::InvalidArgumentError(
+                "Invalid filter type. Only struct filters and MatchAny of struct filters are supported.".into(),
+            )),
+        }
     }
 
     fn get_owned_objects_impl(
         &self,
         address: SuiAddress,
-        object_type: Option<String>,
+        object_types: Option<Vec<String>>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
@@ -578,8 +603,8 @@ impl IndexerReader {
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
                 .limit(limit as i64)
                 .into_boxed();
-            if let Some(object_type) = object_type {
-                query = query.filter(objects::dsl::object_type.eq(object_type));
+            if let Some(object_types) = object_types {
+                query = query.filter(objects::dsl::object_type.eq_any(object_types));
             }
 
             if let Some(object_cursor) = cursor {
