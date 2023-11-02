@@ -615,7 +615,7 @@ mod checked {
                 }
             }
             InputObjectKind::SharedMoveObject {
-                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                id: _sui_authenticator_state_object_id,
                 ..
             } => {
                 if system_transaction {
@@ -626,6 +626,7 @@ mod checked {
                     ));
                 }
             }
+            #[allow(unreachable_patterns)]
             InputObjectKind::SharedMoveObject {
                 initial_shared_version: input_initial_shared_version,
                 ..

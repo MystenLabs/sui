@@ -67,7 +67,7 @@ fn check_receiving_objects(
 fn check_disabled_features(
     filter_config: &TransactionDenyConfig,
     tx_data: &TransactionData,
-    tx_signatures: &[GenericSignature],
+    _tx_signatures: &[GenericSignature],
 ) -> SuiResult {
     deny_if_true!(
         filter_config.user_transaction_disabled(),

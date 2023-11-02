@@ -88,6 +88,7 @@ impl SingleValidator {
         self.validator_service.validator_state()
     }
 
+    #[allow(dead_code)]
     pub fn get_epoch_store(&self) -> &Arc<AuthorityPerEpochStore> {
         &self.epoch_store
     }
@@ -226,6 +227,7 @@ impl SingleValidator {
             .await
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn build_checkpoints(
         &self,
         in_memory_store: InMemoryObjectStore,
@@ -277,6 +279,7 @@ impl SingleValidator {
         checkpoints
     }
 
+    #[allow(dead_code)]
     pub fn create_checkpoint_executor(
         &self,
     ) -> (CheckpointExecutor, broadcast::Sender<VerifiedCheckpoint>) {

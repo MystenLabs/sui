@@ -1,11 +1,8 @@
 use clap::*;
 use futures::future;
 use prometheus::Registry;
-use std::{
-    collections::HashMap,
-    net::{IpAddr, Ipv4Addr},
-};
-use std::{fs, net::SocketAddr};
+use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::{path::PathBuf, sync::Arc};
 use sui_distributed_execution::sw_agent::*;
 use sui_distributed_execution::types::*;

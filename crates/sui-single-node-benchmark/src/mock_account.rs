@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::stream::FuturesUnordered;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
-use sui_types::crypto::{
-    deterministic_random_account_key, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
-};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
 use sui_types::object::Object;
 
 #[derive(Clone, Debug)]
