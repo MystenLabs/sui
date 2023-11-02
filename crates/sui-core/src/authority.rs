@@ -3419,27 +3419,6 @@ impl AuthorityState {
         .await;
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub fn get_certified_transaction(
-        &self,
-        tx_digest: &TransactionDigest,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<Option<VerifiedCertificate>> {
-        let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
-            return Ok(None);
-        };
-        let Some(transaction) = self.database.get_transaction_block(tx_digest)? else {
-            return Ok(None);
-        };
-
-        Ok(Some(VerifiedCertificate::new_unchecked(
-            CertifiedTransaction::new_from_data_and_sig(
-                transaction.into_inner().into_data(),
-                cert_sig,
-            ),
-        )))
-    }
-
     /// Make a status response for a transaction
     #[instrument(level = "trace", skip_all)]
     pub fn get_transaction_status(
