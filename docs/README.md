@@ -18,6 +18,10 @@ You can also build the site locally using `pnpm build`. This builds the static s
 
 Sui Foundation is not able to provide support for building the documentation site locally. If you run into trouble, consult the [Docusaurus](https://docusaurus.io/) documentation.
 
+## Pull requests
+
+Sui uses Vercel to host its documentation site. Vercel builds a preview of the documentation for every pull requests submitted to the Sui repo. You can find a link to this preview in the PR comment section from the Vercel bot. Click the **Visit Preview** link for the **sui-core** project to verify your changes behave as you expect.  
+
 
 ## Contributing
 
