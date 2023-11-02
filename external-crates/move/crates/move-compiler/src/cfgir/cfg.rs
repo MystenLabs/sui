@@ -7,12 +7,10 @@ use crate::{
         ast::{BasicBlock, BasicBlocks, BlockInfo, LoopEnd, LoopInfo},
         remove_no_ops,
     },
-    diag,
-    diagnostics::{Diagnostic, Diagnostics},
-    hlir::ast::{Command, Command_, Exp, Label, UnannotatedExp_, UnitCase},
+    diagnostics::Diagnostics,
+    hlir::ast::{Command, Command_, Label},
     shared::ast_debug::*,
 };
-use move_ir_types::location::*;
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet, BinaryHeap, VecDeque},
@@ -177,12 +175,9 @@ impl<'a> MutForwardCFG<'a> {
         };
         remove_no_ops::optimize(&mut cfg);
 
-        // no dead code
-        let dead_code = cfg.recompute();
-        let mut diags = Diagnostics::new();
-        for (_lbl, block) in dead_code {
-            dead_code_error(&mut diags, &block)
-        }
+        let diags = Diagnostics::new();
+        // remove dead code because we already warned about it
+        let _ = cfg.recompute();
 
         let infinite_loop_starts = determine_infinite_loop_starts(&cfg, block_info);
         (cfg, infinite_loop_starts, diags)
@@ -274,92 +269,6 @@ impl<T: Deref<Target = BasicBlocks>> CFG for ForwardCFG<T> {
     fn debug(&self) {
         self.print();
     }
-}
-
-const DEAD_ERR_CMD: &str =
-    "Unreachable code. This statement (and any following statements) will not be executed.";
-
-const DEAD_ERR_EXP: &str = "Invalid use of a divergent expression. The code following the \
-                            evaluation of this expression will be dead and should be removed.";
-
-fn dead_code_error(diags: &mut Diagnostics, block: &BasicBlock) {
-    if let Some(diag) = build_dead_code_error(block) {
-        diags.add(diag);
-    }
-}
-
-pub fn build_dead_code_error(block: &BasicBlock) -> Option<Diagnostic> {
-    if block.is_empty() {
-        None
-    } else {
-        let first_command = block.front().unwrap();
-        match unreachable_loc(first_command) {
-            Some(loc) => Some(diag!(UnusedItem::DeadCode, (loc, DEAD_ERR_EXP))),
-            None if is_implicit_control_flow(block) => None,
-            None => Some(diag!(
-                UnusedItem::DeadCode,
-                (first_command.loc, DEAD_ERR_CMD)
-            )),
-        }
-    }
-}
-
-fn unreachable_loc(sp!(_, cmd_): &Command) -> Option<Loc> {
-    use Command_ as C;
-    match cmd_ {
-        C::Assign(_, e) => unreachable_loc_exp(e),
-        C::Mutate(el, er) => unreachable_loc_exp(el).or_else(|| unreachable_loc_exp(er)),
-        C::Return { exp: e, .. }
-        | C::Abort(e)
-        | C::IgnoreAndPop { exp: e, .. }
-        | C::JumpIf { cond: e, .. } => unreachable_loc_exp(e),
-        C::Jump { .. } => None,
-        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
-    }
-}
-
-fn unreachable_loc_exp(parent_e: &Exp) -> Option<Loc> {
-    use UnannotatedExp_ as E;
-    match &parent_e.exp.value {
-        E::Unreachable => Some(parent_e.exp.loc),
-        E::Unit { .. }
-        | E::Value(_)
-        | E::Constant(_)
-        | E::Spec(_, _)
-        | E::UnresolvedError
-        | E::BorrowLocal(_, _)
-        | E::Copy { .. }
-        | E::Move { .. } => None,
-        E::ModuleCall(mcall) => mcall.arguments.iter().find_map(unreachable_loc_exp),
-        E::Vector(_, _, _, args) => args.iter().find_map(unreachable_loc_exp),
-        E::Freeze(e)
-        | E::Dereference(e)
-        | E::UnaryExp(_, e)
-        | E::Borrow(_, e, _, _)
-        | E::Cast(e, _) => unreachable_loc_exp(e),
-
-        E::BinopExp(e1, _, e2) => unreachable_loc_exp(e1).or_else(|| unreachable_loc_exp(e2)),
-
-        E::Pack(_, _, fields) => fields.iter().find_map(|(_, _, e)| unreachable_loc_exp(e)),
-
-        E::Multiple(es) => es.iter().find_map(unreachable_loc_exp),
-    }
-}
-
-fn is_implicit_control_flow(block: &BasicBlock) -> bool {
-    use Command_ as C;
-    use UnannotatedExp_ as E;
-    block.len() == 1
-        && match &block.front().unwrap().value {
-            C::Jump { from_user, .. } => !*from_user,
-            C::Return { exp: e, from_user } if !*from_user => matches!(
-                &e.exp.value,
-                E::Unit {
-                    case: UnitCase::Implicit
-                }
-            ),
-            _ => false,
-        }
 }
 
 // Relying on the ordered block info (ordered in the linear ordering of the source code)
