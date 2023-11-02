@@ -91,7 +91,7 @@ enum Operation {
     },
 }
 
-#[tokio::main()]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let args = Args::parse();
     let tx_count = args.tx_count;
