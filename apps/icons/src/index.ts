@@ -170,6 +170,7 @@ export { default as TransferObject16 } from './TransferObject16';
 export { default as TransferSui16 } from './TransferSui16';
 export { default as Unpin16 } from './Unpin16';
 export { default as Unstaked } from './Unstaked';
+export { default as Usdc } from './Usdc';
 export { default as Version24 } from './Version24';
 export { default as Video32 } from './Video32';
 export { default as ViewList16 } from './ViewList16';

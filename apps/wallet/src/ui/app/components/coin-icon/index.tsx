@@ -3,9 +3,12 @@
 
 import { ImageIcon } from '_app/shared/image-icon';
 import { useCoinMetadata } from '@mysten/core';
-import { Sui, Unstaked } from '@mysten/icons';
+import { Sui, Unstaked, Usdc } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
+
+const USDC_TYPE_ARG =
+	'0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN';
 
 const imageStyle = cva(['rounded-full flex'], {
 	variants: {
@@ -29,6 +32,12 @@ const imageStyle = cva(['rounded-full flex'], {
 function SuiCoin() {
 	return (
 		<Sui className="flex items-center w-full h-full justify-center text-white p-1.5 text-body rounded-full" />
+	);
+}
+
+function UsdcCoin() {
+	return (
+		<Usdc className="flex items-center w-full h-full justify-center text-white text-body rounded-full" />
 	);
 }
 
@@ -61,7 +70,13 @@ export interface CoinIconProps extends VariantProps<typeof imageStyle> {
 export function CoinIcon({ coinType, ...styleProps }: CoinIconProps) {
 	return (
 		<div className={imageStyle(styleProps)}>
-			{coinType === SUI_TYPE_ARG ? <SuiCoin /> : <NonSuiCoin coinType={coinType} />}
+			{coinType === SUI_TYPE_ARG ? (
+				<SuiCoin />
+			) : coinType === USDC_TYPE_ARG ? (
+				<UsdcCoin />
+			) : (
+				<NonSuiCoin coinType={coinType} />
+			)}
 		</div>
 	);
 }

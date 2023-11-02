@@ -1,0 +1,34 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+import { SVGProps } from 'react';
+
+const SvgUsdc = (props: SVGProps<SVGSVGElement>) => (
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		xmlnsXlink="http://www.w3.org/1999/xlink"
+		width="1em"
+		height="1em"
+		fill="none"
+		viewBox="0 0 48 48"
+		{...props}
+	>
+		<g clipPath="url(#usdc_svg__a)">
+			<path fill="url(#usdc_svg__b)" d="M-1-1h50v50H-1z" />
+		</g>
+		<defs>
+			<clipPath id="usdc_svg__a">
+				<rect width={48} height={48} fill="#fff" rx={24} />
+			</clipPath>
+			<pattern id="usdc_svg__b" width={1} height={1} patternContentUnits="objectBoundingBox">
+				<use xlinkHref="#usdc_svg__c" transform="scale(.02)" />
+			</pattern>
+			<image
+				xlinkHref="data:image/png;base64,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"
+				id="usdc_svg__c"
+				width={50}
+				height={50}
+			/>
+		</defs>
+	</svg>
+);
+export default SvgUsdc;
