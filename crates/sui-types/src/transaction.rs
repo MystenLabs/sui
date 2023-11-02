@@ -2749,8 +2749,7 @@ impl InputObjects {
 #[derive(Clone, Debug)]
 pub enum ReceivingObjectReadResultKind {
     Object(Arc<Object>),
-    // The version of the object that the transaction intended to read, and the digest of the tx
-    // that deleted it.
+    // The object was received by some other transaction, and we were not able to read it
     PreviouslyReceivedObject,
 }
 
