@@ -53,7 +53,6 @@ impl TransactionInputLoader {
         let mut results = vec![None; input_object_kinds.len()];
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
         let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
-        let mut missing_shared_objects = Vec::new();
 
         for (i, kind) in input_object_kinds.iter().enumerate() {
             let obj_ref = match kind {
@@ -70,9 +69,20 @@ impl TransactionInputLoader {
                     continue;
                 }
                 InputObjectKind::SharedMoveObject { id, .. } => {
-                    let objref = self.store.get_latest_object_ref(*id)?;
+                    let objref = self.store.get_latest_object_ref_if_alive(*id)?;
                     if objref.is_none() {
-                        missing_shared_objects.push((i, *id));
+                        if let Some((version, digest)) = self
+                            .store
+                            .get_last_shared_object_deletion_info(id, epoch_id)?
+                        {
+                            results[i] = Some(ObjectReadResult {
+                                input_object_kind: input_object_kinds[i],
+                                object: ObjectReadResultKind::DeletedSharedObject(version, digest),
+                            });
+                        } else {
+                            return Err(SuiError::from(kind.object_not_found_error()));
+                        }
+
                         continue;
                     }
                     objref
@@ -97,30 +107,11 @@ impl TransactionInputLoader {
             });
         }
 
-        for (i, id) in missing_shared_objects {
-            if let Some((version, digest)) = self
-                .store
-                .get_last_shared_object_deletion_info(&id, epoch_id)?
-            {
-                results[i] = Some(ObjectReadResult {
-                    input_object_kind: input_object_kinds[i],
-                    object: ObjectReadResultKind::DeletedSharedObject(version, digest),
-                });
-            } else {
-                return Err(SuiError::from(
-                    input_object_kinds[i].object_not_found_error(),
-                ));
-            }
-        }
-
         // Load receiving objects
         let mut receiving_results = Vec::with_capacity(receiving_objects.len());
         for objref in receiving_objects {
+            // Note: the digest is checked later in check_transaction_input
             let (object_id, version, _) = objref;
-            fp_ensure!(
-                *version < SequenceNumber::MAX,
-                UserInputError::InvalidSequenceNumber.into()
-            );
 
             if self
                 .store

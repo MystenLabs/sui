@@ -717,6 +717,9 @@ impl AuthorityState {
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
+        // Note: the deny checks may do redundant package loads but:
+        // - they only load packages when there is an active package deny map
+        // - the loads are cached anyway
         sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
             transaction.tx_signatures(),
