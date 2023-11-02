@@ -4,6 +4,7 @@
 import { combineReducers } from '@reduxjs/toolkit';
 
 import app from './slices/app';
+import coins from './slices/coins';
 import permissions from './slices/permissions';
 import transactionRequests from './slices/transaction-requests';
 
@@ -11,6 +12,7 @@ const rootReducer = combineReducers({
 	app,
 	permissions,
 	transactionRequests,
+	coins,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
