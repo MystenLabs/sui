@@ -775,6 +775,19 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
+    // Returns true if authenticator state is enabled in the protocol config *and* the
+    // authenticator state object already exists
+    pub fn randomness_state_enabled(&self) -> bool {
+        // TODO-DNS use this somewhere?
+        self.protocol_config().random_beacon() && self.randomness_state_exists()
+    }
+
+    pub fn randomness_state_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .randomness_obj_initial_shared_version()
+            .is_some()
+    }
+
     pub fn get_parent_path(&self) -> PathBuf {
         self.parent_path.clone()
     }

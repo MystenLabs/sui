@@ -36,7 +36,7 @@ use crate::{
         transaction_block_kind::{
             AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
-            TransactionBlockKind,
+            RandomnessStateUpdate, TransactionBlockKind,
         },
         transaction_signature::TransactionSignature,
         validator::Validator,
@@ -1601,6 +1601,12 @@ impl From<&TransactionKind> for TransactionBlockKind {
                         value: format!("{:?}", asu),
                     },
                 )
+            }
+            // TODO: flesh out type
+            TransactionKind::RandomnessStateUpdate(rsu) => {
+                TransactionBlockKind::RandomnessStateUpdateTransaction(RandomnessStateUpdate {
+                    value: format!("{:?}", rsu),
+                })
             }
             // TODO: flesh out type
             TransactionKind::EndOfEpochTransaction(et) => {

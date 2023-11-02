@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use std::{fs, path::Path};
 use sui_types::authenticator_state::{
     get_authenticator_state, get_authenticator_state_obj_initial_shared_version,
@@ -156,6 +157,11 @@ impl Genesis {
 
     pub fn authenticator_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         get_authenticator_state_obj_initial_shared_version(&self.objects())
+            .expect("Read from genesis cannot fail")
+    }
+
+    pub fn randomness_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        get_randomness_state_obj_initial_shared_version(&self.objects())
             .expect("Read from genesis cannot fail")
     }
 

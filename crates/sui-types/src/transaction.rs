@@ -22,7 +22,7 @@ use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION, SUI_RANDOMNESS_STATE_OBJECT_ID,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -225,6 +225,28 @@ impl AuthenticatorStateUpdate {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct RandomnessStateUpdate {
+    /// Epoch of the randomness state update transaction
+    pub epoch: u64,
+    /// Consensus round of the randomness state update
+    pub round: u64,
+    /// Randomness round of the update
+    pub randomness_round: u64,
+    /// Updated random bytes
+    pub random_bytes: Vec<u8>,
+    /// The initial version of the randomness object that it was shared at.
+    pub randomness_obj_initial_shared_version: SequenceNumber,
+    // to version this struct, do not add new fields. Instead, add a RandomnessStateUpdateV2 to
+    // TransactionKind.
+}
+
+impl RandomnessStateUpdate {
+    pub fn randomness_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.randomness_obj_initial_shared_version
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
     /// A transaction that allows the interleaving of native commands and Move calls
@@ -244,6 +266,7 @@ pub enum TransactionKind {
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
     AuthenticatorStateUpdate(AuthenticatorStateUpdate),
+    RandomnessStateUpdate(RandomnessStateUpdate),
 
     /// EndOfEpochTransaction replaces ChangeEpoch with a list of transactions that are allowed to
     /// run at the end of the epoch.
@@ -257,6 +280,7 @@ pub enum EndOfEpochTransactionKind {
     ChangeEpoch(ChangeEpoch),
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(AuthenticatorStateExpire),
+    RandomnessStateCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -296,6 +320,10 @@ impl EndOfEpochTransactionKind {
         Self::AuthenticatorStateCreate
     }
 
+    pub fn new_randomness_state_create() -> Self {
+        Self::RandomnessStateCreate
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -313,6 +341,7 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 }]
             }
+            Self::RandomnessStateCreate => vec![],
         }
     }
 
@@ -325,6 +354,7 @@ impl EndOfEpochTransactionKind {
                 mutable: true,
             })),
             Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
+            Self::RandomnessStateCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -334,6 +364,10 @@ impl EndOfEpochTransactionKind {
             Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.enable_jwk_consensus_updates());
+            }
+            Self::RandomnessStateCreate => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.random_beacon());
             }
         }
         Ok(())
@@ -376,6 +410,15 @@ impl VersionedProtocolMessage for TransactionKind {
                     })
                 }
             }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                if protocol_config.random_beacon() {
+                    Ok(())
+                } else {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "randomness state updates not enabled".to_string(),
+                    })
+                }
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 if !protocol_config.end_of_epoch_transaction_supported() {
                     Err(SuiError::UnsupportedFeatureError {
@@ -391,6 +434,13 @@ impl VersionedProtocolMessage for TransactionKind {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "authenticator state updates not enabled"
                                             .to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::RandomnessStateCreate => {
+                                if !protocol_config.random_beacon() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "random beacon not enabled".to_string(),
                                     });
                                 }
                             }
@@ -1127,6 +1177,7 @@ impl TransactionKind {
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => vec![],
             TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects(),
         }
@@ -1159,6 +1210,13 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+            }
+            Self::RandomnessStateUpdate(update) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: update.randomness_obj_initial_shared_version(),
                     mutable: true,
                 }]
             }
@@ -1200,6 +1258,10 @@ impl TransactionKind {
                 // The transaction should have been rejected earlier if the feature is not enabled.
                 assert!(config.enable_jwk_consensus_updates());
             }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                // The transaction should have been rejected earlier if the feature is not enabled.
+                assert!(config.random_beacon());
+            }
         };
         Ok(())
     }
@@ -1234,6 +1296,7 @@ impl TransactionKind {
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
@@ -1264,6 +1327,9 @@ impl Display for TransactionKind {
             }
             Self::AuthenticatorStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::RandomnessStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind : Randomness State Update")?;
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;

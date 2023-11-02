@@ -146,6 +146,7 @@ pub enum ConsensusTransactionKind {
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityCapabilities),
     NewJWKFetched(AuthorityName, JwkId, JWK),
+    RandomnessStateUpdate, // TODO-DNS add state to this variant
 }
 
 impl ConsensusTransaction {

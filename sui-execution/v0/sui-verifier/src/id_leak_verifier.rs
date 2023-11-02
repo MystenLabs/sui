@@ -38,7 +38,9 @@ use sui_types::{
 };
 
 #[cfg(msim)]
-use sui_types::authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME;
+use sui_types::{
+    authenticator_state::AUTHENTICATOR_STATE_MODULE_NAME, randomness_state::RANDOMNESS_MODULE_NAME,
+};
 
 use crate::{
     check_for_verifier_timeout, to_verification_timeout_error, verification_failure,
@@ -81,14 +83,20 @@ const SUI_CLOCK_CREATE: FunctionIdent = (
     ident_str!("create"),
 );
 
-// Note: the authenticator object should never exist when v0 execution is being used. However,
-// unwrapped_then_deleted_tests.rs forcibly sets the execution version to 0, so we need to handle
-// this case. Since that test only runs in the simulator we can special case it with cfg(msim)
-// so that we don't risk breaking release builds.
+// Note: the authenticator/randomness objects should never exist when v0 execution is being used.
+// However, unwrapped_then_deleted_tests.rs forcibly sets the execution version to 0, so we need
+// to handle this case. Since that test only runs in the simulator we can special case it with
+// cfg(msim) so that we don't risk breaking release builds.
 #[cfg(msim)]
 const SUI_AUTHENTICATOR_STATE_CREATE: FunctionIdent = (
     &SUI_FRAMEWORK_ADDRESS,
     AUTHENTICATOR_STATE_MODULE_NAME,
+    ident_str!("create"),
+);
+#[cfg(msim)]
+const SUI_RANDOMNESS_STATE_CREATE: FunctionIdent = (
+    &SUI_FRAMEWORK_ADDRESS,
+    RANDOMNESS_MODULE_NAME,
     ident_str!("create"),
 );
 
@@ -101,6 +109,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_SYSTEM_CREATE,
     SUI_CLOCK_CREATE,
     SUI_AUTHENTICATOR_STATE_CREATE,
+    SUI_RANDOMNESS_STATE_CREATE,
 ];
 
 impl AbstractValue {

@@ -169,6 +169,7 @@ impl AuthorityStore {
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
                 genesis.authenticator_state_obj_initial_shared_version(),
+                genesis.randomness_state_obj_initial_shared_version(),
             );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)

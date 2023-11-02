@@ -8,6 +8,8 @@ mod checked {
 
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
+    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::randomness_state::{RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME, RANDOMNESS_STATE_UPDATE_FUNCTION_NAME};
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -43,7 +45,7 @@ mod checked {
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::transaction::CheckedInputObjects;
+    use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
@@ -583,6 +585,10 @@ mod checked {
                             // safe mode.
                             builder = setup_authenticator_state_expire(builder, expire);
                         }
+                        EndOfEpochTransactionKind::RandomnessStateCreate => {
+                            assert!(protocol_config.random_beacon());
+                            builder = setup_randomness_state_create(builder);
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -590,6 +596,18 @@ mod checked {
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
                     auth_state_update,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )?;
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::RandomnessStateUpdate(randomness_state_update) => {
+                setup_randomness_state_update(
+                    randomness_state_update,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -923,6 +941,21 @@ mod checked {
         builder
     }
 
+    fn setup_randomness_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                RANDOMNESS_MODULE_NAME.to_owned(),
+                RANDOMNESS_STATE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate randomness_state_create transaction!");
+        builder
+    }
+
     fn setup_authenticator_state_update(
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
@@ -986,5 +1019,48 @@ mod checked {
             )
             .expect("Unable to generate authenticator_state_expire transaction!");
         builder
+    }
+
+    fn setup_randomness_state_update(
+        update: RandomnessStateUpdate,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                RANDOMNESS_MODULE_NAME.to_owned(),
+                RANDOMNESS_STATE_UPDATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        initial_shared_version: update.randomness_obj_initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&update.randomness_round).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&update.random_bytes).unwrap()),
+                ],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate randomness_state_update transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
     }
 }
