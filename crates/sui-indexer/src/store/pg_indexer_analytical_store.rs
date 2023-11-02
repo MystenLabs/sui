@@ -20,7 +20,7 @@ use crate::models_v2::move_call_metrics::{
 };
 use crate::models_v2::network_metrics::{RowCountEstimation, StoredNetworkMetrics};
 use crate::models_v2::transactions::{
-    StoredTransaction, StoredTransactionCheckpoint, StoredTransactionTimestamp,
+    StoredTransactionCheckpoint, StoredTransactionSuccessCommandCount, StoredTransactionTimestamp,
 };
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
 use crate::models_v2::tx_indices::{StoredTxCalls, StoredTxRecipients, StoredTxSenders};
@@ -75,22 +75,6 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(cps)
     }
 
-    async fn get_transactions_in_checkpoint_range(
-        &self,
-        start_checkpoint: i64,
-        end_checkpoint: i64,
-    ) -> IndexerResult<Vec<StoredTransaction>> {
-        let tx_batch = read_only_blocking!(&self.blocking_cp, |conn| {
-            transactions::dsl::transactions
-                .filter(transactions::checkpoint_sequence_number.ge(start_checkpoint))
-                .filter(transactions::checkpoint_sequence_number.lt(end_checkpoint))
-                .order(transactions::tx_sequence_number.asc())
-                .load::<StoredTransaction>(conn)
-        })
-        .context("Failed reading transactions from PostgresDB")?;
-        Ok(tx_batch)
-    }
-
     async fn get_tx_timestamps_in_checkpoint_range(
         &self,
         start_checkpoint: i64,
@@ -129,6 +113,26 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         })
         .context("Failed reading transaction checkpoints from PostgresDB")?;
         Ok(tx_checkpoints)
+    }
+
+    async fn get_tx_success_cmd_counts_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionSuccessCommandCount>> {
+        let tx_success_cmd_counts = read_only_blocking!(&self.blocking_cp, |conn| {
+            transactions::dsl::transactions
+                .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
+                .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
+                .order(transactions::dsl::tx_sequence_number.asc())
+                .select((
+                    transactions::dsl::tx_sequence_number,
+                    transactions::dsl::success_command_count,
+                ))
+                .load::<StoredTransactionSuccessCommandCount>(conn)
+        })
+        .context("Failed reading transaction success command counts from PostgresDB")?;
+        Ok(tx_success_cmd_counts)
     }
 
     async fn get_peak_network_peak_tps(&self, epoch: i64, day: i64) -> IndexerResult<f64> {

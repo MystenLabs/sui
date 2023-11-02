@@ -61,17 +61,17 @@ where
                 ))?
                 .clone();
 
-            // +1 here b/c get_transactions_in_checkpoint_range is left-inclusive, right-exclusive,
+            // +1 here b/c get_tx_success_cmd_counts_in_checkpoint_range is left-inclusive, right-exclusive,
             // but we want left-exclusive, right-inclusive, as latest_tx_count_metrics has been processed.
-            let tx_batch = self
+            let tx_cmd_count_batch = self
                 .store
-                .get_transactions_in_checkpoint_range(
+                .get_tx_success_cmd_counts_in_checkpoint_range(
                     last_end_cp_seq + 1,
                     end_cp.sequence_number + 1,
                 )
                 .await?;
             let tx_count_metrics_delta =
-                TxCountMetricsDelta::get_tx_count_metrics_delta(&tx_batch, &end_cp);
+                TxCountMetricsDelta::get_tx_count_metrics_delta(&tx_cmd_count_batch, &end_cp);
             let tx_count_metrics = StoredTxCountMetrics::combine_tx_count_metrics_delta(
                 &latest_tx_count_metrics,
                 &tx_count_metrics_delta,
