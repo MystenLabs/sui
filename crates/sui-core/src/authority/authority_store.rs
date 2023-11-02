@@ -484,61 +484,6 @@ impl AuthorityStore {
         Ok(result)
     }
 
-    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
-    pub fn deprecated_insert_finalized_transactions(
-        &self,
-        digests: &[TransactionDigest],
-        epoch: EpochId,
-        sequence: CheckpointSequenceNumber,
-    ) -> SuiResult {
-        let mut batch = self
-            .perpetual_tables
-            .executed_transactions_to_checkpoint
-            .batch();
-        batch.insert_batch(
-            &self.perpetual_tables.executed_transactions_to_checkpoint,
-            digests.iter().map(|d| (*d, (epoch, sequence))),
-        )?;
-        batch.write()?;
-        trace!("Transactions {digests:?} finalized at checkpoint {sequence} epoch {epoch}");
-        Ok(())
-    }
-
-    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
-    pub fn deprecated_is_transaction_executed_in_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .perpetual_tables
-            .executed_transactions_to_checkpoint
-            .contains_key(digest)?)
-    }
-
-    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
-    pub fn deprecated_get_transaction_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<Option<(EpochId, CheckpointSequenceNumber)>> {
-        Ok(self
-            .perpetual_tables
-            .executed_transactions_to_checkpoint
-            .get(digest)?)
-    }
-
-    // DEPRECATED -- use function of same name in AuthorityPerEpochStore
-    pub fn deprecated_multi_get_transaction_checkpoint(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<(EpochId, CheckpointSequenceNumber)>>> {
-        Ok(self
-            .perpetual_tables
-            .executed_transactions_to_checkpoint
-            .multi_get(digests)?
-            .into_iter()
-            .collect())
-    }
-
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         self.perpetual_tables.database_is_empty()
