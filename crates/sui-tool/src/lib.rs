@@ -653,8 +653,7 @@ fn start_summary_sync(
             usize::MAX,
             false,
             &Registry::default(),
-        )
-        .await?;
+        )?;
         let state_sync_store = RocksDbStore::new(store, committee_store, checkpoint_store.clone());
         // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
         if checkpoint_store
@@ -1261,8 +1260,7 @@ pub async fn state_sync_from_archive(
         usize::MAX,
         false,
         &Registry::default(),
-    )
-    .await?;
+    )?;
 
     let latest_checkpoint = checkpoint_store
         .get_highest_synced_checkpoint()?

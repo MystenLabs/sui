@@ -440,8 +440,7 @@ impl SuiNode {
                 .expensive_safety_check_config
                 .enable_epoch_sui_conservation_check(),
             &prometheus_registry,
-        )
-        .await?;
+        )?;
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
             .get_committee(&cur_epoch)?

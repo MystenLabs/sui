@@ -1031,7 +1031,7 @@ impl AuthorityState {
             .expect("notify_read_effects should return exactly 1 element"))
     }
 
-    async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+    fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         self.database
             .check_owned_object_locks_exist(owned_object_refs)
     }
@@ -1087,8 +1087,7 @@ impl AuthorityState {
         }
         let execution_guard = self
             .database
-            .execution_lock_for_executable_transaction(certificate)
-            .await;
+            .execution_lock_for_executable_transaction(certificate);
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
@@ -1115,10 +1114,12 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (inner_temporary_store, effects, execution_error_opt) = match self
-            .prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
-            .await
-        {
+        let (inner_temporary_store, effects, execution_error_opt) = match self.prepare_certificate(
+            &execution_guard,
+            certificate,
+            input_objects,
+            epoch_store,
+        ) {
             Err(e) => {
                 info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
@@ -1334,7 +1335,7 @@ impl AuthorityState {
     /// locks are not held, etc. However, this is not entirely true, as a transient db read error
     /// may also cause this function to fail.
     #[instrument(level = "trace", skip_all)]
-    async fn prepare_certificate(
+    fn prepare_certificate(
         &self,
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
@@ -1357,7 +1358,7 @@ impl AuthorityState {
         )?;
 
         let owned_object_refs = input_objects.inner().filter_owned_objects();
-        self.check_owned_locks(&owned_object_refs).await?;
+        self.check_owned_locks(&owned_object_refs)?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
@@ -2330,8 +2331,7 @@ impl AuthorityState {
         self.committee_store.insert_new_committee(&new_committee)?;
         let db = self.db();
         let mut execution_lock = db.execution_lock_for_reconfiguration().await;
-        self.revert_uncommitted_epoch_transactions(cur_epoch_store)
-            .await?;
+        self.revert_uncommitted_epoch_transactions(cur_epoch_store)?;
         self.check_system_consistency(
             cur_epoch_store,
             checkpoint_executor,
@@ -2346,8 +2346,7 @@ impl AuthorityState {
         );
         self.clear_object_per_epoch_marker_table(&execution_lock)?;
         self.db()
-            .set_epoch_start_configuration(&epoch_start_configuration)
-            .await?;
+            .set_epoch_start_configuration(&epoch_start_configuration)?;
         if let Some(checkpoint_path) = &self.db_checkpoint_config.checkpoint_path {
             if self
                 .db_checkpoint_config
@@ -3671,7 +3670,7 @@ impl AuthorityState {
         )?;
 
         // Allow testing what happens if we crash here.
-        fail_point_async!("crash");
+        fail_point!("crash");
 
         self.database
             .update_state(
@@ -4219,8 +4218,7 @@ impl AuthorityState {
 
         let execution_guard = self
             .database
-            .execution_lock_for_executable_transaction(&executable_tx)
-            .await?;
+            .execution_lock_for_executable_transaction(&executable_tx)?;
 
         let input_objects = self
             .input_loader
@@ -4235,9 +4233,8 @@ impl AuthorityState {
             )
             .await?;
 
-        let (temporary_store, effects, _execution_error_opt) = self
-            .prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)
-            .await?;
+        let (temporary_store, effects, _execution_error_opt) =
+            self.prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");
 
@@ -4264,7 +4261,7 @@ impl AuthorityState {
     /// This function is called at the very end of the epoch.
     /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
     #[instrument(level = "error", skip_all)]
-    async fn revert_uncommitted_epoch_transactions(
+    fn revert_uncommitted_epoch_transactions(
         &self,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult {
@@ -4301,7 +4298,7 @@ impl AuthorityState {
                 continue;
             }
             info!("Reverting {:?} at the end of epoch", digest);
-            self.database.revert_state_update(&digest).await?;
+            self.database.revert_state_update(&digest)?;
         }
         info!("All uncommitted local transactions reverted");
         Ok(())

@@ -143,7 +143,7 @@ pub type ExecutionLockWriteGuard<'a> = RwLockWriteGuard<'a, EpochId>;
 impl AuthorityStore {
     /// Open an authority store by directory path.
     /// If the store is empty, initialize it using genesis.
-    pub async fn open(
+    pub fn open(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         genesis: &Genesis,
         committee_store: &Arc<CommitteeStore>,
@@ -159,9 +159,7 @@ impl AuthorityStore {
                 *genesis.checkpoint().digest(),
                 genesis.authenticator_state_obj_initial_shared_version(),
             );
-            perpetual_tables
-                .set_epoch_start_configuration(&epoch_start_configuration)
-                .await?;
+            perpetual_tables.set_epoch_start_configuration(&epoch_start_configuration)?;
             epoch_start_configuration
         } else {
             info!("Loading epoch start config from DB");
@@ -183,8 +181,7 @@ impl AuthorityStore {
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             registry,
-        )
-        .await?;
+        )?;
         this.update_epoch_flags_metrics(&[], epoch_start_configuration.flags());
         Ok(this)
     }
@@ -204,7 +201,7 @@ impl AuthorityStore {
         }
     }
 
-    pub async fn open_with_committee_for_testing(
+    pub fn open_with_committee_for_testing(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
         genesis: &Genesis,
@@ -221,10 +218,9 @@ impl AuthorityStore {
             true,
             &Registry::new(),
         )
-        .await
     }
 
-    async fn open_inner(
+    fn open_inner(
         genesis: &Genesis,
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         committee: &Committee,
@@ -255,7 +251,6 @@ impl AuthorityStore {
         {
             store
                 .bulk_insert_genesis_objects(genesis.objects())
-                .await
                 .expect("Cannot bulk insert genesis objects");
 
             // insert txn and effects of genesis
@@ -771,11 +766,15 @@ impl AuthorityStore {
     /// Attempts to acquire execution lock for an executable transaction.
     /// Returns the lock if the transaction is matching current executed epoch
     /// Returns None otherwise
-    pub async fn execution_lock_for_executable_transaction(
+    pub fn execution_lock_for_executable_transaction(
         &self,
         transaction: &VerifiedExecutableTransaction,
     ) -> SuiResult<ExecutionLockReadGuard> {
-        let lock = self.execution_lock.read().await;
+        let lock = self
+            .execution_lock
+            .try_read()
+            .map_err(|_| SuiError::ValidatorHaltedAtEpochEnd)?;
+
         if *lock == transaction.auth_sig().epoch() {
             Ok(lock)
         } else {
@@ -835,14 +834,14 @@ impl AuthorityStore {
     }
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
-    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.bulk_insert_genesis_objects(objects).await?;
+    pub fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
+        self.bulk_insert_genesis_objects(objects)?;
         self.force_reload_system_packages_into_cache();
         Ok(())
     }
 
     /// This function should only be used for initializing genesis and should remain private.
-    async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
+    fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -944,13 +943,12 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub async fn set_epoch_start_configuration(
+    pub fn set_epoch_start_configuration(
         &self,
         epoch_start_configuration: &EpochStartConfiguration,
     ) -> SuiResult {
         self.perpetual_tables
-            .set_epoch_start_configuration(epoch_start_configuration)
-            .await?;
+            .set_epoch_start_configuration(epoch_start_configuration)?;
         Ok(())
     }
 
@@ -991,8 +989,7 @@ impl AuthorityStore {
             effects,
             transaction,
             epoch_id,
-        )
-        .await?;
+        )?;
 
         // Store the signed effects of the transaction
         // We can't write this until after sequencing succeeds (which happens in
@@ -1060,7 +1057,7 @@ impl AuthorityStore {
     }
 
     /// Helper function for updating the objects and locks in the state
-    async fn update_objects_and_locks(
+    fn update_objects_and_locks(
         &self,
         write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
@@ -1524,7 +1521,7 @@ impl AuthorityStore {
     /// so that when we receive the checkpoint that includes it from state
     /// sync, we are able to execute the checkpoint.
     /// TODO: implement GC for transactions that are no longer needed.
-    pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
+    pub fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(());

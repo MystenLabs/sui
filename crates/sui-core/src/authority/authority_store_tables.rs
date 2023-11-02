@@ -281,7 +281,7 @@ impl AuthorityPerpetualTables {
             .epoch())
     }
 
-    pub async fn set_epoch_start_configuration(
+    pub fn set_epoch_start_configuration(
         &self,
         epoch_start_configuration: &EpochStartConfiguration,
     ) -> SuiResult {

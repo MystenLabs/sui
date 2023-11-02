@@ -2923,7 +2923,6 @@ async fn test_authority_persist() {
     // Create an authority
     let store =
         AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
-            .await
             .unwrap();
     let authority = init_state(&genesis, authority_key, store).await;
 
@@ -2949,7 +2948,6 @@ async fn test_authority_persist() {
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     let store =
         AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
-            .await
             .unwrap();
     let authority2 = init_state(&genesis, authority_key, store).await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -3283,7 +3281,7 @@ async fn test_store_revert_transfer_sui() {
         .unwrap();
 
     let db = &authority_state.database;
-    db.revert_state_update(&tx_digest).await.unwrap();
+    db.revert_state_update(&tx_digest).unwrap();
 
     assert_eq!(
         db.get_object(&gas_object_id).unwrap().unwrap().owner,
@@ -3357,7 +3355,7 @@ async fn test_store_revert_wrap_move_call() {
     let wrapper_v0 = wrap_effects.created()[0].0;
 
     let db = &authority_state.database;
-    db.revert_state_update(&wrap_digest).await.unwrap();
+    db.revert_state_update(&wrap_digest).unwrap();
 
     // The wrapped object is unwrapped once again (accessible from storage).
     let object = db.get_object(&object_v0.0).unwrap().unwrap();
@@ -3445,7 +3443,7 @@ async fn test_store_revert_unwrap_move_call() {
 
     let db = &authority_state.database;
 
-    db.revert_state_update(&unwrap_digest).await.unwrap();
+    db.revert_state_update(&unwrap_digest).unwrap();
 
     // The unwrapped object is wrapped once again
     assert!(db.get_object(&object_v0.0).unwrap().is_none());
@@ -3711,7 +3709,7 @@ async fn test_store_revert_add_ofield() {
     assert_eq!(inner.version(), inner_v1.1);
     assert_eq!(inner.owner, Owner::ObjectOwner(field_v0.0.into()));
 
-    db.revert_state_update(&add_digest).await.unwrap();
+    db.revert_state_update(&add_digest).unwrap();
 
     let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v0.1);
@@ -3821,7 +3819,7 @@ async fn test_store_revert_remove_ofield() {
     assert_eq!(inner.owner, Owner::AddressOwner(sender));
     assert_eq!(inner.version(), inner_v2.1);
 
-    db.revert_state_update(&remove_ofield_digest).await.unwrap();
+    db.revert_state_update(&remove_ofield_digest).unwrap();
 
     let outer = db.get_object(&outer_v0.0).unwrap().unwrap();
     assert_eq!(outer.version(), outer_v1.1);

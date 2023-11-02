@@ -180,7 +180,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis,
                     0,
                 )
-                .await
                 .unwrap()
             }
         };
@@ -304,7 +303,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             state
                 .database
                 .insert_objects_unsafe_for_testing_only(starting_objects)
-                .await
                 .unwrap();
         };
         state
