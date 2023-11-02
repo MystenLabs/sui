@@ -223,6 +223,7 @@ const concepts = [
 			'concepts/tokenomics/validators-staking',
 			'concepts/tokenomics/staking-unstaking',
 			'concepts/tokenomics/sui-token',
+			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/storage-fund',
 			'concepts/tokenomics/gas-pricing',
 			'concepts/tokenomics/gas-in-sui',
