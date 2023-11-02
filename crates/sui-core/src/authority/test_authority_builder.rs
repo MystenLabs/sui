@@ -151,6 +151,10 @@ impl<'a> TestAuthorityBuilder<'a> {
         let authority_store = match self.store {
             Some(store) => store,
             None => {
+                // todo - hack to mitigate race conditions (we apparently open the store more than once)
+                let r = rand::random::<u64>() % 500;
+                tokio::time::sleep(std::time::Duration::from_millis(r)).await;
+
                 let perpetual_tables =
                     Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
                 // unwrap ok - for testing only.
