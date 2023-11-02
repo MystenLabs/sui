@@ -121,11 +121,13 @@ export function TokenRow({
 						{coinMeta?.name || symbol}
 					</Text>
 
-					<div className="group-hover:hidden">
-						<Text variant="subtitle" color="steel-dark" weight="medium">
-							{symbol}
-						</Text>
-					</div>
+					{renderActions && (
+						<div className="group-hover:hidden">
+							<Text variant="subtitle" color="steel-dark" weight="medium">
+								{symbol}
+							</Text>
+						</div>
+					)}
 
 					{renderActions ? (
 						<div className="group-hover:flex hidden gap-2.5 items-center">

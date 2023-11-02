@@ -13,7 +13,7 @@ import {
 } from '_pages/swap/constants';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
 import { ToAssets } from '_pages/swap/ToAssets';
-import { useSwapData } from '_pages/swap/utils';
+import { getUSDCurrency, useSwapData } from '_pages/swap/utils';
 import { useDeepBookContext } from '_shared/deepBook/context';
 import { type BalanceChange } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -113,6 +113,13 @@ export function ToAssetSection({
 					!!toAssetAmountAsNum && (
 						<Text variant="body" weight="semibold" color="steel">
 							{toAssetSymbol}
+						</Text>
+					)
+				}
+				info={
+					isValid && (
+						<Text variant="subtitleSmall" color="steel-dark">
+							{getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
 						</Text>
 					)
 				}
