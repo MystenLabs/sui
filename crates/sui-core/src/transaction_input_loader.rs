@@ -17,6 +17,7 @@ use sui_types::{
         ReceivingObjectReadResult, ReceivingObjectReadResultKind, ReceivingObjects,
     },
 };
+use tracing::instrument;
 
 pub(crate) struct TransactionInputLoader {
     store: Arc<AuthorityStore>,
@@ -32,6 +33,7 @@ impl TransactionInputLoader {
     /// Read the inputs for a transaction that the validator was asked to sign.
     /// tx_digest is provided so that the inputs can be cached with the tx_digest and returned with
     /// a single hash map lookup when notify_read_objects_for_execution is called later.
+    #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_signing(
         &self,
         _tx_digest: &TransactionDigest,
@@ -148,6 +150,7 @@ impl TransactionInputLoader {
     /// Reads input objects assuming a synchronous context such as the end of epoch transaction.
     /// By "synchronous" we mean that it is safe to read the latest version of all shared objects,
     /// as opposed to relying on the shared input version assignment.
+    #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_synchronous_execution(
         &self,
         tx_digest: &TransactionDigest,
@@ -165,6 +168,7 @@ impl TransactionInputLoader {
     }
 
     /// Read input objects for a dry run execution.
+    #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_dry_run_exec(
         &self,
         tx_digest: &TransactionDigest,
@@ -182,6 +186,7 @@ impl TransactionInputLoader {
     }
 
     /// Read input objects for dev inspect
+    #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_dev_inspect(
         &self,
         input_object_kinds: &[InputObjectKind],
@@ -209,6 +214,7 @@ impl TransactionInputLoader {
     /// can be stored as a group with the transaction_digest as the key, allowing the lookup to
     /// proceed with only a single hash map lookup. (additional lookups may be necessary for shared
     /// inputs, since the versions are not known at signing time).
+    #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_execution(
         &self,
         shared_lock_store: &dyn GetSharedLocks,

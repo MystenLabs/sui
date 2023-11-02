@@ -955,10 +955,14 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
+        let _scope = monitored_scope("Execution::try_execute_immediately");
+        let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
+        debug!("execute_certificate_internal");
+
         let tx_digest = certificate.digest();
         let input_objects = {
             let _scope = monitored_scope("Execution::load_input_objects");
-            let input_objects = &certificate.data().intent_message().value.input_objects()?;
+            let input_objects = &certificate.data().transaction_data().input_objects()?;
             if certificate.data().transaction_data().is_end_of_epoch_tx() {
                 self.input_loader
                     .read_objects_for_synchronous_execution(
@@ -978,10 +982,6 @@ impl AuthorityState {
                     .await?
             }
         };
-
-        let _scope = monitored_scope("Execution::try_execute_immediately");
-        let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
-        debug!("execute_certificate_internal");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
