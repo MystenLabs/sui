@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 use tracing::{error, info};
@@ -94,7 +95,7 @@ where
             let stored_recipients = stored_recipients_res?;
             // replace cp seq with its timestamp
             let senders_to_commit: Vec<AddressInfoToCommit> = stored_senders
-                .into_iter()
+                .into_par_iter()
                 .filter_map(|sender| {
                     if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
                         Some(AddressInfoToCommit {
@@ -112,7 +113,7 @@ where
                 })
                 .collect();
             let recipients_to_commit: Vec<AddressInfoToCommit> = stored_recipients
-                .into_iter()
+                .into_par_iter()
                 .filter_map(|recipient| {
                     if let Some(timestamp_ms) = tx_timestamp_map.get(&recipient.tx_sequence_number)
                     {
@@ -149,7 +150,7 @@ where
             let active_addr_count = active_addresses_to_commit.len();
             info!(
                 "Indexed {} addresses and {} active addresses for checkpoint: {}",
-                addr_count, active_addr_count, end_cp.sequence_number,
+                addr_count, active_addr_count, end_cp_seq,
             );
 
             let persist_addr = self.store.persist_addresses(addresses_to_commit);
