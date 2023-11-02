@@ -18,6 +18,7 @@ use self::{
         },
         hash::{HashBlake2b256CostParams, HashKeccak256CostParams},
         hmac::HmacHmacSha3256CostParams,
+        poseidon,
     },
     dynamic_field::{
         DynamicFieldAddChildObjectCostParams, DynamicFieldBorrowChildObjectCostParams,
@@ -33,6 +34,7 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
@@ -137,6 +139,9 @@ pub struct NativesCostTable {
     // hash
     pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
     pub hash_keccak256_cost_params: HashKeccak256CostParams,
+
+    // poseidon
+    pub poseidon_bn254_cost_params: PoseidonBN254CostParams,
 
     // hmac
     pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
@@ -499,6 +504,14 @@ impl NativesCostTable {
                     .check_zklogin_issuer_cost_base_as_option()
                     .map(Into::into),
             },
+            poseidon_bn254_cost_params: PoseidonBN254CostParams {
+                poseidon_bn254_cost_base: protocol_config
+                    .poseidon_bn254_cost_base_as_option()
+                    .map(Into::into),
+                poseidon_bn254_data_cost_per_block: protocol_config
+                    .poseidon_bn254_cost_per_block_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -705,6 +718,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "zklogin_verified_issuer",
             "check_zklogin_issuer_internal",
             make_native!(zklogin::check_zklogin_issuer_internal),
+        ),
+        (
+            "poseidon",
+            "poseidon_bn254",
+            make_native!(poseidon::poseidon_bn254),
         ),
     ];
     let sui_framework_natives_iter =
