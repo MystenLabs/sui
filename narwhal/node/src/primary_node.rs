@@ -11,7 +11,7 @@ use mysten_metrics::metered_channel;
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
 use primary::consensus::{
-    Bullshark, ChannelMetrics, Consensus, ConsensusMetrics, ConsensusRound, LeaderSchedule,
+    ChannelMetrics, Consensus, ConsensusMetrics, ConsensusRound, LeaderSchedule, Whaleshark,
 };
 use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
@@ -334,7 +334,7 @@ impl PrimaryNodeInner {
         );
 
         // Spawn the consensus core who only sequences transactions.
-        let ordering_engine = Box::new(Bullshark::new(
+        let ordering_engine = Box::new(Whaleshark::new(
             committee.clone(),
             store.consensus_store.clone(),
             protocol_config.clone(),

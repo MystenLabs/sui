@@ -9,6 +9,7 @@ mod leader_schedule;
 mod metrics;
 mod state;
 mod utils;
+mod whaleshark;
 
 pub use crate::consensus::bullshark::Bullshark;
 #[cfg(test)]
@@ -19,6 +20,7 @@ pub use crate::consensus::leader_schedule::{LeaderSchedule, LeaderSwapTable};
 pub use crate::consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 pub use crate::consensus::state::{Consensus, ConsensusRound, ConsensusState, Dag, Protocol};
 pub use crate::consensus::utils::gc_round;
+pub use crate::consensus::whaleshark::Whaleshark;
 
 use store::StoreError;
 use thiserror::Error;

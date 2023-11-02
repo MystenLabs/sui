@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::consensus::Protocol;
+use crate::consensus::{Protocol, Whaleshark};
 use crate::consensus::{
     make_consensus_store, Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule,
     LeaderSwapTable,
@@ -74,7 +74,6 @@ impl ExecutionPlan {
     }
 }
 
-#[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn bullshark_randomised_tests() {
     // Configuration regarding the randomized tests. The tests will run for different values
@@ -526,7 +525,7 @@ fn generate_and_run_execution_plans(
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
         let mut state = ConsensusState::new(metrics.clone(), gc_depth);
         const SUB_DAGS_PER_SCHEDULE: u64 = 5;
-        let mut bullshark = Bullshark::new(
+        let mut bullshark = Whaleshark::new(
             committee.clone(),
             store.clone(),
             protocol_config.clone(),
