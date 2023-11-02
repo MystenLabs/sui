@@ -12,7 +12,6 @@
     }
     stakeConnection {
       nodes {
-        id
         status
         principal
         estimatedReward
