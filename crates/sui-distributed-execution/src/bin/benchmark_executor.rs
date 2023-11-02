@@ -1,4 +1,5 @@
 use clap::*;
+use futures::future;
 use prometheus::Registry;
 use std::{
     collections::HashMap,
@@ -12,47 +13,7 @@ use sui_distributed_execution::{ew_agent::*, prometheus::start_prometheus_server
 use sui_distributed_execution::{metrics::Metrics, server::*};
 use tokio::task::{JoinError, JoinHandle};
 
-const FILE_PATH: &str = "crates/sui-distributed-execution/src/configs/1sw4ew.json";
-
-#[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-struct Args {
-    #[clap(long)]
-    pub my_id: UniqueId,
-
-    #[arg(
-        long,
-        default_value_t = 1_000,
-        help = "Number of transactions to submit"
-    )]
-    pub tx_count: u64,
-
-    #[arg(long, default_value=FILE_PATH, help="Path to json config file")]
-    pub config_path: PathBuf,
-}
-
-#[tokio::main()]
-async fn main() {
-    // Parse command line
-    let args = Args::parse();
-    let my_id = args.my_id;
-    let tx_count = args.tx_count;
-
-    // Parse config from json
-    let config_json = fs::read_to_string(args.config_path).expect("Failed to read config file");
-    let mut global_config: HashMap<UniqueId, ServerConfig> =
-        serde_json::from_str(&config_json).unwrap();
-    global_config.entry(my_id).and_modify(|e| {
-        e.attrs.insert("tx_count".to_string(), tx_count.to_string());
-    });
-
-    // Spawn the executor shard (blocking).
-    ExecutorShard::start(global_config, my_id)
-        .await_completion()
-        .await
-        .expect("Failed to run executor");
-}
-
+/// Top-level executor shard structure.
 pub struct ExecutorShard {
     pub metrics: Arc<Metrics>,
     main_handle: JoinHandle<()>,
@@ -98,45 +59,104 @@ impl ExecutorShard {
     }
 }
 
+/// Example config path.
+const DEFAULT_CONFIG_PATH: &str = "crates/sui-distributed-execution/src/configs/1sw4ew.json";
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Number of transactions to submit.
+    #[arg(long, default_value_t = 1_000, global = true)]
+    pub tx_count: u64,
+
+    #[clap(subcommand)]
+    operation: Operation,
+}
+
+#[derive(Parser)]
+enum Operation {
+    /// Deploy a single executor shard.
+    Run {
+        /// The id of this executor shard.
+        #[clap(long)]
+        id: UniqueId,
+
+        /// Path to json config file.
+        #[arg(long, default_value = DEFAULT_CONFIG_PATH)]
+        config_path: PathBuf,
+    },
+
+    /// Deploy a local testbed of executor shards.
+    Testbed {
+        /// Number of execution workers.
+        #[clap(long, default_value_t = 4)]
+        execution_workers: usize,
+    },
+}
+
+#[tokio::main()]
+async fn main() {
+    let args = Args::parse();
+    let tx_count = args.tx_count;
+
+    match args.operation {
+        Operation::Run { id, config_path } => {
+            // Parse config from json
+            let mut global_config = ServerConfig::from_path(config_path);
+            global_config.entry(id).and_modify(|e| {
+                e.attrs.insert("tx_count".to_string(), tx_count.to_string());
+            });
+
+            // Spawn the executor shard (blocking).
+            ExecutorShard::start(global_config, id)
+                .await_completion()
+                .await
+                .expect("Failed to run executor");
+        }
+        Operation::Testbed { execution_workers } => {
+            deploy_testbed(tx_count, execution_workers).await;
+        }
+    }
+}
+
+/// Deploy a local testbed of executor shards.
+async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> Vec<Arc<Metrics>> {
+    let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
+    let mut global_configs = ServerConfig::new_for_benchmark(ips);
+
+    // Insert workload.
+    for id in 0..execution_workers + 1 {
+        global_configs.entry(id as UniqueId).and_modify(|e| {
+            e.attrs.insert("tx_count".to_string(), tx_count.to_string());
+        });
+    }
+
+    // Spawn sequence worker.
+    let configs = global_configs.clone();
+    let id = 0;
+    let _sequence_worker = ExecutorShard::start(configs, id);
+
+    // Spawn execution workers.
+    let handles = (1..execution_workers + 1).map(|id| {
+        let configs = global_configs.clone();
+        async move {
+            let worker = ExecutorShard::start(configs, id as UniqueId);
+            worker.await_completion().await.unwrap()
+        }
+    });
+    future::join_all(handles).await
+}
+
 #[cfg(test)]
 mod test {
-    use std::net::{IpAddr, Ipv4Addr};
-
-    use futures::future;
-    use sui_distributed_execution::types::{ServerConfig, UniqueId};
-
-    use crate::ExecutorShard;
+    use crate::deploy_testbed;
 
     #[tokio::test]
     async fn smoke_test() {
         let tx_count = 300;
         let execution_workers = 4;
-        let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
-        let mut global_configs = ServerConfig::new_for_benchmark(ips);
+        let metrics = deploy_testbed(tx_count, execution_workers).await;
 
-        // Insert workload.
-        for id in 0..execution_workers + 1 {
-            global_configs.entry(id as u16).and_modify(|e| {
-                e.attrs.insert("tx_count".to_string(), tx_count.to_string());
-            });
-        }
-
-        // Spawn sequence worker.
-        let configs = global_configs.clone();
-        let id = 0;
-        let _sequence_worker = ExecutorShard::start(configs, id);
-
-        // Spawn execution workers.
-        let handles = (1..execution_workers + 1).map(|id| {
-            let configs = global_configs.clone();
-            async move {
-                let worker = ExecutorShard::start(configs, id as UniqueId);
-                worker.await_completion().await.unwrap()
-            }
-        });
-        let metrics = future::join_all(handles).await;
-
-        // Ensure that all execution workers processed the transactions.
         assert!(metrics.iter().all(|m| m
             .latency_s
             .with_label_values(&["default"])

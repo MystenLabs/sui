@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-use std::net::IpAddr;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     net::SocketAddr,
 };
+use std::{fmt::Debug, path::Path};
+use std::{fs, net::IpAddr};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
@@ -34,6 +34,7 @@ pub type GlobalConfig = HashMap<UniqueId, ServerConfig>;
 impl ServerConfig {
     pub const BENCHMARK_BASE_PORT: u16 = 1500;
 
+    /// Create a new global config for benchmarking.
     pub fn new_for_benchmark(ips: Vec<IpAddr>) -> GlobalConfig {
         let benchmark_port_offset = ips.len() as u16;
         let mut global_config = GlobalConfig::new();
@@ -60,6 +61,12 @@ impl ServerConfig {
             global_config.insert(i as u16, config);
         }
         global_config
+    }
+
+    /// Load a global config from a file.
+    pub fn from_path<P: AsRef<Path>>(path: P) -> GlobalConfig {
+        let config_json = fs::read_to_string(path).expect("Failed to read config file");
+        serde_json::from_str(&config_json).expect("Failed to parse config file")
     }
 }
 
