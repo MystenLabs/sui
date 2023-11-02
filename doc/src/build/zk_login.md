@@ -455,7 +455,7 @@ You might want to cache the ephemeral key pair along with the ZKP for future use
 
 However, the ephemeral key pair needs to be treated as a secret akin to a key pair in a traditional wallet. This is because if both the ephemeral private key and ZK proof are revealed to an attacker, then they can typically sign any transaction on behalf of the user (using the same process as above).
 
-So we do not recommend storing them persistently in any form, on any platform. For example, on browsers, we recommend using session storage instead of local storage to store the ephemeral key pair and the ZK proof.
+So we do not recommend storing them persistently in an unsecure storage location, on any platform. For example, on browsers, we recommend using session storage instead of local storage to store the ephemeral key pair and the ZK proof.
 
 # How zkLogin Works
 
