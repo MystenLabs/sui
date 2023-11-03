@@ -99,10 +99,14 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 			response_type: 'code',
 		},
 		buildExtraParams: ({ prompt, loginHint, params }) => {
-			params.append('prompt', prompt ? 'select_account' : 'none');
-			if (loginHint) {
-				params.append('login_hint', loginHint);
+			if (prompt) {
+				params.append('prompt', 'select_account');
 			}
+			// login hint makes user to insert account and password
+			// disables auto login flow (maybe using wrong hint?)
+			// if (loginHint) {
+			// 	params.append('login_hint', loginHint);
+			// }
 		},
 		enabled: isDev,
 		hidden: !isDev,

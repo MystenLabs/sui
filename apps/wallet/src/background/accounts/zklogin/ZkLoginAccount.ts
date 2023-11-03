@@ -273,6 +273,7 @@ export class ZkLoginAccount
 		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
 		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
 		const decodedJWT = decodeJwt(jwt);
+		console.log(decodedJWT);
 		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
 			throw new Error("Logged in account doesn't match with saved account");
 		}
