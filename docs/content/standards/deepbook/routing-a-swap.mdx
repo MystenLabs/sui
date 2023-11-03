@@ -3,6 +3,8 @@ title: Routing a Swap
 slug: /routing-a-swap
 ---
 
+This section shows how to construct and execute a trade using a smart-routing swap.
+
 ## 1. Find the Best Route to Swap {#swap-route}
 
 To use the smart routing functionality, one should first find the best route. The route uses a Depth-First-Search (DFS) algorithm to find all the routes in the swap pools and use dry-run to simulate how much token one can get from each route. The function will return the best route which can provide maximum tokens.
