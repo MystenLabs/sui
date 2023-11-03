@@ -1019,7 +1019,7 @@ export function HouseFinishGame() {
           txb.moveCall({
             target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
             arguments: [
-              txb.pure.address(game_id),
+              txb.pure.id(game_id),
               txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
               txb.object(houseDataId),
             ],
