@@ -263,17 +263,15 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
         };
 
         info!(
-            "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} epoch {}",
-            consensus_output.digest(),
-            round,
-            commit_sub_dag_index,
-            timestamp,
+            "Received consensus output {} at epoch {}",
+            consensus_output,
             self.epoch_store.epoch(),
         );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
+        let empty_bytes = vec![];
         transactions.push((
-            vec![],
+            empty_bytes.as_slice(),
             SequencedConsensusTransactionKind::System(prologue_transaction),
             consensus_output.leader_author_index(),
         ));
@@ -296,7 +294,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                 self.authenticator_state_update_transaction(round, new_jwks);
 
             transactions.push((
-                vec![],
+                empty_bytes.as_slice(),
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
                 consensus_output.leader_author_index(),
             ));
@@ -321,7 +319,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
         {
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
-            for (authority_index, authority_transactions) in consensus_output.into_transactions() {
+            for (authority_index, authority_transactions) in consensus_output.transactions() {
                 let num_certs = self
                     .last_consensus_stats
                     .stats
@@ -350,11 +348,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                             .set(num_txns as i64);
                     }
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((
-                        serialized_transaction.clone(),
-                        transaction,
-                        authority_index,
-                    ));
+                    transactions.push((serialized_transaction, transaction, authority_index));
                 }
             }
         }
@@ -377,7 +371,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                     transaction_index: seq as u64,
                 };
 
-                let index_with_stats = if self.update_index_and_hash(index, &serialized) {
+                let index_with_stats = if self.update_index_and_hash(index, serialized) {
                     self.last_consensus_stats.clone()
                 } else {
                     debug!(
