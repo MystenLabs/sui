@@ -536,10 +536,6 @@ impl TestCluster {
             let replies: Vec<_> = futures::future::join_all(futures)
                 .await
                 .into_iter()
-                // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
-                // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
-                // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
-                // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
                 .filter(|result| match result {
                     Err(e) => !e.to_string().contains("deadline has elapsed"),
                     _ => true,

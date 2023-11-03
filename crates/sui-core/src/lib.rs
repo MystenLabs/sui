@@ -20,6 +20,7 @@ pub mod epoch;
 mod execution_driver;
 pub mod metrics;
 pub mod module_cache_metrics;
+pub mod mysticeti_adapter;
 pub(crate) mod post_consensus_tx_reorder;
 pub mod quorum_driver;
 pub mod safe_client;
