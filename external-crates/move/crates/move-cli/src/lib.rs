@@ -17,9 +17,6 @@ pub const DEFAULT_STORAGE_DIR: &str = "storage";
 /// Default directory for build output
 pub const DEFAULT_BUILD_DIR: &str = ".";
 
-/// Extension for resource and event files, which are in BCS format
-const BCS_EXTENSION: &str = "bcs";
-
 use anyhow::Result;
 use clap::Parser;
 use move_core_types::{

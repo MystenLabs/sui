@@ -8,21 +8,14 @@ use move_bytecode_utils::Modules;
 use move_core_types::vm_status::StatusCode;
 
 use anyhow::{bail, Result};
-use std::{ffi::OsStr, path::Path};
 
 /// Run sanity checks on storage and build dirs. This is primarily intended for testing the CLI;
 /// doctor should never fail unless `publish --ignore-breaking changes` is used or files under
 /// `storage` or `build` are modified manually. This runs the following checks:
 /// (1) all modules pass the bytecode verifier
 /// (2) all modules pass the linker
-/// (3) all resources can be deserialized
-/// (4) all events can be deserialized
-/// (5) build/mv_interfaces is consistent with the global storage (TODO?)
+/// (3) build/mv_interfaces is consistent with the global storage (TODO?)
 pub fn doctor(state: &OnDiskStateView) -> Result<()> {
-    fn parent_addr(p: &Path) -> &OsStr {
-        p.parent().unwrap().parent().unwrap().file_name().unwrap()
-    }
-
     // verify and link each module
     let all_modules = state.get_all_modules()?;
     let code_cache = Modules::new(&all_modules);
@@ -54,17 +47,6 @@ pub fn doctor(state: &OnDiskStateView) -> Result<()> {
             bail!(
                 "Cyclic module dependencies are detected with module {} in the loop",
                 module.self_id()
-            )
-        }
-    }
-    // deserialize each event
-    for event_path in state.event_paths() {
-        let event = state.view_events(&event_path);
-        if event.is_err() {
-            bail!(
-                "Failed to deserialize event {:?} stored under address {:?}",
-                event_path.file_name().unwrap(),
-                parent_addr(&event_path)
             )
         }
     }

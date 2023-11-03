@@ -15,12 +15,6 @@ use std::{
     fmt::Debug,
 };
 
-#[cfg(feature = "table-extension")]
-use {
-    anyhow::Error,
-    move_table_extension::{TableChangeSet, TableHandle, TableResolver},
-};
-
 /// A dummy storage containing no modules or resources.
 #[derive(Debug, Clone)]
 pub struct BlankStorage;
@@ -51,17 +45,6 @@ impl ResourceResolver for BlankStorage {
         _address: &AccountAddress,
         _tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
-    }
-}
-
-#[cfg(feature = "table-extension")]
-impl TableResolver for BlankStorage {
-    fn resolve_table_entry(
-        &self,
-        _handle: &TableHandle,
-        _key: &[u8],
-    ) -> Result<Option<Vec<u8>>, Error> {
         Ok(None)
     }
 }
@@ -105,28 +88,10 @@ impl<'a, 'b, S: ResourceResolver> ResourceResolver for DeltaStorage<'a, 'b, S> {
 
     fn get_resource(
         &self,
-        address: &AccountAddress,
-        tag: &StructTag,
+        _address: &AccountAddress,
+        _tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, S::Error> {
-        if let Some(account_storage) = self.delta.accounts().get(address) {
-            if let Some(blob_opt) = account_storage.resources().get(tag) {
-                return Ok(blob_opt.clone().ok());
-            }
-        }
-
-        self.base.get_resource(address, tag)
-    }
-}
-
-#[cfg(feature = "table-extension")]
-impl<'a, 'b, S: TableResolver> TableResolver for DeltaStorage<'a, 'b, S> {
-    fn resolve_table_entry(
-        &self,
-        handle: &TableHandle,
-        key: &[u8],
-    ) -> std::result::Result<Option<Vec<u8>>, Error> {
-        // TODO: No support for table deltas
-        self.base.resolve_table_entry(handle, key)
+        unreachable!()
     }
 }
 
@@ -139,7 +104,6 @@ impl<'a, 'b, S: MoveResolver> DeltaStorage<'a, 'b, S> {
 /// Simple in-memory storage for modules and resources under an account.
 #[derive(Debug, Clone)]
 struct InMemoryAccountStorage {
-    resources: BTreeMap<StructTag, Vec<u8>>,
     modules: BTreeMap<Identifier, Vec<u8>>,
 }
 
@@ -147,8 +111,6 @@ struct InMemoryAccountStorage {
 #[derive(Debug, Clone)]
 pub struct InMemoryStorage {
     accounts: BTreeMap<AccountAddress, InMemoryAccountStorage>,
-    #[cfg(feature = "table-extension")]
-    tables: BTreeMap<TableHandle, BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 fn apply_changes<K, V>(
@@ -202,26 +164,20 @@ where
 
 impl InMemoryAccountStorage {
     fn apply(&mut self, account_changeset: AccountChangeSet) -> Result<()> {
-        let (modules, resources) = account_changeset.into_inner();
+        let (modules, _resources) = account_changeset.into_inner();
         apply_changes(&mut self.modules, modules)?;
-        apply_changes(&mut self.resources, resources)?;
         Ok(())
     }
 
     fn new() -> Self {
         Self {
             modules: BTreeMap::new(),
-            resources: BTreeMap::new(),
         }
     }
 }
 
 impl InMemoryStorage {
-    pub fn apply_extended(
-        &mut self,
-        changeset: ChangeSet,
-        #[cfg(feature = "table-extension")] table_changes: TableChangeSet,
-    ) -> Result<()> {
+    pub fn apply_extended(&mut self, changeset: ChangeSet) -> Result<()> {
         for (addr, account_changeset) in changeset.into_inner() {
             match self.accounts.entry(addr) {
                 btree_map::Entry::Occupied(entry) => {
@@ -235,50 +191,16 @@ impl InMemoryStorage {
             }
         }
 
-        #[cfg(feature = "table-extension")]
-        self.apply_table(table_changes)?;
-
         Ok(())
     }
 
     pub fn apply(&mut self, changeset: ChangeSet) -> Result<()> {
-        self.apply_extended(
-            changeset,
-            #[cfg(feature = "table-extension")]
-            TableChangeSet::default(),
-        )
-    }
-
-    #[cfg(feature = "table-extension")]
-    fn apply_table(&mut self, changes: TableChangeSet) -> Result<()> {
-        let TableChangeSet {
-            new_tables,
-            removed_tables,
-            changes,
-        } = changes;
-        self.tables.retain(|h, _| !removed_tables.contains(h));
-        self.tables.extend(
-            new_tables
-                .keys()
-                .into_iter()
-                .map(|h| (*h, BTreeMap::default())),
-        );
-        for (h, c) in changes {
-            assert!(
-                self.tables.contains_key(&h),
-                "inconsistent table change set: stale table handle"
-            );
-            let table = self.tables.get_mut(&h).unwrap();
-            apply_changes(table, c.entries)?;
-        }
-        Ok(())
+        self.apply_extended(changeset)
     }
 
     pub fn new() -> Self {
         Self {
             accounts: BTreeMap::new(),
-            #[cfg(feature = "table-extension")]
-            tables: BTreeMap::new(),
         }
     }
 
@@ -287,16 +209,6 @@ impl InMemoryStorage {
             InMemoryAccountStorage::new()
         });
         account.modules.insert(module_id.name().to_owned(), blob);
-    }
-
-    pub fn publish_or_overwrite_resource(
-        &mut self,
-        addr: AccountAddress,
-        struct_tag: StructTag,
-        blob: Vec<u8>,
-    ) {
-        let account = get_or_insert(&mut self.accounts, addr, InMemoryAccountStorage::new);
-        account.resources.insert(struct_tag, blob);
     }
 }
 
@@ -321,23 +233,9 @@ impl ResourceResolver for InMemoryStorage {
 
     fn get_resource(
         &self,
-        address: &AccountAddress,
-        tag: &StructTag,
+        _address: &AccountAddress,
+        _tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        if let Some(account_storage) = self.accounts.get(address) {
-            return Ok(account_storage.resources.get(tag).cloned());
-        }
-        Ok(None)
-    }
-}
-
-#[cfg(feature = "table-extension")]
-impl TableResolver for InMemoryStorage {
-    fn resolve_table_entry(
-        &self,
-        handle: &TableHandle,
-        key: &[u8],
-    ) -> std::result::Result<Option<Vec<u8>>, Error> {
-        Ok(self.tables.get(handle).and_then(|t| t.get(key).cloned()))
+        unreachable!()
     }
 }

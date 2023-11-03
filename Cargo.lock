@@ -5667,7 +5667,6 @@ dependencies = [
  "move-package",
  "move-prover",
  "move-read-write-set-types",
- "move-resource-viewer",
  "move-stdlib",
  "move-unit-test",
  "move-vm-profiler",
@@ -5987,20 +5986,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-resource-viewer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "enum-compat-util",
- "hex",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-proc-macros",
- "serde",
-]
-
-[[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
 dependencies = [
@@ -6105,7 +6090,6 @@ dependencies = [
  "move-disassembler",
  "move-ir-compiler",
  "move-ir-types",
- "move-resource-viewer",
  "move-stdlib",
  "move-symbol-pool",
  "move-vm-config",
@@ -6136,7 +6120,6 @@ dependencies = [
  "move-core-types",
  "move-ir-types",
  "move-model",
- "move-resource-viewer",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-symbol-pool",
@@ -14345,7 +14328,6 @@ dependencies = [
  "move-prover",
  "move-prover-boogie-backend",
  "move-read-write-set-types",
- "move-resource-viewer",
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",

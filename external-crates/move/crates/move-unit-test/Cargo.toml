@@ -30,7 +30,6 @@ move-vm-types.workspace = true
 move-vm-runtime = { workspace = true, features = ["testing"] }
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
-move-resource-viewer.workspace = true
 move-binary-format.workspace = true
 move-model.workspace = true
 move-stackless-bytecode-interpreter.workspace = true
