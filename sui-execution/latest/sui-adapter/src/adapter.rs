@@ -105,7 +105,7 @@ mod checked {
                     .disable_invariant_violation_check_in_swap_loc(),
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "gas-profiler")]
                 profiler_config: VMProfilerConfig {
                     enabled: enable_profiler.is_some(),
                     base_path: (*match enable_profiler {

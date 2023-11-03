@@ -9,7 +9,7 @@ use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, Num
 use move_core_types::language_storage::ModuleId;
 
 use move_core_types::vm_status::StatusCode;
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -76,7 +76,7 @@ pub struct GasStatus {
     instructions_next_tier_start: Option<u64>,
     instructions_current_tier_mult: u64,
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     profiler: Option<GasProfiler>,
 }
 
@@ -114,7 +114,7 @@ impl GasStatus {
             stack_height_next_tier_start,
             stack_size_next_tier_start,
             instructions_next_tier_start,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "gas-profiler")]
             profiler: None,
         }
     }
@@ -142,7 +142,7 @@ impl GasStatus {
             stack_height_next_tier_start: None,
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "gas-profiler")]
             profiler: None,
         }
     }
@@ -714,12 +714,12 @@ impl GasMeter for GasStatus {
         self.gas_left
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         self.profiler.as_mut()
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }

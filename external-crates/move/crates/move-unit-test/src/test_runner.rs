@@ -35,14 +35,14 @@ use move_stackless_bytecode_interpreter::{
     shared::bridge::adapt_move_vm_result,
     StacklessBytecodeInterpreter,
 };
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
     InMemoryStorage,
 };
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 use move_vm_types::gas::GasMeter;
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
@@ -230,7 +230,7 @@ impl SharedTestingConfig {
         let mut session =
             move_vm.new_session_with_extensions(&self.starting_storage_state, extensions);
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gas-profiler")]
         gas_meter.set_profiler(GasProfiler::init_default_cfg(
             function_name.to_owned(),
             self.execution_bound,
