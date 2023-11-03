@@ -21,6 +21,7 @@ use IR::Ability;
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
     pub env: &'a mut CompilationEnv,
+    current_package: Option<Symbol>,
     current_module: Option<&'a ModuleIdent>,
     seen_structs: BTreeSet<(ModuleIdent, StructName)>,
     seen_functions: BTreeSet<(ModuleIdent, FunctionName)>,
@@ -28,14 +29,24 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    pub fn new(env: &'a mut CompilationEnv, current_module: Option<&'a ModuleIdent>) -> Self {
+    pub fn new(
+        env: &'a mut CompilationEnv,
+        current_package: Option<Symbol>,
+        current_module: Option<&'a ModuleIdent>,
+    ) -> Self {
         Self {
             env,
+            current_package,
             current_module,
             seen_structs: BTreeSet::new(),
             seen_functions: BTreeSet::new(),
             spec_info: BTreeMap::new(),
         }
+    }
+
+    #[allow(unused)]
+    pub fn current_package(&self) -> Option<Symbol> {
+        self.current_package
     }
 
     pub fn current_module(&self) -> Option<&'a ModuleIdent> {

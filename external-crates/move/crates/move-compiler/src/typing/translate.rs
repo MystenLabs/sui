@@ -23,7 +23,11 @@ use crate::{
         *,
     },
     sui_mode,
-    typing::{ast as T, dependency_ordering},
+    typing::{
+        ast as T,
+        core::{public_testing_visibility, PublicForTesting},
+        dependency_ordering,
+    },
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -239,6 +243,11 @@ fn function(
     context.reset_for_module_item();
     context.current_function = Some(name);
     process_attributes(context, &attributes);
+    let visibility =
+        match public_testing_visibility(context.env, context.current_package, &name, entry) {
+            Some(PublicForTesting::Entry(loc)) => Visibility::Public(loc),
+            None => visibility,
+        };
     function_signature(context, &signature);
     if is_script {
         let mk_msg = || {

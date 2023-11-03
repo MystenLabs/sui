@@ -5,13 +5,20 @@
 use crate::{
     debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
+    expansion::ast::{AbilitySet, AttributeName_, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
         TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
     },
-    parser::ast::{Ability_, ConstantName, Field, FunctionName, Mutability, StructName},
-    shared::{program_info::*, unique_map::UniqueMap, *},
+    parser::ast::{
+        Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
+    },
+    shared::{
+        known_attributes::{KnownAttribute, TestingAttribute},
+        program_info::*,
+        unique_map::UniqueMap,
+        *,
+    },
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -236,6 +243,7 @@ impl<'env> Context<'env> {
     pub fn bind_script_constants(&mut self, constants: &UniqueMap<ConstantName, N::Constant>) {
         assert!(self.current_script_constants.is_none());
         self.current_script_constants = Some(constants.ref_map(|cname, cdef| ConstantInfo {
+            attributes: cdef.attributes.clone(),
             defined_loc: cname.loc(),
             signature: cdef.signature.clone(),
         }));
@@ -365,6 +373,24 @@ impl<'env> Context<'env> {
                 minfo.friends.contains_key(current_mident)
             }
         }
+    }
+
+    /// current_module.is_test_only || current_function.is_test_only || current_function.is_test
+    fn is_testing_context(&self) -> bool {
+        // TODO should we store this in the context?
+        let test_only = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly));
+        let test = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test));
+
+        self.current_module.as_ref().is_some_and(|m| {
+            let minfo = self.module_info(m);
+            let is_test_only = minfo.attributes.contains_key_(&test_only);
+            is_test_only
+                || self.current_function.as_ref().is_some_and(|f| {
+                    let finfo = minfo.functions.get(f).unwrap();
+                    finfo.attributes.contains_key_(&test_only)
+                        || finfo.attributes.contains_key_(&test)
+                })
+        })
     }
 
     fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
@@ -794,6 +820,7 @@ pub fn make_constant_type(
     let in_current_module = m == &context.current_module;
     let (defined_loc, signature) = {
         let ConstantInfo {
+            attributes: _,
             defined_loc,
             signature,
         } = context.constant_info(m, c);
@@ -968,7 +995,11 @@ pub fn make_function_type(
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
 
     let defined_loc = finfo.defined_loc;
+    let public_for_testing =
+        public_testing_visibility(context.env, context.current_package, f, finfo.entry);
+    let is_testing_context = context.is_testing_context();
     match finfo.visibility {
+        _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
             let internal_msg = format!(
@@ -978,11 +1009,12 @@ pub fn make_function_type(
                 Visibility::FRIEND,
                 Visibility::PACKAGE
             );
-            context.env.add_diag(diag!(
-                TypeSafety::Visibility,
+            visibility_error(
+                context,
+                public_for_testing,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (defined_loc, internal_msg),
-            ));
+            );
         }
         Visibility::Package(loc)
             if in_current_module || context.current_module_shares_package_and_address(m) =>
@@ -1010,11 +1042,12 @@ pub fn make_function_type(
                     .map(|pkg_name| format!("{}", pkg_name))
                     .unwrap_or("<unknown package>".to_string())
             );
-            context.env.add_diag(diag!(
-                TypeSafety::Visibility,
+            visibility_error(
+                context,
+                public_for_testing,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (vis_loc, internal_msg),
-            ));
+            );
         }
         Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}
         Visibility::Friend(vis_loc) => {
@@ -1022,15 +1055,72 @@ pub fn make_function_type(
                 "This function can only be called from a 'friend' of module '{}'",
                 m
             );
-            context.env.add_diag(diag!(
-                TypeSafety::Visibility,
+            visibility_error(
+                context,
+                public_for_testing,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (vis_loc, internal_msg),
-            ));
+            );
         }
         Visibility::Public(_) => (),
     };
     (defined_loc, ty_args, params, return_ty)
+}
+
+pub enum PublicForTesting {
+    /// The function is entry, so it can be called in unit tests
+    Entry(Loc),
+    // TODO we should allow calling init in unit tests, but this would need Sui bytecode verifier
+    // support. Or we would need to name dodge init in unit tests
+    // SuiInit(Loc),
+}
+
+pub fn public_testing_visibility(
+    env: &CompilationEnv,
+    _package: Option<Symbol>,
+    _callee_name: &FunctionName,
+    callee_entry: Option<Loc>,
+) -> Option<PublicForTesting> {
+    // is_testing && (is_entry || is_sui_init)
+    if !env.flags().is_testing() {
+        return None;
+    }
+
+    // TODO support sui init functions
+    // let flavor = env.package_config(package).flavor;
+    // flavor == Flavor::Sui && callee_name.value() == INIT_FUNCTION_NAME
+    callee_entry.map(PublicForTesting::Entry)
+}
+
+fn visibility_error(
+    context: &mut Context,
+    public_for_testing: Option<PublicForTesting>,
+    (call_loc, call_msg): (Loc, impl ToString),
+    (vis_loc, vis_msg): (Loc, impl ToString),
+) {
+    let mut diag = diag!(
+        TypeSafety::Visibility,
+        (call_loc, call_msg),
+        (vis_loc, vis_msg),
+    );
+    if context.env.flags().is_testing() {
+        if let Some(case) = public_for_testing {
+            let (test_loc, test_msg) = match case {
+                PublicForTesting::Entry(entry_loc) => {
+                    let entry_msg = format!(
+                        "'{}' functions can be called in tests, \
+                    but only from testing contexts, e.g. '#[{}]' or '#[{}]'",
+                        ENTRY_MODIFIER,
+                        TestingAttribute::TEST,
+                        TestingAttribute::TEST_ONLY,
+                    );
+                    (entry_loc, entry_msg)
+                }
+            };
+            diag.add_secondary_label((test_loc, test_msg))
+        }
+    }
+    context.env.add_diag(diag)
 }
 
 //**************************************************************************************************
