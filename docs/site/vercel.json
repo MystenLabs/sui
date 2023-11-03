@@ -4,6 +4,7 @@
       { "source": "/learn/objects", "destination": "/concepts/object-model", "permanent": true },
       { "source": "/learn/about-sui", "destination": "/concepts/components", "permanent": true },
       { "source": "/learn/index", "destination": "/concepts", "permanent": true },
+      { "source": "/learn", "destination": "/concepts", "permanent": true },
       { "source": "/learn/sponsored-transactions", "destination": "/concepts/transactions/sponsored-transactions", "permanent": true },
       { "source": "/learn/why-move", "destination": "/concepts/sui-move-concepts", "permanent": true },
       { "source": "/learn/sui-move-diffs", "destination": "/concepts/sui-move-concepts", "permanent": true },
@@ -14,6 +15,7 @@
       { "source": "/learn/cryptography/hashing", "destination": "/guides/developer/cryptography/hashing", "permanent": true },
       { "source": "/learn/cryptography/sui-intent-signing", "destination": "/concepts/cryptography/transaction-auth/intent-signing", "permanent": true },
       { "source": "/learn/cryptography/index", "destination": "/concepts/cryptography", "permanent": true },
+      { "source": "/learn/cryptography", "destination": "/concepts/cryptography", "permanent": true },
       { "source": "/learn/cryptography/ecvrf", "destination": "/guides/developer/cryptography/ecvrf", "permanent": true },
       { "source": "/learn/cryptography/sui-move-signatures", "destination": "/concepts/cryptography/transaction-auth/signatures", "permanent": true },
       { "source": "/learn/cryptography/sui-offline-signing", "destination": "/concepts/cryptography/transaction-auth/offline-signing", "permanent": true },
@@ -25,9 +27,11 @@
       { "source": "/learn/tokenomics/proof-of-stake", "destination": "/concepts/tokenomics/proof-of-stake", "permanent": true },
       { "source": "/learn/tokenomics/gas-in-sui", "destination": "/concepts/tokenomics/gas-in-sui", "permanent": true },
       { "source": "/learn/tokenomics/index", "destination": "/concepts/tokenomics", "permanent": true },
+      { "source": "/learn/tokenomics", "destination": "/concepts/tokenomics", "permanent": true },
       { "source": "/explore/examples", "destination": "/guides/developer/app-examples", "permanent": true },
       { "source": "/explore/tutorials", "destination": "/guides", "permanent": true },
       { "source": "/explore/index", "destination": "/concepts", "permanent": true },
+      { "source": "/explore", "destination": "/concepts", "permanent": true },
       { "source": "/explore/sui-explorer", "destination": "https://docs.mystenlabs.com/explorer", "permanent": true },
       { "source": "/build/sui-gas-charges", "destination": "/concepts/tokenomics/gas-pricing", "permanent": true },
       { "source": "/build/sui-json", "destination": "/references/sui-api", "permanent": true },
@@ -44,6 +48,7 @@
       { "source": "/build/sui-local-network", "destination": "/guides/developer/getting-started/local-network", "permanent": true },
       { "source": "/build/comms", "destination": "/guides/developer/getting-started/connect", "permanent": true },
       { "source": "/build/index", "destination": "/guides", "permanent": true },
+      { "source": "/build", "destination": "/guides", "permanent": true },
       { "source": "/build/rust-sdk", "destination": "/references/sdk/rust-sdk", "permanent": true },
       { "source": "/build/rpc-best-practices", "destination": "/references/sui-api/rpc-best-practices", "permanent": true },
       { "source": "/build/zk_login", "destination": "/concepts/cryptography/zklogin", "permanent": true },
@@ -59,6 +64,7 @@
       { "source": "/build/move/build-test", "destination": "/guides/developer/first-app/build-test", "permanent": true },
       { "source": "/build/move/manifest", "destination": "/references/move/move-toml", "permanent": true },
       { "source": "/build/move/index", "destination": "/guides/developer/sui-101", "permanent": true },
+      { "source": "/build/move", "destination": "/guides/developer/sui-101", "permanent": true },
       { "source": "/build/move/time", "destination": "/guides/developer/sui-101/access-time", "permanent": true },
       { "source": "/build/move/sui-move-library", "destination": "/concepts/sui-move-concepts", "permanent": true },
       { "source": "/build/programming-with-objects/ch6-collections", "destination": "/concepts/dynamic-fields/tables-bags", "permanent": true },
@@ -68,6 +74,7 @@
       { "source": "/build/programming-with-objects/index", "destination": "/concepts/object-model", "permanent": true },
       { "source": "/build/programming-with-objects/ch3-immutable-objects", "destination": "/concepts/object-ownership/immutable", "permanent": true },
       { "source": "/build/programming-with-objects/ch5-dynamic-fields", "destination": "/concepts/dynamic-fields", "permanent": true },     { "source": "/reference/sui-json", "destination": "/sui-api-ref", "permanent": true },
-      { "source": "/reference/index", "destination": "/references", "permanent": true }
+      { "source": "/reference/index", "destination": "/references", "permanent": true },
+      { "source": "/reference", "destination": "/references", "permanent": true }
     ]
   }
