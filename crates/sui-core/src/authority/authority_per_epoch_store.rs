@@ -1285,11 +1285,15 @@ impl AuthorityPerEpochStore {
         min: DeferralKey,
         max: DeferralKey,
     ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
+        let mut keys = Vec::new();
         let txns: Vec<_> = self
             .tables
             .deferred_transactions
             .iter_with_bounds(Some(min), Some(max))
-            .flat_map(|(_, txns)| txns)
+            .flat_map(|(key, txns)| {
+                keys.push(key);
+                txns
+            })
             .collect();
 
         // verify that there are no duplicates - should be impossible due to
@@ -1302,7 +1306,11 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        batch.schedule_delete_range(&self.tables.deferred_transactions, &min, &max)?;
+        // Transactional DBs do not support range deletes, so we have to delete keys one-by-one.
+        // This shouldn't be a problem, there should not usually be more than a small handful of
+        // keys loaded in each round.
+        batch.delete_batch(&self.tables.deferred_transactions, keys)?;
+
         Ok(txns)
     }
 
@@ -2015,7 +2023,7 @@ impl AuthorityPerEpochStore {
         );
 
         // TODO: This is a no-op until we start using random round transactions
-        let placeholder_random_round = u64::MAX;
+        let placeholder_random_round = u64::MAX - 1;
         sequenced_transactions.extend(
             self.load_deferred_transactions_for_randomness_round(
                 &mut batch,
