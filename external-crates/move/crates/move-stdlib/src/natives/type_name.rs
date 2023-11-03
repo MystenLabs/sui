@@ -41,7 +41,7 @@ fn native_get(
         context.type_to_type_tag(&ty_args[0])
     }?;
 
-    let type_name = type_tag.to_canonical_string();
+    let type_name = type_tag.to_canonical_string(/* with_prefix */ false);
 
     // Charge base fee
     native_charge_gas_early_exit!(

@@ -137,3 +137,36 @@ impl StoredEvent {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
+    use sui_types::event::Event;
+
+    #[test]
+    fn test_canonical_string_of_event_type() {
+        let tx_digest = TransactionDigest::default();
+        let event = Event {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("test").unwrap(),
+            sender: AccountAddress::random().into(),
+            type_: StructTag {
+                address: AccountAddress::TWO,
+                module: Identifier::new("test").unwrap(),
+                name: Identifier::new("test").unwrap(),
+                type_params: vec![],
+            },
+            contents: vec![],
+        };
+
+        let indexed_event = IndexedEvent::from_event(1, 1, 1, tx_digest, &event, 100);
+
+        let stored_event = StoredEvent::from(indexed_event);
+
+        assert_eq!(
+            stored_event.event_type,
+            "0x0000000000000000000000000000000000000000000000000000000000000002::test::test"
+        );
+    }
+}

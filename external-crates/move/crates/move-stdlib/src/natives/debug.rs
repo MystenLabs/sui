@@ -470,7 +470,7 @@ mod testing {
             }
             MoveValue::Address(a) => {
                 let str = if canonicalize {
-                    a.to_canonical_string()
+                    a.to_canonical_string(/* with_prefix */ false)
                 } else {
                     a.to_hex_literal()
                 };
@@ -478,7 +478,7 @@ mod testing {
             }
             MoveValue::Signer(s) => {
                 let str = if canonicalize {
-                    s.to_canonical_string()
+                    s.to_canonical_string(/* with_prefix */ false)
                 } else {
                     s.to_hex_literal()
                 };

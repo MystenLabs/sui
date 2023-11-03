@@ -1384,7 +1384,9 @@ impl<'a> fmt::Display for SubstTOML<'a> {
                 }
 
                 PM::SubstOrRename::Assign(account) => {
-                    f.write_str(&str_escape(&account.to_canonical_string())?)?;
+                    f.write_str(&str_escape(
+                        &account.to_canonical_string(/* with_prefix */ false),
+                    )?)?;
                 }
             }
 

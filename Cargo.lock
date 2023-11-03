@@ -11970,6 +11970,7 @@ dependencies = [
  "derivative",
  "derive_more",
  "enum_dispatch",
+ "expect-test",
  "eyre",
  "fastcrypto",
  "fastcrypto-zkp",

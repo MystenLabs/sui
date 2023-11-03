@@ -65,24 +65,45 @@ impl TypeTag {
     /// Struct types are represented as fully qualified type names; e.g.
     /// `00000000000000000000000000000001::string::String` or
     /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`
+    /// With or without the prefix 0x depending on the `with_prefix` flag.
     /// Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
     /// Note: this function is guaranteed to be stable, and this is suitable for use inside
     /// Move native functions or the VM. By contrast, the `Display` implementation is subject
     /// to change and should not be used inside stable code.
-    pub fn to_canonical_string(&self) -> String {
-        use TypeTag::*;
-        match self {
-            Bool => "bool".to_owned(),
-            U8 => "u8".to_owned(),
-            U16 => "u16".to_owned(),
-            U32 => "u32".to_owned(),
-            U64 => "u64".to_owned(),
-            U128 => "u128".to_owned(),
-            U256 => "u256".to_owned(),
-            Address => "address".to_owned(),
-            Signer => "signer".to_owned(),
-            Vector(t) => format!("vector<{}>", t.to_canonical_string()),
-            Struct(s) => s.to_canonical_string(),
+    pub fn to_canonical_string(&self, with_prefix: bool) -> String {
+        self.to_canonical_display(with_prefix).to_string()
+    }
+
+    /// Return the canonical string representation of the TypeTag conditionally with prefix 0x
+    pub fn to_canonical_display(&self, with_prefix: bool) -> impl std::fmt::Display + '_ {
+        struct CanonicalDisplay<'a> {
+            data: &'a TypeTag,
+            with_prefix: bool,
+        }
+
+        impl std::fmt::Display for CanonicalDisplay<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self.data {
+                    TypeTag::Bool => write!(f, "bool"),
+                    TypeTag::U8 => write!(f, "u8"),
+                    TypeTag::U16 => write!(f, "u16"),
+                    TypeTag::U32 => write!(f, "u32"),
+                    TypeTag::U64 => write!(f, "u64"),
+                    TypeTag::U128 => write!(f, "u128"),
+                    TypeTag::U256 => write!(f, "u256"),
+                    TypeTag::Address => write!(f, "address"),
+                    TypeTag::Signer => write!(f, "signer"),
+                    TypeTag::Vector(t) => {
+                        write!(f, "vector<{}>", t.to_canonical_display(self.with_prefix))
+                    }
+                    TypeTag::Struct(s) => write!(f, "{}", s.to_canonical_display(self.with_prefix)),
+                }
+            }
+        }
+
+        CanonicalDisplay {
+            data: self,
+            with_prefix,
         }
     }
 
@@ -157,28 +178,50 @@ impl StructTag {
     /// `00000000000000000000000000000001::string::String`,
     /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`,
     /// or `0000000000000000000000000000000a::module_name2::type_name2<bool,u64,u128>.
+    /// With or without the prefix 0x depending on the `with_prefix` flag.
     /// Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)
     /// Note: this function is guaranteed to be stable, and this is suitable for use inside
     /// Move native functions or the VM. By contrast, the `Display` implementation is subject
     /// to change and should not be used inside stable code.
-    pub fn to_canonical_string(&self) -> String {
-        let mut generics = String::new();
-        if let Some(first_ty) = self.type_params.first() {
-            generics.push('<');
-            generics.push_str(&first_ty.to_canonical_string());
-            for ty in self.type_params.iter().skip(1) {
-                generics.push(',');
-                generics.push_str(&ty.to_canonical_string())
-            }
-            generics.push('>');
+    pub fn to_canonical_string(&self, with_prefix: bool) -> String {
+        self.to_canonical_display(with_prefix).to_string()
+    }
+
+    /// Implements the canonical string representation of the StructTag with the prefix 0x
+    pub fn to_canonical_display(&self, with_prefix: bool) -> impl std::fmt::Display + '_ {
+        struct CanonicalDisplay<'a> {
+            data: &'a StructTag,
+            with_prefix: bool,
         }
-        format!(
-            "{}::{}::{}{}",
-            self.address.to_canonical_string(),
-            self.module,
-            self.name,
-            generics
-        )
+
+        impl std::fmt::Display for CanonicalDisplay<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}::{}::{}",
+                    self.data.address.to_canonical_display(self.with_prefix),
+                    self.data.module,
+                    self.data.name
+                )?;
+
+                if let Some(first_ty) = self.data.type_params.first() {
+                    write!(f, "<")?;
+                    write!(f, "{}", first_ty.to_canonical_display(self.with_prefix))?;
+                    for ty in self.data.type_params.iter().skip(1) {
+                        // Note that unlike Display for StructTag, there is no space between the comma and canonical display.
+                        // This follows the original to_canonical_string() implementation.
+                        write!(f, ",{}", ty.to_canonical_display(self.with_prefix))?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+        }
+
+        CanonicalDisplay {
+            data: self,
+            with_prefix,
+        }
     }
 
     /// Return the abstract size we use for gas metering
