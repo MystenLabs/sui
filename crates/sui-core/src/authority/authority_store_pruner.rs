@@ -124,9 +124,10 @@ impl AuthorityStorePruner {
                 && (indirect_objects_threshold == 0 || indirect_objects_threshold == usize::MAX)
             {
                 for deleted_object_ref in effects
-                    .all_removed_objects()
+                    .deleted()
                     .into_iter()
-                    .map(|(obj_ref, _)| obj_ref)
+                    .chain(effects.unwrapped_then_deleted().into_iter())
+                    .chain(effects.wrapped().into_iter())
                 {
                     object_tombstones_to_prune
                         .push(ObjectKey(deleted_object_ref.0, deleted_object_ref.1));
@@ -193,10 +194,9 @@ impl AuthorityStorePruner {
         }
 
         if !indirect_objects.is_empty() {
-            let ref_count_update = indirect_objects.iter().map(|(digest, delta)| {
-                debug!("Indirect object {:?} ref count delta {:?}", digest, delta);
-                (digest, delta.to_le_bytes())
-            });
+            let ref_count_update = indirect_objects
+                .iter()
+                .map(|(digest, delta)| (digest, delta.to_le_bytes()));
             wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
         }
         perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
