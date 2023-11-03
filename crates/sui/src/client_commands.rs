@@ -1777,12 +1777,10 @@ pub fn write_transaction_response(
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
     writeln!(writer, "{}", response.digest)?;
-    writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
     if let Some(t) = &response.transaction {
         writeln!(writer, "{}", t)?;
     }
 
-    writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
     if let Some(e) = &response.effects {
         writeln!(writer, "{}", e)?;
     }
