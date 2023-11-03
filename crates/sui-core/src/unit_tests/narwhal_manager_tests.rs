@@ -67,7 +67,7 @@ async fn send_transactions(
     assert!(succeeded_once);
 }
 
-fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
+pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
     let accumulator = StateAccumulator::new(state.database.clone());
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);

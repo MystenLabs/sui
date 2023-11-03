@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::{
@@ -18,7 +17,7 @@ use mysticeti_core::types::AuthorityIndex;
 use mysticeti_core::validator::Validator;
 use mysticeti_core::{PublicKey, Signer};
 use prometheus::Registry;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::NodeConfig;
@@ -28,7 +27,10 @@ use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::Mutex;
 
-#[allow(unused)]
+#[cfg(test)]
+#[path = "../unit_tests/mysticeti_manager_tests.rs"]
+pub mod mysticeti_manager_tests;
+
 pub struct MysticetiManager {
     keypair: AuthorityKeyPair,
     network_keypair: NetworkKeyPair,
@@ -40,6 +42,24 @@ pub struct MysticetiManager {
 }
 
 impl MysticetiManager {
+    pub fn new(
+        keypair: AuthorityKeyPair,
+        network_keypair: NetworkKeyPair,
+        storage_base_path: PathBuf,
+        metrics: ConsensusManagerMetrics,
+        registry_service: RegistryService,
+    ) -> MysticetiManager {
+        Self {
+            keypair,
+            network_keypair,
+            storage_base_path,
+            running: Mutex::new(Running::False),
+            metrics,
+            registry_service,
+            validator: ArcSwapOption::empty(),
+        }
+    }
+
     #[allow(unused)]
     fn get_store_path(&self, epoch: EpochId) -> PathBuf {
         let mut store_path = self.storage_base_path.clone();
@@ -85,10 +105,8 @@ impl ConsensusManagerTrait for MysticetiManager {
             .into();
         let config = PrivateConfig::new(self.get_store_path(epoch), authority_index);
 
-        // create the properties to be used
         let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
 
-        // Start validator
         const MAX_RETRIES: u32 = 2;
         let mut retries = 0;
 
@@ -182,12 +200,17 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
     let identifiers = committee
         .authorities()
         .map(|authority| {
+            // By converting first to anemo address it ensures that best effort parsing is done
+            // to extract ip & port irrespective of the dictated protocol.
+            let addr = authority.primary_address().to_anemo_address().unwrap();
+            let network_address = addr.to_socket_addrs().unwrap().collect_vec().pop().unwrap();
+
             Identifier {
                 // TODO: using the  Ed25519 network key which is compatible with Mysticeti which also uses Ed25519. Should
                 // switch to using the authority's protocol key (BLS) instead.
                 public_key: PublicKey(authority.network_key().0),
-                network_address: authority.primary_address().to_socket_addr().unwrap(),
-                metrics_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0), // not relevant as it won't be used
+                network_address,
+                metrics_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0), // not relevant as it won't be used
             }
         })
         .collect_vec();
