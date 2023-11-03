@@ -19,13 +19,12 @@ use tracing::warn;
 
 #[derive(Clone)]
 pub struct SubmitToMysticeti {
-    sender: mpsc::Sender<(ConsensusTransaction, oneshot::Sender<()>)>,
+    // channel to transport bcs-serialized bytes of ConsensusTransaction
+    sender: mpsc::Sender<(Vec<u8>, oneshot::Sender<()>)>,
 }
 
 impl SubmitToMysticeti {
-    pub fn new(
-        sender: mpsc::Sender<(ConsensusTransaction, oneshot::Sender<()>)>,
-    ) -> SubmitToMysticeti {
+    pub fn new(sender: mpsc::Sender<(Vec<u8>, oneshot::Sender<()>)>) -> SubmitToMysticeti {
         SubmitToMysticeti { sender }
     }
 }
@@ -38,8 +37,9 @@ impl SubmitToConsensus for SubmitToMysticeti {
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let (sender, receiver) = oneshot::channel();
+        let tx_bytes = bcs::to_bytes(&transaction).expect("Serialization should not fail.");
         self.sender
-            .send((transaction.clone(), sender))
+            .send((tx_bytes, sender))
             .await
             .tap_err(|e| warn!("Submit transaction failed with {:?}", e))
             .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))?;
@@ -53,17 +53,17 @@ impl SubmitToConsensus for SubmitToMysticeti {
 
 /// A simple BlockHandler that adds received transactions to consensus.
 pub struct SimpleBlockHandler {
-    receiver:
-        mysten_metrics::metered_channel::Receiver<(ConsensusTransaction, oneshot::Sender<()>)>,
+    receiver: mysten_metrics::metered_channel::Receiver<(Vec<u8>, oneshot::Sender<()>)>,
 }
 
 const MAX_PROPOSED_PER_BLOCK: usize = 10000;
 const CHANNEL_SIZE: usize = 10240;
 
 impl SimpleBlockHandler {
+    #[allow(clippy::type_complexity)]
     pub fn new() -> (
         Self,
-        mysten_metrics::metered_channel::Sender<(ConsensusTransaction, oneshot::Sender<()>)>,
+        mysten_metrics::metered_channel::Sender<(Vec<u8>, oneshot::Sender<()>)>,
     ) {
         let (sender, receiver) = mysten_metrics::metered_channel::channel(
             CHANNEL_SIZE,
@@ -84,7 +84,7 @@ impl BlockHandler for SimpleBlockHandler {
         _blocks: &[Data<StatementBlock>],
         require_response: bool,
     ) -> Vec<BaseStatement> {
-        if require_response {
+        if !require_response {
             return vec![];
         }
 
@@ -92,11 +92,10 @@ impl BlockHandler for SimpleBlockHandler {
         // proposed to DAG shortly.
         let mut response = vec![];
 
-        while let Ok((tx, notify_when_done)) = self.receiver.try_recv() {
+        while let Ok((tx_bytes, notify_when_done)) = self.receiver.try_recv() {
             response.push(BaseStatement::Share(
-                mysticeti_core::types::Transaction::new(
-                    bcs::to_bytes(&tx.kind).expect("Serialization should not fail."),
-                ),
+                // tx_bytes is bcs-serialized bytes of ConsensusTransaction
+                mysticeti_core::types::Transaction::new(tx_bytes),
             ));
             // We don't mind if the receiver is dropped.
             let _ = notify_when_done.send(());
