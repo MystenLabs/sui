@@ -28,7 +28,9 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::{
+    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+};
 use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
@@ -525,6 +527,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SequencedConsensusTransaction {
     pub certificate_author_index: AuthorityIndex,
     pub certificate_author: AuthorityName,
@@ -532,9 +535,60 @@ pub struct SequencedConsensusTransaction {
     pub transaction: SequencedConsensusTransactionKind,
 }
 
+#[derive(Debug, Clone)]
 pub enum SequencedConsensusTransactionKind {
     External(ConsensusTransaction),
     System(VerifiedExecutableTransaction),
+}
+
+impl Serialize for SequencedConsensusTransactionKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let serializable = SerializableSequencedConsensusTransactionKind::from(self);
+        serializable.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SequencedConsensusTransactionKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let serializable =
+            SerializableSequencedConsensusTransactionKind::deserialize(deserializer)?;
+        Ok(serializable.into())
+    }
+}
+
+// We can't serialize SequencedConsensusTransactionKind directly because it contains a
+// VerifiedExecutableTransaction, which is not serializable (by design). This wrapper allows us to
+// convert to a serializable format easily.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum SerializableSequencedConsensusTransactionKind {
+    External(ConsensusTransaction),
+    System(TrustedExecutableTransaction),
+}
+
+impl From<&SequencedConsensusTransactionKind> for SerializableSequencedConsensusTransactionKind {
+    fn from(kind: &SequencedConsensusTransactionKind) -> Self {
+        match kind {
+            SequencedConsensusTransactionKind::External(ext) => {
+                SerializableSequencedConsensusTransactionKind::External(ext.clone())
+            }
+            SequencedConsensusTransactionKind::System(txn) => {
+                SerializableSequencedConsensusTransactionKind::System(txn.clone().serializable())
+            }
+        }
+    }
+}
+
+impl From<SerializableSequencedConsensusTransactionKind> for SequencedConsensusTransactionKind {
+    fn from(kind: SerializableSequencedConsensusTransactionKind) -> Self {
+        match kind {
+            SerializableSequencedConsensusTransactionKind::External(ext) => {
+                SequencedConsensusTransactionKind::External(ext)
+            }
+            SerializableSequencedConsensusTransactionKind::System(txn) => {
+                SequencedConsensusTransactionKind::System(txn.into())
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug)]
@@ -623,6 +677,7 @@ impl SequencedConsensusTransaction {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifiedSequencedConsensusTransaction(pub SequencedConsensusTransaction);
 
 #[cfg(test)]

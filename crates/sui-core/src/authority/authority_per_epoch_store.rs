@@ -13,7 +13,7 @@ use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
@@ -115,6 +115,8 @@ pub enum ConsensusCertificateResult {
     Ignored,
     /// An executable transaction (can be a user tx or a system tx)
     SuiTransaction(VerifiedExecutableTransaction),
+    /// The transaction should be re-processed at a future commit, specified by the DeferralKey
+    Defered(DeferralKey),
     /// Everything else, e.g. AuthorityCapabilities, CheckpointSignatures, etc.
     ConsensusMessage,
 }
@@ -413,6 +415,121 @@ pub struct AuthorityEpochTables {
     /// This would normally be stored as (JwkId, JWK) -> u64, but we need to be able to scan to
     /// find all Jwks for a given round
     active_jwks: DBMap<(u64, (JwkId, JWK)), ()>,
+
+    /// Transactions that are being deferred until some future time
+    deferred_transactions: DBMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>,
+}
+
+// DeferralKey requires both the round to which the tx should be deferred (so that we can
+// efficiently load all txns that are now ready), and the round from which it has been deferred (so
+// that multiple rounds can efficiently defer to the same future round).
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum DeferralKey {
+    RandomnessRound {
+        future_round: u64,
+        deferred_from_round: u64,
+    },
+
+    ConsensusRound {
+        future_round: u64,
+        deferred_from_round: u64,
+    },
+}
+
+impl DeferralKey {
+    fn new_for_randomness_round(future_round: u64, deferred_from_round: u64) -> Self {
+        Self::RandomnessRound {
+            future_round,
+            deferred_from_round,
+        }
+    }
+
+    fn new_for_consensus_round(future_round: u64, deferred_from_round: u64) -> Self {
+        Self::ConsensusRound {
+            future_round,
+            deferred_from_round,
+        }
+    }
+
+    fn range_for_randomness_round(future_round: u64) -> (Self, Self) {
+        (
+            Self::RandomnessRound {
+                future_round,
+                deferred_from_round: 0,
+            },
+            Self::RandomnessRound {
+                future_round: future_round.checked_add(1).unwrap(),
+                deferred_from_round: 0,
+            },
+        )
+    }
+
+    fn range_for_consensus_round(future_round: u64) -> (Self, Self) {
+        (
+            Self::ConsensusRound {
+                future_round,
+                deferred_from_round: 0,
+            },
+            Self::ConsensusRound {
+                future_round: future_round.checked_add(1).unwrap(),
+                deferred_from_round: 0,
+            },
+        )
+    }
+}
+
+#[tokio::test]
+async fn test_deferral_key_sort_order() {
+    use rand::prelude::*;
+
+    #[derive(DBMapUtils)]
+    struct TestDB {
+        deferred_certs: DBMap<DeferralKey, ()>,
+    }
+
+    // get a tempdir
+    let tempdir = tempfile::tempdir().unwrap();
+
+    let db = TestDB::open_tables_read_write(
+        tempdir.path().to_owned(),
+        MetricConf::with_db_name("test_db"),
+        None,
+        None,
+    );
+
+    for _ in 0..10000 {
+        let future_round = rand::thread_rng().gen_range(0..u64::MAX);
+        let current_round = rand::thread_rng().gen_range(0..u64::MAX);
+
+        let key = if rand::thread_rng().gen() {
+            DeferralKey::new_for_randomness_round(future_round, current_round)
+        } else {
+            DeferralKey::new_for_consensus_round(future_round, current_round)
+        };
+
+        db.deferred_certs.insert(&key, &()).unwrap();
+    }
+
+    // verify that all random round keys are sorted before all consensus round keys
+    let mut first_consensus_round_seen = false;
+    let mut previous_future_round = 0;
+    for (key, _) in db.deferred_certs.unbounded_iter() {
+        match key {
+            DeferralKey::ConsensusRound { future_round, .. } => {
+                if !first_consensus_round_seen {
+                    first_consensus_round_seen = true;
+                    previous_future_round = 0;
+                }
+                assert!(previous_future_round <= future_round);
+                previous_future_round = future_round;
+            }
+            DeferralKey::RandomnessRound { future_round, .. } => {
+                assert!(!first_consensus_round_seen);
+                assert!(previous_future_round <= future_round);
+                previous_future_round = future_round;
+            }
+        }
+    }
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -1130,6 +1247,81 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    fn defer_transactions(
+        &self,
+        batch: &mut DBBatch,
+        key: DeferralKey,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+    ) -> SuiResult {
+        batch.insert_batch(
+            &self.tables.deferred_transactions,
+            std::iter::once((key, transactions)),
+        )?;
+        Ok(())
+    }
+
+    fn load_deferred_transactions_for_randomness_round(
+        &self,
+        batch: &mut DBBatch,
+        randomness_round: u64,
+    ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
+        let (min, max) = DeferralKey::range_for_randomness_round(randomness_round);
+        self.load_deferred_transactions(batch, min, max)
+    }
+
+    fn load_deferred_transactions_for_consensus_round(
+        &self,
+        batch: &mut DBBatch,
+        consensus_round: u64,
+    ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
+        let (min, max) = DeferralKey::range_for_consensus_round(consensus_round);
+        self.load_deferred_transactions(batch, min, max)
+    }
+
+    // factoring of the above
+    fn load_deferred_transactions(
+        &self,
+        batch: &mut DBBatch,
+        min: DeferralKey,
+        max: DeferralKey,
+    ) -> SuiResult<Vec<VerifiedSequencedConsensusTransaction>> {
+        let mut keys = Vec::new();
+        let txns: Vec<_> = self
+            .tables
+            .deferred_transactions
+            .iter_with_bounds(Some(min), Some(max))
+            .flat_map(|(key, txns)| {
+                keys.push(key);
+                txns
+            })
+            .collect();
+
+        // verify that there are no duplicates - should be impossible due to
+        // is_consensus_message_processed
+        #[cfg(debug_assertions)]
+        {
+            let mut seen = HashSet::new();
+            for txn in &txns {
+                assert!(seen.insert(txn.0.key()));
+            }
+        }
+
+        // Transactional DBs do not support range deletes, so we have to delete keys one-by-one.
+        // This shouldn't be a problem, there should not usually be more than a small handful of
+        // keys loaded in each round.
+        batch.delete_batch(&self.tables.deferred_transactions, keys)?;
+
+        Ok(txns)
+    }
+
+    // Placeholder implementation
+    fn should_defer(&self, _cert: &VerifiedExecutableTransaction) -> Option<DeferralKey> {
+        // placeholder constructions to silence lints
+        let _ = DeferralKey::new_for_randomness_round(0, 0);
+        let _ = DeferralKey::new_for_consensus_round(0, 0);
+        None
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
     /// of that transaction.
     /// Used by full nodes who don't listen to consensus, and validators who catch up by state sync.
@@ -1823,12 +2015,28 @@ impl AuthorityPerEpochStore {
                 .into_iter()
                 .partition(|transaction| transaction.0.is_end_of_publish());
 
+        let mut batch = self.db_batch();
+
+        sequenced_transactions.extend(
+            self.load_deferred_transactions_for_consensus_round(&mut batch, commit_round)?
+                .into_iter(),
+        );
+
+        // TODO: This is a no-op until we start using random round transactions
+        let placeholder_random_round = u64::MAX - 1;
+        sequenced_transactions.extend(
+            self.load_deferred_transactions_for_randomness_round(
+                &mut batch,
+                placeholder_random_round,
+            )?
+            .into_iter(),
+        );
+
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),
         );
 
-        let mut batch = self.db_batch();
         let (transactions_to_schedule, notifications, lock_and_final_round) = self
             .process_consensus_transactions(
                 &mut batch,
@@ -1983,6 +2191,9 @@ impl AuthorityPerEpochStore {
             .await?
         };
 
+        let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
+            BTreeMap::new();
+
         for tx in transactions {
             let key = tx.0.transaction.key();
             self.record_consensus_message_processed(batch, key.clone())?;
@@ -1999,9 +2210,21 @@ impl AuthorityPerEpochStore {
                     notifications.push(key);
                     verified_certificates.push(cert);
                 }
+                ConsensusCertificateResult::Defered(deferral_key) => {
+                    // Note: record_consensus_message_processed() must have been called for this
+                    // cert even though we are not processing it now!
+                    deferred_txns
+                        .entry(deferral_key)
+                        .or_default()
+                        .push(tx.clone());
+                }
                 ConsensusCertificateResult::ConsensusMessage => notifications.push(key),
                 ConsensusCertificateResult::Ignored => (),
             }
+        }
+
+        for (key, txns) in deferred_txns.into_iter() {
+            self.defer_transactions(batch, key, txns)?;
         }
 
         batch.insert_batch(
@@ -2149,6 +2372,15 @@ impl AuthorityPerEpochStore {
                     debug!("Ignoring consensus certificate for transaction {:?} because of end of epoch",
                     certificate.digest());
                     return Ok(ConsensusCertificateResult::Ignored);
+                }
+
+                if let Some(deferral_key) = self.should_defer(&certificate) {
+                    debug!(
+                        "Deferring consensus certificate for transaction {:?} until {:?}",
+                        certificate.digest(),
+                        deferral_key
+                    );
+                    return Ok(ConsensusCertificateResult::Defered(deferral_key));
                 }
 
                 if certificate.contains_shared_object() {
