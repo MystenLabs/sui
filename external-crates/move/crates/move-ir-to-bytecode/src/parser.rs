@@ -22,15 +22,16 @@ use move_ir_types::{ast, location::*};
 // handling of characters inside of comments (usually not included as tokens) and within byte
 // array literals.
 fn verify_string(string: &str) -> Result<()> {
-    string
-        .chars()
+    let chars: Vec<char> = string.chars().collect();
+    chars
+        .iter()
         .enumerate()
-        .find(|(idx, _)| !is_permitted_chars(string.as_bytes(), *idx))
+        .find(|(idx, _)| !is_permitted_chars(&chars, *idx))
         .map_or(Ok(()), |(_, c)| {
             bail!(
-                "Parser Error: invalid character {} found when reading file.\
-                 Only ascii printable, tabs (\\t), lf (\\n) and crlf (\\r\\n) characters are permitted.",
-                c
+                "Invalid character '{c}' found when reading file. \
+                For ASCII, only printable characters (tabs '\\t', lf '\\n' and crlf '\\r'+'\\n') \
+                are permitted. Unicode can be used, excluding certain control characters.",
             )
         })
 }

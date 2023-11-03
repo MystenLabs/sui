@@ -134,6 +134,7 @@ fn decode_(context: &mut Context, buffer: &mut Vec<u8>, chars: Vec<char>) {
 }
 
 fn push(buffer: &mut Vec<u8>, ch: char) {
-    assert!(ch.is_ascii(), "ICE ascii-only support is gated at parsing");
-    buffer.extend(vec![ch as u8]);
+    let mut bytes = vec![0; ch.len_utf8()];
+    ch.encode_utf8(&mut bytes);
+    buffer.extend(bytes);
 }

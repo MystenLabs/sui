@@ -6,7 +6,7 @@ use crate::{
     diag, diagnostics::Diagnostic, editions::SyntaxEdition, parser::syntax::make_loc,
     shared::CompilationEnv, FileCommentMap, MatchedFileCommentMap,
 };
-use move_command_line_common::files::FileHash;
+use move_command_line_common::{character_sets::DisplayChar, files::FileHash};
 use move_ir_types::location::Loc;
 use std::fmt;
 
@@ -303,7 +303,8 @@ impl<'input> Lexer<'input> {
                     } else {
                         // This is a solitary '/' or '*' that isn't part of any comment delimiter.
                         // Skip over it.
-                        text = &text[1..];
+                        let c = text.chars().next().unwrap();
+                        text = &text[c.len_utf8()..];
                     }
                 }
 
@@ -578,11 +579,11 @@ fn find_token(
         '}' => (Tok::RBrace, 1),
         '#' => (Tok::NumSign, 1),
         '@' => (Tok::AtSign, 1),
-        _ => {
+        c => {
             let loc = make_loc(file_hash, start_offset, start_offset);
             return Err(Box::new(diag!(
                 Syntax::InvalidCharacter,
-                (loc, format!("Invalid character: '{}'", c))
+                (loc, format!("Unexpected character: '{}'", DisplayChar(c),))
             )));
         }
     };
@@ -645,7 +646,7 @@ fn get_string_len(text: &str) -> Option<usize> {
         } else if chr == '"' {
             return Some(pos);
         }
-        pos += 1;
+        pos += chr.len_utf8();
     }
     None
 }
@@ -751,5 +752,8 @@ mod tests {
 
         assert_eq!(trim_start_whitespace(" \r\n\r\nxxx\n"), "xxx\n");
         assert_eq!(trim_start_whitespace("\r\n \t\nxxx\r\n"), "xxx\r\n");
+        assert_eq!(trim_start_whitespace("\r\n\u{A0}\n"), "\u{A0}\n");
+        assert_eq!(trim_start_whitespace("\r\n\u{A0}\n"), "\u{A0}\n");
+        assert_eq!(trim_start_whitespace("\t  \u{0085}\n"), "\u{0085}\n")
     }
 }
