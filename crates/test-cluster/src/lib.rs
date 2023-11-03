@@ -936,9 +936,7 @@ impl TestClusterBuilder {
     }
 
     pub fn with_additional_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
-        self.get_or_init_genesis_config()
-            .accounts
-            .extend(accounts.into_iter());
+        self.get_or_init_genesis_config().accounts.extend(accounts);
         self
     }
 
