@@ -10,10 +10,8 @@ publish = false
 
 [dependencies]
 diesel = { version = "2.1.0", features = ["postgres"] }
-fastcrypto = { workspace = true, features = ["copy_key"] }
 dotenvy = "0.15"
 anyhow = "1.0.71"
-serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_json = { version = "1.0.95", features = ["preserve_order", "arbitrary_precision"] }
 tracing = "0.1.37"
 base64 = "0.21.2"

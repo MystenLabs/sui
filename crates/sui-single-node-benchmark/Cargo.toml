@@ -9,7 +9,6 @@ license = "Apache-2.0"
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
-sui-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-test-transaction-builder.workspace = true
 sui-transaction-checks.workspace = true
