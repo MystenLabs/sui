@@ -345,7 +345,7 @@ async fn test_request_vote_has_missing_parents() {
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
     // Create a test header.
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .author(author_id)
@@ -515,7 +515,7 @@ async fn test_request_vote_accept_missing_parents() {
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
     // Create a test header.
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .author(author_id)
@@ -689,7 +689,7 @@ async fn test_request_vote_missing_batches() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != authority_id) {
-        let header = Header::V1(
+        let header = Header::V2(
             primary
                 .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
@@ -713,7 +713,7 @@ async fn test_request_vote_missing_batches() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
@@ -837,7 +837,7 @@ async fn test_request_vote_already_voted() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != id) {
-        let header = Header::V1(
+        let header = Header::V2(
             primary
                 .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
@@ -882,7 +882,7 @@ async fn test_request_vote_already_voted() {
         .unwrap();
 
     // Verify Handler generates a Vote.
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
@@ -934,7 +934,7 @@ async fn test_request_vote_already_voted() {
     assert_eq!(vote.digest(), response.into_body().vote.unwrap().digest());
 
     // Verify a different request for the same round receives an error.
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
@@ -1394,7 +1394,7 @@ async fn test_request_vote_created_at_in_future() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != id) {
-        let header = Header::V1(
+        let header = Header::V2(
             primary
                 .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
@@ -1443,7 +1443,7 @@ async fn test_request_vote_created_at_in_future() {
     // Set the creation time to be deep in the future (an hour)
     let created_at = now() + 60 * 60 * 1000;
 
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
@@ -1496,7 +1496,7 @@ async fn test_request_vote_created_at_in_future() {
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
-        header: Header::V1(test_header.clone()),
+        header: Header::V2(test_header.clone()),
         parents: Vec::new(),
     });
     assert!(request
