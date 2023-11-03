@@ -1251,47 +1251,133 @@ fn value_block(
     }
 }
 
+// This is an slightly sub-optimal implementation of `value_list`, which we preserve in order to
+// accurately re-produce code that is already on-chain. When we support SHA-based source
+// verification, we should swap this version out with the optimized version below it. The main
+// difference is that this version does conversion and binding, then freezing; the other will
+// inline freezing when possible to avoid some bndings.
+
 fn value_list(
     context: &mut Context,
-    block: &mut Block,
+    result: &mut Block,
     ty: Option<&H::Type>,
     e: T::Exp,
 ) -> Vec<H::Exp> {
-    use H::Type_ as HT;
     use T::UnannotatedExp_ as TE;
     if let TE::ExpList(items) = e.exp.value {
-        assert!(!items.is_empty());
-        let mut tys = vec![];
-        let mut item_exprs = vec![];
-        let expected_tys: Vec<_> = if let Some(sp!(tloc, HT::Multiple(ts))) = ty {
-            ts.iter()
-                .map(|t| Some(sp(*tloc, HT::Single(t.clone()))))
-                .collect()
-        } else {
-            items.iter().map(|_| None).collect()
-        };
-        for (item, expected_ty) in items.into_iter().zip(expected_tys) {
-            match item {
-                T::ExpListItem::Single(te, ts) => {
-                    let t = single_type(context, *ts);
-                    tys.push(t);
-                    item_exprs.push((te, expected_ty));
-                }
-                T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
-            }
-        }
-        let exprs = value_evaluation_order(context, block, item_exprs);
-        assert!(
-            exprs.len() == tys.len(),
-            "ICE value_evaluation_order changed arity"
-        );
-        exprs
+        value_list_items_to_vec(context, result, ty, e.exp.loc, items)
     } else if let TE::Unit { .. } = e.exp.value {
         vec![]
     } else {
-        vec![value(context, block, ty, e)]
+        vec![value(context, result, ty, e)]
     }
 }
+
+fn value_list_items_to_vec(
+    context: &mut Context,
+    result: &mut Block,
+    ty: Option<&H::Type>,
+    loc: Loc,
+    items: Vec<T::ExpListItem>,
+) -> Vec<H::Exp> {
+    use H::{Type_ as HT, UnannotatedExp_ as HE};
+    assert!(!items.is_empty());
+    let mut tys = vec![];
+    let mut tes = vec![];
+
+    for item in items.into_iter() {
+        match item {
+            T::ExpListItem::Single(te, ts) => {
+                let t = single_type(context, *ts);
+                tys.push(t.clone());
+                tes.push((te, Some(sp(t.loc, HT::Single(t)))));
+            }
+            T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+        }
+    }
+
+    let es = value_evaluation_order(context, result, tes);
+    assert!(
+        es.len() == tys.len(),
+        "ICE exp_evaluation_order changed arity"
+    );
+
+    // Because we previously froze subpoints of ExpLists as its own binding expression for that
+    // ExpList, we need to process this possible vector the same way.
+
+    if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
+        // We have to check that the arity of the expected type matches because some ill-typed
+        // programs flow through this code. In those cases, the error has already been reported and
+        // we bail.
+        if etys.len() == tys.len() {
+            let current_ty = sp(*tloc, HT::Multiple(tys));
+            match needs_freeze(context, &current_ty, expected_ty) {
+                Freeze::NotNeeded => es,
+                Freeze::Point => unreachable!(),
+                Freeze::Sub(_) => {
+                    let current_exp = H::Exp {
+                        ty: current_ty,
+                        exp: sp(loc, HE::Multiple(es)),
+                    };
+                    let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
+                    result.append(&mut freeze_block);
+                    match frozen.exp.value {
+                        HE::Multiple(final_es) => final_es,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        } else {
+            es
+        }
+    } else {
+        es
+    }
+}
+
+// optimized version, which inlines freezes when possible
+//
+// fn value_list(
+//     context: &mut Context,
+//     block: &mut Block,
+//     ty: Option<&H::Type>,
+//     e: T::Exp,
+// ) -> Vec<H::Exp> {
+//     use H::Type_ as HT;
+//     use T::UnannotatedExp_ as TE;
+//     if let TE::ExpList(items) = e.exp.value {
+//         assert!(!items.is_empty());
+//         let mut tys = vec![];
+//         let mut item_exprs = vec![];
+//         let expected_tys: Vec<_> = if let Some(sp!(tloc, HT::Multiple(ts))) = ty {
+//             ts.iter()
+//                 .map(|t| Some(sp(*tloc, HT::Single(t.clone()))))
+//                 .collect()
+//         } else {
+//             items.iter().map(|_| None).collect()
+//         };
+//         for (item, expected_ty) in items.into_iter().zip(expected_tys) {
+//             match item {
+//                 T::ExpListItem::Single(te, ts) => {
+//                     let t = single_type(context, *ts);
+//                     tys.push(t);
+//                     item_exprs.push((te, expected_ty));
+//                 }
+//                 T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+//             }
+//         }
+//         let exprs = value_evaluation_order(context, block, item_exprs);
+//         assert!(
+//             exprs.len() == tys.len(),
+//             "ICE value_evaluation_order changed arity"
+//         );
+//         exprs
+//     } else if let TE::Unit { .. } = e.exp.value {
+//         vec![]
+//     } else {
+//         vec![value(context, block, ty, e)]
+//     }
+// }
 
 // -------------------------------------------------------------------------------------------------
 // Statement Position

@@ -628,9 +628,6 @@ fn function_body(
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
-            if DEBUG_PRINT {
-                println!("-- cfg built ------------------");
-            }
 
             let function_context = super::CFGContext {
                 module,
@@ -646,6 +643,13 @@ fn function_body(
             if !context.env.has_errors() {
                 cfgir::optimize(signature, &locals, &UniqueMap::new(), &mut cfg);
             }
+            if DEBUG_PRINT {
+                println!("-------------------------------");
+                blocks.print_verbose();
+            }
+            // if DEBUG_PRINT {
+            //     println!("-- cfg built ------------------");
+            // }
 
             let block_info = block_info
                 .into_iter()
