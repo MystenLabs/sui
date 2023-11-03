@@ -3,7 +3,6 @@
 
 use crate::consensus_types::AuthorityIndex;
 use fastcrypto::hash::Hash;
-use mysticeti_core::types::BaseStatement;
 use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI};
 use std::fmt::Display;
 use sui_types::messages_consensus::ConsensusTransaction;
@@ -124,8 +123,7 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
                 let author = block.author() as AuthorityIndex;
                 let transactions: Vec<_> = block
                     .shared_transactions()
-                    .iter()
-                    .map(|(loc, tx)| {
+                    .flat_map(|(loc, tx)| {
                         let cert = bcs::from_bytes::<CertifiedTransaction>(tx.data());
                         match cert {
                             Ok(cert) => Some((
