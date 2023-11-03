@@ -19,6 +19,7 @@ const Method = (props) => {
 
   const handleClick = (e) => {
     let href = "#";
+    if (!e.target.nodeName.match(/^H/)) return;
     if (e.target.id) {
       href += e.target.id;
     } else {
