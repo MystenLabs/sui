@@ -1,0 +1,6 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/enum_invalid.move:13:13
+   │
+13 │        Done(x: u64),
+   │             ^ Cannot use named fields here
+

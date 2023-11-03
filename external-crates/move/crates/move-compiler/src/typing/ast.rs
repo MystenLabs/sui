@@ -6,9 +6,13 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, Value, Visibility},
     naming::ast::{
-        BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var,
+        BlockLabel, EnumDefinition, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_,
+        Type_, Var,
     },
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
+        ENTRY_MODIFIER,
+    },
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
@@ -51,7 +55,8 @@ pub struct ModuleDefinition {
     pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
     pub used_addresses: BTreeSet<Address>,
     pub friends: UniqueMap<ModuleIdent, Friend>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
+    pub structs: UniqueMap<DatatypeName, StructDefinition>,
+    pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
 }
@@ -107,11 +112,26 @@ pub enum LValue_ {
         ty: Box<Type>,
         unused_binding: bool,
     },
-    Unpack(ModuleIdent, StructName, Vec<Type>, Fields<(Type, LValue)>),
+    Unpack(ModuleIdent, DatatypeName, Vec<Type>, Fields<(Type, LValue)>),
     BorrowUnpack(
         bool,
         ModuleIdent,
-        StructName,
+        DatatypeName,
+        Vec<Type>,
+        Fields<(Type, LValue)>,
+    ),
+    UnpackVariant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Vec<Type>,
+        Fields<(Type, LValue)>,
+    ),
+    BorrowUnpackVariant(
+        bool,
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
         Vec<Type>,
         Fields<(Type, LValue)>,
     ),
@@ -159,6 +179,8 @@ pub enum UnannotatedExp_ {
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    Match(Box<Exp>, Spanned<Vec<MatchArm>>),
+    VariantMatch(Box<Exp>, DatatypeName, Vec<(VariantName, Exp)>),
     While(Box<Exp>, BlockLabel, Box<Exp>),
     Loop {
         name: BlockLabel,
@@ -178,7 +200,14 @@ pub enum UnannotatedExp_ {
     UnaryExp(UnaryOp, Box<Exp>),
     BinopExp(Box<Exp>, BinOp, Box<Type>, Box<Exp>),
 
-    Pack(ModuleIdent, StructName, Vec<Type>, Fields<(Type, Exp)>),
+    Pack(ModuleIdent, DatatypeName, Vec<Type>, Fields<(Type, Exp)>),
+    PackVariant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Vec<Type>,
+        Fields<(Type, Exp)>,
+    ),
     ExpList(Vec<ExpListItem>),
 
     Borrow(bool, Box<Exp>, Field),
@@ -208,6 +237,54 @@ pub enum SequenceItem_ {
     Bind(LValueList, Vec<Option<Type>>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm_ {
+    pub pattern: MatchPattern,
+    pub binders: Vec<(Var, Type)>,
+    pub guard: Option<Box<Exp>>,
+    pub guard_binders: UniqueMap<Var, Var>, // pattern binder name -> guard var name
+    pub rhs_binders: BTreeSet<Var>,         // pattern binders used in the right-hand side
+    pub rhs: Box<Exp>,
+}
+
+pub type MatchArm = Spanned<MatchArm_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnannotatedPat_ {
+    Constructor(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Vec<Type>,
+        Fields<(Type, MatchPattern)>,
+    ),
+    BorrowConstructor(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Vec<Type>,
+        Fields<(Type, MatchPattern)>,
+    ),
+    Binder(Var),
+    Literal(Value),
+    Wildcard,
+    Or(Box<MatchPattern>, Box<MatchPattern>),
+    At(Var, Box<MatchPattern>),
+    ErrorPat,
+}
+
+pub type UnannotatedPat = Spanned<UnannotatedPat_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchPattern {
+    pub ty: Type,
+    pub pat: Spanned<UnannotatedPat_>,
+}
+
+pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
+    MatchPattern { pat, ty }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpListItem {
@@ -289,6 +366,7 @@ impl AstDebug for ModuleDefinition {
             used_addresses,
             friends,
             structs,
+            enums,
             constants,
             functions,
         } = self;
@@ -318,6 +396,10 @@ impl AstDebug for ModuleDefinition {
         }
         for sdef in structs.key_cloned_iter() {
             sdef.ast_debug(w);
+            w.new_line();
+        }
+        for edef in enums.key_cloned_iter() {
+            edef.ast_debug(w);
             w.new_line();
         }
         for cdef in constants.key_cloned_iter() {
@@ -489,6 +571,21 @@ impl AstDebug for UnannotatedExp_ {
                 });
                 w.write("}");
             }
+            E::PackVariant(m, e, v, tys, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_e)| {
+                    let (idx, (bt, e)) = idx_bt_e;
+                    w.write(&format!("({}#{}:", idx, f));
+                    bt.ast_debug(w);
+                    w.write("): ");
+                    e.ast_debug(w);
+                });
+                w.write("}");
+            }
             E::IfElse(b, t, f) => {
                 w.write("if (");
                 b.ast_debug(w);
@@ -496,6 +593,34 @@ impl AstDebug for UnannotatedExp_ {
                 t.ast_debug(w);
                 w.write(" else ");
                 f.ast_debug(w);
+            }
+            E::Match(esubject, arms) => {
+                w.write("match (");
+                esubject.ast_debug(w);
+                w.write(") ");
+                w.block(|w| {
+                    w.comma(&arms.value, |w, sp!(_, arm)| {
+                        arm.pattern.ast_debug(w);
+                        if let Some(guard) = &arm.guard {
+                            w.write(" if ");
+                            guard.ast_debug(w);
+                        }
+                        w.write(" => ");
+                        arm.rhs.ast_debug(w);
+                    })
+                });
+            }
+            E::VariantMatch(esubject, enum_name, arms) => {
+                w.write("variant_switch (");
+                esubject.ast_debug(w);
+                w.write(format!(" : {} ) ", enum_name));
+                w.block(|w| {
+                    w.comma(arms.iter(), |w, (variant, rhs)| {
+                        w.write(format!("{} =>", variant));
+                        rhs.ast_debug(w);
+                        println!();
+                    })
+                });
             }
             E::While(name, b, e) => {
                 w.write("while@");
@@ -686,6 +811,76 @@ impl AstDebug for ExpListItem {
     }
 }
 
+impl AstDebug for MatchArm_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        self.pattern.ast_debug(w);
+        if let Some(guard) = &self.guard {
+            w.write(" if ");
+            guard.ast_debug(w);
+        }
+        w.write(" => ");
+        self.rhs.ast_debug(w);
+    }
+}
+
+impl AstDebug for MatchPattern {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let MatchPattern { ty, pat } = self;
+        w.annotate(|w| pat.value.ast_debug(w), ty)
+    }
+}
+
+impl AstDebug for UnannotatedPat_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            UnannotatedPat_::BorrowConstructor(m, e, v, tys, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            UnannotatedPat_::Constructor(m, e, v, tys, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            UnannotatedPat_::Or(lhs, rhs) => {
+                w.write("(");
+                lhs.ast_debug(w);
+                w.write("|");
+                rhs.ast_debug(w);
+                w.write(")");
+            }
+            UnannotatedPat_::At(x, inner) => {
+                x.ast_debug(w);
+                w.write("@");
+                inner.ast_debug(w);
+            }
+            UnannotatedPat_::Binder(x) => x.ast_debug(w),
+            UnannotatedPat_::Literal(v) => v.ast_debug(w),
+            UnannotatedPat_::Wildcard => w.write("_"),
+            UnannotatedPat_::ErrorPat => w.write("<err>"),
+        }
+    }
+}
+
 impl AstDebug for Vec<Option<Type>> {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.comma(self, |w, t_opt| match t_opt {
@@ -746,6 +941,38 @@ impl AstDebug for LValue_ {
                     w.write("mut ");
                 }
                 w.write(&format!("{}::{}", m, s));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            L::UnpackVariant(m, e, v, tys, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            L::BorrowUnpackVariant(mut_, m, e, v, tys, fields) => {
+                w.write("&");
+                if *mut_ {
+                    w.write("mut ");
+                }
+                w.write(&format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
                 w.write(">");

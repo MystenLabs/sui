@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_ref.move:16:32
+   │
+16 │             Option::Some(n) if check_imm_ref_s(n) => n,
+   │                                ^^^^^^^^^^^^^^^
+   │                                │
+   │                                Unexpected 'check_imm_ref_s'
+   │                                Expected '('
+

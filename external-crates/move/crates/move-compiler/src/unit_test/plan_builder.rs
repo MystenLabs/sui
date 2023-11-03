@@ -164,6 +164,7 @@ fn build_test_info<'func>(
         let sp!(vloc, var_) = var.0;
         let var_ = match display_var(var_) {
             crate::hlir::translate::DisplayVar::Orig(s) => s.into(),
+            crate::hlir::translate::DisplayVar::MatchTmp(_) => panic!("ICE temp as parameter"),
             crate::hlir::translate::DisplayVar::Tmp => panic!("ICE temp as parameter"),
         };
         match test_annotation_params.get(&var_) {

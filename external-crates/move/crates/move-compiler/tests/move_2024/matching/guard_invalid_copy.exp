@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_invalid_copy.move:17:32
+   │
+17 │             Option::Some(n) if check_s(n) => n,
+   │                                ^^^^^^^
+   │                                │
+   │                                Unexpected 'check_s'
+   │                                Expected '('
+

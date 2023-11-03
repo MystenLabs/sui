@@ -12,7 +12,7 @@ use crate::{
     diagnostics::Diagnostics,
     expansion::ast::{AbilitySet, Attributes, ModuleIdent},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
-    parser::ast::{ConstantName, FunctionName, StructName},
+    parser::ast::{ConstantName, DatatypeName, FunctionName},
     shared::{unique_map::UniqueMap, CompilationEnv},
     FullyCompiledProgram,
 };
@@ -37,7 +37,7 @@ enum NamedBlockType {
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
-    struct_declared_abilities: UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
+    datatype_declared_abilities: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, AbilitySet>>,
     label_count: usize,
     named_blocks: UniqueMap<BlockLabel, (Label, Label)>,
     // Used for populating block_info
@@ -59,14 +59,22 @@ impl<'env> Context<'env> {
                     .key_cloned_iter()
                     .filter(|(mident, _m)| !modules.contains_key(mident))
             }));
-        let struct_declared_abilities = UniqueMap::maybe_from_iter(
-            all_modules
-                .map(|(m, mdef)| (m, mdef.structs.ref_map(|_s, sdef| sdef.abilities.clone()))),
-        )
-        .unwrap();
+        let datatype_declared_abilities = all_modules.map(|(m, mdef)| {
+            let smap = mdef.structs.ref_map(|_s, sdef| sdef.abilities.clone());
+            let emap = mdef.enums.ref_map(|_e, edef| edef.abilities.clone());
+            (
+                m,
+                smap.union_with(&emap, |_x, _y, _z| {
+                    panic!("ICE should have failed in naming")
+                }),
+            )
+        });
+
+        let datatype_declared_abilities =
+            UniqueMap::maybe_from_iter(datatype_declared_abilities).unwrap();
         Context {
             env,
-            struct_declared_abilities,
+            datatype_declared_abilities,
             label_count: 0,
             named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
@@ -169,6 +177,7 @@ fn module(
         dependency_order,
         friends,
         structs,
+        enums,
         functions: hfunctions,
         constants: hconstants,
     } = mdef;
@@ -187,6 +196,7 @@ fn module(
             dependency_order,
             friends,
             structs,
+            enums,
             constants,
             functions,
         },
@@ -330,7 +340,11 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
             }
-            C::Break(_) | C::Continue(_) | C::Jump { .. } | C::JumpIf { .. } => (),
+            C::Break(_)
+            | C::Continue(_)
+            | C::Jump { .. }
+            | C::JumpIf { .. }
+            | C::VariantSwitch { .. } => (),
         }
     }
 
@@ -346,6 +360,16 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
                 dep_exp(set, cond);
                 dep_block(set, if_block);
                 dep_block(set, else_block)
+            }
+            S::VariantMatch {
+                subject,
+                enum_name: _,
+                arms,
+            } => {
+                dep_exp(set, subject);
+                for (_, arm) in arms {
+                    dep_block(set, arm);
+                }
             }
             S::While {
                 cond: (cond_block, cond_exp),
@@ -460,7 +484,7 @@ fn constant_(
     let function_context = super::CFGContext {
         module,
         member: cfgir::MemberName::Constant(name.0),
-        struct_declared_abilities: &context.struct_declared_abilities,
+        datatype_declared_abilities: &context.datatype_declared_abilities,
         attributes,
         entry: None,
         visibility: H::Visibility::Internal,
@@ -606,10 +630,18 @@ fn function_body(
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
 
+            // for (n, block) in cfg.blocks() {
+            //     println!("{}:", n);
+            //     for entry in block {
+            //         print!("    ");
+            //         entry.print();
+            //     }
+            // }
+
             let function_context = super::CFGContext {
                 module,
                 member: cfgir::MemberName::Function(name.0),
-                struct_declared_abilities: &context.struct_declared_abilities,
+                datatype_declared_abilities: &context.datatype_declared_abilities,
                 attributes,
                 entry,
                 visibility,
@@ -669,7 +701,7 @@ fn finalize_blocks(
     blocks: BlockList,
 ) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
     // Given the in-order vector of blocks we'd like to emit, we do three things:
-    // 1. Generate an in-order mat from that list.
+    // 1. Generate an in-order map from that list.
     // 2. Generate block info for the blocks in order.
     // 3. Discard the in-order vector in favor of a (remapped) BTreeMap for CFG.
 
@@ -760,6 +792,49 @@ fn statement(
 
             (test_block, new_blocks)
         }
+
+        S::VariantMatch {
+            subject,
+            enum_name,
+            arms,
+        } => {
+            let subject = *subject;
+
+            let phi_label = context.new_label();
+
+            let mut arm_blocks = BlockList::new();
+
+            let arms = arms
+                .into_iter()
+                .map(|(variant_name, arm_block)| {
+                    let arm_label = context.new_label();
+                    let (arm_entry_block, arm_entry_blocks) = block_(
+                        context,
+                        with_last(arm_block, make_jump(sloc, phi_label, false)),
+                    );
+                    let mut blocks = [(arm_label, arm_entry_block)]
+                        .into_iter()
+                        .chain(arm_entry_blocks)
+                        .collect::<BlockList>();
+                    arm_blocks.append(&mut blocks);
+                    (variant_name, arm_label)
+                })
+                .collect::<Vec<_>>();
+
+            arm_blocks.push((phi_label, current_block));
+
+            let test_block = VecDeque::from([sp(
+                sloc,
+                C::VariantSwitch {
+                    subject,
+                    enum_name,
+                    arms,
+                },
+            )]);
+
+            (test_block, arm_blocks)
+        }
+
         // We could turn these into loops earlier and elide this case.
         S::While {
             name,
@@ -939,7 +1014,7 @@ fn visit_function(
     let function_context = super::CFGContext {
         module: mident,
         member: cfgir::MemberName::Function(name.0),
-        struct_declared_abilities: &context.struct_declared_abilities,
+        datatype_declared_abilities: &context.datatype_declared_abilities,
         attributes,
         entry: *entry,
         visibility: *visibility,

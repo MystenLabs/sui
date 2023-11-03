@@ -4,24 +4,26 @@
 
 use super::{
     core::{self, Context, Local, Subst},
-    expand, infinite_instantiations, recursive_structs,
+    expand, infinite_instantiations, recursive_datatypes,
 };
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
-        AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
+        AbilitySet, AttributeName_, AttributeValue_, Attribute_, Attributes, DottedUsage, Fields,
+        Friend, ModuleAccess_, ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
+    naming::ast::DatatypeTypeParameter,
     naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{
-        Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_,
+        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, UnaryOp_,
+        VariantName,
     },
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
         process_binops,
-        program_info::TypingProgramInfo,
+        program_info::{DatatypeKind, TypingProgramInfo},
         unique_map::UniqueMap,
         *,
     },
@@ -56,7 +58,7 @@ pub fn program(
 
     assert!(context.constraints.is_empty());
     dependency_ordering::program(context.env, &mut modules);
-    recursive_structs::modules(context.env, &modules);
+    recursive_datatypes::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
     let mut prog = T::Program_ { modules };
     let module_use_funs = context
@@ -128,6 +130,7 @@ fn module(
         use_funs,
         friends,
         mut structs,
+        mut enums,
         functions: nfunctions,
         constants: nconstants,
     } = mdef;
@@ -138,6 +141,7 @@ fn module(
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
+    enums.iter_mut().for_each(|(_, _, e)| enum_def(context, e));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f));
@@ -156,6 +160,7 @@ fn module(
         used_addresses: BTreeSet::new(),
         friends,
         structs,
+        enums,
         constants,
         functions,
     };
@@ -190,7 +195,6 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         };
     function_signature(context, &signature);
     expand::function_signature(context, &mut signature);
-
     let body = function_body(context, n_body);
     unused_let_muts(context);
     context.current_function = None;
@@ -442,6 +446,17 @@ mod check_valid_constant {
                 exp(context, ef);
                 "'if' expressions are"
             }
+            E::Match(esubject, sp!(_, arms)) => {
+                exp(context, esubject);
+                for arm in arms {
+                    if let Some(guard) = arm.value.guard.as_ref() {
+                        exp(context, guard)
+                    }
+                    exp(context, &arm.value.rhs);
+                }
+                "'match' expressions are"
+            }
+            E::VariantMatch(..) => panic!("ICE shouldn't find variant match before HLIR lowerng"),
             E::While(eb, _, eloop) => {
                 exp(context, eb);
                 exp(context, eloop);
@@ -481,6 +496,12 @@ mod check_valid_constant {
                     exp(context, fe)
                 }
                 "Structs are"
+            }
+            E::PackVariant(_, _, _, _, fields) => {
+                for (_, _, (_, (_, fe))) in fields {
+                    exp(context, fe)
+                }
+                "Enum variants are"
             }
         };
         context.env.add_diag(diag!(
@@ -535,7 +556,7 @@ mod check_valid_constant {
 }
 
 //**************************************************************************************************
-// Structs
+// Data Types
 //**************************************************************************************************
 
 fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
@@ -589,9 +610,82 @@ fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
     context.env.pop_warning_filter_scope();
 }
 
+fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
+    assert!(context.constraints.is_empty());
+
+    context
+        .env
+        .add_warning_filter_scope(enum_.warning_filter.clone());
+
+    let enum_abilities = &enum_.abilities;
+    let enum_type_params = &enum_.type_parameters;
+
+    let mut field_types = vec![];
+    for (_, _, variant) in enum_.variants.iter_mut() {
+        let mut varient_fields = variant_def(context, enum_abilities, enum_type_params, variant);
+        field_types.append(&mut varient_fields);
+    }
+
+    check_variant_type_params_usage(context, enum_type_params, field_types);
+    context.env.pop_warning_filter_scope();
+}
+
+fn variant_def(
+    context: &mut Context,
+    enum_abilities: &AbilitySet,
+    enum_tparams: &[DatatypeTypeParameter],
+    v: &mut N::VariantDefinition,
+) -> Vec<(usize, Type)> {
+    context.reset_for_module_item();
+
+    let field_map = match &mut v.fields {
+        N::VariantFields::Empty => return vec![],
+        N::VariantFields::Defined(m) => m,
+    };
+
+    // instantiate types and check constraints
+    for (_field_loc, _field, idx_ty) in field_map.iter() {
+        let loc = idx_ty.1.loc;
+        let inst_ty = core::instantiate(context, idx_ty.1.clone());
+        context.add_base_type_constraint(loc, "Invalid field type", inst_ty.clone());
+    }
+    core::solve_constraints(context);
+
+    // substitute the declared type parameters with an Any type to check for ability field
+    // requirements
+    let tparam_subst = &core::make_tparam_subst(
+        enum_tparams.iter().map(|tp| &tp.param),
+        enum_tparams
+            .iter()
+            .map(|tp| sp(tp.param.user_specified_name.loc, Type_::Anything)),
+    );
+    for (_field_loc, _field, idx_ty) in field_map.iter() {
+        let loc = idx_ty.1.loc;
+        let subst_ty = core::subst_tparams(tparam_subst, idx_ty.1.clone());
+        for declared_ability in enum_abilities {
+            let required = declared_ability.value.requires();
+            let msg = format!(
+                "Invalid field type. The struct was declared with the ability '{}' so all fields \
+                 require the ability '{}'",
+                declared_ability, required
+            );
+            context.add_ability_constraint(loc, Some(msg), subst_ty.clone(), required)
+        }
+    }
+    core::solve_constraints(context);
+
+    for (_field_loc, _field_, idx_ty) in field_map.iter_mut() {
+        expand::type_(context, &mut idx_ty.1);
+    }
+    field_map
+        .into_iter()
+        .map(|(_, _, idx_ty)| idx_ty.clone())
+        .collect::<Vec<_>>()
+}
+
 fn check_type_params_usage(
     context: &mut Context,
-    type_parameters: &[N::StructTypeParameter],
+    type_parameters: &[N::DatatypeTypeParameter],
     field_map: &Fields<Type>,
 ) {
     let has_unresolved = field_map
@@ -612,6 +706,60 @@ fn check_type_params_usage(
         .map(|param| param.param.id)
         .collect();
     for (_, _, idx_ty) in field_map.iter() {
+        visit_type_params(
+            context,
+            &idx_ty.1,
+            ParamPos::FIELD,
+            &mut |context, loc, param, pos| {
+                let param_is_phantom = phantom_params.contains(&param.id);
+                match (pos, param_is_phantom) {
+                    (ParamPos::NonPhantom(non_phantom_pos), true) => {
+                        invalid_phantom_use_error(context, non_phantom_pos, param, loc);
+                    }
+                    (_, false) => {
+                        let used_in_non_phantom_pos =
+                            non_phantom_use.entry(param.id).or_insert(false);
+                        *used_in_non_phantom_pos |= !pos.is_phantom();
+                    }
+                    _ => {}
+                }
+            },
+        );
+    }
+    for ty_param in type_parameters {
+        if !ty_param.is_phantom {
+            check_non_phantom_param_usage(
+                context,
+                &ty_param.param,
+                non_phantom_use.get(&ty_param.param.id).copied(),
+            );
+        }
+    }
+}
+
+fn check_variant_type_params_usage(
+    context: &mut Context,
+    type_parameters: &[N::DatatypeTypeParameter],
+    field_map: Vec<(usize, Type)>,
+) {
+    let has_unresolved = field_map
+        .iter()
+        .any(|(_, ty)| has_unresolved_error_type(ty));
+
+    if has_unresolved {
+        return;
+    }
+
+    // true = used at least once in non-phantom pos
+    // false = only used in phantom pos
+    // not in the map = never used
+    let mut non_phantom_use: BTreeMap<TParamID, bool> = BTreeMap::new();
+    let phantom_params: BTreeSet<TParamID> = type_parameters
+        .iter()
+        .filter(|ty_param| ty_param.is_phantom)
+        .map(|param| param.param.id)
+        .collect();
+    for idx_ty in field_map.iter() {
         visit_type_params(
             context,
             &idx_ty.1,
@@ -1154,6 +1302,20 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             );
             (ty, TE::IfElse(eb, et, ef))
         }
+        NE::Match(nsubject, sp!(aloc, narms_)) => {
+            let esubject = exp(context, nsubject);
+            let subject_type = core::unfold_type(&context.subst, esubject.ty.clone());
+            let ref_mut = match subject_type.value {
+                Type_::Ref(mut_, _) => Some(mut_),
+                _ => {
+                    // Do not need base constraint because of the joins in `match_arms`.
+                    None
+                }
+            };
+            let result_type = core::make_tvar(context, aloc);
+            let earms = match_arms(context, &subject_type, &result_type, narms_, &ref_mut);
+            (result_type, TE::Match(esubject, sp(aloc, earms)))
+        }
         NE::While(nb, name, nloop) => {
             let eb = exp(context, nb);
             let bloc = eb.exp.loc;
@@ -1305,10 +1467,11 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let items = es.into_iter().map(T::single_item).collect();
             (ty, TE::ExpList(items))
         }
+
         NE::Pack(m, n, ty_args_opt, nfields) => {
             let (bt, targs) = core::make_struct_type(context, eloc, &m, &n, ty_args_opt);
             let typed_nfields =
-                add_field_types(context, eloc, "argument", &m, &n, targs.clone(), nfields);
+                add_struct_field_types(context, eloc, "argument", &m, &n, targs.clone(), nfields);
 
             let tfields = typed_nfields.map(|f, (idx, (fty, narg))| {
                 let arg = exp_(context, narg);
@@ -1332,6 +1495,48 @@ fn exp_(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                     .add_diag(diag!(TypeSafety::Visibility, (eloc, msg)));
             }
             (bt, TE::Pack(m, n, targs, tfields))
+        }
+
+        NE::PackVariant(m, e, v, ty_args_opt, nfields) => {
+            let (bt, targs) = core::make_enum_type(context, eloc, &m, &e, ty_args_opt);
+            let typed_nfields = add_variant_field_types(
+                context,
+                eloc,
+                "argument",
+                &m,
+                &e,
+                &v,
+                targs.clone(),
+                nfields,
+            );
+
+            let tfields = typed_nfields.map(|f, (idx, (fty, narg))| {
+                let arg = exp_(context, narg);
+                subtype(
+                    context,
+                    arg.exp.loc,
+                    || {
+                        format!(
+                            "Invalid argument for field '{}' for '{}::{}::{}'",
+                            f, &m, &e, &v
+                        )
+                    },
+                    arg.ty.clone(),
+                    fty.clone(),
+                );
+                (idx, (fty, arg))
+            });
+            if !context.is_current_module(&m) {
+                let msg = format!(
+                    "Invalid instantiation of '{}::{}::{}'.\nAll enum variants can only be \
+                    constructed in the module in which they are declared",
+                    &m, &e, &v
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::Visibility, (eloc, msg)));
+            }
+            (bt, TE::PackVariant(m, e, v, targs, tfields))
         }
 
         NE::ExpDotted(DottedUsage::Use, sp!(_, N::ExpDotted_::Exp(ner))) => {
@@ -1577,6 +1782,236 @@ fn loop_body(
     }
 }
 
+fn match_arms(
+    context: &mut Context,
+    subject_type: &Type,
+    result_type: &Type,
+    narms: Vec<N::MatchArm>,
+    ref_mut: &Option<bool>,
+) -> Vec<T::MatchArm> {
+    narms
+        .into_iter()
+        .map(|narm| match_arm(context, subject_type, result_type, narm, ref_mut))
+        .collect()
+}
+
+fn match_arm(
+    context: &mut Context,
+    subject_type: &Type,
+    result_type: &Type,
+    sp!(aloc, arm_): N::MatchArm,
+    ref_mut: &Option<bool>,
+) -> T::MatchArm {
+    let N::MatchArm_ {
+        pattern,
+        binders,
+        guard,
+        guard_binders,
+        rhs_binders,
+        rhs,
+    } = arm_;
+
+    let bind_locs = binders.iter().map(|sp!(loc, _)| *loc).collect();
+    let msg = "Invalid type for pattern";
+    let bind_vars = core::make_expr_list_tvars(context, pattern.loc, msg, bind_locs);
+
+    let binders: Vec<(N::Var, Type)> = binders
+        .into_iter()
+        .zip(bind_vars)
+        .map(|(x, ty)| {
+            context.declare_local(None, x, ty.clone());
+            (x, ty)
+        })
+        .collect();
+
+    let ploc = pattern.loc;
+    let pattern = match_pattern(context, pattern, ref_mut);
+
+    subtype(
+        context,
+        ploc,
+        || "Invalid pattern",
+        pattern.ty.clone(),
+        subject_type.clone(),
+    );
+
+    let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
+
+    for (pat_var, guard_var) in guard_binders.clone() {
+        use Type_::*;
+        let ety = binder_map.get(&pat_var).unwrap().clone();
+        let unfolded = core::unfold_type(&context.subst, ety.clone());
+        let ty = match unfolded.value {
+            Ref(false, inner) => sp(ety.loc, Ref(false, inner)),
+            Ref(true, inner) => sp(ety.loc, Ref(false, inner)),
+            _ => sp(ety.loc, Ref(false, Box::new(ety.clone()))),
+        };
+        context.declare_local(None, guard_var, ty);
+    }
+
+    let guard = guard.map(|guard| exp(context, guard));
+
+    if let Some(guard) = &guard {
+        let gloc = guard.exp.loc;
+        subtype(
+            context,
+            gloc,
+            || "Invalid guard condition",
+            guard.ty.clone(),
+            Type_::bool(gloc),
+        );
+    }
+
+    let rhs = exp(context, rhs);
+    subtype(
+        context,
+        rhs.exp.loc,
+        || "Invalid right-hand side expression",
+        rhs.ty.clone(),
+        result_type.clone(),
+    );
+
+    sp(
+        aloc,
+        T::MatchArm_ {
+            pattern,
+            binders,
+            guard,
+            guard_binders,
+            rhs_binders,
+            rhs,
+        },
+    )
+}
+
+fn match_pattern(
+    context: &mut Context,
+    sp!(loc, pat_): N::MatchPattern,
+    mut_ref: &Option<bool>, /* None -> value, Some(false) -> imm ref, Some(true) -> mut ref */
+) -> T::MatchPattern {
+    use N::MatchPattern_ as P;
+    use T::UnannotatedPat_ as TP;
+
+    macro_rules! rtype {
+        ($ty:expr) => {
+            if let Some(mut_) = mut_ref {
+                sp($ty.loc, Type_::Ref(*mut_, Box::new($ty)))
+            } else {
+                $ty
+            }
+        };
+    }
+
+    match pat_ {
+        P::Constructor(m, enum_, variant, tys_opt, fields) => {
+            let (bt, targs) = core::make_enum_type(context, loc, &m, &enum_, tys_opt);
+            let typed_fields = add_variant_field_types(
+                context,
+                loc,
+                "pattern",
+                &m,
+                &enum_,
+                &variant,
+                targs.clone(),
+                fields,
+            );
+            let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
+                let tpat = match_pattern(context, tpat, mut_ref);
+                let fty_ref = rtype!(fty);
+                let fty_out = subtype(
+                    context,
+                    f.loc(),
+                    || "Invalid pattern field type",
+                    tpat.ty.clone(),
+                    fty_ref,
+                );
+                (idx, (fty_out, tpat))
+            });
+            if !context.is_current_module(&m) {
+                let msg = format!(
+                    "Invalid deconstructing pattern for '{}::{}::{}'.\n All enums can only be \
+                     matched in the module in which they are declared",
+                    &m, &enum_, &variant
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
+            }
+            let bt = rtype!(bt);
+            let pat_ = if mut_ref.is_some() {
+                TP::BorrowConstructor(m, enum_, variant, targs, tfields)
+            } else {
+                TP::Constructor(m, enum_, variant, targs, tfields)
+            };
+            T::pat(bt, sp(loc, pat_))
+        }
+        P::Binder(x) => {
+            let x_ty = context.get_local_type(&x);
+            T::pat(x_ty, sp(loc, TP::Binder(x)))
+        }
+        P::Literal(v) => {
+            let ty = match &v.value {
+                Value_::InferredNum(_) => core::make_num_tvar(context, loc),
+                _ => v.value.type_(loc).unwrap(),
+            };
+            context.add_ability_constraint(
+                loc,
+                Some(format!(
+                    "Cannot ignore values without the '{}' ability. \
+                    Literal patterns copy their values for equality checking",
+                    Ability_::Copy
+                )),
+                ty.clone(),
+                Ability_::Copy,
+            );
+            T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
+        }
+        P::Wildcard => {
+            let ty = core::make_tvar(context, loc);
+            if mut_ref.is_none() {
+                // If the thing we are matching isn't a ref, a wildcard drops it.
+                context.add_ability_constraint(
+                    loc,
+                    Some(format!(
+                        "Cannot ignore values without the '{}' ability. \
+                        '_' patterns discard their values",
+                        Ability_::Drop
+                    )),
+                    ty.clone(),
+                    Ability_::Drop,
+                );
+            }
+            T::pat(rtype!(ty), sp(loc, TP::Wildcard))
+        }
+        P::Or(lhs, rhs) => {
+            let lpat = match_pattern(context, *lhs, mut_ref);
+            let rpat = match_pattern(context, *rhs, mut_ref);
+            let ty = join(
+                context,
+                loc,
+                || -> String { panic!("ICE unresolved error join, failed") },
+                lpat.ty.clone(),
+                rpat.ty.clone(),
+            );
+            let pat = sp(loc, TP::Or(Box::new(lpat), Box::new(rpat)));
+            T::pat(ty, pat)
+        }
+        P::At(x, inner) => {
+            let inner = match_pattern(context, *inner, mut_ref);
+            let x_ty = context.get_local_type(&x);
+            let ty = subtype(
+                context,
+                inner.pat.loc,
+                || "Invalid inner pattern type".to_string(),
+                inner.ty.clone(),
+                x_ty.clone(),
+            );
+            T::pat(ty, sp(loc, TP::At(x, Box::new(inner))))
+        }
+        P::ErrorPat => T::pat(core::make_tvar(context, loc), sp(loc, TP::ErrorPat)),
+    }
+}
+
 //**************************************************************************************************
 // Locals and LValues
 //**************************************************************************************************
@@ -1607,6 +2042,9 @@ fn lvalue_expected_types(_context: &mut Context, sp!(loc, b_): &T::LValue) -> Op
         L::Unpack(m, s, tys, _) => {
             let tn = sp(loc, N::TypeName_::ModuleType(*m, *s));
             Some(sp(loc, Apply(None, tn, tys.clone())))
+        }
+        L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
+            panic!("ICE shouldn't occur before match expansions")
         }
     }
 }
@@ -1760,7 +2198,8 @@ fn lvalue(
                 C::Bind => "binding",
                 C::Assign => "assignment",
             };
-            let typed_fields = add_field_types(context, loc, verb, &m, &n, targs.clone(), fields);
+            let typed_fields =
+                add_struct_field_types(context, loc, verb, &m, &n, targs.clone(), fields);
             let tfields = typed_fields.map(|f, (idx, (fty, nl))| {
                 let nl_ty = match ref_mut {
                     None => fty.clone(),
@@ -1871,7 +2310,22 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
                     .env
                     .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
-            core::make_field_type(context, loc, &m, &n, targs, field)
+            match context.datatype_kind(&m, &n) {
+                DatatypeKind::Struct => {
+                    core::make_struct_field_type(context, loc, &m, &n, targs, field)
+                }
+                DatatypeKind::Enum => {
+                    let msg = format!(
+                        "Invalid access of field '{}' on '{}::{}'. Fields can only be accessed on \
+                         structs, not enums",
+                        field, &m, &n
+                    );
+                    context
+                        .env
+                        .add_diag(diag!(TypeSafety::ExpectedSpecificType, (loc, msg)));
+                    context.error_type(loc)
+                }
+            }
         }
         t => {
             let smsg = format!(
@@ -1888,16 +2342,16 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
     }
 }
 
-fn add_field_types<T>(
+fn add_struct_field_types<T>(
     context: &mut Context,
     loc: Loc,
     verb: &str,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     targs: Vec<Type>,
     fields: Fields<T>,
 ) -> Fields<(Type, T)> {
-    let maybe_fields_ty = core::make_field_types(context, loc, m, n, targs);
+    let maybe_fields_ty = core::make_struct_field_types(context, loc, m, n, targs);
     let mut fields_ty = match maybe_fields_ty {
         N::StructFields::Defined(m) => m,
         N::StructFields::Native(nloc) => {
@@ -1928,6 +2382,64 @@ fn add_field_types<T>(
                 context.env.add_diag(diag!(
                     NameResolution::UnboundField,
                     (loc, format!("Unbound field '{}' in '{}::{}'", &f, m, n))
+                ));
+                context.error_type(f.loc())
+            }
+            Some((_, fty)) => fty,
+        };
+        (idx, (fty, x))
+    })
+}
+
+fn add_variant_field_types<T>(
+    context: &mut Context,
+    loc: Loc,
+    verb: &str,
+    m: &ModuleIdent,
+    n: &DatatypeName,
+    v: &VariantName,
+    targs: Vec<Type>,
+    fields: Fields<T>,
+) -> Fields<(Type, T)> {
+    let maybe_fields_ty = core::make_variant_field_types(context, loc, m, n, v, targs);
+    let mut fields_ty = match maybe_fields_ty {
+        N::VariantFields::Defined(m) => m,
+        N::VariantFields::Empty => {
+            if !fields.is_empty() {
+                let msg = format!(
+                    "Invalid usage for empty variant '{}::{}::{}'. Empty variants do not take \
+                     any arguments.",
+                    m, n, v
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::InvalidNativeUsage, (loc, msg),));
+                return fields.map(|f, (idx, x)| (idx, (context.error_type(f.loc()), x)));
+            } else {
+                return Fields::new();
+            }
+        }
+    };
+    for (_, f_, _) in &fields_ty {
+        if fields.get_(f_).is_none() {
+            let msg = format!(
+                "Missing {} for field '{}' in '{}::{}::{}'",
+                verb, f_, m, n, v
+            );
+            context
+                .env
+                .add_diag(diag!(TypeSafety::TooFewArguments, (loc, msg)))
+        }
+    }
+    fields.map(|f, (idx, x)| {
+        let fty = match fields_ty.remove(&f) {
+            None => {
+                context.env.add_diag(diag!(
+                    NameResolution::UnboundField,
+                    (
+                        loc,
+                        format!("Unbound field '{}' in '{}::{}::{}'", &f, m, n, v)
+                    )
                 ));
                 context.error_type(f.loc())
             }

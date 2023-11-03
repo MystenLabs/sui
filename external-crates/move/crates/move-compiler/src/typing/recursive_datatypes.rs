@@ -7,7 +7,7 @@ use crate::{
     diagnostics::Diagnostic,
     expansion::ast::ModuleIdent,
     naming::ast::{self as N, TypeName_},
-    parser::ast::StructName,
+    parser::ast::DatatypeName,
     shared::{unique_map::UniqueMap, *},
     typing::ast as T,
 };
@@ -16,33 +16,33 @@ use petgraph::{algo::tarjan_scc as petgraph_scc, graphmap::DiGraphMap};
 use std::collections::BTreeMap;
 
 struct Context {
-    struct_neighbors: BTreeMap<StructName, BTreeMap<StructName, Loc>>,
+    datatype_neighbors: BTreeMap<DatatypeName, BTreeMap<DatatypeName, Loc>>,
     current_module: ModuleIdent,
-    current_struct: Option<StructName>,
+    current_datatype: Option<DatatypeName>,
 }
 
 impl Context {
     fn new(current_module: ModuleIdent) -> Self {
         Context {
             current_module,
-            struct_neighbors: BTreeMap::new(),
-            current_struct: None,
+            datatype_neighbors: BTreeMap::new(),
+            current_datatype: None,
         }
     }
 
-    fn add_usage(&mut self, loc: Loc, module: &ModuleIdent, sname: &StructName) {
+    fn add_usage(&mut self, loc: Loc, module: &ModuleIdent, sname: &DatatypeName) {
         if &self.current_module != module {
             return;
         }
-        self.struct_neighbors
-            .entry(self.current_struct.unwrap())
+        self.datatype_neighbors
+            .entry(self.current_datatype.unwrap())
             .or_default()
             .insert(*sname, loc);
     }
 
-    fn struct_graph(&self) -> DiGraphMap<&StructName, ()> {
+    fn datatype_graph(&self) -> DiGraphMap<&DatatypeName, ()> {
         let edges = self
-            .struct_neighbors
+            .datatype_neighbors
             .iter()
             .flat_map(|(parent, children)| children.iter().map(move |(child, _)| (parent, child)));
         DiGraphMap::from_edges(edges)
@@ -68,7 +68,11 @@ fn module(compilation_env: &mut CompilationEnv, mname: ModuleIdent, module: &T::
         .structs
         .key_cloned_iter()
         .for_each(|(sname, sdef)| struct_def(context, sname, sdef));
-    let graph = context.struct_graph();
+    module
+        .enums
+        .key_cloned_iter()
+        .for_each(|(ename, edef)| enum_def(context, ename, edef));
+    let graph = context.datatype_graph();
     // - get the strongly connected components
     // - filter out single nodes that do not connect to themselves
     // - report those cycles
@@ -78,19 +82,36 @@ fn module(compilation_env: &mut CompilationEnv, mname: ModuleIdent, module: &T::
         .for_each(|scc| compilation_env.add_diag(cycle_error(context, &graph, scc[0])))
 }
 
-fn struct_def(context: &mut Context, sname: StructName, sdef: &N::StructDefinition) {
+fn struct_def(context: &mut Context, sname: DatatypeName, sdef: &N::StructDefinition) {
     assert!(
-        context.current_struct.is_none(),
-        "ICE struct name not unset"
+        context.current_datatype.is_none(),
+        "ICE datatype name not unset"
     );
-    context.current_struct = Some(sname);
+    context.current_datatype = Some(sname);
     match &sdef.fields {
         N::StructFields::Native(_) => (),
         N::StructFields::Defined(fields) => {
             fields.iter().for_each(|(_, _, (_, ty))| type_(context, ty))
         }
     };
-    context.current_struct = None;
+    context.current_datatype = None;
+}
+
+fn enum_def(context: &mut Context, ename: DatatypeName, edef: &N::EnumDefinition) {
+    assert!(
+        context.current_datatype.is_none(),
+        "ICE datatype name not unset"
+    );
+    context.current_datatype = Some(ename);
+    for (_, _, vdef) in &edef.variants {
+        match &vdef.fields {
+            N::VariantFields::Empty => (),
+            N::VariantFields::Defined(fields) => {
+                fields.iter().for_each(|(_, _, (_, ty))| type_(context, ty))
+            }
+        }
+    }
+    context.current_datatype = None;
 }
 
 fn type_(context: &mut Context, sp!(loc, ty_): &N::Type) {
@@ -110,8 +131,8 @@ fn type_(context: &mut Context, sp!(loc, ty_): &N::Type) {
 
 fn cycle_error(
     context: &Context,
-    graph: &DiGraphMap<&StructName, ()>,
-    cycle_node: &StructName,
+    graph: &DiGraphMap<&DatatypeName, ()>,
+    cycle_node: &DatatypeName,
 ) -> Diagnostic {
     let cycle = shortest_cycle(graph, cycle_node);
 
@@ -135,9 +156,9 @@ fn cycle_error(
 
 fn best_cycle_loc<'a>(
     context: &'a Context,
-    cycle: Vec<&'a StructName>,
-) -> (Loc, &'a StructName, &'a StructName) {
-    let get_loc = |user, used| context.struct_neighbors[user][used];
+    cycle: Vec<&'a DatatypeName>,
+) -> (Loc, &'a DatatypeName, &'a DatatypeName) {
+    let get_loc = |user, used| context.datatype_neighbors[user][used];
     let len = cycle.len();
     match len {
         1 => (get_loc(cycle[0], cycle[0]), cycle[0], cycle[0]),

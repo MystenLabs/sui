@@ -26,5 +26,5 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/use_struct_overlap_with_module.move:8:27
   │
 8 │     struct A { f1: X, f2: X::S }
-  │                           ^ Expected a module or address in this position, not a module member
+  │                           ^^^^ Unexpected variant. A variant identifier is not a valid type
 

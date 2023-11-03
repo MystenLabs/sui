@@ -68,7 +68,8 @@ impl WrappingFieldInfo {
 }
 
 /// Structs (per-module) that have fields wrapping other objects.
-type WrappingFields = BTreeMap<E::ModuleIdent, BTreeMap<P::StructName, Option<WrappingFieldInfo>>>;
+type WrappingFields =
+    BTreeMap<E::ModuleIdent, BTreeMap<P::DatatypeName, Option<WrappingFieldInfo>>>;
 
 pub struct FreezeWrappedVisitor;
 
@@ -199,7 +200,7 @@ impl<'a> Context<'a> {
     fn find_wrapping_field_loc(
         &mut self,
         mident: E::ModuleIdent,
-        sname: P::StructName,
+        sname: P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
         let memoized_info = self
             .wrapping_fields
@@ -222,7 +223,7 @@ impl<'a> Context<'a> {
     fn find_wrapping_field_loc_impl(
         &mut self,
         mident: E::ModuleIdent,
-        sname: P::StructName,
+        sname: P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
         let sdef = self.program_info.struct_definition(&mident, &sname);
         let N::StructFields::Defined(sfields) = &sdef.fields else {

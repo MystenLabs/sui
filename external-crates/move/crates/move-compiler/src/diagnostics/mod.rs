@@ -182,9 +182,13 @@ fn render_diagnostics(
 
 fn convert_loc(file_mapping: &FileMapping, loc: Loc) -> (FileId, Range<usize>) {
     let fname = loc.file_hash();
-    let id = *file_mapping.get(&fname).unwrap();
-    let range = loc.usize_range();
-    (id, range)
+    if let Some(id) = file_mapping.get(&fname) {
+        let range = loc.usize_range();
+        (*id, range)
+    } else {
+        let msg = format!("ICE Couldn't find filename hash {:?} in mapping", fname);
+        panic!("{}", msg);
+    }
 }
 
 fn render_diagnostic(
@@ -689,5 +693,32 @@ impl AstDebug for WarningFilters {
 impl<C: DiagnosticCode> From<C> for DiagnosticInfo {
     fn from(value: C) -> Self {
         value.into_info()
+    }
+}
+
+//**************************************************************************************************
+// String Construction Helpers
+//**************************************************************************************************
+
+pub fn and_list_string(input: Vec<String>) -> String {
+    comma_list_string(input, "and".to_string())
+}
+
+pub fn or_list_string(input: Vec<String>) -> String {
+    comma_list_string(input, "or".to_string())
+}
+
+pub fn comma_list_string(mut input: Vec<String>, separator_word: String) -> String {
+    assert!(!input.is_empty());
+    if input.len() == 1 {
+        input.pop().unwrap()
+    } else if input.len() == 2 {
+        let last = input.pop().unwrap();
+        let first = input.pop().unwrap();
+        format!("{} {} {}", first, separator_word, last)
+    } else {
+        let last = format!("{} {}", separator_word, input.pop().unwrap());
+        input.push(last);
+        input.join(", ")
     }
 }

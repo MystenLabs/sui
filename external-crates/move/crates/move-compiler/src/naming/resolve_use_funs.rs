@@ -321,6 +321,16 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
+        N::Exp_::Match(esubject, arms) => {
+            // TODO: account for and remove unused pattern bindings
+            exp(context, esubject);
+            for arm in &mut arms.value {
+                if let Some(guard) = arm.value.guard.as_mut() {
+                    exp(context, guard)
+                }
+                exp(context, &mut arm.value.rhs);
+            }
+        }
         N::Exp_::While(econd, _, ebody) => {
             exp(context, econd);
             exp(context, ebody)
@@ -336,6 +346,11 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, er)
         }
         N::Exp_::Pack(_, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
             for (_, _, (_, e)) in fields {
                 exp(context, e)
             }

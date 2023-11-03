@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/guard_binders.move:19:32
+   │
+19 │             Option::Some(n) if n == &5 => *n,
+   │                                ^
+   │                                │
+   │                                Unexpected 'n'
+   │                                Expected '('
+

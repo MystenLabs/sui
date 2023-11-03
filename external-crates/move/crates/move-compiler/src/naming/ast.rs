@@ -10,8 +10,8 @@ use crate::{
         Visibility,
     },
     parser::ast::{
-        Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
-        ENTRY_MODIFIER,
+        Ability_, BinOp, ConstantName, DatatypeName, Field, FunctionName, Mutability, UnaryOp,
+        VariantName, ENTRY_MODIFIER,
     },
     shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
@@ -92,14 +92,21 @@ pub struct ModuleDefinition {
     pub is_source_module: bool,
     pub use_funs: UseFuns,
     pub friends: UniqueMap<ModuleIdent, Friend>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
+    pub structs: UniqueMap<DatatypeName, StructDefinition>,
+    pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
 }
 
 //**************************************************************************************************
-// Structs
+// Data Types
 //**************************************************************************************************
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DatatypeTypeParameter {
+    pub param: TParam,
+    pub is_phantom: bool,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StructDefinition {
@@ -108,20 +115,39 @@ pub struct StructDefinition {
     pub index: usize,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
     pub fields: StructFields,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StructTypeParameter {
-    pub param: TParam,
-    pub is_phantom: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StructFields {
     Defined(Fields<Type>),
     Native(Loc),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDefinition {
+    pub warning_filter: WarningFilters,
+    // index in the original order as defined in the source file
+    pub index: usize,
+    pub attributes: Attributes,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
+    pub variants: UniqueMap<VariantName, VariantDefinition>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariantDefinition {
+    // index in the original order as defined in the source file
+    pub index: usize,
+    pub loc: Loc,
+    pub fields: VariantFields,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VariantFields {
+    Defined(Fields<Type>),
+    Empty,
 }
 
 //**************************************************************************************************
@@ -204,7 +230,7 @@ pub enum TypeName_ {
     // exp-list/tuple type
     Multiple(usize),
     Builtin(BuiltinTypeName),
-    ModuleType(ModuleIdent, StructName),
+    ModuleType(ModuleIdent, DatatypeName),
 }
 pub type TypeName = Spanned<TypeName_>;
 
@@ -258,7 +284,7 @@ pub enum LValue_ {
         var: Var,
         unused_binding: bool,
     },
-    Unpack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<LValue>),
+    Unpack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<LValue>),
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -297,6 +323,7 @@ pub enum Exp_ {
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     While(Box<Exp>, BlockLabel, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     NamedBlock(BlockLabel, Sequence),
@@ -315,7 +342,14 @@ pub enum Exp_ {
     UnaryExp(UnaryOp, Box<Exp>),
     BinopExp(Box<Exp>, BinOp, Box<Exp>),
 
-    Pack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<Exp>),
+    Pack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<Exp>),
+    PackVariant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Option<Vec<Type>>,
+        Fields<Exp>,
+    ),
     ExpList(Vec<Exp>),
     Unit {
         trailing: bool,
@@ -338,6 +372,37 @@ pub enum SequenceItem_ {
     Bind(LValueList, Exp),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm_ {
+    pub pattern: MatchPattern,
+    pub binders: Vec<Var>,
+    pub guard: Option<Box<Exp>>,
+    pub guard_binders: UniqueMap<Var, Var>, // pattern binder name -> guard var name
+    pub rhs_binders: BTreeSet<Var>,         // pattern binders used in the right-hand side
+    pub rhs: Box<Exp>,
+}
+
+pub type MatchArm = Spanned<MatchArm_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchPattern_ {
+    Constructor(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Binder(Var),
+    Literal(Value),
+    Wildcard,
+    Or(Box<MatchPattern>, Box<MatchPattern>),
+    At(Var, Box<MatchPattern>),
+    ErrorPat,
+}
+
+pub type MatchPattern = Spanned<MatchPattern_>;
 
 //**************************************************************************************************
 // traits
@@ -541,6 +606,12 @@ impl TypeName_ {
             }
         }
     }
+    pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
+        match self {
+            TypeName_::Builtin(_) | TypeName_::Multiple(_) => None,
+            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
+        }
+    }
 }
 
 impl Type_ {
@@ -627,10 +698,26 @@ impl Type_ {
         }
     }
 
+    pub fn unfold_to_builtin_type_name(&self) -> Option<&BuiltinTypeName> {
+        match self {
+            Type_::Apply(_, sp!(_, TypeName_::Builtin(b)), _) => Some(b),
+            Type_::Ref(_, inner) => return inner.value.unfold_to_builtin_type_name(),
+            _ => None,
+        }
+    }
+
     pub fn unfold_to_type_name(&self) -> Option<&TypeName> {
         match self {
             Type_::Apply(_, tn, _) => Some(tn),
             Type_::Ref(_, inner) => return inner.value.unfold_to_type_name(),
+            _ => None,
+        }
+    }
+
+    pub fn type_arguments(&self) -> Option<&Vec<Type>> {
+        match self {
+            Type_::Apply(_, _, tyargs) => Some(tyargs),
+            Type_::Ref(_, inner) => return inner.value.type_arguments(),
             _ => None,
         }
     }
@@ -830,6 +917,7 @@ impl AstDebug for ModuleDefinition {
             use_funs,
             friends,
             structs,
+            enums,
             constants,
             functions,
         } = self;
@@ -852,6 +940,10 @@ impl AstDebug for ModuleDefinition {
             sdef.ast_debug(w);
             w.new_line();
         }
+        for edef in enums.key_cloned_iter() {
+            edef.ast_debug(w);
+            w.new_line();
+        }
         for cdef in constants.key_cloned_iter() {
             cdef.ast_debug(w);
             w.new_line();
@@ -863,7 +955,7 @@ impl AstDebug for ModuleDefinition {
     }
 }
 
-impl AstDebug for (StructName, &StructDefinition) {
+impl AstDebug for (DatatypeName, &StructDefinition) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (
             name,
@@ -893,6 +985,59 @@ impl AstDebug for (StructName, &StructDefinition) {
                     true
                 })
             })
+        }
+    }
+}
+
+impl AstDebug for (DatatypeName, &EnumDefinition) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (
+            name,
+            EnumDefinition {
+                index,
+                attributes,
+                abilities,
+                type_parameters,
+                variants,
+                warning_filter,
+            },
+        ) = self;
+        warning_filter.ast_debug(w);
+        attributes.ast_debug(w);
+
+        w.write(&format!("enum#{index} {name}"));
+        type_parameters.ast_debug(w);
+        ability_modifiers_ast_debug(w, abilities);
+        w.block(|w| {
+            for variant in variants.key_cloned_iter() {
+                variant.ast_debug(w);
+            }
+        });
+    }
+}
+
+impl AstDebug for (VariantName, &VariantDefinition) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (
+            name,
+            VariantDefinition {
+                index,
+                fields,
+                loc: _,
+            },
+        ) = self;
+
+        w.write(&format!("variant#{index} {name}"));
+        match fields {
+            VariantFields::Defined(fields) => w.block(|w| {
+                w.list(fields, ",", |w, (_, f, idx_st)| {
+                    let (idx, st) = idx_st;
+                    w.write(&format!("{}#{}: ", idx, f));
+                    st.ast_debug(w);
+                    true
+                });
+            }),
+            VariantFields::Empty => (),
         }
     }
 }
@@ -989,7 +1134,7 @@ impl AstDebug for Vec<TParam> {
     }
 }
 
-impl AstDebug for Vec<StructTypeParameter> {
+impl AstDebug for Vec<DatatypeTypeParameter> {
     fn ast_debug(&self, w: &mut AstWriter) {
         if !self.is_empty() {
             w.write("<");
@@ -1050,7 +1195,7 @@ impl AstDebug for TParam {
     }
 }
 
-impl AstDebug for StructTypeParameter {
+impl AstDebug for DatatypeTypeParameter {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self { is_phantom, param } = self;
         if *is_phantom {
@@ -1218,6 +1363,21 @@ impl AstDebug for Exp_ {
                 });
                 w.write("}");
             }
+            E::PackVariant(m, e, v, tys_opt, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_e)| {
+                    let (idx, e) = idx_e;
+                    w.write(&format!("{}#{}: ", idx, f));
+                    e.ast_debug(w);
+                });
+                w.write("}");
+            }
             E::IfElse(b, t, f) => {
                 w.write("if (");
                 b.ast_debug(w);
@@ -1226,8 +1386,27 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
+            E::Match(subject, arms) => {
+                w.write("match (");
+                subject.ast_debug(w);
+                w.write(") ");
+                w.block(|w| {
+                    if let Some(arm) = arms.value.first() {
+                        arm.ast_debug(w)
+                    };
+                    w.write(",");
+                    if arms.value.len() > 1 {
+                        w.comma(arms.value.iter().skip(1), |w, a| {
+                            w.write("\n    ");
+                            a.ast_debug(w);
+                        })
+                    }
+                });
+            }
             E::While(b, name, e) => {
                 w.write("while ");
+                w.write("while @");
+                name.ast_debug(w);
                 w.write(" (");
                 b.ast_debug(w);
                 w.write(") ");
@@ -1359,6 +1538,61 @@ impl AstDebug for ExpDotted_ {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
             }
+        }
+    }
+}
+
+impl AstDebug for MatchArm_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let MatchArm_ {
+            pattern,
+            binders: _,
+            guard,
+            guard_binders: _,
+            rhs_binders: _,
+            rhs,
+        } = self;
+        pattern.ast_debug(w);
+        if let Some(exp) = guard.as_ref() {
+            w.write(" if ");
+            exp.ast_debug(w);
+        }
+        w.write(" => ");
+        rhs.ast_debug(w);
+    }
+}
+
+impl AstDebug for MatchPattern_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use MatchPattern_::*;
+        match self {
+            Constructor(mident, enum_, variant, tys_opt, fields) => {
+                w.write(format!("{}::{}::{}", mident, enum_, variant));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Binder(name) => name.ast_debug(w),
+            Literal(v) => v.ast_debug(w),
+            Wildcard => w.write("_"),
+            Or(lhs, rhs) => {
+                lhs.ast_debug(w);
+                w.write(" | ");
+                rhs.ast_debug(w);
+            }
+            At(x, pat) => {
+                x.ast_debug(w);
+                w.write("@");
+                pat.ast_debug(w);
+            }
+            ErrorPat => w.write("#err"),
         }
     }
 }

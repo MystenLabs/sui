@@ -18,7 +18,7 @@ use crate::{
     editions::Flavor,
     expansion::ast::AbilitySet,
     hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
-    parser::ast::{Ability_, StructName},
+    parser::ast::{Ability_, DatatypeName},
     shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
@@ -63,7 +63,7 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
 
 pub struct IDLeakVerifier;
 pub struct IDLeakVerifierAI<'a> {
-    declared_abilities: &'a UniqueMap<StructName, AbilitySet>,
+    declared_abilities: &'a UniqueMap<DatatypeName, AbilitySet>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -118,7 +118,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             }
         }
 
-        let declared_abilities = context.struct_declared_abilities.get(module).unwrap();
+        let declared_abilities = context.datatype_declared_abilities.get(module).unwrap();
         Some(IDLeakVerifierAI { declared_abilities })
     }
 }

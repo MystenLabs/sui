@@ -122,6 +122,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 );
                 (Some(module_name), self.symbol_pool().make(n.value.as_str()))
             }
+            EA::ModuleAccess_::Variant(..) => panic!("Variants are not supported by move model."),
         }
     }
 
@@ -216,6 +217,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                                 self.symbol_pool().make(n.value.as_str()),
                             )
                         }
+                        EA::ModuleAccess_::Variant(..) => {
+                            panic!("Variants are not supported by move model.")
+                        }
                     },
                 };
                 Attribute::Assign(node_id, self.symbol_pool().make(n.value.as_str()), v)
@@ -270,7 +274,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             .define_const(qsym, ConstEntry { loc, ty, value });
     }
 
-    fn decl_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let struct_id = StructId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
@@ -335,7 +339,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 /// ## Struct Definition Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    fn def_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn def_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let type_params = self
             .parent
@@ -458,10 +462,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
                     // This is a pseudo script module, which has exactly one function. Determine
                     // the name of this function.
-                    self.parent.fun_table.iter().filter_map(|(k, _)| {
+                    self.parent.fun_table.iter().find_map(|(k, _)| {
                         if k.module_name == self.module_name
                         { Some(k.symbol) } else { None }
-                    }).next().expect("unexpected script with multiple or no functions")
+                    }).expect("unexpected script with multiple or no functions")
                 } else {
                     self.symbol_pool().make(name_str)
                 };

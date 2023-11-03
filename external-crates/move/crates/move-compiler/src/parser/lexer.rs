@@ -46,6 +46,7 @@ pub enum Tok {
     LessLess,
     Equal,
     EqualEqual,
+    EqualGreater,
     EqualEqualGreater,
     LessEqualEqualGreater,
     Greater,
@@ -122,11 +123,12 @@ impl fmt::Display for Tok {
             Semicolon => ";",
             Less => "<",
             LessEqual => "<=",
-            LessLess => "<<",
             Equal => "=",
             EqualEqual => "==",
             EqualEqualGreater => "==>",
+            EqualGreater => "==>",
             LessEqualEqualGreater => "<==>",
+            LessLess => "<<",
             Greater => ">",
             GreaterEqual => ">=",
             GreaterGreater => ">>",
@@ -566,7 +568,9 @@ fn find_token(
             }
         }
         '=' => {
-            if text.starts_with("==>") {
+            if text.starts_with("=>") && edition.supports(FeatureGate::Enums) {
+                (Tok::EqualGreater, 2)
+            } else if text.starts_with("==>") {
                 (Tok::EqualEqualGreater, 3)
             } else if text.starts_with("==") {
                 (Tok::EqualEqual, 2)

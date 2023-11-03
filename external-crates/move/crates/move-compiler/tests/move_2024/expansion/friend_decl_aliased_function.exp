@@ -2,5 +2,5 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/friend_decl_aliased_function.move:8:12
   │
 8 │     friend a;
-  │            ^ Unexpected module member identifier. A module member identifier is not a valid module
+  │            ^ Unexpected module member. A module member identifier is not a valid module
 

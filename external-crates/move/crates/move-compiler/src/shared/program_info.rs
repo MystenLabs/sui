@@ -9,9 +9,10 @@ use move_symbol_pool::Symbol;
 use crate::{
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
-        self as N, FunctionSignature, ResolvedUseFuns, StructDefinition, StructTypeParameter, Type,
+        self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
+        StructDefinition, Type,
     },
-    parser::ast::{ConstantName, FunctionName, StructName},
+    parser::ast::{ConstantName, DatatypeName, FunctionName},
     shared::unique_map::UniqueMap,
     shared::*,
     typing::ast::{self as T},
@@ -40,9 +41,16 @@ pub struct ModuleInfo {
     pub package: Option<Symbol>,
     pub use_funs: ResolvedUseFuns,
     pub friends: UniqueMap<ModuleIdent, Loc>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
+    pub structs: UniqueMap<DatatypeName, StructDefinition>,
+    pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DatatypeKind {
+    Struct,
+    Enum,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +65,7 @@ macro_rules! program_info {
         let all_modules = $prog.modules.key_cloned_iter();
         let mut modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
             let structs = mdef.structs.clone();
+            let enums = mdef.enums.clone();
             let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
                 attributes: fdef.attributes.clone(),
                 defined_loc: fname.loc(),
@@ -79,6 +88,7 @@ macro_rules! program_info {
                 use_funs,
                 friends: mdef.friends.ref_map(|_, friend| friend.loc),
                 structs,
+                enums,
                 functions,
                 constants,
             };
@@ -122,7 +132,7 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
             .expect("ICE should have failed in naming")
     }
 
-    pub fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
+    pub fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
         let minfo = self.module(m);
         minfo
             .structs
@@ -130,11 +140,11 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
             .expect("ICE should have failed in naming")
     }
 
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
+    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
         &self.struct_definition(m, n).abilities
     }
 
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
+    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
         self.struct_declared_loc_(m, &n.0.value)
     }
 
@@ -149,9 +159,52 @@ impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
     pub fn struct_type_parameters(
         &self,
         m: &ModuleIdent,
-        n: &StructName,
-    ) -> &Vec<StructTypeParameter> {
+        n: &DatatypeName,
+    ) -> &Vec<DatatypeTypeParameter> {
         &self.struct_definition(m, n).type_parameters
+    }
+
+    pub fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
+        let minfo = self.module(m);
+        minfo
+            .enums
+            .get(n)
+            .expect("ICE should have failed in naming")
+    }
+
+    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        &self.enum_definition(m, n).abilities
+    }
+
+    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.enum_declared_loc_(m, &n.0.value)
+    }
+
+    pub fn enum_declared_loc_(&self, m: &ModuleIdent, n: &Symbol) -> Loc {
+        let minfo = self.module(m);
+        *minfo
+            .enums
+            .get_loc_(n)
+            .expect("ICE should have failed in naming")
+    }
+
+    pub fn enum_type_parameters(
+        &self,
+        m: &ModuleIdent,
+        n: &DatatypeName,
+    ) -> &Vec<DatatypeTypeParameter> {
+        &self.enum_definition(m, n).type_parameters
+    }
+
+    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
+        match (
+            self.module(m).structs.contains_key(n),
+            self.module(m).enums.contains_key(n),
+        ) {
+            (true, false) => DatatypeKind::Struct,
+            (false, true) => DatatypeKind::Enum,
+            (false, false) | (true, true) => panic!("ICE should have failed in naming"),
+        }
     }
 
     pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {

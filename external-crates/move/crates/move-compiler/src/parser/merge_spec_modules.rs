@@ -42,6 +42,7 @@ pub fn program(compilation_env: &mut CompilationEnv, prog: Program) -> Program {
                     (f.loc, "functions not allowed in specification module")
                 }
                 ModuleMember::Struct(s) => (s.loc, "structs not allowed in specification module"),
+                ModuleMember::Enum(e) => (e.loc, "enums not allowed in specification module"),
                 ModuleMember::Constant(c) => {
                     (c.loc, "constants not allowed in specification module")
                 }

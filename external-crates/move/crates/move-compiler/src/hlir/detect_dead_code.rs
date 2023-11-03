@@ -320,6 +320,26 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 _ => None,
             }
         }
+        E::Match(subject, arms) => {
+            if let Some(test_control_flow) = value(context, subject) {
+                context.report_value_error(test_control_flow);
+                return None;
+            };
+            let arm_somes = arms
+                .value
+                .iter()
+                .map(|sp!(_, arm)| tail(context, &arm.rhs))
+                .collect::<Vec<_>>();
+            if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
+                for arm_opt in arm_somes {
+                    let sp!(aloc, arm_error) = arm_opt.unwrap();
+                    context.report_tail_error(sp(aloc, arm_error))
+                }
+            }
+            None
+        }
+        E::VariantMatch(..) => panic!("ICE should not have a variant match in this position."),
+
         // Whiles and loops Loops are currently moved to statement position
         E::While(_, _, _) | E::Loop { .. } => statement(context, e),
         E::NamedBlock(name, seq) => {
@@ -410,6 +430,25 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
             None
         }
+        E::Match(subject, arms) => {
+            if let Some(test_control_flow) = value(context, subject) {
+                context.report_value_error(test_control_flow);
+                return None;
+            };
+            let arm_somes = arms
+                .value
+                .iter()
+                .map(|sp!(_, arm)| value(context, &arm.rhs))
+                .collect::<Vec<_>>();
+            if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
+                for arm_opt in arm_somes {
+                    let sp!(aloc, arm_error) = arm_opt.unwrap();
+                    context.report_value_error(sp(aloc, arm_error))
+                }
+            }
+            None
+        }
+        E::VariantMatch(..) => panic!("ICE should not have a variant match in this position."),
         E::While(..) | E::Loop { .. } => statement(context, e),
         E::NamedBlock(name, seq) => {
             // a named block in value position checks if the body exits that block; if so, at least
@@ -431,6 +470,10 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::Builtin(_, args) | E::Vector(_, _, _, args) => value_report!(args),
 
         E::Pack(_, _, _, fields) => fields
+            .iter()
+            .find_map(|(_, _, (_, (_, field_exp)))| value_report!(field_exp)),
+
+        E::PackVariant(_, _, _, _, fields) => fields
             .iter()
             .find_map(|(_, _, (_, (_, field_exp)))| value_report!(field_exp)),
 
@@ -535,6 +578,29 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 }
             }
         }
+        E::Match(subject, arms) => {
+            if let Some(test_control_flow) = value(context, subject) {
+                context.report_value_error(test_control_flow);
+                for sp!(_, arm) in arms.value.iter() {
+                    statement(context, &arm.rhs);
+                }
+                already_reported(*eloc)
+            } else {
+                // if the test was okay but all arms both diverged, we need to report that for the
+                // purpose of trailing semicolons.
+                let arm_somes = arms
+                    .value
+                    .iter()
+                    .map(|sp!(_, arm)| statement(context, &arm.rhs))
+                    .collect::<Vec<_>>();
+                if arm_somes.iter().all(|arm_opt| arm_opt.is_some()) {
+                    divergent(*eloc)
+                } else {
+                    None
+                }
+            }
+        }
+        E::VariantMatch(..) => panic!("ICE should not have a variant match in this position."),
 
         E::While(test, _, body) => {
             if let Some(test_control_flow) = value(context, test) {
@@ -622,6 +688,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::UnaryExp(_, _)
         | E::BinopExp(_, _, _, _)
         | E::Pack(_, _, _, _)
+        | E::PackVariant(_, _, _, _, _)
         | E::ExpList(_)
         | E::Borrow(_, _, _)
         | E::TempBorrow(_, _)

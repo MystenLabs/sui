@@ -2,7 +2,7 @@ error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/expansion/module_alias_as_type.move:7:16
   │
 7 │     fun foo(x: X) { x; }
-  │                ^ Unexpected module identifier. A module identifier is not a valid type
+  │                ^ Unexpected module. A module identifier is not a valid type
   │
   = Resolved 'X' to module identifier '0x2::X'
 

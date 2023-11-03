@@ -1,0 +1,12 @@
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/parser/match.move:53:16
+   │
+23 │     public enum Option<T> {
+   │                 ------ To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+51 │     public fun option_default<T: drop>(o: Option<T>, default: T): Option<T> {
+   │                                           --------- The type '0x42::m::Option<T>' does not have the ability 'drop'
+52 │        match (o) {
+53 │          x @ _ => x,
+   │                ^^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values
+
