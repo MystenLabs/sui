@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Implements a soul-bound primitive for objects. Unlike a typical Soulbound
+/// concept used with accounts, the object bound can not be directly referenced
+/// or mutated by its object owner.
+///
+/// To bypass the limitation with object, the "Transfer To Object" feature is
+/// used to receive and then send the object back to its object-owner.
 module obo::object_bound {
     use std::option::{Self, Option};
     use sui::tx_context::TxContext;
