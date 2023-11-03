@@ -31,6 +31,7 @@ pub enum FeatureGate {
     PublicPackage,
     PostFixAbilities,
     StructTypeVisibility,
+    Enums,
     DotCall,
     PositionalFields,
     LetMut,
@@ -58,17 +59,40 @@ pub const UPGRADE_NOTE: &str =
 // Entry
 //**************************************************************************************************
 
+/// Returns true if the feature is present in the given edition.
+/// Adds an error to the environment.
 pub fn check_feature_or_error(
     env: &mut CompilationEnv,
     edition: Edition,
     feature: FeatureGate,
     loc: Loc,
 ) -> bool {
+    if let Some(msg) = feature_edition_error_msg(edition, feature) {
+        let mut diag = diag!(Editions::FeatureTooNew, (loc, msg));
+        diag.add_note(UPGRADE_NOTE);
+        env.add_diag(diag);
+        false
+    } else {
+        true
+    }
+}
+
+pub fn feature_edition_error_msg(edition: Edition, feature: FeatureGate) -> Option<String> {
     let supports_feature = edition.supports(feature);
     if !supports_feature {
-        env.add_diag(create_feature_error(edition, feature, loc));
+        let valid_editions = valid_editions_for_feature(feature)
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(format!(
+            "{} not supported by current edition '{edition}', \
+                    only '{valid_editions}' support this feature",
+            feature.error_prefix(),
+        ))
+    } else {
+        None
     }
-    supports_feature
 }
 
 pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
@@ -113,6 +137,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
+    FeatureGate::Enums,
     FeatureGate::DotCall,
     FeatureGate::PositionalFields,
     FeatureGate::LetMut,
@@ -207,6 +232,7 @@ impl FeatureGate {
             FeatureGate::PublicPackage => "'public(package)' is",
             FeatureGate::PostFixAbilities => "Postfix abilities are",
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
+            FeatureGate::Enums => "Enums are",
             FeatureGate::DotCall => "Method syntax is",
             FeatureGate::PositionalFields => "Positional fields are",
             FeatureGate::LetMut => "'mut' variable modifiers are",

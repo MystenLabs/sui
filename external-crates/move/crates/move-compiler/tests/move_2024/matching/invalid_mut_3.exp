@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/invalid_mut_3.move:11:28
+   │
+11 │             mut Maybe::Just(_) => (),
+   │                            ^
+   │                            │
+   │                            Unexpected '('
+   │                            Expected '=>'
+

@@ -203,9 +203,11 @@ fn render_diagnostics(
 
 fn convert_loc(file_mapping: &FileMapping, loc: Loc) -> (FileId, Range<usize>) {
     let fname = loc.file_hash();
-    let id = *file_mapping.get(&fname).unwrap();
+    let id = file_mapping
+        .get(&fname)
+        .unwrap_or_else(|| panic!("ICE Couldn't find filename hash {:?} in mapping", fname));
     let range = loc.usize_range();
-    (id, range)
+    (*id, range)
 }
 
 fn render_diagnostic(

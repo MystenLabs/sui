@@ -123,7 +123,8 @@ mod count {
             C::Return { exp: e, .. }
             | C::Abort(e)
             | C::IgnoreAndPop { exp: e, .. }
-            | C::JumpIf { cond: e, .. } => exp(context, e),
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => exp(context, e),
 
             C::Jump { .. } => (),
             C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
@@ -140,7 +141,7 @@ mod count {
     fn lvalue(context: &mut Context, sp!(_, l_): &LValue, substitutable: bool) {
         use LValue_ as L;
         match l_ {
-            L::Ignore | L::Unpack(_, _, _) => (),
+            L::Ignore | L::Unpack(_, _, _) | L::UnpackVariant(..) => (),
             L::Var(v, _) => context.assign(v, substitutable),
         }
     }
@@ -177,6 +178,8 @@ mod count {
             }
 
             E::Pack(_, _, fields) => fields.iter().for_each(|(_, _, e)| exp(context, e)),
+
+            E::PackVariant(_, _, _, fields) => fields.iter().for_each(|(_, _, e)| exp(context, e)),
 
             E::Multiple(es) => es.iter().for_each(|e| exp(context, e)),
 
@@ -215,6 +218,9 @@ mod count {
             }
             E::Multiple(es) => es.iter().all(can_subst_exp_single),
             E::Pack(_, _, fields) => fields.iter().all(|(_, _, e)| can_subst_exp_single(e)),
+            E::PackVariant(_, _, _, fields) => {
+                fields.iter().all(|(_, _, e)| can_subst_exp_single(e))
+            }
             E::Vector(_, _, _, eargs) => eargs.iter().all(can_subst_exp_single),
 
             E::Unreachable => panic!("ICE should not analyze dead code"),
@@ -286,7 +292,8 @@ mod eliminate {
             C::Return { exp: e, .. }
             | C::Abort(e)
             | C::IgnoreAndPop { exp: e, .. }
-            | C::JumpIf { cond: e, .. } => exp(context, e),
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => exp(context, e),
 
             C::Jump { .. } => (),
             C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
@@ -314,7 +321,7 @@ mod eliminate {
     fn lvalue(context: &mut Context, sp!(loc, l_): LValue) -> LRes {
         use LValue_ as L;
         match l_ {
-            l_ @ L::Ignore | l_ @ L::Unpack(_, _, _) => LRes::Same(sp(loc, l_)),
+            l_ @ (L::Ignore | L::Unpack(_, _, _) | L::UnpackVariant(..)) => LRes::Same(sp(loc, l_)),
             L::Var(v, t) => {
                 let contained = context.ssa_temps.remove(&v);
                 if contained {
@@ -363,6 +370,10 @@ mod eliminate {
             }
 
             E::Pack(_, _, fields) => fields.iter_mut().for_each(|(_, _, e)| exp(context, e)),
+
+            E::PackVariant(_, _, _, fields) => {
+                fields.iter_mut().for_each(|(_, _, e)| exp(context, e))
+            }
 
             E::Multiple(es) => es.iter_mut().for_each(|e| exp(context, e)),
 

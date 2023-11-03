@@ -59,6 +59,14 @@ pub trait FilterContext {
         }
     }
 
+    fn filter_map_enum(&mut self, enum_def: P::EnumDefinition) -> Option<P::EnumDefinition> {
+        if self.should_remove_by_attributes(&enum_def.attributes) {
+            None
+        } else {
+            Some(enum_def)
+        }
+    }
+
     fn filter_map_spec(&mut self, spec: P::SpecBlock_) -> Option<P::SpecBlock_> {
         if self.should_remove_by_attributes(&spec.attributes) {
             None
@@ -220,6 +228,7 @@ fn filter_module_member<T: FilterContext>(
     match module_member {
         PM::Function(func_def) => context.filter_map_function(func_def).map(PM::Function),
         PM::Struct(struct_def) => context.filter_map_struct(struct_def).map(PM::Struct),
+        PM::Enum(enum_def) => context.filter_map_enum(enum_def).map(PM::Enum),
         PM::Spec(sp!(spec_loc, spec)) => context
             .filter_map_spec(spec)
             .map(|new_spec| PM::Spec(sp(spec_loc, new_spec))),

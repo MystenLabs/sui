@@ -444,7 +444,7 @@ pub enum LValue_ {
 }
 pub type LValue = Spanned<LValue_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum UnpackType {
     ByValue,
     ByImmRef,
