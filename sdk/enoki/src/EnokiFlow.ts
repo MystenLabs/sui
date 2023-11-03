@@ -1,16 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { fromB64 } from '@mysten/sui.js/utils';
-import {
-	genAddressSeed,
-	generateNonce,
-	generateRandomness,
-	getExtendedEphemeralPublicKey,
-	jwtToAddress,
-} from '@mysten/zklogin';
+import { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 import { decodeJwt } from 'jose';
 import type { WritableAtom } from 'nanostores';
 import { allTasks, atom, onMount, onSet, task } from 'nanostores';
@@ -19,14 +12,12 @@ import type { Encryption } from './encryption.js';
 import { createDefaultEncryption } from './encryption.js';
 import type { EnokiClientConfig } from './EnokiClient.js';
 import { EnokiClient } from './EnokiClient.js';
-import type { Proof } from './EnokiKeypair.js';
 import { EnokiKeypair } from './EnokiKeypair.js';
 import { validateJWT } from './jwt.js';
 import type { AsyncStore } from './stores.js';
 import { createSessionStorage } from './stores.js';
 
 export interface EnokiFlowConfig extends EnokiClientConfig {
-	suiClient: SuiClient;
 	/**
 	 * The storage interface to persist Enoki data locally.
 	 * If not provided, it will use a sessionStorage-backed store.
@@ -47,11 +38,6 @@ export interface EnokiFlowConfig extends EnokiClientConfig {
 	 * If not provided, it will use your Enoki API key as an encryption key.
 	 */
 	encryptionKey?: string;
-	/**
-	 * The number of epochs beyond the current epoch that the generated proof should be
-	 * valid for. Defaults to 2.
-	 */
-	epochValidity?: number;
 }
 
 interface EnokiFlowState {
@@ -66,21 +52,16 @@ interface EnokiFlowState {
 		expiresAt: number;
 
 		jwt?: string;
-		addressSeed?: string;
-		proof?: Proof;
+		proof?: ZkLoginSignatureInputs;
 	};
 }
 
 export type AuthProvider = 'google' | 'facebook' | 'twitch';
 
-const MAX_EPOCH_VALIDITY = 2;
-const DEFAULT_EPOCH_VALIDITY = 2;
 const DEFAULT_STORAGE_KEY = '@enoki/flow';
 
 export class EnokiFlow {
-	#suiClient: SuiClient;
 	#enokiClient: EnokiClient;
-	#epochValidity: number;
 	#encryption: Encryption;
 	#encryptionKey: string;
 	#store: AsyncStore;
@@ -97,8 +78,6 @@ export class EnokiFlow {
 			apiKey: config.apiKey,
 			apiUrl: config.apiUrl,
 		});
-		this.#suiClient = config.suiClient;
-		this.#epochValidity = config.epochValidity ?? DEFAULT_EPOCH_VALIDITY;
 		this.#encryption = config.encryption ?? createDefaultEncryption();
 		this.#encryptionKey = config.encryptionKey ?? config.apiKey;
 		this.#store = config.store ?? createSessionStorage();
@@ -118,18 +97,10 @@ export class EnokiFlow {
 		onMount(this.$state, () => {
 			this.restore();
 		});
-
-		if (this.#epochValidity > MAX_EPOCH_VALIDITY) {
-			throw new Error(`You may only set the epoch validity to a maximum of ${MAX_EPOCH_VALIDITY}`);
-		}
 	}
 
 	get enokiClient() {
 		return this.#enokiClient;
-	}
-
-	get suiClient() {
-		return this.#suiClient;
 	}
 
 	// TODO: Probably name this better:
@@ -139,19 +110,11 @@ export class EnokiFlow {
 		redirectUrl: string,
 		extraParams?: Record<string, unknown>,
 	) {
-		const { epoch, epochDurationMs, epochStartTimestampMs } =
-			await this.#suiClient.getLatestSuiSystemState();
-
-		const epochEstimatedEndTimestamp = Number(epochStartTimestampMs) + Number(epochDurationMs);
-
-		// We mark this as expiring after the current epoch + the epoch validity.
-		const expiresAt =
-			Number(epochEstimatedEndTimestamp) + this.#epochValidity * Number(epochDurationMs);
-
 		const ephemeralKeyPair = new Ed25519Keypair();
-		const rawRandomness = generateRandomness();
-		const maxEpoch = Number(epoch) + this.#epochValidity;
-		const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, rawRandomness);
+		const { nonce, randomness, maxEpoch, estimatedExpiration } =
+			await this.#enokiClient.createNonce({
+				ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
+			});
 
 		const params = new URLSearchParams({
 			...extraParams,
@@ -194,9 +157,9 @@ export class EnokiFlow {
 		this.$state.set({
 			provider,
 			zkp: {
-				expiresAt,
+				expiresAt: estimatedExpiration,
 				maxEpoch,
-				randomness: String(rawRandomness),
+				randomness,
 				ephemeralKeyPair: ephemeralKeyPair.export().privateKey,
 			},
 		});
@@ -204,9 +167,6 @@ export class EnokiFlow {
 		// Allow the state to persist into stores before we redirect:
 		await allTasks();
 
-		// TODO: Should this assign the new location or return it for the consumer to manage?
-		// TODO: Support popup flow?
-		// window.location.href = oauthUrl;
 		return oauthUrl;
 	}
 
@@ -237,16 +197,15 @@ export class EnokiFlow {
 		// Verify the JWT, to ensure that we don't just get stuck with a random invalid JWT:
 		await validateJWT(jwt, decodedJwt);
 
-		const { salt } = await this.#enokiClient.getSaltForJWT(jwt);
+		const { address, salt } = await this.#enokiClient.getZkLogin({ jwt });
 
 		this.$state.set({
 			...state,
 			salt,
-			address: jwtToAddress(jwt, BigInt(salt)),
+			address,
 			zkp: {
 				...state.zkp,
 				jwt,
-				addressSeed: String(genAddressSeed(BigInt(salt), 'sub', decodedJwt.sub, decodedJwt.aud)),
 			},
 		});
 
@@ -295,18 +254,17 @@ export class EnokiFlow {
 			return zkp.proof;
 		}
 
-		if (!salt || !zkp || !zkp.jwt || !zkp.addressSeed) {
+		if (!salt || !zkp || !zkp.jwt) {
 			throw new Error('Missing required parameters for proof generation');
 		}
 
 		const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair));
 
-		const proof = await this.#enokiClient.createProofForJWT({
-			salt,
+		const proof = await this.#enokiClient.createZkLoginZkp({
 			jwt: zkp.jwt!,
 			maxEpoch: zkp.maxEpoch!,
-			jwtRandomness: zkp.randomness!,
-			extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeralKeyPair.getPublicKey()),
+			randomness: zkp.randomness!,
+			ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 		});
 
 		this.$state.set({
@@ -329,7 +287,7 @@ export class EnokiFlow {
 
 		// Check to see if we have the essentials for a keypair:
 		const { zkp, address } = this.$state.get();
-		if (!address || !zkp || !zkp.addressSeed || !zkp.proof) {
+		if (!address || !zkp || !zkp.proof) {
 			throw new Error('Missing required data for keypair generation.');
 		}
 
@@ -340,11 +298,7 @@ export class EnokiFlow {
 		return new EnokiKeypair({
 			address,
 			maxEpoch: zkp.maxEpoch,
-			proof: {
-				...zkp.proof,
-				// TODO: Add this to the response from Enoki:
-				addressSeed: zkp.addressSeed,
-			},
+			proof: zkp.proof,
 			ephemeralKeypair: Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair)),
 		});
 	}

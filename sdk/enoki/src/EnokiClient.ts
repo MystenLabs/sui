@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Proof } from './EnokiKeypair.js';
+import type { PublicKey } from '@mysten/sui.js/cryptography';
+import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 
 const DEFAULT_API_URL = 'https://api.enoki.mystenlabs.com';
 
@@ -17,12 +18,14 @@ export interface EnokiClientConfig {
  * A low-level client for interacting with the Enoki API.
  */
 export class EnokiClient {
-	#apiKey: string;
+	#version: string;
 	#apiUrl: string;
+	#apiKey: string;
 
 	constructor(config: EnokiClientConfig) {
-		this.#apiKey = config.apiKey;
+		this.#version = 'v1';
 		this.#apiUrl = config.apiUrl ?? DEFAULT_API_URL;
+		this.#apiKey = config.apiKey;
 	}
 
 	getAuthProviders() {
@@ -30,45 +33,57 @@ export class EnokiClient {
 			authenticationProviders: {
 				providerType: 'google' | 'facebook' | 'twitch';
 				clientId: string;
-				scopes: string[] | null;
 			}[];
-		}>('auth-providers', {}, { method: 'GET' });
+		}>('config/auth-providers', {
+			method: 'GET',
+		});
 	}
 
-	getAddressForJWT(jwt: string, salt?: string) {
-		return this.#fetch<{ address: string; salt: string }>(
-			'address',
-			{ jwt, salt },
-			{ method: 'POST' },
-		);
+	getZkLogin(input: { jwt: string }) {
+		return this.#fetch<{ address: string; salt: string }>('zklogin', {
+			method: 'GET',
+			headers: {
+				'zk-login-jwt': input.jwt,
+			},
+		});
 	}
 
-	getSaltForJWT(jwt: string) {
-		return this.#fetch<{ salt: string }>('salt', { jwt }, { method: 'POST' });
+	createNonce(input: { ephemeralPublicKey: PublicKey }) {
+		return this.#fetch<{
+			nonce: string;
+			randomness: string;
+			epoch: number;
+			maxEpoch: number;
+			estimatedExpiration: number;
+		}>('zklogin/nonce', {
+			method: 'POST',
+			body: JSON.stringify({
+				ephemeralPublicKey: input.ephemeralPublicKey.toSuiPublicKey(),
+			}),
+		});
 	}
 
-	createProofForJWT(input: {
+	createZkLoginZkp(input: {
 		jwt: string;
-		extendedEphemeralPublicKey: string;
+		ephemeralPublicKey: PublicKey;
+		randomness: string;
 		maxEpoch: number;
-		jwtRandomness: string;
-		salt: string;
-	}): Promise<Proof> {
-		return this.#fetch('zkp', input, { method: 'POST' });
+	}) {
+		return this.#fetch<ZkLoginSignatureInputs>('zklogin/kzp', {
+			method: 'POST',
+			headers: {
+				'zk-login-jwt': input.jwt,
+			},
+			body: JSON.stringify({
+				ephemeralPublicKey: input.ephemeralPublicKey.toSuiPublicKey(),
+				maxEpoch: input.maxEpoch,
+				randomness: input.randomness,
+			}),
+		});
 	}
 
-	async #fetch<T = any>(
-		path: string,
-		payload: Record<string, unknown>,
-		init: RequestInit,
-	): Promise<T> {
-		const filteredPayload = Object.fromEntries(
-			Object.entries(payload).filter(([_, value]) => !!value),
-		) as Record<string, string>;
-
-		const searchParams = init.method === 'GET' ? new URLSearchParams(filteredPayload) : null;
-
-		const res = await fetch(`${this.#apiUrl}/${path}${searchParams ? `?${searchParams}` : ''}`, {
+	async #fetch<T = unknown>(path: string, init: RequestInit): Promise<T> {
+		const res = await fetch(`${this.#apiUrl}/${this.#version}/${path}`, {
 			...init,
 			headers: {
 				...init.headers,
@@ -76,7 +91,6 @@ export class EnokiClient {
 				'Content-Type': 'application/json',
 				'Request-Id': crypto.randomUUID(),
 			},
-			body: init.method?.toLowerCase() === 'post' ? JSON.stringify(payload) : undefined,
 		});
 
 		if (!res.ok) {

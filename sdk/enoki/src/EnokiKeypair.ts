@@ -34,8 +34,6 @@ export class EnokiPublicKey extends PublicKey {
 	}
 }
 
-export type Proof = Omit<ZkLoginSignatureInputs, 'addressSeed'>;
-
 export class EnokiKeypair extends Keypair {
 	#proof: ZkLoginSignatureInputs;
 	#maxEpoch: number;
