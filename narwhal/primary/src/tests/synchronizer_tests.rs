@@ -910,7 +910,7 @@ async fn sync_batches_drops_old() {
 
     let mut certificates = HashMap::new();
     for _ in 0..3 {
-        let header = Header::V1(
+        let header = Header::V2(
             author
                 .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
@@ -931,7 +931,7 @@ async fn sync_batches_drops_old() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = Header::V1(
+    let test_header = Header::V2(
         author
             .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
