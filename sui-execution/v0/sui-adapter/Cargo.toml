@@ -11,12 +11,10 @@ edition = "2021"
 anyhow = { workspace = true, features = ["backtrace"] }
 bcs.workspace = true
 leb128.workspace = true
-once_cell.workspace = true
 tracing.workspace = true
 serde.workspace = true
 
 move-binary-format.workspace = true
-move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
 move-vm-profiler.workspace = true

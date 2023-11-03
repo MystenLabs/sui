@@ -11,7 +11,6 @@ serde.workspace = true
 bcs.workspace = true
 reqwest.workspace = true
 axum.workspace = true
-rand.workspace = true
 simulacrum.workspace = true
 sui-types.workspace = true
 sui-core.workspace = true

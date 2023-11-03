@@ -253,7 +253,6 @@ elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12"
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 encoding_rs = { version = "0.8" }
 endian-type = { version = "0.1", default-features = false }
-enum-compat-util = { path = "../../external-crates/move/crates/enum-compat-util", default-features = false }
 equivalent = { version = "1", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
@@ -703,7 +702,6 @@ toml-d8f496e17d97b5cb = { package = "toml", version = "0.5", features = ["preser
 toml_datetime-3b31131e45eafb45 = { package = "toml_datetime", version = "0.6", default-features = false, features = ["serde"] }
 toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", default-features = false }
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
-toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
 tonic-274715c4dabd11b0 = { package = "tonic", version = "0.9" }
 tonic-93f6ce9d446188ac = { package = "tonic", version = "0.10", features = ["tls"] }
@@ -1582,7 +1580,6 @@ toml-d8f496e17d97b5cb = { package = "toml", version = "0.5", features = ["preser
 toml_datetime-3b31131e45eafb45 = { package = "toml_datetime", version = "0.6", default-features = false, features = ["serde"] }
 toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", default-features = false }
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
-toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
 tonic-274715c4dabd11b0 = { package = "tonic", version = "0.9" }
 tonic-93f6ce9d446188ac = { package = "tonic", version = "0.10", features = ["tls"] }

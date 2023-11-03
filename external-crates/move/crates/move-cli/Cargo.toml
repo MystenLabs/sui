@@ -12,13 +12,11 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 colored.workspace = true
-difference.workspace = true
 serde_yaml.workspace = true
 clap.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true
 codespan-reporting.workspace = true
-toml_edit.workspace = true
 
 bcs.workspace = true
 
@@ -36,7 +34,6 @@ move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
-move-read-write-set-types.workspace = true
 move-resource-viewer.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true

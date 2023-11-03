@@ -34,7 +34,6 @@ move-vm-config.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 move-vm-runtime.workspace = true
-move-resource-viewer.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
