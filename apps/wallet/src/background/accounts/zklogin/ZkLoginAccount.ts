@@ -120,7 +120,7 @@ export class ZkLoginAccount
 		}
 		const aud = decodedJWT.aud;
 		const claims: JwtSerializedClaims = {
-			email: String(decodedJWT.email || '') || null,
+			email: String((decodedJWT.is_private_email ? '' : decodedJWT.email) || '') || null,
 			fullName: String(decodedJWT.name || '') || null,
 			firstName: String(decodedJWT.given_name || '') || null,
 			lastName: String(decodedJWT.family_name || '') || null,

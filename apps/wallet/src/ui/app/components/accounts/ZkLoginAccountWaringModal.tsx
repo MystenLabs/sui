@@ -28,6 +28,7 @@ const providerToName: Record<ZkLoginProvider, string> = {
 	facebook: 'Facebook',
 	twitch: 'Twitch',
 	kakao: 'Kakao',
+	apple: 'Apple',
 };
 
 export function ZkLoginAccountWarningModal() {

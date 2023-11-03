@@ -179,7 +179,7 @@ export interface ClickedSocialSignInButtonProperties {
 	 * |---|---|
 	 * | Enum Values | Microsoft, Facebook, Google, Twitch |
 	 */
-	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch' | 'Kakao';
+	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch' | 'Kakao' | 'Apple';
 	/**
 	 * The flow the user came from.
 	 */

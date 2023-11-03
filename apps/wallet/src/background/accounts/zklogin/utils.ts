@@ -86,12 +86,16 @@ export async function zkLoginAuthenticate({
 		zkLoginProviderDataMap[provider];
 	const params = new URLSearchParams(extraParams);
 	params.append('client_id', clientID);
-	params.append('redirect_uri', Browser.identity.getRedirectURL());
+	params.append(
+		'redirect_uri',
+		provider === 'apple' ? 'https://openidconnect.net/callback' : Browser.identity.getRedirectURL(),
+	);
 	params.append('nonce', nonce);
 	if (buildExtraParams) {
 		buildExtraParams({ prompt, loginHint, params });
 	}
 	const authUrl = `${url}?${params.toString()}`;
+	console.log(authUrl);
 	let responseURL;
 	if (!prompt) {
 		responseURL = await tryGetRedirectURLSilently(provider, authUrl);
@@ -115,10 +119,11 @@ export async function zkLoginAuthenticate({
 	if (!jwt) {
 		throw new Error('JWT is missing');
 	}
+	console.log({ nonce });
 	return jwt;
 }
 
-const saltRegistryUrl = 'https://salt.api.mystenlabs.com';
+const saltRegistryUrl = 'http://localhost:3000';
 
 export async function fetchSalt(jwt: string): Promise<string> {
 	const response = await fetchWithSentry('fetchUserSalt', `${saltRegistryUrl}/get_salt`, {
@@ -146,7 +151,7 @@ export type PartialZkLoginSignature = Omit<
 	'addressSeed'
 >;
 
-const zkLoginProofsServerUrl = 'https://prover.mystenlabs.com/v1';
+const zkLoginProofsServerUrl = 'https://prover-ci.mystenlabs.com';
 
 export async function createPartialZkLoginSignature({
 	jwt,

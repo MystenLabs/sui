@@ -14,11 +14,13 @@ import { SocialButton } from '../../shared/SocialButton';
 
 const zkLoginProviders = Object.entries(zkLoginProviderDataMap)
 	.filter(([_, { hidden }]) => !hidden)
-	.map(([provider, { enabled }]) => ({
+	.map(([provider, { enabled, order }]) => ({
 		provider: provider as ZkLoginProvider,
 		enabled,
 		tooltip: !enabled ? 'Coming soon!' : undefined,
-	}));
+		order,
+	}))
+	.sort((a, b) => a.order - b.order);
 
 const providerToAmpli: Record<
 	ZkLoginProvider,
@@ -28,6 +30,7 @@ const providerToAmpli: Record<
 	twitch: 'Twitch',
 	facebook: 'Facebook',
 	kakao: 'Kakao',
+	apple: 'Apple',
 };
 
 export type ZkLoginButtonsProps = {

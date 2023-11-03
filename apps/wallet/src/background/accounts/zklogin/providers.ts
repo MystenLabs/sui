@@ -3,7 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
-export type ZkLoginProvider = 'google' | 'twitch' | 'facebook' | 'kakao';
+export type ZkLoginProvider = 'google' | 'twitch' | 'facebook' | 'kakao' | 'apple';
 
 export interface ZkLoginProviderData {
 	clientID: string;
@@ -18,6 +18,7 @@ export interface ZkLoginProviderData {
 	hidden?: boolean;
 	mfaLink?: string;
 	extractJWT?: (authResponseURL: URL) => Promise<string>;
+	order: number;
 }
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -40,6 +41,20 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		},
 		enabled: true,
 		mfaLink: 'https://support.google.com/accounts/answer/185839',
+		order: 0,
+	},
+	apple: {
+		clientID: 'nl.digkas.wallet.client',
+		url: 'https://appleid.apple.com/auth/authorize',
+		extraParams: {
+			response_mode: 'form_post',
+			response_type: 'code id_token',
+			scope: 'openid name email',
+		},
+		enabled: isDev,
+		hidden: !isDev,
+		mfaLink: 'https://support.apple.com/en-gb/HT204915',
+		order: 1,
 	},
 	twitch: {
 		clientID: 'uzpfot3uotf7fp9hklsyctn2735bcw',
@@ -63,6 +78,7 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		},
 		enabled: true,
 		mfaLink: 'https://help.twitch.tv/s/article/two-factor-authentication',
+		order: 2,
 	},
 	facebook: {
 		clientID: '829226485248571',
@@ -74,6 +90,7 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 		enabled: isDev,
 		hidden: !isDev,
 		mfaLink: 'https://www.facebook.com/help/148233965247823',
+		order: 3,
 	},
 	kakao: {
 		clientID: '5dea1191b184e641d271af1fff43fc44',
@@ -82,9 +99,7 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 			response_type: 'code',
 		},
 		buildExtraParams: ({ prompt, loginHint, params }) => {
-			if (prompt) {
-				params.append('prompt', 'select_account');
-			}
+			params.append('prompt', prompt ? 'select_account' : 'none');
 			if (loginHint) {
 				params.append('login_hint', loginHint);
 			}
@@ -108,5 +123,6 @@ export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData
 			});
 			return (await res.json())?.id_token;
 		},
+		order: 4,
 	},
 };

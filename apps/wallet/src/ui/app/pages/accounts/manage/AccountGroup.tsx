@@ -43,6 +43,7 @@ const providerToLabel: Record<ZkLoginProvider, string> = {
 	twitch: 'Twitch',
 	facebook: 'Facebook',
 	kakao: 'Kakao',
+	apple: 'Apple',
 };
 
 export function getGroupTitle(aGroupAccount: SerializedUIAccount) {
