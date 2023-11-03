@@ -136,7 +136,6 @@ where
                 .into_iter()
                 .chain(recipients_to_commit.into_iter())
                 .collect::<Vec<AddressInfoToCommit>>();
-
             // de-dup senders with earliest and latest timestamps
             let active_addresses_to_commit: Vec<StoredActiveAddress> =
                 dedup_addresses(senders_to_commit)

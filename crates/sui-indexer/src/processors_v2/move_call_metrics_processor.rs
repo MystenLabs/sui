@@ -43,17 +43,23 @@ where
             }
             // +1 here b/c get_transactions_in_checkpoint_range is left-inclusive, right-exclusive,
             // but we want left-exclusive, right-inclusive, as latest_tx_count_metrics has been processed.
-            let cps = self
+            let end_cp_seq = last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE;
+            let download_cp_handle = self
                 .store
-                .get_checkpoints_in_range(
-                    last_end_cp_seq + 1,
-                    last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE + 1,
-                )
-                .await?;
+                .get_checkpoints_in_range(last_end_cp_seq + 1, end_cp_seq + 1);
+            let download_tx_handle = self
+                .store
+                .get_tx_checkpoints_in_checkpoint_range(last_end_cp_seq + 1, end_cp_seq + 1);
+            let (cps_res, tx_checkpoints_res) =
+                tokio::join!(download_cp_handle, download_tx_handle);
+            let cps = cps_res?;
+            let tx_checkpoints = tx_checkpoints_res?;
             info!(
-                "Downloaded checkpoints for move call metrics on checkpoint {}",
-                last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE
+                "Downloaded checkpoints and transactions from checkpoint {} to checkpoint {}",
+                last_end_cp_seq + 1,
+                end_cp_seq
             );
+
             let end_cp = cps
                 .last()
                 .ok_or(IndexerError::PostgresReadError(
@@ -64,21 +70,6 @@ where
                 .par_iter()
                 .map(|cp| (cp.sequence_number, cp.epoch))
                 .collect::<HashMap<_, _>>();
-            info!(
-                "Constructed cp to epoch maps for move call metrics on checkpoint {}",
-                last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE
-            );
-            let tx_checkpoints = self
-                .store
-                .get_tx_checkpoints_in_checkpoint_range(
-                    last_end_cp_seq + 1,
-                    end_cp.sequence_number + 1,
-                )
-                .await?;
-            info!(
-                "Downloaded transactions for checkpoint: {}",
-                end_cp.sequence_number
-            );
             let tx_cp_map = tx_checkpoints
                 .par_iter()
                 .map(|tx| (tx.tx_sequence_number, tx.checkpoint_sequence_number))
@@ -95,11 +86,6 @@ where
                     "Cannot read last tx from PG for move call metrics".to_string(),
                 ))?
                 .tx_sequence_number;
-            info!(
-                "Constructed tx to cp maps for move call metrics on checkpoint {}",
-                end_cp.sequence_number
-            );
-
             let stored_move_calls = self
                 .store
                 .get_move_calls_in_tx_range(start_tx_seq, end_tx_seq + 1)
@@ -123,7 +109,7 @@ where
             let end_cp_seq = end_cp.sequence_number;
             let move_call_count = move_calls_to_commit.len();
             info!(
-                "Indexed {} move_calls for checkpoint: {}",
+                "Indexed {} move_calls at checkpoint: {}",
                 move_call_count, end_cp_seq
             );
 
@@ -138,7 +124,7 @@ where
                 .await?;
             last_end_cp_seq = end_cp_seq;
             info!(
-                "Persisted {} move_calls and move_call_metrics for checkpoint: {}",
+                "Persisted {} move_calls and move_call_metrics at checkpoint: {}",
                 move_call_count, end_cp_seq
             );
         }
