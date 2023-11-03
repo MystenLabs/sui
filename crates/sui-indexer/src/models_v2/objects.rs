@@ -74,7 +74,10 @@ impl From<IndexedObject> for StoredObject {
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
             owner_id: o.owner_id.map(|id| id.to_vec()),
-            object_type: o.object.type_().map(|t| t.to_canonical_string(true)),
+            object_type: o
+                .object
+                .type_()
+                .map(|t| t.to_canonical_string(/* with_prefix */ true)),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
@@ -339,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_one_more_thing() {
+    fn test_vec_of_coin_sui_conversion() {
         // 0xe7::vec_coin::VecCoin<vector<0x2::coin::Coin<0x2::sui::SUI>>>
         let vec_coins_type = TypeTag::Vector(Box::new(
             Coin::type_(TypeTag::Struct(Box::new(GAS::type_()))).into(),

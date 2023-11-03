@@ -1314,7 +1314,7 @@ impl IndexerReader {
         &self,
         object_type: &move_core_types::language_storage::StructTag,
     ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        let object_type = object_type.to_canonical_display(true).to_string();
+        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
         self.spawn_blocking(move |this| this.get_display_update_event(object_type))
             .await
     }

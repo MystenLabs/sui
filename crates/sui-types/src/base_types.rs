@@ -320,13 +320,9 @@ impl MoveObjectType {
         }
     }
 
-    /// Returns the string representation of this object's type using the canonical display.
-    /// full address with 0x prefix
+    /// Returns the string representation of this object's type using the canonical display.    
     pub fn to_canonical_string(&self, with_prefix: bool) -> String {
-        let canonical_string = StructTag::from(self.clone())
-            .to_canonical_display(with_prefix)
-            .to_string();
-        canonical_string
+        StructTag::from(self.clone()).to_canonical_string(with_prefix)
     }
 }
 

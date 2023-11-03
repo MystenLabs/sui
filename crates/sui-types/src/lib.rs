@@ -272,15 +272,17 @@ fn is_object_struct(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use expect_test::expect;
 
     #[test]
     fn test_parse_sui_struct_tag_short_account_addr() {
         let result = parse_sui_struct_tag("0x2::sui::SUI").expect("should not error");
-        assert_eq!(result.to_string(), "0x2::sui::SUI");
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
@@ -289,33 +291,36 @@ mod tests {
             "0x00000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
         )
         .expect("should not error");
-        assert_eq!(result.to_string(), "0x2::sui::SUI");
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
     fn test_parse_sui_struct_with_type_param_short_addr() {
         let result =
             parse_sui_struct_tag("0x2::coin::COIN<0x2::sui::SUI>").expect("should not error");
-        assert_eq!(result.to_string(), "0x2::coin::COIN<0x2::sui::SUI>");
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000002::coin::COIN<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
     fn test_parse_sui_struct_with_type_param_long_addr() {
         let result = parse_sui_struct_tag("0x0000000000000000000000000000000000000000000000000000000000000002::coin::COIN<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>")
             .expect("should not error");
-        assert_eq!(result.to_string(), "0x2::coin::COIN<0x2::sui::SUI>");
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000002::coin::COIN<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
@@ -323,28 +328,24 @@ mod tests {
         let result =
             parse_sui_struct_tag("0xe7::vec_coin::VecCoin<vector<0x2::coin::Coin<0x2::sui::SUI>>>")
                 .expect("should not error");
-        assert_eq!(
-            result.to_string(),
-            "0xe7::vec_coin::VecCoin<vector<0x2::coin::Coin<0x2::sui::SUI>>>"
-        );
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>"
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
     fn test_complex_struct_tag_with_long_addr() {
         let result = parse_sui_struct_tag("0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>")    
             .expect("should not error");
-        assert_eq!(
-            result.to_string(),
-            "0xe7::vec_coin::VecCoin<vector<0x2::coin::Coin<0x2::sui::SUI>>>"
-        );
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>"            
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
@@ -353,14 +354,12 @@ mod tests {
             "0x2::dynamic_field::Field<address, 0xdee9::custodian_v2::Account<0x234::coin::COIN>>",
         )
         .expect("should not error");
-        assert_eq!(
-            result.to_string(),
-            "0x2::dynamic_field::Field<address, 0xdee9::custodian_v2::Account<0x234::coin::COIN>>"
-        );
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<address,0x000000000000000000000000000000000000000000000000000000000000dee9::custodian_v2::Account<0x0000000000000000000000000000000000000000000000000000000000000234::coin::COIN>>"            
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 
     #[test]
@@ -369,13 +368,11 @@ mod tests {
             "0x2::dynamic_field::Field<address, 0xdee9::custodian_v2::Account<0x234::coin::COIN>>",
         )
         .expect("should not error");
-        assert_eq!(
-            result.to_string(),
-            "0x2::dynamic_field::Field<address, 0xdee9::custodian_v2::Account<0x234::coin::COIN>>"
-        );
-        assert_eq!(
-            result.to_canonical_display(true).to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<address,0x000000000000000000000000000000000000000000000000000000000000dee9::custodian_v2::Account<0x0000000000000000000000000000000000000000000000000000000000000234::coin::COIN>>"            
-        );
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_string());
+
+        let expected = expect![[""]];
+        expected.assert_eq(&result.to_canonical_string(/* with_prefix */ true));
     }
 }
