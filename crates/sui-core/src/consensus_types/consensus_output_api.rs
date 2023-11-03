@@ -106,8 +106,9 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
     }
 
     fn commit_timestamp_ms(&self) -> u64 {
-        // TODO: Enforce ordered timestamp in Mysticeti
-        0
+        // TODO: Enforce ordered timestamp in Mysticeti.
+        // Also, could this ever overflow u64?
+        (self.blocks[0].meta_creation_time_ns() / 1000) as u64
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
@@ -122,23 +123,21 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
                 let round = block.round();
                 let author = block.author() as AuthorityIndex;
                 let transactions: Vec<_> = block
-                    .statements()
+                    .shared_transactions()
                     .iter()
-                    .enumerate()
-                    .flat_map(|(idx, stmt)| match stmt {
-                        BaseStatement::Share(tx) => {
-                            let cert = bcs::from_bytes::<CertifiedTransaction>(tx.data());
-                            match cert {
-                                Ok(cert) => Some((
-                                    tx.data(),
-                                    ConsensusTransaction::new_mysticeti_certificate(
-                                        round, idx, cert,
-                                    ),
-                                )),
-                                Err(_) => None,
-                            }
+                    .map(|(loc, tx)| {
+                        let cert = bcs::from_bytes::<CertifiedTransaction>(tx.data());
+                        match cert {
+                            Ok(cert) => Some((
+                                tx.data(),
+                                ConsensusTransaction::new_mysticeti_certificate(
+                                    round,
+                                    loc.offset(),
+                                    cert,
+                                ),
+                            )),
+                            Err(_) => None,
                         }
-                        BaseStatement::Vote(..) | BaseStatement::VoteRange(_) => None,
                     })
                     .collect();
                 (author, transactions)
