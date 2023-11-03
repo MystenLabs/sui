@@ -1,0 +1,67 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getLatestSuiSystemState {
+	latestSuiSystemState {
+		referenceGasPrice
+		safeMode {
+			enabled
+			gasSummary {
+				computationCost
+				nonRefundableStorageFee
+				storageCost
+				storageRebate
+			}
+		}
+
+		stakeSubsidy {
+			balance
+			currentDistributionAmount
+			decreaseRate
+			distributionCounter
+			periodLength
+			# stakeSubsidyStartEpoch
+			# stakingPoolMappingsId
+			# stakingPoolMappingsSize
+		}
+
+		storageFund {
+			nonRefundableBalance
+			totalObjectStorageRebates
+		}
+		systemStateVersion
+		systemParameters {
+			minValidatorCount
+			maxValidatorCount
+			minValidatorJoiningStake
+			durationMs
+			validatorLowStakeThreshold
+			validatorLowStakeGracePeriod
+			validatorVeryLowStakeThreshold
+		}
+		protocolConfigs {
+			protocolVersion
+		}
+		validatorSet {
+			activeValidators {
+				...RPC_VALIDATOR_FIELDS
+			}
+
+			# atRiskValidators (missing number of epochs)
+			# inactivePoolsId
+			inactivePoolsSize
+			# pendingActiveValidatorsId
+			pendingActiveValidatorsSize
+			# validatorCandidatesId
+			validatorCandidatesSize
+			pendingRemovals
+			totalStake
+		}
+
+		epoch {
+			epochId
+			startTimestamp
+			endTimestamp
+		}
+	}
+}

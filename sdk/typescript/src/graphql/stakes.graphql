@@ -1,0 +1,58 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getStakes($owner: SuiAddress!, $limit: Int, $cursor: String) {
+	address(address: $owner) {
+		# exceeds query cost?
+		stakeConnection(first: $limit, after: $cursor) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				...RPC_STAKE_FIELDS
+			}
+		}
+	}
+}
+
+query getStakesByIds($ids: [SuiAddress!]!, $limit: Int, $cursor: String) {
+	objectConnection(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		nodes {
+			asMoveObject {
+				asStake {
+					...RPC_STAKE_FIELDS
+				}
+			}
+		}
+	}
+}
+
+fragment RPC_STAKE_FIELDS on Stake {
+	principal
+	activeEpoch {
+		epochId
+	}
+	requestEpoch {
+		epochId
+	}
+	asMoveObject {
+		# staking pool can be read from contents
+		contents {
+			json
+		}
+		# bad nesting
+		asObject {
+			location
+		}
+	}
+	estimatedReward
+	# validatorAddress?
+	activeEpoch {
+		referenceGasPrice
+	}
+}

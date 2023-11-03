@@ -1,0 +1,19 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getNormalizedMoveModulesByPackage($packageId: SuiAddress!, $limit: Int, $cursor: String) {
+	object(address: $packageId) {
+		asMovePackage {
+			moduleConnection(first: $limit, after: $cursor) {
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+				nodes {
+					fileFormatVersion
+					# Missing function definitions
+				}
+			}
+		}
+	}
+}

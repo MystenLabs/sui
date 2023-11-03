@@ -1,0 +1,122 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getOwnedObjects(
+	$owner: SuiAddress!
+	$limit: Int
+	$cursor: String
+	$showBcs: Boolean = false
+	$showContent: Boolean = false
+	#$showDisplay: Boolean = false,
+	$showType: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showStorageRebate: Boolean = false
+	$filter: ObjectFilter
+) {
+	address(address: $owner) {
+		# filter missing:
+		# - version
+		# - all, any, none
+		objectConnection(first: $limit, after: $cursor, filter: $filter) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				...RPC_OBJECT_FIELDS
+			}
+		}
+	}
+}
+
+query getObject(
+	$id: SuiAddress!
+	$showBcs: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showContent: Boolean = false
+	#$showDisplay: Boolean = false,
+	$showType: Boolean = false
+	$showStorageRebate: Boolean = false
+) {
+	object(address: $id) {
+		...RPC_OBJECT_FIELDS
+	}
+}
+
+query tryGetPastObject(
+	$id: SuiAddress!
+	$version: Int
+	$showBcs: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showContent: Boolean = false
+	# display not implemented
+	$showType: Boolean = false
+	$showStorageRebate: Boolean = false
+) {
+	object(address: $id) {
+		...RPC_OBJECT_FIELDS
+	}
+}
+
+query multiGetObjects(
+	$ids: [SuiAddress!]!
+	$limit: Int
+	$cursor: String
+	$showBcs: Boolean = false
+	$showContent: Boolean = false
+	#$showDisplay: Boolean = false,
+	$showType: Boolean = false
+	$showOwner: Boolean = false
+	$showPreviousTransaction: Boolean = false
+	$showStorageRebate: Boolean = false
+) {
+	objectConnection(first: $limit, after: $cursor, filter: { objectIds: $ids }) {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		nodes {
+			...RPC_OBJECT_FIELDS
+		}
+	}
+}
+
+fragment RPC_OBJECT_FIELDS on Object {
+	# display not implemented
+	objectId: location
+	bcs @include(if: $showBcs)
+	version
+	asMoveObject @include(if: $showType) {
+		contents {
+			type {
+				signature
+			}
+		}
+	}
+	asMoveObject @include(if: $showContent) {
+		contents {
+			json
+		}
+	}
+	asMoveObject @include(if: $showBcs) {
+		hasPublicTransfer
+		contents {
+			type {
+				signature
+			}
+		}
+	}
+	owner @include(if: $showOwner) {
+		location
+	}
+	previousTransactionBlock @include(if: $showPreviousTransaction) {
+		digest
+	}
+
+	storageRebate @include(if: $showStorageRebate)
+	digest
+	version
+}

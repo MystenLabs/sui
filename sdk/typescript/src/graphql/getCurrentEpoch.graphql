@@ -1,0 +1,77 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getCurrentEpoch {
+	epoch {
+		epochId
+		validatorSet {
+			activeValidators {
+				...RPC_VALIDATOR_FIELDS
+			}
+		}
+		# epochTotalTransactions
+		firstCheckpoint: checkpointConnection(first: 1) {
+			nodes {
+				digest
+				sequenceNumber
+			}
+		}
+		# endOfEpoch it not needed for current epoch
+		startTimestamp
+		endTimestamp
+		referenceGasPrice
+	}
+}
+
+fragment RPC_VALIDATOR_FIELDS on Validator {
+	atRisk
+	commissionRate
+	exchangeRatesSize
+	exchangeRates {
+		asObject {
+			location
+		}
+	}
+	description
+	gasPrice
+	imageUrl
+	name
+	credentials {
+		...RPC_CREDENTIAL_FIELDS
+	}
+	nextEpochCommissionRate
+	nextEpochGasPrice
+	nextEpochCredentials {
+		...RPC_CREDENTIAL_FIELDS
+	}
+	nextEpochStake
+	nextEpochCommissionRate
+	operationCap {
+		asObject {
+			location
+		}
+	}
+	pendingPoolTokenWithdraw
+	pendingStake
+	pendingTotalSuiWithdraw
+	poolTokenBalance
+	projectUrl
+	rewardsPool
+	stakingPoolSuiBalance
+	address {
+		location
+	}
+	votingPower
+	reportRecords
+}
+
+fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {
+	netAddress
+	networkPubKey
+	p2PAddress
+	primaryAddress
+	workerPubKey
+	workerAddress
+	proofOfPossession
+	protocolPubKey
+}

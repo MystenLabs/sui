@@ -1,0 +1,132 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query queryTransactionBlocks(
+	$first: Int
+	$last: Int
+	$before: String
+	$after: String
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	#$showEvents: Boolean = false,
+	#$showInput: Boolean = false,
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+	$filter: TransactionBlockFilter
+) {
+	transactionBlockConnection(
+		first: $first
+		after: $after
+		last: $last
+		before: $before
+		filter: $filter
+	) {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		nodes {
+			...RPC_TRANSACTION_FIELDS
+		}
+	}
+}
+
+query getTransactionBlock(
+	$digest: String!
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	#$showEvents: Boolean = false,
+	#$showInput: Boolean = false,
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+) {
+	transactionBlock(digest: $digest) {
+		...RPC_TRANSACTION_FIELDS
+	}
+}
+
+query multiGetTransactionBlocks(
+	$digests: [String!]!
+	$limit: Int
+	$cursor: String
+	$showBalanceChanges: Boolean = false
+	$showEffects: Boolean = false
+	#$showEvents: Boolean = false,
+	#$showInput: Boolean = false,
+	$showObjectChanges: Boolean = false
+	$showRawInput: Boolean = false
+) {
+	transactionBlockConnection(first: $limit, after: $cursor, filter: { transactionIds: $digests }) {
+		pageInfo {
+			hasNextPage
+			endCursor
+		}
+		nodes {
+			...RPC_TRANSACTION_FIELDS
+		}
+	}
+}
+
+fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
+	digest
+	# timestampMs
+	# transaction can be derived from bcs, except:
+	# - valueType for Pure inputs
+	# - requires a lot of re-structuring
+	rawTransaction: bcs @include(if: $showRawInput)
+	signatures {
+		base64Sig
+	}
+	effects {
+		# eventsConnection {... }
+		checkpoint {
+			digest
+			sequenceNumber
+		}
+		balanceChanges @include(if: $showBalanceChanges) {
+			# missing coinType
+			owner {
+				location
+			}
+			amount
+		}
+		# messageVersion
+		# eventsDigest
+		# object changes don't work, not sure if all data is available
+		dependencies @include(if: $showEffects) {
+			digest
+		}
+		status @include(if: $showEffects)
+		gasEffects @include(if: $showEffects) {
+			gasSummary {
+				storageCost
+				storageRebate
+				nonRefundableStorageFee
+				computationCost
+			}
+		}
+		executedEpoch: epoch @include(if: $showEffects) {
+			epochId
+		}
+		objectChanges @include(if: $showObjectChanges) {
+			idCreated
+			idDeleted
+			inputState {
+				version
+				digest
+				objectId: location
+				owner {
+					location
+				}
+			}
+			outputState {
+				version
+				digest
+				objectId: location
+				owner {
+					location
+				}
+			}
+		}
+	}
+}

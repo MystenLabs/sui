@@ -1,0 +1,38 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getCheckpoint($id: CheckpointId) {
+	checkpoint(id: $id) {
+		# checkpointCommitments
+		digest
+		endOfEpoch {
+			# epochCommitments
+			newCommittee {
+				authorityName
+				stakeUnit
+			}
+			nextProtocolVersion
+		}
+		epoch {
+			epochId
+		}
+
+		rollingGasSummary {
+			computationCost
+			storageCost
+			storageRebate
+			nonRefundableStorageFee
+		}
+		networkTotalTransactions
+		previousCheckpointDigest
+		sequenceNumber
+		timestamp
+		# might be truncated? should we set a higher limit or paginate?
+		transactionBlockConnection {
+			nodes {
+				digest
+			}
+		}
+		validatorSignature
+	}
+}

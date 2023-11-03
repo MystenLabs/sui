@@ -1,0 +1,23 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query resolveNameServiceAddress($name: String!) {
+	resolveNameServiceAddress(name: $name) {
+		location
+	}
+}
+
+query resolveNameServiceNames(
+	$address: SuiAddress! #, $limit: Int, # $cursor: String
+) {
+	address(address: $address) {
+		defaultNameServiceName
+		# nameServiceConnection(first: $limit, after: $cursor) {
+		# 	pageInfo {
+		# 		hasNextPage
+		# 		endCursor
+		# 	}
+		# 	nodes
+		# }
+	}
+}
