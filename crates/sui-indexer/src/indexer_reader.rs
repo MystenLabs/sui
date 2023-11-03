@@ -573,11 +573,11 @@ impl IndexerReader {
             return Ok(None);
         }
         match filter.unwrap() {
-            SuiObjectDataFilter::StructType (struct_tag ) => Ok(Some(vec![struct_tag.to_string()])),
+            SuiObjectDataFilter::StructType (struct_tag ) => Ok(Some(vec![struct_tag.to_canonical_string(/* with_prefix */ true)])),
             SuiObjectDataFilter::MatchAny(filters) => {
                 filters.iter().map(|filter| {
                     match filter {
-                        SuiObjectDataFilter::StructType (struct_tag ) => Ok(struct_tag.to_string()),
+                        SuiObjectDataFilter::StructType (struct_tag ) => Ok(struct_tag.to_canonical_string(/* with_prefix */ true)),
                         _ => Err(IndexerError::InvalidArgumentError(
                             "Invalid filter type. Only struct filters and MatchAny of struct filters are supported.".into(),
                         )),
