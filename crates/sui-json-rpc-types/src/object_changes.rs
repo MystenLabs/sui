@@ -180,7 +180,10 @@ impl Display for ObjectChange {
                 writeln!(
                     f,
                     " ┌──\n │ PackageID: {} \n │ Version: {} \n │ Digest: {}\n | Modules: {}\n └──",
-                    package_id, version, digest, modules.join(",").to_string()
+                    package_id,
+                    version,
+                    digest,
+                    modules.join(",")
                 )
             }
             ObjectChange::Transferred {
@@ -221,7 +224,7 @@ impl Display for ObjectChange {
                 writeln!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ ObjectType: {} \n │ Version: {}\n └──",
-                    object_id, sender, object_type, version, 
+                    object_id, sender, object_type, version
                 )
             }
             ObjectChange::Wrapped {
@@ -233,7 +236,7 @@ impl Display for ObjectChange {
                 writeln!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ ObjectType: {} \n │ Version: {}\n └──",
-                    object_id, sender, object_type, version, 
+                    object_id, sender, object_type, version
                 )
             }
             ObjectChange::Created {
