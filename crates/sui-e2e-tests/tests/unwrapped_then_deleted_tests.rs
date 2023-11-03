@@ -19,6 +19,8 @@ mod sim_only_tests {
     async fn test_no_more_dependency_on_wrapped_tombstone() {
         let mut _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_simplified_unwrap_then_delete(false);
+            // Given that we will never enable effect V2 before turning on simplified_unwrap_then_delete, we also need to disable effect V2 here.
+            config.set_enable_effects_v2(false);
             config
         });
 

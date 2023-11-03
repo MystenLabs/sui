@@ -10,11 +10,10 @@ type Address implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	Lists the stakes corresponding to the StakedSui objects owned by the given address
+	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -91,14 +90,49 @@ type ChangeEpochTransaction {
 }
 
 type Checkpoint {
+	"""
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
+	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
+	"""
 	digest: String!
+	"""
+	This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+	"""
 	sequenceNumber: Int!
+	"""
+	The timestamp at which the checkpoint is agreed to have happened according to consensus.
+	Transactions that access time in this checkpoint will observe this timestamp.
+	"""
 	timestamp: DateTime
+	"""
+	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
 	validatorSignature: Base64
+	"""
+	The digest of the checkpoint at the previous sequence number.
+	"""
 	previousCheckpointDigest: String
+	"""
+	This is a commitment by the committee at the end of epoch
+	on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
 	liveObjectSetDigest: String
+	"""
+	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+	"""
 	networkTotalTransactions: Int
+	"""
+	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
+	during this epoch, up to and including this checkpoint.
+	These values increase monotonically across checkpoints in the same epoch.
+	"""
 	rollingGasSummary: GasCostSummary
+	"""
+	End of epoch data is only available on the final checkpoint of an epoch.
+	This field provides information on the new committee and protocol version for the next epoch.
+	"""
 	endOfEpoch: EndOfEpochData
 	epoch: Epoch
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
@@ -139,7 +173,6 @@ input CheckpointId {
 }
 
 type Coin {
-	id: ID!
 	"""
 	Balance of the coin object
 	"""
@@ -202,18 +235,41 @@ type EndOfEpochTransaction {
 }
 
 type Epoch {
+	"""
+	The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
+	"""
 	epochId: Int!
+	"""
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
+	"""
 	referenceGasPrice: BigInt
+	"""
+	Validator related properties, including the active validators
+	"""
 	validatorSet: ValidatorSet
+	"""
+	The epoch's starting timestamp
+	"""
 	startTimestamp: DateTime
+	"""
+	The epoch's ending timestamp
+	"""
 	endTimestamp: DateTime
+	"""
+	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+	"""
 	protocolConfigs: ProtocolConfigs
+	"""
+	The epoch's corresponding checkpoints
+	"""
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	"""
+	The epoch's corresponding transaction blocks
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type Event {
-	id: ID!
 	"""
 	Package id and module name of Move module that the event was emitted in
 	"""
@@ -327,9 +383,21 @@ type GasEffects {
 }
 
 type GasInput {
+	"""
+	Address of the owner of the gas object(s) used
+	"""
 	gasSponsor: Address
+	"""
+	Objects used to pay for a transaction's execution and storage
+	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+	"""
 	gasPrice: BigInt
+	"""
+	The maximum number of gas units that can be expended by executing this transaction
+	"""
 	gasBudget: BigInt
 }
 
@@ -377,6 +445,10 @@ type MoveData =
 """
 scalar MoveData
 
+"""
+Represents a module in Move, a library that defines struct types
+and functions that operate on these types.
+"""
 type MoveModule {
 	fileFormatVersion: Int!
 }
@@ -412,6 +484,9 @@ type MoveModuleEdge {
 
 type MoveModuleId {
 	name: String!
+	"""
+	The package that this Move module was defined in
+	"""
 	package: MovePackage!
 }
 
@@ -441,7 +516,14 @@ type MoveObject {
 }
 
 type MovePackage {
+	"""
+	A representation of the module called `name` in this package, including the
+	structs and functions it defines.
+	"""
 	module(name: String!): MoveModule
+	"""
+	Paginate through the MoveModules defined in this package.
+	"""
 	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
 	The transitive dependencies of this package.
@@ -532,58 +614,70 @@ type MoveValue {
 	json: JSON!
 }
 
-scalar NameService
-
-type NameServiceConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [NameServiceEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [NameService!]!
-}
-
-"""
-An edge in a connection.
-"""
-type NameServiceEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: NameService!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
-}
-
 type Object implements ObjectOwner {
 	version: Int!
+	"""
+	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
+	"""
 	digest: String!
+	"""
+	The amount of SUI we would rebate if this object gets deleted or mutated.
+	This number is recalculated based on the present storage gas price.
+	"""
 	storageRebate: BigInt
+	"""
+	The Base64 encoded bcs serialization of the object's content.
+	"""
 	bcs: Base64
+	"""
+	The transaction block that created this version of the object.
+	"""
 	previousTransactionBlock: TransactionBlock
+	"""
+	Objects can either be immutable, shared, owned by an address,
+	or are child objects (part of a dynamic field)
+	"""
 	kind: ObjectKind
+	"""
+	The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
+	"""
 	owner: Owner
+	"""
+	Attempts to convert the object into a MoveObject
+	"""
 	asMoveObject: MoveObject
+	"""
+	Attempts to convert the object into a MovePackage
+	"""
 	asMovePackage: MovePackage
+	"""
+	The address of the object, named as such to avoid conflict with the address type.
+	"""
 	location: SuiAddress!
+	"""
+	The objects owned by this object
+	"""
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	The balance of coin objects of a particular coin type owned by the object.
+	"""
 	balance(type: String): Balance
+	"""
+	The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+	"""
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The `0x2::sui::Coin` objects owned by the given object.
+	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	Lists the stakes corresponding to the StakedSui objects owned by the given object
+	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	"""
+	The domain that a user address has explicitly configured as their default domain
+	"""
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type ObjectChange {
@@ -651,7 +745,6 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 type Owner implements ObjectOwner {
@@ -667,7 +760,6 @@ type Owner implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
-	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
 """
@@ -765,6 +857,9 @@ type Query {
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	"""
+	Resolves the owner address of the provided domain name
+	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
 }
@@ -802,13 +897,26 @@ type ServiceConfig {
 	The maximum number of nodes (field names) the service will accept in a single query.
 	"""
 	maxQueryNodes: Int!
+	"""
+	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
+	measured in the same units that the database uses in EXPLAIN queries.
+	"""
+	maxDbQueryCost: BigInt!
+	"""
+	Maximum number of variables a query can define
+	"""
+	maxQueryVariables: Int!
+	"""
+	Maximum number of fragments a query can define
+	"""
+	maxQueryFragments: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one request.
+	"""
+	requestTimeoutMs: BigInt!
 }
 
 type Stake {
-	"""
-	Stake object address
-	"""
-	id: ID!
 	"""
 	The estimated reward for this stake object, computed as the
 	value of multiplying the principal value with the ratio between the initial stake rate and the current rate
@@ -1024,13 +1132,41 @@ type SystemParameters {
 }
 
 type TransactionBlock {
+	"""
+	The effects field captures the results to the chain of executing this transaction
+	"""
 	effects: TransactionBlockEffects
+	"""
+	The address of the user sending this transaction block
+	"""
 	sender: Address
+	"""
+	The transaction block data in BCS format.
+	This includes data on the sender, inputs, sponsor, gas inputs, individual transactions, and user signatures.
+	"""
 	bcs: Base64
+	"""
+	The gas input field provides information on what objects were used as gas
+	As well as the owner of the gas object(s) and information on the gas price and budget
+	If the owner of the gas object(s) is not the same as the sender,
+	the transaction block is a sponsored transaction block.
+	"""
 	gasInput: GasInput
 	kind: TransactionBlockKind
+	"""
+	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
+	"""
 	signatures: [TransactionSignature]
+	"""
+	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
+	This serves as a unique id for the block on chain
+	"""
 	digest: String!
+	"""
+	This field is set by senders of a transaction block
+	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
+	By default, there is no deadline for when a transaction must execute
+	"""
 	expiration: Epoch
 }
 

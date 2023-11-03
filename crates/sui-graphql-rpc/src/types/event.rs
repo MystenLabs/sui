@@ -10,7 +10,6 @@ use super::{
 
 #[derive(SimpleObject)]
 pub(crate) struct Event {
-    pub id: ID,
     /// Package id and module name of Move module that the event was emitted in
     pub sending_module_id: Option<MoveModuleId>,
     /// Package, module, and type of the event

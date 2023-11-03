@@ -45,10 +45,12 @@ export function MaxSlippage({ onOpen }: { onOpen: () => void }) {
 export function MaxSlippageModal({ isOpen, onClose }: { onClose: () => void; isOpen: boolean }) {
 	const {
 		register,
+		watch,
 		formState: { errors },
 	} = useFormContext<FormValues>();
 
 	const errorString = errors.allowedMaxSlippagePercentage?.message;
+	const allowedMaxSlippagePercentage = watch('allowedMaxSlippagePercentage');
 
 	return (
 		<Overlay showModal={isOpen} title="Max Slippage Tolerance" closeOverlay={onClose}>
@@ -63,8 +65,9 @@ export function MaxSlippageModal({ isOpen, onClose }: { onClose: () => void; isO
 							</div>
 							<InputWithActionButton
 								{...register('allowedMaxSlippagePercentage')}
+								value={allowedMaxSlippagePercentage}
 								placeholder="0.0"
-								suffix={<div className="ml-2">%</div>}
+								suffix="%"
 							/>
 							{errorString ? (
 								<div className="mt-3">

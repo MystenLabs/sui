@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
-import type { InfiniteData, UseInfiniteQueryOptions } from '@tanstack/react-query';
+import type {
+	InfiniteData,
+	UseInfiniteQueryOptions,
+	UseInfiniteQueryResult,
+} from '@tanstack/react-query';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { PartialBy } from '../types/utilityTypes.js';
@@ -59,7 +63,7 @@ export function useSuiClientInfiniteQuery<
 		enabled = !!params,
 		...options
 	}: UseSuiClientInfiniteQueryOptions<T, TData> = {},
-) {
+): UseInfiniteQueryResult<TData, Error> {
 	const suiContext = useSuiClientContext();
 
 	return useInfiniteQuery({

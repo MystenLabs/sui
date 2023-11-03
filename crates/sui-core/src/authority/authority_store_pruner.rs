@@ -347,10 +347,11 @@ impl AuthorityStorePruner {
             };
             let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
-            // We have to respect the highest executed checkpoint watermark because there might be
-            // parts of the system that still require access to old object versions (i.e. state accumulator)
+            // We have to respect the highest executed checkpoint watermark (including the watermark itself)
+            // because there might be parts of the system that still require access to old object versions
+            // (i.e. state accumulator).
             if (current_epoch < checkpoint.epoch() + num_epochs_to_retain)
-                || (*checkpoint.sequence_number() > max_eligible_checkpoint)
+                || (*checkpoint.sequence_number() >= max_eligible_checkpoint)
             {
                 break;
             }

@@ -14,8 +14,7 @@ use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
 use sui_types::execution::TypeLayoutStore;
-use sui_types::object::Object;
-use sui_types::storage::BackingPackageStore;
+use sui_types::storage::{BackingPackageStore, PackageObjectArc};
 use sui_types::{
     error::SuiError,
     object::{MoveObject, ObjectFormatOptions},
@@ -71,7 +70,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
 }
 
 impl<'state> BackingPackageStore for NullSuiResolver<'state> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         self.0.get_package_object(package_id)
     }
 }

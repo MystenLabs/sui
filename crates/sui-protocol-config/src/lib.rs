@@ -89,6 +89,7 @@ const MAX_PROTOCOL_VERSION: u64 = 31;
 //             In execution, has_public_transfer is recomputed when loading the object.
 //             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
 // Version 31: Add support for shared object deletion in devnet only.
+//             Add support for getting object ID referenced by receiving object in sui framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1717,6 +1718,9 @@ impl ProtocolConfig {
     }
     pub fn set_verify_legacy_zklogin_address(&mut self, val: bool) {
         self.feature_flags.verify_legacy_zklogin_address = val
+    }
+    pub fn set_enable_effects_v2(&mut self, val: bool) {
+        self.feature_flags.enable_effects_v2 = val;
     }
 }
 

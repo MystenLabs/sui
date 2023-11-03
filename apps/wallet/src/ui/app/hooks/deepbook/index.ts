@@ -4,5 +4,4 @@
 export * from './useDeepBookConfigs';
 export * from './useRecognizedCoins';
 export * from './useDeepbookPools';
-export * from './useBalanceConversion';
 export * from './useGetEstimate';

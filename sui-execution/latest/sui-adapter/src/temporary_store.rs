@@ -17,7 +17,7 @@ use sui_types::execution::{
 };
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingStore, PackageObjectArc};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -1098,17 +1098,23 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        if let Some(obj) = self.execution_results.written_objects.get(package_id) {
-            Ok(Some(obj.clone()))
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+        // We first check the objects in the temporary store because in non-production code path,
+        // it is possible to read packages that are just written in the same transaction.
+        // This can happen for example when we run the expensive conservation checks, where we may
+        // look into the types of each written object in the output, and some of them need the
+        // newly written packages for type checking.
+        // In production path though, this should never happen.
+        if let Some(obj) = self.read_object(package_id) {
+            Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
+                if let Some(v) = &obj {
                     // TODO: Can this lock ever block execution?
                     self.runtime_packages_loaded_from_db
                         .write()
-                        .insert(*package_id, v);
+                        .insert(*package_id, v.object().clone());
                 }
                 obj
             })

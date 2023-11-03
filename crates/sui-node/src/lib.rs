@@ -65,7 +65,7 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::consensus_handler::ConsensusHandler;
+use sui_core::consensus_manager::{ConsensusManager, ConsensusManagerTrait};
 use sui_core::consensus_throughput_calculator::{
     ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
 };
@@ -76,7 +76,6 @@ use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
@@ -130,8 +129,8 @@ pub mod metrics;
 
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
-    narwhal_manager: NarwhalManager,
-    narwhal_epoch_data_remover: EpochDataRemover,
+    consensus_manager: ConsensusManager,
+    consensus_epoch_data_remover: EpochDataRemover,
     consensus_adapter: Arc<ConsensusAdapter>,
     // dropping this will eventually stop checkpoint tasks. The receiver side of this channel
     // is copied into each checkpoint service task, and they are listening to any change to this
@@ -197,6 +196,7 @@ use simulator::*;
 
 #[cfg(msim)]
 pub use simulator::set_jwk_injector;
+use sui_core::consensus_handler::ConsensusHandlerInitializer;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -992,14 +992,14 @@ impl SuiNode {
             &registry_service.default_registry(),
             epoch_store.protocol_config().clone(),
         ));
-        let narwhal_manager =
-            Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
+        let consensus_manager =
+            ConsensusManager::new_narwhal(config, consensus_config, registry_service);
 
-        let mut narwhal_epoch_data_remover =
-            EpochDataRemover::new(narwhal_manager.get_storage_base_path());
+        let mut consensus_epoch_data_remover =
+            EpochDataRemover::new(consensus_manager.get_storage_base_path());
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
-        narwhal_epoch_data_remover.run().await;
+        consensus_epoch_data_remover.run().await;
 
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =
@@ -1020,8 +1020,8 @@ impl SuiNode {
             checkpoint_store,
             epoch_store,
             state_sync_handle,
-            narwhal_manager,
-            narwhal_epoch_data_remover,
+            consensus_manager,
+            consensus_epoch_data_remover,
             accumulator,
             validator_server_handle,
             checkpoint_metrics,
@@ -1038,8 +1038,8 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
-        narwhal_manager: NarwhalManager,
-        narwhal_epoch_data_remover: EpochDataRemover,
+        consensus_manager: ConsensusManager,
+        consensus_epoch_data_remover: EpochDataRemover,
         accumulator: Arc<StateAccumulator>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -1064,9 +1064,6 @@ impl SuiNode {
 
         consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
-        let new_epoch_start_state = epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
-
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
             state.metrics.clone(),
@@ -1082,32 +1079,18 @@ impl SuiNode {
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
 
-        let consensus_handler_initializer = || {
-            ConsensusHandler::new(
-                epoch_store.clone(),
-                checkpoint_service.clone(),
-                state.transaction_manager().clone(),
-                state.db(),
-                low_scoring_authorities.clone(),
-                committee.clone(),
-                state.metrics.clone(),
-                throughput_calculator.clone(),
-            )
-        };
+        let consensus_handler_initializer = ConsensusHandlerInitializer::new(
+            state.clone(),
+            checkpoint_service.clone(),
+            epoch_store.clone(),
+            low_scoring_authorities,
+            throughput_calculator,
+        );
 
-        let transactions_addr = &config
-            .consensus_config
-            .as_ref()
-            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?
-            .address;
-        let worker_cache = new_epoch_start_state.get_narwhal_worker_cache(transactions_addr);
-
-        narwhal_manager
+        consensus_manager
             .start(
-                new_epoch_start_state.get_narwhal_committee(),
-                epoch_store.get_chain_identifier(),
-                epoch_store.protocol_config().clone(),
-                worker_cache,
+                config,
+                epoch_store.clone(),
                 consensus_handler_initializer,
                 SuiTxValidator::new(
                     epoch_store.clone(),
@@ -1130,8 +1113,8 @@ impl SuiNode {
 
         Ok(ValidatorComponents {
             validator_server_handle,
-            narwhal_manager,
-            narwhal_epoch_data_remover,
+            consensus_manager,
+            consensus_epoch_data_remover,
             consensus_adapter,
             checkpoint_service_exit,
             checkpoint_metrics,
@@ -1185,25 +1168,6 @@ impl SuiNode {
             max_tx_per_checkpoint,
             max_checkpoint_size_bytes,
         )
-    }
-
-    fn construct_narwhal_manager(
-        config: &NodeConfig,
-        consensus_config: &ConsensusConfig,
-        registry_service: &RegistryService,
-    ) -> Result<NarwhalManager> {
-        let narwhal_config = NarwhalConfiguration {
-            primary_keypair: config.protocol_key_pair().copy(),
-            network_keypair: config.network_key_pair().copy(),
-            worker_ids_and_keypairs: vec![(0, config.worker_key_pair().copy())],
-            storage_base_path: consensus_config.db_path().to_path_buf(),
-            parameters: consensus_config.narwhal_config().to_owned(),
-            registry_service: registry_service.clone(),
-        };
-
-        let metrics = NarwhalManagerMetrics::new(&registry_service.default_registry());
-
-        Ok(NarwhalManager::new(narwhal_config, metrics))
     }
 
     fn construct_consensus_adapter(
@@ -1420,8 +1384,8 @@ impl SuiNode {
             // in the new epoch.
             let new_validator_components = if let Some(ValidatorComponents {
                 validator_server_handle,
-                narwhal_manager,
-                narwhal_epoch_data_remover,
+                consensus_manager,
+                consensus_epoch_data_remover,
                 consensus_adapter,
                 checkpoint_service_exit,
                 checkpoint_metrics,
@@ -1432,7 +1396,7 @@ impl SuiNode {
                 // Stop the old checkpoint service.
                 drop(checkpoint_service_exit);
 
-                narwhal_manager.shutdown().await;
+                consensus_manager.shutdown().await;
 
                 let new_epoch_store = self
                     .reconfigure_state(
@@ -1444,7 +1408,7 @@ impl SuiNode {
                     )
                     .await;
 
-                narwhal_epoch_data_remover
+                consensus_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
                     .await;
 
@@ -1458,8 +1422,8 @@ impl SuiNode {
                             self.checkpoint_store.clone(),
                             new_epoch_store.clone(),
                             self.state_sync.clone(),
-                            narwhal_manager,
-                            narwhal_epoch_data_remover,
+                            consensus_manager,
+                            consensus_epoch_data_remover,
                             self.accumulator.clone(),
                             validator_server_handle,
                             checkpoint_metrics,

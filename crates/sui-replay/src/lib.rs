@@ -291,7 +291,6 @@ pub async fn execute_replay_command(
                     },
                 );
                 if chunk.len() == batch_size as usize {
-                    println!("=========================================================");
                     println!("Executing batch: {:?}", chunk);
                     // execute all in chunk
                     match exec_batch(
@@ -312,12 +311,11 @@ pub async fn execute_replay_command(
                         }
                     }
                     println!("Finished batch execution");
-                    println!("=========================================================");
+
                     chunk.clear();
                 }
             }
             if !chunk.is_empty() {
-                println!("=========================================================");
                 println!("Executing batch: {:?}", chunk);
                 match exec_batch(
                     rpc_url.clone(),
@@ -337,7 +335,6 @@ pub async fn execute_replay_command(
                     }
                 }
                 println!("Finished batch execution");
-                println!("=========================================================");
             }
 
             // TODO: clean this up
@@ -367,7 +364,7 @@ pub async fn execute_replay_command(
                 println!("{:#?}", sandbox_state.pre_exec_diag);
             }
             if show_effects {
-                println!("{:#?}", sandbox_state.local_exec_effects);
+                println!("{}", sandbox_state.local_exec_effects);
             }
 
             sandbox_state.check_effects()?;

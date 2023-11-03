@@ -5,7 +5,7 @@ import type {
 	SuiSignAndExecuteTransactionBlockInput,
 	SuiSignAndExecuteTransactionBlockOutput,
 } from '@mysten/wallet-standard';
-import type { UseMutationOptions } from '@tanstack/react-query';
+import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
@@ -51,7 +51,11 @@ export function useSignAndExecuteTransactionBlock({
 	mutationKey,
 	executeFromWallet,
 	...mutationOptions
-}: UseSignAndExecuteTransactionBlockMutationOptions = {}) {
+}: UseSignAndExecuteTransactionBlockMutationOptions = {}): UseMutationResult<
+	UseSignAndExecuteTransactionBlockResult,
+	UseSignAndExecuteTransactionBlockError,
+	UseSignAndExecuteTransactionBlockArgs
+> {
 	const { currentWallet } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 	const client = useSuiClient();

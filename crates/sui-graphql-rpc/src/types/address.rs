@@ -9,7 +9,6 @@ use crate::context_data::db_data_provider::PgManager;
 use super::{
     balance::Balance,
     coin::Coin,
-    name_service::NameService,
     object::{Object, ObjectFilter},
     stake::Stake,
     sui_address::SuiAddress,
@@ -124,7 +123,7 @@ impl Address {
             .extend()
     }
 
-    /// Lists the stakes corresponding to the StakedSui objects owned by the given address
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given address.
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,
@@ -146,14 +145,15 @@ impl Address {
             .extend()
     }
 
-    pub async fn name_service_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, NameService>>> {
-        unimplemented!()
-    }
+    // TODO disabled-for-rpc-1.5
+    // pub async fn name_service_connection(
+    //     &self,
+    //     ctx: &Context<'_>,
+    //     first: Option<u64>,
+    //     after: Option<String>,
+    //     last: Option<u64>,
+    //     before: Option<String>,
+    // ) -> Result<Option<Connection<String, NameService>>> {
+    //     unimplemented!()
+    // }
 }
