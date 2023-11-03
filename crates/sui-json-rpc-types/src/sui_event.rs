@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use std::fmt;
+use std::fmt::Display;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::event::{Event, EventEnvelope, EventID};
@@ -119,6 +121,22 @@ impl SuiEvent {
             bcs,
             timestamp_ms,
         })
+    }
+}
+
+impl Display for SuiEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let output = format!(
+            " ┌──\n │ EventID: {}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {} \n │ EventType: {}:{}\n │ ParsedJSON: {}\n │ BCS: {:?}\n",
+            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_, self.parsed_json, self.bcs);
+        match self.timestamp_ms {
+            Some(ts) => {
+                writeln!(f, "{output} │ Timestamp: {}\n └──", ts)
+            }
+            None => {
+                writeln!(f, "{output} └──")
+            }
+        }
     }
 }
 
