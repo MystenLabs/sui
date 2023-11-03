@@ -34,6 +34,9 @@ Commands:
   pay-sui            	Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also
                          	include the coin for gas payment, so no extra gas coin is required
   publish            	Publish Move modules
+  replay-transaction    Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
+  replay-batch          Replay transactions listed in a file.
+  replay-checkpoint     Replay all transactions in a range of checkpoints. 
   split-coin         	Split a coin object into multiple coins
   switch             	Switch active address and network(e.g., devnet, local rpc server)
   tx-block           	Get the effects of executing the given transaction block

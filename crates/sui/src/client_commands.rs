@@ -613,10 +613,6 @@ pub enum SuiClientCommands {
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
-        /// The rpc url for a non-pruning fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: String,
-
         /// The digest of the transaction to replay
         #[arg(long, short)]
         tx_digest: String,
@@ -625,10 +621,6 @@ pub enum SuiClientCommands {
     /// Replay transactions listed in a file.
     #[clap(name = "replay-batch")]
     ReplayBatch {
-        /// The rpc url for a non-pruning fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: String,
-
         /// The path to the file of transaction digests to replay, with one digest per line
         #[arg(long, short)]
         path: PathBuf,
@@ -641,15 +633,11 @@ pub enum SuiClientCommands {
     /// Replay all transactions in a range of checkpoints.
     #[command(name = "replay-checkpoint")]
     ReplayCheckpoints {
-        /// The rpc url for a non-pruning fullnode to use for fetching the transaction dependencies
-        #[arg(long = "rpc")]
-        rpc_url: String,
-
-        /// The start value of the range of checkpoints to replay
+        /// The starting checkpoint sequence number of the range of checkpoints to replay
         #[arg(long, short)]
         start: u64,
 
-        /// The end value of the range of checkpoints to replay
+        /// The ending checkpoint sequence number of the range of checkpoints to replay
         #[arg(long, short)]
         end: u64,
 
@@ -665,7 +653,7 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
-            SuiClientCommands::ReplayTransaction { rpc_url, tx_digest } => {
+            SuiClientCommands::ReplayTransaction { tx_digest } => {
                 let cmd = ReplayToolCommand::ReplayTransaction {
                     tx_digest,
                     show_effects: true,
@@ -673,14 +661,12 @@ impl SuiClientCommands {
                     executor_version_override: None,
                     protocol_version_override: None,
                 };
-                // todo: automatically get non pruning fullnode url
+                let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc_url), false, false, None, cmd)
-                        .await;
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayTransaction
             }
             SuiClientCommands::ReplayBatch {
-                rpc_url,
                 path,
                 terminate_early,
             } => {
@@ -689,14 +675,12 @@ impl SuiClientCommands {
                     terminate_early,
                     batch_size: 16,
                 };
-                // todo: automatically get non pruning fullnode url
+                let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc_url), false, false, None, cmd)
-                        .await;
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayBatch
             }
             SuiClientCommands::ReplayCheckpoints {
-                rpc_url,
                 start,
                 end,
                 terminate_early,
@@ -707,10 +691,9 @@ impl SuiClientCommands {
                     terminate_early,
                     max_tasks: 16,
                 };
-                // todo: automatically get non pruning fullnode url
+                let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc_url), false, false, None, cmd)
-                        .await;
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
                 SuiClientCommandResult::ReplayCheckpoints
             }
             SuiClientCommands::Addresses => {
@@ -1734,8 +1717,6 @@ impl Display for SuiClientCommandResult {
                 table.with(tabled::settings::style::BorderSpanCorrection);
                 writeln!(f, "{}", table)?;
             }
-            // todo: for all replay commands format results using tabular structure instead of
-            // todo: println statements in original command
             SuiClientCommandResult::ReplayTransaction => {}
             SuiClientCommandResult::ReplayBatch => {}
             SuiClientCommandResult::ReplayCheckpoints => {}

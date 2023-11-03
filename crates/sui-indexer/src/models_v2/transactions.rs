@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use diesel::prelude::*;
+
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::BalanceChange;
 use sui_json_rpc_types::ObjectChange;
@@ -35,6 +36,18 @@ pub struct StoredTransaction {
     pub balance_changes: Vec<Option<Vec<u8>>>,
     pub events: Vec<Option<Vec<u8>>>,
     pub transaction_kind: i16,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionTimestamp {
+    pub tx_sequence_number: i64,
+    pub timestamp_ms: i64,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionCheckpoint {
+    pub tx_sequence_number: i64,
+    pub checkpoint_sequence_number: i64,
 }
 
 impl From<&IndexedTransaction> for StoredTransaction {

@@ -63,7 +63,7 @@ mod checked {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn check_transaction_input<S: BackingPackageStore + ObjectStore + MarkerTableQuery>(
+    pub fn check_transaction_input<S>(
         store: &S,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
@@ -72,7 +72,10 @@ mod checked {
         tx_signatures: &[GenericSignature],
         transaction_deny_config: &TransactionDenyConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
-    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    ) -> SuiResult<(SuiGasStatus, InputObjects)>
+    where
+        S: BackingPackageStore + ObjectStore + MarkerTableQuery,
+    {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check(protocol_config)?;
         let receiving_objects = transaction.receiving_objects();
@@ -110,7 +113,7 @@ mod checked {
         Ok((gas_status, input_objects))
     }
 
-    pub fn check_transaction_input_with_given_gas<S: ObjectStore + MarkerTableQuery>(
+    pub fn check_transaction_input_with_given_gas<S>(
         store: &S,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
@@ -118,7 +121,10 @@ mod checked {
         transaction: &TransactionData,
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
-    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    ) -> SuiResult<(SuiGasStatus, InputObjects)>
+    where
+        S: ObjectStore + BackingPackageStore + MarkerTableQuery,
+    {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
@@ -153,14 +159,18 @@ mod checked {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn check_certificate_input<S: ObjectStore + MarkerTableQuery, G: GetSharedLocks>(
+    pub fn check_certificate_input<S, G>(
         store: &S,
         shared_lock_store: &G,
         cert: &VerifiedExecutableTransaction,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         epoch_id: EpochId,
-    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
+    ) -> SuiResult<(SuiGasStatus, InputObjects)>
+    where
+        S: ObjectStore + BackingPackageStore + MarkerTableQuery,
+        G: GetSharedLocks,
+    {
         // This should not happen - validators should not have signed the txn in the first place.
         assert!(
             cert.data()
@@ -207,13 +217,16 @@ mod checked {
 
     /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
     /// bypasses many of the normal object checks
-    pub fn check_dev_inspect_input<S: ObjectStore + MarkerTableQuery>(
+    pub fn check_dev_inspect_input<S>(
         store: &S,
         config: &ProtocolConfig,
         kind: &TransactionKind,
         gas_object: Object,
         epoch_id: EpochId,
-    ) -> SuiResult<(ObjectRef, InputObjects)> {
+    ) -> SuiResult<(ObjectRef, InputObjects)>
+    where
+        S: ObjectStore + BackingPackageStore + MarkerTableQuery,
+    {
         let gas_object_ref = gas_object.compute_object_reference();
         kind.validity_check(config)?;
         if kind.is_system_tx() {
@@ -246,13 +259,16 @@ mod checked {
         Ok((gas_object_ref, input_objects))
     }
 
-    fn check_receiving_objects<S: ObjectStore + MarkerTableQuery>(
+    fn check_receiving_objects<S>(
         store: &S,
         receiving_objects: &[ObjectRef],
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
         epoch_id: EpochId,
-    ) -> Result<(), SuiError> {
+    ) -> Result<(), SuiError>
+    where
+        S: ObjectStore + MarkerTableQuery,
+    {
         // Count receiving objects towards the input object limit as they are passed in the PTB
         // args and they will (most likely) incur an object load at runtime.
         fp_ensure!(
@@ -376,12 +392,15 @@ mod checked {
         Ok(())
     }
 
-    pub fn check_input_objects<S: ObjectStore + MarkerTableQuery>(
+    pub fn check_input_objects<S>(
         object_store: &S,
         objects: &[InputObjectKind],
         protocol_config: &ProtocolConfig,
         epoch_id: EpochId,
-    ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
+    ) -> Result<Vec<(InputObjectKind, Object)>, SuiError>
+    where
+        S: ObjectStore + BackingPackageStore + MarkerTableQuery,
+    {
         let mut result = Vec::new();
 
         fp_ensure!(
@@ -402,7 +421,9 @@ mod checked {
                     }
                     res
                 }
-                InputObjectKind::MovePackage(id) => object_store.get_object(id)?,
+                InputObjectKind::MovePackage(id) => object_store
+                    .get_package_object(id)?
+                    .map(|o| o.object().clone()),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     object_store.get_object_by_key(&objref.0, objref.1)?
                 }
@@ -418,13 +439,17 @@ mod checked {
     ///
     /// Before this function is invoked, TransactionManager must ensure all depended
     /// objects are present. Thus any missing object will panic.
-    pub fn check_sequenced_input_objects<S: ObjectStore + MarkerTableQuery, G: GetSharedLocks>(
+    pub fn check_sequenced_input_objects<S, G>(
         store: &S,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         shared_lock_store: &G,
         epoch_id: EpochId,
-    ) -> Result<(Vec<(InputObjectKind, Object)>, DeletedSharedObjects), SuiError> {
+    ) -> Result<(Vec<(InputObjectKind, Object)>, DeletedSharedObjects), SuiError>
+    where
+        S: ObjectStore + BackingPackageStore + MarkerTableQuery,
+        G: GetSharedLocks,
+    {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
         let mut deleted_shared_objects = Vec::new();
         let mut result = Vec::new();
@@ -459,9 +484,9 @@ mod checked {
                     };
 
                 }
-                InputObjectKind::MovePackage(id) => result.push((*kind, store.get_object(id)?.unwrap_or_else(|| {
+                InputObjectKind::MovePackage(id) => result.push((*kind, store.get_package_object(id)?.unwrap_or_else(|| {
                     panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
-                }))),
+                }).object().clone())),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     result.push((*kind, store.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
                         panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);

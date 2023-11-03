@@ -4,6 +4,9 @@ outputs:
   isDoc:
     description: True when changes happened to some documentation
     value: "${{ steps.diff.outputs.isDoc }}"
+  isOldDoc:
+    description: True when changes happened to old doc folder
+    value: "${{ steps.diff.outputs.isOldDoc }}"    
   isRust:
     description: True when changes happened to the Rust code
     value: "${{ steps.diff.outputs.isRust }}"
@@ -33,9 +36,12 @@ runs:
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
         isDoc:
-          - 'doc/**'
-          - '*.md'
+          - 'docs/content/**'
+          - '*.mdx'
           - '.github/workflows/docs.yml'
+        isOldDoc:
+          - 'doc/**'
+          - '*.md'  
         isMove:
           - 'crates/sui-framework/**'
           - 'crates/sui-framework-build/**'

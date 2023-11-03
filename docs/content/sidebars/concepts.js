@@ -45,19 +45,19 @@ const concepts = [
 							'concepts/dynamic-fields/dynamic-object-fields',
 							'concepts/dynamic-fields/tables-bags',
 							'concepts/dynamic-fields/events',
-							{
-								type: 'category',
-								label: 'Transfers',
-								link: {
-									type: 'doc',
-									id: 'concepts/dynamic-fields/transfers',
-								},
-								items: [
-									'concepts/dynamic-fields/transfers/custom-rules',
-									'concepts/dynamic-fields/transfers/transfer-to-object',
-								],
-							},
 							'concepts/dynamic-fields/versioning',
+						],
+					},
+					{
+						type: 'category',
+						label: 'Transfers',
+						link: {
+							type: 'doc',
+							id: 'concepts/dynamic-fields/transfers',
+						},
+						items: [
+							'concepts/dynamic-fields/transfers/custom-rules',
+							'concepts/dynamic-fields/transfers/transfer-to-object',
 						],
 					},
 				],
@@ -169,20 +169,6 @@ const concepts = [
 				],
 			},
 			'concepts/cryptography/zklogin',
-			{
-				type: 'category',
-				label: 'Smart Contracts',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/smart-contracts',
-				},
-				items: [
-					'concepts/cryptography/smart-contracts/signing',
-					'concepts/cryptography/smart-contracts/groth16',
-					'concepts/cryptography/smart-contracts/hashing',
-					'concepts/cryptography/smart-contracts/ecvrf',
-				],
-			},
 			{
 				type: 'category',
 				label: 'System',

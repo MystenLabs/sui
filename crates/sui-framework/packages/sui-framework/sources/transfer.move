@@ -26,8 +26,23 @@ module sui::transfer {
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
 
+    #[allow(unused_const)]
+    /// Serialization of the object failed.
+    const EBCSSerializationFailure: u64 = 1;
+
+    #[allow(unused_const)]
+    /// The object being received is not of the expected type.
+    const EReceivingObjectTypeMismatch: u64 = 2;
+
+    #[allow(unused_const)]
+    /// Represents both the case where the object does not exist and the case where the object is not
+    /// able to be accessed through the parent that is passed-in.
+    const EUnableToReceiveObject: u64 = 3;
+
+    #[allow(unused_const)]
     /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
-    const ESharedObjectOperationNotSupported: u64 = 1;
+    const ESharedObjectOperationNotSupported: u64 = 4;
+
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
     /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
@@ -94,6 +109,11 @@ module sui::transfer {
             version,
         } = to_receive;
         receive_impl(object::uid_to_address(parent), id, version)
+    }
+
+    /// Return the object ID that the given `Receiving` argument references.
+    public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
+        receiving.id
     }
 
     public(friend) native fun freeze_object_impl<T: key>(obj: T);

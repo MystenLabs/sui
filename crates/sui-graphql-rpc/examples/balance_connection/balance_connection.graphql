@@ -12,7 +12,9 @@
     }
     balanceConnection {
       nodes {
-        coinType
+        coinType {
+          repr
+        }
         coinObjectCount
         totalBalance
       }

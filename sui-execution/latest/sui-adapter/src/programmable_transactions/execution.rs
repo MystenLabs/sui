@@ -32,6 +32,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::storage::{get_package_objects, PackageObjectArc};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -48,7 +49,6 @@ mod checked {
             normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
             UpgradeTicket,
         },
-        storage::get_packages,
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         SUI_FRAMEWORK_ADDRESS,
@@ -482,7 +482,8 @@ mod checked {
         // For newly published packages, runtime ID matches storage ID.
         let storage_id = runtime_id;
         let dependencies = fetch_packages(context, &dep_ids)?;
-        let package = context.new_package(&modules, &dependencies)?;
+        let package =
+            context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
         // Here we optimistacally push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
@@ -582,22 +583,31 @@ mod checked {
         let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
         let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
-        let runtime_id = current_package.original_package_id();
+        let runtime_id = current_package.move_package().original_package_id();
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         let storage_id = context.tx_context.fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
-        let package =
-            context.upgrade_package(storage_id, &current_package, &modules, &dependencies)?;
+        let package = context.upgrade_package(
+            storage_id,
+            current_package.move_package(),
+            &modules,
+            dependencies.iter().map(|p| p.move_package()),
+        )?;
 
         context.linkage_view.set_linkage(&package)?;
         let res = publish_and_verify_modules(context, runtime_id, &modules);
         context.linkage_view.reset_linkage();
         res?;
 
-        check_compatibility(context, &current_package, &modules, upgrade_ticket.policy)?;
+        check_compatibility(
+            context,
+            current_package.move_package(),
+            &modules,
+            upgrade_ticket.policy,
+        )?;
 
         context.write_package(package);
         Ok(vec![Value::Raw(
@@ -683,7 +693,7 @@ mod checked {
     fn fetch_package(
         context: &ExecutionContext<'_, '_, '_>,
         package_id: &ObjectID,
-    ) -> Result<MovePackage, ExecutionError> {
+    ) -> Result<PackageObjectArc, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
@@ -700,9 +710,9 @@ mod checked {
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
         context: &'ctx ExecutionContext<'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-    ) -> Result<Vec<MovePackage>, ExecutionError> {
+    ) -> Result<Vec<PackageObjectArc>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-        match get_packages(&context.state_view, package_ids) {
+        match get_package_objects(&context.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 e,

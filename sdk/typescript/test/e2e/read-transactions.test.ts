@@ -115,16 +115,19 @@ describe('Transaction Reading API', () => {
 			showObjectChanges: true,
 			showBalanceChanges: true,
 		};
-		const resp = await toolbox.client.queryTransactionBlocks({
+		const {
+			// comparing checkpoint causes a race condition resulting in flaky tests
+			data: [{ checkpoint: _, ...response1 }],
+		} = await toolbox.client.queryTransactionBlocks({
 			options,
 			limit: 1,
 		});
-		const digest = resp.data[0].digest;
-		const response2 = await toolbox.client.getTransactionBlock({
-			digest,
+
+		const { checkpoint, ...response2 } = await toolbox.client.getTransactionBlock({
+			digest: response1.digest,
 			options,
 		});
-		expect(resp.data[0]).toEqual(response2);
+		expect(response1).toEqual(response2);
 	});
 
 	it('Get Transactions', async () => {

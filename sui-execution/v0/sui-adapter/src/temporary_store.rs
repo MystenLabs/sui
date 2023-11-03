@@ -13,7 +13,7 @@ use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObjectArc};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -994,17 +994,17 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(obj.clone()))
+            Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
+                if let Some(v) = &obj {
                     // TODO: Can this lock ever block execution?
                     self.runtime_packages_loaded_from_db
                         .write()
-                        .insert(*package_id, v);
+                        .insert(*package_id, v.object().clone());
                 }
                 obj
             })

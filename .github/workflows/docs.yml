@@ -12,20 +12,34 @@ jobs:
     runs-on: [ubuntu-latest]
     outputs:
       isDoc: ${{ steps.diff.outputs.isDoc }}
+      isOldDoc: ${{ steps.diff.outputs.isOldDoc }}
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions/checkout@v3 # pin@v3
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
-
+  
   spelling:
     name: Lint documentation
     needs: diff
     if: needs.diff.outputs.isDoc == 'true'
     runs-on: [ubuntu-latest]
+
     steps:
-      - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+      - uses: actions/checkout@v3 # pin@v3
       - name: Spell Check Docs
         uses: crate-ci/typos@v1.16.11
         with:
-          files: ./doc ./*.md
+          files: ./docs/content
+
+  old-doc-folder-notice:
+    name: Old doc folder notice
+    needs: diff
+    if: needs.diff.outputs.isOldDoc == 'true'
+    runs-on: [ubuntu-latest]
+
+    steps:
+      - name: Output error
+        run: |
+          echo "::error::Sui documentation has moved from doc/* to docs/content/* folder. (*.md files are now *.mdx)"
+          exit 1

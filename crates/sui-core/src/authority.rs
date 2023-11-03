@@ -214,6 +214,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_package_cache_hits: IntCounter,
     pub(crate) transaction_manager_package_cache_misses: IntCounter,
     pub(crate) transaction_manager_package_cache_evictions: IntCounter,
+    pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
@@ -230,7 +231,6 @@ pub struct AuthorityMetrics {
     pending_notify_read: IntGauge,
 
     /// Consensus handler metrics
-    pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
@@ -470,6 +470,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            transaction_manager_transaction_queue_age_s: register_histogram_with_registry!(
+                "transaction_manager_transaction_queue_age_s",
+                "Time spent in waiting for transaction in the queue",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
@@ -524,11 +531,6 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
-            consensus_handler_processed_batches: register_int_counter_with_registry!(
-                "consensus_handler_processed_batches",
-                "Number of batches processed by consensus_handler",
-                registry
-            ).unwrap(),
             consensus_handler_processed_bytes: register_int_counter_with_registry!(
                 "consensus_handler_processed_bytes",
                 "Number of bytes processed by consensus_handler",
@@ -4255,6 +4257,23 @@ impl AuthorityState {
             .unwrap()
             .send(())
             .unwrap();
+    }
+
+    pub async fn prune_objects_and_compact_for_testing(&self) {
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.database.perpetual_tables,
+            &self.checkpoint_store,
+            &self.database.objects_lock_table,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+            usize::MAX,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.database.perpetual_tables);
     }
 }
 

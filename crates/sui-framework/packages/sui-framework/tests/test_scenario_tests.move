@@ -730,7 +730,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = df::EFieldDoesNotExist)]
+    #[expected_failure(abort_code = 4)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);

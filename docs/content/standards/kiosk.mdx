@@ -11,6 +11,12 @@ Kiosk is a decentralized system for commerce applications on Sui. It consists of
 
 Practically, Kiosk is a part of the Sui framework, and it is native to the system and available to everyone out of the box.
 
+:::info
+
+See the [Kiosk SDK documentation](https://sui-typescript-docs.vercel.app/kiosk) for examples of working with Kiosk using TypeScript.
+
+:::
+
 ## Sui Kiosk owners
 
 Anyone can create a Sui Kiosk. Ownership of a kiosk is determined by the owner of the `KioskOwnerCap`, a special object that grants full access to a single kiosk. As the owner, you can sell any asset with a type (T) that has a shared `TransferPolicy` available, or you can use a kiosk to store assets even without a shared policy. You can’t sell or transfer any assets from your kiosk that do not have an associated transfer policy available.
@@ -94,21 +100,10 @@ When someone purchases an asset from a kiosk, the asset leaves the kiosk and own
 
 To use a Sui Kiosk, you must create one and have the `KioskOwnerCap` that matches the `Kiosk` object. You can create a new kiosk using a single transaction by calling the `kiosk::default` function. The function creates and shares a `Kiosk`, and transfers the `KioskOwnerCap` to your address.
 
-### Create a Sui Kiosk using the Kiosk SDK
-
-```rust
-import { createKioskAndShare } from '@mysten/kiosk';
-
-let tx = new TransactionBuilder();
-let kioskOwnerCap = createKioskAndShare(tx);
-
-tx.transferObjects([ kioskOwnerCap ], sender);
-```
-
 ### Create a Kiosk using programmable transaction blocks
 
 ```rust
-let tx = new TransactionBuilder();
+let tx = new TransactionBlock();
 tx.moveCall({
     target: '0x2::kiosk::default'
 });
@@ -128,26 +123,10 @@ sui client call \
 For more advanced use cases, when you want to choose the storage model or perform an action right away, you can use the  programmable transaction block (PTB) friendly function kiosk::new.
 Kiosk is designed to be shared. If you choose a different storage model, such as owned, your kiosk might not function as intended or not be accessible to other users. You can make sure your Kiosk works by testing it on Sui Testnet.
 
-### Create a Kiosk with advanced options using the Kiosk SDK
-
-```rust
-import { createKiosk } from '@mysten/kiosk';
-
-let tx = new TransactionBuilder();
-let [kiosk, kioskOwnerCap] = createKiosk(tx);
-
-tx.transferObjects([ kioskOwnerCap ], sender);
-tx.moveCall({
-    target: '0x2::transfer::public_share_object',
-    arguments: [ kiosk ],
-    typeArguments: '0x2::kiosk::Kiosk'
-})
-```
-
 ### Create a Kiosk with advanced options using programmable transaction blocks
 
 ```rust
-let tx = new TransactionBuilder();
+let tx = new TransactionBlock();
 let [kiosk, kioskOwnerCap] = tx.moveCall({
     target: '0x2::kiosk::new'
 });
@@ -175,24 +154,10 @@ To place an item to the Kiosk, the owner needs to call the `sui::kiosk::place` f
 
 `ITEM_TYPE` in the following examples represents the full type of the item.
 
-### Place an item using the Kiosk SDK
-
-```rust
-import { place } from '@mysten/kiosk';
-
-let tx = new TransactionBuilder();
-
-let itemArg = tx.object('<ID>');
-let kioskArg = tx.object('<ID>');
-let kioskOwnerCapArg = tx.object('<ID>');
-
-place(tx, '<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, item);
-```
-
 ### Place an item using programmable transaction blocks
 
 ```rust
-let tx = new TransactionBuilder();
+let tx = new TransactionBlock();
 
 let itemArg = tx.object('<ID>');
 let kioskArg = tx.object('<ID>');
@@ -223,26 +188,10 @@ To take an item from a kiosk you must be the kiosk owner. As the owner, call the
 
 `ITEM_TYPE` in the following examples represents the full type of the item.
 
-### Take an item from a kiosk using the Kiosk SDK
-
-```rust
-import { take } from '@mysten/kiosk';
-
-let tx = new TransactionBuilder();
-
-let itemId = tx.pure.address('<ITEM_ID>');
-let kioskArg = tx.object('<ID>');
-let kioskOwnerCapArg = tx.object('<ID>');
-
-let item = take('<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, itemId);
-
-tx.transferObjects([ item ], sender);
-```
-
 ### Take an item from a kiosk using programmable transaction blocks
 
 ```rust
-let tx = new TransactionBuilder();
+let tx = new TransactionBlock();
 
 let itemId = tx.pure.address('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
@@ -271,25 +220,10 @@ When you use the lock `function`, similar to using the `place` function, you spe
 
 `<ITEM_TYPE>` in the following examples represents the full type of the asset.
 
-### Lock an item using the Kiosk SDK
-
-```rust
-import { lock } from '@mysten/kiosk';
-
-const tx = new TransactionBuilder();
-
-let kioskArg = tx.object('<ID>');
-let kioskOwnerCapArg = tx.object('<ID>');
-let itemArg = tx.object('<ID>');
-let transferPolicyArg = tx.object('<ID>');
-
-lock(tx, '<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, transferPolicyArg, itemArg);
-```
-
 ### Lock an item using programmable transaction blocks
 
 ```rust
-const tx = new TransactionBuilder();
+const tx = new TransactionBlock();
 
 let kioskArg = tx.object('<ID>');
 let kioskOwnerCapArg = tx.object('<ID>');
@@ -329,21 +263,6 @@ Anyone on the network can purchase an item listed from a Sui Kiosk. To learn mor
 As a kiosk owner, you can use the `kiosk::list` function to list any asset you added to your kiosk. Include the item to sell and the list price as arguments. All listings on Sui are in SUI tokens.
 When you list an item, Sui emits a `kiosk::ItemListed` event that  contains the Kiosk ID, Item ID, type of the Item, and the list price.
 
-### List an item using the Kiosk SDK
-
-```rust
-import { list } from '@mysten/kiosk';
-
-let tx = new TransactionBlock();
-let kioskArg = tx.object('<ID>');
-let capArg = tx.object('<ID>');
-let itemId = tx.pure.address('<ID>');
-let itemType = 'ITEM_TYPE';
-let price = '<price>'; // in MIST (1 SUI = 10^9 MIST)
-
-list(tx, itemType, kioskArg, capArg, itemId, price);
-```
-
 ### List an item using programmable transaction blocks
 
 ```rust
@@ -381,20 +300,6 @@ As a kiosk owner you can use the `kiosk::delist` to delist any currently listed 
 When you delist an item, Sui returns to the kiosk owner the gas fees charged to list the item.
 
 When you delist an item, Sui emits a `kiosk::ItemDelisted` event that contains the Kiosk ID, Item ID, and the type of the item.
-
-### Delist an item using the Kiosk SDK
-
-```rust
-import { delist } from '@mysten/kiosk';
-
-let tx = new TransactionBlock();
-let kioskArg = tx.object('<ID>');
-let capArg = tx.object('<ID>');
-let itemId = tx.pure.address('<ID>');
-let itemType = 'ITEM_TYPE';
-
-delist(tx, itemType, kioskArg, capArg, itemId);
-```
 
 ### Delist an item using the programmable transaction blocks
 
@@ -479,32 +384,10 @@ module examples::mutable_borrow
 
 You can use the PTB-friendly kiosk::borrow_val function. It allows you to take an asset and place it back in the same transaction. To make sure the asset is placed back into the kiosk, the function "obliges" the caller with a “Hot Potato”.
 
-### Mutable borrow with `borrow_val` using the Kiosk SDK
-
-The Kiosk SDK provides a function with borrowing logic you can use within a PTB: `borrowValue` (and `returnValue`).
-
-```rust
-import { borrowValue, returnValue } from '@sui/kiosk-sdk';
-
-let tx = new TransactionBuilder();
-let itemType = 'ITEM_TYPE';
-let itemId = tx.pure.address('<ITEM_ID>');
-let kioskArg = tx.object('<ID>');
-let capArg = tx.object('<ID>');
-
-let [item, promise] = borrowValue(tx, itemType, kioskArg, capArg, itemId);
-
-// freely mutate or reference the `item`
-// any calls are available as long as they take a reference
-// `returnValue` must be explicitly called
-
-returnValue(tx, itemType, kioskArg, item, promise);
-```
-
 ### Mutable borrow with `borrow_val` using programmable transaction blocks
 
 ```rust
-let tx = new TransactionBuilder();
+let tx = new TransactionBlock();
 
 let itemType = 'ITEM_TYPE';
 let itemId = tx.pure.address('<ITEM_ID>');
@@ -531,22 +414,6 @@ tx.moveCall({
 ## Withdraw proceeds from a completed sale
 
 When someone purchases an item, Sui stores the proceeds from the sale in the Kiosk. As the kiosk owner, you can withdraw the proceeds at any time by calling the `kiosk::withdraw` function. The function is simple, but because it is PTB friendly it is not currently supported in the Sui CLI.
-
-### Withdraw proceeds using the Kiosk SDK
-
-```rust
-import { withdrawFromKiosk } from '@mysten/kiosk';
-
-let tx = new TransactionBlock();
-let kioskArg = tx.object('<ID>');
-let capArg = tx.object('<ID>');
-
-// The amount can be `null` to withdraw everything or a specific amount
-let amount = '<amount>';
-let withdrawAll = null;
-
-let coin = withdrawFromKiosk(tx, kioskArg, capArg, amount);
-```
 
 ### Withdraw proceeds using programmable transaction blocks
 
@@ -579,3 +446,4 @@ let coin = tx.moveCall({
 ### Withdraw proceeds using the Sui CLI
 
 Due to the function being PTB friendly, it is not currently supported in the CLI environment.
+

@@ -1,16 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
+import { Coins } from '_pages/swap/constants';
 import { FEATURES } from '_shared/experimentation/features';
 import { useFeatureValue } from '@growthbook/growthbook-react';
-
-export enum Coins {
-	SUI = 'SUI',
-	USDC = 'USDC',
-	USDT = 'USDT',
-	WETH = 'WETH',
-	TBTC = 'TBTC',
-}
 
 export const mainnetDeepBook: {
 	pools: Record<string, string[]>;

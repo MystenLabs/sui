@@ -1,0 +1,1331 @@
+---
+source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
+expression: sdl
+---
+type Address implements ObjectOwner {
+	"""
+	Similar behavior to the `transactionBlockConnection` in Query but
+	supports additional `AddressTransactionBlockRelationship` filter
+	"""
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	The `0x3::staking_pool::StakedSui` objects owned by the given address.
+	"""
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+}
+
+enum AddressTransactionBlockRelationship {
+	SIGN
+	SENT
+	RECV
+	PAID
+}
+
+type AuthenticatorStateUpdate {
+	value: String!
+}
+
+type Balance {
+	"""
+	Coin type for the balance, such as 0x2::sui::SUI
+	"""
+	coinType: MoveType
+	"""
+	How many coins of this type constitute the balance
+	"""
+	coinObjectCount: Int
+	"""
+	Total balance across all coin objects of the coin type
+	"""
+	totalBalance: BigInt
+}
+
+type BalanceChange {
+	owner: Owner
+	amount: BigInt
+}
+
+type BalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Balance!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Balance!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+scalar Base64
+
+scalar BigInt
+
+
+type ChangeEpochTransaction {
+	timestamp: DateTime
+	storageCharge: BigInt
+	computationCharge: BigInt
+	storageRebate: BigInt
+	epoch: Epoch
+}
+
+type Checkpoint {
+	"""
+	A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
+	This hash can be used to verify checkpoint contents by checking signatures against the committee,
+	Hashing contents to match digest, and checking that the previous checkpoint digest matches.
+	"""
+	digest: String!
+	"""
+	This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+	"""
+	sequenceNumber: Int!
+	"""
+	The timestamp at which the checkpoint is agreed to have happened according to consensus.
+	Transactions that access time in this checkpoint will observe this timestamp.
+	"""
+	timestamp: DateTime
+	"""
+	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
+	validatorSignature: Base64
+	"""
+	The digest of the checkpoint at the previous sequence number.
+	"""
+	previousCheckpointDigest: String
+	"""
+	This is a commitment by the committee at the end of epoch
+	on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
+	"""
+	Tracks the total number of transaction blocks in the network at the time of the checkpoint.
+	"""
+	networkTotalTransactions: Int
+	"""
+	The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
+	during this epoch, up to and including this checkpoint.
+	These values increase monotonically across checkpoints in the same epoch.
+	"""
+	rollingGasSummary: GasCostSummary
+	"""
+	End of epoch data is only available on the final checkpoint of an epoch.
+	This field provides information on the new committee and protocol version for the next epoch.
+	"""
+	endOfEpoch: EndOfEpochData
+	epoch: Epoch
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+}
+
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input CheckpointId {
+	digest: String
+	sequenceNumber: Int
+}
+
+type Coin {
+	"""
+	Balance of the coin object
+	"""
+	balance: BigInt
+	"""
+	Convert the coin object into a Move object
+	"""
+	asMoveObject: MoveObject
+}
+
+type CoinConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CoinEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Coin!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CoinEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Coin!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type CommitteeMember {
+	authorityName: String
+	stakeUnit: Int
+}
+
+type ConsensusCommitPrologueTransaction {
+	round: Int
+	timestamp: DateTime
+	epoch: Epoch
+}
+
+scalar DateTime
+
+type EndOfEpochData {
+	newCommittee: [CommitteeMember!]
+	nextProtocolVersion: Int
+}
+
+type EndOfEpochTransaction {
+	value: String!
+}
+
+type Epoch {
+	"""
+	The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
+	"""
+	epochId: Int!
+	"""
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
+	"""
+	referenceGasPrice: BigInt
+	"""
+	Validator related properties, including the active validators
+	"""
+	validatorSet: ValidatorSet
+	"""
+	The epoch's starting timestamp
+	"""
+	startTimestamp: DateTime
+	"""
+	The epoch's ending timestamp
+	"""
+	endTimestamp: DateTime
+	"""
+	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The epoch's corresponding checkpoints
+	"""
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	"""
+	The epoch's corresponding transaction blocks
+	"""
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+}
+
+type Event {
+	"""
+	Package id and module name of Move module that the event was emitted in
+	"""
+	sendingModuleId: MoveModuleId
+	"""
+	Package, module, and type of the event
+	"""
+	eventType: MoveType
+	senders: [Address!]
+	"""
+	UTC timestamp in milliseconds since epoch (1/1/1970)
+	"""
+	timestamp: DateTime
+	"""
+	JSON string representation of the event
+	"""
+	json: String
+	"""
+	Base58 encoded bcs bytes of the Move event
+	"""
+	bcs: Base64
+}
+
+type EventConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EventEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Event!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EventEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input EventFilter {
+	sender: SuiAddress
+	transactionDigest: String
+	emittingPackage: SuiAddress
+	emittingModule: String
+	eventPackage: SuiAddress
+	eventModule: String
+	eventType: String
+}
+
+enum ExecutionStatus {
+	SUCCESS
+	FAILURE
+}
+
+"""
+Groups of features served by the RPC service.  The GraphQL Service can be configured to enable
+or disable these features.
+"""
+enum Feature {
+	"""
+	Statistics about how the network was running (TPS, top packages, APY, etc)
+	"""
+	ANALYTICS
+	"""
+	Coin metadata, per-address coin and balance information.
+	"""
+	COINS
+	"""
+	Querying an object's dynamic fields.
+	"""
+	DYNAMIC_FIELDS
+	"""
+	SuiNS name and reverse name look-up.
+	"""
+	NAME_SERVICE
+	"""
+	Transaction and Event subscriptions.
+	"""
+	SUBSCRIPTIONS
+	"""
+	Information about the system that changes from epoch to epoch (protocol config, committee,
+	reference gas price).
+	"""
+	SYSTEM_STATE
+}
+
+
+type GasCostSummary {
+	computationCost: BigInt
+	storageCost: BigInt
+	storageRebate: BigInt
+	nonRefundableStorageFee: BigInt
+}
+
+type GasEffects {
+	gasObject: Object
+	gasSummary: GasCostSummary
+}
+
+type GasInput {
+	"""
+	Address of the owner of the gas object(s) used
+	"""
+	gasSponsor: Address
+	"""
+	Objects used to pay for a transaction's execution and storage
+	"""
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+	"""
+	gasPrice: BigInt
+	"""
+	The maximum number of gas units that can be expended by executing this transaction
+	"""
+	gasBudget: BigInt
+}
+
+type GenesisTransaction {
+	objects: [SuiAddress!]
+}
+
+
+
+"""
+Arbitrary JSON data.
+"""
+scalar JSON
+
+"""
+Information used by a package to link to a specific version of its dependency.
+"""
+type Linkage {
+	"""
+	The ID on-chain of the first version of the dependency.
+	"""
+	originalId: SuiAddress!
+	"""
+	The ID on-chain of the version of the dependency that this package depends on.
+	"""
+	upgradedId: SuiAddress!
+	"""
+	The version of the dependency that this package depends on.
+	"""
+	version: Int!
+}
+
+"""
+The contents of a Move Value, corresponding to the following recursive type:
+
+type MoveData =
+    { Address: SuiAddress }
+  | { UID:     SuiAddress }
+  | { Bool:    bool }
+  | { Number:  BigInt }
+  | { String:  string }
+  | { Vector:  [MoveData] }
+  | { Option:   MoveData? }
+  | { Struct:  [{ name: string, value: MoveData }] }
+"""
+scalar MoveData
+
+"""
+Represents a module in Move, a library that defines struct types
+and functions that operate on these types.
+"""
+type MoveModule {
+	fileFormatVersion: Int!
+}
+
+type MoveModuleConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveModuleEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveModule!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveModuleEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveModule!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type MoveModuleId {
+	name: String!
+	"""
+	The package that this Move module was defined in
+	"""
+	package: MovePackage!
+}
+
+type MoveObject {
+	"""
+	Displays the contents of the MoveObject in a json string and through graphql types
+	Also provides the flat representation of the type signature, and the bcs of the corresponding data
+	"""
+	contents: MoveValue
+	"""
+	Determines whether a tx can transfer this object
+	"""
+	hasPublicTransfer: Boolean
+	"""
+	Attempts to convert the Move object into an Object
+	This provides additional information such as version and digest on the top-level
+	"""
+	asObject: Object
+	"""
+	Attempts to convert the Move object into a Coin
+	"""
+	asCoin: Coin
+	"""
+	Attempts to convert the Move object into a Stake
+	"""
+	asStake: Stake
+}
+
+type MovePackage {
+	"""
+	A representation of the module called `name` in this package, including the
+	structs and functions it defines.
+	"""
+	module(name: String!): MoveModule
+	"""
+	Paginate through the MoveModules defined in this package.
+	"""
+	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
+	The transitive dependencies of this package.
+	"""
+	linkage: [Linkage!]
+	"""
+	The (previous) versions of this package that introduced its types.
+	"""
+	typeOrigins: [TypeOrigin!]
+	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+	name, followed by module bytes), in alphabetic order by module name.
+	"""
+	bcs: Base64
+	asObject: Object
+}
+
+"""
+Represents concrete types (no type parameters, no references)
+"""
+type MoveType {
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: MoveTypeSignature!
+	"""
+	Structured representation of the "shape" of values that match this type.
+	"""
+	layout: MoveTypeLayout!
+}
+
+"""
+The shape of a concrete Move Type (a type with all its type parameters instantiated with concrete types), corresponding to the following recursive type:
+
+type MoveTypeLayout =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeLayout }
+  | { struct: [{ name: string, layout: MoveTypeLayout }] }
+"""
+scalar MoveTypeLayout
+
+"""
+The signature of a concrete Move Type (a type with all its type parameters instantiated with concrete types, that contains no references), corresponding to the following recursive type:
+
+type MoveTypeSignature =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeSignature }
+  | {
+      struct: {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [MoveTypeSignature],
+      }
+    }
+"""
+scalar MoveTypeSignature
+
+type MoveValue {
+	type: MoveType!
+	bcs: Base64!
+	"""
+	Structured contents of a Move value.
+	"""
+	data: MoveData!
+	"""
+	Representation of a Move value in JSON, where:
+	
+	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Empty optional values are represented by `null`.
+	
+	This form is offered as a less verbose convenience in cases where the layout of the type is
+	known by the client.
+	"""
+	json: JSON!
+}
+
+type Object implements ObjectOwner {
+	version: Int!
+	"""
+	32-byte hash that identifies the object's current contents, encoded as a Base58 string.
+	"""
+	digest: String!
+	"""
+	The amount of SUI we would rebate if this object gets deleted or mutated.
+	This number is recalculated based on the present storage gas price.
+	"""
+	storageRebate: BigInt
+	"""
+	The Base64 encoded bcs serialization of the object's content.
+	"""
+	bcs: Base64
+	"""
+	The transaction block that created this version of the object.
+	"""
+	previousTransactionBlock: TransactionBlock
+	"""
+	Objects can either be immutable, shared, owned by an address,
+	or are child objects (part of a dynamic field)
+	"""
+	kind: ObjectKind
+	"""
+	The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
+	"""
+	owner: Owner
+	"""
+	Attempts to convert the object into a MoveObject
+	"""
+	asMoveObject: MoveObject
+	"""
+	Attempts to convert the object into a MovePackage
+	"""
+	asMovePackage: MovePackage
+	"""
+	The address of the object, named as such to avoid conflict with the address type.
+	"""
+	location: SuiAddress!
+	"""
+	The objects owned by this object
+	"""
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	The balance of coin objects of a particular coin type owned by the object.
+	"""
+	balance(type: String): Balance
+	"""
+	The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+	"""
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The `0x2::sui::Coin` objects owned by the given object.
+	"""
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	The `0x3::staking_pool::StakedSui` objects owned by the given object.
+	"""
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	"""
+	The domain that a user address has explicitly configured as their default domain
+	"""
+	defaultNameServiceName: String
+}
+
+type ObjectChange {
+	inputState: Object
+	outputState: Object
+	idCreated: Boolean
+	idDeleted: Boolean
+}
+
+type ObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Object!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input ObjectFilter {
+	package: SuiAddress
+	module: String
+	ty: String
+	owner: SuiAddress
+	objectIds: [SuiAddress!]
+	objectKeys: [ObjectKey!]
+}
+
+input ObjectKey {
+	objectId: SuiAddress!
+	version: Int!
+}
+
+enum ObjectKind {
+	OWNED
+	CHILD
+	SHARED
+	IMMUTABLE
+}
+
+interface ObjectOwner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+}
+
+type Owner implements ObjectOwner {
+	asAddress: Address
+	asObject: Object
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	"""
+	The stake objects for the given address
+	"""
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type ProgrammableTransaction {
+	value: String!
+}
+
+"""
+A single protocol configuration value.
+"""
+type ProtocolConfigAttr {
+	key: String!
+	value: String!
+}
+
+"""
+Whether or not a single feature is enabled in the protocol config.
+"""
+type ProtocolConfigFeatureFlag {
+	key: String!
+	value: Boolean!
+}
+
+"""
+Constants that control how the chain operates.
+
+These can only change during protocol upgrades which happen on epoch boundaries.
+"""
+type ProtocolConfigs {
+	"""
+	The protocol is not required to change on every epoch boundary, so the protocol version
+	tracks which change to the protocol these configs are from.
+	"""
+	protocolVersion: Int!
+	"""
+	List all available feature flags and their values.  Feature flags are a form of boolean
+	configuration that are usually used to gate features while they are in development.  Once a
+	flag has been enabled, it is rare for it to be disabled.
+	"""
+	featureFlags: [ProtocolConfigFeatureFlag!]!
+	"""
+	List all available configurations and their values.  These configurations can take any value
+	(but they will all be represented in string form), and do not include feature flags.
+	"""
+	configs: [ProtocolConfigAttr!]!
+	"""
+	Query for the value of the configuration with name `key`.
+	"""
+	config(key: String!): ProtocolConfigAttr
+	"""
+	Query for the state of the feature flag with name `key`.
+	"""
+	featureFlag(key: String!): ProtocolConfigFeatureFlag
+}
+
+type Query {
+	"""
+	First four bytes of the network's genesis checkpoint digest (uniquely identifies the
+	network).
+	"""
+	chainIdentifier: String!
+	"""
+	Configuration for this RPC service
+	"""
+	serviceConfig: ServiceConfig!
+	owner(address: SuiAddress!): ObjectOwner
+	object(address: SuiAddress!, version: Int): Object
+	address(address: SuiAddress!): Address
+	epoch(id: Int): Epoch
+	checkpoint(id: CheckpointId): Checkpoint
+	transactionBlock(digest: String!): TransactionBlock
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	"""
+	Resolves the owner address of the provided domain name
+	"""
+	resolveNameServiceAddress(name: String!): Address
+	latestSuiSystemState: SuiSystemStateSummary!
+}
+
+"""
+Information about whether epoch changes are using safe mode.
+"""
+type SafeMode {
+	"""
+	Whether safe mode was used for the last epoch change.  The system will retry a full epoch
+	change on every epoch boundary and automatically reset this flag if so.
+	"""
+	enabled: Boolean
+	"""
+	Accumulated fees for computation and cost that have not been added to the various reward
+	pools, because the full epoch change did not happen.
+	"""
+	gasSummary: GasCostSummary
+}
+
+type ServiceConfig {
+	"""
+	Check whether `feature` is enabled on this GraphQL service.
+	"""
+	isEnabled(feature: Feature!): Boolean!
+	"""
+	List of all features that are enabled on this GraphQL service.
+	"""
+	enabledFeatures: [Feature!]!
+	"""
+	The maximum depth a GraphQL query can be to be accepted by this service.
+	"""
+	maxQueryDepth: Int!
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int!
+	"""
+	Maximum estimated cost of a database query used to serve a GraphQL request.  This is
+	measured in the same units that the database uses in EXPLAIN queries.
+	"""
+	maxDbQueryCost: BigInt!
+	"""
+	Maximum number of variables a query can define
+	"""
+	maxQueryVariables: Int!
+	"""
+	Maximum number of fragments a query can define
+	"""
+	maxQueryFragments: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one request.
+	"""
+	requestTimeoutMs: BigInt!
+}
+
+type Stake {
+	"""
+	The estimated reward for this stake object, computed as the
+	value of multiplying the principal value with the ratio between the initial stake rate and the current rate
+	"""
+	estimatedReward: BigInt
+	"""
+	The amount of SUI that is used to stake
+	"""
+	principal: BigInt
+	"""
+	The status of this stake object: Active, Pending, Unstaked
+	"""
+	status: StakeStatus
+	"""
+	The epoch at which this stake became active
+	"""
+	activeEpoch: Epoch
+	"""
+	The epoch at which this object was requested to join a stake pool
+	"""
+	requestEpoch: Epoch
+	"""
+	The corresponding StakedSui Move object
+	"""
+	asMoveObject: MoveObject
+}
+
+type StakeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [StakeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Stake!]!
+}
+
+"""
+An edge in a connection.
+"""
+type StakeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Stake!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+enum StakeStatus {
+	"""
+	The stake object is active in a staking pool and it is generating rewards
+	"""
+	ACTIVE
+	"""
+	The stake awaits to join a staking pool in the next epoch
+	"""
+	PENDING
+	"""
+	The stake is no longer active in any staking pool
+	"""
+	UNSTAKED
+}
+
+"""
+Parameters related to subsiding staking rewards
+"""
+type StakeSubsidy {
+	"""
+	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over
+	time.
+	"""
+	balance: BigInt
+	"""
+	Number of times stake subsidies have been distributed subsidies are distributed with other
+	staking rewards, at the end of the epoch.
+	"""
+	distributionCounter: Int
+	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Maximum number of stake subsidy distributions that occur with the same distribution amount
+	(before the amount is reduced).
+	"""
+	periodLength: Int
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy
+	period, expressed in basis points.
+	"""
+	decreaseRate: Int
+}
+
+"""
+SUI set aside to account for objects stored on-chain.
+"""
+type StorageFund {
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
+	totalObjectStorageRebates: BigInt
+	"""
+	The portion of the storage fund that will never be refunded through storage rebates.
+	
+	The system maintains an invariant that the sum of all storage fees into the storage fund is
+	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
+	non-refundable balance.
+	"""
+	nonRefundableBalance: BigInt
+}
+
+
+scalar SuiAddress
+
+"""
+Aspects that affect the running of the system that are managed by the validators either
+directly, or through system transactions.
+"""
+type SuiSystemStateSummary {
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
+	version changes whenever the fields contained in the system state object (held in a dynamic
+	field attached to `0x5`) change.
+	"""
+	systemStateVersion: BigInt
+	"""
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
+	"""
+	referenceGasPrice: BigInt
+	"""
+	Details of the system that are decided during genesis.
+	"""
+	systemParameters: SystemParameters
+	"""
+	Parameters related to subsiding staking rewards
+	"""
+	stakeSubsidy: StakeSubsidy
+	"""
+	Details of the currently active validators and pending changes to that set.
+	"""
+	validatorSet: ValidatorSet
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	"""
+	storageFund: StorageFund
+	"""
+	Information about whether last epoch change used safe mode, which happens if the full epoch
+	change logic fails for some reason.
+	"""
+	safeMode: SafeMode
+	"""
+	The start of the current epoch.
+	"""
+	startTimestamp: DateTime
+	"""
+	The epoch for which this is the system state.
+	"""
+	epoch: Epoch
+	"""
+	Configuration for how the chain operates that can change from epoch to epoch (due to a
+	protocol version upgrade).
+	"""
+	protocolConfigs: ProtocolConfigs
+}
+
+"""
+Details of the system that are decided during genesis.
+"""
+type SystemParameters {
+	"""
+	Target duration of an epoch, in milliseconds.
+	"""
+	durationMs: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: Int
+	"""
+	The minimum number of active validators that the system supports.
+	"""
+	minValidatorCount: Int
+	"""
+	The maximum number of active validators that the system supports.
+	"""
+	maxValidatorCount: Int
+	"""
+	Minimum stake needed to become a new validator.
+	"""
+	minValidatorJoiningStake: BigInt
+	"""
+	Validators with stake below this threshold will enter the grace period (see
+	`validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+	"""
+	validatorLowStakeThreshold: BigInt
+	"""
+	Validators with stake below this threshold will be removed from the the active validator set
+	at the next epoch boundary, without a grace period.
+	"""
+	validatorVeryLowStakeThreshold: BigInt
+	"""
+	The number of epochs that a validator has to recover from having less than
+	`validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
+}
+
+type TransactionBlock {
+	"""
+	The effects field captures the results to the chain of executing this transaction
+	"""
+	effects: TransactionBlockEffects
+	"""
+	The address of the user sending this transaction block
+	"""
+	sender: Address
+	"""
+	The transaction block data in BCS format.
+	This includes data on the sender, inputs, sponsor, gas inputs, individual transactions, and user signatures.
+	"""
+	bcs: Base64
+	"""
+	The gas input field provides information on what objects were used as gas
+	As well as the owner of the gas object(s) and information on the gas price and budget
+	If the owner of the gas object(s) is not the same as the sender,
+	the transaction block is a sponsored transaction block.
+	"""
+	gasInput: GasInput
+	kind: TransactionBlockKind
+	"""
+	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
+	"""
+	signatures: [TransactionSignature]
+	"""
+	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
+	This serves as a unique id for the block on chain
+	"""
+	digest: String!
+	"""
+	This field is set by senders of a transaction block
+	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
+	By default, there is no deadline for when a transaction must execute
+	"""
+	expiration: Epoch
+}
+
+type TransactionBlockConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionBlockEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionBlock!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionBlockEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionBlock!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type TransactionBlockEffects {
+	status: ExecutionStatus!
+	errors: String
+	lamportVersion: Int
+	balanceChanges: [BalanceChange]
+	checkpoint: Checkpoint
+	dependencies: [TransactionBlock]
+	epoch: Epoch
+	gasEffects: GasEffects
+	objectChanges: [ObjectChange]
+	transactionBlock: TransactionBlock
+}
+
+input TransactionBlockFilter {
+	package: SuiAddress
+	module: String
+	function: String
+	kind: TransactionBlockKindInput
+	afterCheckpoint: Int
+	atCheckpoint: Int
+	beforeCheckpoint: Int
+	signAddress: SuiAddress
+	sentAddress: SuiAddress
+	recvAddress: SuiAddress
+	paidAddress: SuiAddress
+	inputObject: SuiAddress
+	changedObject: SuiAddress
+	transactionIds: [String!]
+}
+
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | EndOfEpochTransaction
+
+enum TransactionBlockKindInput {
+	SYSTEM_TX
+	PROGRAMMABLE_TX
+}
+
+type TransactionSignature {
+	base64Sig: Base64!
+}
+
+"""
+Information about which previous versions of a package introduced its types.
+"""
+type TypeOrigin {
+	"""
+	Module defining the type.
+	"""
+	module: String!
+	"""
+	Name of the struct.
+	"""
+	struct: String!
+	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress!
+}
+
+type Validator {
+	address: Address!
+	credentials: ValidatorCredentials
+	nextEpochCredentials: ValidatorCredentials
+	name: String
+	description: String
+	imageUrl: String
+	projectUrl: String
+	exchangeRatesSize: Int
+	stakingPoolActivationEpoch: Int
+	stakingPoolSuiBalance: BigInt
+	rewardsPool: BigInt
+	poolTokenBalance: BigInt
+	pendingStake: BigInt
+	pendingTotalSuiWithdraw: BigInt
+	pendingPoolTokenWithdraw: BigInt
+	votingPower: Int
+	gasPrice: BigInt
+	commissionRate: Int
+	nextEpochStake: BigInt
+	nextEpochGasPrice: BigInt
+	nextEpochCommissionRate: Int
+	atRisk: Int
+	reportRecords: [SuiAddress!]
+	operationCap: MoveObject
+	stakingPool: MoveObject
+	exchangeRates: MoveObject
+}
+
+type ValidatorCredentials {
+	protocolPubKey: Base64
+	networkPubKey: Base64
+	workerPubKey: Base64
+	proofOfPossession: Base64
+	netAddress: String
+	p2PAddress: String
+	primaryAddress: String
+	workerAddress: String
+}
+
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
+type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
+	totalStake: BigInt
+	"""
+	The current list of active validators.
+	"""
+	activeValidators: [Validator!]
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
+	pendingActiveValidatorsSize: Int
+	stakePoolMappingsSize: Int
+	inactivePoolsSize: Int
+	validatorCandidatesSize: Int
+}
+
+schema {
+	query: Query
+}
+
