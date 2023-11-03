@@ -19,7 +19,7 @@ use move_core_types::{
     resolver::MoveResolver,
     runtime_value::MoveTypeLayout,
 };
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
@@ -101,7 +101,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gas-profiler")]
         {
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(

@@ -105,7 +105,7 @@ mod checked {
                     .no_extraneous_module_bytes(),
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "gas-profiler")]
                 profiler_config: Default::default(),
             },
         )
