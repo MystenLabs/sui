@@ -159,6 +159,7 @@ pub const FILTER_UNUSED_CONST: &str = "unused_const";
 pub const FILTER_DEAD_CODE: &str = "dead_code";
 pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
+pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -349,6 +350,11 @@ impl CompilationEnv {
             known_code_filter!(
                 FILTER_UNUSED_MUT_REF,
                 UnusedItem::MutReference,
+                filter_attr_name
+            ),
+            known_code_filter!(
+                FILTER_UNUSED_MUT_PARAM,
+                UnusedItem::MutParam,
                 filter_attr_name
             ),
         ]);

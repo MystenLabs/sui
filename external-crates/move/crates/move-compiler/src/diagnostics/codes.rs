@@ -299,6 +299,7 @@ codes!(
         Constant: { msg: "unused constant", severity: Warning },
         MutModifier: { msg: "unused 'mut' modifiers", severity: Warning },
         MutReference: { msg: "unused mutable reference '&mut'", severity: Warning },
+        MutParam: { msg: "unused mutable reference '&mut' parameter", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },

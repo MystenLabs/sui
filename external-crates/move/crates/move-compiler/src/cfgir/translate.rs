@@ -520,6 +520,7 @@ fn constant_(
         module,
         member: cfgir::MemberName::Constant(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
+        visibility: H::Visibility::Internal,
         signature: &fake_signature,
         locals: &locals,
         infinite_loop_starts: &fake_infinite_loop_starts,
@@ -614,7 +615,7 @@ fn function(
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let body = function_body(context, module, name, &signature, body);
+    let body = function_body(context, module, name, visibility, &signature, body);
     context.env.pop_warning_filter_scope();
     G::Function {
         warning_filter,
@@ -631,6 +632,7 @@ fn function_body(
     context: &mut Context,
     module: Option<ModuleIdent>,
     name: FunctionName,
+    visibility: H::Visibility,
     signature: &H::FunctionSignature,
     sp!(loc, tb_): H::FunctionBody,
 ) -> G::FunctionBody {
@@ -659,6 +661,7 @@ fn function_body(
                 module,
                 member: cfgir::MemberName::Function(name.0),
                 struct_declared_abilities: &context.struct_declared_abilities,
+                visibility,
                 signature,
                 locals: &locals,
                 infinite_loop_starts: &infinite_loop_starts,
@@ -934,7 +937,7 @@ fn visit_function(
         warning_filter,
         index: _,
         attributes: _,
-        visibility: _,
+        visibility,
         entry: _,
         signature,
         body,
@@ -954,6 +957,7 @@ fn visit_function(
         module: mident,
         member: cfgir::MemberName::Function(name.0),
         struct_declared_abilities: &context.struct_declared_abilities,
+        visibility: *visibility,
         signature,
         locals,
         infinite_loop_starts: &infinite_loop_starts,
