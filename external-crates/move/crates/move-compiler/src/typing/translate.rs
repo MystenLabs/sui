@@ -244,8 +244,7 @@ fn function(
     context.current_function = Some(name);
     process_attributes(context, &attributes);
     let visibility =
-        match public_testing_visibility(context.env, context.current_package.clone(), &name, entry)
-        {
+        match public_testing_visibility(context.env, context.current_package, &name, entry) {
             Some(PublicForTesting::Entry(loc)) => Visibility::Public(loc),
             None => visibility,
         };
