@@ -1039,16 +1039,16 @@ impl Display for SuiTransactionBlockData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::V1(data) => {
-                writeln!(f, "{}", data.transaction)?;
                 writeln!(f, "Sender: {}", data.sender)?;
-                write!(f, "Gas Payment: ")?;
+                writeln!(f, "Gas Owner: {}", data.gas_data.owner)?;
+                writeln!(f, "Gas Budget: {}", data.gas_data.budget)?;
+                writeln!(f, "Gas Price: {}", data.gas_data.price)?;
+                write!(f, "Gas Payment:\n")?;
                 for payment in &self.gas_data().payment {
-                    write!(f, "{} ", payment)?;
+                    write!(f, "{} ", objref_string(payment))?;
                 }
                 writeln!(f)?;
-                writeln!(f, "Gas Owner: {}", data.gas_data.owner)?;
-                writeln!(f, "Gas Price: {}", data.gas_data.price)?;
-                writeln!(f, "Gas Budget: {}", data.gas_data.budget)
+                writeln!(f, "{}", data.transaction)
             }
         }
     }
