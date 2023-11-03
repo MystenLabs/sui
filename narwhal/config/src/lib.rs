@@ -277,6 +277,28 @@ pub struct AnemoParameters {
 }
 
 impl AnemoParameters {
+    // By default, at most 10 certificates can be sent concurrently to a peer.
+    pub fn send_certificate_rate_limit(&self) -> u32 {
+        self.send_certificate_rate_limit
+            .unwrap_or(NonZeroU32::new(20).unwrap())
+            .get()
+    }
+
+    // By default, at most 100 batches can be broadcasted concurrently.
+    pub fn report_batch_rate_limit(&self) -> u32 {
+        self.report_batch_rate_limit
+            .unwrap_or(NonZeroU32::new(200).unwrap())
+            .get()
+    }
+
+    // As of 11/02/2023, when one worker is actively fetching, each peer receives
+    // 20~30 requests per second.
+    pub fn request_batches_rate_limit(&self) -> u32 {
+        self.request_batches_rate_limit
+            .unwrap_or(NonZeroU32::new(100).unwrap())
+            .get()
+    }
+
     pub fn excessive_message_size(&self) -> usize {
         const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
 
