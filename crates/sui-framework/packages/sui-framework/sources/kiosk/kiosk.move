@@ -519,7 +519,6 @@ module sui::kiosk {
         df::exists_(&self.id, Listing { id, is_exclusive: true })
     }
 
-    #[allow(unused_mut_ref)]
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.for

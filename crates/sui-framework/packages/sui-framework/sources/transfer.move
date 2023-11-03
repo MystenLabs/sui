@@ -100,7 +100,6 @@ module sui::transfer {
         share_object_impl(obj)
     }
 
-    #[allow(unused_mut_ref)]
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
     /// referencing an object of type `T` owned by `parent` use the `to_receive`
     /// argument to receive and return the referenced owned object of type `T`.

@@ -126,7 +126,6 @@ module fungible_tokens::treasury_lock {
         &mut lock.treasury_cap
     }
 
-    #[allow(unused_mut_ref)]
     /// Mint a `Balance` from a `TreasuryLock` providing a `MintCap`.
     public fun mint_balance<T>(
         lock: &mut TreasuryLock<T>, cap: &mut MintCap<T>, amount: u64, ctx: &mut TxContext

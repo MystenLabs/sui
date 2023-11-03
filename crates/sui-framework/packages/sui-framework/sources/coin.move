@@ -413,7 +413,6 @@ module sui::coin {
     // === Deprecated code ===
 
     // oops, wanted treasury: &TreasuryCap<T>
-    #[allow(unused_mut_ref)]
     public fun supply<T>(treasury: &mut TreasuryCap<T>): &Supply<T> {
         &treasury.total_supply
     }
