@@ -122,7 +122,6 @@ impl ConsensusManagerMetrics {
 pub(crate) struct RunningLockGuard<'a> {
     state_guard: MutexGuard<'a, Running>,
     metrics: &'a ConsensusManagerMetrics,
-    completed: bool,
     epoch: Option<EpochId>,
     protocol_version: Option<ProtocolVersion>,
     start: Instant,
@@ -148,7 +147,6 @@ impl<'a> RunningLockGuard<'a> {
         Some(RunningLockGuard {
             state_guard: running,
             metrics,
-            completed: false,
             start: Instant::now(),
             epoch: Some(epoch),
             protocol_version: Some(version),
@@ -172,48 +170,40 @@ impl<'a> RunningLockGuard<'a> {
         Some(RunningLockGuard {
             state_guard: running,
             metrics,
-            completed: false,
             start: Instant::now(),
             epoch: None,
             protocol_version: None,
         })
     }
-
-    // has to be called when the process of start/shutdown has been finished in order to mark correctly timings.
-    fn completed(&mut self) {
-        self.completed = true;
-    }
 }
 
 impl Drop for RunningLockGuard<'_> {
     fn drop(&mut self) {
-        if self.completed {
-            match *self.state_guard {
-                // consensus was running and now will have to be marked as shutdown
-                Running::True(epoch, version) => {
-                    tracing::info!("Consensus shutdown for epoch {epoch:?} & protocol version {version:?} is complete - took {} seconds", self.start.elapsed().as_secs_f64());
+        match *self.state_guard {
+            // consensus was running and now will have to be marked as shutdown
+            Running::True(epoch, version) => {
+                tracing::info!("Consensus shutdown for epoch {epoch:?} & protocol version {version:?} is complete - took {} seconds", self.start.elapsed().as_secs_f64());
 
-                    self.metrics
-                        .shutdown_latency
-                        .set(self.start.elapsed().as_secs_f64() as i64);
+                self.metrics
+                    .shutdown_latency
+                    .set(self.start.elapsed().as_secs_f64() as i64);
 
-                    *self.state_guard = Running::False;
-                }
-                // consensus was not running and now will be marked as started
-                Running::False => {
-                    tracing::info!(
-                    "Starting up consensus for epoch {} & protocol version {:?} is complete - took {} seconds",
-                    self.epoch.unwrap(),
-                    self.protocol_version.unwrap(),
-                    self.start.elapsed().as_secs_f64());
+                *self.state_guard = Running::False;
+            }
+            // consensus was not running and now will be marked as started
+            Running::False => {
+                tracing::info!(
+                "Starting up consensus for epoch {} & protocol version {:?} is complete - took {} seconds",
+                self.epoch.unwrap(),
+                self.protocol_version.unwrap(),
+                self.start.elapsed().as_secs_f64());
 
-                    self.metrics
-                        .start_latency
-                        .set(self.start.elapsed().as_secs_f64() as i64);
+                self.metrics
+                    .start_latency
+                    .set(self.start.elapsed().as_secs_f64() as i64);
 
-                    *self.state_guard =
-                        Running::True(self.epoch.unwrap(), self.protocol_version.unwrap());
-                }
+                *self.state_guard =
+                    Running::True(self.epoch.unwrap(), self.protocol_version.unwrap());
             }
         }
     }

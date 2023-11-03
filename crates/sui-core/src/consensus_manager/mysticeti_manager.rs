@@ -83,7 +83,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
 
-        let Some(mut guard) = RunningLockGuard::acquire_start(
+        let Some(_guard) = RunningLockGuard::acquire_start(
             &self.metrics,
             &self.running,
             epoch,
@@ -129,8 +129,6 @@ impl ConsensusManagerTrait for MysticetiManager {
                     self.validator
                         .swap(Some(Arc::new((validator, registry_id))));
 
-                    guard.completed();
-
                     break;
                 }
                 Err(err) => {
@@ -153,8 +151,7 @@ impl ConsensusManagerTrait for MysticetiManager {
     }
 
     async fn shutdown(&self) {
-        let Some(mut guard) =
-            RunningLockGuard::acquire_shutdown(&self.metrics, &self.running).await
+        let Some(_guard) = RunningLockGuard::acquire_shutdown(&self.metrics, &self.running).await
         else {
             return;
         };
@@ -170,9 +167,6 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // unregister the registry id
         self.registry_service.remove(registry_id);
-
-        // mark shutdown as completed
-        guard.completed();
     }
 
     async fn is_running(&self) -> bool {

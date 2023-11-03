@@ -104,7 +104,7 @@ impl ConsensusManagerTrait for NarwhalManager {
         let committee = system_state.get_narwhal_committee();
         let protocol_config = epoch_store.protocol_config();
 
-        let Some(mut guard) = RunningLockGuard::acquire_start(
+        let Some(_guard) = RunningLockGuard::acquire_start(
             &self.metrics,
             &self.running,
             epoch,
@@ -203,8 +203,6 @@ impl ConsensusManagerTrait for NarwhalManager {
             }
         }
 
-        guard.completed();
-
         self.metrics
             .start_primary_retries
             .set(primary_retries as i64);
@@ -213,16 +211,13 @@ impl ConsensusManagerTrait for NarwhalManager {
 
     // Shuts down whole Narwhal (primary & worker(s)) and waits until nodes have shutdown.
     async fn shutdown(&self) {
-        let Some(mut guard) =
-            RunningLockGuard::acquire_shutdown(&self.metrics, &self.running).await
+        let Some(_guard) = RunningLockGuard::acquire_shutdown(&self.metrics, &self.running).await
         else {
             return;
         };
 
         self.primary_node.shutdown().await;
         self.worker_nodes.shutdown().await;
-
-        guard.completed();
     }
 
     async fn is_running(&self) -> bool {
