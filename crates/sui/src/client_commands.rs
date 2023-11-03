@@ -35,7 +35,7 @@ use sui_json_rpc_types::{
     SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
+use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
@@ -46,6 +46,7 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::{
+    // balance::BALANCE_CREATE_REWARDS_FUNCTION_NAME,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::SignatureScheme,
     digests::TransactionDigest,
@@ -1794,9 +1795,28 @@ pub fn write_transaction_response(
 
     writeln!(writer, "{}", "----- Object changes ----".bold())?;
     if let Some(e) = &response.object_changes {
-        for obj_change in e {
-            writeln!(writer, "{}", obj_change)?;
+        // Note that this will be refactored under Display for SuiTransactionBlockResponse
+        // as soon I implement all of the Display traits for all the types
+        let (mut created, mut deleted, mut mutated, mut published, mut transferred, mut wrapped) =
+            (vec![], vec![], vec![], vec![], vec![], vec![]);
+
+        for obj in e {
+            match obj {
+                ObjectChange::Created { .. } => created.push(obj),
+                ObjectChange::Deleted { .. } => deleted.push(obj),
+                ObjectChange::Mutated { .. } => mutated.push(obj),
+                ObjectChange::Published { .. } => published.push(obj),
+                ObjectChange::Transferred { .. } => transferred.push(obj),
+                ObjectChange::Wrapped { .. } => wrapped.push(obj),
+            };
         }
+
+        write_obj_changes(created, "Created", &mut writer)?;
+        write_obj_changes(deleted, "Deleted", &mut writer)?;
+        write_obj_changes(mutated, "Mutated", &mut writer)?;
+        write_obj_changes(published, "Published", &mut writer)?;
+        write_obj_changes(transferred, "Transferred", &mut writer)?;
+        write_obj_changes(wrapped, "Wrapped", &mut writer)?;
     }
 
     writeln!(writer, "{}", "----- Balance changes ----".bold())?;
@@ -1804,6 +1824,20 @@ pub fn write_transaction_response(
         writeln!(writer, "{:#?}", json!(e))?;
     }
     Ok(writer)
+}
+
+fn write_obj_changes<T: Display>(
+    values: Vec<T>,
+    output_string: &str,
+    writer: &mut String,
+) -> std::fmt::Result {
+    if !values.is_empty() {
+        writeln!(writer, "\n{} Objects: ", output_string)?;
+        for obj in values {
+            writeln!(writer, "{}", obj)?;
+        }
+    }
+    Ok(())
 }
 
 impl Debug for SuiClientCommandResult {
