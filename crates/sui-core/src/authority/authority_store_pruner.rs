@@ -117,12 +117,7 @@ impl AuthorityStorePruner {
                 live_object_keys_to_prune.push(ObjectKey(object_id, seq_number));
             }
 
-            // Indirect object is not being used when pruning tombstone is developed. Therefore, to not further
-            // complicate the code, tombstone pruning is only enabled when indirect object is not turned on.
-            // TODO: re-evaluate the need for indirect object.
-            if enable_pruning_tombstones
-                && (indirect_objects_threshold == 0 || indirect_objects_threshold == usize::MAX)
-            {
+            if enable_pruning_tombstones {
                 for deleted_object_ref in effects
                     .deleted()
                     .into_iter()
