@@ -184,7 +184,7 @@ impl Flavor {
 impl FeatureGate {
     fn error_prefix(&self) -> &'static str {
         match self {
-            FeatureGate::NestedUse => "Nested 'use' forms are ",
+            FeatureGate::NestedUse => "Nested 'use' forms are",
             FeatureGate::PublicPackage => "'public(package)' is",
             FeatureGate::PostFixAbilities => "Postfix abilities are",
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
