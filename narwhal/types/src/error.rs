@@ -136,6 +136,9 @@ pub enum DagError {
     #[error("No peer can be reached for fetching certificates! Check if network is healthy.")]
     NoCertificateFetched,
 
+    #[error("No peer can be reached for fetching headers! Check if network is healthy.")]
+    NoHeaderFetched,
+
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),
 
@@ -153,6 +156,9 @@ pub enum DagError {
 
     #[error("Operation was canceled")]
     Canceled,
+
+    #[error("Header was not accepted because it is missing ancestors")]
+    MissingAncestors,
 }
 
 impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {

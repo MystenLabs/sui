@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
+use crate::{
+    Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, HeaderKey, Round, TimestampMs,
+};
 use config::{AuthorityIdentifier, Committee};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, Hash, HashFunction};
@@ -80,6 +82,37 @@ impl CommittedSubDag {
         previous_sub_dag: Option<&CommittedSubDag>,
     ) -> Self {
         // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp.
+        let previous_sub_dag_ts = previous_sub_dag
+            .map(|s| s.commit_timestamp)
+            .unwrap_or_default();
+        let commit_timestamp = previous_sub_dag_ts.max(*leader.header().created_at());
+
+        if previous_sub_dag_ts > *leader.header().created_at() {
+            warn!(sub_dag_index = ?sub_dag_index, "Leader timestamp {} is older than previously committed sub dag timestamp {}. Auto-correcting to max {}.",
+            leader.header().created_at(), previous_sub_dag_ts, commit_timestamp);
+        }
+
+        Self {
+            certificates,
+            leader,
+            sub_dag_index,
+            reputation_score,
+            commit_timestamp,
+        }
+    }
+
+    pub fn new_narwhalceti(
+        certificates: Vec<Certificate>,
+        leader: Certificate,
+        reputation_score: ReputationScores,
+        previous_sub_dag: Option<&CommittedSubDag>,
+    ) -> Self {
+        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp.
+        let previous_sub_dag_index = previous_sub_dag
+            .map(|s| s.sub_dag_index)
+            .unwrap_or_default();
+        let sub_dag_index = previous_sub_dag_index + 1;
+
         let previous_sub_dag_ts = previous_sub_dag
             .map(|s| s.commit_timestamp)
             .unwrap_or_default();
@@ -242,13 +275,15 @@ impl ReputationScores {
 }
 
 #[enum_dispatch(ConsensusCommitAPI)]
-trait ConsensusCommitAPI {
-    fn certificates(&self) -> Vec<CertificateDigest>;
-    fn leader(&self) -> CertificateDigest;
+pub trait ConsensusCommitAPI {
+    fn headers(&self) -> Vec<HeaderKey>;
+    fn leader(&self) -> HeaderKey;
     fn leader_round(&self) -> Round;
     fn sub_dag_index(&self) -> SequenceNumber;
     fn reputation_score(&self) -> ReputationScores;
     fn commit_timestamp(&self) -> TimestampMs;
+    fn certificate_digests(&self) -> Vec<CertificateDigest>;
+    fn leader_digest(&self) -> CertificateDigest;
 }
 
 // TODO: remove once the upgrade has been rolled out. We want to keep only the
@@ -267,42 +302,12 @@ pub struct CommittedSubDagShell {
     pub reputation_score: ReputationScores,
 }
 
-impl ConsensusCommitAPI for CommittedSubDagShell {
-    fn certificates(&self) -> Vec<CertificateDigest> {
-        self.certificates.clone()
-    }
-
-    fn leader(&self) -> CertificateDigest {
-        self.leader
-    }
-
-    fn leader_round(&self) -> Round {
-        self.leader_round
-    }
-
-    fn sub_dag_index(&self) -> SequenceNumber {
-        self.sub_dag_index
-    }
-
-    fn reputation_score(&self) -> ReputationScores {
-        self.reputation_score.clone()
-    }
-
-    fn commit_timestamp(&self) -> TimestampMs {
-        // We explicitly return 0 as we don't have this information stored already. This will be
-        // handle accordingly to the CommittedSubdag struct.
-        0
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusCommitV2 {
-    /// The sequence of committed certificates' digests.
-    pub certificates: Vec<CertificateDigest>,
+    /// The sequence of committed headers.
+    pub headers: Vec<HeaderKey>,
     /// The leader certificate's digest responsible of committing this sub-dag.
-    pub leader: CertificateDigest,
-    /// The round of the leader
-    pub leader_round: Round,
+    pub leader: HeaderKey,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
@@ -315,9 +320,8 @@ pub struct ConsensusCommitV2 {
 impl ConsensusCommitV2 {
     pub fn from_sub_dag(sub_dag: &CommittedSubDag) -> Self {
         Self {
-            certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
-            leader: sub_dag.leader.digest(),
-            leader_round: sub_dag.leader.round(),
+            headers: sub_dag.certificates.iter().map(|x| x.key()).collect(),
+            leader: sub_dag.leader.key(),
             sub_dag_index: sub_dag.sub_dag_index,
             reputation_score: sub_dag.reputation_score.clone(),
             commit_timestamp: sub_dag.commit_timestamp,
@@ -326,16 +330,16 @@ impl ConsensusCommitV2 {
 }
 
 impl ConsensusCommitAPI for ConsensusCommitV2 {
-    fn certificates(&self) -> Vec<CertificateDigest> {
-        self.certificates.clone()
+    fn headers(&self) -> Vec<HeaderKey> {
+        self.headers.clone()
     }
 
-    fn leader(&self) -> CertificateDigest {
+    fn leader(&self) -> HeaderKey {
         self.leader
     }
 
     fn leader_round(&self) -> Round {
-        self.leader_round
+        self.leader.round()
     }
 
     fn sub_dag_index(&self) -> SequenceNumber {
@@ -349,57 +353,20 @@ impl ConsensusCommitAPI for ConsensusCommitV2 {
     fn commit_timestamp(&self) -> TimestampMs {
         self.commit_timestamp
     }
+
+    fn certificate_digests(&self) -> Vec<CertificateDigest> {
+        self.headers.iter().map(|x| x.digest().into()).collect()
+    }
+
+    fn leader_digest(&self) -> CertificateDigest {
+        self.leader().digest().into()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[enum_dispatch(ConsensusCommitAPI)]
 pub enum ConsensusCommit {
-    V1(CommittedSubDagShell),
     V2(ConsensusCommitV2),
-}
-
-impl ConsensusCommit {
-    pub fn certificates(&self) -> Vec<CertificateDigest> {
-        match self {
-            ConsensusCommit::V1(sub_dag) => sub_dag.certificates(),
-            ConsensusCommit::V2(sub_dag) => sub_dag.certificates(),
-        }
-    }
-
-    pub fn leader(&self) -> CertificateDigest {
-        match self {
-            ConsensusCommit::V1(sub_dag) => sub_dag.leader(),
-            ConsensusCommit::V2(sub_dag) => sub_dag.leader(),
-        }
-    }
-
-    pub fn leader_round(&self) -> Round {
-        match self {
-            ConsensusCommit::V1(sub_dag) => sub_dag.leader_round(),
-            ConsensusCommit::V2(sub_dag) => sub_dag.leader_round(),
-        }
-    }
-
-    pub fn sub_dag_index(&self) -> SequenceNumber {
-        match self {
-            ConsensusCommit::V1(sub_dag) => sub_dag.sub_dag_index(),
-            ConsensusCommit::V2(sub_dag) => sub_dag.sub_dag_index(),
-        }
-    }
-
-    pub fn reputation_score(&self) -> ReputationScores {
-        match self {
-            ConsensusCommit::V1(sub_dag) => sub_dag.reputation_score(),
-            ConsensusCommit::V2(sub_dag) => sub_dag.reputation_score(),
-        }
-    }
-
-    pub fn commit_timestamp(&self) -> TimestampMs {
-        match self {
-            ConsensusCommit::V1(sub_dag) => sub_dag.commit_timestamp(),
-            ConsensusCommit::V2(sub_dag) => sub_dag.commit_timestamp(),
-        }
-    }
 }
 
 impl CommittedSubDagShell {

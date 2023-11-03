@@ -894,7 +894,11 @@ impl Synchronizer {
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
-            self.inner.metrics.duplicate_certificates_processed.inc();
+            self.inner
+                .metrics
+                .duplicate_certificates_processed
+                .with_label_values(&["process_certificate_internal"])
+                .inc();
             return Ok(());
         }
         // Ensure parents are checked if !early_suspend.
@@ -1014,7 +1018,11 @@ impl Synchronizer {
             .filter_map(|(c, exist)| {
                 if exist {
                     debug!("Skip processing certificate {:?}", c);
-                    inner.metrics.duplicate_certificates_processed.inc();
+                    inner
+                        .metrics
+                        .duplicate_certificates_processed
+                        .with_label_values(&["process_certificates_with_lock"])
+                        .inc();
                     return None;
                 }
                 Some(c)

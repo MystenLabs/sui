@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     error::{DagError, DagResult},
     serde::NarwhalBitmap,
@@ -14,11 +15,13 @@ use crypto::{
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
+    ed25519::{Ed25519Signature, Ed25519SignatureAsBytes},
     hash::{Digest, Hash, HashFunction},
+    serde_helpers::BytesRepresentation,
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
-use indexmap::IndexMap;
+use indexmap::{map::serde_seq, IndexMap};
 use mysten_util_mem::MallocSizeOf;
 use once_cell::sync::{Lazy, OnceCell};
 use proptest_derive::Arbitrary;
@@ -101,6 +104,64 @@ impl RandomnessRound {
 
     pub fn signature_message(&self) -> Vec<u8> {
         format!("random_beacon round {}", self.0).into()
+    }
+}
+
+/// HeaderKey uniquely identifies a header, even if the author equivocates.
+#[derive(Clone, Copy, Eq, Serialize, Deserialize, Default, MallocSizeOf, PartialOrd, Ord)]
+pub struct HeaderKey {
+    round: Round,
+    author: AuthorityIdentifier,
+    digest: HeaderDigest,
+}
+
+impl HeaderKey {
+    pub fn new(round: Round, author: AuthorityIdentifier, digest: HeaderDigest) -> Self {
+        Self {
+            round,
+            author,
+            digest,
+        }
+    }
+
+    pub fn round(&self) -> Round {
+        self.round
+    }
+
+    pub fn author(&self) -> AuthorityIdentifier {
+        self.author
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        self.digest
+    }
+
+    pub fn round_digest(&self) -> (Round, HeaderDigest) {
+        (self.round, self.digest)
+    }
+}
+
+impl std::hash::Hash for HeaderKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.digest.0.as_ref()[..8]);
+    }
+}
+
+impl fmt::Display for HeaderKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "K({},{})", self.round(), self.author(),)
+    }
+}
+
+impl fmt::Debug for HeaderKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "K({},{};{})", self.round(), self.author(), self.digest())
+    }
+}
+
+impl PartialEq for HeaderKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.digest() == other.digest()
     }
 }
 
@@ -440,13 +501,14 @@ pub enum SystemMessage {
 pub enum Header {
     V1(HeaderV1),
     V2(HeaderV2),
+    V3(HeaderV3),
 }
 
 // TODO: Revisit if we should not impl Default for Header and just use
 // versioned header in Certificate
 impl Default for Header {
     fn default() -> Self {
-        Self::V1(HeaderV1::default())
+        Self::V3(HeaderV3::default())
     }
 }
 
@@ -455,6 +517,7 @@ impl Header {
         match self {
             Header::V1(data) => data.digest(),
             Header::V2(data) => data.digest(),
+            Header::V3(data) => data.digest(),
         }
     }
 
@@ -462,6 +525,7 @@ impl Header {
         match self {
             Header::V1(data) => data.validate(committee, worker_cache),
             Header::V2(data) => data.validate(committee, worker_cache),
+            Header::V3(data) => data.validate(committee, worker_cache),
         }
     }
 
@@ -469,6 +533,7 @@ impl Header {
         match self {
             Header::V1(_) => panic!("called unwrap_v2 on Header::V1"),
             Header::V2(data) => data,
+            Header::V3(_) => panic!("called unwrap_v1 on Header::V3"),
         }
     }
 }
@@ -480,6 +545,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
         match self {
             Header::V1(data) => data.digest(),
             Header::V2(data) => data.digest(),
+            Header::V3(data) => data.digest(),
         }
     }
 }
@@ -510,6 +576,9 @@ impl fmt::Display for Header {
             Self::V2(data) => {
                 write!(f, "B{}({})", data.round, data.author)
             }
+            Self::V3(data) => {
+                write!(f, "H{}({})({})", data.round, data.author, data.digest())
+            }
         }
     }
 }
@@ -519,12 +588,14 @@ impl PartialEq for Header {
         match self {
             Self::V1(data) => data.digest() == other.digest(),
             Self::V2(data) => data.digest() == other.digest(),
+            Self::V3(data) => data.digest() == other.digest(),
         }
     }
 }
 
 #[enum_dispatch]
 pub trait HeaderAPI {
+    fn key(&self) -> HeaderKey;
     fn author(&self) -> AuthorityIdentifier;
     fn round(&self) -> Round;
     fn epoch(&self) -> Epoch;
@@ -532,11 +603,13 @@ pub trait HeaderAPI {
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)>;
     fn system_messages(&self) -> &[SystemMessage];
     fn parents(&self) -> &BTreeSet<CertificateDigest>;
+    fn ancestors(&self) -> &[HeaderKey];
 
     // Used for testing.
     fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>);
     fn update_round(&mut self, new_round: Round);
     fn clear_parents(&mut self);
+    fn clear_ancestors(&mut self);
 }
 
 #[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
@@ -556,6 +629,13 @@ pub struct HeaderV1 {
 }
 
 impl HeaderAPI for HeaderV1 {
+    fn key(&self) -> HeaderKey {
+        HeaderKey {
+            author: self.author(),
+            round: self.round(),
+            digest: self.digest(),
+        }
+    }
     fn author(&self) -> AuthorityIdentifier {
         self.author
     }
@@ -579,6 +659,9 @@ impl HeaderAPI for HeaderV1 {
     fn parents(&self) -> &BTreeSet<CertificateDigest> {
         &self.parents
     }
+    fn ancestors(&self) -> &[HeaderKey] {
+        unimplemented!("HeaderV1 does not have an ancestors field");
+    }
 
     // Used for testing.
     fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>) {
@@ -589,6 +672,9 @@ impl HeaderAPI for HeaderV1 {
     }
     fn clear_parents(&mut self) {
         self.parents.clear();
+    }
+    fn clear_ancestors(&mut self) {
+        unimplemented!("HeaderV1 does not have an ancestors field");
     }
 }
 
@@ -707,6 +793,14 @@ pub struct HeaderV2 {
 }
 
 impl HeaderAPI for HeaderV2 {
+    fn key(&self) -> HeaderKey {
+        HeaderKey {
+            author: self.author(),
+            round: self.round(),
+            digest: self.digest(),
+        }
+    }
+
     fn author(&self) -> AuthorityIdentifier {
         self.author
     }
@@ -728,6 +822,9 @@ impl HeaderAPI for HeaderV2 {
     fn parents(&self) -> &BTreeSet<CertificateDigest> {
         &self.parents
     }
+    fn ancestors(&self) -> &[HeaderKey] {
+        unimplemented!("HeaderV1 does not have an ancestors field");
+    }
 
     // Used for testing.
     fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>) {
@@ -738,6 +835,9 @@ impl HeaderAPI for HeaderV2 {
     }
     fn clear_parents(&mut self) {
         self.parents.clear();
+    }
+    fn clear_ancestors(&mut self) {
+        unimplemented!("HeaderV1 does not have an ancestors field");
     }
 }
 
@@ -841,6 +941,172 @@ impl HeaderV2 {
     }
 }
 
+#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[builder(pattern = "owned", build_fn(skip))]
+pub struct HeaderV3 {
+    // Primary that created the header. Must be the same primary that broadcasted the header.
+    // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
+    pub author: AuthorityIdentifier,
+    pub round: Round,
+    pub epoch: Epoch,
+    pub created_at: TimestampMs,
+    #[serde(with = "serde_seq")]
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+    pub system_messages: Vec<SystemMessage>,
+    pub ancestors: Vec<HeaderKey>,
+    #[serde(skip)]
+    digest: OnceCell<HeaderDigest>,
+}
+
+impl HeaderAPI for HeaderV3 {
+    fn key(&self) -> HeaderKey {
+        HeaderKey {
+            author: self.author(),
+            round: self.round(),
+            digest: self.digest(),
+        }
+    }
+
+    fn author(&self) -> AuthorityIdentifier {
+        self.author
+    }
+    fn round(&self) -> Round {
+        self.round
+    }
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+    fn created_at(&self) -> &TimestampMs {
+        &self.created_at
+    }
+    fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+        &self.payload
+    }
+    fn system_messages(&self) -> &[SystemMessage] {
+        &self.system_messages
+    }
+    fn parents(&self) -> &BTreeSet<CertificateDigest> {
+        unimplemented!("HeaderV3 does not have a parents field");
+    }
+    fn ancestors(&self) -> &[HeaderKey] {
+        &self.ancestors
+    }
+
+    // Used for testing.
+    fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>) {
+        self.payload = new_payload;
+    }
+    fn update_round(&mut self, new_round: Round) {
+        self.round = new_round;
+    }
+    fn clear_parents(&mut self) {
+        unimplemented!("HeaderV3 does not have a parents field");
+    }
+    fn clear_ancestors(&mut self) {
+        self.ancestors.clear();
+    }
+}
+
+impl HeaderV3Builder {
+    pub fn build(self) -> Result<HeaderV3, fastcrypto::error::FastCryptoError> {
+        let h = HeaderV3 {
+            author: self.author.unwrap(),
+            round: self.round.unwrap(),
+            epoch: self.epoch.unwrap(),
+            created_at: self.created_at.unwrap_or(0),
+            payload: self.payload.unwrap(),
+            system_messages: self.system_messages.unwrap_or_default(),
+            ancestors: self.ancestors.unwrap(),
+            digest: OnceCell::default(),
+        };
+        h.digest.set(Hash::digest(&h)).unwrap();
+
+        Ok(h)
+    }
+
+    // helper method to set directly values to the payload
+    pub fn with_payload_batch(
+        mut self,
+        batch: Batch,
+        worker_id: WorkerId,
+        created_at: TimestampMs,
+    ) -> Self {
+        if self.payload.is_none() {
+            self.payload = Some(Default::default());
+        }
+        let payload = self.payload.as_mut().unwrap();
+
+        payload.insert(batch.digest(), (worker_id, created_at));
+
+        self
+    }
+}
+
+impl HeaderV3 {
+    pub fn new(
+        author: AuthorityIdentifier,
+        round: Round,
+        epoch: Epoch,
+        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+        system_messages: Vec<SystemMessage>,
+        ancestors: Vec<HeaderKey>,
+    ) -> Self {
+        let header = Self {
+            author,
+            round,
+            epoch,
+            created_at: now(),
+            payload,
+            system_messages,
+            ancestors,
+            digest: OnceCell::default(),
+        };
+        let digest = Hash::digest(&header);
+        header.digest.set(digest).unwrap();
+        header
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        *self.digest.get_or_init(|| Hash::digest(self))
+    }
+
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            self.epoch == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: self.epoch
+            }
+        );
+
+        // Ensure the header digest is well formed.
+        ensure!(
+            Hash::digest(self) == self.digest(),
+            DagError::InvalidHeaderDigest
+        );
+
+        // Ensure the authority has voting rights.
+        let voting_rights = committee.stake_by_id(self.author);
+        ensure!(
+            voting_rights > 0,
+            DagError::UnknownAuthority(self.author.to_string())
+        );
+
+        // Ensure all worker ids are correct.
+        for (worker_id, _) in self.payload.values() {
+            worker_cache
+                .worker(
+                    committee.authority(&self.author).unwrap().protocol_key(),
+                    worker_id,
+                )
+                .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(
     Clone,
     Copy,
@@ -860,6 +1126,18 @@ pub struct HeaderDigest([u8; crypto::DIGEST_LENGTH]);
 impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: HeaderDigest) -> Self {
         Digest::new(hd.0)
+    }
+}
+
+impl From<HeaderDigest> for Digest<{ crypto::INTENT_MESSAGE_LENGTH }> {
+    fn from(digest: HeaderDigest) -> Self {
+        let intent_message = to_intent_message(digest.0);
+        Digest {
+            digest: bcs::to_bytes(&intent_message)
+                .expect("Serialization message should not fail")
+                .try_into()
+                .expect("INTENT_MESSAGE_LENGTH is correct"),
+        }
     }
 }
 
@@ -908,6 +1186,70 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV2 {
         let mut hasher = crypto::DefaultHashFunction::new();
         hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
         HeaderDigest(hasher.finalize().into())
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV3 {
+    type TypedDigest = HeaderDigest;
+
+    fn digest(&self) -> HeaderDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
+        HeaderDigest(hasher.finalize().into())
+    }
+}
+
+pub type HeaderSignature = Ed25519Signature;
+pub type HeaderSignatureBytes = Ed25519SignatureAsBytes;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SignedHeader {
+    header: Header,
+    signature: HeaderSignatureBytes,
+}
+
+impl SignedHeader {
+    pub fn new(header: Header, signature: HeaderSignatureBytes) -> Self {
+        Self { header, signature }
+    }
+
+    pub fn key(&self) -> HeaderKey {
+        self.header.key()
+    }
+
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    pub fn signature(&self) -> &HeaderSignatureBytes {
+        &self.signature
+    }
+
+    pub fn round(&self) -> Round {
+        self.header.round()
+    }
+
+    pub fn author(&self) -> AuthorityIdentifier {
+        self.header.author()
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        self.header.digest()
+    }
+
+    pub fn genesis(committee: &Committee) -> Vec<Self> {
+        let signature_bytes = BytesRepresentation::<64>([0u8; 64]);
+        committee
+            .authorities()
+            .map(|authority| SignedHeader {
+                header: Header::V3(HeaderV3 {
+                    author: authority.id(),
+                    epoch: committee.epoch(),
+                    ..HeaderV3::default()
+                }),
+                signature: signature_bytes.clone(),
+            })
+            .collect()
     }
 }
 
@@ -1030,6 +1372,7 @@ impl VoteV1 {
         Self { signature, ..vote }
     }
 }
+
 #[derive(
     Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, Arbitrary,
 )]
@@ -1221,18 +1564,21 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
 
 #[enum_dispatch]
 pub trait CertificateAPI {
+    fn key(&self) -> HeaderKey;
     fn header(&self) -> &Header;
-    fn aggregated_signature(&self) -> Option<&AggregateSignatureBytes>;
-    fn signed_authorities(&self) -> &roaring::RoaringBitmap;
-    fn metadata(&self) -> &Metadata;
 
     // Used for testing.
     fn update_header(&mut self, header: Header);
     fn header_mut(&mut self) -> &mut Header;
 
+    // Certification related methods.
+    fn aggregated_signature(&self) -> Option<&AggregateSignatureBytes>;
+    fn signed_authorities(&self) -> &roaring::RoaringBitmap;
     // CertificateV2
     fn signature_verification_state(&self) -> &SignatureVerificationState;
     fn set_signature_verification_state(&mut self, state: SignatureVerificationState);
+
+    fn metadata(&self) -> &Metadata;
 }
 
 #[serde_as]
@@ -1246,6 +1592,14 @@ pub struct CertificateV1 {
 }
 
 impl CertificateAPI for CertificateV1 {
+    fn key(&self) -> HeaderKey {
+        HeaderKey {
+            author: self.header.author(),
+            round: self.header.round(),
+            digest: self.header.digest(),
+        }
+    }
+
     fn header(&self) -> &Header {
         &self.header
     }
@@ -1506,6 +1860,14 @@ pub struct CertificateV2 {
 }
 
 impl CertificateAPI for CertificateV2 {
+    fn key(&self) -> HeaderKey {
+        HeaderKey {
+            author: self.header.author(),
+            round: self.header.round(),
+            digest: self.header.digest(),
+        }
+    }
+
     fn header(&self) -> &Header {
         &self.header
     }
@@ -1838,6 +2200,12 @@ impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     }
 }
 
+impl From<HeaderDigest> for CertificateDigest {
+    fn from(hd: HeaderDigest) -> Self {
+        CertificateDigest(hd.0)
+    }
+}
+
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
@@ -1879,24 +2247,12 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for CertificateV2 {
 impl fmt::Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Certificate::V1(data) => write!(
-                f,
-                "{}: C{}({}, {}, E{})",
-                data.digest(),
-                data.round(),
-                data.origin(),
-                data.header.digest(),
-                data.epoch()
-            ),
-            Certificate::V2(data) => write!(
-                f,
-                "{}: C{}({}, {}, E{})",
-                data.digest(),
-                data.round(),
-                data.origin(),
-                data.header.digest(),
-                data.epoch()
-            ),
+            Certificate::V1(data) => {
+                write!(f, "C{}({}, {})", data.round(), data.origin(), data.digest(),)
+            }
+            Certificate::V2(data) => {
+                write!(f, "C{}({}, {})", data.round(), data.origin(), data.digest(),)
+            }
         }
     }
 }
@@ -1946,6 +2302,26 @@ pub struct SendCertificateRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendCertificateResponse {
     pub accepted: bool,
+}
+
+/// Request to send a header to a peer.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendHeaderRequest {
+    pub signed_header: SignedHeader,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum HeaderValidationResult {
+    Ok,
+    InvalidSignature,
+    InvalidAncestors,
+    MissingAncestors(Vec<HeaderKey>),
+}
+
+/// Response from a peer after receiving a header.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendHeaderResponse {
+    pub result: HeaderValidationResult,
 }
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.
@@ -2048,6 +2424,32 @@ impl FetchCertificatesRequest {
 pub struct FetchCertificatesResponse {
     /// Certificates sorted from lower to higher rounds.
     pub certificates: Vec<Certificate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetHeadersRequest {
+    /// Keys of missing headers.
+    pub missing: Vec<HeaderKey>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetHeadersResponse {
+    /// Headers sorted from lower to higher rounds.
+    pub headers: Vec<SignedHeader>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FetchHeadersRequest {
+    /// The exclusive lower bound are header keys where each primary should return headers above that.
+    pub exclusive_lower_bounds: Vec<(AuthorityIdentifier, Round)>,
+    /// Maximum number of headers that should be returned.
+    pub max_items: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FetchHeadersResponse {
+    /// Headers sorted from lower to higher rounds.
+    pub headers: Vec<SignedHeader>,
 }
 
 /// Used by the primary to request that the worker sync the target missing batches.
@@ -2198,4 +2600,13 @@ mod tests {
             0.0
         );
     }
+}
+
+/// Index of a leader among all potential leaders.
+#[derive(
+    Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, MallocSizeOf, PartialOrd, Ord,
+)]
+pub struct LeaderIndex {
+    pub round: Round,
+    pub pos: u64,
 }

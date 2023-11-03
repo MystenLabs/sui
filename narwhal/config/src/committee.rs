@@ -95,9 +95,9 @@ impl Authority {
         self.primary_address.clone()
     }
 
-    pub fn network_key(&self) -> NetworkPublicKey {
+    pub fn network_key(&self) -> &NetworkPublicKey {
         assert!(self.initialised);
-        self.network_key.clone()
+        &self.network_key
     }
 
     pub fn hostname(&self) -> &str {
@@ -144,6 +144,18 @@ pub struct AuthorityIdentifier(pub u16);
 impl Display for AuthorityIdentifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.to_string().as_str())
+    }
+}
+
+impl From<u16> for AuthorityIdentifier {
+    fn from(id: u16) -> Self {
+        Self(id)
+    }
+}
+
+impl From<AuthorityIdentifier> for u16 {
+    fn from(id: AuthorityIdentifier) -> Self {
+        id.0
     }
 }
 
@@ -396,7 +408,7 @@ impl Committee {
                 (
                     authority.id(),
                     authority.primary_address(),
-                    authority.network_key(),
+                    authority.network_key().clone(),
                 )
             })
             .collect()

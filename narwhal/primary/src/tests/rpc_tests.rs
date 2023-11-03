@@ -30,7 +30,7 @@ async fn test_server_authorizations() {
         let request = anemo::Request::new(FetchCertificatesRequest::default())
             .with_timeout(Duration::from_secs(5));
         primary_network
-            .fetch_certificates(&primary_target_name, request)
+            .fetch_certificates(primary_target_name, request)
             .await
             .unwrap();
 
@@ -77,7 +77,7 @@ async fn test_server_authorizations() {
             .with_timeout(Duration::from_secs(5));
         // Removing the AllowedPeers RequireAuthorizationLayer for primary should make this succeed.
         assert!(primary_network
-            .fetch_certificates(&primary_target_name, request)
+            .fetch_certificates(primary_target_name, request)
             .await
             .is_err());
 

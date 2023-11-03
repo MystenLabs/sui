@@ -20,10 +20,13 @@ use mysten_metrics::metered_channel;
 use network::client::NetworkClient;
 use prometheus::Registry;
 use std::sync::Arc;
-use storage::{CertificateStore, ConsensusStore};
+use storage::{ConsensusStore, HeaderStore};
 use tokio::task::JoinHandle;
 use tracing::info;
-use types::{CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver, ConsensusOutput};
+use types::{
+    CertificateV2, CommittedSubDag, ConditionalBroadcastReceiver, ConsensusCommitAPI,
+    ConsensusOutput,
+};
 
 /// Convenience type representing a serialized transaction.
 pub type SerializedTransaction = Vec<u8>;
@@ -88,8 +91,9 @@ impl Executor {
 }
 
 pub async fn get_restored_consensus_output<State: ExecutionState>(
+    committee: Committee,
+    header_store: HeaderStore,
     consensus_store: Arc<ConsensusStore>,
-    certificate_store: CertificateStore,
     execution_state: &State,
 ) -> Result<Vec<CommittedSubDag>, SubscriberError> {
     // We always want to recover at least the last committed sub-dag since we can't know
@@ -103,21 +107,24 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
 
     let mut sub_dags = Vec::new();
     for compressed_sub_dag in compressed_sub_dags {
-        let certificate_digests: Vec<CertificateDigest> = compressed_sub_dag.certificates();
-
-        let certificates = certificate_store
-            .read_all(certificate_digests)?
+        let committed = header_store
+            .read_all(compressed_sub_dag.headers().into_iter())
+            .unwrap()
             .into_iter()
-            .flatten()
+            .map(|h| {
+                CertificateV2::new_unsigned(&committee, h.unwrap().header().clone(), Vec::new())
+                    .unwrap()
+            })
             .collect();
-
-        let leader = certificate_store
-            .read(compressed_sub_dag.leader())?
+        let leader = header_store
+            .read(compressed_sub_dag.leader())
+            .unwrap()
             .unwrap();
-
+        let leader =
+            CertificateV2::new_unsigned(&committee, leader.header().clone(), Vec::new()).unwrap();
         sub_dags.push(CommittedSubDag::from_commit(
             compressed_sub_dag,
-            certificates,
+            committed,
             leader,
         ));
     }

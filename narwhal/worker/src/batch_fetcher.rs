@@ -10,6 +10,7 @@ use std::{
 use anemo::Network;
 use anyhow::bail;
 use async_trait::async_trait;
+use config::{WorkerCache, WorkerId};
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
@@ -23,19 +24,22 @@ use tokio::{
     select,
     time::{sleep, sleep_until, Instant},
 };
-use tracing::debug;
+use tracing::{debug, warn};
 use types::{
     now, validate_batch_version, Batch, BatchAPI, BatchDigest, MetadataAPI, RequestBatchesRequest,
     RequestBatchesResponse,
 };
 
 use crate::metrics::WorkerMetrics;
+use crate::TransactionValidator;
 
 const REMOTE_PARALLEL_FETCH_INTERVAL: Duration = Duration::from_secs(2);
 const WORKER_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct BatchFetcher {
     name: NetworkPublicKey,
+    id: WorkerId,
+    worker_cache: WorkerCache,
     network: Arc<dyn RequestBatchesNetwork>,
     batch_store: DBMap<BatchDigest, Batch>,
     metrics: Arc<WorkerMetrics>,
@@ -45,6 +49,8 @@ pub struct BatchFetcher {
 impl BatchFetcher {
     pub fn new(
         name: NetworkPublicKey,
+        id: WorkerId,
+        worker_cache: WorkerCache,
         network: Network,
         batch_store: DBMap<BatchDigest, Batch>,
         metrics: Arc<WorkerMetrics>,
@@ -52,6 +58,8 @@ impl BatchFetcher {
     ) -> Self {
         Self {
             name,
+            id,
+            worker_cache,
             network: Arc::new(RequestBatchesNetworkImpl { network }),
             batch_store,
             metrics,
@@ -65,6 +73,8 @@ impl BatchFetcher {
         &self,
         digests: HashSet<BatchDigest>,
         known_workers: HashSet<NetworkPublicKey>,
+        txn_validator: &impl TransactionValidator,
+        is_certified: bool,
     ) -> HashMap<BatchDigest, Batch> {
         debug!(
             "Attempting to fetch {} digests from {} workers",
@@ -74,8 +84,20 @@ impl BatchFetcher {
 
         let mut remaining_digests = digests;
         let mut fetched_batches = HashMap::new();
-        // TODO: verify known_workers meets quorum threshold, or just use all other workers.
+
+        let all_workers: HashSet<_> = self
+            .worker_cache
+            .all_workers()
+            .into_iter()
+            .map(|(key, _addr)| key)
+            .collect();
+        let remaining_workers: HashSet<_> =
+            all_workers.difference(&known_workers).cloned().collect();
         let known_workers = known_workers
+            .into_iter()
+            .filter(|worker| worker != &self.name)
+            .collect_vec();
+        let remaining_workers = remaining_workers
             .into_iter()
             .filter(|worker| worker != &self.name)
             .collect_vec();
@@ -97,15 +119,20 @@ impl BatchFetcher {
             // Fetch from remote workers.
             // TODO: Can further parallelize this by target worker_id if necessary.
             let _timer = self.metrics.worker_remote_fetch_latency.start_timer();
+
+            let mut all_workers = VecDeque::new();
             let mut known_workers: Vec<_> = known_workers.iter().collect();
             known_workers.shuffle(&mut ThreadRng::default());
-            let mut known_workers = VecDeque::from(known_workers);
-            let mut stagger = Duration::from_secs(0);
+            all_workers.extend(known_workers);
+            let mut remaining_workers: Vec<_> = remaining_workers.iter().collect();
+            remaining_workers.shuffle(&mut ThreadRng::default());
+            all_workers.extend(remaining_workers);
+
             let mut futures = FuturesUnordered::new();
 
             loop {
                 assert!(!remaining_digests.is_empty());
-                if let Some(worker) = known_workers.pop_front() {
+                if let Some(worker) = all_workers.pop_front() {
                     let future = self.fetch_remote(worker.clone(), remaining_digests.clone());
                     futures.push(future.boxed());
                 } else {
@@ -113,12 +140,38 @@ impl BatchFetcher {
                     // workers and then another staggered interval has passed.
                     break;
                 }
-                stagger += REMOTE_PARALLEL_FETCH_INTERVAL;
-                let mut interval = Box::pin(sleep(stagger));
+                let mut interval = Box::pin(sleep(REMOTE_PARALLEL_FETCH_INTERVAL));
                 select! {
                     result = futures.next() => {
                         if let Some(remote_batches) = result {
-                            let new_batches: HashMap<_, _> = remote_batches.iter().filter(|(d, _)| remaining_digests.remove(d)).collect();
+                            let mut should_accept_batch = vec![false;remote_batches.len()];
+                            for (i, (d, batch)) in remote_batches.iter().enumerate() {
+                                if !remaining_digests.remove(d) {
+                                    continue;
+                                }
+                                if !is_certified {
+                                    if let Err(e) = validate_batch_version(batch, &self.protocol_config) {
+                                        warn!("Invalid batch version: {e}");
+                                        continue;
+                                    }
+                                    if let Err(e) = txn_validator
+                                        .validate_batch(batch, &self.protocol_config)
+                                        .await
+                                    {
+                                        warn!("Invalid batch: {e}");
+                                        continue;
+                                    }
+                                }
+                                should_accept_batch[i] = true;
+                            }
+                            let new_batches: HashMap<_, _> =
+                                remote_batches.iter().zip(should_accept_batch).filter_map(|((d, batch), should_accept)| {
+                                if should_accept {
+                                    Some((d, batch))
+                                } else {
+                                    None
+                                }
+                            }).collect();
                             // Also persist the batches, so they are available after restarts.
                             let mut write_batch = self.batch_store.batch();
 
@@ -131,8 +184,6 @@ impl BatchFetcher {
                             }
                             fetched_batches.extend(updated_new_batches.iter().map(|(d, b)| (*d, (*b).clone())));
                             write_batch.insert_batch(&self.batch_store, updated_new_batches).unwrap();
-
-
                             write_batch.write().unwrap();
                             if remaining_digests.is_empty() {
                                 return fetched_batches;
@@ -350,6 +401,25 @@ mod tests {
     use tokio::time::timeout;
     use types::BatchV1;
 
+    // A test txn validator that accepts every transaction / batch
+    #[derive(Clone)]
+    struct NoopTxnValidator;
+    #[async_trait]
+    impl TransactionValidator for NoopTxnValidator {
+        type Error = eyre::Report;
+
+        fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        async fn validate_batch(
+            &self,
+            _txs: &Batch,
+            _protocol_config: &ProtocolConfig,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
     // TODO: Remove once we have removed BatchV1 from the codebase.
     // Case #1: Receive BatchV1 but network is upgraded past v11 so we fail because we expect BatchV2
     #[tokio::test]
@@ -368,6 +438,8 @@ mod tests {
         network.put(&[2, 3], batchv1_2.clone());
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store: batch_store.clone(),
             metrics: Arc::new(WorkerMetrics::default()),
@@ -375,7 +447,7 @@ mod tests {
         };
         let fetch_result = timeout(
             Duration::from_secs(1),
-            fetcher.fetch(digests, known_workers),
+            fetcher.fetch(digests, known_workers, &NoopTxnValidator, true),
         )
         .await;
         assert!(fetch_result.is_err());
@@ -398,6 +470,8 @@ mod tests {
         network.put(&[2, 3], batchv2_2.clone());
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store: batch_store.clone(),
             metrics: Arc::new(WorkerMetrics::default()),
@@ -407,7 +481,9 @@ mod tests {
             (batchv2_1.digest(), batchv2_1.clone()),
             (batchv2_2.digest(), batchv2_2.clone()),
         ]);
-        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher
+            .fetch(digests, known_workers, &NoopTxnValidator, true)
+            .await;
         // Reset metadata from the fetched and expected batches
         for batch in fetched_batches.values_mut() {
             // assert received_at was set to some value before resetting.
@@ -450,6 +526,8 @@ mod tests {
         network.put(&[2, 3], batch2.clone());
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store: batch_store.clone(),
             metrics: Arc::new(WorkerMetrics::default()),
@@ -459,7 +537,9 @@ mod tests {
             (batch1.digest(), batch1.clone()),
             (batch2.digest(), batch2.clone()),
         ]);
-        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher
+            .fetch(digests, known_workers, &NoopTxnValidator, true)
+            .await;
         // Reset metadata from the fetched and expected batches
         for batch in fetched_batches.values_mut() {
             // assert received_at was set to some value before resetting.
@@ -501,6 +581,8 @@ mod tests {
         network.put(&[3, 4], batch3.clone());
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
@@ -511,7 +593,9 @@ mod tests {
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let fetched_batches = fetcher
+            .fetch(digests, known_workers, &NoopTxnValidator, true)
+            .await;
         assert_eq!(fetched_batches, expected_batches);
     }
 
@@ -533,6 +617,8 @@ mod tests {
         network.put(&[2, 3, 4], batch3.clone());
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
@@ -543,7 +629,9 @@ mod tests {
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher
+            .fetch(digests, known_workers, &NoopTxnValidator, true)
+            .await;
 
         // Reset metadata from the fetched and expected batches
         for batch in fetched_batches.values_mut() {
@@ -575,6 +663,8 @@ mod tests {
         network.put(&[1, 4], batch3.clone());
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
@@ -585,7 +675,9 @@ mod tests {
             (batch2.digest(), batch2.clone()),
             (batch3.digest(), batch3.clone()),
         ]);
-        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher
+            .fetch(digests, known_workers, &NoopTxnValidator, true)
+            .await;
 
         // Reset metadata from the fetched and expected remote batches
         for batch in fetched_batches.values_mut() {
@@ -637,12 +729,16 @@ mod tests {
         );
         let fetcher = BatchFetcher {
             name: test_pk(0),
+            id: 0,
+            worker_cache: WorkerCache::default(),
             network: Arc::new(network.clone()),
             batch_store,
             metrics: Arc::new(WorkerMetrics::default()),
             protocol_config: latest_protocol_version(),
         };
-        let mut fetched_batches = fetcher.fetch(digests, known_workers).await;
+        let mut fetched_batches = fetcher
+            .fetch(digests, known_workers, &NoopTxnValidator, true)
+            .await;
 
         // Reset metadata from the fetched and expected remote batches
         for batch in fetched_batches.values_mut() {

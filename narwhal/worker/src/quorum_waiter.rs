@@ -168,7 +168,7 @@ impl QuorumWaiter {
                            // offline and will never succeed.
                            //
                            // TODO: make the constant a config parameter.
-                           timeout(Duration::from_secs(5), async move{
+                           timeout(Duration::from_secs(15), async move{
                                while remaining.next().await.is_some() { }
                            }).await
                        });

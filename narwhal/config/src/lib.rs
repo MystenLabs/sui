@@ -286,7 +286,7 @@ impl AnemoParameters {
             .get()
     }
 
-    // By default, at most 100 batches can be broadcasted concurrently.
+    // By default, at most 200 batches can be broadcasted concurrently.
     pub fn report_batch_rate_limit(&self) -> u32 {
         self.report_batch_rate_limit
             .unwrap_or(NonZeroU32::new(200).unwrap())
@@ -297,7 +297,7 @@ impl AnemoParameters {
     // 20~30 requests per second.
     pub fn request_batches_rate_limit(&self) -> u32 {
         self.request_batches_rate_limit
-            .unwrap_or(NonZeroU32::new(100).unwrap())
+            .unwrap_or(NonZeroU32::new(1000).unwrap())
             .get()
     }
 
@@ -426,7 +426,7 @@ pub struct WorkerInfo {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WorkerIndex(pub BTreeMap<WorkerId, WorkerInfo>);
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct WorkerCache {
     /// The authority to worker index.
     pub workers: BTreeMap<PublicKey, WorkerIndex>,

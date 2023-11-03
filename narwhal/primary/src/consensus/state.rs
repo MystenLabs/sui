@@ -22,7 +22,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusCommit, HeaderAPI, Round, SequenceNumber, Timestamp,
+    ConsensusCommit, ConsensusCommitAPI, HeaderAPI, Round, SequenceNumber, Timestamp,
 };
 
 #[cfg(test)]
@@ -82,7 +82,7 @@ impl ConsensusState {
 
         let last_committed_sub_dag = if let Some(latest_sub_dag) = latest_sub_dag.as_ref() {
             let certificates = latest_sub_dag
-                .certificates()
+                .certificate_digests()
                 .iter()
                 .map(|s| {
                     cert_store
@@ -93,7 +93,7 @@ impl ConsensusState {
                 .collect();
 
             let leader = cert_store
-                .read(latest_sub_dag.leader())
+                .read(latest_sub_dag.leader_digest())
                 .unwrap()
                 .expect("Certificate should be found in database");
 

@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+arc-swap.workspace = true
 async-trait.workspace = true
 backoff.workspace = true
 bcs.workspace = true
@@ -21,6 +22,7 @@ once_cell.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 rand = { workspace = true, features = ["small_rng"] }
+serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "test-util"] }
 tokio-stream.workspace = true

@@ -86,13 +86,13 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 0).await);
+        let test_cluster = Arc::new(build_test_cluster(10, 0).await);
         let node_restarter = test_cluster
             .random_node_restarter()
-            .with_kill_interval_secs(5, 15)
-            .with_restart_delay_secs(1, 10);
+            .with_kill_interval_secs(1, 5)
+            .with_restart_delay_secs(1, 30);
         node_restarter.run();
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 600).await;
     }
 
     #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]

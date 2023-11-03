@@ -289,6 +289,8 @@ impl Worker {
 
         let batch_fetcher = BatchFetcher::new(
             worker_name,
+            worker.id,
+            worker.worker_cache.clone(),
             network.clone(),
             worker.store.clone(),
             node_metrics.clone(),
@@ -332,7 +334,7 @@ impl Worker {
         // Connect worker to its corresponding primary.
         let (peer_id, address) = Self::add_peer_in_network(
             &network,
-            authority.network_key(),
+            authority.network_key().clone(),
             &authority.primary_address(),
         );
         peer_types.insert(peer_id, "our_primary".to_string());
