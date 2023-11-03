@@ -1799,7 +1799,9 @@ pub fn write_transaction_response(
 
     writeln!(writer, "{}", "----- Balance changes ----".bold())?;
     if let Some(e) = &response.balance_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        for balance in e {
+            writeln!(writer, "{}", balance)?;
+        }
     }
     Ok(writer)
 }
