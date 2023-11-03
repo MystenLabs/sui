@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import useAppDispatch from '_app/hooks/useAppDispatch';
-import useAppSelector from '_app/hooks/useAppSelector';
-import { setPinnedCoinTypes } from '_redux/slices/coins';
+import { useCoinsStore } from '_app/zustand/coins';
 import { get, set } from 'idb-keyval';
 import { useCallback, useEffect } from 'react';
 
@@ -12,12 +10,9 @@ import { useRecognizedPackages } from './useRecognizedPackages';
 const PINNED_COIN_TYPES = 'pinned-coin-types';
 
 export function usePinnedCoinTypes() {
-	const dispatch = useAppDispatch();
+	const setPinnedCoinTypes = useCoinsStore.use.setPinnedCoinTypes();
+	const internalPinnedCoinTypes = useCoinsStore.use.pinnedCoinTypes();
 	const recognizedPackages = useRecognizedPackages();
-	// const [internalPinnedCoinTypes, internalSetPinnedCoinTypes] = useState<string[]>([]);
-	const internalPinnedCoinTypes = useAppSelector(
-		({ coins: { pinnedCoinTypes } }) => pinnedCoinTypes,
-	);
 
 	// TODO: Ideally this should also update storage so that we don't need to keep track of pinned coins that have become recognized
 	// In the event that a user pins a coin that becomes recognized, we need to remove it from pins:
@@ -29,29 +24,29 @@ export function usePinnedCoinTypes() {
 		(async () => {
 			const pinnedCoins = await get<string[]>(PINNED_COIN_TYPES);
 			if (pinnedCoins) {
-				dispatch(setPinnedCoinTypes(pinnedCoins));
+				setPinnedCoinTypes(pinnedCoins);
 			}
 		})();
-	}, [dispatch]);
+	}, [setPinnedCoinTypes]);
 
 	const pinCoinType = useCallback(
 		async (newCoinType: string) => {
 			if (pinnedCoinTypes.find((coinType) => coinType === newCoinType)) return;
 
 			const newPinnedCoinTypes = [...pinnedCoinTypes, newCoinType];
-			dispatch(setPinnedCoinTypes(newPinnedCoinTypes));
+			setPinnedCoinTypes(newPinnedCoinTypes);
 			await set(PINNED_COIN_TYPES, newPinnedCoinTypes);
 		},
-		[dispatch, pinnedCoinTypes],
+		[pinnedCoinTypes, setPinnedCoinTypes],
 	);
 
 	const unpinCoinType = useCallback(
 		async (removeCoinType: string) => {
 			const newPinnedCoinTypes = pinnedCoinTypes.filter((coinType) => coinType !== removeCoinType);
-			dispatch(setPinnedCoinTypes(newPinnedCoinTypes));
+			setPinnedCoinTypes(newPinnedCoinTypes);
 			await set(PINNED_COIN_TYPES, newPinnedCoinTypes);
 		},
-		[dispatch, pinnedCoinTypes],
+		[pinnedCoinTypes, setPinnedCoinTypes],
 	);
 
 	return [pinnedCoinTypes, { pinCoinType, unpinCoinType }] as const;
