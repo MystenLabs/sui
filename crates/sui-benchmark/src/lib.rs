@@ -374,6 +374,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         events,
                     ));
                 }
+                Err(NonRecoverableTransactionError { .. }) => {
+                    bail!(
+                        "Transaction {:?} failed with non-recoverable err: {:?}.",
+                        tx_digest,
+                        err,
+                    );
+                }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     error!(
