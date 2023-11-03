@@ -90,3 +90,11 @@ normal = ["jemalloc-ctl"]
 name = "generate-genesis-checkpoint"
 path = "src/generate_genesis_checkpoint.rs"
 test = false
+
+[[bin]]
+name = "sui"
+path = "src/main.rs"
+
+#[features]
+#default = ["gas-profiler"]
+

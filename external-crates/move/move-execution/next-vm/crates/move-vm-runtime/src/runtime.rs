@@ -441,7 +441,6 @@ impl VMRuntime {
             extensions,
         )
     }
-
     pub(crate) fn loader(&self) -> &Loader {
         &self.loader
     }
