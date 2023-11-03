@@ -29,11 +29,8 @@ impl Display for BalanceChange {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         writeln!(
             f,
-            "{}",
-            format!(
-                " ┌──\n │ Owner: {} \n │ CoinType: {} \n │ Amount: {}\n └──",
-                self.owner, self.coin_type, self.amount
-            )
+            " ┌──\n │ Owner: {} \n │ CoinType: {} \n │ Amount: {}\n └──",
+            self.owner, self.coin_type, self.amount
         )
     }
 }
