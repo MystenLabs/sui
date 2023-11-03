@@ -32,7 +32,7 @@ More questions? See [this page](#faq).
 
 The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
-| Provider     | Can support? | DevNet   | TestNet  | MainNet  |
+| Provider     | Can support? | Devnet   | Testnet  | Mainnet  |
 | ------------ | ----------   | -------- | -------- | -------- |
 | Facebook     | Yes          |	 Yes    |  Yes     | Yes      |
 | Google       | Yes          |   Yes    |  Yes     | Yes      |
@@ -274,7 +274,16 @@ const zkLoginUserAddress = jwtToAddress(jwt, userSalt)
 
 ## Get the Zero-Knowledge Proof
 
-A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise, it can be cached in the wallet's local storage.
+The next step is to fetch the ZK proof. This can be viewed as an attestation over the ephemeral key pair proving that "this ephemeral key pair is valid". 
+
+First, generate the extended ephemeral public key. This will be used as an input to the ZKP.
+```typescript
+import { getExtendedEphemeralPublicKey } from '@mysten/zklogin';
+
+const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(ephemeralKeyPair.getPublicKey());
+```
+
+Note that a new ZK proof needs to be fetched if the previous ephemeral key pair is expired or is otherwise inaccessible.
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
@@ -286,13 +295,13 @@ There are two options:
 
 If you wish to use the Mysten ran ZK Proving Service for Mainnet, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
-To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for DevNet zkLogin transactions, submitting it to TestNet or MainNet will fail.  
+To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet will fail.  
 
 | Network | Prover URL |
-| MainNet | https://prover.mystenlabs.com/v1 | 
-| DevNet, TestNet | https://prover-dev.mystenlabs.com/v1 | 
+| Mainnet, Testnet | https://prover.mystenlabs.com/v1 | 
+| Devnet | https://prover-dev.mystenlabs.com/v1 | 
 
-You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
+You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64. 
 
 ```bash
 curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
@@ -375,7 +384,6 @@ docker run \
 ```bash
 docker run \
     -e PROVER_URI='http://localhost:PORT1/input' \
-    -e NODE_ENV=production \
     -e DEBUG=zkLogin:info,jwks \
     -p PORT2:8080 \
     <prover-fe-image>
@@ -395,10 +403,8 @@ A few things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
   ```typescript
- const ephemeralKeyPair = new Ed25519Keypair();
-
 const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
@@ -407,7 +413,7 @@ txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
    client,
-   signer: ephemeralKeyPair,
+   signer: ephemeralKeyPair, // This must be the same ephemeral key pair used in the ZKP request
 });
   ```
 
@@ -440,6 +446,16 @@ Finally, execute the transaction.
    signature: zkLoginSignature,
 });
   ```
+
+## Caching the ephemeral private key and ZK proof
+
+As mentioned before, each ZK proof is tied to an ephemeral key pair. So the proof can be reused to sign any number of transactions until the ephemeral key pair expires, i.e., until the current epoch crosses `maxEpoch`.
+
+You might want to cache the ephemeral key pair along with the ZKP for future uses.
+
+However, the ephemeral key pair needs to be treated as a secret akin to a key pair in a traditional wallet. This is because if both the ephemeral private key and ZK proof are revealed to an attacker, then they can typically sign any transaction on behalf of the user (using the same process as above).
+
+So we do not recommend storing them persistently in an unsecure storage location, on any platform. For example, on browsers, we recommend using session storage instead of local storage to store the ephemeral key pair and the ZK proof.
 
 # How zkLogin Works
 
