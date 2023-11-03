@@ -1184,146 +1184,160 @@ fn use_(
         loc,
         attributes,
     } = u;
-    let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
-    let unbound_module = |mident: &ModuleIdent| -> Diagnostic {
-        diag!(
-            NameResolution::UnboundModule,
-            (
-                mident.loc,
-                format!("Invalid 'use'. Unbound module: '{}'", mident),
-            )
-        )
-    };
-    macro_rules! add_module_alias {
-        ($ident:expr, $alias_opt:expr) => {{
-            let alias: Name = $alias_opt.unwrap_or_else(|| $ident.value.module.0.clone());
-            if let Err(()) = check_restricted_name_all_cases(context, NameCase::ModuleAlias, &alias)
-            {
-                return;
-            }
-
-            if let Err(old_loc) = acc.add_module_alias(alias.clone(), $ident) {
-                duplicate_module_alias(context, old_loc, alias)
-            }
-        }};
-    }
-    match u {
-        P::Use::Module(pmident, alias_opt) => {
-            let mident = module_ident(context, pmident);
-            if !context.module_members.contains_key(&mident) {
-                context.env.add_diag(unbound_module(&mident));
-                return;
+    if let P::Use::Modules(uses) = u {
+        for (use_entry, loc) in uses {
+            let use_decl = P::UseDecl {
+                use_: use_entry,
+                loc,
+                attributes: attributes.clone(),
             };
-            add_module_alias!(mident, alias_opt.map(|m| m.0))
+            use_(context, acc, use_funs, use_decl);
         }
-        P::Use::Members(pmident, sub_uses) => {
-            let mident = module_ident(context, pmident);
-            let members = match context.module_members.get(&mident) {
-                Some(members) => members,
-                None => {
-                    context.env.add_diag(unbound_module(&mident));
+    } else {
+        let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
+        let unbound_module = |mident: &ModuleIdent| -> Diagnostic {
+            diag!(
+                NameResolution::UnboundModule,
+                (
+                    mident.loc,
+                    format!("Invalid 'use'. Unbound module: '{}'", mident),
+                )
+            )
+        };
+        macro_rules! add_module_alias {
+            ($ident:expr, $alias_opt:expr) => {{
+                let alias: Name = $alias_opt.unwrap_or_else(|| $ident.value.module.0.clone());
+                if let Err(()) =
+                    check_restricted_name_all_cases(context, NameCase::ModuleAlias, &alias)
+                {
                     return;
                 }
-            };
-            let mloc = *context.module_members.get_loc(&mident).unwrap();
-            let sub_uses_kinds = sub_uses
-                .into_iter()
-                .map(|(member, alia_opt)| {
-                    let kind = members.get(&member).cloned();
-                    (member, alia_opt, kind)
-                })
-                .collect::<Vec<_>>();
 
-            for (member, alias_opt, member_kind_opt) in sub_uses_kinds {
-                if member.value.as_str() == ModuleName::SELF_NAME {
-                    add_module_alias!(mident, alias_opt);
-                    continue;
+                if let Err(old_loc) = acc.add_module_alias(alias.clone(), $ident) {
+                    duplicate_module_alias(context, old_loc, alias)
                 }
+            }};
+        }
+        match u {
+            P::Use::Modules(_) => unreachable!(),
 
-                // check is member
-
-                let member_kind = match member_kind_opt {
+            P::Use::Module(pmident, alias_opt) => {
+                let mident = module_ident(context, pmident);
+                if !context.module_members.contains_key(&mident) {
+                    context.env.add_diag(unbound_module(&mident));
+                    return;
+                };
+                add_module_alias!(mident, alias_opt.map(|m| m.0))
+            }
+            P::Use::Members(pmident, sub_uses) => {
+                let mident = module_ident(context, pmident);
+                let members = match context.module_members.get(&mident) {
+                    Some(members) => members,
                     None => {
-                        let msg = format!(
-                            "Invalid 'use'. Unbound member '{}' in module '{}'",
-                            member, mident
-                        );
-                        context.env.add_diag(diag!(
-                            NameResolution::UnboundModuleMember,
-                            (member.loc, msg),
-                            (mloc, format!("Module '{}' declared here", mident)),
-                        ));
+                        context.env.add_diag(unbound_module(&mident));
+                        return;
+                    }
+                };
+                let mloc = *context.module_members.get_loc(&mident).unwrap();
+                let sub_uses_kinds = sub_uses
+                    .into_iter()
+                    .map(|(member, alia_opt)| {
+                        let kind = members.get(&member).cloned();
+                        (member, alia_opt, kind)
+                    })
+                    .collect::<Vec<_>>();
+
+                for (member, alias_opt, member_kind_opt) in sub_uses_kinds {
+                    if member.value.as_str() == ModuleName::SELF_NAME {
+                        add_module_alias!(mident, alias_opt);
                         continue;
                     }
-                    Some(m) => m,
-                };
 
-                let alias = alias_opt.unwrap_or(member);
+                    // check is member
 
-                let alias = match check_valid_module_member_alias(context, member_kind, alias) {
-                    None => continue,
-                    Some(alias) => alias,
-                };
-                if let Err(old_loc) = acc.add_member_alias(alias, mident, member) {
-                    duplicate_module_member(context, old_loc, alias)
-                }
-                if matches!(member_kind, ModuleMemberKind::Function) {
-                    // remove any previously declared alias to keep in sync with the member alias
-                    // map
-                    use_funs.implicit.remove(&alias);
-                    // not a function declaration
-                    let is_public = None;
-                    // assume used. We will set it to false if needed when exiting this alias scope
-                    let kind = E::ImplicitUseFunKind::UseAlias { used: true };
-                    let implicit = E::ImplicitUseFunCandidate {
-                        loc: alias.loc,
-                        attributes: attributes.clone(),
-                        is_public,
-                        function: (mident, member),
-                        kind,
+                    let member_kind = match member_kind_opt {
+                        None => {
+                            let msg = format!(
+                                "Invalid 'use'. Unbound member '{}' in module '{}'",
+                                member, mident
+                            );
+                            context.env.add_diag(diag!(
+                                NameResolution::UnboundModuleMember,
+                                (member.loc, msg),
+                                (mloc, format!("Module '{}' declared here", mident)),
+                            ));
+                            continue;
+                        }
+                        Some(m) => m,
                     };
-                    use_funs.implicit.add(alias, implicit).unwrap();
+
+                    let alias = alias_opt.unwrap_or(member);
+
+                    let alias = match check_valid_module_member_alias(context, member_kind, alias) {
+                        None => continue,
+                        Some(alias) => alias,
+                    };
+                    if let Err(old_loc) = acc.add_member_alias(alias, mident, member) {
+                        duplicate_module_member(context, old_loc, alias)
+                    }
+                    if matches!(member_kind, ModuleMemberKind::Function) {
+                        // remove any previously declared alias to keep in sync with the member alias
+                        // map
+                        use_funs.implicit.remove(&alias);
+                        // not a function declaration
+                        let is_public = None;
+                        // assume used. We will set it to false if needed when exiting this alias scope
+                        let kind = E::ImplicitUseFunKind::UseAlias { used: true };
+                        let implicit = E::ImplicitUseFunCandidate {
+                            loc: alias.loc,
+                            attributes: attributes.clone(),
+                            is_public,
+                            function: (mident, member),
+                            kind,
+                        };
+                        use_funs.implicit.add(alias, implicit).unwrap();
+                    }
                 }
             }
-        }
-        P::Use::Fun {
-            visibility,
-            function,
-            ty,
-            method,
-        } => {
-            context
-                .env
-                .check_feature(FeatureGate::DotCall, context.current_package, loc);
-            let is_public = match visibility {
-                P::Visibility::Public(vis_loc) => Some(vis_loc),
-                P::Visibility::Internal => None,
-                P::Visibility::Script(vis_loc)
-                | P::Visibility::Friend(vis_loc)
-                | P::Visibility::Package(vis_loc) => {
-                    let msg = "Invalid visibility for 'use fun' declaration";
-                    let vis_msg = format!(
+            P::Use::Fun {
+                visibility,
+                function,
+                ty,
+                method,
+            } => {
+                context
+                    .env
+                    .check_feature(FeatureGate::DotCall, context.current_package, loc);
+                let is_public = match visibility {
+                    P::Visibility::Public(vis_loc) => Some(vis_loc),
+                    P::Visibility::Internal => None,
+                    P::Visibility::Script(vis_loc)
+                    | P::Visibility::Friend(vis_loc)
+                    | P::Visibility::Package(vis_loc) => {
+                        let msg = "Invalid visibility for 'use fun' declaration";
+                        let vis_msg = format!(
                         "Module level 'use fun' declarations can be '{}' for the module's types, \
                         otherwise they must internal to declared scope.",
                         P::Visibility::PUBLIC
                     );
-                    context.env.add_diag(diag!(
-                        Declarations::InvalidUseFun,
-                        (loc, msg),
-                        (vis_loc, vis_msg)
-                    ));
-                    None
-                }
-            };
-            let explicit = ParserExplicitUseFun {
-                loc,
-                attributes,
-                is_public,
-                function,
-                ty,
-                method,
-            };
-            use_funs.explicit.push(explicit);
+                        context.env.add_diag(diag!(
+                            Declarations::InvalidUseFun,
+                            (loc, msg),
+                            (vis_loc, vis_msg)
+                        ));
+                        None
+                    }
+                };
+                let explicit = ParserExplicitUseFun {
+                    loc,
+                    attributes,
+                    is_public,
+                    function,
+                    ty,
+                    method,
+                };
+                use_funs.explicit.push(explicit);
+            }
         }
     }
 }

@@ -103,6 +103,7 @@ pub struct Script {
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Use {
     Module(ModuleIdent, Option<ModuleName>),
+    Modules(Vec<(Use, Loc)>), // Loc tracks end of inner form
     Members(ModuleIdent, Vec<(Name, Option<Name>)>),
     Fun {
         visibility: Visibility,
@@ -1213,7 +1214,49 @@ impl AstDebug for UseDecl {
 
 impl AstDebug for Use {
     fn ast_debug(&self, w: &mut AstWriter) {
+        fn inner(input: &Use, w: &mut AstWriter, print_addr: bool) {
+            match input {
+                Use::Module(m, alias_opt) => {
+                    if print_addr {
+                        w.write(&format!("{}", m.value.address));
+                    }
+                    w.write("{");
+                    w.write(&format!("{}", m.value.module));
+                    if let Some(alias) = alias_opt {
+                        w.write(&format!(" as {}", alias))
+                    }
+                    w.write("}");
+                }
+                Use::Members(m, sub_uses) => {
+                    if print_addr {
+                        w.write(&format!("{}", m.value.address));
+                    }
+                    w.write("{");
+                    w.write(&format!("{}", m.value.module));
+                    w.write("}");
+                    w.write(&format!("{}::", m.value.module));
+                    w.block(|w| {
+                        w.comma(sub_uses, |w, (n, alias_opt)| {
+                            w.write(&format!("{}", n));
+                            if let Some(alias) = alias_opt {
+                                w.write(&format!(" as {}", alias))
+                            }
+                        })
+                    })
+                }
+                Use::Modules(_) | Use::Fun { .. } => unreachable!(),
+            }
+        }
+
         match self {
+            Use::Modules(uses) => {
+                w.write("use ");
+                inner(&uses[0].0, w, true);
+                for (use_, _) in uses.iter().skip(1) {
+                    w.write(", ");
+                    inner(use_, w, false);
+                }
+            }
             Use::Module(m, alias_opt) => {
                 w.write(&format!("use {}", m));
                 if let Some(alias) = alias_opt {
