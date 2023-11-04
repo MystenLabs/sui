@@ -10,8 +10,9 @@ import { useRecognizedPackages } from './useRecognizedPackages';
 const PINNED_COIN_TYPES = 'pinned-coin-types';
 
 export function usePinnedCoinTypes() {
-	const setPinnedCoinTypes = useCoinsStore((state) => state.setPinnedCoinTypes);
-	const internalPinnedCoinTypes = useCoinsStore((state) => state.pinnedCoinTypes);
+	const coinsStore = useCoinsStore();
+	const setPinnedCoinTypes = coinsStore.setPinnedCoinTypes;
+	const internalPinnedCoinTypes = coinsStore.pinnedCoinTypes;
 	const recognizedPackages = useRecognizedPackages();
 
 	useEffect(() => {
