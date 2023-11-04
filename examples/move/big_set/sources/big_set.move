@@ -43,8 +43,8 @@ module big_set::big_set {
     /// utilizing dynamic fields.
     struct BigSet<phantom K: store + drop> has key, store {
         id: UID,
-        /// Length of the key; for 1 byte, the set can hold 256 elements.
-        /// For 2 bytes, the set can hold 65536 elements.
+        /// Length of the key; for 1 byte, the set can hold 256 VecSets in it.
+        /// For 2 bytes, the set can hold 65536 sub-sets.
         ///
         /// We don't support more than 2 bytes due to the object size limit.
         scale: u8,
