@@ -10,7 +10,6 @@ import type { EnokiFlow } from './EnokiFlow.js';
 const EnokiFlowContext = createContext<EnokiFlow | null>(null);
 
 // TODO: Flatten props and construct an instance ourself.
-// TODO: Maybe integrate with dapp-kit?
 export function EnokiFlowProvider({
 	children,
 	enokiFlow,
