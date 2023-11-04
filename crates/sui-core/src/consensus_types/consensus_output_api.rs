@@ -106,8 +106,7 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
 
     fn commit_timestamp_ms(&self) -> u64 {
         // TODO: Enforce ordered timestamp in Mysticeti.
-        // Also, could this ever overflow u64?
-        (self.blocks[0].meta_creation_time_ns() / 1000) as u64
+        self.timestamp_ms
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
