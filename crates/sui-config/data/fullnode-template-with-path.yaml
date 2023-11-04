@@ -18,7 +18,6 @@ authority-store-pruning-config:
   max-checkpoints-in-batch: 10
   max-transactions-in-batch: 1000
   pruning-run-delay-seconds: 60
-  enable-pruning-tombstones: false
 
 protocol-key-pair:
   path: "protocol.key"

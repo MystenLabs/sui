@@ -247,13 +247,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let overload_threshold_config = self.overload_threshold_config.unwrap_or_default();
-        let mut pruning_config = AuthorityStorePruningConfig::default();
-        if !epoch_store
-            .protocol_config()
-            .simplified_unwrap_then_delete()
-        {
-            pruning_config.set_enable_pruning_tombstones(false);
-        }
         let state = AuthorityState::new(
             name,
             secret,
@@ -264,7 +257,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             index_store,
             checkpoint_store,
             &registry,
-            pruning_config,
+            AuthorityStorePruningConfig::default(),
             genesis.objects(),
             &DBCheckpointConfig::default(),
             ExpensiveSafetyCheckConfig::new_enable_all(),
