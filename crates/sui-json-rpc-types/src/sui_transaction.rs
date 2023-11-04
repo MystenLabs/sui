@@ -984,7 +984,7 @@ impl Display for SuiGasData {
         writeln!(f, "Gas Owner: {}", self.owner)?;
         writeln!(f, "Gas Budget: {}", self.budget)?;
         writeln!(f, "Gas Price: {}", self.price)?;
-        write!(f, "Gas Payment:\n")?;
+        writeln!(f, "Gas Payment:")?;
         for payment in &self.payment {
             write!(f, "{} ", objref_string(payment))?;
         }
