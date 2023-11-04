@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::warn;
@@ -36,6 +37,19 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for ConsensusOutput {
             hasher.update(b.digest());
         });
         ConsensusOutputDigest(hasher.finalize().into())
+    }
+}
+
+impl Display for ConsensusOutput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ConsensusOutput(round={:?}, sub_dag_index={:?}, timestamp={:?}, digest={:?})",
+            self.sub_dag.leader_round(),
+            self.sub_dag.sub_dag_index,
+            self.sub_dag.commit_timestamp(),
+            self.digest()
+        )
     }
 }
 
