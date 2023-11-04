@@ -118,14 +118,9 @@ impl AuthorityStorePruner {
             }
 
             if enable_pruning_tombstones {
-                for deleted_object_ref in effects
-                    .deleted()
-                    .into_iter()
-                    .chain(effects.unwrapped_then_deleted().into_iter())
-                    .chain(effects.wrapped().into_iter())
-                {
+                for deleted_object_key in effects.all_tombstones() {
                     object_tombstones_to_prune
-                        .push(ObjectKey(deleted_object_ref.0, deleted_object_ref.1));
+                        .push(ObjectKey(deleted_object_key.0, deleted_object_key.1));
                 }
             }
         }

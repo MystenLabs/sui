@@ -1079,18 +1079,7 @@ impl AuthorityStore {
         trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
-        let deleted: HashMap<_, _> = effects
-            .deleted()
-            .iter()
-            .map(|oref| (oref.0, oref.1))
-            .chain(effects.wrapped().iter().map(|oref| (oref.0, oref.1)))
-            .chain(
-                effects
-                    .unwrapped_then_deleted()
-                    .iter()
-                    .map(|oref| (oref.0, oref.1)),
-            )
-            .collect();
+        let deleted: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
 
         // Get the actual set of objects that have been received -- any received
         // object will show up in the modified-at set.
@@ -1557,9 +1546,9 @@ impl AuthorityStore {
         }
 
         let tombstones = effects
-            .all_removed_objects()
+            .all_tombstones()
             .into_iter()
-            .map(|(obj_ref, _)| ObjectKey(obj_ref.0, obj_ref.1));
+            .map(|(id, version)| ObjectKey(id, version));
         write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
