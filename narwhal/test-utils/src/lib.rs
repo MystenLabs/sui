@@ -40,9 +40,9 @@ use types::{
     FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest, FetchCertificatesResponse,
     Header, HeaderAPI, HeaderV2Builder, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, TimestampMs,
-    Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SendHeaderRequest,
+    SendHeaderResponse, TimestampMs, Transaction, Vote, VoteAPI, WorkerBatchMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -237,6 +237,13 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         Ok(anemo::Response::new(SendCertificateResponse {
             accepted: true,
         }))
+    }
+
+    async fn send_header(
+        &self,
+        _request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 
     async fn request_vote(

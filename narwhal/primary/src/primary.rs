@@ -65,9 +65,10 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
-    FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
+    FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, HeaderValidationResult,
+    MetadataAPI, PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer,
+    RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
+    SendCertificateResponse, SendHeaderRequest, SendHeaderResponse, Vote, VoteInfoAPI,
     WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
@@ -920,6 +921,22 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             })),
             Err(e) => Err(anemo::rpc::Status::internal(e.to_string())),
         }
+    }
+
+    async fn send_header(
+        &self,
+        request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        let signed_header = request.into_body().signed_header;
+        let Header::V3(_header) = signed_header.header else {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "Invalid header version",
+            ));
+        };
+        Ok(anemo::Response::new(SendHeaderResponse {
+            result: HeaderValidationResult::Ok,
+        }))
     }
 
     async fn request_vote(

@@ -15,6 +15,7 @@ use crypto::{
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
+    ed25519::Ed25519SignatureAsBytes,
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
@@ -1179,6 +1180,36 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV3 {
     }
 }
 
+pub type HeaderSignatureBytes = Ed25519SignatureAsBytes;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SignedHeader {
+    pub header: Header,
+    pub signature: HeaderSignatureBytes,
+}
+
+impl SignedHeader {
+    pub fn key(&self) -> HeaderKey {
+        self.header.key()
+    }
+
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    pub fn round(&self) -> Round {
+        self.header.round()
+    }
+
+    pub fn author(&self) -> AuthorityIdentifier {
+        self.header.author()
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        self.header.digest()
+    }
+}
+
 /// A Vote on a Header is a claim by the voting authority that all payloads and the full history
 /// of Certificates included in the Header are available.
 #[derive(Clone, Serialize, Deserialize)]
@@ -2234,6 +2265,26 @@ pub struct SendCertificateRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SendCertificateResponse {
     pub accepted: bool,
+}
+
+/// Request to send a header to a peer.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendHeaderRequest {
+    pub signed_header: SignedHeader,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum HeaderValidationResult {
+    Ok,
+    InvalidSignature,
+    InvalidAncestors,
+    MissingAncestors(Vec<HeaderKey>),
+}
+
+/// Response from a peer after receiving a header.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendHeaderResponse {
+    pub result: HeaderValidationResult,
 }
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.

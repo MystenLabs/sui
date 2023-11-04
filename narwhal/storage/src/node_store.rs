@@ -6,7 +6,7 @@ use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{
     CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, ConsensusStore,
-    ProposerStore,
+    HeaderStore, ProposerStore,
 };
 use config::{AuthorityIdentifier, WorkerId};
 use std::num::NonZeroUsize;
@@ -17,7 +17,7 @@ use store::reopen;
 use store::rocks::{default_db_options, open_cf_opts, DBMap, MetricConf, ReadWriteOptions};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
-    Header, Round, SequenceNumber, VoteInfo,
+    Header, HeaderDigest, HeaderKey, Round, SequenceNumber, SignedHeader, VoteInfo,
 };
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -29,6 +29,7 @@ pub struct NodeStorage {
     pub proposer_store: ProposerStore,
     pub vote_digest_store: VoteDigestStore,
     pub certificate_store: CertificateStore<CertificateStoreCache>,
+    pub header_store: HeaderStore,
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
@@ -41,6 +42,8 @@ impl NodeStorage {
     pub(crate) const CERTIFICATES_CF: &'static str = "certificates";
     pub(crate) const CERTIFICATE_DIGEST_BY_ROUND_CF: &'static str = "certificate_digest_by_round";
     pub(crate) const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &'static str = "certificate_digest_by_origin";
+    pub(crate) const HEADER_BY_KEY_CF: &'static str = "header_by_key";
+    pub(crate) const HEADER_KEY_BY_AUTHOR_CF: &'static str = "header_key_by_author";
     pub(crate) const PAYLOAD_CF: &'static str = "payload";
     pub(crate) const BATCHES_CF: &'static str = "batches";
     pub(crate) const LAST_COMMITTED_CF: &'static str = "last_committed";
@@ -73,6 +76,14 @@ impl NodeStorage {
             ),
             (Self::CERTIFICATE_DIGEST_BY_ROUND_CF, cf_options.clone()),
             (Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF, cf_options.clone()),
+            (
+                Self::HEADER_BY_KEY_CF,
+                default_db_options()
+                    .optimize_for_write_throughput()
+                    .optimize_for_large_values_no_scan(1 << 10)
+                    .options,
+            ),
+            (Self::HEADER_KEY_BY_AUTHOR_CF, cf_options.clone()),
             (Self::PAYLOAD_CF, cf_options.clone()),
             (
                 Self::BATCHES_CF,
@@ -99,6 +110,8 @@ impl NodeStorage {
             certificate_map,
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
+            header_by_key_map,
+            header_key_by_author_map,
             payload_map,
             batch_map,
             last_committed_map,
@@ -112,6 +125,8 @@ impl NodeStorage {
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
             Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>,
+            Self::HEADER_BY_KEY_CF;<HeaderKey, SignedHeader>,
+            Self::HEADER_KEY_BY_AUTHOR_CF;<(AuthorityIdentifier, Round, HeaderDigest), ()>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
@@ -132,6 +147,9 @@ impl NodeStorage {
             certificate_digest_by_origin_map,
             certificate_store_cache,
         );
+
+        let header_store = HeaderStore::new(header_by_key_map, header_key_by_author_map);
+
         let payload_store = PayloadStore::new(payload_map);
         let batch_store = batch_map;
         let consensus_store = Arc::new(ConsensusStore::new(
@@ -143,6 +161,7 @@ impl NodeStorage {
             proposer_store,
             vote_digest_store,
             certificate_store,
+            header_store,
             payload_store,
             batch_store,
             consensus_store,

@@ -27,6 +27,8 @@ use tokio::{
     },
     time::sleep,
 };
+use types::SendHeaderRequest;
+use types::SendHeaderResponse;
 use types::SystemMessage;
 use types::TimestampMs;
 use types::{
@@ -52,6 +54,13 @@ impl PrimaryToPrimary for NetworkProxy {
             "FetchCertificateProxy::send_certificate() is unimplemented!! {:#?}",
             request
         );
+    }
+
+    async fn send_header(
+        &self,
+        _request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 
     async fn request_vote(
