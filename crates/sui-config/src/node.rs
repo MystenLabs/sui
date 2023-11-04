@@ -543,7 +543,6 @@ pub struct AuthorityStorePruningConfig {
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
-    pub enable_pruning_tombstones: bool,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -560,7 +559,6 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
-            enable_pruning_tombstones: false,
         }
     }
 }
@@ -580,7 +578,6 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
-            enable_pruning_tombstones: false,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -597,7 +594,6 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
-            enable_pruning_tombstones: false,
         }
     }
 
@@ -616,10 +612,6 @@ impl AuthorityStorePruningConfig {
                     n
                 }
             })
-    }
-
-    pub fn set_enable_pruning_tombstones(&mut self, enable_pruning_tombstones: bool) {
-        self.enable_pruning_tombstones = enable_pruning_tombstones;
     }
 }
 

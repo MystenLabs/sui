@@ -397,12 +397,7 @@ pub trait TransactionEffectsAPI {
     fn transaction_digest_mut_for_testing(&mut self) -> &mut TransactionDigest;
     fn dependencies_mut_for_testing(&mut self) -> &mut Vec<TransactionDigest>;
     fn unsafe_add_input_shared_object_for_testing(&mut self, kind: InputSharedObject);
-
-    // Adding an old version of a live object.
-    fn unsafe_add_deleted_live_object_for_testing(&mut self, obj_ref: ObjectRef);
-
-    // Adding a tombstone for a deleted object.
-    fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef);
+    fn unsafe_add_deleted_object_for_testing(&mut self, obj_ref: ObjectRef);
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]

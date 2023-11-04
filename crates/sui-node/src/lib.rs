@@ -562,14 +562,6 @@ impl SuiNode {
             state_snapshot_handle.is_some(),
         )?;
 
-        let mut pruning_config = config.authority_store_pruning_config;
-        if !epoch_store
-            .protocol_config()
-            .simplified_unwrap_then_delete()
-        {
-            pruning_config.set_enable_pruning_tombstones(false);
-        }
-
         let state = AuthorityState::new(
             config.protocol_public_key(),
             secret,
@@ -580,7 +572,7 @@ impl SuiNode {
             index_store.clone(),
             checkpoint_store.clone(),
             &prometheus_registry,
-            pruning_config,
+            config.authority_store_pruning_config,
             genesis.objects(),
             &db_checkpoint_config,
             config.expensive_safety_check_config.clone(),

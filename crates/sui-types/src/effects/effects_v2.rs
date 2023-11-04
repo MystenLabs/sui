@@ -323,24 +323,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         }
     }
 
-    fn unsafe_add_deleted_live_object_for_testing(&mut self, obj_ref: ObjectRef) {
-        self.changed_objects.push((
-            obj_ref.0,
-            EffectsObjectChange {
-                input_state: ObjectIn::Exist((
-                    (obj_ref.1, obj_ref.2),
-                    Owner::AddressOwner(SuiAddress::default()),
-                )),
-                output_state: ObjectOut::ObjectWrite((
-                    obj_ref.2,
-                    Owner::AddressOwner(SuiAddress::default()),
-                )),
-                id_operation: IDOperation::None,
-            },
-        ))
-    }
-
-    fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef) {
+    fn unsafe_add_deleted_object_for_testing(&mut self, obj_ref: ObjectRef) {
         self.changed_objects.push((
             obj_ref.0,
             EffectsObjectChange {
