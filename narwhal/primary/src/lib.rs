@@ -12,10 +12,12 @@ mod aggregators;
 mod certificate_fetcher;
 mod certifier;
 pub mod consensus;
+mod core;
 mod primary;
 mod proposer;
 mod state_handler;
 mod synchronizer;
+mod verifier;
 
 #[cfg(test)]
 #[path = "tests/common.rs"]

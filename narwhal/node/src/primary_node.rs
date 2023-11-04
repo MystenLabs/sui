@@ -85,21 +85,40 @@ impl PrimaryNodeInner {
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
         // spawn primary if not already running
-        let handles = Self::spawn_primary(
-            keypair,
-            network_keypair,
-            committee,
-            worker_cache,
-            client,
-            store,
-            chain,
-            protocol_config.clone(),
-            self.parameters.clone(),
-            execution_state,
-            &registry,
-            &mut tx_shutdown,
-        )
-        .await?;
+        let handles = if protocol_config.narwhalceti() {
+            Self::spawn_mysticeti_primary(
+                committee.authority_by_key(keypair.public()).unwrap().id(),
+                keypair,
+                network_keypair,
+                committee,
+                worker_cache,
+                client,
+                store,
+                chain,
+                &protocol_config,
+                self.parameters.clone(),
+                execution_state,
+                &registry,
+                &mut tx_shutdown,
+            )
+            .await?
+        } else {
+            Self::spawn_primary(
+                keypair,
+                network_keypair,
+                committee,
+                worker_cache,
+                client,
+                store,
+                chain,
+                protocol_config.clone(),
+                self.parameters.clone(),
+                execution_state,
+                &registry,
+                &mut tx_shutdown,
+            )
+            .await?
+        };
 
         // store the registry
         self.swap_registry(Some(registry));
@@ -277,6 +296,112 @@ impl PrimaryNodeInner {
             leader_schedule,
         );
         handles.extend(primary_handles);
+
+        Ok(handles)
+    }
+
+    /// Spawn a Mysticeti primary.
+    pub async fn spawn_mysticeti_primary<State>(
+        authority_id: AuthorityIdentifier,
+        // The private-public key pair of this authority.
+        keypair: KeyPair,
+        // The private-public network key pair of this authority.
+        network_keypair: NetworkKeyPair,
+        // The committee information.
+        committee: Committee,
+        // The worker information cache.
+        worker_cache: WorkerCache,
+        // Client for communications.
+        client: NetworkClient,
+        // The node's storage.
+        store: &NodeStorage,
+        chain: ChainIdentifier,
+        protocol_config: &ProtocolConfig,
+        // The configuration parameters.
+        parameters: Parameters,
+        // The state used by the client to execute transactions.
+        execution_state: State,
+        // A prometheus exporter Registry to use for the metrics
+        registry: &Registry,
+        // The channel to send the shutdown signal
+        tx_shutdown: &mut PreSubscribedBroadcastSender,
+    ) -> SubscriberResult<Vec<JoinHandle<()>>>
+    where
+        State: ExecutionState + Send + Sync + 'static,
+    {
+        let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
+        let channel_metrics = ChannelMetrics::new(registry);
+
+        let (tx_sequence, rx_sequence) =
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
+
+        // Check for any sub-dags that have been sent by consensus but were not processed by the executor.
+        let restored_consensus_output = get_restored_consensus_output(
+            store.consensus_store.clone(),
+            store.certificate_store.clone(),
+            &execution_state,
+        )
+        .await?;
+
+        let num_sub_dags = restored_consensus_output.len() as u64;
+        if num_sub_dags > 0 {
+            info!(
+                "Consensus output on its way to the executor was restored for {num_sub_dags} sub-dags",
+            );
+        }
+        consensus_metrics
+            .recovered_consensus_output
+            .inc_by(num_sub_dags);
+
+        let leader_schedule = LeaderSchedule::from_store(
+            committee.clone(),
+            store.consensus_store.clone(),
+            protocol_config.clone(),
+        );
+
+        // Spawn the client executing the transactions. It can also synchronize with the
+        // subscriber handler if it missed some transactions.
+        let mut handles = Executor::spawn(
+            authority_id,
+            worker_cache.clone(),
+            committee.clone(),
+            protocol_config,
+            client.clone(),
+            execution_state,
+            tx_shutdown.subscribe_n(2),
+            rx_sequence,
+            registry,
+            restored_consensus_output,
+        )?;
+
+        // Compute the public key of this authority.
+        let name = keypair.public().clone();
+
+        // Figure out the id for this authority
+        let authority = committee
+            .authority_by_key(&name)
+            .unwrap_or_else(|| panic!("Our node with key {:?} should be in committee", name));
+
+        // TODO: the same set of variables are sent to primary, consensus and downstream
+        // components. Consider using a holder struct to pass them around.
+
+        // Spawn the primary.
+        handles.extend(Primary::spawn_mysticeti(
+            authority.clone(),
+            keypair,
+            network_keypair,
+            committee.clone(),
+            worker_cache.clone(),
+            chain,
+            protocol_config.clone(),
+            parameters.clone(),
+            client,
+            store.header_store.clone(),
+            store.payload_store.clone(),
+            tx_sequence,
+            tx_shutdown,
+            registry,
+        ));
 
         Ok(handles)
     }

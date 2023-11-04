@@ -15,7 +15,7 @@ use crypto::{
 use derive_builder::Builder;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{
-    ed25519::Ed25519SignatureAsBytes,
+    ed25519::{Ed25519Signature, Ed25519SignatureAsBytes},
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
@@ -1180,12 +1180,13 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV3 {
     }
 }
 
+pub type HeaderSignature = Ed25519Signature;
 pub type HeaderSignatureBytes = Ed25519SignatureAsBytes;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SignedHeader {
-    pub header: Header,
-    pub signature: HeaderSignatureBytes,
+    header: Header,
+    signature: HeaderSignatureBytes,
 }
 
 impl SignedHeader {
@@ -1195,6 +1196,10 @@ impl SignedHeader {
 
     pub fn header(&self) -> &Header {
         &self.header
+    }
+
+    pub fn signature(&self) -> &HeaderSignatureBytes {
+        &self.signature
     }
 
     pub fn round(&self) -> Round {

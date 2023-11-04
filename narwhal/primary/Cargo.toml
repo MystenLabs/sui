@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+arc-swap.workspace = true
 async-trait.workspace = true
 backoff.workspace = true
 bcs.workspace = true

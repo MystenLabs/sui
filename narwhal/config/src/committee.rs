@@ -95,9 +95,9 @@ impl Authority {
         self.primary_address.clone()
     }
 
-    pub fn network_key(&self) -> NetworkPublicKey {
+    pub fn network_key(&self) -> &NetworkPublicKey {
         assert!(self.initialised);
-        self.network_key.clone()
+        &self.network_key
     }
 
     pub fn hostname(&self) -> &str {
@@ -394,7 +394,7 @@ impl Committee {
                 (
                     authority.id(),
                     authority.primary_address(),
-                    authority.network_key(),
+                    authority.network_key().clone(),
                 )
             })
             .collect()

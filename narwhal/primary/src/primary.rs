@@ -10,6 +10,7 @@ use crate::{
     proposer::{OurDigestMessage, Proposer},
     state_handler::StateHandler,
     synchronizer::Synchronizer,
+    verifier::Verifier,
 };
 
 use anemo::{
@@ -26,6 +27,7 @@ use anemo_tower::{
     set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
 use crypto::{traits::EncodeDecodeBase64, RandomnessPrivateKey};
@@ -46,7 +48,6 @@ use network::{
 use network::{failpoints::FailpointsMakeCallbackHandler, metrics::MetricsMakeCallbackHandler};
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::{btree_map::Entry, BTreeMap, HashMap};
 use std::{
     cmp::Reverse,
     collections::{BTreeSet, BinaryHeap},
@@ -55,7 +56,11 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, PayloadStore, ProposerStore, VoteDigestStore};
+use std::{
+    collections::{btree_map::Entry, BTreeMap, HashMap},
+    num::NonZeroU32,
+};
+use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
 use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
@@ -65,9 +70,9 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
-    FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, HeaderValidationResult,
-    MetadataAPI, PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer,
-    RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
+    CommittedSubDag, FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI,
+    HeaderValidationResult, MetadataAPI, PreSubscribedBroadcastSender, PrimaryToPrimary,
+    PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
     SendCertificateResponse, SendHeaderRequest, SendHeaderResponse, Vote, VoteInfoAPI,
     WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
@@ -530,6 +535,365 @@ impl Primary {
         handles
     }
 
+    // Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_mysticeti(
+        authority: Authority,
+        signer: KeyPair,
+        network_signer: NetworkKeyPair,
+        committee: Committee,
+        worker_cache: WorkerCache,
+        chain_identifier: ChainIdentifier,
+        protocol_config: ProtocolConfig,
+        parameters: Parameters,
+        client: NetworkClient,
+        header_store: HeaderStore,
+        payload_store: PayloadStore,
+        tx_sequence: Sender<CommittedSubDag>,
+        tx_shutdown: &mut PreSubscribedBroadcastSender,
+        registry: &Registry,
+    ) -> Vec<JoinHandle<()>> {
+        // Write the parameters to the logs.
+        parameters.tracing();
+
+        // Some info statements
+        let own_peer_id = PeerId(network_signer.public().0.to_bytes());
+        info!(
+            "Boot primary node with peer id {} and public key {}",
+            own_peer_id,
+            authority.protocol_key().encode_base64(),
+        );
+
+        // Initialize the metrics
+        let metrics = initialise_metrics(registry);
+        let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
+        let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
+        let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
+        let node_metrics = Arc::new(metrics.node_metrics.unwrap());
+        let network_connection_metrics = metrics.network_connection_metrics.unwrap();
+
+        let (tx_our_digests, rx_our_digests) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_our_digests,
+            &primary_channel_metrics.tx_our_digests_total,
+        );
+        let (tx_system_messages, rx_system_messages) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_system_messages,
+            &primary_channel_metrics.tx_system_messages_total,
+        );
+        let (tx_verified_headers, rx_verified_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_headers,
+            &primary_channel_metrics.tx_headers_total,
+        );
+        // let (tx_fetcher, rx_fetcher) = channel_with_total(
+        //     CHANNEL_CAPACITY,
+        //     &primary_channel_metrics.tx_certificate_fetcher,
+        //     &primary_channel_metrics.tx_certificate_fetcher_total,
+        // );
+        let (tx_committed_own_headers, rx_committed_own_headers) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_committed_own_headers,
+            &primary_channel_metrics.tx_committed_own_headers_total,
+        );
+        let (tx_committed_certificates, rx_committed_certificates) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_committed_certificates,
+            &primary_channel_metrics.tx_committed_certificates_total,
+        );
+
+        // Convert authority private key into key used for random beacon.
+        let randomness_private_key = fastcrypto::groups::bls12381::Scalar::from_byte_array(
+            signer
+                .copy()
+                .private()
+                .as_bytes()
+                .try_into()
+                .expect("key length should match"),
+        )
+        .expect("should work to convert BLS key to Scalar");
+
+        // Create the verifier container which will be populated later.
+        let verifier = Arc::new(ArcSwapOption::default());
+        verifier.store(Some(Arc::new(Verifier::new(
+            authority.id(),
+            committee.clone(),
+            protocol_config.clone(),
+            worker_cache.clone(),
+            client.clone(),
+            payload_store.clone(),
+            tx_verified_headers,
+            node_metrics.clone(),
+        ))));
+
+        // Spawn the network receiver listening to messages from the other primaries.
+        let address = authority.primary_address();
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
+            .unwrap();
+        let primary_service = PrimaryToPrimaryServer::new(PrimaryToPrimaryHandler {
+            authority_id: authority.id(),
+            committee: committee.clone(),
+            protocol_config: protocol_config.clone(),
+            worker_cache: worker_cache.clone(),
+            verifier: verifier.clone(),
+            metrics: node_metrics.clone(),
+        })
+        .add_layer_for_request_vote(InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+            governor::Quota::per_second(NonZeroU32::new(1).unwrap()),
+            rate_limit::WaitMode::ReturnError,
+        )))
+        .add_layer_for_fetch_certificates(InboundRequestLayer::new(
+            rate_limit::RateLimitLayer::new(
+                governor::Quota::per_second(NonZeroU32::new(1).unwrap()),
+                rate_limit::WaitMode::ReturnError,
+            ),
+        ))
+        .add_layer_for_send_certificate(InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+            governor::Quota::per_second(NonZeroU32::new(1).unwrap()),
+            rate_limit::WaitMode::ReturnError,
+        )))
+        .add_layer_for_send_header(InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
+            governor::Quota::per_second(NonZeroU32::new(100).unwrap()),
+            rate_limit::WaitMode::Block,
+        )))
+        .add_layer_for_send_header(InboundRequestLayer::new(
+            inflight_limit::InflightLimitLayer::new(100, inflight_limit::WaitMode::Block),
+        ));
+
+        let worker_receiver_handler = WorkerReceiverHandler {
+            tx_our_digests,
+            payload_store,
+        };
+
+        client.set_worker_to_primary_local_handler(Arc::new(worker_receiver_handler.clone()));
+
+        let worker_service = WorkerToPrimaryServer::new(worker_receiver_handler);
+
+        let addr = address.to_anemo_address().unwrap();
+
+        let epoch_string: String = committee.epoch().to_string();
+
+        let our_worker_peer_ids = worker_cache
+            .our_workers(authority.protocol_key())
+            .unwrap()
+            .into_iter()
+            .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
+        let worker_to_primary_router = anemo::Router::new()
+            .add_rpc_service(worker_service)
+            // Add an Authorization Layer to ensure that we only service requests from our workers
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                our_worker_peer_ids,
+            )))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )));
+
+        let primary_peer_ids = committee
+            .authorities()
+            .map(|authority| PeerId(authority.network_key().0.to_bytes()));
+        let routes = anemo::Router::new()
+            .add_rpc_service(primary_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new(
+                primary_peer_ids,
+            )))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )))
+            .merge(worker_to_primary_router);
+
+        let service = ServiceBuilder::new()
+            .layer(
+                TraceLayer::new_for_server_errors()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
+            )
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                inbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
+            )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetResponseHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string.clone(),
+            ))
+            .service(routes);
+
+        let outbound_layer = ServiceBuilder::new()
+            .layer(
+                TraceLayer::new_for_client_and_server_errors()
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
+            )
+            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+                outbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
+            )))
+            .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string,
+            ))
+            .into_inner();
+
+        let anemo_config = {
+            let mut quic_config = anemo::QuicConfig::default();
+            // Allow more concurrent streams for burst activity.
+            quic_config.max_concurrent_bidi_streams = Some(10_000);
+            // Increase send and receive buffer sizes on the primary, since the primary also
+            // needs to fetch payloads.
+            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
+            quic_config.stream_receive_window = Some(100 << 20);
+            quic_config.receive_window = Some(200 << 20);
+            quic_config.send_window = Some(200 << 20);
+            quic_config.crypto_buffer_size = Some(1 << 20);
+            quic_config.socket_receive_buffer_size = Some(20 << 20);
+            quic_config.socket_send_buffer_size = Some(20 << 20);
+            quic_config.allow_failed_socket_buffer_size_setting = true;
+            quic_config.max_idle_timeout_ms = Some(30_000);
+            // Enable keep alives every 5s
+            quic_config.keep_alive_interval_ms = Some(5_000);
+            let mut config = anemo::Config::default();
+            config.quic = Some(quic_config);
+            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            config.max_frame_size = Some(1 << 30);
+            // Set a default timeout of 300s for all RPC requests
+            config.inbound_request_timeout_ms = Some(300_000);
+            config.outbound_request_timeout_ms = Some(300_000);
+            config.shutdown_idle_timeout_ms = Some(1_000);
+            config.connectivity_check_interval_ms = Some(2_000);
+            config.connection_backoff_ms = Some(1_000);
+            config.max_connection_backoff_ms = Some(20_000);
+            config
+        };
+
+        let network;
+        let mut retries_left = 90;
+
+        loop {
+            let network_result = anemo::Network::bind(addr.clone())
+                .server_name("narwhal")
+                .private_key(network_signer.copy().private().0.to_bytes())
+                .config(anemo_config.clone())
+                .outbound_request_layer(outbound_layer.clone())
+                .start(service.clone());
+            match network_result {
+                Ok(n) => {
+                    network = n;
+                    break;
+                }
+                Err(_) => {
+                    retries_left -= 1;
+
+                    if retries_left <= 0 {
+                        panic!("Failed to initialize Network!");
+                    }
+                    error!(
+                        "Address {} should be available for the primary Narwhal service, retrying in one second",
+                        addr
+                    );
+                    sleep(Duration::from_secs(1));
+                }
+            }
+        }
+        client.set_primary_network(network.clone());
+
+        info!("Primary {} listening on {}", authority.id(), address);
+
+        let mut peer_types = HashMap::new();
+
+        // Add my workers
+        for worker in worker_cache.our_workers(authority.protocol_key()).unwrap() {
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            peer_types.insert(peer_id, "our_worker".to_string());
+            info!(
+                "Adding our worker with peer id {} and address {}",
+                peer_id, address
+            );
+        }
+
+        // Add others workers
+        for (_, worker) in worker_cache.others_workers(authority.protocol_key()) {
+            let (peer_id, address) =
+                Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
+            peer_types.insert(peer_id, "other_worker".to_string());
+            info!(
+                "Adding others worker with peer id {} and address {}",
+                peer_id, address
+            );
+        }
+
+        // Add other primaries
+        let primaries = committee
+            .others_primaries_by_id(authority.id())
+            .into_iter()
+            .map(|(_, address, network_key)| (network_key, address));
+
+        for (public_key, address) in primaries {
+            let (peer_id, address) = Self::add_peer_in_network(&network, public_key, &address);
+            peer_types.insert(peer_id, "other_primary".to_string());
+            info!(
+                "Adding others primaries with peer id {} and address {}",
+                peer_id, address
+            );
+        }
+
+        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
+            network.downgrade(),
+            network_connection_metrics,
+            peer_types,
+            Some(tx_shutdown.subscribe()),
+        );
+
+        info!(
+            "Primary {} listening to network admin messages on 127.0.0.1:{}",
+            authority.id(),
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port
+        );
+
+        let admin_handles = network::admin::start_admin_server(
+            parameters
+                .network_admin_server
+                .primary_network_admin_server_port,
+            network.clone(),
+            tx_shutdown.subscribe(),
+        );
+
+        let mut handles = vec![connection_monitor_handle];
+        handles.extend(admin_handles);
+
+        // Start Core, Consensus with leader_schedule
+
+        // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
+        let state_handler_handle = StateHandler::spawn(
+            &chain_identifier,
+            &protocol_config,
+            authority.id(),
+            committee,
+            rx_committed_certificates,
+            tx_shutdown.subscribe(),
+            Some(tx_committed_own_headers),
+            tx_system_messages,
+            RandomnessPrivateKey::from(randomness_private_key),
+            network,
+        );
+        handles.push(state_handler_handle);
+
+        // NOTE: This log entry is used to compute performance.
+        info!(
+            "Primary {} successfully booted on {}",
+            authority.id(),
+            authority.primary_address()
+        );
+
+        handles
+    }
+
     fn add_peer_in_network(
         network: &Network,
         peer_name: NetworkPublicKey,
@@ -928,7 +1292,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<SendHeaderRequest>,
     ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
         let signed_header = request.into_body().signed_header;
-        let Header::V3(_header) = signed_header.header else {
+        let Header::V3(_header) = signed_header.header() else {
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
                 "Invalid header version",
@@ -1063,6 +1427,172 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         // The requestor should be able to process certificates returned in this order without
         // any missing parents.
         Ok(anemo::Response::new(response))
+    }
+}
+
+/// Handler for incoming Mysticeti primary messages.
+#[derive(Clone)]
+struct PrimaryToPrimaryHandler {
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
+    committee: Committee,
+    protocol_config: ProtocolConfig,
+    worker_cache: WorkerCache,
+    verifier: Arc<ArcSwapOption<Verifier>>,
+    metrics: Arc<PrimaryMetrics>,
+}
+
+#[async_trait]
+impl PrimaryToPrimary for PrimaryToPrimaryHandler {
+    async fn send_certificate(
+        &self,
+        _request: anemo::Request<SendCertificateRequest>,
+    ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
+        return Err(anemo::rpc::Status::new_with_message(
+            StatusCode::NotFound,
+            "send_certificate unimplemented",
+        ));
+    }
+
+    async fn send_header(
+        &self,
+        request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        let signed_header = request.into_body().signed_header;
+        let Header::V3(_header) = signed_header.header() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "Invalid header version",
+            ));
+        };
+        let guard = self.verifier.load();
+        let Some(verifier) = guard.as_ref() else {
+            // TODO: add a Service Unavailable error code to anemo.
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::InternalServerError,
+                "Verifier unavailable",
+            ));
+        };
+
+        verifier.verify(signed_header).await.map_err(|e| {
+            anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                format!("Failed to verify header: {e}"),
+            )
+        })?;
+
+        Ok(anemo::Response::new(SendHeaderResponse {
+            result: HeaderValidationResult::Ok,
+        }))
+    }
+
+    async fn request_vote(
+        &self,
+        _request: anemo::Request<RequestVoteRequest>,
+    ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        return Err(anemo::rpc::Status::new_with_message(
+            StatusCode::NotFound,
+            "request_vote unimplemented",
+        ));
+    }
+
+    #[instrument(level = "debug", skip_all, peer = ?request.peer_id())]
+    async fn fetch_certificates(
+        &self,
+        _request: anemo::Request<FetchCertificatesRequest>,
+    ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
+        return Err(anemo::rpc::Status::new_with_message(
+            StatusCode::NotFound,
+            "fetch_certificates unimplemented",
+        ));
+        // let time_start = Instant::now();
+        // let peer = request
+        //     .peer_id()
+        //     .map_or_else(|| "None".to_string(), |peer_id| format!("{}", peer_id));
+        // let request = request.into_body();
+        // let mut response = FetchCertificatesResponse {
+        //     certificates: Vec::new(),
+        // };
+        // if request.max_items == 0 {
+        //     return Ok(anemo::Response::new(response));
+        // }
+
+        // // Use a min-queue for (round, authority) to keep track of the next certificate to fetch.
+        // //
+        // // Compared to fetching certificates iteratatively round by round, using a heap is simpler,
+        // // and avoids the pathological case of iterating through many missing rounds of a downed authority.
+        // let (lower_bound, skip_rounds) = request.get_bounds();
+        // debug!(
+        //     "Fetching certificates after round {lower_bound} for peer {:?}, elapsed = {}ms",
+        //     peer,
+        //     time_start.elapsed().as_millis(),
+        // );
+
+        // let mut fetch_queue = BinaryHeap::new();
+        // const MAX_SKIP_ROUNDS: usize = 1000;
+        // for (origin, rounds) in &skip_rounds {
+        //     if rounds.len() > MAX_SKIP_ROUNDS {
+        //         warn!(
+        //             "Peer has sent {} rounds to skip on origin {}, indicating peer's problem with \
+        //             committing or keeping track of GC rounds. elapsed = {}ms",
+        //             rounds.len(),
+        //             origin,
+        //             time_start.elapsed().as_millis(),
+        //         );
+        //     }
+        //     let next_round = self.find_next_round(*origin, lower_bound, rounds)?;
+        //     if let Some(r) = next_round {
+        //         fetch_queue.push(Reverse((r, origin)));
+        //     }
+        // }
+        // debug!(
+        //     "Initialized origins and rounds to fetch, elapsed = {}ms",
+        //     time_start.elapsed().as_millis(),
+        // );
+
+        // // Iteratively pop the next smallest (Round, Authority) pair, and push to min-heap the next
+        // // higher round of the same authority that should not be skipped.
+        // // The process ends when there are no more pairs in the min-heap.
+        // while let Some(Reverse((round, origin))) = fetch_queue.pop() {
+        //     // Allow the request handler to be stopped after timeout.
+        //     tokio::task::yield_now().await;
+        //     match self
+        //         .certificate_store
+        //         .read_by_index(*origin, round)
+        //         .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
+        //     {
+        //         Some(cert) => {
+        //             response.certificates.push(cert);
+        //             let next_round =
+        //                 self.find_next_round(*origin, round, skip_rounds.get(origin).unwrap())?;
+        //             if let Some(r) = next_round {
+        //                 fetch_queue.push(Reverse((r, origin)));
+        //             }
+        //         }
+        //         None => continue,
+        //     };
+        //     if response.certificates.len() == request.max_items {
+        //         debug!(
+        //             "Collected enough certificates (num={}, elapsed={}ms), returning.",
+        //             response.certificates.len(),
+        //             time_start.elapsed().as_millis(),
+        //         );
+        //         break;
+        //     }
+        //     if time_start.elapsed() >= FETCH_CERTIFICATES_MAX_HANDLER_TIME {
+        //         debug!(
+        //             "Spent enough time reading certificates (num={}, elapsed={}ms), returning.",
+        //             response.certificates.len(),
+        //             time_start.elapsed().as_millis(),
+        //         );
+        //         break;
+        //     }
+        //     assert!(response.certificates.len() < request.max_items);
+        // }
+
+        // // The requestor should be able to process certificates returned in this order without
+        // // any missing parents.
+        // Ok(anemo::Response::new(response))
     }
 }
 
