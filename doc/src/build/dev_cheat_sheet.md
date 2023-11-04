@@ -13,13 +13,76 @@ Quick reference on best practices for Sui Network developers.
     - If you upgrade a package `P` to `P'`, other packages and clients that depend on `P` will continue using `P`, not auto-update to `P'`. Both dependent packages and client code must be explicitly updated to point at `P'`.
     - Packages that expect to be extended by dependent packages can avoid breaking their extensions with each upgrade by providing a standard (unchanging) interface that all versions conform to. See this example for [message sending](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move) across a bridge from Wormhole. Extension packages that produce messages to send can use [`prepare_message`](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move#L68-L90) from any version of the Wormhole package to produce a [`MessageTicket`](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move#L52-L66) while client code to send the message must pass that `MessageTicket` into [`publish_message`](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move#L92-L152) in the latest version of the package.
     - `public` function signatures cannot be deleted or changed, but `public(friend)` functions can. Use `public(friend)` or private visibility liberally unless you are exposing library functions that will live forever.
-    - It is not possible to delete `struct` types, add new fields (though you can add [dynamic fields](https://docs.sui.io/devnet/build/programming-with-objects/ch5-dynamic-fields)), or add new [abilities](https://move-language.github.io/move/abilities.html) via an upgrade. Introduce new types carefully—they will live forever!
-- Use `vector`-backed collections (`vector`, `VecSet`, `VecMap`, `PriorityQueue`) with a **known** maximum size of ≤ 1000 items.
-    - Use dynamic field-backed collections (`Table`, `Bag`, `ObjectBag`, `ObjectTable`, `LinkedTable`) for any collection that allows third-party addition, larger collections, and collections of unknown size.
-    - Sui Move objects have a maximum size of 250KB—any attempt to create a larger object will lead to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
+    - It is not possible to delete `struct` types, add new fields (though you can add [dynamic fields](https://docs.sui.io/devnet/build/programming-with-objects/ch5-dynamic-fields)), or add new [abilities](https://move-language.github.io/move/abilities.html) via an upgrade. Introduce new types carefully—they will live forever!  
 - If your function `f` needs a payment in (e.g.) SUI from the caller, use `fun f(payment: Coin<SUI>)` not `fun f(payment: &mut Coin<SUI>, amount: u64)`. This is safer for callers—they know exactly how much they are paying, and do not need to trust `f` to extract the right amount.
 - Don’t micro-optimize gas usage. Sui computation costs are rounded up to the closest *[bucket](https://docs.sui.io/learn/tokenomics/gas-in-sui#gas-units)*, so only very drastic changes will make a difference. In particular, if your transaction is already in the lowest cost bucket, it can’t get any cheaper.
 - Follow the [Move coding conventions](https://move-language.github.io/move/coding-conventions.html) for consistent style.
+
+### Collections
+
+```
+Choose the right Sui move collection decision tree:
+
+Q: The collection does not require third-party addition, the number of items are known upfront, from the same type (homogeneous) and <1000?  
+Yes: use a `vector`-backed collection (`vector`, `VecSet`, `VecMap`, `PriorityQueue`)
+    Sui Move objects have a maximum size of 250KB—any attempt to create a larger object will lead to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
+
+  Q: Do you require a map data structure with key-value pairs?  
+  Yes: use `VecMap`
+    A map data structure backed by a vector. The map is guaranteed not to contain duplicate keys, but entries
+    are *not* sorted by key. Entries are included in insertion order.
+
+  Q: Do you require the guarantee of unique entries?
+  Yes: use `VecSet`
+
+  Q: Do your collection items require a specific order based on their importance/urgency?
+  Yes: use `PriorityQueue`
+
+  --> use `vector` from the std module
+  
+No: use a dynamic field-backed collection (`Table`, `Bag`, `ObjectBag`, `ObjectTable`, `LinkedTable`, `TableVec`)
+
+  Q: Do you know at compile time that the items will be of the same type?
+  Yes: use a homogeneous collection (`Table`, `ObjectTable`, `LinkedTable`, `TableVec`)
+
+    Q: Do you require a map collection that you can loop over or a map collection in which the order of the keys is relevant?
+    Yes: use `LinkedTable` (see below for a loop example)
+
+    Q: Do you require the values (objects) in the collection to be directly accessible in Sui storage?
+    Yes: use `ObjectTable`
+
+    Q: ???
+    Yes: use `TableVec`
+    
+    --> use `Table`
+    
+  No: use a heterogeneous collection (`Bag`, `ObjectBag`)
+
+    Q: Do you require the values (objects) in the collection to be directly accessible in Sui storage?
+    Yes: use `ObjectBag`
+    
+    --> use `Bag`
+```
+`vector` (
+    [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/1_homogeneous_collections.md#vectors) 
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/vector.move) 
+    | [docs](https://move-book.com/advanced-topics/managing-collections-with-vectors.html) 
+    )  
+`Table` (
+    [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/1_homogeneous_collections.md#table) 
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/table.move) 
+    | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/table.md)
+    )  
+`LinkedTable` (
+    [loop example](https://forums.sui.io/t/how-to-loop-over-a-table-collection/45087)
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/linked_table.move) 
+    | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/linked_table.md)
+)  
+`Bag` (
+    [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/3_heterogeneous_collections.md#heterogeneous-collections) 
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/bag.move) 
+    | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bag.md)
+    )  
 
 ### Composability
 
