@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::time::Duration;
+use tap::tap::TapFallible;
+use tracing::error;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
@@ -396,21 +398,41 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         let move_call_query_7d = build_move_call_metric_query(epoch, 7);
         let move_call_query_30d = build_move_call_metric_query(epoch, 30);
 
-        let move_call_metrics_3d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-        let move_call_metrics_7d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-        let move_call_metrics_30d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-
-        let chained = move_call_metrics_3d
+        let mut calculate_tasks = vec![];
+        let blocking_cp_3d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_3d, |conn| {
+                diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let blocking_cp_7d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_7d, |conn| {
+                diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let blocking_cp_30d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_30d, |conn| {
+                diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let chained = futures::future::join_all(calculate_tasks)
+            .await
             .into_iter()
-            .chain(move_call_metrics_7d)
-            .chain(move_call_metrics_30d)
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
+                error!("Error joining move call calculation tasks: {:?}", e);
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
+                error!("Error calculating move call metrics: {:?}", e);
+            })?
+            .into_iter()
+            .flatten()
             .collect::<Vec<_>>();
+
         let move_call_metrics: Vec<StoredMoveCallMetrics> = chained
             .into_iter()
             .filter_map(|queried_move_metrics| {
