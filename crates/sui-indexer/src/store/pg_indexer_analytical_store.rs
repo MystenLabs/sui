@@ -34,35 +34,14 @@ use crate::PgConnectionPool;
 
 use super::IndexerAnalyticalStore;
 
-const DEFAULT_ADDRESS_COMMIT_CHUNK_SIZE: usize = 10000;
-const DEFAULT_MOVE_CALL_COMMIT_CHUNK_SIZE: usize = 5000;
-
 #[derive(Clone)]
 pub struct PgIndexerAnalyticalStore {
     blocking_cp: PgConnectionPool,
-    address_chunk_size: usize,
-    move_call_chunk_size: usize,
 }
 
 impl PgIndexerAnalyticalStore {
     pub fn new(blocking_cp: PgConnectionPool) -> Self {
-        let address_chunk_size = std::env::var("ADDRESS_CHUNK_SIZE")
-            .map(|s| {
-                s.parse::<usize>()
-                    .unwrap_or(DEFAULT_ADDRESS_COMMIT_CHUNK_SIZE)
-            })
-            .unwrap_or(DEFAULT_ADDRESS_COMMIT_CHUNK_SIZE);
-        let move_call_chunk_size = std::env::var("MOVE_CALL_CHUNK_SIZE")
-            .map(|s| {
-                s.parse::<usize>()
-                    .unwrap_or(DEFAULT_MOVE_CALL_COMMIT_CHUNK_SIZE)
-            })
-            .unwrap_or(DEFAULT_MOVE_CALL_COMMIT_CHUNK_SIZE);
-        Self {
-            blocking_cp,
-            address_chunk_size,
-            move_call_chunk_size,
-        }
+        Self { blocking_cp }
     }
 }
 
@@ -269,19 +248,16 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for address_chunk in addresses.chunks(self.address_chunk_size) {
-                    diesel::insert_into(addresses::table)
-                        .values(address_chunk)
-                        .on_conflict(addresses::address)
-                        .do_update()
-                        .set((
-                            addresses::last_appearance_time
-                                .eq(excluded(addresses::last_appearance_time)),
-                            addresses::last_appearance_tx
-                                .eq(excluded(addresses::last_appearance_tx)),
-                        ))
-                        .execute(conn)?;
-                }
+                diesel::insert_into(addresses::table)
+                    .values(addresses.clone())
+                    .on_conflict(addresses::address)
+                    .do_update()
+                    .set((
+                        addresses::last_appearance_time
+                            .eq(excluded(addresses::last_appearance_time)),
+                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -297,19 +273,17 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for active_address_chunk in active_addresses.chunks(self.address_chunk_size) {
-                    diesel::insert_into(active_addresses::table)
-                        .values(active_address_chunk)
-                        .on_conflict(active_addresses::address)
-                        .do_update()
-                        .set((
-                            active_addresses::last_appearance_time
-                                .eq(excluded(active_addresses::last_appearance_time)),
-                            active_addresses::last_appearance_tx
-                                .eq(excluded(active_addresses::last_appearance_tx)),
-                        ))
-                        .execute(conn)?;
-                }
+                diesel::insert_into(active_addresses::table)
+                    .values(active_addresses.clone())
+                    .on_conflict(active_addresses::address)
+                    .do_update()
+                    .set((
+                        active_addresses::last_appearance_time
+                            .eq(excluded(active_addresses::last_appearance_time)),
+                        active_addresses::last_appearance_tx
+                            .eq(excluded(active_addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -401,12 +375,10 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for move_call_chunk in move_calls.chunks(self.move_call_chunk_size) {
-                    diesel::insert_into(move_calls::table)
-                        .values(move_call_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)?;
-                }
+                diesel::insert_into(move_calls::table)
+                    .values(move_calls.clone())
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
