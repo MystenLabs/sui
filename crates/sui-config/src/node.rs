@@ -543,7 +543,13 @@ pub struct AuthorityStorePruningConfig {
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
+    /// enables pruner to prune no longer needed object tombstones.
+    #[serde(default = "default_enable_pruning_tombstones")]
     pub enable_pruning_tombstones: bool,
+}
+
+fn default_enable_pruning_tombstones() -> bool {
+    false
 }
 
 impl Default for AuthorityStorePruningConfig {
