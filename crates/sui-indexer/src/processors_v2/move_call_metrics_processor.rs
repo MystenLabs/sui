@@ -3,7 +3,8 @@
 
 use rayon::prelude::*;
 use std::collections::HashMap;
-use tracing::info;
+use tap::tap::TapFallible;
+use tracing::{error, info};
 
 use crate::errors::IndexerError;
 use crate::models_v2::move_call_metrics::StoredMoveCall;
@@ -11,6 +12,7 @@ use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
 const MOVE_CALL_PROCESSOR_BATCH_SIZE: i64 = 1000;
+const PARALLEL_DOWNLOAD_CHUNK_SIZE: i64 = 100;
 
 pub struct MoveCallMetricsProcessor<S> {
     pub store: S,
@@ -18,7 +20,7 @@ pub struct MoveCallMetricsProcessor<S> {
 
 impl<S> MoveCallMetricsProcessor<S>
 where
-    S: IndexerAnalyticalStore + Sync + Send + 'static,
+    S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S) -> MoveCallMetricsProcessor<S> {
         Self { store }
@@ -41,19 +43,43 @@ where
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
             }
-            // +1 here b/c get_transactions_in_checkpoint_range is left-inclusive, right-exclusive,
-            // but we want left-exclusive, right-inclusive, as latest_tx_count_metrics has been processed.
+            // +1 as latest_move_call_metrics has been processed in last batch
             let end_cp_seq = last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE;
-            let download_cp_handle = self
+            let mut chunk_start_cp_seq = last_end_cp_seq + 1;
+            let mut chunk_end_cp_seq = last_end_cp_seq + PARALLEL_DOWNLOAD_CHUNK_SIZE;
+            let mut parallel_download_tasks = vec![];
+            while chunk_end_cp_seq < end_cp_seq {
+                let store = self.store.clone();
+                parallel_download_tasks.push(tokio::task::spawn(async move {
+                    store
+                        .get_tx_checkpoints_in_checkpoint_range(
+                            chunk_start_cp_seq,
+                            chunk_end_cp_seq + 1,
+                        )
+                        .await
+                }));
+                chunk_start_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
+                chunk_end_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
+            }
+            let tx_checkpoints = futures::future::join_all(parallel_download_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining tx checkpoints download tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error downloading tx checkpoints: {:?}", e);
+                })?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+            let cps = self
                 .store
-                .get_checkpoints_in_range(last_end_cp_seq + 1, end_cp_seq + 1);
-            let download_tx_handle = self
-                .store
-                .get_tx_checkpoints_in_checkpoint_range(last_end_cp_seq + 1, end_cp_seq + 1);
-            let (cps_res, tx_checkpoints_res) =
-                tokio::join!(download_cp_handle, download_tx_handle);
-            let cps = cps_res?;
-            let tx_checkpoints = tx_checkpoints_res?;
+                .get_checkpoints_in_range(last_end_cp_seq + 1, end_cp_seq + 1)
+                .await?;
             info!(
                 "Downloaded checkpoints and transactions from checkpoint {} to checkpoint {}",
                 last_end_cp_seq + 1,

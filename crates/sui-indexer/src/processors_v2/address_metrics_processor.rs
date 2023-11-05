@@ -3,7 +3,7 @@
 
 use rayon::prelude::*;
 use std::collections::HashMap;
-
+use tap::tap::TapFallible;
 use tracing::{error, info};
 
 use crate::errors::IndexerError;
@@ -14,6 +14,7 @@ use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
 const ADDRESS_PROCESSOR_BATCH_SIZE: i64 = 1000;
+const PARALLEL_DOWNLOAD_CHUNK_SIZE: i64 = 100;
 
 pub struct AddressMetricsProcessor<S> {
     pub store: S,
@@ -21,7 +22,7 @@ pub struct AddressMetricsProcessor<S> {
 
 impl<S> AddressMetricsProcessor<S>
 where
-    S: IndexerAnalyticalStore + Sync + Send + 'static,
+    S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S) -> AddressMetricsProcessor<S> {
         Self { store }
@@ -57,15 +58,40 @@ where
                 ))?
                 .clone();
 
-            // +1 b/c get_tx_indices_in_checkpoint_range is left-inclusive, right-exclusive,
-            // but we want left-exclusive, right-inclusive, as latest_address_metrics has been processed.
-            let tx_timestamps = self
-                .store
-                .get_tx_timestamps_in_checkpoint_range(
-                    latest_address_metrics.checkpoint + 1,
-                    end_cp.sequence_number + 1,
-                )
-                .await?;
+            // +1 as latest_address_metrics has been processed.
+            let end_cp_seq = last_end_cp_seq + ADDRESS_PROCESSOR_BATCH_SIZE;
+            let mut chunk_start_cp_seq = last_end_cp_seq + 1;
+            let mut chunk_end_cp_seq = last_end_cp_seq + PARALLEL_DOWNLOAD_CHUNK_SIZE;
+            let mut parallel_download_tasks = vec![];
+            while chunk_end_cp_seq < end_cp_seq {
+                let store = self.store.clone();
+                parallel_download_tasks.push(tokio::task::spawn(async move {
+                    store
+                        .get_tx_timestamps_in_checkpoint_range(
+                            chunk_start_cp_seq,
+                            chunk_end_cp_seq + 1,
+                        )
+                        .await
+                }));
+                chunk_start_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
+                chunk_end_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
+            }
+            let tx_timestamps = futures::future::join_all(parallel_download_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining tx timestamps download tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error downloading tx timestamps: {:?}", e);
+                })?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+
             let start_tx_seq = tx_timestamps
                 .first()
                 .ok_or(IndexerError::PostgresReadError(
