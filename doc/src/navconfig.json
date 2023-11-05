@@ -240,6 +240,10 @@
 					{
 						"label": "Sui Move Library",
 						"fileName": "build/move/sui-move-library"
+					},
+          {
+						"label": "Remix IDE Plugin",
+						"fileName": "build/move/remix-ide"
 					}
 				]
 			},
