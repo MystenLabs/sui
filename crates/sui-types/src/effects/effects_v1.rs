@@ -191,8 +191,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         }
     }
 
-    fn unsafe_add_deleted_object_for_testing(&mut self, object: ObjectRef) {
+    fn unsafe_add_deleted_live_object_for_testing(&mut self, object: ObjectRef) {
         self.modified_at_versions.push((object.0, object.1));
+    }
+
+    fn unsafe_add_object_tombstone_for_testing(&mut self, object: ObjectRef) {
         self.deleted.push(object);
     }
 }
