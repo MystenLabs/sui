@@ -197,7 +197,7 @@ where
                 .into_iter()
                 .map(|chunk| {
                     let store = self.store.clone();
-                    tokio::task::spawn(async move { store.persist_addresses(chunk).await })
+                    tokio::task::spawn_blocking(move || store.persist_addresses(chunk))
                 })
                 .collect::<Vec<_>>();
 
@@ -211,7 +211,7 @@ where
                 .into_iter()
                 .map(|chunk| {
                     let store = self.store.clone();
-                    tokio::task::spawn(async move { store.persist_active_addresses(chunk).await })
+                    tokio::task::spawn_blocking(move || store.persist_active_addresses(chunk))
                 })
                 .collect::<Vec<_>>();
 

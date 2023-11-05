@@ -244,7 +244,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(recipients)
     }
 
-    async fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()> {
+    fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -266,7 +266,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
-    async fn persist_active_addresses(
+    fn persist_active_addresses(
         &self,
         active_addresses: Vec<StoredActiveAddress>,
     ) -> IndexerResult<()> {
@@ -371,7 +371,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(move_calls)
     }
 
-    async fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()> {
+    fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {

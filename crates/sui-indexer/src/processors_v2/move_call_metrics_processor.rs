@@ -37,7 +37,6 @@ where
 
     pub async fn start(&self) -> IndexerResult<()> {
         info!("Indexer move call metrics async processor started...");
-
         let latest_move_call_metrics = self
             .store
             .get_latest_move_call_metrics()
@@ -157,8 +156,8 @@ where
             let mut parallel_commit_tasks = vec![];
             for move_call_chunk in move_call_chunk_to_commit {
                 let store = self.store.clone();
-                parallel_commit_tasks.push(tokio::task::spawn(async move {
-                    store.persist_move_calls(move_call_chunk).await
+                parallel_commit_tasks.push(tokio::task::spawn_blocking(move || {
+                    store.persist_move_calls(move_call_chunk)
                 }));
             }
             futures::future::join_all(parallel_commit_tasks)
@@ -175,17 +174,15 @@ where
                 })?;
             info!(
                 "Persisted {} move_calls at checkpoint: {}",
-                move_call_count, end_cp_seq);
+                move_call_count, end_cp_seq
+            );
 
             let move_call_metrics = self.store.calculate_move_call_metrics(end_cp).await?;
             self.store
                 .persist_move_call_metrics(move_call_metrics)
                 .await?;
             last_end_cp_seq = end_cp_seq;
-            info!(
-                "Persisted move_call_metrics at checkpoint: {}",
-                end_cp_seq
-            );
+            info!("Persisted move_call_metrics at checkpoint: {}", end_cp_seq);
         }
     }
 }
