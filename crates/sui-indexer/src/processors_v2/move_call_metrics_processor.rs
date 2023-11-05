@@ -43,6 +43,7 @@ where
             .await
             .unwrap_or_default();
         let mut last_end_cp_seq = latest_move_call_metrics.checkpoint_sequence_number;
+        let mut last_move_call_epoch = latest_move_call_metrics.epoch;
         loop {
             let mut latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
             while latest_stored_checkpoint.sequence_number
@@ -141,6 +142,7 @@ where
                 })
                 .collect::<Vec<StoredMoveCall>>();
             let end_cp_seq = end_cp.sequence_number;
+            let end_cp_epoch = end_cp.epoch;
             let move_call_count = move_calls_to_commit.len();
             info!(
                 "Indexed {} move_calls at checkpoint: {}",
@@ -176,13 +178,15 @@ where
                 "Persisted {} move_calls at checkpoint: {}",
                 move_call_count, end_cp_seq
             );
-
-            let move_call_metrics = self.store.calculate_move_call_metrics(end_cp).await?;
-            self.store
-                .persist_move_call_metrics(move_call_metrics)
-                .await?;
+            if end_cp_epoch > last_move_call_epoch {
+                let move_call_metrics = self.store.calculate_move_call_metrics(end_cp).await?;
+                self.store
+                    .persist_move_call_metrics(move_call_metrics)
+                    .await?;
+                info!("Persisted move_call_metrics at epoch: {}", end_cp_epoch);
+                last_move_call_epoch = end_cp_epoch;
+            }
             last_end_cp_seq = end_cp_seq;
-            info!("Persisted move_call_metrics at checkpoint: {}", end_cp_seq);
         }
     }
 }
