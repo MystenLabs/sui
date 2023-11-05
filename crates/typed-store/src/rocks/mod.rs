@@ -2036,27 +2036,31 @@ where
         J: Borrow<K>,
     {
         let cf = self.cf();
-        let keys_bytes = keys
+        let keys_bytes: Vec<_> = keys
             .into_iter()
-            .map(|k| (&cf, be_fix_int_ser(k.borrow()).unwrap()));
+            .map(|k| (&cf, be_fix_int_ser(k.borrow()).unwrap()))
+            .collect();
+        let num_keys = keys_bytes.len();
         let chunked_keys = keys_bytes.into_iter().chunks(chunk_size);
         let snapshot = self.snapshot()?;
-        let mut results = vec![];
+        let mut results: Vec<Result<Option<V>, TypedStoreError>> = Vec::with_capacity(num_keys);
         for chunk in chunked_keys.into_iter() {
             let chunk_result = snapshot.multi_get_cf(chunk);
-            let values_parsed: Result<Vec<_>, TypedStoreError> = chunk_result
-                .into_iter()
-                .map(|value_byte| {
-                    let value_byte = value_byte?;
-                    match value_byte {
-                        Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
-                        None => Ok(None),
+            let iter = chunk_result.into_iter().map(|value_byte| {
+                let value_byte =
+                    value_byte.map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+                match value_byte {
+                    Some(data) => {
+                        Ok(Some(bcs::from_bytes(&data).map_err(|e| {
+                            TypedStoreError::SerializationError(e.to_string())
+                        })?))
                     }
-                })
-                .collect();
-            results.extend(values_parsed?);
+                    None => Ok::<Option<V>, TypedStoreError>(None),
+                }
+            });
+            results.extend(iter);
         }
-        Ok(results)
+        results.into_iter().collect()
     }
 
     /// Convenience method for batch insertion
