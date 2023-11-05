@@ -1569,7 +1569,8 @@ impl IndexerReader {
         coin_struct: StructTag,
     ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
         let package_id = coin_struct.address.into();
-        let coin_metadata_type = CoinMetadata::type_(coin_struct).to_string();
+        let coin_metadata_type =
+            CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
         let coin_metadata_obj_id =
             get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type)?;
         if let Some(id) = coin_metadata_obj_id {
@@ -1590,7 +1591,8 @@ impl IndexerReader {
 
     fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
         let package_id = coin_struct.address.into();
-        let treasury_cap_type = TreasuryCap::type_(coin_struct).to_string();
+        let treasury_cap_type =
+            TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
         let treasury_cap_obj_id =
             get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())?
                 .ok_or(IndexerError::GenericError(format!(

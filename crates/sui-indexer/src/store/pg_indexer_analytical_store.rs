@@ -425,7 +425,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             .filter_map(|queried_move_metrics| {
                 let package = ObjectID::from_bytes(queried_move_metrics.move_package.clone()).ok();
                 let package_str = match package {
-                    Some(p) => p.to_string(),
+                    Some(p) => p.to_canonical_string(/* with_prefix */ true),
                     None => {
                         tracing::error!(
                             "Failed to parse move package ID: {:?}",
