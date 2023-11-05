@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use tap::tap::TapFallible;
@@ -13,9 +14,11 @@ use crate::types_v2::IndexerResult;
 
 const MOVE_CALL_PROCESSOR_BATCH_SIZE: i64 = 1000;
 const PARALLEL_DOWNLOAD_CHUNK_SIZE: i64 = 100;
+const PARALLEL_COMMIT_CHUNK_SIZE: usize = 8000;
 
 pub struct MoveCallMetricsProcessor<S> {
     pub store: S,
+    pub parallel_commit_chunk_size: usize,
 }
 
 impl<S> MoveCallMetricsProcessor<S>
@@ -23,7 +26,13 @@ where
     S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S) -> MoveCallMetricsProcessor<S> {
-        Self { store }
+        let parallel_commit_chunk_size = std::env::var("MOVE_CALL_CHUNK_SIZE")
+            .map(|s| s.parse::<usize>().unwrap_or(PARALLEL_COMMIT_CHUNK_SIZE))
+            .unwrap_or(PARALLEL_COMMIT_CHUNK_SIZE);
+        Self {
+            store,
+            parallel_commit_chunk_size,
+        }
     }
 
     pub async fn start(&self) -> IndexerResult<()> {
@@ -139,19 +148,43 @@ where
                 move_call_count, end_cp_seq
             );
 
-            let persist_move_call_handle = self.store.persist_move_calls(move_calls_to_commit);
-            let calculate_move_call_metrics_handle = self.store.calculate_move_call_metrics(end_cp);
-            let (persist_move_call_res, calculate_move_call_metrics_res) =
-                tokio::join!(persist_move_call_handle, calculate_move_call_metrics_handle);
-            persist_move_call_res?;
-            let move_call_metrics = calculate_move_call_metrics_res?;
+            let move_call_chunk_to_commit = move_calls_to_commit
+                .into_iter()
+                .chunks(self.parallel_commit_chunk_size)
+                .into_iter()
+                .map(|chunk| chunk.collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            let mut parallel_commit_tasks = vec![];
+            for move_call_chunk in move_call_chunk_to_commit {
+                let store = self.store.clone();
+                parallel_commit_tasks.push(tokio::task::spawn(async move {
+                    store.persist_move_calls(move_call_chunk).await
+                }));
+            }
+            futures::future::join_all(parallel_commit_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining move call persist tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error persisting move calls: {:?}", e);
+                })?;
+            info!(
+                "Persisted {} move_calls at checkpoint: {}",
+                move_call_count, end_cp_seq);
+
+            let move_call_metrics = self.store.calculate_move_call_metrics(end_cp).await?;
             self.store
                 .persist_move_call_metrics(move_call_metrics)
                 .await?;
             last_end_cp_seq = end_cp_seq;
             info!(
-                "Persisted {} move_calls and move_call_metrics at checkpoint: {}",
-                move_call_count, end_cp_seq
+                "Persisted move_call_metrics at checkpoint: {}",
+                end_cp_seq
             );
         }
     }

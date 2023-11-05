@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use tap::tap::TapFallible;
@@ -15,9 +16,11 @@ use crate::types_v2::IndexerResult;
 
 const ADDRESS_PROCESSOR_BATCH_SIZE: i64 = 1000;
 const PARALLEL_DOWNLOAD_CHUNK_SIZE: i64 = 100;
+const PARALLEL_COMMIT_CHUNK_SIZE: usize = 10000;
 
 pub struct AddressMetricsProcessor<S> {
     pub store: S,
+    pub parallel_commit_chunk_size: usize,
 }
 
 impl<S> AddressMetricsProcessor<S>
@@ -25,7 +28,13 @@ where
     S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S) -> AddressMetricsProcessor<S> {
-        Self { store }
+        let parallel_commit_chunk_size = std::env::var("ADDRESS_CHUNK_SIZE")
+            .map(|s| s.parse::<usize>().unwrap_or(PARALLEL_COMMIT_CHUNK_SIZE))
+            .unwrap_or(PARALLEL_COMMIT_CHUNK_SIZE);
+        Self {
+            store,
+            parallel_commit_chunk_size,
+        }
     }
 
     pub async fn start(&self) -> IndexerResult<()> {
@@ -178,13 +187,58 @@ where
                 addr_count, active_addr_count, end_cp_seq,
             );
 
-            let persist_addr = self.store.persist_addresses(addresses_to_commit);
-            let persist_active_addr = self
-                .store
-                .persist_active_addresses(active_addresses_to_commit);
-            let (persist_addr_res, persist_active_addr_res) =
-                tokio::join!(persist_addr, persist_active_addr);
-            persist_addr_res.and(persist_active_addr_res)?;
+            let address_chunk_to_commit = addresses_to_commit
+                .into_iter()
+                .chunks(self.parallel_commit_chunk_size)
+                .into_iter()
+                .map(|chunk| chunk.collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            let parallel_address_commit_tasks = address_chunk_to_commit
+                .into_iter()
+                .map(|chunk| {
+                    let store = self.store.clone();
+                    tokio::task::spawn(async move { store.persist_addresses(chunk).await })
+                })
+                .collect::<Vec<_>>();
+
+            let active_address_chunk_to_commit = active_addresses_to_commit
+                .into_iter()
+                .chunks(self.parallel_commit_chunk_size)
+                .into_iter()
+                .map(|chunk| chunk.collect::<Vec<_>>())
+                .collect::<Vec<_>>();
+            let parallel_active_address_commit_tasks = active_address_chunk_to_commit
+                .into_iter()
+                .map(|chunk| {
+                    let store = self.store.clone();
+                    tokio::task::spawn(async move { store.persist_active_addresses(chunk).await })
+                })
+                .collect::<Vec<_>>();
+
+            futures::future::join_all(parallel_address_commit_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining address persist tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error persisting addresses: {:?}", e);
+                })?;
+            futures::future::join_all(parallel_active_address_commit_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining active address persist tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error persisting active addresses: {:?}", e);
+                })?;
             info!(
                 "Persisted {} addresses and {} active addresses for checkpoint: {}",
                 addr_count, active_addr_count, end_cp_seq,
