@@ -4,6 +4,7 @@
 use crate::consensus::LeaderSchedule;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee};
 use crypto::{RandomnessPartialSignature, RandomnessPrivateKey};
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::groups;
 use fastcrypto::serde_helpers::ToFromByteArray;
 use fastcrypto_tbls::tbls::ThresholdBls;
@@ -44,7 +45,7 @@ pub struct StateHandler {
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Channel to signal when the round changes.
     rx_narwhal_round_updates: WatchStream<Round>,
-    /// Channel to recieve partial signatures for randomness generation.
+    /// Channel to receive partial signatures for randomness generation.
     rx_randomness_partial_signatures: Receiver<(
         AuthorityIdentifier,
         RandomnessRound,
@@ -142,7 +143,11 @@ impl RandomnessState {
         );
         let total_weight = nodes.n();
         let num_nodes = nodes.num_nodes();
-        let prefix_str = format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch());
+        let prefix_str = format!(
+            "dkg {} {}",
+            Hex::encode(chain.as_bytes()),
+            committee.epoch()
+        );
         let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
