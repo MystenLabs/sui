@@ -55,7 +55,7 @@ module closed_loop::actions_tests {
         assert!(option::is_some(&cl::spent(&request)), 4);
         assert!(option::borrow(&cl::spent(&request)) == &1000, 5);
 
-        cl::confirm_request(&mut policy, request, ctx);
+        cl::confirm_request_mut(&mut policy, request, ctx);
 
         assert!(cl::spent_balance(&policy) == 1000, 6);
 
@@ -117,7 +117,7 @@ module closed_loop::actions_tests {
         assert!(option::is_none(&cl::recipient(&request)), 3);
         assert!(option::is_none(&cl::spent(&request)), 4);
 
-        cl::confirm_request(&mut policy, request, ctx);
+        cl::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap);
     }
 }

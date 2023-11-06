@@ -21,7 +21,7 @@ module closed_loop::treasury_cap_tests {
         let request = cl::spend(token, ctx);
 
         cl::allow(&mut policy, &cap, cl::spend_action(), ctx);
-        cl::confirm_request(&mut policy, request, ctx);
+        cl::confirm_request_mut(&mut policy, request, ctx);
         cl::flush(&mut policy, &mut treasury_cap, ctx);
 
         test::return_treasury_cap(treasury_cap);

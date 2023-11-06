@@ -37,6 +37,8 @@ module closed_loop::closed_loop {
     const ENotZero: u64 = 4;
     /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
     const ECantConsumeBalance: u64 = 5;
+    /// Trying to perform an owner-gated action without being the owner.
+    const ENotOwner: u64 = 6;
 
     /// A Tag for the `spend` action.
     const SPEND: vector<u8> = b"spend";
@@ -48,7 +50,16 @@ module closed_loop::closed_loop {
     const FROM_COIN: vector<u8> = b"from_coin";
 
     /// A token with closed-loop restrictions set by the issuer
-    struct Token<phantom T> has key { id: UID, balance: Balance<T> }
+    struct Token<phantom T> has key {
+        id: UID,
+        /// The Balance of the `Token`.
+        balance: Balance<T>,
+        /// The owner of the `Token`. Defaults to `tx_context::sender`, however
+        /// for the situations like `transfer` it is set to the recipient. This
+        /// field should help prevent arbitrary transfers with "Transfer To
+        /// Object" (TTO) feature when it's released.
+        owner: address,
+    }
 
     /// A Capability that allows managing the `TokenPolicy`s.
     struct TokenPolicyCap<phantom T> has key, store { id: UID, for: ID }
@@ -126,10 +137,14 @@ module closed_loop::closed_loop {
 
     /// Transfer a `Token` to a `recipient`. Creates an `ActionRequest` for the
     /// "transfer" action.
+    ///
+    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun transfer<T>(
         t: Token<T>, recipient: address, ctx: &mut TxContext
     ): ActionRequest<T> {
+        assert!(t.owner == tx_context::sender(ctx), ENotOwner);
         let amount = balance::value(&t.balance);
+        t.owner = recipient;
         transfer::transfer(t, recipient);
 
         new_request(
@@ -143,8 +158,11 @@ module closed_loop::closed_loop {
 
     /// Spend a `Token` by "burning" it and storing in the `ActionRequest` for
     /// the "spend" action.
+    ///
+    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
-        let Token { id, balance } = t;
+        let Token { id, balance, owner } = t;
+        assert!(owner == tx_context::sender(ctx), ENotOwner);
         object::delete(id);
         new_request(
             string::utf8(SPEND),
@@ -157,11 +175,14 @@ module closed_loop::closed_loop {
 
     /// Convert `Token` into an open `Coin`. Creates an `ActionRequest` for the
     /// "to_coin" action.
+    ///
+    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun to_coin<T>(
         t: Token<T>, ctx: &mut TxContext
     ): (Coin<T>, ActionRequest<T>) {
-        let Token { id, balance } = t;
+        let Token { id, balance, owner } = t;
         let amount = balance::value(&balance);
+        assert!(owner == tx_context::sender(ctx), ENotOwner);
         object::delete(id);
 
         (
@@ -183,7 +204,8 @@ module closed_loop::closed_loop {
     ): (Token<T>, ActionRequest<T>) {
         let balance = coin::into_balance(coin);
         let amount = balance::value(&balance);
-        let token = Token { id: object::new(ctx), balance };
+        let owner = tx_context::sender(ctx);
+        let token = Token { id: object::new(ctx), balance, owner };
 
         (
             token,
@@ -201,7 +223,8 @@ module closed_loop::closed_loop {
 
     /// Join two `Token`s into one, always available.
     public fun join<T>(token: &mut Token<T>, another: Token<T>) {
-        let Token { id, balance } = another;
+        let Token { id, balance, owner } = another;
+        assert!(token.owner == owner, ENotOwner);
         balance::join(&mut token.balance, balance);
         object::delete(id);
     }
@@ -212,24 +235,28 @@ module closed_loop::closed_loop {
     ): Token<T> {
         assert!(balance::value(&token.balance) >= amount, EBalanceTooLow);
         let balance = balance::split(&mut token.balance, amount);
-        Token { id: object::new(ctx), balance }
+        Token { id: object::new(ctx), balance, owner: token.owner }
     }
 
     /// Create a zero `Token`.
     public fun zero<T>(ctx: &mut TxContext): Token<T> {
-        Token { id: object::new(ctx), balance: balance::zero() }
+        let owner = tx_context::sender(ctx);
+        Token { id: object::new(ctx), balance: balance::zero(), owner }
     }
 
     /// Destroy an empty `Token`, fails if the balance is non-zero.
+    /// Aborts if the `Token.balance` is not zero
     public fun destroy_zero<T>(token: Token<T>) {
-        let Token { id, balance } = token;
+        let Token { id, balance, owner: _ } = token;
         assert!(balance::value(&balance) == 0, ENotZero);
         balance::destroy_zero(balance);
         object::delete(id);
     }
 
     /// Transfer the `Token` to the transaction sender.
+    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
+        assert!(token.owner == tx_context::sender(ctx), ENotOwner);
         transfer::transfer(token, tx_context::sender(ctx))
     }
 
@@ -255,18 +282,24 @@ module closed_loop::closed_loop {
 
     /// Confirm the request against the `TokenPolicy` and return the parameters
     /// of the request: (Name, Amount, Sender, Recipient).
+    ///
+    /// Cannot be used for `spend` and similar actions that deliver `spent_balance`
+    /// to the `TokenPolicy`. For those actions use `confirm_request_mut`.
     public fun confirm_request<T>(
-        policy: &mut TokenPolicy<T>,
+        policy: &TokenPolicy<T>,
         request: ActionRequest<T>,
         _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
+        assert!(option::is_none(&request.spent_balance), ECantConsumeBalance);
 
         let ActionRequest {
             name, approvals,
             spent_balance,
             amount, sender, recipient,
         } = request;
+
+        option::destroy_none(spent_balance);
 
         let rules = &vec_set::into_keys(*vec_map::get(&policy.rules, &name));
         let rules_len = vector::length(rules);
@@ -278,16 +311,28 @@ module closed_loop::closed_loop {
             i = i + 1;
         };
 
-        if (option::is_some(&spent_balance)) {
+        (name, amount, sender, recipient)
+    }
+
+    /// Confirm the request against the `TokenPolicy` and return the parameters
+    /// of the request: (Name, Amount, Sender, Recipient).
+    ///
+    /// Unlike `confirm_request` this function requires mutable access to the
+    /// `TokenPolicy` and must be used on `spend` action.
+    public fun confirm_request_mut<T>(
+        policy: &mut TokenPolicy<T>,
+        request: ActionRequest<T>,
+        ctx: &mut TxContext
+    ): (String, u64, address, Option<address>) {
+        assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
+        if (option::is_some(&request.spent_balance)) {
             balance::join(
                 &mut policy.spent_balance,
-                option::destroy_some(spent_balance)
+                option::extract(&mut request.spent_balance)
             );
-        } else {
-            option::destroy_none(spent_balance);
         };
 
-        (name, amount, sender, recipient)
+        confirm_request(policy, request, ctx)
     }
 
     /// Confirm the request using the `TreasuryCap` as having access to it means
@@ -467,14 +512,14 @@ module closed_loop::closed_loop {
         cap: &mut TreasuryCap<T>, amount: u64, ctx: &mut TxContext
     ): Token<T> {
         let balance = balance::increase_supply(coin::supply_mut(cap), amount);
-        Token { id: object::new(ctx), balance }
+        Token { id: object::new(ctx), balance, owner: tx_context::sender(ctx) }
     }
 
     /// Burn a `Token` using the `TreasuryCap`.
     public fun burn<T>(
         cap: &mut TreasuryCap<T>, token: Token<T>
     ) {
-        let Token { id, balance } = token;
+        let Token { id, balance, owner: _ } = token;
         balance::decrease_supply(coin::supply_mut(cap), balance);
         object::delete(id);
     }
@@ -596,12 +641,12 @@ module closed_loop::closed_loop {
     #[test_only]
     public fun mint_for_testing<T>(amount: u64, ctx: &mut TxContext): Token<T> {
         let balance = balance::create_for_testing(amount);
-        Token { id: object::new(ctx), balance }
+        Token { id: object::new(ctx), balance, owner: tx_context::sender(ctx) }
     }
 
     #[test_only]
     public fun burn_for_testing<T>(token: Token<T>) {
-        let Token { id, balance } = token;
+        let Token { id, balance, owner: _ } = token;
         balance::destroy_for_testing(balance);
         object::delete(id);
     }
