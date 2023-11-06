@@ -11266,6 +11266,7 @@ dependencies = [
  "sui-types",
  "thiserror",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
