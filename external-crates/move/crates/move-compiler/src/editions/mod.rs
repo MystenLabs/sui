@@ -27,6 +27,7 @@ pub struct Edition {
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum FeatureGate {
+    NestedUse,
     PublicPackage,
     PostFixAbilities,
     StructTypeVisibility,
@@ -101,6 +102,7 @@ static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
 const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
+    FeatureGate::NestedUse,
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
@@ -182,6 +184,7 @@ impl Flavor {
 impl FeatureGate {
     fn error_prefix(&self) -> &'static str {
         match self {
+            FeatureGate::NestedUse => "Nested 'use' forms are",
             FeatureGate::PublicPackage => "'public(package)' is",
             FeatureGate::PostFixAbilities => "Postfix abilities are",
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",

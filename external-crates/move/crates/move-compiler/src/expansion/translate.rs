@@ -1185,6 +1185,66 @@ fn use_(
         attributes,
     } = u;
     let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
+    match u {
+        P::Use::NestedModuleUses(address, use_decls) => {
+            for (module, use_) in use_decls {
+                let mident = sp(module.loc(), P::ModuleIdent_ { address, module });
+                module_use(context, acc, use_funs, mident, &attributes, use_);
+            }
+        }
+        P::Use::ModuleUse(mident, use_) => {
+            module_use(context, acc, use_funs, mident, &attributes, use_);
+        }
+        P::Use::Fun {
+            visibility,
+            function,
+            ty,
+            method,
+        } => {
+            context
+                .env
+                .check_feature(FeatureGate::DotCall, context.current_package, loc);
+            let is_public = match visibility {
+                P::Visibility::Public(vis_loc) => Some(vis_loc),
+                P::Visibility::Internal => None,
+                P::Visibility::Script(vis_loc)
+                | P::Visibility::Friend(vis_loc)
+                | P::Visibility::Package(vis_loc) => {
+                    let msg = "Invalid visibility for 'use fun' declaration";
+                    let vis_msg = format!(
+                        "Module level 'use fun' declarations can be '{}' for the module's types, \
+                    otherwise they must internal to declared scope.",
+                        P::Visibility::PUBLIC
+                    );
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidUseFun,
+                        (loc, msg),
+                        (vis_loc, vis_msg)
+                    ));
+                    None
+                }
+            };
+            let explicit = ParserExplicitUseFun {
+                loc,
+                attributes,
+                is_public,
+                function,
+                ty,
+                method,
+            };
+            use_funs.explicit.push(explicit);
+        }
+    }
+}
+
+fn module_use(
+    context: &mut Context,
+    acc: &mut AliasMapBuilder,
+    use_funs: &mut UseFunsBuilder,
+    in_mident: P::ModuleIdent,
+    attributes: &E::Attributes,
+    muse: P::ModuleUse,
+) {
     let unbound_module = |mident: &ModuleIdent| -> Diagnostic {
         diag!(
             NameResolution::UnboundModule,
@@ -1207,17 +1267,17 @@ fn use_(
             }
         }};
     }
-    match u {
-        P::Use::Module(pmident, alias_opt) => {
-            let mident = module_ident(context, pmident);
+    match muse {
+        P::ModuleUse::Module(alias_opt) => {
+            let mident = module_ident(context, in_mident);
             if !context.module_members.contains_key(&mident) {
                 context.env.add_diag(unbound_module(&mident));
                 return;
             };
             add_module_alias!(mident, alias_opt.map(|m| m.0))
         }
-        P::Use::Members(pmident, sub_uses) => {
-            let mident = module_ident(context, pmident);
+        P::ModuleUse::Members(sub_uses) => {
+            let mident = module_ident(context, in_mident);
             let members = match context.module_members.get(&mident) {
                 Some(members) => members,
                 None => {
@@ -1285,45 +1345,6 @@ fn use_(
                     use_funs.implicit.add(alias, implicit).unwrap();
                 }
             }
-        }
-        P::Use::Fun {
-            visibility,
-            function,
-            ty,
-            method,
-        } => {
-            context
-                .env
-                .check_feature(FeatureGate::DotCall, context.current_package, loc);
-            let is_public = match visibility {
-                P::Visibility::Public(vis_loc) => Some(vis_loc),
-                P::Visibility::Internal => None,
-                P::Visibility::Script(vis_loc)
-                | P::Visibility::Friend(vis_loc)
-                | P::Visibility::Package(vis_loc) => {
-                    let msg = "Invalid visibility for 'use fun' declaration";
-                    let vis_msg = format!(
-                        "Module level 'use fun' declarations can be '{}' for the module's types, \
-                        otherwise they must internal to declared scope.",
-                        P::Visibility::PUBLIC
-                    );
-                    context.env.add_diag(diag!(
-                        Declarations::InvalidUseFun,
-                        (loc, msg),
-                        (vis_loc, vis_msg)
-                    ));
-                    None
-                }
-            };
-            let explicit = ParserExplicitUseFun {
-                loc,
-                attributes,
-                is_public,
-                function,
-                ty,
-                method,
-            };
-            use_funs.explicit.push(explicit);
         }
     }
 }

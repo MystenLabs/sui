@@ -102,14 +102,20 @@ pub struct Script {
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Use {
-    Module(ModuleIdent, Option<ModuleName>),
-    Members(ModuleIdent, Vec<(Name, Option<Name>)>),
+    ModuleUse(ModuleIdent, ModuleUse),
+    NestedModuleUses(LeadingNameAccess, Vec<(ModuleName, ModuleUse)>),
     Fun {
         visibility: Visibility,
         function: Box<NameAccessChain>,
         ty: Box<NameAccessChain>,
         method: Name,
     },
+}
+
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub enum ModuleUse {
+    Module(Option<ModuleName>),
+    Members(Vec<(Name, Option<Name>)>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1211,23 +1217,36 @@ impl AstDebug for UseDecl {
     }
 }
 
-impl AstDebug for Use {
+impl AstDebug for ModuleUse {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            Use::Module(m, alias_opt) => {
-                w.write(&format!("use {}", m));
-                if let Some(alias) = alias_opt {
-                    w.write(&format!(" as {}", alias))
-                }
+            ModuleUse::Module(alias) => {
+                alias.map(|alias| w.write(&format!("as {}", alias)));
             }
-            Use::Members(m, sub_uses) => {
-                w.write(&format!("use {}::", m));
+            ModuleUse::Members(members) => w.block(|w| {
+                w.comma(members, |w, (name, alias)| {
+                    w.write(&format!("{}", name));
+                    alias.map(|alias| w.write(&format!("as {}", alias.value)));
+                })
+            }),
+        }
+    }
+}
+
+impl AstDebug for Use {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("use ");
+        match self {
+            Use::ModuleUse(mident, use_) => {
+                w.write(&format!("{}", mident));
+                use_.ast_debug(w);
+            }
+            Use::NestedModuleUses(addr, entries) => {
+                w.write(&format!("{}::", addr));
                 w.block(|w| {
-                    w.comma(sub_uses, |w, (n, alias_opt)| {
-                        w.write(&format!("{}", n));
-                        if let Some(alias) = alias_opt {
-                            w.write(&format!(" as {}", alias))
-                        }
+                    w.comma(entries, |w, (name, use_)| {
+                        w.write(&format!("{}::", name));
+                        use_.ast_debug(w);
                     })
                 })
             }
