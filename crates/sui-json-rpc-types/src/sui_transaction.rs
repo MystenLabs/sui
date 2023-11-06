@@ -979,6 +979,19 @@ pub struct SuiGasData {
     pub budget: u64,
 }
 
+impl Display for SuiGasData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Gas Owner: {}", self.owner)?;
+        writeln!(f, "Gas Budget: {}", self.budget)?;
+        writeln!(f, "Gas Price: {}", self.price)?;
+        writeln!(f, "Gas Payment:")?;
+        for payment in &self.payment {
+            write!(f, "{} ", objref_string(payment))?;
+        }
+        writeln!(f)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[enum_dispatch(SuiTransactionBlockDataAPI)]
 #[serde(
@@ -1039,16 +1052,9 @@ impl Display for SuiTransactionBlockData {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::V1(data) => {
-                writeln!(f, "{}", data.transaction)?;
                 writeln!(f, "Sender: {}", data.sender)?;
-                write!(f, "Gas Payment: ")?;
-                for payment in &self.gas_data().payment {
-                    write!(f, "{} ", payment)?;
-                }
-                writeln!(f)?;
-                writeln!(f, "Gas Owner: {}", data.gas_data.owner)?;
-                writeln!(f, "Gas Price: {}", data.gas_data.price)?;
-                writeln!(f, "Gas Budget: {}", data.gas_data.budget)
+                writeln!(f, "{}", self.gas_data())?;
+                writeln!(f, "{}", data.transaction)
             }
         }
     }
