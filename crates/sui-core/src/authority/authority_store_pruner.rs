@@ -104,25 +104,41 @@ impl AuthorityStorePruner {
         checkpoint_number: CheckpointSequenceNumber,
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
+        enable_pruning_tombstones: bool,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("ObjectsLivePruner");
         let mut wb = perpetual_db.objects.batch();
 
-        let mut object_keys_to_prune = vec![];
+        // Collect objects keys that need to be deleted from `transaction_effects`.
+        let mut live_object_keys_to_prune = vec![];
+        let mut object_tombstones_to_prune = vec![];
         for effects in &transaction_effects {
             for (object_id, seq_number) in effects.modified_at_versions() {
-                object_keys_to_prune.push(ObjectKey(object_id, seq_number));
+                live_object_keys_to_prune.push(ObjectKey(object_id, seq_number));
+            }
+
+            if enable_pruning_tombstones {
+                for deleted_object_ref in effects
+                    .deleted()
+                    .into_iter()
+                    .chain(effects.unwrapped_then_deleted().into_iter())
+                    .chain(effects.wrapped().into_iter())
+                {
+                    object_tombstones_to_prune
+                        .push(ObjectKey(deleted_object_ref.0, deleted_object_ref.1));
+                }
             }
         }
+
         metrics
             .num_pruned_objects
-            .inc_by(object_keys_to_prune.len() as u64);
-        let mut indirect_objects: HashMap<_, i64> = HashMap::new();
+            .inc_by((live_object_keys_to_prune.len() + object_tombstones_to_prune.len()) as u64);
 
+        let mut indirect_objects: HashMap<_, i64> = HashMap::new();
         if indirect_objects_threshold > 0 && indirect_objects_threshold < usize::MAX {
             for object in perpetual_db
                 .objects
-                .multi_get(object_keys_to_prune.iter())?
+                .multi_get(live_object_keys_to_prune.iter())?
                 .into_iter()
                 .flatten()
             {
@@ -135,16 +151,13 @@ impl AuthorityStorePruner {
         }
 
         let mut updates: HashMap<ObjectID, (VersionNumber, VersionNumber)> = HashMap::new();
-        for effects in transaction_effects {
-            for (object_id, seq_number) in effects.modified_at_versions() {
-                updates
-                    .entry(object_id)
-                    .and_modify(|range| {
-                        *range = (min(range.0, seq_number), max(range.1, seq_number))
-                    })
-                    .or_insert((seq_number, seq_number));
-            }
+        for ObjectKey(object_id, seq_number) in live_object_keys_to_prune {
+            updates
+                .entry(object_id)
+                .and_modify(|range| *range = (min(range.0, seq_number), max(range.1, seq_number)))
+                .or_insert((seq_number, seq_number));
         }
+
         for (object_id, (min_version, max_version)) in updates {
             debug!(
                 "Pruning object {:?} versions {:?} - {:?}",
@@ -153,6 +166,26 @@ impl AuthorityStorePruner {
             let start_range = ObjectKey(object_id, min_version);
             let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
             wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+        }
+
+        // When enable_pruning_tombstones is enabled, instead of using range deletes, we need to do a scan of all the keys
+        // for the deleted objects and then do point deletes to delete all the existing keys. This is because to improve read
+        // performance, we set `ignore_range_deletions` on all read options, and using range delete to delete tombstones
+        // may leak object (imagine a tombstone is compacted away, but earlier version is still not). Using point deletes
+        // guarantees that all earlier versions are deleted in the database.
+        if !object_tombstones_to_prune.is_empty() {
+            let mut object_keys_to_delete = vec![];
+            for ObjectKey(object_id, seq_number) in object_tombstones_to_prune {
+                for (object_key, _object_value) in perpetual_db.objects.iter_with_bounds(
+                    Some(ObjectKey(object_id, VersionNumber::MIN)),
+                    Some(ObjectKey(object_id, seq_number.next())),
+                ) {
+                    assert_eq!(object_key.0, object_id);
+                    object_keys_to_delete.push(object_key);
+                }
+            }
+
+            wb.delete_batch(&perpetual_db.objects, object_keys_to_delete)?;
         }
 
         if !indirect_objects.is_empty() {
@@ -385,6 +418,7 @@ impl AuthorityStorePruner {
                             checkpoint_number,
                             metrics.clone(),
                             indirect_objects_threshold,
+                            config.enable_pruning_tombstones,
                         )
                         .await?
                     }
@@ -403,6 +437,7 @@ impl AuthorityStorePruner {
                 effects_to_prune = vec![];
             }
         }
+
         if !checkpoints_to_prune.is_empty() {
             match mode {
                 PruningMode::Objects => {
@@ -413,6 +448,7 @@ impl AuthorityStorePruner {
                         checkpoint_number,
                         metrics.clone(),
                         indirect_objects_threshold,
+                        config.enable_pruning_tombstones,
                     )
                     .await?
                 }
@@ -640,30 +676,37 @@ mod tests {
         Ok(after_pruning)
     }
 
+    type GenerateTestDataResult = (Vec<ObjectKey>, Vec<ObjectKey>, Vec<ObjectKey>);
+
     fn generate_test_data(
         db: Arc<AuthorityPerpetualTables>,
         num_versions_per_object: u64,
         num_object_versions_to_retain: u64,
         total_unique_object_ids: u32,
-    ) -> Result<(Vec<ObjectKey>, Vec<ObjectKey>), anyhow::Error> {
-        let (mut to_keep, mut to_delete) = (vec![], vec![]);
+        indirect_object_threshold: usize,
+    ) -> Result<GenerateTestDataResult, anyhow::Error> {
+        assert!(num_versions_per_object >= num_object_versions_to_retain);
+
+        let (mut to_keep, mut to_delete, mut tombstones) = (vec![], vec![], vec![]);
         let mut batch = db.objects.batch();
 
         let ids = ObjectID::in_range(ObjectID::ZERO, total_unique_object_ids.into())?;
         for id in ids {
-            for (counter, i) in (0..num_versions_per_object).rev().enumerate() {
-                let object_key = ObjectKey(id, SequenceNumber::from_u64(i));
+            for (counter, seq) in (0..num_versions_per_object).rev().enumerate() {
+                let object_key = ObjectKey(id, SequenceNumber::from_u64(seq));
                 if counter < num_object_versions_to_retain.try_into().unwrap() {
                     // latest `num_object_versions_to_retain` should not have been pruned
                     to_keep.push(object_key);
                 } else {
                     to_delete.push(object_key);
                 }
-                let StoreObjectPair(obj, indirect_obj) =
-                    get_store_object_pair(Object::immutable_with_id_for_testing(id), 1);
+                let StoreObjectPair(obj, indirect_obj) = get_store_object_pair(
+                    Object::immutable_with_id_for_testing(id),
+                    indirect_object_threshold,
+                );
                 batch.insert_batch(
                     &db.objects,
-                    [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
+                    [(ObjectKey(id, SequenceNumber::from(seq)), obj.clone())],
                 )?;
                 if let StoreObject::Value(o) = obj.into_inner() {
                     if let StoreData::IndirectObject(metadata) = o.data {
@@ -674,6 +717,17 @@ mod tests {
                     }
                 }
             }
+
+            // Adding a tombstone for deleted object.
+            if num_object_versions_to_retain == 0 {
+                let tombstone_key = ObjectKey(id, SequenceNumber::from(num_versions_per_object));
+                println!("Adding tombstone object {:?}", tombstone_key);
+                batch.insert_batch(
+                    &db.objects,
+                    [(tombstone_key, StoreObjectWrapper::V1(StoreObject::Deleted))],
+                )?;
+                tombstones.push(tombstone_key);
+            }
         }
         batch.write().unwrap();
         assert_eq!(
@@ -681,7 +735,15 @@ mod tests {
             std::cmp::min(num_object_versions_to_retain, num_versions_per_object)
                 * total_unique_object_ids as u64
         );
-        Ok((to_keep, to_delete))
+        assert_eq!(
+            tombstones.len() as u64,
+            if num_object_versions_to_retain == 0 {
+                total_unique_object_ids as u64
+            } else {
+                0
+            }
+        );
+        Ok((to_keep, to_delete, tombstones))
     }
 
     pub(crate) fn lock_table() -> Arc<RwLockTable<ObjectContentDigest>> {
@@ -693,50 +755,82 @@ mod tests {
         num_versions_per_object: u64,
         num_object_versions_to_retain: u64,
         total_unique_object_ids: u32,
+        indirect_object_threshold: usize,
     ) -> Vec<ObjectKey> {
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
         let to_keep = {
             let db = Arc::new(AuthorityPerpetualTables::open(path, None));
-            let (to_keep, to_delete) = generate_test_data(
+            let (to_keep, to_delete, tombstones) = generate_test_data(
                 db.clone(),
                 num_versions_per_object,
                 num_object_versions_to_retain,
                 total_unique_object_ids,
+                indirect_object_threshold,
             )
             .unwrap();
             let mut effects = TransactionEffects::default();
             for object in to_delete {
-                effects.unsafe_add_deleted_object_for_testing((
+                effects.unsafe_add_deleted_live_object_for_testing((
                     object.0,
                     object.1,
                     ObjectDigest::MIN,
                 ));
             }
-            AuthorityStorePruner::prune_objects(vec![effects], &db, &lock_table(), 0, metrics, 1)
-                .await
-                .unwrap();
+            for object in tombstones {
+                effects.unsafe_add_object_tombstone_for_testing((
+                    object.0,
+                    object.1,
+                    ObjectDigest::MIN,
+                ));
+            }
+            AuthorityStorePruner::prune_objects(
+                vec![effects],
+                &db,
+                &lock_table(),
+                0,
+                metrics,
+                indirect_object_threshold,
+                true,
+            )
+            .await
+            .unwrap();
             to_keep
         };
         tokio::time::sleep(Duration::from_secs(3)).await;
         to_keep
     }
 
+    // Tests pruning old version of live objects.
     #[tokio::test]
-    async fn test_pruning() {
+    async fn test_pruning_objects() {
         let path = tempfile::tempdir().unwrap().into_path();
-        let to_keep = run_pruner(&path, 3, 2, 1000).await;
+        let to_keep = run_pruner(&path, 3, 2, 1000, 0).await;
         assert_eq!(
             HashSet::from_iter(to_keep),
             get_keys_after_pruning(&path).unwrap()
         );
-        run_pruner(&tempfile::tempdir().unwrap().into_path(), 3, 2, 1000).await;
+        run_pruner(&tempfile::tempdir().unwrap().into_path(), 3, 2, 1000, 0).await;
+    }
+
+    // Tests pruning deleted objects (object tombstones).
+    #[tokio::test]
+    async fn test_pruning_tombstones() {
+        let path = tempfile::tempdir().unwrap().into_path();
+        let to_keep = run_pruner(&path, 0, 0, 1000, 0).await;
+        assert_eq!(to_keep.len(), 0);
+        assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
+
+        let path = tempfile::tempdir().unwrap().into_path();
+        let to_keep = run_pruner(&path, 3, 0, 1000, 0).await;
+        assert_eq!(to_keep.len(), 0);
+        assert_eq!(get_keys_after_pruning(&path).unwrap().len(), 0);
     }
 
     #[tokio::test]
     async fn test_ref_count_pruning() {
         let path = tempfile::tempdir().unwrap().into_path();
-        run_pruner(&path, 3, 2, 1000).await;
+        run_pruner(&path, 3, 2, 1000, 1).await;
         {
             let perpetual_db = AuthorityPerpetualTables::open(&path, None);
             let count = perpetual_db.indirect_move_objects.keys().count();
@@ -745,7 +839,7 @@ mod tests {
         }
 
         let path = tempfile::tempdir().unwrap().into_path();
-        run_pruner(&path, 3, 0, 1000).await;
+        run_pruner(&path, 3, 0, 1000, 1).await;
         {
             let perpetual_db = AuthorityPerpetualTables::open(&path, None);
             perpetual_db.indirect_move_objects.flush().unwrap();
@@ -808,7 +902,11 @@ mod tests {
 
         let mut effects = TransactionEffects::default();
         for object in to_delete {
-            effects.unsafe_add_deleted_object_for_testing((object.0, object.1, ObjectDigest::MIN));
+            effects.unsafe_add_deleted_live_object_for_testing((
+                object.0,
+                object.1,
+                ObjectDigest::MIN,
+            ));
         }
         let registry = Registry::default();
         let metrics = AuthorityStorePruningMetrics::new(&registry);
@@ -819,6 +917,7 @@ mod tests {
             0,
             metrics,
             0,
+            true,
         )
         .await;
         info!("Total pruned keys = {:?}", total_pruned);
@@ -886,7 +985,11 @@ mod pprof_tests {
 
         let mut effects = TransactionEffects::default();
         for object in to_delete {
-            effects.unsafe_add_deleted_object_for_testing((object.0, object.1, ObjectDigest::MIN));
+            effects.unsafe_add_deleted_live_object_for_testing((
+                object.0,
+                object.1,
+                ObjectDigest::MIN,
+            ));
         }
         Ok(effects)
     }
@@ -934,6 +1037,7 @@ mod pprof_tests {
             0,
             metrics,
             1,
+            true,
         )
         .await?;
         let guard = pprof::ProfilerGuardBuilder::default()
@@ -969,6 +1073,7 @@ mod pprof_tests {
             0,
             metrics,
             1,
+            true,
         )
         .await?;
         if let Ok(()) = perpetual_db.objects.flush() {
