@@ -18,6 +18,8 @@ const MAX_QUERY_FRAGMENTS: u32 = 50;
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
+const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
+
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
@@ -57,6 +59,21 @@ pub struct Limits {
     pub(crate) max_query_fragments: u32,
     #[serde(default)]
     pub(crate) request_timeout_ms: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Ide {
+    #[serde(default)]
+    pub(crate) ide_title: String,
+}
+
+impl Default for Ide {
+    fn default() -> Self {
+        Self {
+            ide_title: DEFAULT_IDE_TITLE.to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -218,6 +235,8 @@ pub struct ServerConfig {
     pub internal_features: InternalFeatureConfig,
     #[serde(default)]
     pub name_service: NameServiceConfig,
+    #[serde(default)]
+    pub ide: Ide,
 }
 
 #[allow(dead_code)]

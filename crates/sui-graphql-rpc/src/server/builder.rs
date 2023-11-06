@@ -81,6 +81,7 @@ impl Server {
             .context_data(pg_conn_pool)
             .context_data(package_cache)
             .context_data(name_service_config)
+            .ide_title(config.ide.ide_title.clone())
             .context_data(Arc::new(metrics))
             .context_data(config.clone());
 
@@ -106,6 +107,7 @@ pub(crate) struct ServerBuilder {
     host: String,
 
     schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
+    ide_title: Option<String>,
 }
 
 impl ServerBuilder {
@@ -114,6 +116,7 @@ impl ServerBuilder {
             port,
             host,
             schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
+            ide_title: None,
         }
     }
 
@@ -141,12 +144,18 @@ impl ServerBuilder {
         self
     }
 
+    fn ide_title(mut self, name: String) -> Self {
+        self.ide_title = Some(name);
+        self
+    }
+
     fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
         self.schema.finish()
     }
 
     pub fn build(self) -> Result<Server, Error> {
         let address = self.address();
+        let ide_title = self.ide_title.clone();
         let schema = self.build_schema();
 
         let app = axum::Router::new()
@@ -154,6 +163,7 @@ impl ServerBuilder {
             .route("/schema", axum::routing::get(get_schema))
             .route("/health", axum::routing::get(health_checks))
             .layer(axum::extract::Extension(schema))
+            .layer(axum::extract::Extension(ide_title))
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
         Ok(Server {
@@ -196,12 +206,13 @@ async fn graphql_handler(
     schema.execute(req).await.into()
 }
 
-async fn graphiql() -> impl axum::response::IntoResponse {
-    axum::response::Html(
-        async_graphql::http::GraphiQLSource::build()
-            .endpoint("/")
-            .finish(),
-    )
+async fn graphiql(ide_title: axum::Extension<Option<String>>) -> impl axum::response::IntoResponse {
+    let gq = async_graphql::http::GraphiQLSource::build().endpoint("/");
+    if let axum::Extension(Some(title)) = ide_title {
+        axum::response::Html(gq.title(&title).finish())
+    } else {
+        axum::response::Html(gq.finish())
+    }
 }
 
 async fn health_checks(
