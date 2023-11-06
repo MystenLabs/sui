@@ -125,22 +125,43 @@ where
                 .store
                 .get_move_calls_in_tx_range(start_tx_seq, end_tx_seq + 1)
                 .await?;
+            let stored_move_calls_count = stored_move_calls.len();
             let move_calls_to_commit = stored_move_calls
                 .into_par_iter()
                 .filter_map(|call| {
-                    let cp = tx_cp_map.get(&call.tx_sequence_number)?;
-                    let epoch = cp_epoch_map.get(cp)?;
-                    Some(StoredMoveCall {
-                        id: None,
-                        transaction_sequence_number: call.tx_sequence_number,
-                        checkpoint_sequence_number: *cp,
-                        epoch: *epoch,
-                        move_package: call.package,
-                        move_module: call.module,
-                        move_function: call.func,
-                    })
+                    if let Some(cp) = tx_cp_map.get(&call.tx_sequence_number) {
+                        if let Some(epoch) = cp_epoch_map.get(cp) {
+                            Some(StoredMoveCall {
+                                id: None,
+                                transaction_sequence_number: call.tx_sequence_number,
+                                checkpoint_sequence_number: *cp,
+                                epoch: *epoch,
+                                move_package: call.package,
+                                move_module: call.module,
+                                move_function: call.func,
+                            })
+                        } else {
+                            error!("Failed to find epoch for checkpoint: {}", cp);
+                            None
+                        }
+                    } else {
+                        error!(
+                            "Failed to find checkpoint for tx: {}",
+                            call.tx_sequence_number
+                        );
+                        None
+                    }
                 })
                 .collect::<Vec<StoredMoveCall>>();
+            if stored_move_calls_count != move_calls_to_commit.len() {
+                error!(
+                    "Error enriching data of move calls to commit: {} != {}",
+                    stored_move_calls_count,
+                    move_calls_to_commit.len()
+                );
+                continue;
+            }
+
             let end_cp_seq = end_cp.sequence_number;
             let end_cp_epoch = end_cp.epoch;
             let move_call_count = move_calls_to_commit.len();
