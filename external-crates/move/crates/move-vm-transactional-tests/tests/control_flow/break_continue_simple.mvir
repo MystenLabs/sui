@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
 label b0:
     x = 0;
@@ -17,4 +19,6 @@ label while_b2:
 label while_cont:
     assert(move(x) == 5, 11);
     return;
+}
+
 }

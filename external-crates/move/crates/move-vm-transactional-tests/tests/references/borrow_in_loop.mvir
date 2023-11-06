@@ -25,7 +25,9 @@ public foo() {
 //# run 0x42::m::foo --gas-budget 100000
 
 //# run --gas-budget 100000
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
     let y: u64;
     let z: u64;
@@ -38,4 +40,6 @@ main() {
         z = *copy(r);
         r = &y;
         jump l1;
+}
+
 }

@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let ret_if_val: bool;
 label b0:
     ret_if_val = true;
@@ -12,4 +14,6 @@ label b2:
 label b3:
     assert(false, 43);
     return;
+}
+
 }

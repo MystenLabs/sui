@@ -24,11 +24,14 @@ main(s: M.S, i: &M.S, m: &mut M.S) {
 }
 
 //# run --type-args 0x42::M::S --args 0 0 0
-main<T:drop>(s: T, i: &T, m: &mut T) {
+module 0x42.m {
+
+entry foo<T:drop>(s: T, i: &T, m: &mut T) {
     label l0:
     return;
 }
 
+}
 //# run 0x42::M::foo --args 0 0 0
 
 //# run 0x42::M::foo_gen --type-args 0x42::M::S --args 0 0 0

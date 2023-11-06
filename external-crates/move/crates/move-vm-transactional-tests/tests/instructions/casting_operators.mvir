@@ -32,7 +32,9 @@ label b0:
 
 // Casting to u16.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     // 0 remains unchanged.
     assert(to_u16(0u8) == 0u16, 1000);
@@ -60,11 +62,14 @@ label b0:
 
     return;
 }
-// check: "Keep(EXECUTED)"
+
+}// check: "Keep(EXECUTED)"
 
 // Casting to u32.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     // 0 remains unchanged.
     assert(to_u32(0u8) == 0u32, 1000);
@@ -92,11 +97,14 @@ label b0:
 
     return;
 }
-// check: "Keep(EXECUTED)"
+
+}// check: "Keep(EXECUTED)"
 
 // Casting to u64.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     // 0 remains unchanged.
     assert(to_u64(0u8) == 0u64, 2000);
@@ -114,11 +122,14 @@ label b0:
     assert(to_u64(18446744073709551615u128) == 18446744073709551615u64, 2202);
     return;
 }
-// check: "Keep(EXECUTED)"
+
+}// check: "Keep(EXECUTED)"
 
 // Casting to u128.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     // 0 remains unchanged.
     assert(to_u128(0u8) == 0u128, 3000);
@@ -136,12 +147,15 @@ label b0:
     assert(to_u128(340282366920938463463374607431768211455u128) == 340282366920938463463374607431768211455u128, 3202);
     return;
 }
-// check: "Keep(EXECUTED)"
+
+}// check: "Keep(EXECUTED)"
 
 
 // Casting to u256.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     // 0 remains unchanged.
     assert(to_u256(0u8) == 0u256, 1000);
@@ -169,264 +183,361 @@ label b0:
 
     return;
 }
-// check: "Keep(EXECUTED)"
+
+}// check: "Keep(EXECUTED)"
 
 // Casting to u8, overflowing.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(256u64);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(303u64);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(256u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(56432u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(256u16);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(303u16);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(256u32);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(303u32);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(18446744073709551615u64);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(340282366920938463463374607431768211455u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(65535u16);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(4294967295u32);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 // Casting to u64, overflowing.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(18446744073709551616u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(18446744073709551647u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(340282366920938463463374607431768211455u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(18446744073709551647u256);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(18446744073709551647u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(57896044618658097711785492504343953926634992332820282019728792003956564819967u256);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 // Casting to u16, overflowing.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(18446744073709551616u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(18446744073709551647u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(340282366920938463463374607431768211455u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(18446744073709551647u256);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(18446744073709551647u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(57896044618658097711785492504343953926634992332820282019728792003956564819967u256);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(2561233u32);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(4294967295u32);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 // Casting to u32, overflowing.
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(18446744073709551616u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(18446744073709551647u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(340282366920938463463374607431768211455u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(18446744073709551647u256);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(18446744073709551647u128);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(57896044618658097711785492504343953926634992332820282019728792003956564819967u256);
     return;
 }
-// check: ARITHMETIC_ERROR
+
+}// check: ARITHMETIC_ERROR
