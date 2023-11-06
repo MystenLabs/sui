@@ -62,10 +62,10 @@ export const socialLinks = [
 export const legalLinks = [
 	{
 		title: 'Terms & Conditions',
-		href: 'https://mystenlabs.com/legal?content=terms',
+		href: 'https://mystenlabs.com/legal#termsofservice',
 	},
 	{
 		title: 'Privacy Policy',
-		href: 'https://mystenlabs.com/legal?content=privacy',
+		href: 'https://mystenlabs.com/legal#privacypolicy',
 	},
 ];
