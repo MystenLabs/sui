@@ -46,7 +46,6 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::{
-    // balance::BALANCE_CREATE_REWARDS_FUNCTION_NAME,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::SignatureScheme,
     digests::TransactionDigest,

@@ -183,7 +183,7 @@ impl Display for ObjectChange {
                     package_id,
                     version,
                     digest,
-                    modules.join(",")
+                    modules.join(", ")
                 )
             }
             ObjectChange::Transferred {
