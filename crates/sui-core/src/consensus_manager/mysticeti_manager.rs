@@ -6,6 +6,7 @@ use crate::consensus_manager::{
     ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
 };
 use crate::consensus_validator::SuiTxValidator;
+use crate::mysticeti_adapter::{LazyMysticetiClient, MysticetiClient};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
@@ -15,7 +16,7 @@ use mysticeti_core::committee::{Authority, Committee};
 use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
 use mysticeti_core::types::AuthorityIndex;
 use mysticeti_core::validator::Validator;
-use mysticeti_core::{PublicKey, Signer};
+use mysticeti_core::{PublicKey, Signer, SimpleBlockHandler};
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
@@ -38,7 +39,7 @@ pub struct MysticetiManager {
     running: Mutex<Running>,
     metrics: ConsensusManagerMetrics,
     registry_service: RegistryService,
-    validator: ArcSwapOption<(Validator, RegistryID)>,
+    validator: ArcSwapOption<(Validator<SimpleBlockHandler>, RegistryID)>,
 }
 
 impl MysticetiManager {
@@ -113,21 +114,26 @@ impl ConsensusManagerTrait for MysticetiManager {
         loop {
             let private_key = self.network_keypair.copy().private();
 
-            match Validator::start(
+            let (block_handler, _tx_sender) = SimpleBlockHandler::new();
+
+            match Validator::start_production(
                 authority_index,
                 committee.clone(),
                 &parameters,
                 config.clone(),
-                Some(registry.clone()),
+                registry.clone(),
                 Signer(Box::new(private_key.0.clone())),
             )
             .await
             {
-                Ok(validator) => {
+                Ok((validator, tx_sender)) => {
                     let registry_id = self.registry_service.add(registry);
 
                     self.validator
                         .swap(Some(Arc::new((validator, registry_id))));
+
+                    // create the client to send transactions to Mysticeti and update it
+                    LazyMysticetiClient::set(MysticetiClient::new(tx_sender));
 
                     break;
                 }
