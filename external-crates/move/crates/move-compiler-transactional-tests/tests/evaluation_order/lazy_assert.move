@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+module 1::m {
     fun main() {
         // does not abort
         assert!(true, 1 / 0);
@@ -7,7 +7,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::m {
+module 2::m {
     fun main() {
         // does abort
         assert!(false, 1 / 0);
@@ -15,7 +15,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::m {
+module 3::m {
     fun main() {
         // does abort, will be deprecated
         assert(true, 1 / 0);

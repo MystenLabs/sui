@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+module 1::m {
     // should fail
     // Checks that default integers will always be u64 otherwise existing impls might fail
     // We're going above u64 max
@@ -14,7 +14,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::m {
+module 2::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     fun main() {
         let i = 1;
@@ -27,7 +27,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::m {
+module 3::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     fun main() {
         let i = 256;
@@ -40,7 +40,7 @@ module 0x42::m {
 }
 
 //# run
-module 0x42::m {
+module 4::m {
     // Checks that default integers will always be u64 otherwise existing impls might fail
     fun main() {
         let i = 65536;
