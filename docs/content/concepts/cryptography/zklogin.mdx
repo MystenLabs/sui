@@ -368,8 +368,8 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 		wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
 		```
 
-	- To verify the download contains the correct zkey file, you can check the Blake2b hash by running by running `b2sum ${file_name}.zkey`.
-	
+	- To verify the download contains the correct zkey file, you can run the following command to check the Blake2b hash: `b2sum ${file_name}.zkey`.
+
 		| Network | zkey file name | Hash |
 		| ------------ | ----------   | -------- |
 		| Mainnet, Testnet |  `zkLogin-main.zkey` | `060b...bce` |
