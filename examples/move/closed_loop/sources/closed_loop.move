@@ -92,10 +92,9 @@ module closed_loop::closed_loop {
     /// about the performed action and must be consumed by the `confirm_request`
     /// function when the Rules are satisfied.
     struct ActionRequest<phantom T> {
-        /// Name of the Action to look up in the Policy.
-        ///
-        /// > String will always be shorter than the fully qualfied name of the
-        /// type (just in case the gas micro optimizations matter).
+        /// Name of the Action to look up in the Policy. Name can be one of the
+        /// default actions: `transfer`, `spend`, `to_coin`, `from_coin` or a
+        /// custom action.
         name: String,
         /// Amount is present in all of the txs
         amount: u64,
