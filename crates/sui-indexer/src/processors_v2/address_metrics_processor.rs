@@ -127,26 +127,34 @@ where
             let (stored_senders_res, stored_recipients_res) =
                 tokio::join!(get_senders_handle, get_recipients_handle);
             let stored_senders = stored_senders_res?;
-            let stored_recipients = stored_recipients_res?;
-            // replace cp seq with its timestamp
+            let stored_senders_count = stored_senders.len();
             let senders_to_commit: Vec<AddressInfoToCommit> = stored_senders
-                .into_par_iter()
-                .filter_map(|sender| {
-                    if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
-                        Some(AddressInfoToCommit {
-                            address: sender.sender,
-                            tx_seq: sender.tx_sequence_number,
-                            timestamp_ms: *timestamp_ms,
-                        })
-                    } else {
-                        error!(
-                            "Failed to find timestamp for tx {}",
-                            sender.tx_sequence_number
-                        );
-                        None
-                    }
-                })
-                .collect();
+            .into_par_iter()
+            .filter_map(|sender| {
+                if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
+                    Some(AddressInfoToCommit {
+                        address: sender.sender,
+                        tx_seq: sender.tx_sequence_number,
+                        timestamp_ms: *timestamp_ms,
+                    })
+                } else {
+                    error!(
+                        "Failed to find timestamp for tx {}",
+                        sender.tx_sequence_number
+                    );
+                    None
+                }
+            })
+            .collect();
+            if stored_senders_count != senders_to_commit.len() {
+                error!(
+                    "Failed to find timestamp for {} senders in checkpoint {}",
+                    stored_senders_count - senders_to_commit.len(), end_cp.sequence_number
+                );
+                continue;
+            }
+            let stored_recipients = stored_recipients_res?;
+            let stored_recipients_count = stored_recipients.len();
             let recipients_to_commit: Vec<AddressInfoToCommit> = stored_recipients
                 .into_par_iter()
                 .filter_map(|recipient| {
@@ -166,6 +174,15 @@ where
                     }
                 })
                 .collect();
+            if stored_recipients_count != recipients_to_commit.len() {
+                error!(
+                    "Failed to find timestamp for {} recipients in checkpoint {}",
+                    stored_recipients_count - recipients_to_commit.len(),
+                    end_cp.sequence_number
+                );
+                continue;
+            }
+
             let sneders_recipients_to_commit: Vec<AddressInfoToCommit> = senders_to_commit
                 .clone()
                 .into_iter()
