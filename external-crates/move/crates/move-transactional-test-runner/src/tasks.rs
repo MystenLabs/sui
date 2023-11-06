@@ -354,8 +354,8 @@ impl<
 {
 }
 
-#[derive(Debug, Parser)]
-pub struct EmptyCommand {}
+#[derive(Debug, Parser, Default)]
+pub struct EmptyCommand;
 
 fn parse_qualified_module_access(s: &str) -> Result<(ParsedAddress, Identifier, Identifier)> {
     let [addr_str, module_str, struct_str]: [&str; 3] =

@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u16 + 0u16 == 0u16, 1000);
     assert!(0u16 + 1u16 == 1u16, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     1u16 + 65535u16;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     65135u16 + 6555u16;
@@ -31,7 +31,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u16 - 0u16 == 0u16, 2000);
     assert!(1u16 - 0u16 == 1u16, 2001);
@@ -46,7 +46,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     0u16 - 1u16;
@@ -54,7 +54,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     54u16 - 100u16;
@@ -63,7 +63,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u16 * 0u16 == 0u16, 3000);
     assert!(1u16 * 0u16 == 0u16, 3001);
@@ -77,7 +77,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     32767u16 * 32767u16;
@@ -85,7 +85,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     33767u16 * 2u16;
@@ -95,7 +95,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u16 / 1u16 == 0u16, 4000);
     assert!(1u16 / 1u16 == 1u16, 4001);
@@ -110,7 +110,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     0u16 / 0u16;
@@ -119,14 +119,14 @@ fun main() {
 // check: ARITHMETIC_ERROR
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     1u16 / 0u16;
 }
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     65535u16 / 0u16;
@@ -135,7 +135,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u16 % 1u16 == 0u16, 5000);
     assert!(1u16 % 1u16 == 0u16, 5001);
@@ -150,7 +150,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     0u16 % 0u16;
@@ -158,7 +158,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     1u16 % 0u16;
@@ -166,7 +166,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     65535u16 % 0u16;

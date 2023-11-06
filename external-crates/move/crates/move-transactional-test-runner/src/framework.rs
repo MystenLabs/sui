@@ -338,8 +338,14 @@ fn single_entry_function(
         .iter()
         .filter(|def| def.is_entry)
         .collect();
-    anyhow::ensure!(entry_funs.len() == 1, "Expected exactly one function");
-    let function_handle = module.function_handle_at(entry_funs[0].function);
+    let function = if entry_funs.len() == 1 {
+        entry_funs[0]
+    } else if module.function_defs.len() == 1 {
+        module.function_def_at(move_binary_format::file_format::FunctionDefinitionIndex::new(0))
+    } else {
+        anyhow::bail!("Expected exactly one function or one entry function");
+    };
+    let function_handle = module.function_handle_at(function.function);
     let name = module.identifier_at(function_handle.name).to_owned();
     Ok((module.self_id(), name))
 }

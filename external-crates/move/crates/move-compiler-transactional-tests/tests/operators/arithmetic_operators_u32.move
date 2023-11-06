@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u32 + 0u32 == 0u32, 1000);
     assert!(0u32 + 1u32 == 1u32, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     1u32 + 4294967295u32;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     4294967295u32 + 4294967295u32;
@@ -31,7 +31,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u32 - 0u32 == 0u32, 2000);
     assert!(1u32 - 0u32 == 1u32, 2001);
@@ -46,7 +46,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     0u32 - 1u32;
@@ -54,7 +54,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     54u32 - 100u32;
@@ -63,7 +63,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u32 * 0u32 == 0u32, 3000);
     assert!(1u32 * 0u32 == 0u32, 3001);
@@ -77,7 +77,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     1147483647u32 * 2147483647u32;
@@ -85,7 +85,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     1147483647u32 * 2u32;
@@ -95,7 +95,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u32 / 1u32 == 0u32, 4000);
     assert!(1u32 / 1u32 == 1u32, 4001);
@@ -110,7 +110,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     0u32 / 0u32;
@@ -119,14 +119,14 @@ fun main() {
 // check: ARITHMETIC_ERROR
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     1u32 / 0u32;
 }
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     4294967294u32 / 0u32;
@@ -135,7 +135,7 @@ fun main() {
 
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(0u32 % 1u32 == 0u32, 5000);
     assert!(1u32 % 1u32 == 0u32, 5001);
@@ -150,7 +150,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     0u32 % 0u32;
@@ -158,7 +158,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     1u32 % 0u32;
@@ -166,7 +166,7 @@ fun main() {
 }
 
 //# run
-script {
+module 0x42::m {
 fun main() {
     // should fail
     4294967294u32 % 0u32;
