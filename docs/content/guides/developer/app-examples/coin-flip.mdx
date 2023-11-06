@@ -341,7 +341,7 @@ module satoshi_flip::single_player_satoshi {
 
 This code follows the same pattern as the others. First, you include the respective imports, although this time the imports are not only from the standard library but also include modules created previously in this example. You also create several constants (in upper case), as well as constants used for errors (Pascal case prefixed with `E`).
 
-Lastly in this section, you also create structs for two [events](concepts/dynamic-fields/events.mdx) to emit. Indexers consume emitted events, which enables you to track these events through API services, or your own indexer. In this case, the events are for when a new game begins (`NewGame`) and for the outcome of a game when it has finished (`Outcome`).
+Lastly in this section, you also create structs for two [events](concepts/events.mdx) to emit. Indexers consume emitted events, which enables you to track these events through API services, or your own indexer. In this case, the events are for when a new game begins (`NewGame`) and for the outcome of a game when it has finished (`Outcome`).
 
 Add a struct to the module:
 
