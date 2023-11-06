@@ -20,6 +20,15 @@ Currently, there is one available playground for Sui GraphQL Service:
 
 This instance runs the GraphQL IDE, an interactive IDE with autocomplete support and in-built documentation.
 
+The endpoint can also be queried using `curl` by passing the query to the call:
+```shell
+curl -X POST https://graphql-beta.mainnet.sui.io \
+     --header "Content-Type: application/json" \
+     --data '{ 
+       "query": "query { chainIdentifier }"
+     }'
+```
+
 ## Query examples
 
 An extensive list of query examples is available in the Sui repository: https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples. 
