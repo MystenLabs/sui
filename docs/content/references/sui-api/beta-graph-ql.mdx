@@ -22,12 +22,20 @@ This instance runs the GraphQL IDE, an interactive IDE with autocomplete support
 
 The endpoint can also be queried using `curl` by passing the query to the call:
 ```shell
+# basic query
 curl -X POST https://graphql-beta.mainnet.sui.io \
      --header "Content-Type: application/json" \
      --data '{
-          "query": "query ($epochID: Int!) { epoch(id: $epochID) {referenceGasPrice} }", "variables": { "epochID": 123 } }
+          "query": "query { epoch {referenceGasPrice} }"
+     }'
+# query with variables
+curl -X POST https://graphql-beta.mainnet.sui.io \
+     --header "Content-Type: application/json" \
+     --data '{
+          "query": "query ($epochID: Int!) { epoch(id: $epochID) {referenceGasPrice} }", "variables": { "epochID": 123 } 
      }'
 ```
+
 
 ## Query examples
 
