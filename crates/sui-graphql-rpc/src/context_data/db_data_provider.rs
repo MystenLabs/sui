@@ -1301,8 +1301,13 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type = parse_to_type_tag(coin_type)
-            .map_err(|_| Error::Internal("Coin type is not valid".to_string()))?
+        let coin_type_tag = parse_to_type_tag(coin_type);
+        if coin_type_tag.is_err() {
+            // The provided `coin_type` cannot be parsed to a type tag so return None here.
+            return Ok(None);
+        }
+        let coin_type = coin_type_tag
+            .unwrap()
             .to_canonical_string(/* with_prefix */ true);
         let result = self.get_balance(address, coin_type).await?;
 
