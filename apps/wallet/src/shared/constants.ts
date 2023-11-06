@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export const ToS_LINK = 'https://mystenlabs.com/legal?content=wallet-terms';
-export const PRIVACY_POLICY_LINK = 'https://mystenlabs.com/legal?content=privacy';
+export const ToS_LINK = 'https://mystenlabs.com/legal#suiwallettermsofservice';
+export const PRIVACY_POLICY_LINK = 'https://mystenlabs.com/legal#privacypolicy';
 export const FAQ_LINK = 'https://docs.mystenlabs.com/wallet/faq';
 
 // number of epochs before earning
