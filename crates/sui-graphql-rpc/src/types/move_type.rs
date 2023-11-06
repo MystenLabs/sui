@@ -6,7 +6,8 @@ use std::str::FromStr;
 use async_graphql::*;
 use move_core_types::{language_storage::TypeTag, value};
 use serde::{Deserialize, Serialize};
-use sui_package_resolver::cache::PackageCache;
+use crate::context_data::package_cache::PackageCache;
+use sui_package_resolver::Resolver;
 
 use crate::error::{code, graphql_error};
 
@@ -126,7 +127,7 @@ impl MoveType {
     }
 
     pub(crate) async fn layout_impl(&self, cache: &PackageCache) -> Result<value::MoveTypeLayout> {
-        cache
+        Resolver::new(cache)
             .type_layout(self.native_type_tag()?)
             .await
             .map_err(|e| {

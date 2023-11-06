@@ -27,7 +27,7 @@ use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
-use sui_package_resolver::cache::PackageCache;
+use crate::context_data::package_cache::PackageCache;
 use tokio::sync::OnceCell;
 
 pub struct Server {
