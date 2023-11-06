@@ -465,6 +465,32 @@ impl AsyncTransactionScheduler {
     }
 }
 
+/// Consensus handler used by Mysticeti. Since Mysticeti repo is not yet integrated, we use a
+/// channel to receive the consensus output from Mysticeti.
+/// During initialization, the sender is passed into Mysticeti which can send consensus output
+/// to the channel.
+pub struct MysticetiConsensusHandler {
+    _handle: tokio::task::JoinHandle<()>,
+}
+
+impl MysticetiConsensusHandler {
+    pub fn new(
+        mut consensus_handler: ConsensusHandler<AuthorityStore, CheckpointService>,
+        mut receiver: tokio::sync::mpsc::Receiver<
+            mysticeti_core::consensus::linearizer::CommittedSubDag,
+        >,
+    ) -> Self {
+        let _handle = spawn_monitored_task!(async move {
+            while let Some(committed_subdag) = receiver.recv().await {
+                consensus_handler
+                    .handle_consensus_output_internal(committed_subdag)
+                    .await;
+            }
+        });
+        Self { _handle }
+    }
+}
+
 impl<T, C> ConsensusHandler<T, C> {
     fn consensus_commit_prologue_transaction(
         &self,
