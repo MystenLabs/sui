@@ -372,9 +372,10 @@ wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-cont
 
    - To verify the correct zkey file is downloaded, you can check the Blake2b hash by running by running `b2sum ${file_name}.zkey`.
 
-| Network | zkey file name | Hash 
-| Mainnet, Testnet |  zkLogin-main.zkey | 060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce |
-| Devnet | zkLogin-test.zkey | 686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2 |
+| Network | zkey file name | Hash |
+| ------------ | ----------   | -------- |
+| Mainnet, Testnet |  `zkLogin-main.zkey` | 060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce |
+| Devnet | `zkLogin-test.zkey` | 686e2f5fd969897b1c034d7654799ee2c3952489814e4eaaf3d7e1bb539841047ae8ee5fdcdaca5f4ddd76abb5a8e8eb77b44b693a2ba9d4be57e94292b26ce2 |
 
 1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64). Further, we recommended using at least 16 vcpu, preferably an AMD cpu and at least 16gb ram for production use. Whereas 8 vcpu, 8gb ram works for testing (but its not fast).
 
