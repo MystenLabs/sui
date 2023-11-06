@@ -23,8 +23,8 @@ use async_graphql::*;
 
 use sui_indexer::types_v2::IndexedObjectChange;
 use sui_json_rpc_types::{
-    BalanceChange as NativeBalanceChange, SuiExecutionStatus, SuiTransactionBlockDataAPI,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    BalanceChange as NativeBalanceChange, SuiExecutionStatus, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
 };
 use sui_types::digests::TransactionDigest;
 
@@ -50,27 +50,6 @@ pub(crate) struct TransactionBlock {
     pub kind: Option<TransactionBlockKind>,
     /// A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
     pub signatures: Option<Vec<Option<TransactionSignature>>>,
-}
-
-impl From<SuiTransactionBlockResponse> for TransactionBlock {
-    fn from(tx_block: SuiTransactionBlockResponse) -> Self {
-        let transaction = tx_block.transaction.as_ref();
-        let sender = transaction.map(|tx| Address {
-            address: SuiAddress::from_array(tx.data.sender().to_inner()),
-        });
-        let gas_input = transaction.map(|tx| GasInput::from(tx.data.gas_data()));
-
-        Self {
-            digest: Digest::from_array(tx_block.digest.into_inner()),
-            effects: tx_block.effects.as_ref().map(TransactionBlockEffects::from),
-            sender,
-            bcs: Some(Base64::from(&tx_block.raw_transaction)),
-            gas_input,
-            epoch_id: None,
-            kind: None,
-            signatures: None,
-        }
-    }
 }
 
 #[ComplexObject]
@@ -99,36 +78,6 @@ impl TransactionBlock {
     }
 }
 
-// This is required for the sdk reference implementations
-// TODO remove this once the full DB implementation is complete
-impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
-    fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
-        let (status, errors) = match tx_effects.status() {
-            SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
-            SuiExecutionStatus::Failure { error } => {
-                (ExecutionStatus::Failure, Some(error.clone()))
-            }
-        };
-
-        let lamport_version = tx_effects
-            .created()
-            .first()
-            .map(|x| x.reference.version.value());
-
-        Self {
-            gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
-            status,
-            errors,
-            lamport_version,
-            dependencies: tx_effects.dependencies().to_vec(),
-            balance_changes: None,
-            epoch_id: tx_effects.executed_epoch(),
-            tx_block_digest: Digest::from_array(tx_effects.transaction_digest().into_inner()),
-            object_changes_as_bcs: vec![],
-        }
-    }
-}
-
 #[derive(Clone, Eq, PartialEq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct TransactionBlockEffects {
@@ -153,11 +102,14 @@ pub(crate) struct TransactionBlockEffects {
     pub epoch_id: u64,
     // pub epoch: Option<Epoch>,
     // pub checkpoint: Option<Checkpoint>,
+    #[graphql(skip)]
+    checkpoint_seq_number: u64,
 }
 
 impl TransactionBlockEffects {
     pub fn from_stored_transaction(
         balance_changes: Vec<Option<Vec<u8>>>,
+        checkpoint_seq_number: u64,
         object_changes: Vec<Option<Vec<u8>>>,
         tx_effects: &SuiTransactionBlockEffects,
         tx_block_digest: Digest,
@@ -172,7 +124,6 @@ impl TransactionBlockEffects {
             .created()
             .first()
             .map(|x| x.reference.version.value());
-
         let balance_changes = BalanceChange::from(balance_changes)?;
 
         Ok(Some(Self {
@@ -185,6 +136,7 @@ impl TransactionBlockEffects {
             epoch_id: tx_effects.executed_epoch(),
             tx_block_digest,
             object_changes_as_bcs: object_changes,
+            checkpoint_seq_number,
         }))
     }
 }
@@ -195,7 +147,7 @@ impl TransactionBlockEffects {
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
         let checkpoint = ctx
             .data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, self.lamport_version)
+            .fetch_checkpoint(None, Some(self.checkpoint_seq_number))
             .await?;
         Ok(checkpoint)
     }
