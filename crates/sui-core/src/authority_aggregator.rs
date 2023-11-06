@@ -637,8 +637,10 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
             .active_validators
             .into_iter()
             .filter_map(|s| {
-                let authority_name =
-                    AuthorityPublicKeyBytes::from_bytes(s.protocol_pubkey_bytes.as_slice());
+                let authority_name: Result<
+                    AuthorityPublicKeyBytes,
+                    fastcrypto::error::FastCryptoError,
+                > = AuthorityPublicKeyBytes::from_bytes(s.protocol_pubkey_bytes.as_slice());
                 if authority_name.is_err() {
                     return None;
                 }

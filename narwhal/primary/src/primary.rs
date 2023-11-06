@@ -3,10 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    broadcaster::Broadcaster,
     certificate_fetcher::CertificateFetcher,
     certifier::Certifier,
     consensus::{ConsensusRound, LeaderSchedule},
+    core::Core,
+    dag_state::{self, DagState},
     metrics::{initialise_metrics, PrimaryMetrics},
+    producer::Producer,
     proposer::{OurDigestMessage, Proposer},
     state_handler::StateHandler,
     synchronizer::Synchronizer,
@@ -62,8 +66,11 @@ use std::{
 };
 use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
 use sui_protocol_config::ProtocolConfig;
-use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
+use tokio::{
+    sync::{broadcast, oneshot},
+    time::Instant,
+};
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument, warn};
 use types::{
@@ -587,6 +594,7 @@ impl Primary {
             &primary_channel_metrics.tx_headers,
             &primary_channel_metrics.tx_headers_total,
         );
+        let (tx_headers_accepted, rx_headers_accepted) = watch::channel(());
         // let (tx_fetcher, rx_fetcher) = channel_with_total(
         //     CHANNEL_CAPACITY,
         //     &primary_channel_metrics.tx_certificate_fetcher,
@@ -867,7 +875,44 @@ impl Primary {
         let mut handles = vec![connection_monitor_handle];
         handles.extend(admin_handles);
 
-        // Start Core, Consensus with leader_schedule
+        // Start rest of the primary components.
+
+        let broadcaster = Broadcaster::new(authority.id(), committee.clone(), client.clone());
+
+        let dag_state = Arc::new(DagState::new(
+            authority.id(),
+            committee.clone(),
+            header_store,
+        ));
+
+        let core = Core::new(
+            authority.id(),
+            committee.clone(),
+            protocol_config.clone(),
+            worker_cache.clone(),
+            dag_state.clone(),
+            tx_headers_accepted,
+            tx_sequence,
+            rx_verified_headers,
+            node_metrics.clone(),
+        );
+        handles.push(core.spawn());
+
+        let producer = Producer::new(
+            authority.id(),
+            network_signer.copy(),
+            committee.clone(),
+            protocol_config.clone(),
+            worker_cache.clone(),
+            dag_state.clone(),
+            broadcaster,
+            rx_headers_accepted,
+            rx_our_digests,
+            node_metrics.clone(),
+        );
+        handles.push(producer.spawn());
+
+        // TODO: start Consensus with leader_schedule
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(

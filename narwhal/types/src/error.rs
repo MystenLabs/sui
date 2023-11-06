@@ -150,6 +150,9 @@ pub enum DagError {
 
     #[error("Operation was canceled")]
     Canceled,
+
+    #[error("Header was not accepted because it is missing ancestors")]
+    MissingAncestors,
 }
 
 impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for DagError {

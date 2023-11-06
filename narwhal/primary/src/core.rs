@@ -1,18 +1,21 @@
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::Arc;
 
 use config::{AuthorityIdentifier, Committee, WorkerCache};
-use network::client::NetworkClient;
-use storage::{HeaderStore, PayloadStore};
-use sui_protocol_config::ProtocolConfig;
-use tracing::debug;
-use types::{
-    error::{DagError, DagResult},
-    Header, HeaderAPI, SignedHeader,
+use mysten_metrics::{
+    metered_channel::{Receiver, Sender},
+    spawn_logged_monitored_task,
 };
+use sui_protocol_config::ProtocolConfig;
+use tokio::{sync::watch, task::JoinHandle};
+use tracing::{debug, info, warn};
+use types::{CommittedSubDag, SignedHeader};
 
-use crate::metrics::PrimaryMetrics;
+use crate::{dag_state::DagState, metrics::PrimaryMetrics};
 
-struct Inner {
+/// Core runs a loop that drives the process to accept incoming headers,
+/// notify header producer, and commit in consensus when possible.
+/// The logic to accept headers is delegated to `DagState`.
+pub struct Core {
     // The id of this primary.
     authority_id: AuthorityIdentifier,
     // Committee of the current epoch.
@@ -20,35 +23,16 @@ struct Inner {
     protocol_config: ProtocolConfig,
     // The worker information cache.
     worker_cache: WorkerCache,
-    // Highest round of certificate accepted into the certificate store.
-    highest_processed_round: AtomicU64,
-    // Highest round of verfied certificate that has been received.
-    highest_received_round: AtomicU64,
-    // Client for fetching payloads.
-    client: NetworkClient,
-    header_store: HeaderStore,
-    // The persistent store of the available batch digests produced either via our own workers
-    // or others workers.
-    payload_store: PayloadStore,
+    // Stores headers accepted by this primary.
+    dag_state: Arc<DagState>,
+    // Notifies the header producer when one or more headers are accepted.
+    tx_headers_accepted: watch::Sender<()>,
+    // Sends committed subdag to be prepared for consensus output.
+    tx_sequence: Sender<CommittedSubDag>,
+    // Receives verified headers from RPC handler.
+    rx_verified_header: Receiver<SignedHeader>,
     // Contains Synchronizer specific metrics among other Primary metrics.
     metrics: Arc<PrimaryMetrics>,
-    // Send missing certificates to the `CertificateFetcher`.
-    // tx_certificate_fetcher: Sender<CertificateFetcherCommand>,
-    // Send certificates to be accepted into a separate task that runs
-    // `process_certificates_with_lock()` in a loop.
-    // See comment above `process_certificates_with_lock()` for why this is necessary.
-    // tx_certificate_acceptor: Sender<(Vec<Certificate>, oneshot::Sender<DagResult<()>>, bool)>,
-    // Output all certificates to the consensus layer. Must send certificates in causal order.
-    // tx_new_certificates: Sender<Certificate>,
-    // Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    // tx_parents: Sender<(Vec<Certificate>, Round)>,
-    // A background task that synchronizes batches. A tuple of a header and the maximum accepted
-    // age is sent over.
-    // tx_batch_tasks: Sender<(Header, u64)>,
-}
-
-pub struct Core {
-    inner: Arc<Inner>,
 }
 
 impl Core {
@@ -57,29 +41,64 @@ impl Core {
         committee: Committee,
         protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
-        client: NetworkClient,
-        header_store: HeaderStore,
-        payload_store: PayloadStore,
+        dag_state: Arc<DagState>,
+        tx_headers_accepted: watch::Sender<()>,
+        tx_sequence: Sender<CommittedSubDag>,
+        rx_verified_header: Receiver<SignedHeader>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {
-        let inner = Inner {
+        Self {
             authority_id,
             committee,
             protocol_config,
             worker_cache,
-            highest_processed_round: AtomicU64::new(0),
-            highest_received_round: AtomicU64::new(0),
-            client,
-            header_store,
-            payload_store,
+            dag_state,
+            tx_headers_accepted,
+            tx_sequence,
+            rx_verified_header,
             metrics,
-        };
-        Self {
-            inner: Arc::new(inner),
         }
     }
 
-    pub async fn try_accept(&self, _header: SignedHeader) -> DagResult<()> {
-        Ok(())
+    pub fn spawn(mut self) -> JoinHandle<()> {
+        spawn_logged_monitored_task!(
+            async move {
+                self.run().await;
+            },
+            "CoreLoop"
+        )
+    }
+
+    async fn run(&mut self) {
+        loop {
+            let Some(header) = self.rx_verified_header.recv().await else {
+                info!("Core loop shutting down!");
+                return;
+            };
+            debug!("Received verified header: {:?}", header);
+            let mut headers = vec![header];
+            while let Ok(header) = self.rx_verified_header.try_recv() {
+                debug!("Received verified header without await: {:?}", header);
+                headers.push(header);
+            }
+
+            let any_accepted = match self.dag_state.try_accept(headers) {
+                Ok(any_accepted) => any_accepted,
+                Err(e) => {
+                    warn!("Failed to accept headers: {:?}", e);
+                    continue;
+                }
+            };
+            if !any_accepted {
+                continue;
+            }
+
+            // TODO: try consensus commit
+
+            if let Err(e) = self.tx_headers_accepted.send(()) {
+                warn!("Failed to notify header producer, shutting down: {:?}", e);
+                return;
+            }
+        }
     }
 }

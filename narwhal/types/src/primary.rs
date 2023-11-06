@@ -17,6 +17,7 @@ use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     ed25519::{Ed25519Signature, Ed25519SignatureAsBytes},
     hash::{Digest, Hash, HashFunction},
+    serde_helpers::BytesRepresentation,
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
@@ -1024,7 +1025,7 @@ impl HeaderV3Builder {
 }
 
 impl HeaderV3 {
-    pub async fn new(
+    pub fn new(
         author: AuthorityIdentifier,
         round: Round,
         epoch: Epoch,
@@ -1190,6 +1191,10 @@ pub struct SignedHeader {
 }
 
 impl SignedHeader {
+    pub fn new(header: Header, signature: HeaderSignatureBytes) -> Self {
+        Self { header, signature }
+    }
+
     pub fn key(&self) -> HeaderKey {
         self.header.key()
     }
@@ -1212,6 +1217,21 @@ impl SignedHeader {
 
     pub fn digest(&self) -> HeaderDigest {
         self.header.digest()
+    }
+
+    pub fn genesis(committee: &Committee) -> Vec<Self> {
+        let signature_bytes = BytesRepresentation::<64>([0u8; 64]);
+        committee
+            .authorities()
+            .map(|authority| SignedHeader {
+                header: Header::V3(HeaderV3 {
+                    author: authority.id(),
+                    epoch: committee.epoch(),
+                    ..HeaderV3::default()
+                }),
+                signature: signature_bytes.clone(),
+            })
+            .collect()
     }
 }
 

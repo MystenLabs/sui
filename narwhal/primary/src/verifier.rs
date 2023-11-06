@@ -60,6 +60,12 @@ impl Verifier {
     }
 
     pub async fn verify(&self, signed_header: SignedHeader) -> DagResult<()> {
+        // Run basic header validations.
+        signed_header
+            .header()
+            .validate(&self.committee, &self.worker_cache)?;
+
+        // Verify header signature.
         let Some(authority) = self.committee.authority(&signed_header.header().author()) else {
             return Err(DagError::UnknownAuthority(format!(
                 "Unknown author {}",
@@ -84,6 +90,7 @@ impl Verifier {
                 DagError::InvalidSignature
             })?;
 
+        // Verify existence and validity of batches.
         self.sync_batches_internal(signed_header.header()).await?;
 
         self.tx_verified_headers
@@ -94,7 +101,7 @@ impl Verifier {
         Ok(())
     }
 
-    async fn sync_batches_internal(self: &Self, header: &Header) -> DagResult<()> {
+    async fn sync_batches_internal(&self, header: &Header) -> DagResult<()> {
         if header.author() == self.authority_id {
             debug!("skipping sync_batches for header {header}: no need to sync payload from own workers");
             return Ok(());
