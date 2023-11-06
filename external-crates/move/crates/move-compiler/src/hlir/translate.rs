@@ -837,6 +837,11 @@ fn value(
     } else if is_binop(&e) {
         let out_type = type_(context, e.ty.clone());
         return process_binops(context, block, out_type, e);
+    } else if is_exp_list(&e) {
+        let out_type = type_(context, e.ty.clone());
+        let eloc = e.exp.loc;
+        let out_vec = value_list(context, block, Some(&out_type), e);
+        return H::exp(out_type, sp(eloc, HE::Multiple(out_vec)));
     }
 
     let T::Exp {
@@ -1108,24 +1113,6 @@ fn value(
             make_exp(HE::Pack(struct_name, base_types, fields))
         }
 
-        E::ExpList(items) => {
-            let mut values = Vec::new();
-            for item in items {
-                match item {
-                    T::ExpListItem::Single(entry, ty) => {
-                        let exp_ty = single_type(context, *ty);
-                        let new_value =
-                            value(context, block, Some(&H::Type_::single(exp_ty)), entry);
-                        values.push(new_value);
-                    }
-                    T::ExpListItem::Splat(_, _, _) => {
-                        panic!("ICE splats should be lowered already")
-                    }
-                }
-            }
-            make_exp(HE::Multiple(values))
-        }
-
         E::Borrow(mut_, base_exp, field) => {
             let exp = value(context, block, None, *base_exp);
             if let Some(struct_name) = struct_name(&exp.ty) {
@@ -1202,6 +1189,7 @@ fn value(
         //  matches that handled earlier
         // -----------------------------------------------------------------------------------------
         E::BinopExp(_, _, _, _)
+        | E::ExpList(_)
         | E::Return(_)
         | E::Abort(_)
         | E::Give(_, _)
@@ -1267,8 +1255,7 @@ fn value_list(
         .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
     {
         value_list_opt(context, result, ty, e)
-    // clippy insisteed on this!
-    } else if let TE::ExpList(items) = e.exp.value {
+    } else if let TE::ExpList(items) = e.exp.value { // clippy insisted on this if structure!
         value_list_items_to_vec(context, result, ty, e.exp.loc, items)
     } else if let TE::Unit { .. } = e.exp.value {
         vec![]
@@ -1667,6 +1654,12 @@ fn is_binop(e: &T::Exp) -> bool {
     use T::UnannotatedExp_ as E;
     matches!(e.exp.value, E::BinopExp(_, _, _, _))
 }
+
+fn is_exp_list(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::ExpList(_))
+}
+
 
 macro_rules! hcmd {
     ($cmd:pat) => {
