@@ -1762,6 +1762,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             Ok(effects) => {
                 let transaction_effects = TransactionBlockEffects::from_stored_transaction(
                     balance_changes,
+                    tx.checkpoint_sequence_number as u64,
                     object_changes,
                     &effects,
                     digest,
