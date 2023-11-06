@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    editions::Flavor,
+    editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     hlir::detect_dead_code::program as detect_dead_code_analysis,
@@ -1001,9 +1001,7 @@ fn value(
             };
             make_exp(HE::ModuleCall(Box::new(call)))
         }
-        E::Builtin(bt, args) => {
-            make_exp(builtin(context, block, eloc, *bt, args))
-        }
+        E::Builtin(bt, args) => make_exp(builtin(context, block, eloc, *bt, args)),
 
         // -----------------------------------------------------------------------------------------
         // nested expressions
@@ -1253,9 +1251,7 @@ fn value_block(
 
 // This is an slightly sub-optimal implementation of `value_list`, which we preserve in order to
 // accurately re-produce code that is already on-chain. When we support SHA-based source
-// verification, we should swap this version out with the optimized version below it. The main
-// difference is that this version does conversion and binding, then freezing; the other will
-// inline freezing when possible to avoid some bndings.
+// verification, we should swap this version out with the optimized version below it.
 
 fn value_list(
     context: &mut Context,
@@ -1264,7 +1260,15 @@ fn value_list(
     e: T::Exp,
 ) -> Vec<H::Exp> {
     use T::UnannotatedExp_ as TE;
-    if let TE::ExpList(items) = e.exp.value {
+    // The main difference is that less-optimized version does conversion and binding, then
+    // freezing; the optimized will inline freezing when possible to avoid some bndings.
+    if context
+        .env
+        .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
+    {
+        value_list_opt(context, result, ty, e)
+    // clippy insisteed on this!
+    } else if let TE::ExpList(items) = e.exp.value {
         value_list_items_to_vec(context, result, ty, e.exp.loc, items)
     } else if let TE::Unit { .. } = e.exp.value {
         vec![]
@@ -1336,48 +1340,48 @@ fn value_list_items_to_vec(
 }
 
 // optimized version, which inlines freezes when possible
-//
-// fn value_list(
-//     context: &mut Context,
-//     block: &mut Block,
-//     ty: Option<&H::Type>,
-//     e: T::Exp,
-// ) -> Vec<H::Exp> {
-//     use H::Type_ as HT;
-//     use T::UnannotatedExp_ as TE;
-//     if let TE::ExpList(items) = e.exp.value {
-//         assert!(!items.is_empty());
-//         let mut tys = vec![];
-//         let mut item_exprs = vec![];
-//         let expected_tys: Vec<_> = if let Some(sp!(tloc, HT::Multiple(ts))) = ty {
-//             ts.iter()
-//                 .map(|t| Some(sp(*tloc, HT::Single(t.clone()))))
-//                 .collect()
-//         } else {
-//             items.iter().map(|_| None).collect()
-//         };
-//         for (item, expected_ty) in items.into_iter().zip(expected_tys) {
-//             match item {
-//                 T::ExpListItem::Single(te, ts) => {
-//                     let t = single_type(context, *ts);
-//                     tys.push(t);
-//                     item_exprs.push((te, expected_ty));
-//                 }
-//                 T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
-//             }
-//         }
-//         let exprs = value_evaluation_order(context, block, item_exprs);
-//         assert!(
-//             exprs.len() == tys.len(),
-//             "ICE value_evaluation_order changed arity"
-//         );
-//         exprs
-//     } else if let TE::Unit { .. } = e.exp.value {
-//         vec![]
-//     } else {
-//         vec![value(context, block, ty, e)]
-//     }
-// }
+
+fn value_list_opt(
+    context: &mut Context,
+    block: &mut Block,
+    ty: Option<&H::Type>,
+    e: T::Exp,
+) -> Vec<H::Exp> {
+    use H::Type_ as HT;
+    use T::UnannotatedExp_ as TE;
+    if let TE::ExpList(items) = e.exp.value {
+        assert!(!items.is_empty());
+        let mut tys = vec![];
+        let mut item_exprs = vec![];
+        let expected_tys: Vec<_> = if let Some(sp!(tloc, HT::Multiple(ts))) = ty {
+            ts.iter()
+                .map(|t| Some(sp(*tloc, HT::Single(t.clone()))))
+                .collect()
+        } else {
+            items.iter().map(|_| None).collect()
+        };
+        for (item, expected_ty) in items.into_iter().zip(expected_tys) {
+            match item {
+                T::ExpListItem::Single(te, ts) => {
+                    let t = single_type(context, *ts);
+                    tys.push(t);
+                    item_exprs.push((te, expected_ty));
+                }
+                T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+            }
+        }
+        let exprs = value_evaluation_order(context, block, item_exprs);
+        assert!(
+            exprs.len() == tys.len(),
+            "ICE value_evaluation_order changed arity"
+        );
+        exprs
+    } else if let TE::Unit { .. } = e.exp.value {
+        vec![]
+    } else {
+        vec![value(context, block, ty, e)]
+    }
+}
 
 // -------------------------------------------------------------------------------------------------
 // Statement Position
