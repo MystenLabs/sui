@@ -110,8 +110,7 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        // TODO: Mysticeti doesn't have this concept right now
-        self.anchor.round
+        self.height
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
