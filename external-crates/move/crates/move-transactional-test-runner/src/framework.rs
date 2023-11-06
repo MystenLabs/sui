@@ -12,6 +12,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
+    access::ModuleAccess,
     binary_views::BinaryIndexedView,
     file_format::{CompiledModule, CompiledScript},
 };
@@ -33,7 +34,7 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::IdentStr,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
@@ -110,7 +111,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 
 #[async_trait]
 pub trait MoveTestAdapter<'a>: Sized + Send {
-    type ExtraPublishArgs: Send + Parser;
+    type ExtraPublishArgs: Send + Parser + Default;
     type ExtraValueArgs: ParsableValue + Clone;
     type ExtraRunArgs: Send + Parser;
     type Subcommand: Send + Parser;
@@ -240,42 +241,43 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                 extra_args,
             ) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
-                let data = match data {
-                    Some(f) => f,
-                    None => panic!(
-                        "Expected a script text block following 'run' starting on lines {}-{}",
-                        start_line, command_lines_stop
-                    ),
-                };
-                let state = self.compiled_state();
-                let (script, warning_opt) = match syntax {
-                    SyntaxChoice::Source => {
-                        let (mut units, warning_opt) = compile_source_units(state, data.path())?;
-                        let len = units.len();
-                        if len != 1 {
-                            panic!("Invalid input. Expected 1 compiled unit but got {}", len)
-                        }
-                        let unit = units.pop().unwrap();
-                        match unit {
-                        AnnotatedCompiledUnit::Script(annot_script) => (annot_script.named_script.script, warning_opt),
-                        AnnotatedCompiledUnit::Module(_) => panic!(
-                            "Expected a script text block, not a module, following 'run' starting on lines {}-{}",
-                            start_line, command_lines_stop
-                        ),
-                    }
-                    }
-                    SyntaxChoice::IR => (compile_ir_script(state, data.path())?, None),
-                };
-                let args = self.compiled_state().resolve_args(args)?;
+                let empty_publish_args = <Self::ExtraPublishArgs as Default>::default();
+                let (warnings_opt, output, data, modules) = compile_any(
+                    self,
+                    "publish",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |adapter, modules| {
+                        adapter.publish_modules(modules, gas_budget, empty_publish_args)
+                    },
+                )
+                .await?;
+                let (module_id, name) = single_entry_function(&modules).unwrap_or_else(|err| {
+                    panic!("{} on lines {}-{}", err, start_line, command_lines_stop)
+                });
+                let output = merge_output(warnings_opt, output);
+                store_modules(self, syntax, data, modules);
                 let type_args = self.compiled_state().resolve_type_args(type_args)?;
-                let (output, return_values) = self
-                    .execute_script(script, type_args, signers, args, gas_budget, extra_args)
+                let args = self.compiled_state().resolve_args(args)?;
+                let (ret_output, return_values) = self
+                    .call_function(
+                        &module_id,
+                        name.as_ident_str(),
+                        type_args,
+                        signers,
+                        args,
+                        gas_budget,
+                        extra_args,
+                    )
                     .await?;
+                let output = merge_output(ret_output, output);
                 let rendered_return_value = display_return_values(return_values);
-                Ok(merge_output(
-                    warning_opt,
-                    merge_output(output, rendered_return_value),
-                ))
+                Ok(merge_output(output, rendered_return_value))
             }
             TaskCommand::Run(
                 RunCommand {
@@ -324,6 +326,22 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             }
         }
     }
+}
+
+fn single_entry_function(
+    modules: &[(Option<Symbol>, CompiledModule)],
+) -> anyhow::Result<(ModuleId, Identifier)> {
+    anyhow::ensure!(modules.len() == 1, "Expected exactly one module");
+    let module = &modules[0].1;
+    let entry_funs: Vec<_> = module
+        .function_defs()
+        .iter()
+        .filter(|def| def.is_entry)
+        .collect();
+    anyhow::ensure!(entry_funs.len() == 1, "Expected exactly one function");
+    let function_handle = module.function_handle_at(entry_funs[0].function);
+    let name = module.identifier_at(function_handle.name).to_owned();
+    Ok((module.self_id(), name))
 }
 
 fn display_return_values(return_values: SerializedReturnValues) -> Option<String> {
