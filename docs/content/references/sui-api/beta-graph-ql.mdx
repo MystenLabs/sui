@@ -32,7 +32,7 @@ curl -X POST https://graphql-beta.mainnet.sui.io \
 curl -X POST https://graphql-beta.mainnet.sui.io \
      --header "Content-Type: application/json" \
      --data '{
-          "query": "query ($epochID: Int!) { epoch(id: $epochID) {referenceGasPrice} }", "variables": { "epochID": 123 } 
+          "query": "query ($epochID: Int!) { epoch(id: $epochID) { referenceGasPrice } }", "variables": { "epochID": 123 } 
      }'
 ```
 
