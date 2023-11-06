@@ -42,15 +42,7 @@ our latest design inspired by previous works below.
 * **Publication:** Not published yet (under submission)
 * **Relevance:** Extends the FastPay design to support objects (rather than accounts), what Sui actually uses. An additional contribution of this paper is
   to add strong privacy to FastPay transactions (but Sui does not plan to do this).
-* **Summary:** We introduce Zef, the first Byzantine-Fault Tolerant (BFT) protocol to support payments in anonymous digital coins at arbitrary scale. Zef
-  follows the communication and security model of FastPay: both protocols are asynchronous, low-latency, linearly-scalable, and powered by partially-trusted
-  sharded validators. Zef further introduces opaque coins represented as off-chain certificates that are bound to user accounts. In order to hide the face
-  values of coins when a payment operation consumes or creates them, Zef uses random commitments and NIZK proofs. Created coins are made unlinkable using the
-  blind and randomizable threshold anonymous credentials of [Coconut](https://arxiv.org/pdf/1802.07344.pdf). To control storage costs associated with coin
-  replay prevention, Zef accounts are designed so that data can be safely removed once an account is deactivated. Besides the specifications and a detailed
-  analysis of the protocol, we are making available an open source implementation of Zef in Rust. Our extensive benchmarks on AWS confirm textbook linear
-  scalability and demonstrate a confirmation time under one second at nominal capacity. Compared to existing anonymous payment systems based on a blockchain,
-  this represents a latency speedup of three orders of magnitude, with no theoretical limit on throughput.
+* **Summary:** Zef is a novel payment protocol that allows for anonymous transactions with digital coins at large scale. It utilizes the communication and security model of FastPay, which is asynchronous, low-latency, linearly-scalable, and powered by partially-trusted sharded validators. Unlike FastPay, Zef introduces opaque coins, which are off-chain certificates that are bound to user accounts, to provide privacy. To hide the face values of coins in transactions, Zef uses random commitments and NIZK proofs. Zef also employs the blind and randomizable threshold anonymous credentials of Coconut to make the created coins unlinkable. To control storage costs, Zef accounts are designed in such a way that data can be safely removed when an account is no longer active. The protocol is thoroughly analyzed and has an open source implementation in Rust. Benchmarks on AWS confirm its linear scalability and demonstrate a confirmation time of under one second at nominal capacity, which is a significant improvement compared to existing anonymous payment systems based on a blockchain. The throughput has no theoretical limit and the latency is three orders of magnitude faster.
 
 ##  Bullshark: DAG BFT Protocols Made Practical 
 
