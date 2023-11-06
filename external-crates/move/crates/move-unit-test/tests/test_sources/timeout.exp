@@ -4,16 +4,6 @@ Running Move unit tests
 [ PASS    ] 0x1::M::no_timeout_while_loop
 [ TIMEOUT ] 0x1::M::timeout_fail
 [ PASS    ] 0x1::M::timeout_fail_with_expected_failure
-0x1::M::no_timeout
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::no_timeout_fail
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::no_timeout_while_loop
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::timeout_fail
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::timeout_fail_with_expected_failure
-Output: Ok(ChangeSet { accounts: {} })
 
 Test failures:
 

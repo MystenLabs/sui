@@ -1,7 +1,5 @@
 Running Move unit tests
 [ FAIL    ] 0x1::M::non_existent_native
-0x1::M::non_existent_native
-Output: Ok(ChangeSet { accounts: {} })
 
 Test failures:
 

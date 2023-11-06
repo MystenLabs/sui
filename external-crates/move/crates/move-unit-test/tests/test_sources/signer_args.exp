@@ -5,18 +5,6 @@ Running Move unit tests
 [ FAIL    ] 0x1::M::single_signer_fail
 [ PASS    ] 0x1::M::single_signer_pass
 [ PASS    ] 0x1::M::test_correct_signer_arg_addrs
-0x1::M::multi_signer_fail
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::multi_signer_pass
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::multi_signer_pass_expected_failure
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::single_signer_fail
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::single_signer_pass
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::test_correct_signer_arg_addrs
-Output: Ok(ChangeSet { accounts: {} })
 
 Test failures:
 

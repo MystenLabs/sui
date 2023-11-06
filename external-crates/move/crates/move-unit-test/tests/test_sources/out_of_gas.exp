@@ -2,12 +2,6 @@ Running Move unit tests
 [ FAIL    ] 0x42::m::t0
 [ FAIL    ] 0x42::m::t1
 [ FAIL    ] 0x42::m::t2
-0x42::m::t0
-Output: Ok(ChangeSet { accounts: {} })
-0x42::m::t1
-Output: Ok(ChangeSet { accounts: {} })
-0x42::m::t2
-Output: Ok(ChangeSet { accounts: {} })
 
 Test failures:
 
