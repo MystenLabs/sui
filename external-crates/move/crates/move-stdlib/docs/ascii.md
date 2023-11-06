@@ -202,7 +202,7 @@ Convert a vector of bytes <code>bytes</code> into an <code><a href="ascii.md#0x1
 
 
 
-<pre><code><b>aborts_if</b> <b>exists</b> i in 0..len(bytes): !<a href="ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(bytes[i]) <b>with</b> <a href="ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>;
+<pre><code><b>aborts_if</b> exists i in 0..len(bytes): !<a href="ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(bytes[i]) <b>with</b> <a href="ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>;
 </code></pre>
 
 

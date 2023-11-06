@@ -100,10 +100,6 @@ pub struct UnitTestingConfig {
     /// Verbose mode
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
-
-    /// Whether the test output need to be printed out.
-    #[clap(short = 'v', long = "verbose")]
-    pub report_writeset: bool,
 }
 
 fn format_module_id(module_id: &ModuleId) -> String {
@@ -129,7 +125,6 @@ impl UnitTestingConfig {
             verbose: false,
             list: false,
             named_address_values: vec![],
-            report_writeset: false,
         }
     }
 
@@ -219,7 +214,6 @@ impl UnitTestingConfig {
             native_function_table,
             cost_table,
             verify_and_create_named_address_mapping(self.named_address_values.clone()).unwrap(),
-            self.report_writeset,
         )
         .unwrap();
 
@@ -230,10 +224,6 @@ impl UnitTestingConfig {
         let test_results = test_runner.run(&shared_writer).unwrap();
         if let Some(report_type) = &self.report_statistics {
             test_results.report_statistics(&shared_writer, report_type)?;
-        }
-
-        if self.report_writeset {
-            test_results.report_goldens(&shared_writer)?;
         }
 
         let ok = test_results.summarize(&shared_writer)?;

@@ -4,8 +4,8 @@
 
 use crate::{
     sandbox::utils::{
-        contains_module, explain_execution_effects, explain_execution_error, get_gas_status,
-        is_bytecode_file, maybe_commit_effects, on_disk_state_view::OnDiskStateView,
+        contains_module, explain_execution_error, get_gas_status, is_bytecode_file,
+        on_disk_state_view::OnDiskStateView,
     },
     NativeFunctionRecord,
 };
@@ -41,8 +41,8 @@ pub fn run(
     txn_args: &[TransactionArgument],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
-    dry_run: bool,
-    verbose: bool,
+    _dry_run: bool,
+    _verbose: bool,
 ) -> Result<()> {
     if !try_exists(script_path)? {
         bail!("Script file {:?} does not exist", script_path)
@@ -143,10 +143,7 @@ move run` must be applied to a module inside `storage/`",
             txn_args,
         )
     } else {
-        let (changeset, events) = session.finish().0.map_err(|e| e.into_vm_status())?;
-        if verbose {
-            explain_execution_effects(&changeset, &events, state)?
-        }
-        maybe_commit_effects(!dry_run, changeset, events, state)
+        let (_changeset, _events) = session.finish().0.map_err(|e| e.into_vm_status())?;
+        Ok(())
     }
 }

@@ -67,13 +67,4 @@ pub const CONTEXTUAL_KEYWORDS: &[&str] = &[
 
 pub const PRIMITIVE_TYPES: &[&str] = &["u8", "u16", "u32", "u64", "u128", "u256", "bool", "vector"];
 
-pub const BUILTINS: &[&str] = &[
-    "assert",
-    "borrow_global",
-    "borrow_global_mut",
-    "exists",
-    "freeze",
-    "move_from",
-    "move_to",
-    "old",
-];
+pub const BUILTINS: &[&str] = &["assert", "freeze", "old"];

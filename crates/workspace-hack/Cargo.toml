@@ -435,7 +435,6 @@ move-package = { path = "../../external-crates/move/crates/move-package", defaul
 move-prover = { path = "../../external-crates/move/crates/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/crates/move-prover-boogie-backend", default-features = false }
 move-read-write-set-types = { path = "../../external-crates/move/crates/move-read-write-set-types", default-features = false }
-move-resource-viewer = { path = "../../external-crates/move/crates/move-resource-viewer", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features = ["testing"] }
@@ -1256,7 +1255,6 @@ move-proc-macros = { path = "../../external-crates/move/crates/move-proc-macros"
 move-prover = { path = "../../external-crates/move/crates/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/crates/move-prover-boogie-backend", default-features = false }
 move-read-write-set-types = { path = "../../external-crates/move/crates/move-read-write-set-types", default-features = false }
-move-resource-viewer = { path = "../../external-crates/move/crates/move-resource-viewer", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features = ["testing"] }

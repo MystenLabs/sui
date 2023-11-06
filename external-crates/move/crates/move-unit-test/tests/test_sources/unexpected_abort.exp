@@ -5,18 +5,6 @@ Running Move unit tests
 [ FAIL    ] 0x1::M::unexpected_abort_in_native_function
 [ FAIL    ] 0x1::M::unexpected_abort_in_other_function
 [ FAIL    ] 0x1::M::wrong_abort_code
-0x1::M::correct_abort_code
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::just_test_failure
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::unexpected_abort
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::unexpected_abort_in_native_function
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::unexpected_abort_in_other_function
-Output: Ok(ChangeSet { accounts: {} })
-0x1::M::wrong_abort_code
-Output: Ok(ChangeSet { accounts: {} })
 
 Test failures:
 

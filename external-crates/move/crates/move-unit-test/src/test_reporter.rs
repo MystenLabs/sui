@@ -14,7 +14,7 @@ use move_compiler::{
     diagnostics::{self, Diagnostic, Diagnostics},
     unit_test::{ModuleTestPlan, TestName, TestPlan},
 };
-use move_core_types::{effects::ChangeSet, language_storage::ModuleId, vm_status::StatusType};
+use move_core_types::{language_storage::ModuleId, vm_status::StatusType};
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 use std::{
@@ -41,9 +41,7 @@ pub enum FailureReason {
     // The execution results of the Move VM and stackless VM does not match
     Mismatch {
         move_vm_return_values: Box<VMResult<Vec<Vec<u8>>>>,
-        move_vm_change_set: Box<VMResult<ChangeSet>>,
         stackless_vm_return_values: Box<VMResult<Vec<Vec<u8>>>>,
-        stackless_vm_change_set: Box<VMResult<ChangeSet>>,
     },
     // Property checking failed
     Property(String),
@@ -117,15 +115,11 @@ impl FailureReason {
 
     pub fn mismatch(
         move_vm_return_values: VMResult<Vec<Vec<u8>>>,
-        move_vm_change_set: VMResult<ChangeSet>,
         stackless_vm_return_values: VMResult<Vec<Vec<u8>>>,
-        stackless_vm_change_set: VMResult<ChangeSet>,
     ) -> Self {
         FailureReason::Mismatch {
             move_vm_return_values: Box::new(move_vm_return_values),
-            move_vm_change_set: Box::new(move_vm_change_set),
             stackless_vm_return_values: Box::new(stackless_vm_return_values),
-            stackless_vm_change_set: Box::new(stackless_vm_change_set),
         }
     }
 
@@ -195,21 +189,14 @@ impl TestFailure {
             }
             FailureReason::Mismatch {
                 move_vm_return_values,
-                move_vm_change_set,
                 stackless_vm_return_values,
-                stackless_vm_change_set,
             } => {
                 format!(
                     "Executions via Move VM [M] and stackless VM [S] yield different results.\n\
                     [M] - return values: {:?}\n\
                     [S] - return values: {:?}\n\
-                    [M] - change set: {:?}\n\
-                    [S] - change set: {:?}\n\
                     ",
-                    move_vm_return_values,
-                    stackless_vm_return_values,
-                    move_vm_change_set,
-                    stackless_vm_change_set
+                    move_vm_return_values, stackless_vm_return_values,
                 )
             }
             FailureReason::Property(message) => message.clone(),

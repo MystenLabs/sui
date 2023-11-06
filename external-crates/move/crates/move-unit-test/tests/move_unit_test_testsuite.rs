@@ -18,7 +18,6 @@ fn run_test_with_modifiers(
 ) -> anyhow::Result<Vec<((Vec<u8>, bool), PathBuf)>> {
     let mut results = Vec::new();
 
-    // Now run with no modifiers
     let buffer = Vec::new();
     let test_plan = unit_test_config.build_test_plan();
     if test_plan.is_none() {
@@ -46,7 +45,6 @@ fn run_test_impl(path: &Path) -> anyhow::Result<()> {
         named_address_values: move_stdlib::move_stdlib_named_addresses()
             .into_iter()
             .collect(),
-        report_writeset: true,
         report_stacktrace_on_abort: true,
 
         ..UnitTestingConfig::default_with_bound(None)

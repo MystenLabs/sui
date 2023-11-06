@@ -32,7 +32,7 @@ use move_model::{
 };
 use move_stackless_bytecode_interpreter::{
     concrete::{settings::InterpreterSettings, value::GlobalState},
-    shared::bridge::{adapt_move_vm_change_set, adapt_move_vm_result},
+    shared::bridge::adapt_move_vm_result,
     StacklessBytecodeInterpreter,
 };
 #[cfg(debug_assertions)]
@@ -60,7 +60,6 @@ pub struct SharedTestingConfig {
     named_address_values: BTreeMap<String, NumericalAddress>,
     check_stackless_vm: bool,
     verbose: bool,
-    record_writeset: bool,
 }
 
 pub struct TestRunner {
@@ -101,7 +100,6 @@ impl TestRunner {
         native_function_table: Option<NativeFunctionTable>,
         cost_table: Option<CostTable>,
         named_address_values: BTreeMap<String, NumericalAddress>,
-        record_writeset: bool,
     ) -> Result<Self> {
         let source_files = tests
             .files
@@ -132,7 +130,6 @@ impl TestRunner {
                 check_stackless_vm,
                 verbose,
                 named_address_values,
-                record_writeset,
             },
             num_threads,
             tests,
@@ -282,12 +279,7 @@ impl SharedTestingConfig {
         test_plan: &ModuleTestPlan,
         function_name: &str,
         test_info: &TestCase,
-    ) -> (
-        VMResult<ChangeSet>,
-        VMResult<Vec<Vec<u8>>>,
-        TestRunInfo,
-        Option<String>,
-    ) {
+    ) -> (VMResult<Vec<Vec<u8>>>, TestRunInfo, Option<String>) {
         let now = Instant::now();
 
         let settings = if self.verbose {
@@ -301,7 +293,7 @@ impl SharedTestingConfig {
         // The modules are captured by `env: &GlobalEnv` and the default GlobalState captures the
         // empty-resource state.
         let global_state = GlobalState::default();
-        let (return_result, change_set, _) = interpreter.interpret(
+        let (return_result, _, _) = interpreter.interpret(
             &test_plan.module_id,
             IdentStr::new(function_name).unwrap(),
             &[], // no ty args, at least for now
@@ -317,12 +309,7 @@ impl SharedTestingConfig {
             // gas is not charged against stackless VM instruction.
             0,
         );
-        (
-            Ok(change_set),
-            return_result,
-            test_run_info,
-            prop_check_result,
-        )
+        (return_result, test_run_info, prop_check_result)
     }
 
     fn exec_module_tests_move_vm_and_stackless_vm(
@@ -368,40 +355,22 @@ impl SharedTestingConfig {
         let mut stats = TestStatistics::new();
 
         for (function_name, test_info) in &test_plan.tests {
-            let (cs_result, _ext_result, exec_result, test_run_info) =
+            let (_cs_result, _ext_result, exec_result, test_run_info) =
                 self.execute_via_move_vm(test_plan, function_name, test_info);
 
-            if self.record_writeset {
-                stats.test_output(
-                    function_name.to_string(),
-                    test_plan,
-                    format!("{:?}", cs_result),
-                );
-            }
-
             if self.check_stackless_vm {
-                let (stackless_vm_change_set, stackless_vm_result, _, prop_check_result) = self
-                    .execute_via_stackless_vm(
-                        stackless_model.as_ref().unwrap(),
-                        test_plan,
-                        function_name,
-                        test_info,
-                    );
+                let (stackless_vm_result, _, prop_check_result) = self.execute_via_stackless_vm(
+                    stackless_model.as_ref().unwrap(),
+                    test_plan,
+                    function_name,
+                    test_info,
+                );
                 let move_vm_result = adapt_move_vm_result(exec_result.clone());
-                let move_vm_change_set =
-                    adapt_move_vm_change_set(cs_result.clone(), &self.starting_storage_state);
-                if stackless_vm_result != move_vm_result
-                    || stackless_vm_change_set != move_vm_change_set
-                {
+                if stackless_vm_result != move_vm_result {
                     output.fail(function_name);
                     stats.test_failure(
                         TestFailure::new(
-                            FailureReason::mismatch(
-                                move_vm_result,
-                                move_vm_change_set,
-                                stackless_vm_result,
-                                stackless_vm_change_set,
-                            ),
+                            FailureReason::mismatch(move_vm_result, stackless_vm_result),
                             test_run_info,
                             None,
                         ),
