@@ -30,14 +30,13 @@ module big_set::big_set {
 
     /// Error code for unimplemented functions.
     const ENotImplemented: u64 = 0;
-    #[allow(unused_const)]
     /// Error code for invalid scaling (currently only 1 and 2 are supported).
     const EInvalidScaling: u64 = 1;
     /// Error code for a key that does not exist in the set.
     const EKeyDoesNotExist: u64 = 2;
 
     /// An item Key; used to store items in the set.
-    struct Key has copy, store, drop { value: vector<u8> }
+    struct Key has copy, store, drop { value: u16 }
 
     /// A Large Collection type which can increase the size of a Collection by
     /// utilizing dynamic fields.
@@ -199,17 +198,61 @@ module big_set::big_set {
     fun key<K>(k: &K, scale: u8): Key {
         let value = if (scale == 1) {
             let bytes = blake2b256(&bcs::to_bytes(k));
-            vector[ *vector::borrow(&bytes, 0) ]
+            (*vector::borrow(&bytes, 0) as u16)
         } else if (scale == 2) {
             let bytes = blake2b256(&bcs::to_bytes(k));
-            vector[
-                *vector::borrow(&bytes, 0),
-                *vector::borrow(&bytes, 1)
-            ]
+            let value = (*vector::borrow(&bytes, 0) as u16);
+            value = value << 8;
+            value + (*vector::borrow(&bytes, 1) as u16)
         } else {
             abort 0
         };
 
         Key { value }
+    }
+}
+
+#[test_only]
+module big_set::big_set_tests {
+    use sui::tx_context::dummy as ctx;
+    use big_set::big_set;
+
+    #[test]
+    fun test_big_set() {
+        let ctx = &mut ctx();
+        let set = big_set::empty<address>(1, ctx);
+
+        big_set::insert(&mut set, @0x1);
+        big_set::insert(&mut set, @0x2);
+        big_set::insert(&mut set, @0x3);
+        big_set::insert(&mut set, @0x4);
+
+        assert!(big_set::contains(&set, &@0x1), 0);
+        assert!(big_set::contains(&set, &@0x2), 1);
+        assert!(big_set::contains(&set, &@0x3), 2);
+        assert!(big_set::contains(&set, &@0x4), 3);
+
+        assert!(big_set::size(&set) == 4, 4);
+        assert!(!big_set::is_empty(&set), 5);
+
+        big_set::remove(&mut set, &@0x1);
+
+        assert!(!big_set::contains(&set, &@0x1), 6);
+        assert!(big_set::size(&set) == 3, 7);
+
+        let copy_ = big_set::copy_(&set, ctx);
+        let values = big_set::into_keys(set);
+
+        assert!(std::vector::contains(&values, &@0x2), 8);
+        assert!(std::vector::contains(&values, &@0x3), 9);
+        assert!(std::vector::contains(&values, &@0x4), 10);
+
+        // now deal with copy
+        assert!(big_set::size(&copy_) == 3, 11);
+        assert!(big_set::contains(&copy_, &@0x2), 12);
+        assert!(big_set::contains(&copy_, &@0x3), 13);
+        assert!(big_set::contains(&copy_, &@0x4), 14);
+
+        big_set::drop(copy_);
     }
 }
