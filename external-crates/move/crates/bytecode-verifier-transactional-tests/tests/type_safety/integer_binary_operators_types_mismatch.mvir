@@ -1,15 +1,16 @@
 //# run
+module 0x42.m {
 
 // tests multiple type mismatches for int operations
 // !!!! generated file, do NOT edit manually !!!!
 
 // operator +
-main() {
+entry foo() {
 label b0:
     _ = 0u8 + 0u64;
     return;
 }
-
+}
 
 //# run
 module 0x42.m {

@@ -1,6 +1,7 @@
 //# run
+module 0x42.m {
 // simple breaks for control flow check
-main() {
+entry foo() {
     let x: u64;
 label b0:
     x = 1;
@@ -14,4 +15,5 @@ label while_b0:
 label while_cont:
     assert(move(x) == 3, 42);
     return;
+}
 }

@@ -34,9 +34,10 @@ module 0x42.Tester {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Tester;
 
-main() {
+entry foo() {
     let t: Tester.T;
     let old_ref: &mut Tester.T;
     let ref_t: &mut Tester.T;
@@ -58,4 +59,5 @@ label b0:
     assert(copy(v_from_t) == 1, 42);
     no = Tester.value(move(old_ref));
     return;
+}
 }

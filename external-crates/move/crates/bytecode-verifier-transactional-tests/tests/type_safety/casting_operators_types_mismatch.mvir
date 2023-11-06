@@ -1,9 +1,11 @@
 //# run
+module 0x42.m {
 // tests bad casts/integer conversions
-main() {
+entry foo() {
 label b0:
     _ = to_u8(true);
     return;
+}
 }
 
 //# run

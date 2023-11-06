@@ -39,9 +39,10 @@ module 0x42.Test {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Test;
 
-main() {
+entry foo() {
     let obj: Test.T;
     let ref: &Test.T;
 label b0:
@@ -51,4 +52,5 @@ label b0:
     // are done
     Test.internal_set_value(move(ref), 1);
     return;
+}
 }

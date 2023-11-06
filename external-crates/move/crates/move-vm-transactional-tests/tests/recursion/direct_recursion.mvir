@@ -26,9 +26,10 @@ module 0x42.Math {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Math;
 
-main() {
+entry foo() {
     let sum1: u64;
     let sum2: u64;
 label b0:
@@ -39,4 +40,5 @@ label b0:
     assert(move(sum2) == 28, 67);
 
     return;
+}
 }

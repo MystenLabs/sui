@@ -1,7 +1,7 @@
 processed 2 tasks
 
-task 1 'run'. lines 19-26:
-Error: Script execution failed with VMError: {
+task 1 'run'. lines 19-28:
+Error: Function execution failed with VMError: {
     major_status: ABORTED,
     sub_status: Some(42),
     location: 0x1::M,

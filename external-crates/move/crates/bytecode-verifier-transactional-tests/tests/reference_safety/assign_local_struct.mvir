@@ -32,9 +32,10 @@ module 0x42.Tester {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Tester;
 
-main() {
+entry foo() {
     let t: Tester.T;
     let ref_t: &mut Tester.T;
     let v_from_ref: u64;
@@ -51,4 +52,5 @@ label b0:
     assert(copy(v_from_ref) == 1, 42);
     assert(copy(v_from_t) == 1, 42);
     return;
+}
 }
