@@ -12,7 +12,7 @@ use clap::*;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     self,
-    diagnostics::{self, codes::Severity},
+    diagnostics::{self},
     shared::{self, NumericalAddress},
     unit_test::{self, TestPlan},
     Compiler, Flags, PASS_CFGIR,
@@ -34,7 +34,7 @@ const DEFAULT_EXECUTION_BOUND: u64 = 1_000_000;
 #[clap(author, version, about)]
 pub struct UnitTestingConfig {
     /// Bound the gas limit for any one test. If using custom gas table, this is the max number of instructions.
-    #[clap(name = "gas_limit", short = 'i', long = "gas_limit")]
+    #[clap(name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
 
     /// A filter string to determine which unit tests to run
@@ -47,7 +47,7 @@ pub struct UnitTestingConfig {
 
     /// Number of threads to use for running tests.
     #[clap(
-        name = "num_threads",
+        name = "num-threads",
         default_value = "8",
         short = 't',
         long = "threads"
@@ -65,12 +65,8 @@ pub struct UnitTestingConfig {
     pub dep_files: Vec<String>,
 
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
-    #[clap(name = "report_statistics", short = 's', long = "statistics")]
+    #[clap(name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
-
-    /// Show the storage state at the end of execution of a failing test
-    #[clap(name = "global_state_on_error", short = 'g', long = "state_on_error")]
-    pub report_storage_on_error: bool,
 
     #[clap(
         name = "report_stacktrace_on_abort",
@@ -78,10 +74,6 @@ pub struct UnitTestingConfig {
         long = "stacktrace_on_abort"
     )]
     pub report_stacktrace_on_abort: bool,
-
-    /// Ignore compiler's warning, and continue run tests
-    #[clap(name = "ignore_compile_warnings", long = "ignore_compile_warnings")]
-    pub ignore_compile_warnings: bool,
 
     /// Named address mapping
     #[clap(
@@ -130,9 +122,7 @@ impl UnitTestingConfig {
             filter: None,
             num_threads: 8,
             report_statistics: None,
-            report_storage_on_error: false,
             report_stacktrace_on_abort: false,
-            ignore_compile_warnings: false,
             source_files: vec![],
             dep_files: vec![],
             check_stackless_vm: false,
@@ -159,9 +149,10 @@ impl UnitTestingConfig {
     ) -> Option<TestPlan> {
         let addresses =
             verify_and_create_named_address_mapping(self.named_address_values.clone()).ok()?;
+        let flags = Flags::testing();
         let (files, comments_and_compiler_res) =
             Compiler::from_files(source_files, deps, addresses)
-                .set_flags(Flags::testing())
+                .set_flags(flags)
                 .run::<PASS_CFGIR>()
                 .unwrap();
         let (_, compiler) =
@@ -171,18 +162,7 @@ impl UnitTestingConfig {
         let compilation_env = compiler.compilation_env();
         let test_plan = unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
 
-        if let Err(diags) =
-            compilation_env.check_diags_at_or_above_severity(if self.ignore_compile_warnings {
-                Severity::NonblockingError
-            } else {
-                Severity::Warning
-            })
-        {
-            diagnostics::report_diagnostics(&files, diags);
-        }
-
         let compilation_result = compiler.at_cfgir(cfgir).build();
-
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);
@@ -234,7 +214,6 @@ impl UnitTestingConfig {
             self.num_threads,
             self.check_stackless_vm,
             self.verbose,
-            self.report_storage_on_error,
             self.report_stacktrace_on_abort,
             test_plan,
             native_function_table,

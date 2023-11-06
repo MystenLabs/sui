@@ -12,7 +12,10 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
-use move_compiler::editions::{Edition, Flavor};
+use move_compiler::{
+    editions::{Edition, Flavor},
+    Flags,
+};
 use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
@@ -89,6 +92,14 @@ pub struct BuildConfig {
     /// warning suppression in dependency packages.
     #[clap(long = "dependencies-are-root", global = true)]
     pub deps_as_root: bool,
+
+    /// If set, ignore any compiler warnings
+    #[clap(long = move_compiler::command_line::SILENCE_WARNINGS, global = true)]
+    pub silence_warnings: bool,
+
+    /// If set, warnings become errors
+    #[clap(long = move_compiler::command_line::WARNINGS_ARE_ERRORS, global = true)]
+    pub warnings_are_errors: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -196,5 +207,16 @@ impl BuildConfig {
             &mut dependency_cache,
             progress_output,
         )
+    }
+
+    pub fn compiler_flags(&self) -> Flags {
+        let flags = if self.test_mode {
+            Flags::testing()
+        } else {
+            Flags::empty()
+        };
+        flags
+            .set_warnings_are_errors(self.warnings_are_errors)
+            .set_silence_warnings(self.silence_warnings)
     }
 }

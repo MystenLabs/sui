@@ -17,6 +17,9 @@ pub const DEFAULT_OUTPUT_DIR: &str = "build";
 pub const SHADOW: &str = "shadow";
 pub const SHADOW_SHORT: char = 'S';
 
+pub const SILENCE_WARNINGS: &str = "silence-warnings";
+pub const SILENCE_WARNINGS_SHORT: char = 'w';
+
 pub const SOURCE_MAP: &str = "source-map";
 pub const SOURCE_MAP_SHORT: char = 'm';
 
@@ -25,6 +28,8 @@ pub const TEST_SHORT: char = 't';
 
 pub const VERIFY: &str = "verify";
 pub const VERIFY_SHORT: char = 'v';
+
+pub const WARNINGS_ARE_ERRORS: &str = "warnings-are-errors";
 
 pub const BYTECODE_VERSION: &str = "bytecode-version";
 

@@ -11,8 +11,8 @@ use crate::{
         WellKnownFilterName,
     },
     shared::{
-        ast_debug::AstDebug, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_MUT_REF,
-        FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
+        ast_debug::AstDebug, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_MUT_PARAM,
+        FILTER_UNUSED_MUT_REF, FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
     },
 };
 use codespan_reporting::{
@@ -376,6 +376,11 @@ impl Diagnostic {
         self
     }
 
+    pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
+        self.info = self.info.set_severity(severity);
+        self
+    }
+
     #[allow(unused)]
     pub fn add_secondary_labels(
         &mut self,
@@ -594,6 +599,7 @@ impl UnprefixedWarningFilters {
             (UnusedItem::FunTypeParam, FILTER_UNUSED_TYPE_PARAMETER),
             (UnusedItem::Constant, FILTER_UNUSED_CONST),
             (UnusedItem::MutReference, FILTER_UNUSED_MUT_REF),
+            (UnusedItem::MutParam, FILTER_UNUSED_MUT_PARAM),
         ]
         .into_iter()
         .map(|(item, filter)| {

@@ -152,7 +152,7 @@ module capy::capy_item {
     public entry fun buy_mut(
         s: &mut ItemStore, name: vector<u8>, payment: &mut Coin<SUI>, ctx: &mut TxContext
     ) {
-        let listing = dof::borrow<vector<u8>, ListedItem>(&mut s.id, name);
+        let listing = dof::borrow<vector<u8>, ListedItem>(&s.id, name);
         let paid = coin::split(payment, listing.price, ctx);
         buy_and_take(s, name, paid, ctx)
     }

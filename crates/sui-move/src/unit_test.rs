@@ -115,7 +115,6 @@ pub fn run_move_unit_tests(
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
-            ignore_compile_warnings: true,
             ..config
         },
         sui_move_natives::all_natives(/* silent */ false),

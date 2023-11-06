@@ -104,11 +104,18 @@ pub fn verify(
     initial_state.canonicalize_locals(&safety.local_numbers);
     let (final_state, ds) = safety.analyze_function(cfg, initial_state);
     compilation_env.add_diags(ds);
-    unused_mut_borrows(compilation_env, safety.mutably_used);
+    unused_mut_borrows(compilation_env, context, safety.mutably_used);
     final_state
 }
 
-fn unused_mut_borrows(compilation_env: &mut CompilationEnv, mutably_used: RefExpInfoMap) {
+fn unused_mut_borrows(
+    compilation_env: &mut CompilationEnv,
+    context: &super::CFGContext,
+    mutably_used: RefExpInfoMap,
+) {
+    const MSG: &str = "Mutable reference is never used mutably, \
+    consider switching to an immutable reference '&' instead";
+
     for info in RefCell::borrow(&mutably_used).values() {
         let RefExpInfo {
             loc,
@@ -117,20 +124,23 @@ fn unused_mut_borrows(compilation_env: &mut CompilationEnv, mutably_used: RefExp
             param_name,
         } = info;
         if *is_mut && !*used_mutably {
-            let msg = "Mutable reference is never used mutably, \
-            consider switching to an immutable reference '&' instead";
-            let mut diag = diag!(UnusedItem::MutReference, (*loc, msg));
-            let display_param = param_name
-                .as_ref()
-                .map(|v| (v.loc(), display_var(v.value())));
-            if let Some((param_loc, DisplayVar::Orig(v))) = display_param {
+            let diag = if let Some(v) = param_name {
+                if matches!(context.visibility, Visibility::Public(_)) {
+                    // silence the warning for public function parameters
+                    continue;
+                }
+                let param_loc = v.loc();
+                let DisplayVar::Orig(v) = display_var(v.value()) else {
+                    panic!("ICE param {v:?} is a tmp")
+                };
                 let param_msg = format!(
                     "For parameters, this can be silenced by prefixing \
                     the name with an underscore, e.g. '_{v}'"
                 );
-                diag.add_secondary_label((param_loc, param_msg))
-            }
-
+                diag!(UnusedItem::MutParam, (*loc, MSG), (param_loc, param_msg))
+            } else {
+                diag!(UnusedItem::MutReference, (*loc, MSG))
+            };
             compilation_env.add_diag(diag)
         }
     }

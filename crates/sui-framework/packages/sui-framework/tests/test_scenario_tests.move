@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-#[allow(unused_use)]
-module sui::test_scenarioTests {
+module sui::test_scenario_tests {
     use sui::dynamic_field as df;
     use sui::object;
-    use sui::test_scenario::Self as ts;
+    use sui::test_scenario as ts;
     use sui::transfer;
     use sui::tx_context;
 
@@ -23,17 +22,6 @@ module sui::test_scenarioTests {
         child: Object,
     }
 
-    struct Parent has key {
-        id: object::UID,
-        child: object::ID,
-    }
-
-    struct MultiChildParent has key {
-        id: object::UID,
-        child1: object::ID,
-        child2: object::ID,
-    }
-
     #[test]
     fun test_wrap_unwrap() {
         let sender = @0x0;
@@ -47,7 +35,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             let id = ts::new_object(&mut scenario);
-            let child = ts::take_from_sender<Object>(&mut scenario);
+            let child = ts::take_from_sender<Object>(&scenario);
             let wrapper = Wrapper { id, child };
             transfer::transfer(wrapper, copy sender);
         };
@@ -72,8 +60,8 @@ module sui::test_scenarioTests {
         // object gets removed, then returned
         ts::next_tx(&mut scenario, sender);
         {
-            let object = ts::take_from_sender<Object>(&mut scenario);
-            ts::return_to_sender(&mut scenario, object);
+            let object = ts::take_from_sender<Object>(&scenario);
+            ts::return_to_sender(&scenario, object);
         };
         // Object should remain accessible
         ts::next_tx(&mut scenario, sender);
@@ -94,16 +82,16 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj = ts::take_from_sender<Object>(&mut scenario);
+            let obj = ts::take_from_sender<Object>(&scenario);
             assert!(obj.value == 10, 0);
             obj.value = 100;
-            ts::return_to_sender(&mut scenario, obj);
+            ts::return_to_sender(&scenario, obj);
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj = ts::take_from_sender<Object>(&mut scenario);
+            let obj = ts::take_from_sender<Object>(&scenario);
             assert!(obj.value == 100, 1);
-            ts::return_to_sender(&mut scenario, obj);
+            ts::return_to_sender(&scenario, obj);
         };
         ts::end(scenario);
     }
@@ -134,10 +122,10 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj1 = ts::take_from_sender<Object>(&mut scenario);
-            let obj2 = ts::take_from_sender<Object>(&mut scenario);
-            ts::return_to_sender(&mut scenario, obj1);
-            ts::return_to_sender(&mut scenario, obj2);
+            let obj1 = ts::take_from_sender<Object>(&scenario);
+            let obj2 = ts::take_from_sender<Object>(&scenario);
+            ts::return_to_sender(&scenario, obj1);
+            ts::return_to_sender(&scenario, obj2);
         };
         ts::end(scenario);
     }
@@ -159,7 +147,7 @@ module sui::test_scenarioTests {
         // addr1 -> addr2
         ts::next_tx(&mut scenario, addr1);
         {
-            let obj = ts::take_from_sender<Object>(&mut scenario);
+            let obj = ts::take_from_sender<Object>(&scenario);
             transfer::public_transfer(obj, copy addr2)
         };
         // addr1 cannot access
@@ -170,7 +158,7 @@ module sui::test_scenarioTests {
         // addr2 -> addr3
         ts::next_tx(&mut scenario, addr2);
         {
-            let obj = ts::take_from_sender<Object>(&mut scenario);
+            let obj = ts::take_from_sender<Object>(&scenario);
             transfer::public_transfer(obj, copy addr3)
         };
         // addr1 cannot access
@@ -210,7 +198,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, tx2_sender);
         {
             assert!(ts::has_most_recent_for_sender<Object>(&scenario), 1);
-            let received_obj = ts::take_from_sender<Object>(&mut scenario);
+            let received_obj = ts::take_from_sender<Object>(&scenario);
             let Object { id: received_id, value } = received_obj;
             assert!(object::uid_to_inner(&received_id) == id_bytes, EIdBytesMismatch);
             assert!(value == 100, EValueMismatch);
@@ -268,15 +256,15 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj1 = ts::take_from_sender_by_id<Object>(&mut scenario, id1);
-            let obj3 = ts::take_from_sender_by_id<Object>(&mut scenario, id3);
-            let obj2 = ts::take_from_sender_by_id<Object>(&mut scenario, id2);
+            let obj1 = ts::take_from_sender_by_id<Object>(&scenario, id1);
+            let obj3 = ts::take_from_sender_by_id<Object>(&scenario, id3);
+            let obj2 = ts::take_from_sender_by_id<Object>(&scenario, id2);
             assert!(obj1.value == 10, EValueMismatch);
             assert!(obj2.value == 20, EValueMismatch);
             assert!(obj3.value == 30, EValueMismatch);
-            ts::return_to_sender(&mut scenario, obj1);
-            ts::return_to_sender(&mut scenario, obj2);
-            ts::return_to_sender(&mut scenario, obj3);
+            ts::return_to_sender(&scenario, obj1);
+            ts::return_to_sender(&scenario, obj2);
+            ts::return_to_sender(&scenario, obj3);
         };
         ts::end(scenario);
     }
@@ -341,7 +329,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             assert!(ts::has_most_recent_shared<Object>(), 1);
-            let obj1 = ts::take_shared<Object>(&mut scenario);
+            let obj1 = ts::take_shared<Object>(&scenario);
             assert!(obj1.value == 10, EValueMismatch);
             ts::return_shared(obj1);
         };
@@ -393,7 +381,7 @@ module sui::test_scenarioTests {
         ts::next_tx(&mut scenario, sender);
         {
             assert!(ts::has_most_recent_immutable<Object>(), 1);
-            let obj1 = ts::take_immutable<Object>(&mut scenario);
+            let obj1 = ts::take_immutable<Object>(&scenario);
             assert!(obj1.value == 10, EValueMismatch);
             ts::return_immutable(obj1);
         };
@@ -473,7 +461,7 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj1 = ts::take_shared<Object>(&mut scenario);
+            let obj1 = ts::take_shared<Object>(&scenario);
             transfer::public_freeze_object(obj1);
         };
         ts::next_tx(&mut scenario, sender);
@@ -492,7 +480,7 @@ module sui::test_scenarioTests {
         };
         ts::next_tx(&mut scenario, sender);
         {
-            let obj1 = ts::take_immutable<Object>(&mut scenario);
+            let obj1 = ts::take_immutable<Object>(&scenario);
             transfer::public_transfer(obj1, @0x0);
         };
         ts::next_tx(&mut scenario, sender);
@@ -510,7 +498,7 @@ module sui::test_scenarioTests {
             transfer::public_freeze_object(obj1);
         };
         ts::next_tx(&mut scenario, sender);
-        let obj1 = ts::take_immutable<Object>(&mut scenario);
+        let obj1 = ts::take_immutable<Object>(&scenario);
         ts::next_tx(&mut scenario, sender);
         obj1.value = 100;
         ts::next_tx(&mut scenario, sender);
@@ -651,7 +639,7 @@ module sui::test_scenarioTests {
         let scenario = ts::begin(sender);
         let parent = ts::new_object(&mut scenario);
         sui::dynamic_field::add(&mut parent, b"", 10);
-        let r = sui::dynamic_field::borrow<vector<u8>, u64>(&mut parent, b"");
+        let r = sui::dynamic_field::borrow<vector<u8>, u64>(&parent, b"");
         ts::end(scenario);
         assert!(*r == 10, 0);
         object::delete(parent);
@@ -664,7 +652,7 @@ module sui::test_scenarioTests {
         let parent = ts::new_object(&mut scenario);
         let id = ts::new_object(&mut scenario);
         sui::dynamic_object_field::add(&mut parent, b"", Object { id, value: 10});
-        let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&mut parent, b"");
+        let obj = sui::dynamic_object_field::borrow<vector<u8>, Object>(&parent, b"");
         ts::end(scenario);
         assert!(obj.value == 10, 0);
         object::delete(parent);
@@ -681,7 +669,7 @@ module sui::test_scenarioTests {
         transfer::public_transfer(obj, sender);
         ts::next_tx(&mut scenario, sender);
         assert!(ts::has_most_recent_for_address<Object>(sender), 0);
-        let obj = ts::take_from_sender<Object>(&mut scenario);
+        let obj = ts::take_from_sender<Object>(&scenario);
         assert!(object::id(&obj) == id, 0);
         assert!(!ts::has_most_recent_for_address<Object>(sender), 0);
         sui::dynamic_object_field::add(&mut parent, b"", obj);
@@ -702,7 +690,7 @@ module sui::test_scenarioTests {
         let id = object::id(&obj);
         transfer::public_share_object(obj);
         ts::next_tx(&mut scenario, sender);
-        let obj = ts::take_shared<Object>(&mut scenario);
+        let obj = ts::take_shared<Object>(&scenario);
         assert!(object::id(&obj) == id, 0);
         // wraps the object
         sui::dynamic_field::add(&mut parent, b"", obj);
@@ -721,7 +709,7 @@ module sui::test_scenarioTests {
         let id = object::id(&obj);
         transfer::public_freeze_object(obj);
         ts::next_tx(&mut scenario, sender);
-        let obj = ts::take_immutable<Object>(&mut scenario);
+        let obj = ts::take_immutable<Object>(&scenario);
         assert!(object::id(&obj) == id, 0);
         // wraps the object
         sui::dynamic_field::add(&mut parent, b"", obj);
@@ -730,7 +718,7 @@ module sui::test_scenarioTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 4)]
+    #[expected_failure(abort_code = df::ESharedObjectOperationNotSupported)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -740,7 +728,7 @@ module sui::test_scenarioTests {
         let id = object::id(&obj);
         transfer::public_share_object(obj);
         ts::next_tx(&mut scenario, sender);
-        let obj = ts::take_shared<Object>(&mut scenario);
+        let obj = ts::take_shared<Object>(&scenario);
         assert!(object::id(&obj) == id, 0);
         sui::dynamic_object_field::add(&mut parent, b"", obj);
         ts::next_tx(&mut scenario, sender);
@@ -758,7 +746,7 @@ module sui::test_scenarioTests {
         let id = object::id(&obj);
         transfer::public_freeze_object(obj);
         ts::next_tx(&mut scenario, sender);
-        let obj = ts::take_immutable<Object>(&mut scenario);
+        let obj = ts::take_immutable<Object>(&scenario);
         assert!(object::id(&obj) == id, 0);
         sui::dynamic_object_field::add(&mut parent, b"", obj);
         ts::next_tx(&mut scenario, sender);

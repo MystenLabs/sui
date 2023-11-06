@@ -116,12 +116,12 @@ module defi::some_amm {
 
     /// Entry function that uses a shared pool object.
     /// Can only be accessed from outside of the chain - can't be called from another module.
-    entry fun swap<T, S>(/* &mut Pool, Coin<T> ... */) { /* ... */ }
+    entry fun swap(/* &mut Pool, Coin<T> ... */) { /* ... */ }
 
     /// Function similar to the `swap` but can be called from other Move modules.
     /// Opens up tooling; potentially slows down the AMM if multiple shared objects
     /// used in the same tx! And for that developers have to pay.
-    public fun dev_swap<T, S>(p: SingleUse<DEVPASS>, /* &mut Pool, Coin<T> */): bool /* Coin<S> */ {
+    public fun dev_swap(p: SingleUse<DEVPASS>, /* &mut Pool, Coin<T> */): bool /* Coin<S> */ {
         dev_pass::confirm_use(DEVPASS {}, p);
         /* ... */
         true
@@ -160,8 +160,8 @@ module defi::smart_swapper {
         /* assuming a lot of arguments */
     ) {
 
-        let _a = some_amm::dev_swap<ETH, BTC>(dev_pass::use_pass(s) /*, Coin<ETH> */);
-        let _b = some_amm::dev_swap<BTC, KTS>(dev_pass::use_pass(s) /*, _a */);
+        let _a = some_amm::dev_swap(dev_pass::use_pass(s) /*, Coin<ETH> */);
+        let _b = some_amm::dev_swap(dev_pass::use_pass(s) /*, _a */);
 
         // do something with swapped values ?
         // transfer::public_transfer( ... )

@@ -105,7 +105,7 @@ pub struct Constant {
 //**************************************************************************************************
 
 // package visibility is removed after typing is done
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Visibility {
     Public(Loc),
     Friend(Loc),

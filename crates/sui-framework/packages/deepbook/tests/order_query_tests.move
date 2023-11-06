@@ -32,7 +32,7 @@ module deepbook::order_query_tests {
     fun test_order_query_pagination() {
         let scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), true);
         assert!(vector::length(order_query::orders(&page1)) == 100, 0);
         assert!(order_query::has_next_page(&page1), 0);
@@ -69,7 +69,7 @@ module deepbook::order_query_tests {
     fun test_order_query_pagination_decending() {
         let scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), false);
 
         assert!(vector::length(order_query::orders(&page1)) == 100, 0);
@@ -107,7 +107,7 @@ module deepbook::order_query_tests {
     fun test_order_query_start_order_id() {
         let scenario = prepare_scenario();
         add_orders(200, TIMESTAMP_INF, none(), &mut scenario);
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         // test start order id
         let page = iter_bids(&pool, none(), some(51), none(), none(), true);
         assert!(vector::length(order_query::orders(&page)) == 100, 0);
@@ -146,14 +146,14 @@ module deepbook::order_query_tests {
         let scenario = prepare_scenario();
         add_orders(20, TIMESTAMP_INF, none(), &mut scenario);
 
-        let clock = test_scenario::take_shared<Clock>(&mut scenario);
+        let clock = test_scenario::take_shared<Clock>(&scenario);
         let expired_timestamp = clock::timestamp_ms(&clock) + 10000;
         test_scenario::return_shared(clock);
         next_tx(&mut scenario, ALICE);
 
         add_orders(50, expired_timestamp, none(), &mut scenario);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
 
         // test get all order excluding expired orders
         let page = iter_bids(&pool, none(), none(), some(expired_timestamp + 1), none(), true);
@@ -175,7 +175,7 @@ module deepbook::order_query_tests {
         let scenario = prepare_scenario();
         add_orders(70, TIMESTAMP_INF, none(), &mut scenario);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
 
         // test get all order with id < 50
         let page = iter_bids(&pool, none(), none(), none(), some(50), true);
@@ -213,7 +213,7 @@ module deepbook::order_query_tests {
         add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
         add_orders(50, TIMESTAMP_INF, none(), &mut scenario);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page1 = iter_bids(&pool, none(), none(), none(), none(), true);
         assert!(vector::length(order_query::orders(&page1)) == 100, 0);
         assert!(order_query::has_next_page(&page1), 0);
@@ -266,7 +266,7 @@ module deepbook::order_query_tests {
         // insert a new order at tick level 10
         add_orders(1, TIMESTAMP_INF, some(10), &mut scenario);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let page = iter_bids(&pool, some(11 * FLOAT_SCALING), none(), none(), none(), true);
 
         // this page should start from order id 11 and end at order id 110, contains 100 orders
@@ -304,7 +304,7 @@ module deepbook::order_query_tests {
         mint_account_cap_transfer(BOB, test_scenario::ctx(&mut scenario));
         next_tx(&mut scenario, ALICE);
 
-        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut scenario);
+        let pool = test_scenario::take_shared<Pool<SUI, USD>>(&scenario);
         let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
         let account_cap_user = account_owner(&account_cap);
         let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);

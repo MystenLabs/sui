@@ -80,7 +80,7 @@ module sui::royalty_policy_tests {
         let payment = coin::mint_for_testing<SUI>(2000, ctx);
 
         royalty_policy::pay(&mut policy, &mut request, &mut payment, ctx);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         let remainder = coin::burn_for_testing(payment);
         let profits = test::wrapup(policy, cap, ctx);
@@ -113,7 +113,7 @@ module sui::royalty_policy_tests {
         let payment = coin::mint_for_testing<SUI>(999, ctx);
 
         royalty_policy::pay(&mut policy, &mut request, &mut payment, ctx);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         coin::burn_for_testing(payment);
         test::wrapup(policy, cap, ctx);

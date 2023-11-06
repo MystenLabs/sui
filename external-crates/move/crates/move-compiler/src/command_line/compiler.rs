@@ -246,6 +246,7 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn set_warning_filter(mut self, filter: Option<WarningFilters>) -> Self {
+        assert!(self.warning_filter.is_none());
         self.warning_filter = filter;
         self
     }

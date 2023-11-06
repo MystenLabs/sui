@@ -23,17 +23,13 @@ use move_compiler::{
     unit_test::{ExpectedFailure, ModuleTestPlan, TestCase, TestPlan},
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    effects::{ChangeSet, Op},
-    identifier::IdentStr,
-    value::serialize_values,
-    vm_status::StatusCode,
+    account_address::AccountAddress, effects::ChangeSet, identifier::IdentStr,
+    value::serialize_values, vm_status::StatusCode,
 };
 use move_model::{
     model::GlobalEnv, options::ModelBuilderOptions,
     run_model_builder_with_options_and_compilation_flags,
 };
-use move_resource_viewer::MoveValueAnnotator;
 use move_stackless_bytecode_interpreter::{
     concrete::{settings::InterpreterSettings, value::GlobalState},
     shared::bridge::{adapt_move_vm_change_set, adapt_move_vm_result},
@@ -55,7 +51,6 @@ use move_vm_runtime::native_extensions::NativeContextExtensions;
 
 /// Test state common to all tests
 pub struct SharedTestingConfig {
-    save_storage_state_on_failure: bool,
     report_stacktrace_on_abort: bool,
     execution_bound: u64,
     cost_table: CostTable,
@@ -93,41 +88,12 @@ fn setup_test_storage<'a>(
     Ok(storage)
 }
 
-/// Print the updates to storage represented by `cs` in the context of the starting storage state
-/// `storage`.
-fn print_resources_and_extensions(
-    cs: &ChangeSet,
-    extensions: NativeContextExtensions,
-    storage: &InMemoryStorage,
-) -> Result<String> {
-    use std::fmt::Write;
-    let mut buf = String::new();
-    let annotator = MoveValueAnnotator::new(storage);
-    for (account_addr, account_state) in cs.accounts() {
-        writeln!(&mut buf, "0x{}:", account_addr.short_str_lossless())?;
-
-        for (tag, resource_op) in account_state.resources() {
-            if let Op::New(resource) | Op::Modify(resource) = resource_op {
-                writeln!(
-                    &mut buf,
-                    "\t{}",
-                    format!("=> {}", annotator.view_resource(tag, resource)?).replace('\n', "\n\t")
-                )?;
-            }
-        }
-    }
-    extensions::print_change_sets(&mut buf, extensions);
-
-    Ok(buf)
-}
-
 impl TestRunner {
     pub fn new(
         execution_bound: u64,
         num_threads: usize,
         check_stackless_vm: bool,
         verbose: bool,
-        save_storage_state_on_failure: bool,
         report_stacktrace_on_abort: bool,
         tests: TestPlan,
         // TODO: maybe we should require the clients to always pass in a list of native functions so
@@ -152,7 +118,6 @@ impl TestRunner {
         });
         Ok(Self {
             testing_config: SharedTestingConfig {
-                save_storage_state_on_failure,
                 report_stacktrace_on_abort,
                 starting_storage_state,
                 execution_bound,
@@ -403,7 +368,7 @@ impl SharedTestingConfig {
         let mut stats = TestStatistics::new();
 
         for (function_name, test_info) in &test_plan.tests {
-            let (cs_result, ext_result, exec_result, test_run_info) =
+            let (cs_result, _ext_result, exec_result, test_run_info) =
                 self.execute_via_move_vm(test_plan, function_name, test_info);
 
             if self.record_writeset {
@@ -439,7 +404,6 @@ impl SharedTestingConfig {
                             ),
                             test_run_info,
                             None,
-                            None,
                         ),
                         test_plan,
                     );
@@ -452,7 +416,6 @@ impl SharedTestingConfig {
                             FailureReason::property(prop_failure),
                             test_run_info,
                             None,
-                            None,
                         ),
                         test_plan,
                     );
@@ -460,22 +423,6 @@ impl SharedTestingConfig {
                 }
             }
 
-            let save_session_state = || {
-                if self.save_storage_state_on_failure {
-                    cs_result.ok().and_then(|changeset| {
-                        ext_result.ok().and_then(|extensions| {
-                            print_resources_and_extensions(
-                                &changeset,
-                                extensions,
-                                &self.starting_storage_state,
-                            )
-                            .ok()
-                        })
-                    })
-                } else {
-                    None
-                }
-            };
             match exec_result {
                 Err(err) => {
                     let actual_err =
@@ -508,7 +455,6 @@ impl SharedTestingConfig {
                                     FailureReason::wrong_error(expected_err.clone(), actual_err),
                                     test_run_info,
                                     Some(err),
-                                    save_session_state(),
                                 ),
                                 test_plan,
                             )
@@ -523,7 +469,6 @@ impl SharedTestingConfig {
                                     ),
                                     test_run_info,
                                     Some(err),
-                                    save_session_state(),
                                 ),
                                 test_plan,
                             )
@@ -536,7 +481,6 @@ impl SharedTestingConfig {
                                     FailureReason::timeout(),
                                     test_run_info,
                                     Some(err),
-                                    save_session_state(),
                                 ),
                                 test_plan,
                             )
@@ -548,7 +492,6 @@ impl SharedTestingConfig {
                                     FailureReason::unexpected_error(actual_err),
                                     test_run_info,
                                     Some(err),
-                                    save_session_state(),
                                 ),
                                 test_plan,
                             )
@@ -560,12 +503,7 @@ impl SharedTestingConfig {
                     if test_info.expected_failure.is_some() {
                         output.fail(function_name);
                         stats.test_failure(
-                            TestFailure::new(
-                                FailureReason::no_error(),
-                                test_run_info,
-                                None,
-                                save_session_state(),
-                            ),
+                            TestFailure::new(FailureReason::no_error(), test_run_info, None),
                             test_plan,
                         )
                     } else {

@@ -2,7 +2,7 @@
 module a::m {
     struct S has drop { f: u64 }
 
-    public fun param(x: &mut S): &S {
+    public(friend) fun param(x: &mut S): &S {
         let r: &S;
         freeze(x);
         let _: &S = x;
@@ -13,7 +13,7 @@ module a::m {
         x
     }
 
-    public fun local(s: S) {
+    public(friend) fun local(s: S) {
         let x = &mut s;
         let r: &S;
         freeze(x);

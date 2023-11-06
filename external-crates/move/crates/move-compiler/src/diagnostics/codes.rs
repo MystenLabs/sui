@@ -299,6 +299,7 @@ codes!(
         Constant: { msg: "unused constant", severity: Warning },
         MutModifier: { msg: "unused 'mut' modifiers", severity: Warning },
         MutReference: { msg: "unused mutable reference '&mut'", severity: Warning },
+        MutParam: { msg: "unused mutable reference '&mut' parameter", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },
@@ -389,6 +390,11 @@ impl DiagnosticInfo {
             format!("{sev_prefix}{category:02}{code:03}")
         };
         (string_code, message)
+    }
+
+    pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
     }
 
     pub fn severity(&self) -> Severity {

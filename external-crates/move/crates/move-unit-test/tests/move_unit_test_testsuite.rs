@@ -12,47 +12,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// We don't support statistics tests as that includes times which are variable and will make these
-// tests flaky.
-const TEST_MODIFIER_STRS: &[&str] = &["storage"];
-
-pub fn modify(mut base_config: UnitTestingConfig, modifier_str: &str) -> Option<UnitTestingConfig> {
-    // Add future test modifiers here
-    match modifier_str {
-        "storage" => base_config.report_storage_on_error = true,
-        _ => return None,
-    };
-    Some(base_config)
-}
-
 fn run_test_with_modifiers(
     unit_test_config: UnitTestingConfig,
     path: &Path,
 ) -> anyhow::Result<Vec<((Vec<u8>, bool), PathBuf)>> {
     let mut results = Vec::new();
-
-    for modifier in TEST_MODIFIER_STRS.iter() {
-        let modified_exp_path = path.with_extension(format!("{}.{}", modifier, EXP_EXT));
-        if let (Some(test_config), true) = (
-            modify(unit_test_config.clone(), modifier),
-            modified_exp_path.exists(),
-        ) {
-            let buffer = Vec::new();
-            let test_plan = test_config.build_test_plan();
-            if test_plan.is_none() {
-                anyhow::bail!(
-                    "No test plan constructed for {:?} with modifier {}",
-                    path,
-                    modifier
-                );
-            }
-
-            results.push((
-                test_config.run_and_report_unit_tests(test_plan.unwrap(), None, None, buffer)?,
-                modified_exp_path,
-            ))
-        }
-    }
 
     // Now run with no modifiers
     let buffer = Vec::new();
