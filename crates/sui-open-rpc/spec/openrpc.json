@@ -8976,6 +8976,7 @@
           "inactivePoolsId",
           "inactivePoolsSize",
           "maxValidatorCount",
+          "minValidatorCount",
           "minValidatorJoiningStake",
           "pendingActiveValidatorsId",
           "pendingActiveValidatorsSize",
@@ -9073,6 +9074,14 @@
           },
           "maxValidatorCount": {
             "description": "Maximum number of active validators at any moment. We do not allow the number of validators in any epoch to go above this.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            ]
+          },
+          "minValidatorCount": {
+            "description": "Minimum number of active validators at any moment.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
