@@ -230,7 +230,6 @@ impl PackageStore for DbPackageStore {
 //     }
 
 //     /***** Test Helpers ***************************************************************************/
-
 //     type TypeOriginTable = Vec<StructKey>;
 
 //     fn a0_types() -> TypeOriginTable {

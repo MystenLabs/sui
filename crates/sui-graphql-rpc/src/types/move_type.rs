@@ -3,10 +3,10 @@
 
 use std::str::FromStr;
 
+use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
 use move_core_types::{language_storage::TypeTag, value};
 use serde::{Deserialize, Serialize};
-use crate::context_data::package_cache::PackageCache;
 use sui_package_resolver::Resolver;
 
 use crate::error::{code, graphql_error};

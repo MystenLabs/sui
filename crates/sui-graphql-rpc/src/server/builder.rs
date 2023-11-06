@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::context_data::package_cache::PackageCache;
 use crate::{
     config::ServerConfig,
     context_data::db_data_provider::PgManager,
@@ -27,7 +28,6 @@ use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
-use crate::context_data::package_cache::PackageCache;
 use tokio::sync::OnceCell;
 
 pub struct Server {
