@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base58;
+use json_to_table::json_to_table;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -126,16 +127,16 @@ impl SuiEvent {
 
 impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let output = format!(
+        let table_json = json_to_table::json_to_table(&self.parsed_json)
+            .into_table()
+            .to_string();
+        write!(f,
             " ┌──\n │ EventID: {}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {} \n │ EventType: {}:{}\n │ ParsedJSON: {}\n │ BCS: {:?}\n",
-            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_, self.parsed_json, self.bcs);
-        match self.timestamp_ms {
-            Some(ts) => {
-                writeln!(f, "{output} │ Timestamp: {}\n └──", ts)
-            }
-            None => {
-                writeln!(f, "{output} └──")
-            }
+            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_, table_json, self.bcs);
+        if let Some(ts) = self.timestamp_ms {
+            writeln!(f, " │ Timestamp: {}\n └──", ts)
+        } else {
+            writeln!(f, " └──")
         }
     }
 }
