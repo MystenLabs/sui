@@ -47,14 +47,9 @@ To confirm that Sui installed correctly, type `sui` and press Enter. You should 
 
 Follow the instructions in this topic to install the Rust crates (packages) required to interact with Sui networks, including the Sui CLI.
 
-The steps to install Sui include:
+To install Sui from source, you first need to install its [prerequisites](#prerequisites) for your operating system. After installing the supporting technologies, you can install [Sui binaries from source](#install-sui-binaries-from-source).
 
-1.  Install [prerequisites](#prerequisites) for your operating system.
-1.  Install [Sui binaries](#install-sui-binaries).
-1.  Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-1.  Request [SUI test tokens](#sui-tokens) to use on Sui Devnet or Sui Testnet networks.
-
-You can also download the [source code](#source-code) to have local access to files.
+You can also download the [source code](./sui-environment) to have local access to files.
 
 ## Prerequisites {#prerequisites}
 
@@ -104,7 +99,9 @@ The prerequisites needed for the Linux operating system include:
 - build-essential
 
 :::info
+
 The Linux instructions assume a distribution that uses the APT package manager. You might need to adjust the instructions to use other package managers.
+
 :::
 
 Install the prerequisites listed in this section. Use the following command to update `apt-get`:
@@ -308,6 +305,32 @@ Sui requires the following additional tools on computers running Windows.
 </TabItem>
 
 </Tabs>
+
+## Install Sui binaries from source {#install-sui-binaries-from-source}
+
+Run the following command to install Sui binaries from the `testnet` branch:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+```
+
+The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
+
+To update to the latest stable version of Rust:
+
+```shell
+rustup update stable
+```
+
+The command installs Sui components in the `~/.cargo/bin` folder.
+
+## Upgrade Sui binaries
+
+If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
+```
 
 ## Next steps {#next-steps}
 

@@ -35,7 +35,7 @@ use sui_json_rpc_types::{
     SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
+use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
@@ -405,9 +405,9 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
 
-        /// If `true`, enable linters
+        /// If `true`, disable linters
         #[clap(long, global = true)]
-        lint: bool,
+        no_lint: bool,
     },
 
     /// Split a coin object into multiple coins.
@@ -568,9 +568,9 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
 
-        /// If `true`, enable linters
+        /// If `true`, disable linters
         #[clap(long, global = true)]
-        lint: bool,
+        no_lint: bool,
     },
 
     /// Run the bytecode verifier on the package
@@ -723,7 +723,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                lint,
+                no_lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -736,7 +736,7 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
-                        lint,
+                        !no_lint,
                     )
                     .await?;
 
@@ -812,7 +812,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                lint,
+                no_lint,
             } => {
                 if build_config.test_mode {
                     return Err(SuiError::ModulePublishFailure {
@@ -839,7 +839,7 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
-                    lint,
+                    !no_lint,
                 )
                 .await?;
 
@@ -1794,14 +1794,51 @@ pub fn write_transaction_response(
 
     writeln!(writer, "{}", "----- Object changes ----".bold())?;
     if let Some(e) = &response.object_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        // Note that this will be refactored under Display for SuiTransactionBlockResponse
+        // as soon I implement all of the Display traits for all the types
+        let (mut created, mut deleted, mut mutated, mut published, mut transferred, mut wrapped) =
+            (vec![], vec![], vec![], vec![], vec![], vec![]);
+
+        for obj in e {
+            match obj {
+                ObjectChange::Created { .. } => created.push(obj),
+                ObjectChange::Deleted { .. } => deleted.push(obj),
+                ObjectChange::Mutated { .. } => mutated.push(obj),
+                ObjectChange::Published { .. } => published.push(obj),
+                ObjectChange::Transferred { .. } => transferred.push(obj),
+                ObjectChange::Wrapped { .. } => wrapped.push(obj),
+            };
+        }
+
+        write_obj_changes(created, "Created", &mut writer)?;
+        write_obj_changes(deleted, "Deleted", &mut writer)?;
+        write_obj_changes(mutated, "Mutated", &mut writer)?;
+        write_obj_changes(published, "Published", &mut writer)?;
+        write_obj_changes(transferred, "Transferred", &mut writer)?;
+        write_obj_changes(wrapped, "Wrapped", &mut writer)?;
     }
 
     writeln!(writer, "{}", "----- Balance changes ----".bold())?;
     if let Some(e) = &response.balance_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        for balance in e {
+            writeln!(writer, "{}", balance)?;
+        }
     }
     Ok(writer)
+}
+
+fn write_obj_changes<T: Display>(
+    values: Vec<T>,
+    output_string: &str,
+    writer: &mut String,
+) -> std::fmt::Result {
+    if !values.is_empty() {
+        writeln!(writer, "\n{} Objects: ", output_string)?;
+        for obj in values {
+            writeln!(writer, "{}", obj)?;
+        }
+    }
+    Ok(())
 }
 
 impl Debug for SuiClientCommandResult {

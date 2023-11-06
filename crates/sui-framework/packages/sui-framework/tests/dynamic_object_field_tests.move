@@ -100,7 +100,7 @@ module sui::dynamic_object_field_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
-        borrow<u64, Counter>(&mut id, 0);
+        borrow<u64, Counter>(&id, 0);
         abort 42
     }
 
@@ -111,7 +111,7 @@ module sui::dynamic_object_field_tests {
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         add(&mut id, 0, new(&mut scenario));
-        borrow<u64, Fake>(&mut id, 0);
+        borrow<u64, Fake>(&id, 0);
         abort 42
     }
 
@@ -193,7 +193,7 @@ module sui::dynamic_object_field_tests {
         let scenario = ts::begin(sender);
         let id = ts::new_object(&mut scenario);
         add(&mut id, 0, new(&mut scenario));
-        assert!(exists_<u64>(&mut id, 0), 0);
+        assert!(exists_<u64>(&id, 0), 0);
         ts::end(scenario);
         object::delete(id);
     }
@@ -206,13 +206,13 @@ module sui::dynamic_object_field_tests {
         let id1 = ts::new_object(&mut scenario);
         let id2 = ts::new_object(&mut scenario);
         add(&mut id1, 0, new(&mut scenario));
-        assert!(exists_<u64>(&mut id1, 0), 0);
-        assert!(!exists_<u64>(&mut id2, 0), 0);
+        assert!(exists_<u64>(&id1, 0), 0);
+        assert!(!exists_<u64>(&id2, 0), 0);
         bump(borrow_mut(&mut id1, 0));
         let c: Counter = remove(&mut id1, 0);
         add(&mut id2, 0, c);
-        assert!(!exists_<u64>(&mut id1, 0), 0);
-        assert!(exists_<u64>(&mut id2, 0), 0);
+        assert!(!exists_<u64>(&id1, 0), 0);
+        assert!(exists_<u64>(&id2, 0), 0);
         bump(borrow_mut(&mut id2, 0));
         assert!(count(borrow(&id2, 0)) == 2, 0);
         ts::end(scenario);

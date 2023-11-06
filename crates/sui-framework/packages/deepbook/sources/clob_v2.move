@@ -338,7 +338,7 @@ module deepbook::clob_v2 {
 
         let pool_uid = object::new(ctx);
         let pool_id = *object::uid_as_inner(&pool_uid);
-    
+
         event::emit(PoolCreated {
             pool_id,
             base_asset: base_type_name,
@@ -1901,7 +1901,7 @@ module deepbook::clob_v2 {
                 balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
                 test_scenario::ctx(scenario)
             );
-            // let pool = 
+            // let pool =
             transfer::share_object(WrappedPool {
                 id: object::new(test_scenario::ctx(scenario)),
                 pool
@@ -2264,7 +2264,7 @@ module deepbook::clob_v2 {
         };
         test_scenario::next_tx(&mut test, alice);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
@@ -2326,7 +2326,7 @@ module deepbook::clob_v2 {
         };
         test_scenario::next_tx(&mut test, alice);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
@@ -2409,7 +2409,7 @@ module deepbook::clob_v2 {
 
         test_scenario::next_tx(&mut test, bob);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
             let account_cap_user = account_owner(&account_cap);
@@ -2467,7 +2467,7 @@ module deepbook::clob_v2 {
         };
         test_scenario::next_tx(&mut test, alice);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
@@ -2550,7 +2550,7 @@ module deepbook::clob_v2 {
 
         test_scenario::next_tx(&mut test, bob);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
             let account_cap_user = account_owner(&account_cap);
@@ -2607,7 +2607,7 @@ module deepbook::clob_v2 {
         };
         test_scenario::next_tx(&mut test, alice);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
             let account_cap_user = account_owner(&account_cap);
@@ -2696,7 +2696,7 @@ module deepbook::clob_v2 {
 
         test_scenario::next_tx(&mut test, bob);
         {
-            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&mut test);
+            let pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
             let clock = test_scenario::take_shared<Clock>(&test);
             let account_cap = test_scenario::take_from_address<AccountCap>(&test, bob);
             let account_cap_user = account_owner(&account_cap);

@@ -100,6 +100,8 @@ fn check_package_builds(path: PathBuf) {
     config.config.dev_mode = true;
     config.run_bytecode_verifier = true;
     config.print_diags_to_stderr = true;
+    config.config.warnings_are_errors = true;
+    config.config.silence_warnings = false;
 
     config
         .build(path.clone())
@@ -113,6 +115,8 @@ fn check_move_unit_tests(path: PathBuf) {
     config.config.test_mode = true;
     config.run_bytecode_verifier = true;
     config.print_diags_to_stderr = true;
+    config.config.warnings_are_errors = true;
+    config.config.silence_warnings = false;
     let move_config = config.config.clone();
     let testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
 

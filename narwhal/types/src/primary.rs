@@ -5,7 +5,7 @@ use crate::{
     error::{DagError, DagResult},
     serde::NarwhalBitmap,
 };
-use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
+use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId};
 use crypto::{
     to_intent_message, AggregateSignature, AggregateSignatureBytes,
     NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, NetworkPublicKey, PublicKey,
@@ -55,6 +55,7 @@ impl Timestamp for TimestampMs {
         Duration::from_millis(diff)
     }
 }
+
 // Returns the current time expressed as UNIX
 // timestamp in milliseconds
 pub fn now() -> TimestampMs {
@@ -445,6 +446,45 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
     }
 }
 
+impl fmt::Debug for Header {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}: B{}({}, E{}, {}B)",
+            self.digest(),
+            self.round(),
+            self.author(),
+            self.epoch(),
+            self.payload()
+                .keys()
+                .map(|x| Digest::from(*x).size())
+                .sum::<usize>(),
+        )
+    }
+}
+
+impl fmt::Display for Header {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::V1(data) => {
+                write!(f, "B{}({})", data.round, data.author)
+            }
+            Self::V2(data) => {
+                write!(f, "B{}({})", data.round, data.author)
+            }
+        }
+    }
+}
+
+impl PartialEq for Header {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::V1(data) => data.digest() == other.digest(),
+            Self::V2(data) => data.digest() == other.digest(),
+        }
+    }
+}
+
 #[enum_dispatch]
 pub trait HeaderAPI {
     fn author(&self) -> AuthorityIdentifier;
@@ -452,7 +492,7 @@ pub trait HeaderAPI {
     fn epoch(&self) -> Epoch;
     fn created_at(&self) -> &TimestampMs;
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)>;
-    fn system_messages(&self) -> &Vec<SystemMessage>;
+    fn system_messages(&self) -> &[SystemMessage];
     fn parents(&self) -> &BTreeSet<CertificateDigest>;
 
     // Used for testing.
@@ -493,7 +533,7 @@ impl HeaderAPI for HeaderV1 {
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
         &self.payload
     }
-    fn system_messages(&self) -> &Vec<SystemMessage> {
+    fn system_messages(&self) -> &[SystemMessage] {
         static EMPTY_SYSTEM_MESSAGES: Lazy<Vec<SystemMessage>> =
             Lazy::new(|| Vec::with_capacity(0));
         &EMPTY_SYSTEM_MESSAGES
@@ -644,7 +684,7 @@ impl HeaderAPI for HeaderV2 {
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
         &self.payload
     }
-    fn system_messages(&self) -> &Vec<SystemMessage> {
+    fn system_messages(&self) -> &[SystemMessage] {
         &self.system_messages
     }
     fn parents(&self) -> &BTreeSet<CertificateDigest> {
@@ -805,6 +845,12 @@ impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     }
 }
 
+impl AsRef<[u8]> for HeaderDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 impl fmt::Debug for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
@@ -844,45 +890,6 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV2 {
         let mut hasher = crypto::DefaultHashFunction::new();
         hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
         HeaderDigest(hasher.finalize().into())
-    }
-}
-
-impl fmt::Debug for Header {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}: B{}({}, E{}, {}B)",
-            self.digest(),
-            self.round(),
-            self.author(),
-            self.epoch(),
-            self.payload()
-                .keys()
-                .map(|x| Digest::from(*x).size())
-                .sum::<usize>(),
-        )
-    }
-}
-
-impl fmt::Display for Header {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            Self::V1(data) => {
-                write!(f, "B{}({})", data.round, data.author)
-            }
-            Self::V2(data) => {
-                write!(f, "B{}({})", data.round, data.author)
-            }
-        }
-    }
-}
-
-impl PartialEq for Header {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Self::V1(data) => data.digest() == other.digest(),
-            Self::V2(data) => data.digest() == other.digest(),
-        }
     }
 }
 
@@ -1088,12 +1095,12 @@ pub enum Certificate {
 impl Certificate {
     pub fn genesis(protocol_config: &ProtocolConfig, committee: &Committee) -> Vec<Self> {
         if protocol_config.narwhal_certificate_v2() {
-            CertificateV2::genesis(committee)
+            CertificateV2::genesis(committee, protocol_config.narwhal_header_v2())
                 .into_iter()
                 .map(Self::V2)
                 .collect()
         } else {
-            CertificateV1::genesis(committee)
+            CertificateV1::genesis(committee, protocol_config.narwhal_header_v2())
                 .into_iter()
                 .map(Self::V1)
                 .collect()
@@ -1256,15 +1263,23 @@ impl CertificateAPI for CertificateV1 {
 }
 
 impl CertificateV1 {
-    pub fn genesis(committee: &Committee) -> Vec<Self> {
+    pub fn genesis(committee: &Committee, use_header_v2: bool) -> Vec<Self> {
         committee
             .authorities()
             .map(|authority| Self {
-                header: Header::V1(HeaderV1 {
-                    author: authority.id(),
-                    epoch: committee.epoch(),
-                    ..Default::default()
-                }),
+                header: if use_header_v2 {
+                    Header::V2(HeaderV2 {
+                        author: authority.id(),
+                        epoch: committee.epoch(),
+                        ..Default::default()
+                    })
+                } else {
+                    Header::V1(HeaderV1 {
+                        author: authority.id(),
+                        epoch: committee.epoch(),
+                        ..Default::default()
+                    })
+                },
                 ..Self::default()
             })
             .collect()
@@ -1393,7 +1408,8 @@ impl CertificateV1 {
         );
 
         // Genesis certificates are always valid.
-        if self.round() == 0 && Self::genesis(committee).contains(&self) {
+        let use_header_v2 = matches!(self.header, Header::V2(_));
+        if self.round() == 0 && Self::genesis(committee, use_header_v2).contains(&self) {
             return Ok(Certificate::V1(self));
         }
 
@@ -1513,15 +1529,23 @@ impl CertificateAPI for CertificateV2 {
 }
 
 impl CertificateV2 {
-    pub fn genesis(committee: &Committee) -> Vec<Self> {
+    pub fn genesis(committee: &Committee, use_header_v2: bool) -> Vec<Self> {
         committee
             .authorities()
             .map(|authority| Self {
-                header: Header::V1(HeaderV1 {
-                    author: authority.id(),
-                    epoch: committee.epoch(),
-                    ..Default::default()
-                }),
+                header: if use_header_v2 {
+                    Header::V2(HeaderV2 {
+                        author: authority.id(),
+                        epoch: committee.epoch(),
+                        ..Default::default()
+                    })
+                } else {
+                    Header::V1(HeaderV1 {
+                        author: authority.id(),
+                        epoch: committee.epoch(),
+                        ..Default::default()
+                    })
+                },
                 signature_verification_state: SignatureVerificationState::Genesis,
                 ..Self::default()
             })
@@ -1659,7 +1683,8 @@ impl CertificateV2 {
         );
 
         // Genesis certificates are always valid.
-        if self.round() == 0 && Self::genesis(committee).contains(&self) {
+        let use_header_v2 = matches!(self.header, Header::V2(_));
+        if self.round() == 0 && Self::genesis(committee, use_header_v2).contains(&self) {
             return Ok(Certificate::V2(self));
         }
 
@@ -2032,43 +2057,6 @@ pub struct BatchMessage {
     pub batch: Batch,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum BlockErrorKind {
-    BlockNotFound,
-    BatchTimeout,
-    BatchError,
-}
-
-pub type BlockResult<T> = Result<T, BlockError>;
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BlockError {
-    pub digest: CertificateDigest,
-    pub error: BlockErrorKind,
-}
-
-impl<T> From<BlockError> for BlockResult<T> {
-    fn from(error: BlockError) -> Self {
-        Err(error)
-    }
-}
-
-impl fmt::Display for BlockError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "block digest: {}, error type: {}",
-            self.digest, self.error
-        )
-    }
-}
-
-impl fmt::Display for BlockErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 /// Used by worker to inform primary it sealed a new batch.
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct WorkerOwnBatchMessage {
@@ -2082,12 +2070,6 @@ pub struct WorkerOwnBatchMessage {
 pub struct WorkerOthersBatchMessage {
     pub digest: BatchDigest,
     pub worker_id: WorkerId,
-}
-
-#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct WorkerInfoResponse {
-    /// Map of workers' id and their network addresses.
-    pub workers: BTreeMap<WorkerId, WorkerInfo>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

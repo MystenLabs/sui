@@ -16,12 +16,6 @@ module nfts::geniteam {
     /// Trying to add more than 1 farm to a Player
     const ETooManyFarms: u64 = 1;
 
-    /// Monster collection not owned by farm
-    const EMonsterCollectionNotOwnedByFarm: u64 = 2;
-
-    /// Inventory not owned by player
-    const EInventoryNotOwnedByPlayer: u64 = 3;
-
     /// Invalid cosmetic slot
     const EInvalidCosmeticsSlot: u64 = 4;
 

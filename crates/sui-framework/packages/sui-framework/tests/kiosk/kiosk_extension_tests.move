@@ -27,9 +27,6 @@ module sui::kiosk_marketplace_ext {
     /// A Bid on an item of type `T`.
     struct Bid<phantom T> has copy, store, drop {}
 
-    /// A Hot-Potato ensuring the item is placed or locked in the destination.
-    struct PlaceOrLock<phantom T> { id: ID }
-
     /// Add the `Marketplace` extension to the given `Kiosk`.
     ///
     /// Requests all permissions: `b011` - `place` and `lock` to perform collection bidding.

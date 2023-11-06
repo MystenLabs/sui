@@ -173,7 +173,7 @@ impl TryFrom<TypeTag> for MoveTypeSignature {
             T::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
 
             T::Struct(s) => Self::Struct {
-                package: format!("0x{}", s.address.to_canonical_string()),
+                package: s.address.to_canonical_string(/* with_prefix */ true),
                 module: s.module.to_string(),
                 type_: s.name.to_string(),
                 type_parameters: s

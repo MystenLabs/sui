@@ -220,7 +220,7 @@ fn try_to_json_value(value: value::MoveValue) -> Result<Value> {
         V::U256(n) => Value::String(n.to_string()),
 
         V::Bool(b) => Value::Boolean(b),
-        V::Address(a) => Value::String(format!("0x{}", a.to_canonical_string())),
+        V::Address(a) => Value::String(a.to_canonical_string(/* with_prefix */ true)),
 
         V::Vector(xs) => Value::List(
             xs.into_iter()
@@ -243,10 +243,9 @@ fn try_to_json_value(value: value::MoveValue) -> Result<Value> {
                 Value::String(extract_string(&type_, fields)?)
             } else if is_type(&type_, &SUI, MOD_OBJECT, TYP_UID) {
                 // 0x2::object::UID
-                Value::String(format!(
-                    "0x{}",
-                    extract_uid(&type_, fields)?.to_canonical_string()
-                ))
+                Value::String(
+                    extract_uid(&type_, fields)?.to_canonical_string(/* with_prefix */ true),
+                )
             } else {
                 // Arbitrary structs
                 Value::Object(

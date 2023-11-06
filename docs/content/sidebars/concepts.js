@@ -44,8 +44,6 @@ const concepts = [
 						items: [
 							'concepts/dynamic-fields/dynamic-object-fields',
 							'concepts/dynamic-fields/tables-bags',
-							'concepts/dynamic-fields/events',
-							'concepts/dynamic-fields/versioning',
 						],
 					},
 					{
@@ -60,6 +58,8 @@ const concepts = [
 							'concepts/dynamic-fields/transfers/transfer-to-object',
 						],
 					},
+					'concepts/events',
+					'concepts/versioning',
 				],
 			},
 			{
@@ -223,6 +223,7 @@ const concepts = [
 			'concepts/tokenomics/validators-staking',
 			'concepts/tokenomics/staking-unstaking',
 			'concepts/tokenomics/sui-token',
+			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/storage-fund',
 			'concepts/tokenomics/gas-pricing',
 			'concepts/tokenomics/gas-in-sui',

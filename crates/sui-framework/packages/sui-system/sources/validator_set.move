@@ -235,7 +235,7 @@ module sui_system::validator_set {
 
     /// Called by `sui_system` to add a new validator to `pending_active_validators`, which will be
     /// processed at the end of epoch.
-    public(friend) fun request_add_validator(self: &mut ValidatorSet, min_joining_stake_amount: u64, ctx: &mut TxContext) {
+    public(friend) fun request_add_validator(self: &mut ValidatorSet, min_joining_stake_amount: u64, ctx: &TxContext) {
         let validator_address = tx_context::sender(ctx);
         assert!(
             table::contains(&self.validator_candidates, validator_address),
@@ -269,7 +269,7 @@ module sui_system::validator_set {
     /// Only an active validator can request to be removed.
     public(friend) fun request_remove_validator(
         self: &mut ValidatorSet,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
@@ -310,7 +310,7 @@ module sui_system::validator_set {
     public(friend) fun request_withdraw_stake(
         self: &mut ValidatorSet,
         staked_sui: StakedSui,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) : Balance<SUI> {
         let staking_pool_id = pool_id(&staked_sui);
         let validator =
@@ -945,7 +945,7 @@ module sui_system::validator_set {
 
     /// Process all active validators' pending stake deposits and withdraws.
     fun process_pending_stakes_and_withdraws(
-        validators: &mut vector<Validator>, ctx: &mut TxContext
+        validators: &mut vector<Validator>, ctx: &TxContext
     ) {
         let length = vector::length(validators);
         let i = 0;
@@ -998,7 +998,7 @@ module sui_system::validator_set {
         let total_storage_fund_reward_adjustment = 0;
         let individual_storage_fund_reward_adjustments = vec_map::empty();
 
-        while (!vector::is_empty(&mut slashed_validator_indices)) {
+        while (!vector::is_empty(&slashed_validator_indices)) {
             let validator_index = vector::pop_back(&mut slashed_validator_indices);
 
             // Use the slashing rate to compute the amount of staking rewards slashed from this punished validator.

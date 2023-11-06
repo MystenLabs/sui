@@ -165,6 +165,7 @@ const guides = [
 			'guides/operator/validator-tasks',
 			'guides/operator/staking-rewards',
 			'guides/operator/node-tools',
+			'guides/operator/formal-snapshot',
 		],
 	},
 ];

@@ -31,9 +31,9 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
-    /// If `true`, enable linters
+    /// If `true`, disable linters
     #[clap(long, global = true)]
-    pub lint: bool,
+    pub no_lint: bool,
 }
 
 impl Test {
@@ -58,7 +58,7 @@ impl Test {
             with_unpublished_deps,
             dump_bytecode_as_base64,
             generate_struct_layouts,
-            self.lint,
+            !self.no_lint,
         )?;
         run_move_unit_tests(
             rerooted_path,
@@ -115,7 +115,6 @@ pub fn run_move_unit_tests(
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
-            ignore_compile_warnings: true,
             ..config
         },
         sui_move_natives::all_natives(/* silent */ false),

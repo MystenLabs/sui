@@ -7,17 +7,13 @@ use async_graphql::*;
 
 use sui_types::coin::Coin as NativeSuiCoin;
 
-#[derive(Clone, SimpleObject)]
-#[graphql(complex)]
+#[derive(Clone)]
 pub(crate) struct Coin {
-    pub id: ID,
-    #[graphql(skip)]
     pub move_obj: MoveObject,
-    #[graphql(skip)]
     pub balance: Option<BigInt>,
 }
 
-#[ComplexObject]
+#[Object]
 impl Coin {
     /// Balance of the coin object
     async fn balance(&self) -> Option<BigInt> {

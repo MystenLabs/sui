@@ -312,7 +312,7 @@ module hero::example {
     // === Payments ===
 
     /// The owner of the `Admin` object can extract payment from the `Game`.
-    fun take_payment(
+    public fun take_payment(
         admin: &Admin,
         game: &mut Game,
         ctx: &mut TxContext,

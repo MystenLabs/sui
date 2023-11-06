@@ -202,6 +202,7 @@ module sui::display_tests {
     use sui::package;
     use sui::display;
 
+    #[allow(unused_field)]
     /// An example object.
     /// Purely for visibility.
     struct Capy has key {

@@ -28,7 +28,9 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::{
+    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+};
 use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
@@ -261,17 +263,15 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
         };
 
         info!(
-            "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} epoch {}",
-            consensus_output.digest(),
-            round,
-            commit_sub_dag_index,
-            timestamp,
+            "Received consensus output {} at epoch {}",
+            consensus_output,
             self.epoch_store.epoch(),
         );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
+        let empty_bytes = vec![];
         transactions.push((
-            vec![],
+            empty_bytes.as_slice(),
             SequencedConsensusTransactionKind::System(prologue_transaction),
             consensus_output.leader_author_index(),
         ));
@@ -294,7 +294,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                 self.authenticator_state_update_transaction(round, new_jwks);
 
             transactions.push((
-                vec![],
+                empty_bytes.as_slice(),
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
                 consensus_output.leader_author_index(),
             ));
@@ -319,7 +319,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
         {
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
-            for (authority_index, authority_transactions) in consensus_output.into_transactions() {
+            for (authority_index, authority_transactions) in consensus_output.transactions() {
                 let num_certs = self
                     .last_consensus_stats
                     .stats
@@ -348,11 +348,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                             .set(num_txns as i64);
                     }
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((
-                        serialized_transaction.clone(),
-                        transaction,
-                        authority_index,
-                    ));
+                    transactions.push((serialized_transaction, transaction, authority_index));
                 }
             }
         }
@@ -375,7 +371,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                     transaction_index: seq as u64,
                 };
 
-                let index_with_stats = if self.update_index_and_hash(index, &serialized) {
+                let index_with_stats = if self.update_index_and_hash(index, serialized) {
                     self.last_consensus_stats.clone()
                 } else {
                     debug!(
@@ -469,6 +465,32 @@ impl AsyncTransactionScheduler {
     }
 }
 
+/// Consensus handler used by Mysticeti. Since Mysticeti repo is not yet integrated, we use a
+/// channel to receive the consensus output from Mysticeti.
+/// During initialization, the sender is passed into Mysticeti which can send consensus output
+/// to the channel.
+pub struct MysticetiConsensusHandler {
+    _handle: tokio::task::JoinHandle<()>,
+}
+
+impl MysticetiConsensusHandler {
+    pub fn new(
+        mut consensus_handler: ConsensusHandler<AuthorityStore, CheckpointService>,
+        mut receiver: tokio::sync::mpsc::Receiver<
+            mysticeti_core::consensus::linearizer::CommittedSubDag,
+        >,
+    ) -> Self {
+        let _handle = spawn_monitored_task!(async move {
+            while let Some(committed_subdag) = receiver.recv().await {
+                consensus_handler
+                    .handle_consensus_output_internal(committed_subdag)
+                    .await;
+            }
+        });
+        Self { _handle }
+    }
+}
+
 impl<T, C> ConsensusHandler<T, C> {
     fn consensus_commit_prologue_transaction(
         &self,
@@ -525,6 +547,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SequencedConsensusTransaction {
     pub certificate_author_index: AuthorityIndex,
     pub certificate_author: AuthorityName,
@@ -532,9 +555,60 @@ pub struct SequencedConsensusTransaction {
     pub transaction: SequencedConsensusTransactionKind,
 }
 
+#[derive(Debug, Clone)]
 pub enum SequencedConsensusTransactionKind {
     External(ConsensusTransaction),
     System(VerifiedExecutableTransaction),
+}
+
+impl Serialize for SequencedConsensusTransactionKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let serializable = SerializableSequencedConsensusTransactionKind::from(self);
+        serializable.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SequencedConsensusTransactionKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let serializable =
+            SerializableSequencedConsensusTransactionKind::deserialize(deserializer)?;
+        Ok(serializable.into())
+    }
+}
+
+// We can't serialize SequencedConsensusTransactionKind directly because it contains a
+// VerifiedExecutableTransaction, which is not serializable (by design). This wrapper allows us to
+// convert to a serializable format easily.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum SerializableSequencedConsensusTransactionKind {
+    External(ConsensusTransaction),
+    System(TrustedExecutableTransaction),
+}
+
+impl From<&SequencedConsensusTransactionKind> for SerializableSequencedConsensusTransactionKind {
+    fn from(kind: &SequencedConsensusTransactionKind) -> Self {
+        match kind {
+            SequencedConsensusTransactionKind::External(ext) => {
+                SerializableSequencedConsensusTransactionKind::External(ext.clone())
+            }
+            SequencedConsensusTransactionKind::System(txn) => {
+                SerializableSequencedConsensusTransactionKind::System(txn.clone().serializable())
+            }
+        }
+    }
+}
+
+impl From<SerializableSequencedConsensusTransactionKind> for SequencedConsensusTransactionKind {
+    fn from(kind: SerializableSequencedConsensusTransactionKind) -> Self {
+        match kind {
+            SerializableSequencedConsensusTransactionKind::External(ext) => {
+                SequencedConsensusTransactionKind::External(ext)
+            }
+            SerializableSequencedConsensusTransactionKind::System(txn) => {
+                SequencedConsensusTransactionKind::System(txn.into())
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Debug)]
@@ -623,6 +697,7 @@ impl SequencedConsensusTransaction {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifiedSequencedConsensusTransaction(pub SequencedConsensusTransaction);
 
 #[cfg(test)]
@@ -654,7 +729,7 @@ mod tests {
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
-        Batch, Certificate, CommittedSubDag, Header, HeaderV1Builder, ReputationScores,
+        Batch, Certificate, CommittedSubDag, Header, HeaderV2Builder, ReputationScores,
     };
     use prometheus::Registry;
     use shared_crypto::intent::Intent;
@@ -725,7 +800,7 @@ mod tests {
             batches.push(vec![batch.clone()]);
 
             // AND make batch as part of a commit
-            let header = HeaderV1Builder::default()
+            let header = HeaderV2Builder::default()
                 .author(AuthorityIdentifier(0))
                 .round(5)
                 .epoch(0)
@@ -737,7 +812,7 @@ mod tests {
             let certificate = Certificate::new_unsigned(
                 latest_protocol_config,
                 &committee,
-                Header::V1(header),
+                Header::V2(header),
                 vec![],
             )
             .unwrap();

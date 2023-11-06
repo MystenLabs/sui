@@ -248,11 +248,11 @@ mod tests {
     fn test_path_relative_to_unrelated() {
         let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let sui_adapter = repo_root.join("sui-execution/latest/sui-adapter");
-        let vm_runtime = repo_root.join("external-crates/move/move-vm/runtime");
+        let vm_runtime = repo_root.join("external-crates/move/crates/move-vm-runtime");
 
         assert_eq!(
             path_relative_to(sui_adapter, vm_runtime).unwrap(),
-            PathBuf::from("../../../external-crates/move/move-vm/runtime"),
+            PathBuf::from("../../../external-crates/move/crates/move-vm-runtime"),
         );
     }
 

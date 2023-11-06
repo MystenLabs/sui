@@ -22,10 +22,9 @@ pub(crate) struct CheckpointId {
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Checkpoint {
-    // id: ID1
     /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
     /// This hash can be used to verify checkpoint contents by checking signatures against the committee,
-    /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.    
+    /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
     pub digest: String,
     /// This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
     pub sequence_number: u64,
