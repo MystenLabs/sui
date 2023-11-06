@@ -24,8 +24,8 @@ The endpoint can also be queried using `curl` by passing the query to the call:
 ```shell
 curl -X POST https://graphql-beta.mainnet.sui.io \
      --header "Content-Type: application/json" \
-     --data '{ 
-       "query": "query { chainIdentifier }"
+     --data '{
+          "query": "query ($epochID: Int!) { epoch(id: $epochID) {referenceGasPrice} }", "variables": { "epochID": 123 } }
      }'
 ```
 
