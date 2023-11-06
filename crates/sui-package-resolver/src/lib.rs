@@ -32,6 +32,28 @@ pub trait PackageStore {
     async fn package(&self, id: AccountAddress) -> Result<Package>;
 }
 
+impl<T: PackageStore + ?Sized> PackageStore for &T {
+    #[must_use]
+    #[allow(clippy::type_complexity, clippy::type_repetition_in_bounds)]
+    fn package<'life0, 'async_trait>(
+        &'life0 self,
+        id: AccountAddress,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = Result<Package>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        (**self).package(id)
+    }
+}
+
+#[derive(Debug)]
 pub struct Resolver<T> {
     package_store: T,
 }
