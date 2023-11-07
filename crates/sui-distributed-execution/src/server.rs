@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::SinkExt;
+use futures::{stream::FuturesUnordered, SinkExt, StreamExt};
 use network::{MessageHandler, Receiver, ReliableSender, Writer};
 use std::error::Error;
 use std::fmt::Debug;
@@ -173,22 +173,35 @@ impl NetworkManager {
         let mut application_out = self.application_out;
         // check from messages from app and send them out
         tokio::spawn(async move {
-            while let Some(message) = application_out.recv().await {
-                let mut message = message;
-                message.src = self.my_id; // set source to self
-                let dst = message.dst;
-                if dst == self.my_id {
-                    self.application_in
-                        .send(message)
-                        .await
-                        .expect("send to self failed");
-                } else {
-                    // get address from id
-                    let address = self.addr_table.get(&dst).unwrap();
-                    let cancel_handler = sender
-                        .send(*address, Bytes::from(bincode::serialize(&message).unwrap()))
-                        .await;
-                    cancel_handler.await.unwrap();
+            let mut waiting = FuturesUnordered::new();
+
+            loop {
+                tokio::select! {
+                    Some(message) = application_out.recv() => {
+                        let mut message = message;
+                        message.src = self.my_id; // set source to self
+                        let dst = message.dst;
+                        if dst == self.my_id {
+                            self.application_in
+                                .send(message)
+                                .await
+                                .expect("send to self failed");
+                        } else {
+                            // get address from id
+                            let address = self.addr_table.get(&dst).unwrap();
+                            let cancel_handler = sender
+                                .send(*address, Bytes::from(bincode::serialize(&message).unwrap()))
+                                .await;
+                            waiting.push(cancel_handler);
+                        }
+                    },
+                    Some(_result) = waiting.next() => {
+                        // Ignore the result. We do not expect failures in this example.
+                    },
+                    else => {
+                        // The application has been dropped.
+                        break;
+                    }
                 }
             }
         });
