@@ -1,0 +1,84 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+ @tailwind base;
+ @tailwind components;
+ @tailwind utilities;
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #4ca2ff;
+  --ifm-color-primary-dark: #2b91ff;
+  --ifm-color-primary-darker: #1a88ff;
+  --ifm-color-primary-darkest: #006fe8;
+  --ifm-color-primary-light: #6db3ff;
+  --ifm-color-primary-lighter: #7ebcff;
+  --ifm-color-primary-lightest: #afd6ff;
+  --ifm-code-font-size: 95%;
+  --ifm-background-color-dark: #1b1b1d;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --sui-black: #090B1A;
+  --sui-blue: #6fbcf0;
+  --sui-blue-bright: #00f9fb;
+  --sui-blue-light: #e1f3ff;
+  --sui-blue-lighter: #B4C2D0;
+  --sui-blue-dark: 52 99 151;
+  --sui-blue-darker: #303846;
+  --sui-hero: #0284AD;
+  --sui-hero-dark: #007195;
+  --sui-sui-steel: #A0B6C3;
+  --sui-steel-dark: #758F9E;
+  --sui-steel-darker: #566873;
+  --sui-header-nav: #2A4362;
+  --sui-success: #2DD7A7;
+  --sui-success-dark: #008C65;
+  --sui-success-light: #D5F7EE;
+  --sui-issue: #FF794B;
+  --sui-issue-dark: #EB5A29;
+  --sui-issue-light: #FFECE5;
+  --sui-warning: #F2BD24;
+  --sui-warning-dark: #8D6E15;
+  --sui-warning-light: #FFF8E2;
+  --sui-code: #845ED6;
+  --sui-gray-35: #FEFEFE;
+  --sui-gray-40: #F7F8F8;
+  --sui-gray-45: #EBECED;
+  --sui-gray-50: #E9EAEB;
+  --sui-gray-55: #D7D8DA;
+  --sui-gray-60: #C3C5C8;
+  --sui-gray-65: #9C9FA4;
+  --sui-gray-70: #898D93;
+  --sui-gray-75: #767A81;
+  --sui-gray-80: #636870;
+  --sui-gray-85: #5A6573;
+  --sui-gray-90: #383F47;
+  --sui-gray-95: #2A3645;
+  --sui-gray-100: #182435;
+  --sui-link-color: #1068a6;
+  --sui-link-color-dark: #057fd1;
+  --sui-link-color-light: #1f98e9;	
+  --sui-ghost-white: #f8f8ff;
+  --sui-ghost-dark: #282a36;
+  --sui-white: 255 255 255;
+  --sui-card-dark: 13 20 37;
+  --sui-card-darker: 0 23 49;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #4ca2ff;
+  --ifm-color-primary-dark: #2b91ff;
+  --ifm-color-primary-darker: #1a88ff;
+  --ifm-color-primary-darkest: #006fe8;
+  --ifm-color-primary-light: #6db3ff;
+  --ifm-color-primary-lighter: #7ebcff;
+  --ifm-color-primary-lightest: #afd6ff;
+  --ifm-background-color: #011829;
+}
+
+.active-scroll-spy {
+  @apply bg-sui-ghost-white dark:bg-sui-ghost-dark rounded-lg;
+}
+

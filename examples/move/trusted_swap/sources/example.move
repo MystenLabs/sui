@@ -86,7 +86,7 @@ module trusted_swap::example {
     }
 
     // === Tests ===
-    use sui::test_scenario as ts;
+    #[test_only] use sui::test_scenario as ts;
 
     #[test]
     fun successful_swap() {
@@ -115,8 +115,8 @@ module trusted_swap::example {
 
         {
             ts::next_tx(&mut ts, custodian);
-            let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
-            let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let s1 = ts::take_from_sender<SwapRequest>(&ts);
+            let s2 = ts::take_from_sender<SwapRequest>(&ts);
 
             let bal = execute_swap(s1, s2);
             let fee = coin::from_balance(bal, ts::ctx(&mut ts));
@@ -176,8 +176,8 @@ module trusted_swap::example {
 
         {
             ts::next_tx(&mut ts, custodian);
-            let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
-            let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let s1 = ts::take_from_sender<SwapRequest>(&ts);
+            let s2 = ts::take_from_sender<SwapRequest>(&ts);
             let _fee = execute_swap(s1, s2);
         };
 
@@ -208,8 +208,8 @@ module trusted_swap::example {
 
         {
             ts::next_tx(&mut ts, custodian);
-            let s1 = ts::take_from_sender<SwapRequest>(&mut ts);
-            let s2 = ts::take_from_sender<SwapRequest>(&mut ts);
+            let s1 = ts::take_from_sender<SwapRequest>(&ts);
+            let s2 = ts::take_from_sender<SwapRequest>(&ts);
             let _fee = execute_swap(s1, s2);
         };
 

@@ -1,0 +1,67 @@
+Running Move unit tests
+[ FAIL    ] 0x2::A::simple_number_min_range_failure
+[ FAIL    ] 0x2::A::simple_number_range_failure
+[ FAIL    ] 0x2::A::vector_choose_min_unsatisfied_predicate
+[ PASS    ] 0x2::A::vector_choose_success
+[ FAIL    ] 0x2::A::vector_choose_unsatisfied_predicate
+
+Test failures:
+
+Failures in 0x2::A:
+
+┌── simple_number_min_range_failure ──────
+│ error: failed to evaluate expression: enumeration of a non-address type domain is not supported
+│    ┌─ tests/concrete_check/choice.move:56:42
+│    │
+│ 56 │         ensures result <= (choose min x: u64 where x >= 4);
+│    │                                          ^^^
+│
+│ error: failed to evaluate expression: unexpected error code
+│    ┌─ tests/concrete_check/choice.move:56:17
+│    │
+│ 56 │         ensures result <= (choose min x: u64 where x >= 4);
+│    │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+│
+│
+└──────────────────
+
+
+┌── simple_number_range_failure ──────
+│ error: failed to evaluate expression: enumeration of a non-address type domain is not supported
+│    ┌─ tests/concrete_check/choice.move:49:38
+│    │
+│ 49 │         ensures result <= (choose x: u64 where x >= 4);
+│    │                                      ^^^
+│
+│ error: failed to evaluate expression: unexpected error code
+│    ┌─ tests/concrete_check/choice.move:49:17
+│    │
+│ 49 │         ensures result <= (choose x: u64 where x >= 4);
+│    │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+│
+│
+└──────────────────
+
+
+┌── vector_choose_min_unsatisfied_predicate ──────
+│ error: failed to evaluate expression: choose min fails to satisfy a predicate
+│    ┌─ tests/concrete_check/choice.move:42:68
+│    │
+│ 42 │         let post choice_min = choose min i in 0..len(result) where result[i] == 3;
+│    │                                                                    ^^^^^^^^^^^^^^
+│
+│
+└──────────────────
+
+
+┌── vector_choose_unsatisfied_predicate ──────
+│ error: failed to evaluate expression: choose fails to satisfy a predicate
+│    ┌─ tests/concrete_check/choice.move:29:60
+│    │
+│ 29 │         let post choice = choose i in 0..len(result) where result[i] == 3;
+│    │                                                            ^^^^^^^^^^^^^^
+│
+│
+└──────────────────
+
+Test result: FAILED. Total tests: 5; passed: 1; failed: 4

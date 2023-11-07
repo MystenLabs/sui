@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+num_cpus.workspace = true
 bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
 colored.workspace = true
@@ -40,6 +41,8 @@ narwhal-types.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-network.workspace = true
+sui-snapshot.workspace = true
+sui-protocol-config.workspace = true
 sui-replay.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true

@@ -312,7 +312,7 @@ module hero::example {
     // === Payments ===
 
     /// The owner of the `Admin` object can extract payment from the `Game`.
-    fun take_payment(
+    public fun take_payment(
         admin: &Admin,
         game: &mut Game,
         ctx: &mut TxContext,
@@ -322,7 +322,7 @@ module hero::example {
     }
 
     // === Tests ===
-    use sui::test_scenario as ts;
+    #[test_only] use sui::test_scenario as ts;
 
     #[test]
     fun slay_boar_test() {

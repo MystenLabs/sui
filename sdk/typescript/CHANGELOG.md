@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 0.45.1
+
+### Patch Changes
+
+- 30b47b758: Fix formatting when parsing addresses with bcs.Address
+
+## 0.45.0
+
+### Minor Changes
+
+- b9afb5567: adds "transfer to object" (receivingRef) support
+
 ## 0.44.0
 
 ### Minor Changes

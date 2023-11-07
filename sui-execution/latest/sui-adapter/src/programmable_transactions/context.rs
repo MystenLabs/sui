@@ -5,6 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use std::collections::{BTreeSet, HashSet};
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -46,6 +47,7 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
+    use sui_types::storage::PackageObjectArc;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -138,6 +140,7 @@ mod checked {
                 .into_iter()
                 .map(|call_arg| {
                     load_call_arg(
+                        protocol_config,
                         vm,
                         state_view,
                         &mut linkage_view,
@@ -149,6 +152,7 @@ mod checked {
                 .collect::<Result<_, ExecutionError>>()?;
             let gas = if let Some(gas_coin) = gas_charger.gas_coin() {
                 let mut gas = load_object(
+                    protocol_config,
                     vm,
                     state_view,
                     &mut linkage_view,
@@ -268,7 +272,7 @@ mod checked {
             let package = package_for_linkage(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(&package)
+            self.linkage_view.set_linkage(package.move_package())
         }
 
         /// Load a type using the context's current session.
@@ -345,6 +349,7 @@ mod checked {
             command_kind: CommandKind<'_>,
             arg: Argument,
         ) -> Result<V, CommandArgumentError> {
+            let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
             let is_borrowed = self.arg_is_borrowed(&arg);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
@@ -366,16 +371,42 @@ mod checked {
             {
                 return Err(CommandArgumentError::InvalidGasCoinUsage);
             }
-            // Immutable objects and shared objects cannot be taken by value
+            // Immutable objects cannot be taken by value
             if matches!(
                 input_metadata_opt,
                 Some(InputObjectMetadata::InputObject {
-                    owner: Owner::Immutable | Owner::Shared { .. },
+                    owner: Owner::Immutable,
                     ..
                 })
             ) {
                 return Err(CommandArgumentError::InvalidObjectByValue);
             }
+            if (
+                // this check can be removed after shared_object_deletion feature flag is removed
+                matches!(
+                    input_metadata_opt,
+                    Some(InputObjectMetadata::InputObject {
+                        owner: Owner::Shared { .. },
+                        ..
+                    })
+                ) && !shared_obj_deletion_enabled
+            ) {
+                return Err(CommandArgumentError::InvalidObjectByValue);
+            }
+
+            // ensure we don't transfer shared objects to new owners
+            if matches!(
+                input_metadata_opt,
+                Some(InputObjectMetadata::InputObject {
+                    owner: Owner::Shared { .. },
+                    ..
+                })
+            ) && matches!(command_kind, CommandKind::TransferObjects)
+                && shared_obj_deletion_enabled
+            {
+                return Err(CommandArgumentError::SharedObjectOperationNotAllowed);
+            }
+
             let val = if is_copyable {
                 val_opt.as_ref().unwrap().clone()
             } else {
@@ -585,6 +616,7 @@ mod checked {
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
+            let mut by_value_shared_objects = BTreeSet::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -609,13 +641,8 @@ mod checked {
                 );
                 if let Some(Value::Object(object_value)) = value {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
-                } else {
-                    // The object has been taken by value.
-                    if owner.is_shared() {
-                        // TODO: This would be a case of wrapping shared object, once we support
-                        // shared object deletion. We should report error below.
-                        unreachable!("Passing shared object by value should not be allowed yet");
-                    }
+                } else if owner.is_shared() {
+                    by_value_shared_objects.insert(id);
                 }
             }
             // check for unused values
@@ -680,6 +707,8 @@ mod checked {
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove();
+            let external_transfers = additional_writes.keys().copied().collect::<HashSet<_>>();
+
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
@@ -691,6 +720,18 @@ mod checked {
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
+
+            for id in by_value_shared_objects {
+                if !writes.contains_key(&id)
+                    && !deleted_object_ids.contains_key(&id)
+                    && !external_transfers.contains(&id)
+                {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectWrapped,
+                        Some(format!("Wrapping shared object {} not allowed", id).into()),
+                    ));
+                }
+            }
 
             loaded_runtime_objects.extend(loaded_child_objects);
 
@@ -917,6 +958,7 @@ mod checked {
             contents: &[u8],
         ) -> Result<ObjectValue, ExecutionError> {
             make_object_value(
+                self.protocol_config,
                 self.vm,
                 &mut self.linkage_view,
                 &self.new_packages,
@@ -958,11 +1000,11 @@ mod checked {
     fn package_for_linkage(
         linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<MovePackage> {
+    ) -> VMResult<PackageObjectArc> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
-        match linkage_view.get_package(&package_id) {
+        match linkage_view.get_package_object(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
@@ -998,11 +1040,13 @@ mod checked {
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view.set_linkage(&package).map_err(|e| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(e.to_string())
-                .finish(Location::Undefined)
-        })?;
+        let original_address = linkage_view
+            .set_linkage(package.move_package())
+            .map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(e.to_string())
+                    .finish(Location::Undefined)
+            })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
@@ -1065,6 +1109,7 @@ mod checked {
     }
 
     pub(crate) fn make_object_value(
+        protocol_config: &ProtocolConfig,
         vm: &MoveVM,
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
@@ -1085,6 +1130,15 @@ mod checked {
         let tag: StructTag = type_.into();
         let type_ = load_type_from_struct(vm, linkage_view, new_packages, &tag)
             .map_err(|e| crate::error::convert_vm_error(e, vm, linkage_view))?;
+        let has_public_transfer = if protocol_config.recompute_has_public_transfer_in_execution() {
+            let abilities = vm
+                .get_runtime()
+                .get_type_abilities(&type_)
+                .map_err(|e| crate::error::convert_vm_error(e, vm, linkage_view))?;
+            abilities.has_store()
+        } else {
+            has_public_transfer
+        };
         Ok(ObjectValue {
             type_,
             has_public_transfer,
@@ -1094,6 +1148,7 @@ mod checked {
     }
 
     pub(crate) fn value_from_object(
+        protocol_config: &ProtocolConfig,
         vm: &MoveVM,
         linkage_view: &mut LinkageView,
         new_packages: &[MovePackage],
@@ -1109,6 +1164,7 @@ mod checked {
 
         let used_in_non_entry_move_call = false;
         make_object_value(
+            protocol_config,
             vm,
             linkage_view,
             new_packages,
@@ -1121,6 +1177,7 @@ mod checked {
 
     /// Load an input object from the state_view
     fn load_object(
+        protocol_config: &ProtocolConfig,
         vm: &MoveVM,
         state_view: &dyn ExecutionState,
         linkage_view: &mut LinkageView,
@@ -1155,7 +1212,7 @@ mod checked {
             owner,
             version,
         };
-        let obj_value = value_from_object(vm, linkage_view, new_packages, obj)?;
+        let obj_value = value_from_object(protocol_config, vm, linkage_view, new_packages, obj)?;
         let contained_uids = {
             let fully_annotated_layout = vm
                 .get_runtime()
@@ -1183,6 +1240,7 @@ mod checked {
 
     /// Load an a CallArg, either an object or a raw set of BCS bytes
     fn load_call_arg(
+        protocol_config: &ProtocolConfig,
         vm: &MoveVM,
         state_view: &dyn ExecutionState,
         linkage_view: &mut LinkageView,
@@ -1193,6 +1251,7 @@ mod checked {
         Ok(match call_arg {
             CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
             CallArg::Object(obj_arg) => load_object_arg(
+                protocol_config,
                 vm,
                 state_view,
                 linkage_view,
@@ -1205,6 +1264,7 @@ mod checked {
 
     /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
     fn load_object_arg(
+        protocol_config: &ProtocolConfig,
         vm: &MoveVM,
         state_view: &dyn ExecutionState,
         linkage_view: &mut LinkageView,
@@ -1214,6 +1274,7 @@ mod checked {
     ) -> Result<InputValue, ExecutionError> {
         match obj_arg {
             ObjectArg::ImmOrOwnedObject((id, _, _)) => load_object(
+                protocol_config,
                 vm,
                 state_view,
                 linkage_view,
@@ -1223,6 +1284,7 @@ mod checked {
                 id,
             ),
             ObjectArg::SharedObject { id, mutable, .. } => load_object(
+                protocol_config,
                 vm,
                 state_view,
                 linkage_view,

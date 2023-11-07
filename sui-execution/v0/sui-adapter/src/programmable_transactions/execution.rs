@@ -34,6 +34,7 @@ mod checked {
     use serde::{de::DeserializeSeed, Deserialize};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::storage::{get_package_objects, PackageObjectArc};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -50,7 +51,6 @@ mod checked {
             normalize_deserialized_modules, MovePackage, TypeOrigin, UpgradeCap, UpgradePolicy,
             UpgradeReceipt, UpgradeTicket,
         },
-        storage::get_packages,
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         Identifier, SUI_FRAMEWORK_ADDRESS,
     };
@@ -483,7 +483,8 @@ mod checked {
         // affects the order in which error cases are checked.
         let package_obj = if context.protocol_config.package_upgrades_supported() {
             let dependencies = fetch_packages(context, &dep_ids)?;
-            let package_obj = context.new_package(&modules, &dependencies)?;
+            let package_obj =
+                context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
             let Some(package) = package_obj.data.try_as_package() else {
                 invariant_violation!("Newly created package object is not a package");
@@ -501,7 +502,8 @@ mod checked {
             // required to maintain backwards compatibility.
             publish_and_verify_modules(context, runtime_id, &modules)?;
             let dependencies = fetch_packages(context, &dep_ids)?;
-            let package = context.new_package(&modules, &dependencies)?;
+            let package =
+                context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
             init_modules::<Mode>(context, argument_updates, &modules)?;
             package
         };
@@ -597,15 +599,19 @@ mod checked {
         let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
         let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
-        let runtime_id = current_package.original_package_id();
+        let runtime_id = current_package.move_package().original_package_id();
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         let storage_id = context.tx_context.fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
-        let package_obj =
-            context.upgrade_package(storage_id, &current_package, &modules, &dependencies)?;
+        let package_obj = context.upgrade_package(
+            storage_id,
+            current_package.move_package(),
+            &modules,
+            dependencies.iter().map(|p| p.move_package()),
+        )?;
 
         let Some(package) = package_obj.data.try_as_package() else {
             invariant_violation!("Newly created package object is not a package");
@@ -648,7 +654,12 @@ mod checked {
         context.reset_linkage();
         res?;
 
-        check_compatibility(context, &current_package, &modules, upgrade_ticket.policy)?;
+        check_compatibility(
+            context,
+            current_package.move_package(),
+            &modules,
+            upgrade_ticket.policy,
+        )?;
 
         context.write_package(package_obj)?;
         Ok(vec![Value::Raw(
@@ -743,7 +754,7 @@ mod checked {
     fn fetch_package(
         context: &ExecutionContext<'_, '_, '_>,
         package_id: &ObjectID,
-    ) -> Result<MovePackage, ExecutionError> {
+    ) -> Result<PackageObjectArc, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
@@ -760,9 +771,9 @@ mod checked {
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
         context: &'ctx ExecutionContext<'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-    ) -> Result<Vec<MovePackage>, ExecutionError> {
+    ) -> Result<Vec<PackageObjectArc>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-        match get_packages(&context.state_view, package_ids) {
+        match get_package_objects(&context.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 e,

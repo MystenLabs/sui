@@ -1,2 +1,0 @@
-sandbox publish
-sandbox run scripts/missing_resource.move

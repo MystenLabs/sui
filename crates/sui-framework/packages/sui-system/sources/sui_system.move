@@ -676,7 +676,7 @@ module sui_system::sui_system {
     public fun request_add_validator_for_testing(
         wrapper: &mut SuiSystemState,
         min_joining_stake_for_testing: u64,
-        ctx: &mut TxContext,
+        ctx: &TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_add_validator_for_testing(self, min_joining_stake_for_testing, ctx)

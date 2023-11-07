@@ -7,7 +7,9 @@ use crate::models_v2::address_metrics::{StoredActiveAddress, StoredAddress, Stor
 use crate::models_v2::checkpoints::StoredCheckpoint;
 use crate::models_v2::move_call_metrics::{StoredMoveCall, StoredMoveCallMetrics};
 use crate::models_v2::network_metrics::StoredNetworkMetrics;
-use crate::models_v2::transactions::StoredTransaction;
+use crate::models_v2::transactions::{
+    StoredTransactionCheckpoint, StoredTransactionSuccessCommandCount, StoredTransactionTimestamp,
+};
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
 use crate::models_v2::tx_indices::{StoredTxCalls, StoredTxRecipients, StoredTxSenders};
 use crate::types_v2::IndexerResult;
@@ -20,11 +22,21 @@ pub trait IndexerAnalyticalStore {
         start_checkpoint: i64,
         end_checkpoint: i64,
     ) -> IndexerResult<Vec<StoredCheckpoint>>;
-    async fn get_transactions_in_checkpoint_range(
+    async fn get_tx_timestamps_in_checkpoint_range(
         &self,
         start_checkpoint: i64,
         end_checkpoint: i64,
-    ) -> IndexerResult<Vec<StoredTransaction>>;
+    ) -> IndexerResult<Vec<StoredTransactionTimestamp>>;
+    async fn get_tx_checkpoints_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionCheckpoint>>;
+    async fn get_tx_success_cmd_counts_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionSuccessCommandCount>>;
     async fn get_estimated_count(&self, table: &str) -> IndexerResult<i64>;
 
     // for network metrics including TPS and counts of objects etc.

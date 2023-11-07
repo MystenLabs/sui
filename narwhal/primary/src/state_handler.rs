@@ -195,7 +195,9 @@ impl RandomnessState {
         );
         let _ = self
             .tx_system_messages
-            .send(SystemMessage::DkgMessage(msg))
+            .send(SystemMessage::DkgMessage(
+                bcs::to_bytes(&msg).expect("message serialization should not fail"),
+            ))
             .await;
     }
 
@@ -241,7 +243,10 @@ impl RandomnessState {
                     self.used_messages = Some(used_msgs);
                     let _ = self
                         .tx_system_messages
-                        .send(SystemMessage::DkgConfirmation(conf))
+                        .send(SystemMessage::DkgConfirmation(
+                            bcs::to_bytes(&conf)
+                                .expect("confirmation serialization should not fail"),
+                        ))
                         .await;
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
@@ -530,9 +535,22 @@ impl StateHandler {
             for certificate in certificates {
                 let header = certificate.header();
                 for message in header.system_messages() {
+                    type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
                     match message {
-                        SystemMessage::DkgMessage(msg) => randomness_state.add_message(msg.clone()),
-                        SystemMessage::DkgConfirmation(conf) => {
+                        SystemMessage::DkgMessage(bytes) => {
+                            let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> = bcs::from_bytes(
+                                bytes,
+                            )
+                            .expect(
+                                "DKG message deserialization from certified header should not fail",
+                            );
+                            randomness_state.add_message(msg.clone());
+                        }
+                        SystemMessage::DkgConfirmation(bytes) => {
+                            let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> =
+                                bcs::from_bytes(bytes).expect(
+                                    "DKG confirmation deserialization from certified header should not fail",
+                                );
                             randomness_state.add_confirmation(conf.clone())
                         }
                         SystemMessage::RandomnessSignature(round, _sig) => {

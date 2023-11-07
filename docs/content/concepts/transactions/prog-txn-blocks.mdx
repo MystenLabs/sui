@@ -1,0 +1,34 @@
+---
+title: Programmable Transaction Blocks
+description: Programmable transaction blocks are a group of commands that complete a transaction on Sui.
+---
+
+In basic terms, a blockchain is a block of transactions chained together in a shared digital ledger. In traditional blockchains, a transaction captures inputs and outputs that define the flow of objects (for instance, tokens) on the chain. Similar to a physical ledger, these transactions add a row that credits (adds to) one account for a specific amount and debits (removes from) another account for a specific amount.
+
+## Transactions on Sui
+
+In Sui, a transaction is more than a basic record of the flow of assets. Transactions in Sui are composed of a number of commands that execute on inputs to define the result of the transaction. In essence, transactions on Sui are programmable, therefore they are termed "programmable transaction blocks" (PTB for short) to reference their additional capabilities over traditional blockchain transactions. A programmable transaction block on Sui can perform up to 1,024 unique operations in a single execution, whereas transactions on traditional blockchains would require 1,024 individual executions to accomplish the same result.
+
+:::info
+
+Unless otherwise noted in the documentation, "transaction" is synonymous with "programmable transaction block" when referring to transactions on the Sui network.
+
+:::
+
+In addition to the efficiency gains of blocking commands together in a single transaction, the structure also promotes cheaper gas fees. The cost of facilitating individual transactions is always more than the cost of those same transactions blocked together in a PTB. The difference is not unlike the petrol you save by making a single trip to the supermarket versus driving back and forth for each bag of groceries you purchase.
+
+## PTB inputs
+
+Inputs are values that you use as arguments to the commands in the PTB. Inputs can either be an object reference (either to an [owned object](../object-ownership/address-owned.mdx), an [immutable object](../object-ownership/immutable.mdx), or a [shared object](../object-ownership/shared.mdx)), or an encoded value (for example, an encoded string used as an argument to a Move call). 
+
+## PTB commands
+
+There are multiple types of commands that you can use in a PTB, starting with implementations of common asset manipulation operations such as coin merging or splitting, and ending with the ability to call any on-chain Move function. You can chain typed outputs that your PTB commands receive and use them as typed inputs in subsequent commands in your PTB. With the ability to chain commands, you can develop a programmable transaction that performs a variety of operations on myriad object types in a single execution.
+
+For example, you might develop a PTB in which the first command extracts a `Player` object from a smart contract wallet, then the next command uses that `Player` to make a move in a game. Based on the outcome of that move, the next command might send a `Badge` object to a multi-game `TrophyCase` object. All of these events happen in a single PTB execution on the Sui network.
+
+The commands in a PTB allow the smart contracts you develop to operate independent of logic they interact with in other smart contracts. For instance, in the previous example the game does not have to be aware that the `Player` is in a multisig wallet or that the `Badge` is in a `TrophyCase`.
+
+All chained commands in a PTB must successfully complete for the entire PTB to successfully execute. If one of the commands fails, the entire transaction fails.
+
+For information on how to build PTBs, see [Building Programmable Transaction Blocks](/guides/developer/sui-101/building-ptb.mdx). 

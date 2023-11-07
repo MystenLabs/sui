@@ -9,7 +9,6 @@ use crate::context_data::db_data_provider::PgManager;
 use super::{
     balance::Balance,
     coin::Coin,
-    name_service::NameService,
     object::{Object, ObjectFilter},
     stake::Stake,
     sui_address::SuiAddress,
@@ -29,9 +28,6 @@ pub(crate) enum AddressTransactionBlockRelationship {
     Paid, // Transactions that were paid for by this address
 }
 
-#[allow(clippy::diverging_sub_expression)]
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl Address {
     /// Similar behavior to the `transactionBlockConnection` in Query but
@@ -124,6 +120,7 @@ impl Address {
             .extend()
     }
 
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given address.
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,
@@ -145,14 +142,15 @@ impl Address {
             .extend()
     }
 
-    pub async fn name_service_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, NameService>>> {
-        unimplemented!()
-    }
+    // TODO disabled-for-rpc-1.5
+    // pub async fn name_service_connection(
+    //     &self,
+    //     ctx: &Context<'_>,
+    //     first: Option<u64>,
+    //     after: Option<String>,
+    //     last: Option<u64>,
+    //     before: Option<String>,
+    // ) -> Result<Option<Connection<String, NameService>>> {
+    //     unimplemented!()
+    // }
 }

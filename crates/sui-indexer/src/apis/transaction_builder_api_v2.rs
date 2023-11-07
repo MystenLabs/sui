@@ -6,7 +6,7 @@ use crate::indexer_reader::IndexerReader;
 use async_trait::async_trait;
 use move_core_types::language_storage::StructTag;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse};
+use sui_json_rpc_types::{SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse};
 use sui_transaction_builder::DataReader;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
 use sui_types::object::Object;
@@ -33,7 +33,7 @@ impl DataReader for TransactionBuilderApiV2 {
             .inner
             .get_owned_objects_in_blocking_task(
                 address,
-                Some(object_type.to_canonical_string()),
+                Some(SuiObjectDataFilter::StructType(object_type)),
                 None,
                 50, // Limit the number of objects returned to 50
             )

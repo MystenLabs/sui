@@ -23,11 +23,10 @@ use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest};
 use serde::Serialize;
 use serde_json::json;
-use shared_crypto::intent::{Intent, IntentMessage};
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
@@ -43,6 +42,8 @@ use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use sui_types::transaction::TransactionData;
+use sui_types::utils::get_inputs;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
@@ -208,18 +209,34 @@ pub enum KeyToolCommand {
         network: String,
     },
 
-    /// Given a zkLogin signature, parse it if valid. If tx_bytes provided,
-    /// it verifies the zkLogin signature based on provider and its latest JWK fetched.
-    /// Example request: sui keytool zk-login-sig-verify --sig $SERIALIZED_ZKLOGIN_SIG --tx-bytes $TX_BYTES --provider Google --curr-epoch 10
+    /// Given a zkLogin signature, parse it if valid. If `bytes` provided,
+    /// parse it as either as TransactionData or PersonalMessage based on `intent_scope`.
+    /// It verifies the zkLogin signature based its latest JWK fetched.
+    /// Example request: sui keytool zk-login-sig-verify --sig $SERIALIZED_ZKLOGIN_SIG --bytes $BYTES --intent-scope 0 --network devnet --curr-epoch 10
     ZkLoginSigVerify {
+        /// The Base64 of the serialized zkLogin signature.
         #[clap(long)]
         sig: String,
+        /// The Base64 of the BCS encoded TransactionData or PersonalMessage.
         #[clap(long)]
-        tx_bytes: Option<String>,
+        bytes: Option<String>,
+        /// Either 0 for TransactionData or 3 for PersonalMessage.
         #[clap(long)]
-        provider: Option<String>,
+        intent_scope: u8,
+        /// The current epoch for the network to verify the signature's max_epoch against.
         #[clap(long)]
         curr_epoch: Option<EpochId>,
+        /// The network to verify the signature for, determines ZkLoginEnv.
+        #[clap(long, default_value = "devnet")]
+        network: String,
+    },
+
+    /// TESTING ONLY: Given a string of data, sign with the fixed dev-only ephemeral key
+    /// and output a zkLogin signature with a fixed dev-only proof with fixed max epoch 10.
+    ZkLoginInsecureSignPersonalMessage {
+        /// The string of data to sign.
+        #[clap(long)]
+        data: String,
     },
 }
 
@@ -340,10 +357,17 @@ pub struct ZkLoginSignAndExecuteTx {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZkLoginSigVerifyResponse {
-    tx_data: Option<String>,
+    data: Option<String>,
     parsed: Option<String>,
     jwks: Option<String>,
     res: Option<SuiResult>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZkLoginInsecureSignPersonalMessage {
+    sig: String,
+    bytes: String,
 }
 
 #[derive(Serialize)]
@@ -365,6 +389,7 @@ pub enum CommandOutput {
     Sign(SignData),
     SignKMS(SerializedSig),
     ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx),
+    ZkLoginInsecureSignPersonalMessage(ZkLoginInsecureSignPersonalMessage),
     ZkLoginSigVerify(ZkLoginSigVerifyResponse),
 }
 
@@ -741,6 +766,28 @@ impl KeyToolCommand {
                 CommandOutput::Show(key)
             }
 
+            KeyToolCommand::ZkLoginInsecureSignPersonalMessage { data } => {
+                let msg = PersonalMessage {
+                    message: data.as_bytes().to_vec(),
+                };
+                let intent_msg = IntentMessage::new(Intent::personal_message(), msg.clone());
+
+                let skp =
+                    SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+                let s = Signature::new_secure(&intent_msg, &skp);
+
+                let sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+                    get_inputs(), // this is for the fixed keypair
+                    10,
+                    s,
+                ));
+                CommandOutput::ZkLoginInsecureSignPersonalMessage(
+                    ZkLoginInsecureSignPersonalMessage {
+                        sig: Base64::encode(sig.as_bytes()),
+                        bytes: Base64::encode(bcs::to_bytes(&msg).unwrap()),
+                    },
+                )
+            }
             KeyToolCommand::ZkLoginSignAndExecuteTx {
                 max_epoch,
                 network,
@@ -878,53 +925,72 @@ impl KeyToolCommand {
 
             KeyToolCommand::ZkLoginSigVerify {
                 sig,
-                tx_bytes,
-                provider,
+                bytes,
+                intent_scope,
                 curr_epoch,
+                network,
             } => {
                 match GenericSignature::from_bytes(
                     &Base64::decode(&sig).map_err(|e| anyhow!("Invalid base64 sig: {:?}", e))?,
                 )? {
                     GenericSignature::ZkLoginAuthenticator(zk) => {
-                        if tx_bytes.is_none() || provider.is_none() || curr_epoch.is_none() {
+                        if bytes.is_none() || curr_epoch.is_none() {
                             return Ok(CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
-                                tx_data: None,
+                                data: None,
                                 parsed: Some(serde_json::to_string(&zk)?),
                                 res: None,
                                 jwks: None,
                             }));
                         }
 
-                        let tx_data: TransactionData = bcs::from_bytes(
-                            &Base64::decode(&tx_bytes.unwrap())
-                                .map_err(|e| anyhow!("Invalid base64 tx data: {:?}", e))?,
-                        )?;
                         let client = reqwest::Client::new();
-                        let jwks = fetch_jwks(
-                            &OIDCProvider::from_str(&provider.clone().unwrap())
-                                .map_err(|_| anyhow!("Unsupported provider:"))?,
-                            &client,
-                        )
-                        .await?;
+                        let provider = OIDCProvider::from_iss(zk.get_iss())
+                            .map_err(|_| anyhow!("Invalid iss"))?;
+                        let jwks = fetch_jwks(&provider, &client).await?;
                         let parsed: ImHashMap<JwkId, JWK> = jwks.clone().into_iter().collect();
-                        let aux_verify_data = VerifyParams::new(
-                            parsed,
-                            vec![
-                                OIDCProvider::Facebook,
-                                OIDCProvider::Twitch,
-                                OIDCProvider::Google,
-                            ],
-                            ZkLoginEnv::Prod,
-                            true,
-                        );
-                        let res = zk.verify_authenticator(
-                            &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
-                            tx_data.execution_parts().1,
-                            Some(curr_epoch.unwrap()),
-                            &aux_verify_data,
-                        );
+                        let env = match network.as_str() {
+                            "devnet" | "localnet" => ZkLoginEnv::Test,
+                            "mainnet" | "testnet" => ZkLoginEnv::Prod,
+                            _ => return Err(anyhow!("Invalid network")),
+                        };
+                        let aux_verify_data = VerifyParams::new(parsed, vec![], env, true);
+
+                        let (serialized, res) = match IntentScope::try_from(intent_scope)
+                            .map_err(|_| anyhow!("Invalid scope"))?
+                        {
+                            IntentScope::TransactionData => {
+                                let tx_data: TransactionData = bcs::from_bytes(
+                                    &Base64::decode(&bytes.unwrap())
+                                        .map_err(|e| anyhow!("Invalid base64 tx data: {:?}", e))?,
+                                )?;
+
+                                let res = zk.verify_authenticator(
+                                    &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+                                    tx_data.execution_parts().1,
+                                    Some(curr_epoch.unwrap()),
+                                    &aux_verify_data,
+                                );
+                                (serde_json::to_string(&tx_data)?, res)
+                            }
+                            IntentScope::PersonalMessage => {
+                                let data: PersonalMessage = bcs::from_bytes(
+                                    &Base64::decode(&bytes.unwrap()).map_err(|e| {
+                                        anyhow!("Invalid base64 personal message data: {:?}", e)
+                                    })?,
+                                )?;
+
+                                let res = zk.verify_authenticator(
+                                    &IntentMessage::new(Intent::personal_message(), data.clone()),
+                                    (&zk).try_into()?,
+                                    Some(curr_epoch.unwrap()),
+                                    &aux_verify_data,
+                                );
+                                (serde_json::to_string(&data)?, res)
+                            }
+                            _ => return Err(anyhow!("Invalid intent scope")),
+                        };
                         CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
-                            tx_data: Some(serde_json::to_string(&tx_data)?),
+                            data: Some(serialized),
                             parsed: Some(serde_json::to_string(&zk)?),
                             jwks: Some(serde_json::to_string(&jwks)?),
                             res: Some(res),

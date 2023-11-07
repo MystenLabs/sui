@@ -70,6 +70,7 @@ impl SingleValidator {
             None,
             None,
             ConsensusAdapterMetrics::new_test(),
+            epoch_store.protocol_config().clone(),
         ));
         let validator_service = Arc::new(ValidatorService::new(
             validator,
@@ -182,6 +183,7 @@ impl SingleValidator {
             &executable,
             self.epoch_store.protocol_config(),
             self.epoch_store.reference_gas_price(),
+            self.epoch_store.epoch(),
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();

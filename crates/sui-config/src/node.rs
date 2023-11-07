@@ -159,6 +159,9 @@ pub struct NodeConfig {
 
     #[serde(default = "default_zklogin_oauth_providers")]
     pub zklogin_oauth_providers: BTreeMap<Chain, BTreeSet<String>>,
+
+    #[serde(default = "default_overload_threshold_config")]
+    pub overload_threshold_config: OverloadThresholdConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -540,6 +543,9 @@ pub struct AuthorityStorePruningConfig {
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
+    /// enables pruner to prune no longer needed object tombstones. We don't serialize it if it is the default value, false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub enable_pruning_tombstones: bool,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -556,6 +562,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
+            enable_pruning_tombstones: false,
         }
     }
 }
@@ -575,6 +582,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
+            enable_pruning_tombstones: false,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -591,6 +599,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
+            enable_pruning_tombstones: false,
         }
     }
 
@@ -609,6 +618,10 @@ impl AuthorityStorePruningConfig {
                     n
                 }
             })
+    }
+
+    pub fn set_enable_pruning_tombstones(&mut self, enable_pruning_tombstones: bool) {
+        self.enable_pruning_tombstones = enable_pruning_tombstones;
     }
 }
 
@@ -669,6 +682,29 @@ pub struct TransactionKeyValueStoreWriteConfig {
     pub table_name: String,
     pub bucket_name: String,
     pub concurrency: usize,
+}
+
+/// Configuration for the threshold(s) at which we consider the system
+/// to be overloaded. When one of the threshold is passed, the node may
+/// stop processing new transactions and/or certificates until the congestion
+/// resolves.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct OverloadThresholdConfig {
+    pub max_txn_age_in_queue: Duration,
+    // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
+    // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
+}
+
+impl Default for OverloadThresholdConfig {
+    fn default() -> Self {
+        Self {
+            max_txn_age_in_queue: Duration::from_secs(1), // 1 second
+        }
+    }
+}
+
+fn default_overload_threshold_config() -> OverloadThresholdConfig {
+    OverloadThresholdConfig::default()
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

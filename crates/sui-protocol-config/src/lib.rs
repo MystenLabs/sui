@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use clap::*;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
@@ -11,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 30;
+const MAX_PROTOCOL_VERSION: u64 = 31;
 
 // Record history of protocol version allocations here:
 //
@@ -62,7 +63,7 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 19: Changes to sui-system package to enable liquid staking.
 //             Add limit for total size of events.
 //             Increase limit for number of events emitted to 1024.
-// Version 20: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+// Version 20: Enables the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
 //             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
 //             value. Both values are set for all the environments except mainnet.
 // Version 21: ZKLogin known providers.
@@ -83,7 +84,13 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 30: Enable Narwhal CertificateV2
 //             Add support for random beacon.
 //             Enable transaction effects v2 in testnet.
-//             Deprecate supported oauth providers from protocol config and rely on node config instead.
+//             Deprecate supported oauth providers from protocol config and rely on node config
+//             instead.
+//             In execution, has_public_transfer is recomputed when loading the object.
+//             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
+// Version 31: Add support for shared object deletion in devnet only.
+//             Add support for getting object ID referenced by receiving object in sui framework.
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -172,7 +179,7 @@ impl SupportedProtocolVersions {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum)]
 pub enum Chain {
     Mainnet,
     Testnet,
@@ -268,6 +275,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     txn_base_cost_as_multiplier: bool,
 
+    // If true, the ability to delete shared objects is in effect
+    #[serde(skip_serializing_if = "is_false")]
+    shared_object_deletion: bool,
+
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
@@ -317,6 +328,14 @@ struct FeatureFlags {
     // If true, allow verify with legacy zklogin address
     #[serde(skip_serializing_if = "is_false")]
     verify_legacy_zklogin_address: bool,
+
+    // Enable throughput aware consensus submission
+    #[serde(skip_serializing_if = "is_false")]
+    throughput_aware_consensus_submission: bool,
+
+    // If true, recompute has_public_transfer from the type instead of what is stored in the object
+    #[serde(skip_serializing_if = "is_false")]
+    recompute_has_public_transfer_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -938,6 +957,10 @@ impl ProtocolConfig {
         self.feature_flags.txn_base_cost_as_multiplier
     }
 
+    pub fn shared_object_deletion(&self) -> bool {
+        self.feature_flags.shared_object_deletion
+    }
+
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {
         self.feature_flags.narwhal_new_leader_election_schedule
     }
@@ -972,6 +995,11 @@ impl ProtocolConfig {
         ret
     }
 
+    pub fn recompute_has_public_transfer_in_execution(&self) -> bool {
+        self.feature_flags
+            .recompute_has_public_transfer_in_execution
+    }
+
     // this function only exists for readability in the genesis code.
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
@@ -1000,6 +1028,10 @@ impl ProtocolConfig {
 
     pub fn verify_legacy_zklogin_address(&self) -> bool {
         self.feature_flags.verify_legacy_zklogin_address
+    }
+
+    pub fn throughput_aware_consensus_submission(&self) -> bool {
+        self.feature_flags.throughput_aware_consensus_submission
     }
 }
 
@@ -1572,6 +1604,7 @@ impl ProtocolConfig {
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
+
                     // Only enable effects v2 on devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1581,8 +1614,8 @@ impl ProtocolConfig {
                     cfg.feature_flags.verify_legacy_zklogin_address = true;
                 }
                 30 => {
-                    // Only enable nw certificate v2 on devnet.
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    // Only enable nw certificate v2 on testnet.
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.narwhal_certificate_v2 = true;
                     }
 
@@ -1601,6 +1634,14 @@ impl ProtocolConfig {
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
                     cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
+
+                    cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
+                }
+                31 => {
+                    // Only enable shared object deletion on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shared_object_deletion = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -1651,14 +1692,21 @@ impl ProtocolConfig {
     pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_jwk_consensus_updates = val
     }
-
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.upgraded_multisig_supported = val
     }
     #[cfg(msim)]
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
-        self.feature_flags.simplified_unwrap_then_delete = val
+        self.feature_flags.simplified_unwrap_then_delete = val;
+        if val == false {
+            // Given that we will never enable effect V2 before turning on simplified_unwrap_then_delete, we also need to disable effect V2 here.
+            self.set_enable_effects_v2(false);
+        }
     }
+    pub fn set_shared_object_deletion(&mut self, val: bool) {
+        self.feature_flags.shared_object_deletion = val;
+    }
+
     pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
         self.feature_flags.narwhal_new_leader_election_schedule = val;
     }
@@ -1674,6 +1722,9 @@ impl ProtocolConfig {
     }
     pub fn set_verify_legacy_zklogin_address(&mut self, val: bool) {
         self.feature_flags.verify_legacy_zklogin_address = val
+    }
+    pub fn set_enable_effects_v2(&mut self, val: bool) {
+        self.feature_flags.enable_effects_v2 = val;
     }
 }
 

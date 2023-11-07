@@ -11,6 +11,7 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::execution::{DeletedSharedObjects, SharedInput};
 use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
@@ -1749,7 +1750,6 @@ pub trait TransactionDataAPI {
     fn check_sponsorship(&self) -> UserInputResult;
 
     fn is_system_tx(&self) -> bool;
-    fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
     /// returns true if the transaction is one that is specially sequenced to run at the very end
@@ -1884,12 +1884,11 @@ impl TransactionDataAPI for TransactionDataV1 {
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    fn is_change_epoch_tx(&self) -> bool {
-        matches!(self.kind, TransactionKind::ChangeEpoch(_))
-    }
-
     fn is_end_of_epoch_tx(&self) -> bool {
-        self.is_change_epoch_tx() || matches!(self.kind, TransactionKind::EndOfEpochTransaction(_))
+        matches!(
+            self.kind,
+            TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+        )
     }
 
     fn is_system_tx(&self) -> bool {
@@ -2413,19 +2412,24 @@ impl InputObjectKind {
 #[derive(Clone)]
 pub struct InputObjects {
     objects: Vec<(InputObjectKind, Object)>,
+    deleted: DeletedSharedObjects,
 }
 
 impl InputObjects {
-    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
-        Self { objects }
+    pub fn new(objects: Vec<(InputObjectKind, Object)>, deleted: DeletedSharedObjects) -> Self {
+        Self { objects, deleted }
     }
 
     pub fn len(&self) -> usize {
-        self.objects.len()
+        self.objects.len() + self.deleted.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.objects.is_empty()
+        self.objects.is_empty() && self.deleted.is_empty()
+    }
+
+    pub fn contains_deleted_objects(&self) -> bool {
+        !self.deleted.is_empty()
     }
 
     pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
@@ -2453,19 +2457,27 @@ impl InputObjects {
         owned_objects
     }
 
-    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
+    pub fn filter_shared_objects(&self) -> Vec<SharedInput> {
         self.objects
             .iter()
             .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject { .. }))
-            .map(|(_, obj)| obj.compute_object_reference())
+            .map(|(_, obj)| SharedInput::Existing(obj.compute_object_reference()))
+            .chain(self.deleted.iter().map(|info| SharedInput::Deleted(*info)))
             .collect()
     }
 
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
-        self.objects
+        let mut dependencies: BTreeSet<TransactionDigest> = self
+            .objects
             .iter()
             .map(|(_, obj)| obj.previous_transaction)
-            .collect()
+            .collect();
+
+        for (_, _, _, digest) in &self.deleted {
+            dependencies.insert(*digest);
+        }
+
+        dependencies
     }
 
     pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
@@ -2500,7 +2512,8 @@ impl InputObjects {
             .objects
             .iter()
             .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version))
-            .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
+            .chain(receiving_objects.iter().map(|object_ref| object_ref.1))
+            .chain(self.deleted.iter().map(|(_, version, _, _)| *version));
 
         SequenceNumber::lamport_increment(input_versions)
     }

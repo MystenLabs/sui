@@ -12,14 +12,6 @@ warning[Lint W00001]: possible owned object share
    │
    = This warning can be suppressed with '#[lint_allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W09009]: unused struct field
-   ┌─ tests/linter/share_owned.move:25:9
-   │
-25 │         id: UID
-   │         ^^ The 'id' field of the 'Obj' type is unused
-   │
-   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 warning[Lint W00001]: possible owned object share
    ┌─ tests/linter/share_owned.move:36:9
    │

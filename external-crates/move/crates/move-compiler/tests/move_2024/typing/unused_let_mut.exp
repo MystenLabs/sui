@@ -1,0 +1,46 @@
+error[E04013]: invalid statement or expression in constant
+  ┌─ tests/move_2024/typing/unused_let_mut.move:5:9
+  │
+5 │         let mut x = 0;
+  │         ^^^^^^^^^^^^^ 'let' declarations are not supported in constants
+
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/unused_let_mut.move:5:17
+  │
+5 │         let mut x = 0;
+  │             --- ^ The variable 'x' is never used mutably
+  │             │    
+  │             Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/unused_let_mut.move:9:24
+  │
+9 │     public fun foo(mut x: u64, s: S): u64 {
+  │                    --- ^ The variable 'x' is never used mutably
+  │                    │    
+  │                    Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+   ┌─ tests/move_2024/typing/unused_let_mut.move:10:17
+   │
+10 │         let mut y = 0;
+   │             --- ^ The variable 'y' is never used mutably
+   │             │    
+   │             Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+   ┌─ tests/move_2024/typing/unused_let_mut.move:11:21
+   │
+11 │         let S { mut f } = s;
+   │                 --- ^ The variable 'f' is never used mutably
+   │                 │    
+   │                 Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

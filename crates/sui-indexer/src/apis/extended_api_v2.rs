@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use crate::indexer_reader::IndexerReader;
 use jsonrpsee::{core::RpcResult, RpcModule};
 use sui_json_rpc::{
@@ -68,9 +64,9 @@ impl ExtendedApiServer for ExtendedApiV2 {
 
     async fn query_objects(
         &self,
-        query: SuiObjectResponseQuery,
-        cursor: Option<CheckpointedObjectID>,
-        limit: Option<usize>,
+        _query: SuiObjectResponseQuery,
+        _cursor: Option<CheckpointedObjectID>,
+        _limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
         Err(jsonrpsee::types::error::CallError::Custom(
             jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
@@ -122,7 +118,11 @@ impl ExtendedApiServer for ExtendedApiV2 {
     }
 
     async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
-        unimplemented!()
+        let latest_checkpoint = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_checkpoint())
+            .await?;
+        Ok(latest_checkpoint.network_total_transactions.into())
     }
 }
 

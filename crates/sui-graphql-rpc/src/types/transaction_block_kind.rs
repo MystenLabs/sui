@@ -6,7 +6,6 @@ use crate::context_data::db_data_provider::PgManager;
 use async_graphql::{ComplexObject, Context, Result, ResultExt, SimpleObject, Union};
 
 #[derive(Union, PartialEq, Clone, Eq)]
-#[allow(clippy::enum_variant_names)]
 pub(crate) enum TransactionBlockKind {
     ConsensusCommitPrologueTransaction(ConsensusCommitPrologueTransaction),
     GenesisTransaction(GenesisTransaction),

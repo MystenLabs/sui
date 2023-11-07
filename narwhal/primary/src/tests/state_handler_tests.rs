@@ -63,13 +63,16 @@ async fn dkg() {
     }
 
     // Generate and distribute Messages.
+    type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
     let mut dkg_messages = Vec::new();
     for i in 0..randomness_states.len() {
         randomness_states[i].start_dkg().await;
 
         let dkg_message = rx_system_messages_channels[i].recv().await.unwrap();
         match dkg_message {
-            SystemMessage::DkgMessage(msg) => {
+            SystemMessage::DkgMessage(bytes) => {
+                let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> =
+                    bcs::from_bytes(&bytes).expect("DKG message deserialization should not fail");
                 assert_eq!(msg.sender, fixture.authority(i).id().0);
                 dkg_messages.push(msg);
             }
@@ -88,7 +91,9 @@ async fn dkg() {
     for (i, channel) in rx_system_messages_channels.iter_mut().enumerate() {
         let dkg_confirmation = channel.recv().await.unwrap();
         match dkg_confirmation {
-            SystemMessage::DkgConfirmation(conf) => {
+            SystemMessage::DkgConfirmation(bytes) => {
+                let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> = bcs::from_bytes(&bytes)
+                    .expect("DKG confirmation deserialization should not fail");
                 assert_eq!(conf.sender, fixture.authority(i).id().0);
                 dkg_confirmations.push(conf);
             }

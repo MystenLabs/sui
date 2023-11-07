@@ -93,10 +93,10 @@ module sui::table_tests {
         let sender = @0x0;
         let scenario = ts::begin(sender);
         let table = table::new<u64, u64>(ts::ctx(&mut scenario));
-        assert!(!contains(&mut table, 0), 0);
+        assert!(!contains(&table, 0), 0);
         add(&mut table, 0, 0);
-        assert!(contains<u64, u64>(&mut table, 0), 0);
-        assert!(!contains<u64, u64>(&mut table, 1), 0);
+        assert!(contains<u64, u64>(&table, 0), 0);
+        assert!(!contains<u64, u64>(&table, 1), 0);
         ts::end(scenario);
         table::drop(table);
     }

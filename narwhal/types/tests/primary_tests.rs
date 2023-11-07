@@ -4,7 +4,7 @@ use config::{AuthorityIdentifier, Committee, Stake};
 use crypto::{PublicKey, Signature};
 use fastcrypto::traits::KeyPair;
 use indexmap::IndexMap;
-use narwhal_types::{Certificate, Header, HeaderV1, Vote, VoteAPI};
+use narwhal_types::{Certificate, Header, HeaderV2, Vote, VoteAPI};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::collections::BTreeSet;
@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use test_utils::{latest_protocol_version, AuthorityFixture, CommitteeFixture};
 
 #[tokio::test]
-async fn test_certificate_singers_are_ordered() {
+async fn test_certificate_signers_are_ordered() {
     // GIVEN
     let fixture = CommitteeFixture::builder()
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -25,18 +25,26 @@ async fn test_certificate_singers_are_ordered() {
     // The authority that creates the Header
     let authority = authorities[0];
 
-    let header = HeaderV1::new(authority.id(), 1, 1, IndexMap::new(), BTreeSet::new()).await;
+    let header = HeaderV2::new(
+        authority.id(),
+        1,
+        1,
+        IndexMap::new(),
+        Vec::new(),
+        BTreeSet::new(),
+    )
+    .await;
 
     // WHEN
     let mut votes: Vec<(AuthorityIdentifier, Signature)> = Vec::new();
-    let mut sorted_singers: Vec<PublicKey> = Vec::new();
+    let mut sorted_signers: Vec<PublicKey> = Vec::new();
 
     // The authorities on position 1, 2, 3 are the ones who would sign
     for authority in &authorities[1..=3] {
-        sorted_singers.push(authority.keypair().public().clone());
+        sorted_signers.push(authority.keypair().public().clone());
 
         let vote = Vote::new_with_signer(
-            &Header::V1(header.clone()),
+            &Header::V2(header.clone()),
             &authority.id(),
             authority.keypair(),
         );
@@ -50,7 +58,7 @@ async fn test_certificate_singers_are_ordered() {
     let certificate = Certificate::new_unverified(
         &latest_protocol_version(),
         &committee,
-        Header::V1(header),
+        Header::V2(header),
         votes,
     )
     .unwrap();
@@ -61,7 +69,7 @@ async fn test_certificate_singers_are_ordered() {
     assert_eq!(signers.len(), 3);
 
     // AND authorities public keys are returned in order
-    assert_eq!(signers, sorted_singers);
+    assert_eq!(signers, sorted_signers);
 
     assert_eq!(stake, 9 as Stake);
 }

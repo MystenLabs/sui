@@ -36,7 +36,10 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
-use fastcrypto_tbls::{tbls::ThresholdBls, types::PublicVssKey};
+use fastcrypto_tbls::{
+    tbls::ThresholdBls,
+    types::{PublicVssKey, ThresholdBls12381MinSig},
+};
 use mysten_metrics::metered_channel::{channel_with_total, Receiver, Sender};
 use mysten_metrics::monitored_scope;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
@@ -82,7 +85,7 @@ use types::{
 pub mod primary_tests;
 
 /// The default channel capacity for each channel of the primary.
-pub const CHANNEL_CAPACITY: usize = 1_000;
+pub const CHANNEL_CAPACITY: usize = 10_000;
 
 /// The number of shutdown receivers to create on startup. We need one per component loop.
 pub const NUM_SHUTDOWN_RECEIVERS: u64 = 27;
@@ -748,18 +751,37 @@ impl PrimaryReceiverHandler {
             DagError::HeaderRequiresQuorum(header.digest())
         );
 
-        // Verify any randomness signature present in the header.
+        // Verify any system messages present in the header.
+        type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
         for m in header.system_messages().iter() {
-            if let SystemMessage::RandomnessSignature(round, sig) = m {
-                fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
-                    self.randomness_vss_key_lock
-                        .get()
-                        .ok_or(DagError::RandomnessUnavailable)?
-                        .c0(),
-                    &round.signature_message(),
-                    sig,
-                )
-                .map_err(|_| DagError::InvalidRandomnessSignature)?;
+            match m {
+                SystemMessage::DkgMessage(bytes) => {
+                    let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> =
+                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+                    ensure!(
+                        msg.sender == header.author().0,
+                        DagError::InvalidSystemMessage
+                    );
+                }
+                SystemMessage::DkgConfirmation(bytes) => {
+                    let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> =
+                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+                    ensure!(
+                        conf.sender == header.author().0,
+                        DagError::InvalidSystemMessage
+                    );
+                }
+                SystemMessage::RandomnessSignature(round, sig) => {
+                    fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
+                        self.randomness_vss_key_lock
+                            .get()
+                            .ok_or(DagError::RandomnessUnavailable)?
+                            .c0(),
+                        &round.signature_message(),
+                        sig,
+                    )
+                    .map_err(|_| DagError::InvalidRandomnessSignature)?;
+                }
             }
         }
 
@@ -891,8 +913,9 @@ impl PrimaryReceiverHandler {
         Ok(())
     }
 
-    /// Gets parent certificate digests not known before, in storage, among suspended certificates,
-    /// or being requested from other header proposers.
+    /// Gets parent certificate digests not known before.
+    /// Digests that are in storage, suspended, or being requested from other proposers
+    /// are considered to be known.
     async fn get_unknown_parent_digests(
         &self,
         header: &Header,

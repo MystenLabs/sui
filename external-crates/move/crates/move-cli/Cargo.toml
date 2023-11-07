@@ -1,0 +1,67 @@
+[package]
+name = "move-cli"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "CLI frontend for the Move compiler and VM"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+colored.workspace = true
+difference.workspace = true
+serde_yaml.workspace = true
+clap.workspace = true
+tempfile.workspace = true
+walkdir.workspace = true
+codespan-reporting.workspace = true
+toml_edit.workspace = true
+
+bcs.workspace = true
+
+move-bytecode-verifier.workspace = true
+move-disassembler.workspace = true
+move-docgen.workspace = true
+move-command-line-common.workspace = true
+move-bytecode-utils.workspace = true
+move-coverage.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-compiler.workspace = true
+move-stdlib.workspace = true
+move-vm-types.workspace = true
+move-vm-runtime.workspace = true
+move-vm-profiler.workspace = true
+move-vm-test-utils.workspace = true
+move-read-write-set-types.workspace = true
+move-binary-format.workspace = true
+move-package.workspace = true
+move-prover.workspace = true
+move-unit-test.workspace = true
+move-errmapgen.workspace = true
+move-bytecode-viewer.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+
+[[bin]]
+name = "move"
+path = "src/main.rs"
+
+[[test]]
+name = "sandbox_testsuite"
+harness = false
+
+[[test]]
+name = "move_unit_tests_move_vm_and_stackless_vm"
+harness = false
+
+[[test]]
+name = "build_testsuite"
+harness = false
+
+[features]
+tiered-gas = [ "move-vm-test-utils/tiered-gas" ]

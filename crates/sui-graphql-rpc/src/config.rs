@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::Error as SuiGraphQLError;
+use crate::{error::Error as SuiGraphQLError, types::big_int::BigInt};
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
@@ -10,9 +10,15 @@ use sui_json_rpc::name_service::NameServiceConfig;
 use crate::functional_group::FunctionalGroup;
 
 // TODO: calculate proper cost limits
-const MAX_QUERY_DEPTH: u32 = 10;
-const MAX_QUERY_NODES: u32 = 100;
-const MAX_DB_QUERY_COST: u64 = 50; // Max DB query cost (normally f64) truncated
+const MAX_QUERY_DEPTH: u32 = 20;
+const MAX_QUERY_NODES: u32 = 200;
+const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
+const MAX_QUERY_VARIABLES: u32 = 50;
+const MAX_QUERY_FRAGMENTS: u32 = 50;
+
+const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
+
+const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
@@ -47,6 +53,27 @@ pub struct Limits {
     pub(crate) max_query_nodes: u32,
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
+    #[serde(default)]
+    pub(crate) max_query_variables: u32,
+    #[serde(default)]
+    pub(crate) max_query_fragments: u32,
+    #[serde(default)]
+    pub(crate) request_timeout_ms: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Ide {
+    #[serde(default)]
+    pub(crate) ide_title: String,
+}
+
+impl Default for Ide {
+    fn default() -> Self {
+        Self {
+            ide_title: DEFAULT_IDE_TITLE.to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -101,27 +128,48 @@ impl ServiceConfig {
 #[Object]
 impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
-    async fn is_enabled(&self, feature: FunctionalGroup) -> Result<bool> {
-        Ok(!self.disabled_features.contains(&feature))
+    async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
+        !self.disabled_features.contains(&feature)
     }
 
     /// List of all features that are enabled on this GraphQL service.
-    async fn enabled_features(&self) -> Result<Vec<FunctionalGroup>> {
-        Ok(FunctionalGroup::all()
+    async fn enabled_features(&self) -> Vec<FunctionalGroup> {
+        FunctionalGroup::all()
             .iter()
             .filter(|g| !self.disabled_features.contains(g))
             .copied()
-            .collect())
+            .collect()
     }
 
     /// The maximum depth a GraphQL query can be to be accepted by this service.
-    async fn max_query_depth(&self) -> Result<u32> {
-        Ok(self.limits.max_query_depth)
+    async fn max_query_depth(&self) -> u32 {
+        self.limits.max_query_depth
     }
 
     /// The maximum number of nodes (field names) the service will accept in a single query.
-    async fn max_query_nodes(&self) -> Result<u32> {
-        Ok(self.limits.max_query_nodes)
+    async fn max_query_nodes(&self) -> u32 {
+        self.limits.max_query_nodes
+    }
+
+    /// Maximum estimated cost of a database query used to serve a GraphQL request.  This is
+    /// measured in the same units that the database uses in EXPLAIN queries.
+    async fn max_db_query_cost(&self) -> BigInt {
+        BigInt::from(self.limits.max_db_query_cost)
+    }
+
+    /// Maximum number of variables a query can define
+    async fn max_query_variables(&self) -> u32 {
+        self.limits.max_query_variables
+    }
+
+    /// Maximum number of fragments a query can define
+    async fn max_query_fragments(&self) -> u32 {
+        self.limits.max_query_fragments
+    }
+
+    /// Maximum time in milliseconds that will be spent to serve one request.
+    async fn request_timeout_ms(&self) -> BigInt {
+        BigInt::from(self.limits.request_timeout_ms)
     }
 }
 
@@ -143,11 +191,13 @@ impl Default for Limits {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
             max_db_query_cost: MAX_DB_QUERY_COST,
+            max_query_variables: MAX_QUERY_VARIABLES,
+            max_query_fragments: MAX_QUERY_FRAGMENTS,
+            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
         }
     }
 }
 
-#[allow(dead_code)]
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct InternalFeatureConfig {
     #[serde(default)]
@@ -184,9 +234,10 @@ pub struct ServerConfig {
     pub internal_features: InternalFeatureConfig,
     #[serde(default)]
     pub name_service: NameServiceConfig,
+    #[serde(default)]
+    pub ide: Ide,
 }
 
-#[allow(dead_code)]
 impl ServerConfig {
     pub fn from_yaml(path: &str) -> Result<Self, SuiGraphQLError> {
         let contents = std::fs::read_to_string(path).map_err(|e| {
@@ -235,6 +286,9 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-db-query-cost = 50
+                max-query-variables = 45
+                max-query-fragments = 32
+                request-timeout-ms = 27000
             "#,
         )
         .unwrap();
@@ -244,6 +298,9 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_db_query_cost: 50,
+                max_query_variables: 45,
+                max_query_fragments: 32,
+                request_timeout_ms: 27_000,
             },
             ..Default::default()
         };
@@ -298,6 +355,9 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-db-query-cost = 20
+                max-query-variables = 34
+                max-query-fragments = 31
+                request-timeout-ms = 30000
 
                 [experiments]
                 test-flag = true
@@ -310,6 +370,9 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_db_query_cost: 20,
+                max_query_variables: 34,
+                max_query_fragments: 31,
+                request_timeout_ms: 30_000,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

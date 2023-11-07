@@ -89,6 +89,7 @@ impl SharedCounterWorkloadBuilder {
         num_workers: u64,
         in_flight_ratio: u64,
         shared_counter_hotness_factor: u32,
+        num_shared_counters: Option<u64>,
         shared_counter_max_tip_amount: u64,
         reference_gas_price: u64,
         duration: Interval,
@@ -99,7 +100,8 @@ impl SharedCounterWorkloadBuilder {
         let max_ops = target_qps * in_flight_ratio;
         let shared_counter_ratio =
             1.0 - (std::cmp::min(shared_counter_hotness_factor, 100) as f32 / 100.0);
-        let num_shared_counters = (max_ops as f32 * shared_counter_ratio) as u64;
+        let num_shared_counters =
+            num_shared_counters.unwrap_or((max_ops as f32 * shared_counter_ratio) as u64);
         if num_shared_counters == 0 || num_workers == 0 {
             None
         } else {

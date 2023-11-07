@@ -26,15 +26,16 @@ use axum::{
 use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
-use std::{any::Any, net::SocketAddr, sync::Arc};
+use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use tokio::sync::OnceCell;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
 }
 
-#[allow(dead_code)]
 impl Server {
     pub async fn run(self) -> Result<(), Error> {
+        get_or_init_server_start_time().await;
         self.server
             .await
             .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
@@ -79,6 +80,7 @@ impl Server {
             .context_data(pg_conn_pool)
             .context_data(package_cache)
             .context_data(name_service_config)
+            .ide_title(config.ide.ide_title.clone())
             .context_data(Arc::new(metrics))
             .context_data(config.clone());
 
@@ -92,7 +94,7 @@ impl Server {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout::default());
+            builder = builder.extension(Timeout);
         }
 
         builder.build()
@@ -104,6 +106,7 @@ pub(crate) struct ServerBuilder {
     host: String,
 
     schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
+    ide_title: Option<String>,
 }
 
 impl ServerBuilder {
@@ -112,6 +115,7 @@ impl ServerBuilder {
             port,
             host,
             schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
+            ide_title: None,
         }
     }
 
@@ -139,17 +143,26 @@ impl ServerBuilder {
         self
     }
 
+    fn ide_title(mut self, name: String) -> Self {
+        self.ide_title = Some(name);
+        self
+    }
+
     fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
         self.schema.finish()
     }
 
     pub fn build(self) -> Result<Server, Error> {
         let address = self.address();
+        let ide_title = self.ide_title.clone();
         let schema = self.build_schema();
 
         let app = axum::Router::new()
             .route("/", axum::routing::get(graphiql).post(graphql_handler))
+            .route("/schema", axum::routing::get(get_schema))
+            .route("/health", axum::routing::get(health_checks))
             .layer(axum::extract::Extension(schema))
+            .layer(axum::extract::Extension(ide_title))
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
         Ok(Server {
@@ -161,6 +174,19 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
         })
     }
+}
+
+async fn get_schema() -> impl axum::response::IntoResponse {
+    let schema = include_str!("../../schema/current_progress_schema.graphql").to_string();
+    let schema = format!(
+        r#"
+    <span style="white-space: pre;">{}
+    </span>  
+    "#,
+        schema
+    );
+
+    axum::response::Html(schema)
 }
 
 async fn graphql_handler(
@@ -179,12 +205,44 @@ async fn graphql_handler(
     schema.execute(req).await.into()
 }
 
-async fn graphiql() -> impl axum::response::IntoResponse {
-    axum::response::Html(
-        async_graphql::http::GraphiQLSource::build()
-            .endpoint("/")
-            .finish(),
+async fn graphiql(ide_title: axum::Extension<Option<String>>) -> impl axum::response::IntoResponse {
+    let gq = async_graphql::http::GraphiQLSource::build().endpoint("/");
+    if let axum::Extension(Some(title)) = ide_title {
+        axum::response::Html(gq.title(&title).finish())
+    } else {
+        axum::response::Html(gq.finish())
+    }
+}
+
+async fn health_checks(
+    schema: axum::Extension<SuiGraphQLSchema>,
+) -> impl axum::response::IntoResponse {
+    // Simple request to check if the DB is up
+    // TODO: add more checks
+    let req = r#"
+        query {
+            chainIdentifier
+        }
+        "#;
+    let db_up = match schema.execute(req).await.is_ok() {
+        true => "UP",
+        false => "DOWN",
+    };
+    let uptime = get_or_init_server_start_time()
+        .await
+        .elapsed()
+        .as_secs_f64();
+    format!(
+        r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
+        "#,
+        uptime, db_up
     )
+}
+
+// One server per proc, so this is okay
+async fn get_or_init_server_start_time() -> &'static Instant {
+    static ONCE: OnceCell<Instant> = OnceCell::const_new();
+    ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
 pub mod tests {
@@ -194,7 +252,7 @@ pub mod tests {
         config::{ConnectionConfig, Limits, ServiceConfig},
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
-        extensions::timeout::{Timeout, TimeoutConfig},
+        extensions::timeout::Timeout,
         metrics::RequestMetrics,
     };
     use async_graphql::{
@@ -258,16 +316,16 @@ pub mod tests {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader, Limits::default());
+            let mut cfg = ServiceConfig::default();
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
+                .context_data(cfg)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout {
-                    config: TimeoutConfig {
-                        request_timeout: timeout,
-                    },
-                })
+                .extension(Timeout)
                 .build_schema();
             schema.execute("{ chainIdentifier }").await
         }
@@ -400,7 +458,7 @@ pub mod tests {
     pub async fn test_query_complexity_metrics_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
-        let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         let metrics = RequestMetrics::new(&registry);
         let metrics = Arc::new(metrics);

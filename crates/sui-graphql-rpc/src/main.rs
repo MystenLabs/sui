@@ -16,6 +16,19 @@ use tracing::error;
 async fn main() {
     let cmd: Command = Command::parse();
     match cmd {
+        Command::GenerateConfig { path } => {
+            let cfg = ServerConfig::default();
+            if let Some(file) = path {
+                println!("Write config to file: {:?}", file);
+                cfg.to_yaml_file(file)
+                    .expect("Failed writing config to file");
+            } else {
+                println!(
+                    "{}",
+                    &cfg.to_yaml().expect("Failed serializing config to yaml")
+                );
+            }
+        }
         Command::GenerateSchema { file } => {
             let out = schema_sdl_export();
             if let Some(file) = file {
@@ -24,6 +37,18 @@ async fn main() {
             } else {
                 println!("{}", &out);
             }
+        }
+        Command::GenerateExamples { file } => {
+            let new_content: String = sui_graphql_rpc::examples::generate_markdown()
+                .expect("Generating examples markdown failed");
+
+            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            buf.push("docs");
+            buf.push("examples.md");
+            let file = file.unwrap_or(buf);
+
+            std::fs::write(file.clone(), new_content).expect("Writing examples markdown failed");
+            println!("Written examples to file: {:?}", file);
         }
         Command::StartServer {
             db_url,

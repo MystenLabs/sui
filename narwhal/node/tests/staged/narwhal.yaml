@@ -1,4 +1,21 @@
 ---
+Authority:
+  STRUCT:
+    - protocol_key:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
+    - protocol_key_bytes:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 96
+    - stake: U64
+    - primary_address: STR
+    - network_key:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
+    - hostname: STR
 AuthorityIdentifier:
   NEWTYPESTRUCT: U16
 Batch:
@@ -50,6 +67,17 @@ CertificateV2:
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
+Committee:
+  STRUCT:
+    - authorities:
+        MAP:
+          KEY:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 96
+          VALUE:
+            TYPENAME: Authority
+    - epoch: U64
 Header:
   ENUM:
     0:

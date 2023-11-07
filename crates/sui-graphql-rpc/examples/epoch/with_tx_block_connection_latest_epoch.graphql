@@ -2,7 +2,7 @@
 # last tx number of the checkpoint is 261225985
 {
   epoch {
-    transactionBlockConnection(first: 20, after:"261225985") {
+    transactionBlockConnection(first: 20, after: "261225985") {
       pageInfo {
         hasNextPage
         endCursor

@@ -167,6 +167,7 @@
 		"webextension-polyfill": "^0.10.0",
 		"yup": "^1.1.1",
 		"zod": "^3.21.4",
+		"zustand": "^4.4.1",
 		"zxcvbn": "^4.4.2"
 	}
 }
