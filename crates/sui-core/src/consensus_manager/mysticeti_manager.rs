@@ -17,7 +17,8 @@ use mysticeti_core::committee::{Authority, Committee};
 use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
 use mysticeti_core::types::AuthorityIndex;
 use mysticeti_core::validator::Validator;
-use mysticeti_core::{PublicKey, Signer, SimpleBlockHandler};
+use mysticeti_core::{CommitConsumer, PublicKey, Signer, SimpleBlockHandler};
+use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
@@ -131,6 +132,12 @@ impl ConsensusManagerTrait for MysticetiManager {
             #[allow(clippy::disallowed_methods)]
             let (commit_sender, commit_receiver) = unbounded_channel();
 
+            let consensus_handler = consensus_handler_initializer.new_consensus_handler();
+            let consumer = CommitConsumer::new(
+                commit_sender,
+                consensus_handler.last_executed_sub_dag_index().await,
+            );
+
             match Validator::start_production(
                 authority_index,
                 committee.clone(),
@@ -138,7 +145,7 @@ impl ConsensusManagerTrait for MysticetiManager {
                 config.clone(),
                 registry.clone(),
                 Signer(Box::new(private_key.0.clone())),
-                commit_sender,
+                consumer,
             )
             .await
             {
@@ -152,10 +159,8 @@ impl ConsensusManagerTrait for MysticetiManager {
                     self.client.set(MysticetiClient::new(tx_sender));
 
                     // spin up the new mysticeti consensus handler to listen for committed sub dags
-                    let handler = MysticetiConsensusHandler::new(
-                        consensus_handler_initializer.new_consensus_handler(),
-                        commit_receiver,
-                    );
+                    let handler =
+                        MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
                     self.consensus_handler.store(Some(Arc::new(handler)));
 
                     break;
