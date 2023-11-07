@@ -42,6 +42,7 @@ struct ValidationRes {
     depth: u32,
     num_variables: u32,
     num_fragments: u32,
+    query_payload: u32,
 }
 
 #[derive(Debug, Default)]
@@ -103,6 +104,7 @@ impl Extension for QueryLimitsChecker {
                     "depth": validation_result.depth,
                     "variables": validation_result.num_variables,
                     "fragments": validation_result.num_fragments,
+                    "query_payload": validation_result.query_payload,
                 }),
             )
         } else {
@@ -121,11 +123,20 @@ impl Extension for QueryLimitsChecker {
     ) -> ServerResult<ExecutableDocument> {
         // TODO: limit number of variables, fragments, etc
         // TODO: limit/ban directives for now
-        // TODO: limit overall query size
 
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
+
+        if query.len() > cfg.limits.max_query_payload_size as usize {
+            return Err(ServerError::new(
+                format!(
+                    "Query payload is too large. The maximum allowed is {} bytes",
+                    cfg.limits.max_query_payload_size
+                ),
+                None,
+            ));
+        }
 
         if variables.len() > cfg.limits.max_query_variables as usize {
             return Err(ServerError::new(
@@ -173,6 +184,7 @@ impl Extension for QueryLimitsChecker {
             *self.validation_result.lock().await = Some(ValidationRes {
                 num_nodes: running_costs.num_nodes,
                 depth: running_costs.depth,
+                query_payload: query.len() as u32,
                 num_variables: variables.len() as u32,
                 num_fragments: doc.fragments.len() as u32,
             });
