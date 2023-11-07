@@ -50,6 +50,8 @@ pub struct SuiInitArgs {
     pub max_gas: Option<u64>,
     #[clap(long = "shared-object-deletion")]
     pub shared_object_deletion: Option<bool>,
+    #[clap(long = "simulator")]
+    pub simulator: bool,
 }
 
 #[derive(Debug, clap::Parser)]

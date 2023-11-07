@@ -11926,6 +11926,7 @@ dependencies = [
  "msim",
  "once_cell",
  "rand 0.8.5",
+ "simulacrum",
  "sui-core",
  "sui-framework",
  "sui-framework-snapshot",

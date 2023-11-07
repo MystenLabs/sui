@@ -8,7 +8,11 @@ pub mod programmable_transaction_test_parser;
 pub mod test_adapter;
 
 use move_transactional_test_runner::framework::run_test_impl;
+use rand::rngs::StdRng;
+use simulacrum::Simulacrum;
 use std::path::Path;
+use sui_types::digests::TransactionDigest;
+use sui_types::event::Event;
 use sui_types::storage::ObjectStore;
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 
@@ -17,7 +21,6 @@ use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::EventFilter;
-use sui_json_rpc_types::SuiEvent;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -26,7 +29,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::error::ExecutionError;
 use sui_types::error::SuiError;
 use sui_types::error::SuiResult;
-use sui_types::event::EventID;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
@@ -77,14 +79,11 @@ pub trait TransactionalAdapter: Send + Sync + ObjectStore {
         gas_price: Option<u64>,
     ) -> SuiResult<DevInspectResults>;
 
-    async fn query_events(
+    async fn query_tx_events_asc(
         &self,
-        query: EventFilter,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<EventID>,
+        tx_digest: &TransactionDigest,
         limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<SuiEvent>>;
+    ) -> SuiResult<Vec<Event>>;
 }
 
 #[async_trait::async_trait]
@@ -119,17 +118,25 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             .await
     }
 
-    async fn query_events(
+    async fn query_tx_events_asc(
         &self,
-        query: EventFilter,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<EventID>,
+        tx_digest: &TransactionDigest,
         limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<SuiEvent>> {
-        self.validator
-            .query_events(&self.kv_store, query, cursor, limit, descending)
+    ) -> SuiResult<Vec<Event>> {
+        Ok(self
+            .validator
+            .query_events(
+                &self.kv_store,
+                EventFilter::Transaction(*tx_digest),
+                None,
+                limit,
+                false,
+            )
             .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|sui_event| sui_event.into())
+            .collect())
     }
 
     async fn create_checkpoint(&mut self) -> anyhow::Result<VerifiedCheckpoint> {
@@ -169,5 +176,60 @@ impl ObjectStore for ValidatorWithFullnode {
         self.validator
             .database
             .get_object_by_key(object_id, version)
+    }
+}
+
+#[async_trait::async_trait]
+impl TransactionalAdapter for Simulacrum<StdRng> {
+    async fn execute_txn(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        Ok(self.execute_transaction(transaction)?)
+    }
+
+    async fn dev_inspect_transaction_block(
+        &self,
+        _sender: SuiAddress,
+        _transaction_kind: TransactionKind,
+        _gas_price: Option<u64>,
+    ) -> SuiResult<DevInspectResults> {
+        unimplemented!("dev_inspect_transaction_block not supported in simulator mode")
+    }
+
+    async fn query_tx_events_asc(
+        &self,
+        tx_digest: &TransactionDigest,
+        _limit: usize,
+    ) -> SuiResult<Vec<Event>> {
+        Ok(self
+            .store()
+            .get_transaction_events_by_tx_digest(tx_digest)
+            .map(|x| x.data.clone())
+            .unwrap_or_default())
+    }
+
+    async fn create_checkpoint(&mut self) -> anyhow::Result<VerifiedCheckpoint> {
+        Ok(self.create_checkpoint())
+    }
+
+    async fn advance_clock(
+        &mut self,
+        duration: std::time::Duration,
+    ) -> anyhow::Result<TransactionEffects> {
+        Ok(self.advance_clock(duration))
+    }
+
+    async fn advance_epoch(&mut self) -> anyhow::Result<()> {
+        self.advance_epoch();
+        Ok(())
+    }
+
+    async fn request_gas(
+        &mut self,
+        address: SuiAddress,
+        amount: u64,
+    ) -> anyhow::Result<TransactionEffects> {
+        self.request_gas(address, amount)
     }
 }
