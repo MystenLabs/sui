@@ -41,6 +41,15 @@ impl Build {
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path.clone())?;
         let build_config = resolve_lock_file_path(build_config, path)?;
+        if let Some(lock_file) = build_config.clone().lock_file {
+            let lock_string = std::fs::read_to_string(lock_file)?;
+            let _compiler_toolchain = move_package::lock_file::schema::CompilerToolchain::read(
+                &mut lock_string.as_bytes(),
+            )?;
+            // TODO: Check for Move.lock compiler toolchain. If it exists and we are not on the current
+            // version, run logic to download and execute the build for a previous version.
+        }
+
         Self::execute_internal(
             rerooted_path,
             build_config,
@@ -49,6 +58,10 @@ impl Build {
             self.generate_struct_layouts,
             !self.no_lint,
         )
+
+        // TODO: Write Move.lock with compiler toolchain / version info on success here.
+        // Grab compiler version from env!("CARGO_PKG_VERSION")
+        // Grab flags from build_config.compiler_flags.
     }
 
     pub fn execute_internal(
