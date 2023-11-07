@@ -1034,7 +1034,7 @@ export class Ampli {
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/clicked%20swap%20coin)
    *
-   * Event has no description in tracking plan.
+   * When users click to swap a coin in the wallet
    *
    * @param properties The event's properties (e.g. coinType)
    * @param options Amplitude event options.
@@ -1349,7 +1349,7 @@ export class Ampli {
    *
    * [View in Tracking Plan](https://data.amplitude.com/mystenlabs/Sui%20Wallet/events/main/latest/swapped%20coin)
    *
-   * Event has no description in tracking plan.
+   * When users complete swapping 1 coin to another
    *
    * @param properties The event's properties (e.g. estimatedReturnBalance)
    * @param options Amplitude event options.
