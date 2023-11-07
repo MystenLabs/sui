@@ -219,6 +219,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         )?;
         let dep_lock_files = dep_graphs
             .values()
+            // WHY write_to_lock here?
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
         let dev_dep_graphs = self.collect_graphs(
@@ -231,6 +232,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         let dev_dep_lock_files = dev_dep_graphs
             .values()
+            // WHY write_to_lock here again?
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
@@ -886,6 +888,7 @@ impl DependencyGraph {
                 version: _,
                 manifest_digest,
                 deps_digest,
+                ..
             },
         ) = schema::Packages::read(lock)?;
 
@@ -1037,6 +1040,7 @@ impl DependencyGraph {
     /// This operation fails, writing nothing, if the graph contains a cycle, and can fail with an
     /// undefined output if it cannot be represented in a TOML file.
     pub fn write_to_lock(&self, install_dir: PathBuf) -> Result<LockFile> {
+        println!("writing lock to {}", install_dir.display());
         let lock = LockFile::new(
             install_dir,
             self.manifest_digest.clone(),

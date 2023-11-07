@@ -318,7 +318,12 @@ impl SuiCommand {
                 package_path,
                 build_config,
                 cmd,
-            } => execute_move_command(package_path, build_config, cmd),
+            } =>
+            /* XXX */
+            {
+                println!("move command XYZ");
+                execute_move_command(package_path, build_config, cmd)
+            }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
         }
     }

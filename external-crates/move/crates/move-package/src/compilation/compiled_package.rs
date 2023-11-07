@@ -642,6 +642,12 @@ impl CompiledPackage {
             compiled_abis,
         };
 
+        let flags = resolution_graph.build_options.compiler_flags();
+        println!(
+            "flags known from build_options in compiled_package.rs: {:#?}",
+            flags
+        );
+        // WRITE TO LOCK FILE HERE?
         compiled_package.save_to_disk(project_root.join(CompiledPackageLayout::Root.path()))?;
 
         Ok(compiled_package)
@@ -759,6 +765,7 @@ impl CompiledPackage {
             }
         }
 
+        // This is where BuildInfo.yaml is saved
         on_disk_package.save_under(
             CompiledPackageLayout::BuildInfo.path(),
             serde_yaml::to_string(&on_disk_package.package)?.as_bytes(),

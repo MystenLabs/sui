@@ -78,6 +78,8 @@ async fn main() {
         .init();
     debug!("Sui-Move CLI version: {VERSION}");
 
+    // XXX
+    println!("move command 123 in main.rs");
     exit_main!(execute_move_command(
         args.package_path,
         args.build_config,

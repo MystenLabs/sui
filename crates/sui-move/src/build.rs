@@ -41,6 +41,36 @@ impl Build {
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path.clone())?;
         let build_config = resolve_lock_file_path(build_config, path)?;
+        // let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let lock_string = std::fs::read_to_string(build_config.clone().lock_file.unwrap());
+        println!("lock string: {:#?}", lock_string);
+        let mut git_version = "";
+        if let Some(revision) = option_env!("GIT_REVISION") {
+            git_version = revision
+        } else {
+            let version = git_version::git_version!(
+                args = ["--always", "--dirty", "--exclude", "*"],
+                fallback = ""
+            );
+
+            if version.is_empty() {
+                panic!("unable to query git revision");
+            }
+            git_version = version
+        };
+        let version = concat!(env!("CARGO_PKG_VERSION"), "-", "fixme-git-revision");
+        println!("{version}-{git_version}");
+
+        /*
+            // let _mutx = PackageLock::lock();
+            // write stuff
+            if let Some(lock_path) = build_config.lock_file {
+                let lock_string = std::fs::read_to_string(lock_path);
+                println!("lock string: {:#?}", lock_string);
+                // Do things
+        }
+         */
+
         Self::execute_internal(
             rerooted_path,
             build_config,
@@ -94,6 +124,7 @@ impl Build {
             fs::write(layout_filename, layout_str)?
         }
 
+        // WRITE TO LOCK FILE HERE
         Ok(())
     }
 }

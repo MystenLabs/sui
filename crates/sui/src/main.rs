@@ -57,6 +57,7 @@ async fn main() {
     };
 
     debug!("Sui CLI version: {VERSION}");
+    println!("TTTTT");
 
     exit_main!(args.command.execute().await);
 }

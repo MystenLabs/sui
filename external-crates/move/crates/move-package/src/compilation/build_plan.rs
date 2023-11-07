@@ -116,6 +116,7 @@ impl BuildPlan {
             &project_root.join(CompiledPackageLayout::Root.path()),
             self.sorted_deps.iter().copied().collect(),
         )?;
+        // WRITE TO LOCK FILE HERE?
         Ok(compiled)
     }
 

@@ -71,6 +71,12 @@ pub struct Header {
     /// a single digest using SHA-256 hasher (similarly to the package digest is computed). If there
     /// are no dependencies, it's an empty string.
     pub deps_digest: String,
+    /// The Move compiler version used to compile this package.
+    #[serde(rename = "compiler-version")]
+    pub compiler_version: String,
+    /// The Move compiler flags used to compile this package.
+    #[serde(rename = "compiler-flags")]
+    pub compiler_flags: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,6 +124,8 @@ pub(crate) fn write_prologue(
     file: &mut NamedTempFile,
     manifest_digest: String,
     deps_digest: String,
+    compiler_version: String,
+    compiler_flags: Vec<String>,
 ) -> Result<()> {
     writeln!(
         file,
@@ -129,6 +137,8 @@ pub(crate) fn write_prologue(
             version: VERSION,
             manifest_digest,
             deps_digest,
+            compiler_version,
+            compiler_flags,
         },
     })?;
 

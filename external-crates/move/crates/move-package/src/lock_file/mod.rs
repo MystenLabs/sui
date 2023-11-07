@@ -53,8 +53,16 @@ impl LockFile {
             .tempfile_in(locks_dir)
             .context("Creating lock file")?;
 
-        schema::write_prologue(&mut lock, manifest_digest, deps_digest)
-            .context("Initializing lock file")?;
+        let compiler_version = env!("CARGO_PKG_VERSION").into();
+        let compiler_flags = vec![];
+        schema::write_prologue(
+            &mut lock,
+            manifest_digest,
+            deps_digest,
+            compiler_version,
+            compiler_flags,
+        )
+        .context("Initializing lock file")?;
 
         Ok(LockFile { file: lock })
     }
