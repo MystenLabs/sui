@@ -203,6 +203,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         protocol_config.set_shared_object_deletion(enable);
                     }
                     if let Some(mx_tx_gas_override) = max_gas {
+                        if simulator {
+                            panic!("Cannot set max gas in simulator mode");
+                        }
                         protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
                     }
                     (map, accounts, protocol_config, simulator)
