@@ -203,6 +203,10 @@ export interface ClickedSwapCoinProperties {
 	 */
 	coinType: string;
 	/**
+	 * The flow the user came from.
+	 */
+	sourceFlow: string;
+	/**
 	 * The total balance in SUI of the selected coin that the user has.
 	 *
 	 * | Rule | Value |

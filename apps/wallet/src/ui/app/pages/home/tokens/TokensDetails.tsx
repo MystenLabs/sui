@@ -153,6 +153,7 @@ export function TokenRow({
 										ampli.clickedSwapCoin({
 											coinType: coinBalance.coinType,
 											totalBalance: Number(formatted),
+											sourceFlow: 'TokenRow',
 										});
 									}}
 								>
@@ -455,6 +456,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												ampli.clickedSwapCoin({
 													coinType: coinBalance.coinType,
 													totalBalance: Number(formatted),
+													sourceFlow: 'LargeButton-TokenDetails',
 												});
 											}}
 										>
