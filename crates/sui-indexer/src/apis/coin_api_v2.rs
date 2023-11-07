@@ -39,7 +39,8 @@ impl CoinReadApiServer for CoinReadApiV2 {
         }
 
         // Normalize coin type tag and default to Gas
-        let coin_type = parse_to_type_tag(coin_type)?.to_string();
+        let coin_type =
+            parse_to_type_tag(coin_type)?.to_canonical_string(/* with_prefix */ true);
 
         let cursor = match cursor {
             Some(c) => c,
@@ -98,7 +99,8 @@ impl CoinReadApiServer for CoinReadApiV2 {
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
         // Normalize coin type tag and default to Gas
-        let coin_type = parse_to_type_tag(coin_type)?.to_string();
+        let coin_type =
+            parse_to_type_tag(coin_type)?.to_canonical_string(/* with_prefix */ true);
 
         let mut results = self
             .inner

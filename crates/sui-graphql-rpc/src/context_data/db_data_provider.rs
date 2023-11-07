@@ -64,7 +64,10 @@ use sui_indexer::{
     types_v2::OwnerType,
     PgConnectionPoolConfig,
 };
-use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
+use sui_json_rpc::{
+    coin_api::parse_to_type_tag,
+    name_service::{Domain, NameRecord, NameServiceConfig},
+};
 use sui_json_rpc_types::{
     EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as SuiStake,
     SuiTransactionBlockEffects,
@@ -1298,7 +1301,14 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
+        let coin_type_tag = parse_to_type_tag(coin_type);
+        if coin_type_tag.is_err() {
+            // The provided `coin_type` cannot be parsed to a type tag so return None here.
+            return Ok(None);
+        }
+        let coin_type = coin_type_tag
+            .unwrap()
+            .to_canonical_string(/* with_prefix */ true);
         let result = self.get_balance(address, coin_type).await?;
 
         match result {
@@ -1378,7 +1388,15 @@ impl PgManager {
                     Coin::try_from(stored_obj)
                         .map_err(|e| eprintln!("Error converting object to coin: {:?}", e))
                         .ok()
-                        .map(|coin| Edge::new(coin.move_obj.native_object.id().to_string(), coin))
+                        .map(|coin| {
+                            Edge::new(
+                                coin.move_obj
+                                    .native_object
+                                    .id()
+                                    .to_canonical_string(/* with_prefix */ true),
+                                coin,
+                            )
+                        })
                 }));
             Ok(Some(connection))
         } else {
@@ -1502,7 +1520,7 @@ impl PgManager {
         let obj_filter = ObjectFilter {
             package: None,
             module: None,
-            ty: Some(MoveObjectType::staked_sui().to_string()),
+            ty: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
             owner: Some(address),
             object_ids: None,
             object_keys: None,
@@ -1551,7 +1569,9 @@ impl PgManager {
                 .collect::<Vec<_>>();
 
             for stk in stakes {
-                let cursor = stk.staked_sui_id.to_string();
+                let cursor = stk
+                    .staked_sui_id
+                    .to_canonical_string(/* with_prefix */ true);
                 let stake = Stake::from(stk);
                 edges.push(Edge::new(cursor, stake));
             }
@@ -1628,7 +1648,9 @@ impl PgManager {
                         package: SuiAddress::from_array(**e.package_id),
                         name: e.transaction_module.to_string(),
                     }),
-                    event_type: Some(MoveType::new(e.type_.to_string())),
+                    event_type: Some(MoveType::new(
+                        e.type_.to_canonical_string(/* with_prefix */ true),
+                    )),
                     senders: Some(vec![Address {
                         address: SuiAddress::from_array(e.sender.to_inner()),
                     }]),

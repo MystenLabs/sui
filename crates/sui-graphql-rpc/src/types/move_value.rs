@@ -477,7 +477,7 @@ mod tests {
 
     fn json<T: Serialize>(layout: value::MoveTypeLayout, data: T) -> Result<Json> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
-        let type_ = MoveType::new(tag.to_string());
+        let type_ = MoveType::new(tag.to_canonical_string(/* with_prefix */ true));
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.json_impl(layout)
     }
