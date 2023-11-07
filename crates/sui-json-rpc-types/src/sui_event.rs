@@ -127,7 +127,7 @@ impl SuiEvent {
 impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f,
-            " ┌──\n │ EventID: {}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {} \n │ EventType: {}:{}\n",
+            " ┌──\n │ Event ID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n",
             self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_)?;
         if let Some(ts) = self.timestamp_ms {
             writeln!(f, " │ Timestamp: {}\n └──", ts)?;
