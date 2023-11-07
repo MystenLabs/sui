@@ -51,8 +51,6 @@ pub(crate) struct TransactionBlock {
     pub kind: Option<TransactionBlockKind>,
     /// A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
     pub signatures: Option<Vec<Option<TransactionSignature>>>,
-    /// UTC timestamp in milliseconds since epoch (1/1/1970)
-    pub timestamp: Option<DateTime>,
 }
 
 #[ComplexObject]
@@ -107,6 +105,10 @@ pub(crate) struct TransactionBlockEffects {
     // pub checkpoint: Option<Checkpoint>,
     #[graphql(skip)]
     checkpoint_seq_number: u64,
+    /// UTC timestamp in milliseconds since epoch (1/1/1970)
+    /// representing the time when the checkpoint that contains
+    /// this transaction was created
+    pub timestamp: Option<DateTime>,
 }
 
 impl TransactionBlockEffects {
@@ -116,6 +118,7 @@ impl TransactionBlockEffects {
         object_changes: Vec<Option<Vec<u8>>>,
         tx_effects: &SuiTransactionBlockEffects,
         tx_block_digest: Digest,
+        timestamp: Option<DateTime>,
     ) -> Result<Option<Self>> {
         let (status, errors) = match tx_effects.status() {
             SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
@@ -140,6 +143,7 @@ impl TransactionBlockEffects {
             tx_block_digest,
             object_changes_as_bcs: object_changes,
             checkpoint_seq_number,
+            timestamp,
         }))
     }
 }
