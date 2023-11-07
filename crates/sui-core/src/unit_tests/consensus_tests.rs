@@ -136,7 +136,7 @@ async fn submit_transaction_to_consensus_adapter() {
     }
     // Make a new consensus adapter instance.
     let adapter = Arc::new(ConsensusAdapter::new(
-        Box::new(SubmitDirectly(state.clone())),
+        Box::new(Arc::new(SubmitDirectly(state.clone()))),
         state.name,
         Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
         100_000,

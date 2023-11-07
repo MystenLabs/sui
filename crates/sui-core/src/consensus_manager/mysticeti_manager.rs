@@ -45,6 +45,9 @@ pub struct MysticetiManager {
         Validator<SimpleBlockHandler, SimpleCommitObserver>,
         RegistryID,
     )>,
+    // we use a shared lazy mysticeti client so we can update the internal mysticeti client that
+    // gets created for every new epoch.
+    client: Arc<LazyMysticetiClient>,
 }
 
 impl MysticetiManager {
@@ -54,6 +57,7 @@ impl MysticetiManager {
         storage_base_path: PathBuf,
         metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
+        client: Arc<LazyMysticetiClient>,
     ) -> MysticetiManager {
         Self {
             keypair,
@@ -63,6 +67,7 @@ impl MysticetiManager {
             metrics,
             registry_service,
             validator: ArcSwapOption::empty(),
+            client,
         }
     }
 
@@ -141,8 +146,8 @@ impl ConsensusManagerTrait for MysticetiManager {
                     self.validator
                         .swap(Some(Arc::new((validator, registry_id))));
 
-                    // create the client to send transactions to Mysticeti and update it
-                    LazyMysticetiClient::set(MysticetiClient::new(tx_sender));
+                    // create the client to send transactions to Mysticeti and update it.
+                    self.client.set(MysticetiClient::new(tx_sender));
 
                     break;
                 }

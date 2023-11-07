@@ -15,8 +15,6 @@ use crate::consensus_adapter::SubmitToConsensus;
 use sui_types::messages_consensus::ConsensusTransaction;
 use tracing::warn;
 
-static LOCAL_MYSTICETI_CLIENT: ArcSwapOption<MysticetiClient> = ArcSwapOption::const_empty();
-
 #[derive(Clone)]
 pub struct MysticetiClient {
     // channel to transport bcs-serialized bytes of ConsensusTransaction
@@ -48,12 +46,18 @@ impl MysticetiClient {
 /// MysticetiClient is stored in order to communicate with Mysticeti. The LazyMysticetiClient is considered
 /// "lazy" only in the sense that we can't use it directly to submit to consensus unless the underlying
 /// local client is set first.
-#[derive(Default)]
-pub struct LazyMysticetiClient;
+#[derive(Default, Clone)]
+pub struct LazyMysticetiClient {
+    client: Arc<ArcSwapOption<MysticetiClient>>,
+}
 
 impl LazyMysticetiClient {
+    pub fn new(client: Arc<ArcSwapOption<MysticetiClient>>) -> Self {
+        Self { client }
+    }
+
     async fn get(&self) -> Guard<Option<Arc<MysticetiClient>>> {
-        let client = LOCAL_MYSTICETI_CLIENT.load();
+        let client = self.client.load();
         if client.is_some() {
             return client;
         }
@@ -64,7 +68,7 @@ impl LazyMysticetiClient {
         const LOAD_RETRY_TIMEOUT: Duration = Duration::from_millis(100);
         if let Ok(client) = timeout(MYSTICETI_START_TIMEOUT, async {
             loop {
-                let client = LOCAL_MYSTICETI_CLIENT.load();
+                let client = self.client.load();
                 if client.is_some() {
                     return client;
                 } else {
@@ -83,9 +87,8 @@ impl LazyMysticetiClient {
         );
     }
 
-    // Helper method to replace the mysticeti client with a new one to support the new epoch.
-    pub fn set(submit: MysticetiClient) {
-        LOCAL_MYSTICETI_CLIENT.store(Some(Arc::new(submit)));
+    pub fn set(&self, client: MysticetiClient) {
+        self.client.store(Some(Arc::new(client)));
     }
 }
 
@@ -104,7 +107,6 @@ impl SubmitToConsensus for LazyMysticetiClient {
             .expect("Client should always be returned")
             .submit_transaction(transaction)
             .await
-            .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
             .tap_err(|r| {
                 // Will be logged by caller as well.
                 warn!("Submit transaction failed with: {:?}", r);

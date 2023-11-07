@@ -62,7 +62,10 @@ impl SingleValidator {
             _ => ConsensusMode::Noop,
         };
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Box::new(MockConsensusClient::new(validator.clone(), consensus_mode)),
+            Box::new(Arc::new(MockConsensusClient::new(
+                validator.clone(),
+                consensus_mode,
+            ))),
             validator.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             100_000,
