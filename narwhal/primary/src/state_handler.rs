@@ -118,7 +118,7 @@ impl RandomnessState {
 
     async fn start_dkg(&self, tx_system_messages: &Sender<SystemMessage>) {
         let msg = self.party.create_message(&mut rand::thread_rng());
-        info!("random beacon: sending DKG Message: {msg:?}");
+        // info!("random beacon: sending DKG Message: {msg:?}");
         let _ = tx_system_messages
             .send(SystemMessage::DkgMessage(msg))
             .await;

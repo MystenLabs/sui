@@ -843,6 +843,9 @@ pub struct ProtocolConfig {
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
+
+    /// Narwhalceti
+    narwhalceti_leaders_per_round: Option<u64>,
 }
 
 // feature flags
@@ -1417,6 +1420,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_allowed_delta: None,
 
+            narwhalceti_leaders_per_round: None,
+
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1653,6 +1658,7 @@ impl ProtocolConfig {
                     // Only enable narwhalceti on private testnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhalceti = true;
+                        cfg.narwhalceti_leaders_per_round = Some(5);
                     }
                 }
                 // Use this template when making changes:

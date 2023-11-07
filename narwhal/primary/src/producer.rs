@@ -5,20 +5,18 @@ use crypto::{traits::Signer, NetworkKeyPair};
 use mysten_metrics::{metered_channel::Receiver, spawn_logged_monitored_task};
 use sui_protocol_config::ProtocolConfig;
 use tokio::{
-    sync::{mpsc, watch},
+    sync::watch,
     task::JoinHandle,
     time::{sleep, sleep_until, Instant},
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use types::{
-    error::DagResult, now, Header, HeaderAPI, HeaderKey, HeaderSignatureBytes, HeaderV3, Round,
-    SignedHeader, TimestampMs,
+    now, Header, HeaderAPI, HeaderKey, HeaderSignatureBytes, HeaderV3, Round, SignedHeader,
+    TimestampMs,
 };
 
 use crate::{
-    broadcaster::{self, Broadcaster},
-    dag_state::DagState,
-    metrics::PrimaryMetrics,
+    broadcaster::Broadcaster, dag_state::DagState, metrics::PrimaryMetrics,
     proposer::OurDigestMessage,
 };
 
@@ -81,6 +79,7 @@ impl Producer {
         )
     }
 
+    // TODO(narwhalceti): remove loop and let this be driven by Core instead.
     async fn run(&mut self) {
         self.rx_headers_accepted.borrow_and_update();
         let mut our_digests = VecDeque::new();
@@ -125,7 +124,7 @@ impl Producer {
                 .make_header(header_round, ancestors, ancestor_max_ts_ms, batch_digests)
                 .await;
 
-            // TODO: log to DagState instead.
+            // TODO(narwhalceti): persisence.
             self.dag_state
                 .try_accept(vec![signed_header.clone()])
                 .unwrap();

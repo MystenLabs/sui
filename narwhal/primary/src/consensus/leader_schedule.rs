@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fmt::{Debug, Formatter},
     sync::Arc,
 };
 
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use storage::ConsensusStore;
 use sui_protocol_config::ProtocolConfig;
@@ -32,6 +32,10 @@ pub struct LeaderSwapTable {
     /// Every time where such authority is elected as leader on the schedule, it will swapped by one
     /// of the authorities of the `good_nodes`.
     bad_nodes: HashMap<AuthorityIdentifier, Authority>,
+    /// Weights per authority.
+    weights: Vec<(AuthorityIdentifier, f32)>,
+    /// Caches per round leaders.
+    leader_cache: BTreeMap<Round, Vec<AuthorityIdentifier>>,
 }
 
 impl Debug for LeaderSwapTable {
@@ -118,6 +122,24 @@ impl LeaderSwapTable {
             round,
             good_nodes,
             bad_nodes,
+            weights: committee
+                .authorities()
+                .map(|authority| (authority.id(), authority.stake() as f32))
+                .collect::<Vec<_>>(),
+            leader_cache: Default::default(),
+        }
+    }
+
+    pub fn new_empty(committee: &Committee) -> Self {
+        Self {
+            round: 0,
+            good_nodes: Default::default(),
+            bad_nodes: Default::default(),
+            weights: committee
+                .authorities()
+                .map(|authority| (authority.id(), authority.stake() as f32))
+                .collect::<Vec<_>>(),
+            leader_cache: Default::default(),
         }
     }
 
@@ -150,6 +172,51 @@ impl LeaderSwapTable {
             return Some(good_node.to_owned());
         }
         None
+    }
+
+    pub fn leader_sequence(
+        &mut self,
+        leader_round: Round,
+        num_leaders: usize,
+    ) -> Vec<AuthorityIdentifier> {
+        if let Some(seq) = self.leader_cache.get(&leader_round) {
+            assert_eq!(seq.len(), num_leaders);
+            return seq.clone();
+        }
+
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes[32 - 8..].copy_from_slice(&leader_round.to_le_bytes());
+        let mut rng = StdRng::from_seed(seed_bytes);
+
+        let mut weights = self.weights.clone();
+
+        let mut leaders = vec![];
+        for _ in 0..num_leaders {
+            let (leader, _) = weights
+                .choose_weighted(&mut rng, |(_, weight)| *weight)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "There should be at least one authority available. num_leaders={}",
+                        num_leaders
+                    )
+                });
+
+            let mut leader = *leader;
+            if self.bad_nodes.contains_key(&leader) {
+                leader = self
+                    .good_nodes
+                    .choose(&mut rng)
+                    .expect("There should be at least one good node available")
+                    .id();
+            }
+
+            weights.retain(|(id, _)| *id != leader);
+
+            leaders.push(leader);
+        }
+
+        self.leader_cache.insert(leader_round, leaders.clone());
+        leaders
     }
 
     // Retrieves the first nodes provided by the iterator `authorities` until the `stake_threshold` has been
@@ -186,14 +253,28 @@ impl LeaderSwapTable {
 #[derive(Clone)]
 pub struct LeaderSchedule {
     pub committee: Committee,
-    pub leader_swap_table: Arc<RwLock<LeaderSwapTable>>,
+    pub leader_swap_table: Arc<Mutex<LeaderSwapTable>>,
+    num_leaders_per_round: usize,
 }
 
 impl LeaderSchedule {
     pub fn new(committee: Committee, table: LeaderSwapTable) -> Self {
         Self {
             committee,
-            leader_swap_table: Arc::new(RwLock::new(table)),
+            leader_swap_table: Arc::new(Mutex::new(table)),
+            num_leaders_per_round: 1,
+        }
+    }
+
+    pub fn new_narwhalceti(
+        committee: Committee,
+        table: LeaderSwapTable,
+        num_leaders_per_round: usize,
+    ) -> Self {
+        Self {
+            committee,
+            leader_swap_table: Arc::new(Mutex::new(table)),
+            num_leaders_per_round,
         }
     }
 
@@ -218,25 +299,53 @@ impl LeaderSchedule {
         Self::new(committee, table)
     }
 
+    pub fn from_narwhalceti_store(
+        committee: Committee,
+        store: Arc<ConsensusStore>,
+        protocol_config: ProtocolConfig,
+    ) -> Self {
+        let table = store
+            .read_latest_commit_with_final_reputation_scores()
+            .map_or(LeaderSwapTable::default(), |commit| {
+                LeaderSwapTable::new(
+                    &committee,
+                    commit.leader_round(),
+                    &commit.reputation_score(),
+                    protocol_config.consensus_bad_nodes_stake_threshold(),
+                )
+            });
+        let num_leaders_per_round = (protocol_config.narwhalceti_leaders_per_round() as usize)
+            .max(1)
+            .min(committee.size() * 2 / 3);
+        Self {
+            committee,
+            leader_swap_table: Arc::new(Mutex::new(table)),
+            num_leaders_per_round,
+        }
+    }
+
     /// Atomically updates the leader swap table with the new provided one. Any leader queried from
     /// now on will get calculated according to this swap table until a new one is provided again.
     pub fn update_leader_swap_table(&self, table: LeaderSwapTable) {
         trace!("Updating swap table {:?}", table);
 
-        let mut write = self.leader_swap_table.write();
+        let mut write = self.leader_swap_table.lock();
         *write = table;
+    }
+
+    pub fn leader_sequence(&self, round: Round) -> Vec<AuthorityIdentifier> {
+        let mut swap_table = self.leader_swap_table.lock();
+        swap_table.leader_sequence(round, self.num_leaders_per_round)
+    }
+
+    pub fn num_leaders_per_round(&self) -> usize {
+        self.num_leaders_per_round
     }
 
     /// Returns the leader for the provided round. Keep in mind that this method will return a leader
     /// according to the provided LeaderSwapTable. Providing a different table can potentially produce
     /// a different leader for the same round.
     pub fn leader(&self, round: Round) -> Authority {
-        assert_eq!(
-            round % 2,
-            0,
-            "We should never attempt to do a leader election for odd rounds"
-        );
-
         // TODO: split the leader election logic for testing from the production code.
         cfg_if::cfg_if! {
             if #[cfg(test)] {
@@ -249,14 +358,14 @@ impl LeaderSchedule {
                 let authorities = self.committee.authorities().collect::<Vec<_>>();
 
                 let leader: Authority = (*authorities.get(next_leader).unwrap()).clone();
-                let table = self.leader_swap_table.read();
+                let table = self.leader_swap_table.lock();
 
                 table.swap(&leader.id(), round).unwrap_or(leader)
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
                 let leader = self.committee.leader(round);
 
-                let table = self.leader_swap_table.read();
+                let table = self.leader_swap_table.lock();
                 table.swap(&leader.id(), round).unwrap_or(leader)
             }
         }
@@ -284,7 +393,7 @@ impl LeaderSchedule {
     }
 
     pub fn num_of_bad_nodes(&self) -> usize {
-        let read = self.leader_swap_table.read();
-        read.bad_nodes.len()
+        let table = self.leader_swap_table.lock();
+        table.bad_nodes.len()
     }
 }

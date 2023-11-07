@@ -99,6 +99,37 @@ impl CommittedSubDag {
         }
     }
 
+    pub fn new_narwhalceti(
+        certificates: Vec<Certificate>,
+        leader: Certificate,
+        reputation_score: ReputationScores,
+        previous_sub_dag: Option<&CommittedSubDag>,
+    ) -> Self {
+        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp.
+        let previous_sub_dag_index = previous_sub_dag
+            .map(|s| s.sub_dag_index)
+            .unwrap_or_default();
+        let sub_dag_index = previous_sub_dag_index + 1;
+
+        let previous_sub_dag_ts = previous_sub_dag
+            .map(|s| s.commit_timestamp)
+            .unwrap_or_default();
+        let commit_timestamp = previous_sub_dag_ts.max(*leader.header().created_at());
+
+        if previous_sub_dag_ts > *leader.header().created_at() {
+            warn!(sub_dag_index = ?sub_dag_index, "Leader timestamp {} is older than previously committed sub dag timestamp {}. Auto-correcting to max {}.",
+            leader.header().created_at(), previous_sub_dag_ts, commit_timestamp);
+        }
+
+        Self {
+            certificates,
+            leader,
+            sub_dag_index,
+            reputation_score,
+            commit_timestamp,
+        }
+    }
+
     pub fn from_commit(
         commit: ConsensusCommit,
         certificates: Vec<Certificate>,

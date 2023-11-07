@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use anemo::{rpc::Status, Network, Request, Response};
+use anemo::{rpc::Status, Request, Response};
 use config::{AuthorityIdentifier, Committee};
 use crypto::NetworkPublicKey;
-use futures::{stream::FuturesOrdered, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::spawn_logged_monitored_task;
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
@@ -42,10 +42,6 @@ impl Broadcaster {
         let inner_clone = inner.clone();
         spawn_logged_monitored_task!(
             async move {
-                let Ok(network) = inner_clone.client.get_primary_network().await else {
-                    error!("Failed to get primary Network!");
-                    return;
-                };
                 let mut senders = inner_clone.header_senders.lock();
                 for (peer_authority, _, peer_name) in inner_clone
                     .committee
@@ -53,7 +49,7 @@ impl Broadcaster {
                     .into_iter()
                 {
                     senders.spawn(Self::push_headers(
-                        network.clone(),
+                        inner_clone.clone(),
                         peer_authority,
                         peer_name,
                         tx_own_header_broadcast.subscribe(),
@@ -79,18 +75,18 @@ impl Broadcaster {
     ///
     /// Exits only when the primary is shutting down.
     async fn push_headers(
-        network: Network,
+        inner: Arc<Inner>,
         peer_authority: AuthorityIdentifier,
         peer_name: NetworkPublicKey,
         mut rx_own_header_broadcast: broadcast::Receiver<SignedHeader>,
     ) {
+        let network = inner.client.get_primary_network().await.unwrap();
         const PUSH_TIMEOUT: Duration = Duration::from_secs(10);
         let peer_id = anemo::PeerId(peer_name.0.to_bytes());
         let peer = network.waiting_peer(peer_id);
         let client = PrimaryToPrimaryClient::new(peer);
-        // Older broadcasts return early, so the last broadcast must be the latest header.
         // This will contain at most headers created within the last PUSH_TIMEOUT.
-        let mut requests = FuturesOrdered::new();
+        let mut requests = FuturesUnordered::new();
         // Back off and retry only happen when there is only one header to be broadcasted.
         // Otherwise no retry happens.
         const BACKOFF_INTERVAL: Duration = Duration::from_millis(100);
@@ -101,9 +97,14 @@ impl Broadcaster {
             mut client: PrimaryToPrimaryClient<WaitingPeer>,
             request: Request<SendHeaderRequest>,
             header: SignedHeader,
-        ) -> (SignedHeader, Result<Response<SendHeaderResponse>, Status>) {
+            retries: usize,
+        ) -> (
+            SignedHeader,
+            Result<Response<SendHeaderResponse>, Status>,
+            usize,
+        ) {
             let resp = client.send_header(request).await;
-            (header, resp)
+            (header, resp, retries + 1)
         }
 
         loop {
@@ -122,21 +123,20 @@ impl Broadcaster {
                         }
                     };
                     let request = Request::new(SendHeaderRequest { signed_header: header.clone() }).with_timeout(PUSH_TIMEOUT);
-                    requests.push_back(send_header(client.clone(),request, header));
+                    requests.push(send_header(client.clone(),request, header, 0));
                 }
-                Some((header, resp)) = requests.next() => {
+                Some((header, resp, retries)) = requests.next() => {
                     backoff_multiplier = match resp {
                         Ok(_) => {
                             0
                         },
                         Err(_) => {
-                            if requests.is_empty() {
+                            if retries < 10 {
                                 // Retry broadcasting the latest header, to help the network stay alive.
                                 let request = Request::new(SendHeaderRequest { signed_header: header.clone() }).with_timeout(PUSH_TIMEOUT);
-                                requests.push_back(send_header(client.clone(), request, header));
+                                requests.push(send_header(client.clone(), request, header, retries));
                                 std::cmp::min(backoff_multiplier * 2 + 1, MAX_BACKOFF_MULTIPLIER)
                             } else {
-                                // TODO: add backoff and retries for transient & retriable errors.
                                 0
                             }
                         },

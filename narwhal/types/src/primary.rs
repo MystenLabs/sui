@@ -2556,3 +2556,12 @@ mod tests {
         );
     }
 }
+
+/// Index of a leader among all potential leaders.
+#[derive(
+    Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, MallocSizeOf, PartialOrd, Ord,
+)]
+pub struct LeaderIndex {
+    pub round: Round,
+    pub pos: u64,
+}

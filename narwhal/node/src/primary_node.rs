@@ -353,12 +353,6 @@ impl PrimaryNodeInner {
             .recovered_consensus_output
             .inc_by(num_sub_dags);
 
-        let leader_schedule = LeaderSchedule::from_store(
-            committee.clone(),
-            store.consensus_store.clone(),
-            protocol_config.clone(),
-        );
-
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
         let mut handles = Executor::spawn(

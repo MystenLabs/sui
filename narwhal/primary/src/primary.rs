@@ -6,9 +6,9 @@ use crate::{
     broadcaster::Broadcaster,
     certificate_fetcher::CertificateFetcher,
     certifier::Certifier,
-    consensus::{ConsensusRound, LeaderSchedule},
+    consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable},
     core::Core,
-    dag_state::{self, DagState},
+    dag_state::DagState,
     metrics::{initialise_metrics, PrimaryMetrics},
     producer::Producer,
     proposer::{OurDigestMessage, Proposer},
@@ -66,11 +66,8 @@ use std::{
 };
 use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
 use sui_protocol_config::ProtocolConfig;
+use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
-use tokio::{
-    sync::{broadcast, oneshot},
-    time::Instant,
-};
 use tower::ServiceBuilder;
 use tracing::{debug, error, info, instrument, warn};
 use types::{
@@ -573,7 +570,7 @@ impl Primary {
 
         // Initialize the metrics
         let metrics = initialise_metrics(registry);
-        let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
+        let primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
         let inbound_network_metrics = Arc::new(metrics.inbound_network_metrics.unwrap());
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
@@ -584,7 +581,7 @@ impl Primary {
             &primary_channel_metrics.tx_our_digests,
             &primary_channel_metrics.tx_our_digests_total,
         );
-        let (tx_system_messages, rx_system_messages) = channel_with_total(
+        let (tx_system_messages, _rx_system_messages) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_system_messages,
             &primary_channel_metrics.tx_system_messages_total,
@@ -600,12 +597,12 @@ impl Primary {
         //     &primary_channel_metrics.tx_certificate_fetcher,
         //     &primary_channel_metrics.tx_certificate_fetcher_total,
         // );
-        let (tx_committed_own_headers, rx_committed_own_headers) = channel_with_total(
+        let (tx_committed_own_headers, _rx_committed_own_headers) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_committed_own_headers,
             &primary_channel_metrics.tx_committed_own_headers_total,
         );
-        let (tx_committed_certificates, rx_committed_certificates) = channel_with_total(
+        let (_tx_committed_certificates, rx_committed_certificates) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_committed_certificates,
             &primary_channel_metrics.tx_committed_certificates_total,
@@ -879,9 +876,15 @@ impl Primary {
 
         let broadcaster = Broadcaster::new(authority.id(), committee.clone(), client.clone());
 
+        let leader_schedule = LeaderSchedule::new_narwhalceti(
+            committee.clone(),
+            LeaderSwapTable::new_empty(&committee),
+            1,
+        );
         let dag_state = Arc::new(DagState::new(
             authority.id(),
             committee.clone(),
+            leader_schedule,
             header_store,
         ));
 
@@ -1334,18 +1337,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
 
     async fn send_header(
         &self,
-        request: anemo::Request<SendHeaderRequest>,
+        _request: anemo::Request<SendHeaderRequest>,
     ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
-        let signed_header = request.into_body().signed_header;
-        let Header::V3(_header) = signed_header.header() else {
-            return Err(anemo::rpc::Status::new_with_message(
-                StatusCode::BadRequest,
-                "Invalid header version",
-            ));
-        };
-        Ok(anemo::Response::new(SendHeaderResponse {
-            result: HeaderValidationResult::Ok,
-        }))
+        Err(anemo::rpc::Status::internal("send_header unimplemented!"))
     }
 
     async fn request_vote(
