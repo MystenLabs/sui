@@ -11,8 +11,13 @@ use move_transactional_test_runner::framework::run_test_impl;
 use rand::rngs::StdRng;
 use simulacrum::Simulacrum;
 use std::path::Path;
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_types::digests::TransactionDigest;
+use sui_types::digests::TransactionEventsDigest;
+use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
+use sui_types::messages_checkpoint::CheckpointContentsDigest;
+use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 
@@ -51,7 +56,7 @@ pub struct ValidatorWithFullnode {
 #[allow(unused_variables)]
 /// TODO: better name?
 #[async_trait::async_trait]
-pub trait TransactionalAdapter: Send + Sync + ObjectStore {
+pub trait TransactionalAdapter: Send + Sync + ObjectStore + NodeStateGetter {
     async fn execute_txn(
         &mut self,
         transaction: Transaction,
@@ -160,6 +165,68 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         _amount: u64,
     ) -> anyhow::Result<TransactionEffects> {
         unimplemented!("request_gas not supported")
+    }
+}
+
+#[async_trait::async_trait]
+impl NodeStateGetter for ValidatorWithFullnode {
+    fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: u64,
+    ) -> SuiResult<VerifiedCheckpoint> {
+        self.validator
+            .get_verified_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<u64> {
+        self.validator.get_latest_checkpoint_sequence_number()
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        content_digest: CheckpointContentsDigest,
+    ) -> SuiResult<sui_types::messages_checkpoint::CheckpointContents> {
+        self.validator.get_checkpoint_contents(content_digest)
+    }
+
+    fn multi_get_transaction_blocks(
+        &self,
+        tx_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<sui_types::transaction::VerifiedTransaction>>> {
+        self.validator.multi_get_transaction_blocks(tx_digests)
+    }
+
+    fn multi_get_executed_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<sui_types::effects::TransactionEffects>>> {
+        self.validator.multi_get_executed_effects(digests)
+    }
+
+    fn multi_get_events(
+        &self,
+        event_digests: &[TransactionEventsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        self.validator.multi_get_events(event_digests)
+    }
+
+    fn multi_get_object_by_key(
+        &self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        self.validator.multi_get_object_by_key(object_keys)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        self.validator.get_object_by_key(object_id, version)
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.validator.database.get_object(object_id)
     }
 }
 

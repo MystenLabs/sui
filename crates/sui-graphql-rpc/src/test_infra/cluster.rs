@@ -6,8 +6,6 @@ use crate::config::ConnectionConfig;
 use crate::config::ServerConfig;
 use crate::server::simple_server::start_example_server;
 use mysten_metrics::init_metrics;
-use rand::rngs::StdRng;
-use simulacrum::Simulacrum;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,6 +16,7 @@ use sui_indexer::new_pg_connection_pool_impl;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::utils::reset_database;
 use sui_indexer::IndexerConfig;
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -29,8 +28,8 @@ const EPOCH_DURATION_MS: u64 = 15000;
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
 
-pub struct SimulatorCluster {
-    pub simulator_server_handle: JoinHandle<()>,
+pub struct ExecutorCluster {
+    pub executor_server_handle: JoinHandle<()>,
     pub indexer_store: PgIndexerStoreV2,
     pub indexer_join_handle: JoinHandle<Result<(), IndexerError>>,
     pub graphql_server_join_handle: JoinHandle<()>,
@@ -78,24 +77,24 @@ pub async fn start_cluster(
     }
 }
 
-pub async fn serve_simulator(
+pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
-    simulator: Arc<Simulacrum<StdRng>>,
-) -> SimulatorCluster {
+    executor: Arc<dyn NodeStateGetter>,
+) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
 
-    let sim_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
+    let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
         .parse()
         .unwrap();
 
-    let simulator_server_handle = tokio::spawn(async move {
-        sui_rest_api::start_service(sim_server_url, simulator, Some("/rest".to_owned())).await;
+    let executor_server_handle = tokio::spawn(async move {
+        sui_rest_api::start_service(executor_server_url, executor, Some("/rest".to_owned())).await;
     });
 
     // Starts indexer
     let (pg_store, pg_handle) =
-        start_test_indexer(Some(db_url), format!("http://{}", sim_server_url)).await;
+        start_test_indexer(Some(db_url), format!("http://{}", executor_server_url)).await;
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
@@ -109,8 +108,8 @@ pub async fn serve_simulator(
     // Starts graphql client
     let client = SimpleClient::new(server_url);
 
-    SimulatorCluster {
-        simulator_server_handle,
+    ExecutorCluster {
+        executor_server_handle,
         indexer_store: pg_store,
         indexer_join_handle: pg_handle,
         graphql_server_join_handle: graphql_server_handle,
@@ -189,4 +188,47 @@ pub async fn start_test_indexer(
         IndexerV2::start_writer(&config, store_clone, indexer_metrics).await
     });
     (store, handle)
+}
+
+#[tokio::test]
+pub async fn simulator_commands_test() -> Result<(), Box<dyn std::error::Error>> {
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("test_infra")
+        .join("example.move");
+
+    // Read the file into a string
+    let file_contents = std::fs::read_to_string(&path)?;
+
+    let (_output, adapter) = move_transactional_test_runner::framework::handle_actual_output::<
+        sui_transactional_test_runner::test_adapter::SuiTestAdapter,
+    >(
+        &path,
+        Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
+    )
+    .await?;
+
+    let executor = adapter.executor();
+
+    let checkpoint = executor.get_latest_checkpoint_sequence_number().unwrap();
+    let checkpoint_info = executor
+        .get_verified_checkpoint_by_sequence_number(checkpoint)
+        .unwrap();
+
+    let num_actual_checkpoint_commands = file_contents.match_indices("create-checkpoint").count();
+    let num_actual_epoch_commands = file_contents.match_indices("advance-epoch").count();
+
+    // Each epoch creation also creates a checkpoint
+    assert_eq!(
+        checkpoint as usize,
+        num_actual_checkpoint_commands + num_actual_epoch_commands
+    );
+
+    // Since we start at epoch 0, we need to subtract 1
+    assert_eq!(
+        checkpoint_info.epoch() as usize,
+        num_actual_epoch_commands - 1
+    );
+
+    Ok(())
 }

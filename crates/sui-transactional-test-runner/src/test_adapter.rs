@@ -877,8 +877,12 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl<'a> SuiTestAdapter<'a> {
-    fn is_simulator(&self) -> bool {
+    pub fn is_simulator(&self) -> bool {
         self.is_simulator
+    }
+
+    pub fn executor(&self) -> &dyn TransactionalAdapter {
+        &*self.executor
     }
 
     async fn upgrade_package(
@@ -1158,9 +1162,9 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn get_object(&self, id: &ObjectID, version: Option<SequenceNumber>) -> anyhow::Result<Object> {
         let obj_res = if let Some(v) = version {
-            self.executor.get_object_by_key(id, v)
+            sui_types::storage::ObjectStore::get_object_by_key(&*self.executor, id, v)
         } else {
-            self.executor.get_object(id)
+            sui_types::storage::ObjectStore::get_object(&*self.executor, id)
         };
         match obj_res {
             Ok(Some(obj)) => Ok(obj),
@@ -1448,7 +1452,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
     let sui_system_sources = {
@@ -1626,20 +1630,18 @@ fn init_sim_executor(
             address,
             GAS_FOR_TESTING,
         );
-        let test_account = TestAccount {
+
+        TestAccount {
             address,
             key_pair,
             gas: obj.id(),
-        };
-        objects.push(obj);
-        test_account
+        }
     };
 
     // For each named Sui account without an address value, create an account with an adddress
     // and a gas object
     for n in account_names {
         let test_account = mk_account();
-        account_objects.insert(n.clone(), test_account.gas);
         accounts.insert(n, test_account);
     }
 
@@ -1665,9 +1667,7 @@ fn init_sim_executor(
         acc_cfgs.clone(),
     );
 
-    // Get the actual values from the simulator
-    objects.clear();
-    account_objects.clear();
+    // Get the actual object values from the simulator
     for (name, acc) in accounts.iter_mut() {
         let o = sim.store().owned_objects(acc.address).next().unwrap();
         acc.gas = o.id();

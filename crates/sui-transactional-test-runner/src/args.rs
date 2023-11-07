@@ -268,9 +268,9 @@ impl SuiValue {
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
         };
         let obj_res = if let Some(v) = version {
-            test_adapter.executor.get_object_by_key(&id, v)
+            sui_types::storage::ObjectStore::get_object_by_key(&*test_adapter.executor, &id, v)
         } else {
-            test_adapter.executor.get_object(&id)
+            sui_types::storage::ObjectStore::get_object(&*test_adapter.executor, &id)
         };
         let obj = match obj_res {
             Ok(Some(obj)) => obj,
