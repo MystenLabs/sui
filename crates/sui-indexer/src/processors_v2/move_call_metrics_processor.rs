@@ -52,24 +52,24 @@ where
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
             }
-            // +1 as latest_move_call_metrics has been processed in last batch
-            let end_cp_seq = last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE;
-            let mut chunk_start_cp_seq = last_end_cp_seq + 1;
-            let mut chunk_end_cp_seq = last_end_cp_seq + PARALLEL_DOWNLOAD_CHUNK_SIZE;
+
             let mut parallel_download_tasks = vec![];
-            while chunk_end_cp_seq < end_cp_seq {
+            for chunk_start_cp_seq in ((last_end_cp_seq + 1)
+                ..last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE + 1)
+                .step_by(PARALLEL_DOWNLOAD_CHUNK_SIZE as usize)
+            {
+                let chunk_end_cp_seq = chunk_start_cp_seq + PARALLEL_DOWNLOAD_CHUNK_SIZE;
                 let store = self.store.clone();
                 parallel_download_tasks.push(tokio::task::spawn(async move {
                     store
                         .get_tx_checkpoints_in_checkpoint_range(
                             chunk_start_cp_seq,
-                            chunk_end_cp_seq + 1,
+                            chunk_end_cp_seq,
                         )
                         .await
                 }));
-                chunk_start_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
-                chunk_end_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
             }
+
             let tx_checkpoints = futures::future::join_all(parallel_download_tasks)
                 .await
                 .into_iter()
@@ -85,6 +85,7 @@ where
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>();
+            let end_cp_seq = last_end_cp_seq + MOVE_CALL_PROCESSOR_BATCH_SIZE;
             let cps = self
                 .store
                 .get_checkpoints_in_range(last_end_cp_seq + 1, end_cp_seq + 1)

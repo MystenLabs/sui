@@ -67,24 +67,20 @@ where
                 ))?
                 .clone();
 
-            // +1 as latest_address_metrics has been processed.
-            let end_cp_seq = last_end_cp_seq + ADDRESS_PROCESSOR_BATCH_SIZE;
-            let mut chunk_start_cp_seq = last_end_cp_seq + 1;
-            let mut chunk_end_cp_seq = last_end_cp_seq + PARALLEL_DOWNLOAD_CHUNK_SIZE;
             let mut parallel_download_tasks = vec![];
-            while chunk_end_cp_seq < end_cp_seq {
+            for chunk_start_cp_seq in ((last_end_cp_seq + 1)
+                ..last_end_cp_seq + ADDRESS_PROCESSOR_BATCH_SIZE + 1)
+                .step_by(PARALLEL_DOWNLOAD_CHUNK_SIZE as usize)
+            {
+                let chunk_end_cp_seq = chunk_start_cp_seq + PARALLEL_DOWNLOAD_CHUNK_SIZE;
                 let store = self.store.clone();
                 parallel_download_tasks.push(tokio::task::spawn(async move {
                     store
-                        .get_tx_timestamps_in_checkpoint_range(
-                            chunk_start_cp_seq,
-                            chunk_end_cp_seq + 1,
-                        )
+                        .get_tx_timestamps_in_checkpoint_range(chunk_start_cp_seq, chunk_end_cp_seq)
                         .await
                 }));
-                chunk_start_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
-                chunk_end_cp_seq += PARALLEL_DOWNLOAD_CHUNK_SIZE;
             }
+
             let tx_timestamps = futures::future::join_all(parallel_download_tasks)
                 .await
                 .into_iter()
@@ -129,27 +125,28 @@ where
             let stored_senders = stored_senders_res?;
             let stored_senders_count = stored_senders.len();
             let senders_to_commit: Vec<AddressInfoToCommit> = stored_senders
-            .into_par_iter()
-            .filter_map(|sender| {
-                if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
-                    Some(AddressInfoToCommit {
-                        address: sender.sender,
-                        tx_seq: sender.tx_sequence_number,
-                        timestamp_ms: *timestamp_ms,
-                    })
-                } else {
-                    error!(
-                        "Failed to find timestamp for tx {}",
-                        sender.tx_sequence_number
-                    );
-                    None
-                }
-            })
-            .collect();
+                .into_par_iter()
+                .filter_map(|sender| {
+                    if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
+                        Some(AddressInfoToCommit {
+                            address: sender.sender,
+                            tx_seq: sender.tx_sequence_number,
+                            timestamp_ms: *timestamp_ms,
+                        })
+                    } else {
+                        error!(
+                            "Failed to find timestamp for tx {}",
+                            sender.tx_sequence_number
+                        );
+                        None
+                    }
+                })
+                .collect();
             if stored_senders_count != senders_to_commit.len() {
                 error!(
                     "Failed to find timestamp for {} senders in checkpoint {}",
-                    stored_senders_count - senders_to_commit.len(), end_cp.sequence_number
+                    stored_senders_count - senders_to_commit.len(),
+                    end_cp.sequence_number
                 );
                 continue;
             }
