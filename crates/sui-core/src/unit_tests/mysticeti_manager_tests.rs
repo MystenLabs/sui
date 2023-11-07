@@ -10,7 +10,6 @@ use crate::consensus_manager::ConsensusManagerMetrics;
 use crate::consensus_manager::ConsensusManagerTrait;
 use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use crate::mysticeti_adapter::LazyMysticetiClient;
-use arc_swap::ArcSwapOption;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
@@ -41,7 +40,7 @@ async fn test_mysticeti_manager() {
 
         let metrics = ConsensusManagerMetrics::new(&Registry::new());
         let epoch_store = state.epoch_store_for_testing();
-        let client = Arc::new(LazyMysticetiClient::new(Arc::new(ArcSwapOption::empty())));
+        let client = Arc::new(LazyMysticetiClient::default());
 
         let manager = MysticetiManager::new(
             config.protocol_key_pair().copy(),

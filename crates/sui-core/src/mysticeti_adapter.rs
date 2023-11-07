@@ -52,8 +52,10 @@ pub struct LazyMysticetiClient {
 }
 
 impl LazyMysticetiClient {
-    pub fn new(client: Arc<ArcSwapOption<MysticetiClient>>) -> Self {
-        Self { client }
+    pub fn new() -> Self {
+        Self {
+            client: Arc::new(ArcSwapOption::empty()),
+        }
     }
 
     async fn get(&self) -> Guard<Option<Arc<MysticetiClient>>> {
