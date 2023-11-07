@@ -269,6 +269,17 @@ impl TransactionEffects {
             .collect()
     }
 
+    /// Returns all objects that will become a tombstone after this transaction.
+    /// This includes deleted, unwrapped_then_deleted and wrapped objects.
+    pub fn all_tombstones(&self) -> Vec<(ObjectID, SequenceNumber)> {
+        self.deleted()
+            .into_iter()
+            .chain(self.unwrapped_then_deleted())
+            .chain(self.wrapped())
+            .map(|obj_ref| (obj_ref.0, obj_ref.1))
+            .collect()
+    }
+
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> Vec<(ObjectRef, Owner)> {
         self.mutated()
