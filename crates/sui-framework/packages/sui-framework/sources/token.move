@@ -46,7 +46,6 @@ module sui::token {
     /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
     const ECantConsumeBalance: u64 = 5;
     /// Trying to perform an owner-gated action without being the owner.
-    const ENotOwner: u64 = 6;
     /// Rule is trying to access a missing config (with type).
     const ENoConfig: u64 = 7;
 
@@ -67,12 +66,6 @@ module sui::token {
         id: UID,
         /// The Balance of the `Token`.
         balance: Balance<T>,
-        /// The owner of the `Token`.
-        /// Defaults to `tx_context::sender`, however, in the `transfer` action
-        /// it is changed to the "recipient". This field is future-proofing for
-        /// the "Transfer To Object" (TTO) feature, making it impossible to send
-        /// a `Token` to an object and do arbitrary transfers through it.
-        owner: address,
     }
 
     /// A Capability that manages a single `TokenPolicy` specified in the `for`
@@ -164,14 +157,10 @@ module sui::token {
     /// Transfer a `Token` to a `recipient`. Creates an `ActionRequest` for the
     /// "transfer" action. The `ActionRequest` contains the `recipient` field
     /// to be used in verification.
-    ///
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun transfer<T>(
         t: Token<T>, recipient: address, ctx: &mut TxContext
     ): ActionRequest<T> {
-        assert!(t.owner == tx_context::sender(ctx), ENotOwner);
         let amount = balance::value(&t.balance);
-        t.owner = recipient;
         transfer::transfer(t, recipient);
 
         new_request(
@@ -189,11 +178,8 @@ module sui::token {
     ///
     /// Spend action requires `confirm_request_mut` to be called to confirm the
     /// request and join the spent balance with the `TokenPolicy.spent_balance`.
-    ///
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
-        let Token { id, balance, owner } = t;
-        assert!(owner == tx_context::sender(ctx), ENotOwner);
+        let Token { id, balance } = t;
         object::delete(id);
 
         new_request(
@@ -207,14 +193,11 @@ module sui::token {
 
     /// Convert `Token` into an open `Coin`. Creates an `ActionRequest` for the
     /// "to_coin" action.
-    ///
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun to_coin<T>(
         t: Token<T>, ctx: &mut TxContext
     ): (Coin<T>, ActionRequest<T>) {
-        let Token { id, balance, owner } = t;
+        let Token { id, balance } = t;
         let amount = balance::value(&balance);
-        assert!(owner == tx_context::sender(ctx), ENotOwner);
         object::delete(id);
 
         (
@@ -230,14 +213,13 @@ module sui::token {
     }
 
     /// Convert an open `Coin` into a `Token`. Creates an `ActionRequest` for
-    /// the "from_coin" action. The owner of the `Token` is set to the sender.
+    /// the "from_coin" action.
     public fun from_coin<T>(
         coin: Coin<T>, ctx: &mut TxContext
     ): (Token<T>, ActionRequest<T>) {
         let amount = coin::value(&coin);
         let token = Token {
             id: object::new(ctx),
-            owner: tx_context::sender(ctx),
             balance: coin::into_balance(coin)
         };
 
@@ -256,15 +238,13 @@ module sui::token {
     // === Public Actions ===
 
     /// Join two `Token`s into one, always available.
-    /// Aborts if the `Token.owner` fields don't match.
     public fun join<T>(token: &mut Token<T>, another: Token<T>) {
-        let Token { id, balance, owner } = another;
-        assert!(token.owner == owner, ENotOwner);
+        let Token { id, balance } = another;
         balance::join(&mut token.balance, balance);
         object::delete(id);
     }
 
-    /// Split a `Token` with `amount`. The `Token.owner` is preserved.
+    /// Split a `Token` with `amount`.
     /// Aborts if the `Token.balance` is lower than `amount`.
     public fun split<T>(
         token: &mut Token<T>, amount: u64, ctx: &mut TxContext
@@ -273,7 +253,6 @@ module sui::token {
         Token {
             id: object::new(ctx),
             balance: balance::split(&mut token.balance, amount),
-            owner: token.owner
         }
     }
 
@@ -282,23 +261,20 @@ module sui::token {
         Token {
             id: object::new(ctx),
             balance: balance::zero(),
-            owner: tx_context::sender(ctx)
         }
     }
 
     /// Destroy an empty `Token`, fails if the balance is non-zero.
-    /// Aborts if the `Token.balance` is not zero. Ignores the `Token.owner`.
+    /// Aborts if the `Token.balance` is not zero.
     public fun destroy_zero<T>(token: Token<T>) {
-        let Token { id, balance, owner: _ } = token;
+        let Token { id, balance } = token;
         assert!(balance::value(&balance) == 0, ENotZero);
         balance::destroy_zero(balance);
         object::delete(id);
     }
 
     /// Transfer the `Token` to the transaction sender.
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
-        assert!(token.owner == tx_context::sender(ctx), ENotOwner);
         transfer::transfer(token, tx_context::sender(ctx))
     }
 
@@ -603,20 +579,17 @@ module sui::token {
 
     // === Protected: Treasury Management ===
 
-    /// Mint a `Token` with a given `amount` using the `TreasuryCap`. The
-    /// `owner` field is set to the transaction sender; if a `Token` is minted
-    /// for some other account it will require `transfer` to be performed anyway
+    /// Mint a `Token` with a given `amount` using the `TreasuryCap`.
     public fun mint<T>(
         cap: &mut TreasuryCap<T>, amount: u64, ctx: &mut TxContext
     ): Token<T> {
         let balance = balance::increase_supply(coin::supply_mut(cap), amount);
-        Token { id: object::new(ctx), balance, owner: tx_context::sender(ctx) }
+        Token { id: object::new(ctx), balance }
     }
 
-    /// Burn a `Token` using the `TreasuryCap`. Avoids the `owner` check due to
-    /// the action only being available to the `TreasuryCap` owner.
+    /// Burn a `Token` using the `TreasuryCap`.
     public fun burn<T>(cap: &mut TreasuryCap<T>, token: Token<T>) {
-        let Token { id, balance, owner: _ } = token;
+        let Token { id, balance } = token;
         balance::decrease_supply(coin::supply_mut(cap), balance);
         object::delete(id);
     }
@@ -742,12 +715,12 @@ module sui::token {
     #[test_only]
     public fun mint_for_testing<T>(amount: u64, ctx: &mut TxContext): Token<T> {
         let balance = balance::create_for_testing(amount);
-        Token { id: object::new(ctx), balance, owner: tx_context::sender(ctx) }
+        Token { id: object::new(ctx), balance }
     }
 
     #[test_only]
     public fun burn_for_testing<T>(token: Token<T>) {
-        let Token { id, balance, owner: _ } = token;
+        let Token { id, balance } = token;
         balance::destroy_for_testing(balance);
         object::delete(id);
     }
