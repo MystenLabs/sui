@@ -18,15 +18,11 @@ pub(crate) struct MoveObject {
     pub native_object: NativeSuiObject,
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl MoveObject {
     /// Displays the contents of the MoveObject in a json string and through graphql types
     /// Also provides the flat representation of the type signature, and the bcs of the corresponding data
-    async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
-        let resolver = ctx.data_unchecked::<PgManager>();
-
+    async fn contents(&self) -> Result<Option<MoveValue>> {
         if let Some(struct_tag) = self.native_object.data.struct_tag() {
             let type_tag = TypeTag::Struct(Box::new(struct_tag));
             return Ok(Some(MoveValue::new(

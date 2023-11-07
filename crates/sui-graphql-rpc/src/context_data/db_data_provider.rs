@@ -2051,7 +2051,6 @@ impl From<&TransactionKind> for TransactionBlockKind {
 }
 
 // TODO fix this GenesisObject
-#[allow(unreachable_code)]
 impl From<GenesisObject> for SuiAddress {
     fn from(value: GenesisObject) -> Self {
         match value {

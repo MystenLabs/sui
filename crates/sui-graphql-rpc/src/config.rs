@@ -198,7 +198,6 @@ impl Default for Limits {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct InternalFeatureConfig {
     #[serde(default)]
@@ -239,7 +238,6 @@ pub struct ServerConfig {
     pub ide: Ide,
 }
 
-#[allow(dead_code)]
 impl ServerConfig {
     pub fn from_yaml(path: &str) -> Result<Self, SuiGraphQLError> {
         let contents = std::fs::read_to_string(path).map_err(|e| {
