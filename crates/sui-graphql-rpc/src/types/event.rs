@@ -19,7 +19,7 @@ pub(crate) struct Event {
     pub timestamp: Option<DateTime>,
     /// JSON string representation of the event
     pub json: Option<String>,
-    /// Base58 encoded bcs bytes of the Move event
+    /// Base64 encoded bcs bytes of the Move event
     pub bcs: Option<Base64>,
 }
 
