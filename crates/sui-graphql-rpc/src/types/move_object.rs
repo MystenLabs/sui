@@ -22,7 +22,7 @@ pub(crate) struct MoveObject {
 impl MoveObject {
     /// Displays the contents of the MoveObject in a json string and through graphql types
     /// Also provides the flat representation of the type signature, and the bcs of the corresponding data
-    async fn contents(&self, _ctx: &Context<'_>) -> Result<Option<MoveValue>> {
+    async fn contents(&self) -> Result<Option<MoveValue>> {
         if let Some(struct_tag) = self.native_object.data.struct_tag() {
             let type_tag = TypeTag::Struct(Box::new(struct_tag));
             return Ok(Some(MoveValue::new(

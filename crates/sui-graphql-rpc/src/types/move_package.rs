@@ -73,7 +73,6 @@ impl MovePackage {
     /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
-        _ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,

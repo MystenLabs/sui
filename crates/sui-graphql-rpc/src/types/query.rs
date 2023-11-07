@@ -53,7 +53,7 @@ impl Query {
     // dryRunTransactionBlock
     // coinMetadata
 
-    async fn owner(&self, _ctx: &Context<'_>, address: SuiAddress) -> Option<ObjectOwner> {
+    async fn owner(&self, address: SuiAddress) -> Option<ObjectOwner> {
         Some(ObjectOwner::Owner(Owner { address }))
     }
 

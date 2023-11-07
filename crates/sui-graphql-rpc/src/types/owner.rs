@@ -80,14 +80,14 @@ pub(crate) struct Owner {
 
 #[Object]
 impl Owner {
-    async fn as_address(&self, _ctx: &Context<'_>) -> Option<Address> {
+    async fn as_address(&self) -> Option<Address> {
         // For now only addresses can be owners
         Some(Address {
             address: self.address,
         })
     }
 
-    async fn as_object(&self, _ctx: &Context<'_>) -> Option<Object> {
+    async fn as_object(&self) -> Option<Object> {
         // TODO: extend when send to object imnplementation is done
         // For now only addresses can be owners
         None
@@ -95,7 +95,7 @@ impl Owner {
 
     // =========== Owner interface methods =============
 
-    pub async fn location(&self, _ctx: &Context<'_>) -> SuiAddress {
+    pub async fn location(&self) -> SuiAddress {
         self.address
     }
 
