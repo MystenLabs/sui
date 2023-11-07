@@ -41,9 +41,12 @@ async fn start_dkg() {
     let (tx_system_messages, mut rx_system_messages) = test_utils::test_channel!(1);
     randomness_state.start_dkg(&tx_system_messages).await;
 
+    type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
     let dkg_message = rx_system_messages.recv().await.unwrap();
     match dkg_message {
-        SystemMessage::DkgMessage(msg) => {
+        SystemMessage::DkgMessage(bytes) => {
+            let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> = bcs::from_bytes(&bytes)
+                .expect("DKG message deserialization from certified header should not fail");
             assert_eq!(msg.sender, name.0);
         }
         _ => panic!("wrong type of message sent"),

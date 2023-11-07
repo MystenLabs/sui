@@ -36,6 +36,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
+use fastcrypto_tbls::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
 use mysten_metrics::metered_channel::{channel_with_total, Receiver, Sender};
 use mysten_metrics::monitored_scope;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
@@ -67,8 +68,9 @@ use types::{
     now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
     FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SystemMessage,
+    Vote, VoteInfoAPI, WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 
 #[cfg(test)]
@@ -712,6 +714,29 @@ impl PrimaryReceiverHandler {
             stake >= committee.quorum_threshold(),
             DagError::HeaderRequiresQuorum(header.digest())
         );
+
+        // Verify any system messages present in the header.
+        type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
+        for m in header.system_messages().iter() {
+            match m {
+                SystemMessage::DkgMessage(bytes) => {
+                    let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> =
+                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+                    ensure!(
+                        msg.sender == header.author().0,
+                        DagError::InvalidSystemMessage
+                    );
+                }
+                SystemMessage::DkgConfirmation(bytes) => {
+                    let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> =
+                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+                    ensure!(
+                        conf.sender == header.author().0,
+                        DagError::InvalidSystemMessage
+                    );
+                }
+            }
+        }
 
         // Synchronize all batches referenced in the header.
         self.synchronizer
