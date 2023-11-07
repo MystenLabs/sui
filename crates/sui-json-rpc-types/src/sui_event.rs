@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base58;
+use json_to_table::json_to_table;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -126,11 +127,18 @@ impl SuiEvent {
 
 impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parsed_json_table = json_to_table(&self.parsed_json);
+        let table = parsed_json_table.into_table();
+        let rows = table.count_rows();
         write!(f,
             " ┌──\n │ Event ID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n",
             self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_)?;
         if let Some(ts) = self.timestamp_ms {
             writeln!(f, " │ Timestamp: {}\n └──", ts)?;
+        }
+        writeln!(f, " │ ParsedJSON: {}\n", table.to_string())?;
+        for _ in rows {
+            writeln!(f, " │")?;
         }
         writeln!(f, " └──")
     }
