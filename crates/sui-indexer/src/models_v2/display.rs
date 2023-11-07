@@ -20,7 +20,7 @@ impl StoredDisplay {
         let (ty, display_event) = DisplayVersionUpdatedEvent::try_from_event(event)?;
 
         Some(Self {
-            object_type: ty.to_canonical_string(),
+            object_type: ty.to_canonical_string(/* with_prefix */ true),
             id: display_event.id.bytes.to_vec(),
             version: display_event.version as i16,
             bcs: event.contents.clone(),

@@ -10,10 +10,10 @@ use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObjectArc};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -76,6 +76,7 @@ impl<'backing> TemporaryStore<'backing> {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&[]);
         let objects = input_objects.into_object_map();
+
         Self {
             store,
             tx_digest,
@@ -154,6 +155,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_child_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
+            lamport_version: self.lamport_timestamp,
         }
     }
 
@@ -178,7 +180,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn to_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -255,6 +257,16 @@ impl<'backing> TemporaryStore<'backing> {
         }
 
         let inner = self.into_inner();
+
+        let shared_object_refs = shared_object_refs
+            .into_iter()
+            .map(|shared_input| match shared_input {
+                SharedInput::Existing(oref) => oref,
+                SharedInput::Deleted(_) => {
+                    unreachable!("Shared object deletion not supported in effects v1")
+                }
+            })
+            .collect();
 
         let effects = TransactionEffects::new_from_execution_v1(
             status,
@@ -982,17 +994,17 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(obj.clone()))
+            Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
+                if let Some(v) = &obj {
                     // TODO: Can this lock ever block execution?
                     self.runtime_packages_loaded_from_db
                         .write()
-                        .insert(*package_id, v);
+                        .insert(*package_id, v.object().clone());
                 }
                 obj
             })

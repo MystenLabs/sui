@@ -12,7 +12,7 @@ const config = {
   tagline:
     "Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
   favicon: "img/favicon.ico",
-  url: "https://sui-docs-sui-foundation.vercel.app",
+  url: "https://docs.sui.io",
   baseUrl: "/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
@@ -61,7 +61,8 @@ const config = {
           path: "../content",
           routeBasePath: "/",
           sidebarPath: require.resolve("./sidebars.js"),
-          editUrl: "https://github.com/sui-foundation/sui-docs/tree/main/",
+          // the double docs below is a fix for having the path set to ../content
+          editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
           /*disableVersioning: true,
           lastVersion: "current",
           versions: {
@@ -74,7 +75,11 @@ const config = {
             "current",
             "1.0.0",
           ],*/
-          remarkPlugins: [math],
+          remarkPlugins: [
+            math,
+            require("@docusaurus/remark-plugin-npm2yarn"),
+            { sync: true, converters: ["npm", "yarn", "pnpm"] },
+          ],
           rehypePlugins: [katex],
         },
         theme: {
@@ -100,6 +105,35 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      algolia: {
+        // The application ID provided by Algolia
+        appId: "ZF283DJAYX",
+
+        // Public API key: it is safe to commit it
+        apiKey: "7f24db6c4ec06d6905592deb228f4460",
+
+        indexName: "sui",
+
+        // Optional: see doc section below
+        contextualSearch: false,
+
+        // Optional: Specify domains where the navigation should occur through window.location instead on history.push. Useful when our Algolia config crawls multiple documentation sites and we want to navigate with window.location.href to them.
+        // externalUrlRegex: "external\\.com|domain\\.com",
+
+        // Optional: Replace parts of the item URLs from Algolia. Useful when using the same search index for multiple deployments using a different baseUrl. You can use regexp or string in the `from` param. For example: localhost:3000 vs myCompany.com/docs
+        //replaceSearchResultPathname: {
+        //from: "/docs/", // or as RegExp: /\/docs\//
+        //to: "/",
+        //},
+
+        // Optional: Algolia search parameters
+        //searchParameters: {},
+
+        // Optional: path for search page that enabled by default (`false` to disable it)
+        searchPagePath: "search",
+
+        //... other Algolia params
+      },
       image: "img/og.jpg",
       docs: {
         sidebar: {

@@ -141,7 +141,7 @@ bs58 = { version = "0.4", features = ["check"] }
 bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto", default-features = false }
+bytecode-interpreter-crypto = { path = "../../external-crates/move/crates/bytecode-interpreter-crypto", default-features = false }
 bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
@@ -253,7 +253,7 @@ elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12"
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 encoding_rs = { version = "0.8" }
 endian-type = { version = "0.1", default-features = false }
-enum-compat-util = { path = "../../external-crates/move/testing-infra/enum-compat-util", default-features = false }
+enum-compat-util = { path = "../../external-crates/move/crates/enum-compat-util", default-features = false }
 equivalent = { version = "1", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
@@ -261,9 +261,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", features = ["beacon-dkg", "copy_key"] }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", features = ["beacon-dkg", "copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -294,6 +294,7 @@ futures-util = { version = "0.3", default-features = false, features = ["async-a
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
+gettid = { version = "0.1", default-features = false }
 ghash = { version = "0.5", default-features = false }
 gimli = { version = "0.27", default-features = false, features = ["read"] }
 git-version = { version = "0.3", default-features = false }
@@ -396,60 +397,62 @@ md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
 md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
 md5 = { version = "0.7" }
 memchr = { version = "2" }
+memmap2-ca01ad9e24f5d932 = { package = "memmap2", version = "0.7", default-features = false }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
 migrations_internals = { version = "2", default-features = false }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
+minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "315917edbc14186d5bc24328a93eaaccabea673e", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { path = "../../external-crates/move/move-prover/move-abigen", default-features = false }
-move-abstract-stack = { path = "../../external-crates/move/move-abstract-stack", default-features = false }
-move-binary-format = { path = "../../external-crates/move/move-binary-format" }
-move-borrow-graph = { path = "../../external-crates/move/move-borrow-graph", default-features = false }
-move-bytecode-source-map = { path = "../../external-crates/move/move-ir-compiler/move-bytecode-source-map" }
-move-bytecode-utils = { path = "../../external-crates/move/tools/move-bytecode-utils", default-features = false }
-move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
+move-abigen = { path = "../../external-crates/move/crates/move-abigen", default-features = false }
+move-abstract-stack = { path = "../../external-crates/move/crates/move-abstract-stack", default-features = false }
+move-binary-format = { path = "../../external-crates/move/crates/move-binary-format" }
+move-borrow-graph = { path = "../../external-crates/move/crates/move-borrow-graph", default-features = false }
+move-bytecode-source-map = { path = "../../external-crates/move/crates/move-bytecode-source-map" }
+move-bytecode-utils = { path = "../../external-crates/move/crates/move-bytecode-utils", default-features = false }
+move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v0 = { path = "../../external-crates/move/move-execution/v0/move-bytecode-verifier" }
-move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-viewer" }
-move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
-move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
-move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["fuzzing"] }
-move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
-move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
-move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }
-move-errmapgen = { path = "../../external-crates/move/move-prover/move-errmapgen", default-features = false }
-move-ir-compiler = { path = "../../external-crates/move/move-ir-compiler" }
-move-ir-to-bytecode = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode" }
-move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax" }
-move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
-move-model = { path = "../../external-crates/move/move-model", default-features = false }
-move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
-move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
-move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
-move-read-write-set-types = { path = "../../external-crates/move/tools/move-read-write-set-types", default-features = false }
-move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-viewer", default-features = false }
-move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
-move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
-move-stdlib = { path = "../../external-crates/move/move-stdlib", features = ["testing"] }
+move-bytecode-viewer = { path = "../../external-crates/move/crates/move-bytecode-viewer" }
+move-cli = { path = "../../external-crates/move/crates/move-cli", default-features = false }
+move-command-line-common = { path = "../../external-crates/move/crates/move-command-line-common", default-features = false }
+move-compiler = { path = "../../external-crates/move/crates/move-compiler", default-features = false }
+move-core-types = { path = "../../external-crates/move/crates/move-core-types", features = ["fuzzing"] }
+move-coverage = { path = "../../external-crates/move/crates/move-coverage" }
+move-disassembler = { path = "../../external-crates/move/crates/move-disassembler" }
+move-docgen = { path = "../../external-crates/move/crates/move-docgen", default-features = false }
+move-errmapgen = { path = "../../external-crates/move/crates/move-errmapgen", default-features = false }
+move-ir-compiler = { path = "../../external-crates/move/crates/move-ir-compiler" }
+move-ir-to-bytecode = { path = "../../external-crates/move/crates/move-ir-to-bytecode" }
+move-ir-to-bytecode-syntax = { path = "../../external-crates/move/crates/move-ir-to-bytecode-syntax" }
+move-ir-types = { path = "../../external-crates/move/crates/move-ir-types", default-features = false }
+move-model = { path = "../../external-crates/move/crates/move-model", default-features = false }
+move-package = { path = "../../external-crates/move/crates/move-package", default-features = false }
+move-prover = { path = "../../external-crates/move/crates/move-prover", default-features = false }
+move-prover-boogie-backend = { path = "../../external-crates/move/crates/move-prover-boogie-backend", default-features = false }
+move-read-write-set-types = { path = "../../external-crates/move/crates/move-read-write-set-types", default-features = false }
+move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
+move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
+move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features = ["testing"] }
 move-stdlib-v0 = { path = "../../external-crates/move/move-execution/v0/move-stdlib", default-features = false }
-move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
-move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
-move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
-move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
-move-vm-profiler = { path = "../../external-crates/move/move-vm/profiler", default-features = false }
-move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime", features = ["testing"] }
+move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
+move-transactional-test-runner = { path = "../../external-crates/move/crates/move-transactional-test-runner", default-features = false }
+move-unit-test = { path = "../../external-crates/move/crates/move-unit-test", default-features = false }
+move-vm-config = { path = "../../external-crates/move/crates/move-vm-config", default-features = false }
+move-vm-profiler = { path = "../../external-crates/move/crates/move-vm-profiler", default-features = false }
+move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["testing"] }
 move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime" }
-move-vm-test-utils = { path = "../../external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
-move-vm-types = { path = "../../external-crates/move/move-vm/types" }
+move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["tiered-gas"] }
+move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
 multer = { version = "2" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "315917edbc14186d5bc24328a93eaaccabea673e", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 newline-converter = { version = "0.2", default-features = false }
@@ -712,10 +715,10 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-log = { version = "0.1", default-features = false }
+tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "time"] }
 treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
@@ -915,7 +918,7 @@ bs58 = { version = "0.4", features = ["check"] }
 bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto", default-features = false }
+bytecode-interpreter-crypto = { path = "../../external-crates/move/crates/bytecode-interpreter-crypto", default-features = false }
 bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
@@ -1052,7 +1055,7 @@ elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12"
 encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 encoding_rs = { version = "0.8" }
 endian-type = { version = "0.1", default-features = false }
-enum-compat-util = { path = "../../external-crates/move/testing-infra/enum-compat-util", default-features = false }
+enum-compat-util = { path = "../../external-crates/move/crates/enum-compat-util", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
 equivalent = { version = "1", default-features = false }
 ethnum = { version = "1", default-features = false }
@@ -1061,10 +1064,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", features = ["beacon-dkg", "copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", default-features = false }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", features = ["beacon-dkg", "copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -1096,6 +1099,7 @@ futures-util = { version = "0.3", default-features = false, features = ["async-a
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "serde", "zeroize"] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-c65f7effa3be6d31 = { package = "getrandom", version = "0.1", default-features = false, features = ["std"] }
+gettid = { version = "0.1", default-features = false }
 ghash = { version = "0.5", default-features = false }
 gimli = { version = "0.27", default-features = false, features = ["read"] }
 git-version = { version = "0.3", default-features = false }
@@ -1210,65 +1214,67 @@ md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
 md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
 md5 = { version = "0.7" }
 memchr = { version = "2" }
+memmap2-ca01ad9e24f5d932 = { package = "memmap2", version = "0.7", default-features = false }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
 migrations_internals = { version = "2", default-features = false }
 migrations_macros = { version = "2" }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
+minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "315917edbc14186d5bc24328a93eaaccabea673e", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { path = "../../external-crates/move/move-prover/move-abigen", default-features = false }
-move-abstract-stack = { path = "../../external-crates/move/move-abstract-stack", default-features = false }
-move-binary-format = { path = "../../external-crates/move/move-binary-format" }
-move-borrow-graph = { path = "../../external-crates/move/move-borrow-graph", default-features = false }
-move-bytecode-source-map = { path = "../../external-crates/move/move-ir-compiler/move-bytecode-source-map" }
-move-bytecode-utils = { path = "../../external-crates/move/tools/move-bytecode-utils", default-features = false }
-move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
+move-abigen = { path = "../../external-crates/move/crates/move-abigen", default-features = false }
+move-abstract-stack = { path = "../../external-crates/move/crates/move-abstract-stack", default-features = false }
+move-binary-format = { path = "../../external-crates/move/crates/move-binary-format" }
+move-borrow-graph = { path = "../../external-crates/move/crates/move-borrow-graph", default-features = false }
+move-bytecode-source-map = { path = "../../external-crates/move/crates/move-bytecode-source-map" }
+move-bytecode-utils = { path = "../../external-crates/move/crates/move-bytecode-utils", default-features = false }
+move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v0 = { path = "../../external-crates/move/move-execution/v0/move-bytecode-verifier" }
-move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-viewer" }
-move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
-move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
-move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["fuzzing"] }
-move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
-move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
-move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }
-move-errmapgen = { path = "../../external-crates/move/move-prover/move-errmapgen", default-features = false }
-move-ir-compiler = { path = "../../external-crates/move/move-ir-compiler" }
-move-ir-to-bytecode = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode" }
-move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax" }
-move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
-move-model = { path = "../../external-crates/move/move-model", default-features = false }
-move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
-move-proc-macros = { path = "../../external-crates/move/testing-infra/move-proc-macros", default-features = false }
-move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
-move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
-move-read-write-set-types = { path = "../../external-crates/move/tools/move-read-write-set-types", default-features = false }
-move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-viewer", default-features = false }
-move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
-move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
-move-stdlib = { path = "../../external-crates/move/move-stdlib", features = ["testing"] }
+move-bytecode-viewer = { path = "../../external-crates/move/crates/move-bytecode-viewer" }
+move-cli = { path = "../../external-crates/move/crates/move-cli", default-features = false }
+move-command-line-common = { path = "../../external-crates/move/crates/move-command-line-common", default-features = false }
+move-compiler = { path = "../../external-crates/move/crates/move-compiler", default-features = false }
+move-core-types = { path = "../../external-crates/move/crates/move-core-types", features = ["fuzzing"] }
+move-coverage = { path = "../../external-crates/move/crates/move-coverage" }
+move-disassembler = { path = "../../external-crates/move/crates/move-disassembler" }
+move-docgen = { path = "../../external-crates/move/crates/move-docgen", default-features = false }
+move-errmapgen = { path = "../../external-crates/move/crates/move-errmapgen", default-features = false }
+move-ir-compiler = { path = "../../external-crates/move/crates/move-ir-compiler" }
+move-ir-to-bytecode = { path = "../../external-crates/move/crates/move-ir-to-bytecode" }
+move-ir-to-bytecode-syntax = { path = "../../external-crates/move/crates/move-ir-to-bytecode-syntax" }
+move-ir-types = { path = "../../external-crates/move/crates/move-ir-types", default-features = false }
+move-model = { path = "../../external-crates/move/crates/move-model", default-features = false }
+move-package = { path = "../../external-crates/move/crates/move-package", default-features = false }
+move-proc-macros = { path = "../../external-crates/move/crates/move-proc-macros", default-features = false }
+move-prover = { path = "../../external-crates/move/crates/move-prover", default-features = false }
+move-prover-boogie-backend = { path = "../../external-crates/move/crates/move-prover-boogie-backend", default-features = false }
+move-read-write-set-types = { path = "../../external-crates/move/crates/move-read-write-set-types", default-features = false }
+move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode", default-features = false }
+move-stackless-bytecode-interpreter = { path = "../../external-crates/move/crates/move-stackless-bytecode-interpreter", default-features = false }
+move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features = ["testing"] }
 move-stdlib-v0 = { path = "../../external-crates/move/move-execution/v0/move-stdlib", default-features = false }
-move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
-move-transactional-test-runner = { path = "../../external-crates/move/testing-infra/transactional-test-runner", default-features = false }
-move-unit-test = { path = "../../external-crates/move/tools/move-unit-test", default-features = false }
-move-vm-config = { path = "../../external-crates/move/move-vm/config", default-features = false }
-move-vm-profiler = { path = "../../external-crates/move/move-vm/profiler", default-features = false }
-move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime", features = ["testing"] }
+move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
+move-transactional-test-runner = { path = "../../external-crates/move/crates/move-transactional-test-runner", default-features = false }
+move-unit-test = { path = "../../external-crates/move/crates/move-unit-test", default-features = false }
+move-vm-config = { path = "../../external-crates/move/crates/move-vm-config", default-features = false }
+move-vm-profiler = { path = "../../external-crates/move/crates/move-vm-profiler", default-features = false }
+move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["testing"] }
 move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime" }
-move-vm-test-utils = { path = "../../external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
-move-vm-types = { path = "../../external-crates/move/move-vm/types" }
+move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["tiered-gas"] }
+move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
 multer = { version = "2" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "315917edbc14186d5bc24328a93eaaccabea673e", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 newline-converter = { version = "0.2", default-features = false }
@@ -1590,10 +1596,10 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-log = { version = "0.1", default-features = false }
+tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "time"] }
 treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
@@ -1677,7 +1683,7 @@ jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 mach2 = { version = "0.4" }
-memmap2 = { version = "0.5", default-features = false }
+memmap2-d8f496e17d97b5cb = { package = "memmap2", version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
@@ -1716,7 +1722,7 @@ jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 mach2 = { version = "0.4" }
-memmap2 = { version = "0.5", default-features = false }
+memmap2-d8f496e17d97b5cb = { package = "memmap2", version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
@@ -1753,7 +1759,7 @@ libc = { version = "0.2", default-features = false, features = ["extra_traits"] 
 linux-raw-sys-468e82937335b1c9 = { package = "linux-raw-sys", version = "0.3", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 linux-raw-sys-c65f7effa3be6d31 = { package = "linux-raw-sys", version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
-memmap2 = { version = "0.5", default-features = false }
+memmap2-d8f496e17d97b5cb = { package = "memmap2", version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }
@@ -1791,7 +1797,7 @@ libc = { version = "0.2", default-features = false, features = ["extra_traits"] 
 linux-raw-sys-468e82937335b1c9 = { package = "linux-raw-sys", version = "0.3", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 linux-raw-sys-c65f7effa3be6d31 = { package = "linux-raw-sys", version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
-memmap2 = { version = "0.5", default-features = false }
+memmap2-d8f496e17d97b5cb = { package = "memmap2", version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
 mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["os-util", "uds"] }
 nix-2b5c6dc72f624058 = { package = "nix", version = "0.23", default-features = false }

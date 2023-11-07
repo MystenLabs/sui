@@ -39,6 +39,7 @@ const guides = [
 					id: 'guides/developer/first-app',
 				},
 				items: [
+					'guides/developer/first-app/write-package',
 					'guides/developer/first-app/build-test',
 					'guides/developer/first-app/publish',
 					'guides/developer/first-app/debug',
@@ -71,18 +72,21 @@ const guides = [
 							'guides/developer/sui-101/coin-mgt',
 						],
 					},
-					{
-						type: 'category',
-						label: 'Building a PTB',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/sui-101/working-with-ptbs',
-						},
-						items: [
-							'guides/developer/sui-101/building-ptb',
-							'guides/developer/sui-101/simulating-refs',
-						],
-					},
+					'guides/developer/sui-101/building-ptb',
+				],
+			},
+			{
+				type: 'category',
+				label: 'Cryptography',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/cryptography',
+				},
+				items: [
+					'guides/developer/cryptography/signing',
+					'guides/developer/cryptography/groth16',
+					'guides/developer/cryptography/hashing',
+					'guides/developer/cryptography/ecvrf',
 				],
 			},
 			{
@@ -107,39 +111,40 @@ const guides = [
 					'guides/developer/advanced/maximize-reach',
 				],
 			},
+			{
+				type: 'category',
+				label: 'App Examples',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/app-examples',
+				},
+				items: [
+					'guides/developer/app-examples/e2e-counter',
+					'guides/developer/app-examples/auction',
+					'guides/developer/app-examples/escrow',
+					'guides/developer/app-examples/trusted-swap',
+					'guides/developer/app-examples/tic-tac-toe',
+					'guides/developer/app-examples/trusted-swap',
+					'guides/developer/app-examples/turnip-town',
+					{
+						type: 'category',
+						label: 'Oracles',
+						link: {
+							type: 'doc',
+							id: 'guides/developer/app-examples/oracle',
+						},
+						items: [
+							'guides/developer/app-examples/weather-oracle',
+							'guides/developer/app-examples/meta-pricing-oracle',
+						],
+					},
+					'guides/developer/app-examples/coin-flip',
+					'guides/developer/app-examples/blackjack',
+				],
+			},
 			'guides/developer/starter-templates',
 			'guides/developer/zklogin-onboarding',
 			'guides/developer/dev-cheat-sheet',
-		],
-	},
-	{
-		type: 'category',
-		label: 'App Examples',
-		link: {
-			type: 'doc',
-			id: 'guides/developer/app-examples',
-		},
-		items: [
-			'guides/developer/app-examples/auction',
-			'guides/developer/app-examples/escrow',
-			'guides/developer/app-examples/trusted-swap',
-			'guides/developer/app-examples/tic-tac-toe',
-			'guides/developer/app-examples/trusted-swap',
-			'guides/developer/app-examples/turnip-town',
-			{
-				type: 'category',
-				label: 'Oracles',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/app-examples/oracle',
-				},
-				items: [
-					'guides/developer/app-examples/weather-oracle',
-					'guides/developer/app-examples/meta-pricing-oracle',
-				],
-			},
-			'guides/developer/app-examples/coin-flip',
-			'guides/developer/app-examples/blackjack',
 		],
 	},
 	{
@@ -160,6 +165,7 @@ const guides = [
 			'guides/operator/validator-tasks',
 			'guides/operator/staking-rewards',
 			'guides/operator/node-tools',
+			'guides/operator/formal-snapshot',
 		],
 	},
 ];

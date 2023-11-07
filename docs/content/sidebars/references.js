@@ -20,8 +20,7 @@ const references = [
 			id: 'references/sui-api',
 		},
 		items: [
-			`references/sui-api/beta-graph-ql`,
-			'references/sui-api/json-rpc-format',
+			'references/sui-api/beta-graph-ql',
 			{
 				type: 'link',
 				label: 'API Reference',
@@ -68,12 +67,20 @@ const references = [
 	},
 	{
 		type: 'category',
-		label: 'Sui Move',
+		label: 'Move',
 		link: {
 			type: 'doc',
 			id: 'references/sui-move',
 		},
-		items: ['references/move/move-toml', 'references/move/move-lock'],
+		items: [
+			'references/move/move-toml',
+			'references/move/move-lock',
+			{
+				type: 'link',
+				label: 'Move Language (GitHub)',
+				href: 'https://github.com/move-language/move/blob/main/language/documentation/book/src/introduction.md',
+			},
+		],
 	},
 	{
 		type: 'category',

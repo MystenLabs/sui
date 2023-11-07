@@ -65,9 +65,13 @@ pub struct ObjectStoreConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub aws_profile: Option<String>,
+    /// Enable virtual hosted style requests
+    #[serde(default)]
+    #[arg(long, default_value_t = true)]
+    pub aws_virtual_hosted_style_request: bool,
     /// Allow unencrypted HTTP connection to AWS.
     #[serde(default)]
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = true)]
     pub aws_allow_http: bool,
     /// When using Google Cloud Storage as the object store, set this to the
     /// path to the JSON file that contains the Google credentials.
@@ -113,11 +117,14 @@ impl ObjectStoreConfig {
 
         info!(bucket=?self.bucket, object_store_type="S3", "Object Store");
 
-        let mut builder = AmazonS3Builder::new()
-            .with_allow_http(true)
-            .with_virtual_hosted_style_request(true)
-            .with_imdsv1_fallback();
+        let mut builder = AmazonS3Builder::new().with_imdsv1_fallback();
 
+        if self.aws_virtual_hosted_style_request {
+            builder = builder.with_virtual_hosted_style_request(true);
+        }
+        if self.aws_allow_http {
+            builder = builder.with_allow_http(true);
+        }
         if let Some(region) = &self.aws_region {
             builder = builder.with_region(region);
         }

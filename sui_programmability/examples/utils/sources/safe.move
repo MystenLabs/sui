@@ -11,8 +11,6 @@ module utils::safe {
     use sui::coin::{Self, Coin};
     use sui::vec_set::{Self, VecSet};
 
-    const MAX_CAPABILITY_ISSUABLE: u64 = 1000;
-
     // Errors
     const EInvalidTransferCapability: u64 = 0;
     const EInvalidOwnerCapability: u64 = 1;

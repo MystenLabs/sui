@@ -265,11 +265,12 @@ async fn test_upgrade_package_happy_path() {
     let package = runner
         .authority_state
         .database
-        .get_package(&runner.package.0)
+        .get_package_object(&runner.package.0)
         .unwrap()
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let normalized_modules = package
+        .move_package()
         .normalize(
             config.move_binary_format_version(),
             config.no_extraneous_module_bytes(),
@@ -838,12 +839,13 @@ async fn test_publish_override_happy_path() {
     let package = runner
         .authority_state
         .database
-        .get_package(&new_package.0)
+        .get_package_object(&new_package.0)
         .unwrap()
         .unwrap();
 
     // Make sure the linkage table points to the correct versions!
     let dep_ids_in_linkage_table: BTreeSet<_> = package
+        .move_package()
         .linkage_table()
         .values()
         .map(|up| up.upgraded_id)
@@ -890,12 +892,13 @@ async fn test_publish_transitive_happy_path() {
     let root_move_package = runner
         .authority_state
         .database
-        .get_package(&root_package.0)
+        .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
 
     // Make sure the linkage table points to the correct versions!
     let dep_ids_in_linkage_table: BTreeSet<_> = root_move_package
+        .move_package()
         .linkage_table()
         .values()
         .map(|up| up.upgraded_id)
@@ -980,12 +983,13 @@ async fn test_publish_transitive_override_happy_path() {
     let root_move_package = runner
         .authority_state
         .database
-        .get_package(&root_package.0)
+        .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
 
     // Make sure the linkage table points to the correct versions!
     let dep_ids_in_linkage_table: BTreeSet<_> = root_move_package
+        .move_package()
         .linkage_table()
         .values()
         .map(|up| up.upgraded_id)

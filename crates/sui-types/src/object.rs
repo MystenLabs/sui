@@ -232,6 +232,10 @@ impl MoveObject {
         self.type_.is_coin()
     }
 
+    pub fn is_staked_sui(&self) -> bool {
+        self.type_.is_staked_sui()
+    }
+
     pub fn is_clock(&self) -> bool {
         self.type_.is(&crate::clock::Clock::type_())
     }

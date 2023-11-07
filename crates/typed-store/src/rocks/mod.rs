@@ -370,9 +370,7 @@ impl RocksDB {
     ) -> Result<Transaction<'_, rocksdb::OptimisticTransactionDB>, TypedStoreError> {
         match self {
             Self::OptimisticTransactionDB(db) => Ok(db.underlying.transaction()),
-            Self::DBWithThreadMode(_) => Err(TypedStoreError::RocksDBError(
-                "operation not supported".to_string(),
-            )),
+            Self::DBWithThreadMode(_) => panic!(),
         }
     }
 
@@ -388,9 +386,7 @@ impl RocksDB {
                     .underlying
                     .transaction_opt(&WriteOptions::default(), &tx_opts))
             }
-            Self::DBWithThreadMode(_) => Err(TypedStoreError::RocksDBError(
-                "operation not supported".to_string(),
-            )),
+            Self::DBWithThreadMode(_) => panic!(),
         }
     }
 
@@ -624,9 +620,7 @@ impl RocksDBBatch {
                 batch.delete_range_cf(cf, from, to);
                 Ok(())
             }
-            Self::Transactional(_) => Err(TypedStoreError::RocksDBError(
-                "operation not supported".to_string(),
-            )),
+            Self::Transactional(_) => panic!(),
         }
     }
 }

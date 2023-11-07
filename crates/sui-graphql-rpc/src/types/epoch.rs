@@ -16,17 +16,24 @@ use async_graphql::*;
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Epoch {
+    /// The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
     pub epoch_id: u64,
+    /// The epoch's protocol version
     #[graphql(skip)]
     pub protocol_version: u64,
+    /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
     pub reference_gas_price: Option<BigInt>,
+    /// Validator related properties, including the active validators
     pub validator_set: Option<ValidatorSet>,
+    /// The epoch's starting timestamp
     pub start_timestamp: Option<DateTime>,
+    /// The epoch's ending timestamp
     pub end_timestamp: Option<DateTime>,
 }
 
 #[ComplexObject]
 impl Epoch {
+    /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options
     async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<Option<ProtocolConfigs>> {
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
@@ -35,6 +42,7 @@ impl Epoch {
         ))
     }
 
+    /// The epoch's corresponding checkpoints
     async fn checkpoint_connection(
         &self,
         ctx: &Context<'_>,
@@ -49,6 +57,7 @@ impl Epoch {
             .extend()
     }
 
+    /// The epoch's corresponding transaction blocks
     async fn transaction_block_connection(
         &self,
         ctx: &Context<'_>,

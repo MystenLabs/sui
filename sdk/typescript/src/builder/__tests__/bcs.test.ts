@@ -63,17 +63,17 @@ it('can serialize Option<T> types using the legacy registry API', () => {
 
 function ref(): { objectId: string; version: string; digest: string } {
 	return {
-		objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+		objectId: normalizeSuiAddress((Math.random() * 100000).toFixed(0).padEnd(64, '0')),
 		version: String((Math.random() * 10000).toFixed(0)),
 		digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
 	};
 }
 
 it('can serialize transaction data with a programmable transaction', () => {
-	let sui = normalizeSuiAddress('0x2').replace('0x', '');
+	let sui = normalizeSuiAddress('0x2');
 	let txData = {
 		V1: {
-			sender: normalizeSuiAddress('0xBAD').replace('0x', ''),
+			sender: normalizeSuiAddress('0xBAD'),
 			expiration: { None: true },
 			gasData: {
 				payment: [ref()],

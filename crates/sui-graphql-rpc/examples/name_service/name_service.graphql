@@ -7,7 +7,9 @@
   ) {
     location
     balance(type: "0x2::sui::SUI") {
-      coinType
+      coinType {
+        repr
+      }
       coinObjectCount
       totalBalance
     }

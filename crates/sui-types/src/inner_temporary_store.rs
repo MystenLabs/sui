@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::VersionDigest;
+use crate::base_types::{SequenceNumber, VersionDigest};
 use crate::effects::TransactionEvents;
 use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::{
@@ -29,6 +29,7 @@ pub struct InnerTemporaryStore {
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
+    pub lamport_version: SequenceNumber,
 }
 
 pub struct TemporaryModuleResolver<'a, R> {

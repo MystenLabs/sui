@@ -388,7 +388,7 @@ module abc::tests {
         {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
+            let reg_ref = &reg;
 
             abc::transfer(reg_ref, &mut coin, 500000, user1, ctx(test));
 
@@ -401,7 +401,7 @@ module abc::tests {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let transfer = test_scenario::take_from_sender<abc::Transfer>(test);
             let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
+            let reg_ref = &reg;
 
             abc::accept_transfer(reg_ref, &mut coin, transfer);
 
@@ -441,7 +441,7 @@ module abc::tests {
         {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
+            let reg_ref = &reg;
 
             abc::transfer(reg_ref, &mut coin, 250000, user2, ctx(test));
 
@@ -460,7 +460,7 @@ module abc::tests {
         {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
+            let reg_ref = &reg;
 
             abc::transfer(reg_ref, &mut coin, 250000, user1, ctx(test));
 
@@ -486,7 +486,7 @@ module abc::tests {
         {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
             let reg = test_scenario::take_shared<Registry>(test);
-            let reg_ref = &mut reg;
+            let reg_ref = &reg;
 
             abc::transfer(reg_ref, &mut coin, 500000, user1, ctx(test));
 

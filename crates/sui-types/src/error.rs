@@ -519,8 +519,6 @@ pub enum SuiError {
     FailedToSubmitToConsensus(String),
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
-    #[error("Failed to hear back from consensus: {0}")]
-    FailedToHearBackFromConsensus(String),
     #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
     HandleConsensusTransactionFailure(String),
 

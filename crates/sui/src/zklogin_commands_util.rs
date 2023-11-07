@@ -84,7 +84,7 @@ pub async fn perform_zk_login_test_tx(
         "https://prover-dev.mystenlabs.com/v1",
     )
     .await
-    .map_err(|_| anyhow!("Failed to get salt"))?;
+    .map_err(|_| anyhow!("Failed to get proof"))?;
     println!("ZkLogin inputs:");
     println!("{:?}", serde_json::to_string(&reader).unwrap());
     let (sub, aud) = parse_and_validate_jwt(parsed_token)?;

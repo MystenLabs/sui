@@ -13,8 +13,8 @@ pub(crate) struct MoveModule {
     pub native_module: CompiledModule,
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
+/// Represents a module in Move, a library that defines struct types
+/// and functions that operate on these types.
 #[Object]
 impl MoveModule {
     async fn file_format_version(&self) -> u32 {
@@ -56,6 +56,7 @@ pub(crate) struct MoveModuleId {
 
 #[ComplexObject]
 impl MoveModuleId {
+    /// The package that this Move module was defined in
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
         let result = ctx
             .data_unchecked::<PgManager>()

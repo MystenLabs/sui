@@ -64,8 +64,9 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 14 'run'. lines 156-159:
-Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
-Cannot return execution error with shared objects. Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
+mutated: object(0,0)
+deleted: object(13,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
 task 15 'run'. lines 161-161:
 created: object(15,0)

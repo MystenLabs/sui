@@ -128,11 +128,9 @@ impl ObjectStatusTracker {
             .map(|(obj_ref, _)| obj_ref.0)
             .collect();
         let deleted: BTreeSet<ObjectID> = effects
-            .deleted()
-            .iter()
-            .chain(effects.unwrapped_then_deleted().iter())
-            .chain(effects.wrapped().iter())
-            .map(|obj_ref| obj_ref.0)
+            .all_tombstones()
+            .into_iter()
+            .map(|(id, _)| id)
             .collect();
         Self {
             created,

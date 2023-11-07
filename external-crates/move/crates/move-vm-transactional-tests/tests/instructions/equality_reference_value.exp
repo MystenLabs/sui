@@ -1,0 +1,13 @@
+processed 3 tasks
+
+task 1 'run'. lines 15-15:
+mutable inputs after call: local#0: 0
+
+task 2 'run'. lines 17-17:
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(42),
+    location: 0x1::test,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

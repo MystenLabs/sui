@@ -1,27 +1,23 @@
 ---
-title: Init
+title: Module Initializers
 ---
 
-The `init` function is a special function that executes only once - when you publish the associated module. It always has the same signature and only one argument:
+The module initializer function, `init`, is special in that it executes only once - when you publish the associated module - and must have the following properties:
 
-```rust
-fun init(ctx: &mut TxContext) { /* ... */ }
-```
-
-The initializer function must have the following properties for it to execute at publication:
-
-    - Function name must be `init`
-    - The parameter list must end with either a `&mut TxContext` or a `&TxContext` type
-    - No return values
-    - Private visibility
-    - Optionally, the parameter list starts by accepting the module's one-time witness by value
+- Function name must be `init`
+- The parameter list must end with either a `&mut TxContext` or a `&TxContext` type
+- No return values
+- Private visibility
+- Optionally, the parameter list starts by accepting the module's one-time witness by value
 
 For example, the following `init` functions are all valid:
 
-    - `fun init(ctx: &TxContext)`
-    - `fun init(ctx: &mut TxContext)`
-    - `fun init(otw: EXAMPLE, ctx: &TxContext)`
-    - `fun init(otw: EXAMPLE, ctx: &mut TxContext)`
+- `fun init(ctx: &TxContext)`
+- `fun init(ctx: &mut TxContext)`
+- `fun init(otw: EXAMPLE, ctx: &TxContext)`
+- `fun init(otw: EXAMPLE, ctx: &mut TxContext)`
+
+Every function that fits this criteria will be run when the package is first published, and at no other time, including when the package is upgraded.  This means that an `init` function that was introduced during an upgrade (to a new or existing module) will never run.
 
 The following example demonstrates a valid `init` function in a module:
 

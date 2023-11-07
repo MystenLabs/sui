@@ -74,7 +74,7 @@ module sui::kiosk_tests {
         let payment = coin::mint_for_testing<SUI>(AMT, ctx);
         let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment);
         assert!(!kiosk::is_listed(&kiosk, item_id), 0);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_assets(vector[ asset ]);
@@ -166,7 +166,7 @@ module sui::kiosk_tests {
         kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
         let payment = coin::mint_for_testing<SUI>(AMT + 1, ctx);
         let (_asset, request) = kiosk::purchase(&mut kiosk, item_id, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         abort 1337
     }
@@ -184,7 +184,7 @@ module sui::kiosk_tests {
         assert!(kiosk::is_listed_exclusively(&kiosk, item_id), 0);
         let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment);
         assert!(!kiosk::is_listed_exclusively(&kiosk, item_id), 0);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_assets(vector[ asset ]);

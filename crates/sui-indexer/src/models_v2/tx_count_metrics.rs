@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use crate::schema_v2::tx_count_metrics;
 
 use super::checkpoints::StoredCheckpoint;
-use super::transactions::StoredTransaction;
+use super::transactions::StoredTransactionSuccessCommandCount;
 
 #[derive(Clone, Debug, Default, Queryable, Insertable)]
 #[diesel(table_name = tx_count_metrics)]
@@ -34,38 +34,21 @@ pub struct TxCountMetricsDelta {
 
 impl TxCountMetricsDelta {
     pub fn get_tx_count_metrics_delta(
-        tx_batch: &[StoredTransaction],
+        tx_cmd_count_batch: &[StoredTransactionSuccessCommandCount],
         end_cp: &StoredCheckpoint,
     ) -> Self {
         let checkpoint_sequence_number = end_cp.sequence_number;
         let epoch = end_cp.epoch;
         let timestamp_ms = end_cp.timestamp_ms;
 
-        let tx_and_cmd_num_batch: Vec<(StoredTransaction, u64)> = tx_batch
+        let total_transaction_blocks = tx_cmd_count_batch.len() as i64;
+        let total_successful_transaction_blocks = tx_cmd_count_batch
             .iter()
-            .filter_map(|tx| {
-                let cmd_num_res = tx.get_successful_tx_num();
-                if let Ok(cmd_num) = cmd_num_res {
-                    Some((tx.clone(), cmd_num))
-                } else {
-                    tracing::error!(
-                        "Failed to get successful tx num for tx: {:?}, error: {:?}",
-                        tx,
-                        cmd_num_res
-                    );
-                    None
-                }
-            })
-            .collect();
-        let total_transaction_blocks = tx_batch.len() as i64;
-        let total_successful_transaction_blocks = tx_and_cmd_num_batch
-            .iter()
-            .filter(|(_, successful_cmd_num)| *successful_cmd_num > 0)
+            .filter(|tx_cmd_count| tx_cmd_count.success_command_count > 0)
             .count() as i64;
-        let total_successful_transactions = tx_and_cmd_num_batch
-            .iter()
-            .fold(0, |acc, (_, successful_cmd_num)| {
-                acc + *successful_cmd_num as i64
+        let total_successful_transactions =
+            tx_cmd_count_batch.iter().fold(0, |acc, tx_cmd_count| {
+                acc + tx_cmd_count.success_command_count as i64
             });
         Self {
             checkpoint_sequence_number,

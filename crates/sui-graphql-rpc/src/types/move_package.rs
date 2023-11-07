@@ -35,10 +35,24 @@ struct Linkage {
     version: u64,
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
+/// Information about which previous versions of a package introduced its types.
+#[derive(SimpleObject)]
+struct TypeOrigin {
+    /// Module defining the type.
+    module: String,
+
+    /// Name of the struct.
+    #[graphql(name = "struct")]
+    struct_: String,
+
+    /// The storage ID of the package that first defined this type.
+    defining_id: SuiAddress,
+}
+
 #[Object]
 impl MovePackage {
+    /// A representation of the module called `name` in this package, including the
+    /// structs and functions it defines.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
         let identifier = Identifier::new(name).map_err(|e| Error::Internal(e.to_string()))?;
 
@@ -56,9 +70,9 @@ impl MovePackage {
         Ok(None)
     }
 
+    /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
-        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
@@ -164,6 +178,22 @@ impl MovePackage {
             .collect();
 
         Ok(Some(linkage))
+    }
+
+    /// The (previous) versions of this package that introduced its types.
+    async fn type_origins(&self) -> Result<Option<Vec<TypeOrigin>>> {
+        let type_origins = self
+            .as_native_package()?
+            .type_origin_table()
+            .iter()
+            .map(|origin| TypeOrigin {
+                module: origin.module_name.clone(),
+                struct_: origin.struct_name.clone(),
+                defining_id: origin.package.into(),
+            })
+            .collect();
+
+        Ok(Some(type_origins))
     }
 
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module

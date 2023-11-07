@@ -28,10 +28,10 @@ use tokio::{
 };
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV1, Metadata,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV2, Metadata,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SignatureVerificationState,
+    SendRandomnessPartialSignaturesRequest, SignatureVerificationState, SystemMessage,
 };
 
 pub struct NetworkProxy {
@@ -55,6 +55,13 @@ impl PrimaryToPrimary for NetworkProxy {
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn send_randomness_partial_signatures(
+        &self,
+        _request: anemo::Request<SendRandomnessPartialSignaturesRequest>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         unimplemented!()
     }
 
@@ -176,6 +183,7 @@ struct BadHeader {
     pub round: Round,
     pub epoch: Epoch,
     pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub system_messages: Vec<SystemMessage>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
     pub metadata: Metadata,
@@ -438,9 +446,9 @@ async fn fetch_certificates_v1_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header =
-        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
+        unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert.header().clone().unwrap_v2()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(wrong_header) };
     cert.update_header(wolf_header.into());
     certs.push(cert);
     // Add cert without all parents in storage.
@@ -734,9 +742,9 @@ async fn fetch_certificates_v2_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header =
-        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
+        unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert.header().clone().unwrap_v2()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(wrong_header) };
     cert.update_header(Header::from(wolf_header));
     certs.push(cert);
     // Add cert without all parents in storage.
@@ -783,32 +791,6 @@ async fn fetch_certificates_v2_basic() {
     sleep(Duration::from_secs(1)).await;
     verify_certificates_not_in_store(&certificate_store, &certificates[num_written..target_index]);
 
-    // Additional testcases cannot be added, because it seems impossible now to receive from
-    // the tx_fetch_resp channel after a certain number of messages.
-    // TODO: find the root cause of this issue.
-
-    // Send out a batch of certificates with good signatures for leaves,
-    // but bad signatures at other rounds including the verification round.
-    // let mut certs = Vec::new();
-    // for cert in certificates.iter().skip(num_written).take(200) {
-    //     let mut cert = cert.clone();
-    //     cert.set_signature_verification_state(SignatureVerificationState::Unverified(
-    //         AggregateSignatureBytes::default(),
-    //     ));
-    //     certs.push(cert);
-    // }
-    // for cert in certificates.iter().skip(num_written + 200).take(4) {
-    //     certs.push(cert.clone());
-    // }
-    // tx_fetch_resp
-    //     .try_send(FetchCertificatesResponse {
-    //         certificates: certs,
-    //     })
-    //     .unwrap();
-
-    // sleep(Duration::from_secs(1)).await;
-    // verify_certificates_not_in_store(&certificate_store, &certificates[num_written..target_index]);
-
     // Send out a batch of certificates with good signatures.
     // The certificates 4 + 62 + 58 + 204 = 328 should become available in store eventually.let mut certs = Vec::new();
     let mut certs = Vec::new();
@@ -828,4 +810,8 @@ async fn fetch_certificates_v2_basic() {
         310, // to be verified indirectly
     )
     .await;
+
+    // Additional testcases cannot be added, because it seems impossible now to receive from
+    // the tx_fetch_resp channel after a certain number of messages.
+    // TODO: find the root cause of this issue.
 }

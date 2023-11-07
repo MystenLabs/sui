@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
-
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
+use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObjectArc};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -20,7 +20,7 @@ use sui_types::{
     },
     object::{Object, Owner},
     storage::{
-        BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, ReceivedMarkerQuery,
+        BackingPackageStore, ChildObjectResolver, MarkerTableQuery, ObjectStore, ParentSync,
     },
     transaction::VerifiedTransaction,
 };
@@ -242,8 +242,8 @@ impl BackingPackageStore for InMemoryStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<Object>> {
-        Ok(self.get_object(package_id).cloned())
+    ) -> sui_types::error::SuiResult<Option<PackageObjectArc>> {
+        load_package_object_from_object_store(self, package_id)
     }
 }
 
@@ -300,7 +300,7 @@ impl ChildObjectResolver for InMemoryStore {
     }
 }
 
-impl ReceivedMarkerQuery for InMemoryStore {
+impl MarkerTableQuery for InMemoryStore {
     fn have_received_object_at_version(
         &self,
         _object_id: &ObjectID,
@@ -310,6 +310,23 @@ impl ReceivedMarkerQuery for InMemoryStore {
         // In simulation, we always have the object don't have a marker table, and we don't need to
         // worry about equivocation protection. So we simply return false if ever asked if we
         // received this object.
+        Ok(false)
+    }
+
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        _object_id: &ObjectID,
+        _version: &SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        Ok(None)
+    }
+
+    fn is_shared_object_deleted(
+        &self,
+        _object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
         Ok(false)
     }
 }
@@ -329,14 +346,7 @@ impl ModuleResolver for InMemoryStore {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
+        get_module(self, module_id)
     }
 }
 
@@ -413,7 +423,7 @@ impl KeyStore {
 pub trait SimulatorStore:
     sui_types::storage::BackingPackageStore
     + sui_types::storage::ObjectStore
-    + sui_types::storage::ReceivedMarkerQuery
+    + sui_types::storage::MarkerTableQuery
 {
     fn get_checkpoint_by_sequence_number(
         &self,

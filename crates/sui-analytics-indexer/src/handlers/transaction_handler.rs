@@ -79,7 +79,7 @@ impl TransactionHandler {
         let move_calls_vec = txn_data.move_calls();
         let packages: BTreeSet<_> = move_calls_vec
             .iter()
-            .map(|(package, _, _)| package.to_canonical_string())
+            .map(|(package, _, _)| package.to_canonical_string(/* with_prefix */ false))
             .collect();
         let packages = packages
             .iter()
@@ -166,6 +166,9 @@ impl TransactionHandler {
             gas_price: txn_data.gas_price(),
 
             raw_transaction: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
+
+            has_zklogin_sig: transaction.has_zklogin_sig(),
+            has_upgraded_multisig: transaction.has_upgraded_multisig(),
         };
         self.transactions.push(entry);
     }

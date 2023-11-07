@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
+use super::shared_object_deletion::SharedCounterDeletionWorkloadBuilder;
 
 pub struct WorkloadConfiguration;
 
@@ -33,11 +34,13 @@ impl WorkloadConfiguration {
             RunSpec::Bench {
                 num_of_benchmark_groups,
                 shared_counter,
+                shared_deletion,
                 transfer_object,
                 delegation,
                 batch_payment,
                 adversarial,
                 shared_counter_hotness_factor,
+                num_shared_counters,
                 shared_counter_max_tip,
                 batch_payment_size,
                 adversarial_cfg,
@@ -60,6 +63,7 @@ impl WorkloadConfiguration {
                         num_workers[i],
                         opts.num_transfer_accounts,
                         shared_counter[i],
+                        shared_deletion[i],
                         transfer_object[i],
                         delegation[i],
                         batch_payment[i],
@@ -67,6 +71,7 @@ impl WorkloadConfiguration {
                         AdversarialPayloadCfg::from_str(&adversarial_cfg[i]).unwrap(),
                         batch_payment_size[i],
                         shared_counter_hotness_factor[i],
+                        num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip[i],
                         target_qps[i],
                         in_flight_ratio[i],
@@ -138,10 +143,12 @@ impl WorkloadConfiguration {
         transfer_object_weight: u32,
         delegation_weight: u32,
         batch_payment_weight: u32,
+        shared_deletion_weight: u32,
         adversarial_weight: u32,
         adversarial_cfg: AdversarialPayloadCfg,
         batch_payment_size: u32,
         shared_counter_hotness_factor: u32,
+        num_shared_counters: Option<u64>,
         shared_counter_max_tip: u64,
         target_qps: u64,
         in_flight_ratio: u64,
@@ -161,12 +168,25 @@ impl WorkloadConfiguration {
             num_workers,
             in_flight_ratio,
             shared_counter_hotness_factor,
+            num_shared_counters,
             shared_counter_max_tip,
             reference_gas_price,
             duration,
             workload_group,
         );
         workload_builders.push(shared_workload);
+        let shared_deletion_workload = SharedCounterDeletionWorkloadBuilder::from(
+            shared_deletion_weight as f32 / total_weight as f32,
+            target_qps,
+            num_workers,
+            in_flight_ratio,
+            shared_counter_hotness_factor,
+            shared_counter_max_tip,
+            reference_gas_price,
+            duration,
+            workload_group,
+        );
+        workload_builders.push(shared_deletion_workload);
         let transfer_workload = TransferObjectWorkloadBuilder::from(
             transfer_object_weight as f32 / total_weight as f32,
             target_qps,

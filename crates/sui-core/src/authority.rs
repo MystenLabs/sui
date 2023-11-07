@@ -37,7 +37,7 @@ use std::{
     fs,
     pin::Pin,
     sync::Arc,
-    thread,
+    thread, vec,
 };
 use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
@@ -82,8 +82,8 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
 use sui_types::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+    InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
+    TransactionEvents, VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
@@ -214,6 +214,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_package_cache_hits: IntCounter,
     pub(crate) transaction_manager_package_cache_misses: IntCounter,
     pub(crate) transaction_manager_package_cache_evictions: IntCounter,
+    pub(crate) transaction_manager_transaction_queue_age_s: Histogram,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
     pub(crate) execution_driver_dispatch_queue: IntGauge,
@@ -230,7 +231,6 @@ pub struct AuthorityMetrics {
     pending_notify_read: IntGauge,
 
     /// Consensus handler metrics
-    pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
@@ -470,6 +470,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            transaction_manager_transaction_queue_age_s: register_histogram_with_registry!(
+                "transaction_manager_transaction_queue_age_s",
+                "Time spent in waiting for transaction in the queue",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
@@ -524,11 +531,6 @@ impl AuthorityMetrics {
                 registry,
             )
                 .unwrap(),
-            consensus_handler_processed_batches: register_int_counter_with_registry!(
-                "consensus_handler_processed_batches",
-                "Number of batches processed by consensus_handler",
-                registry
-            ).unwrap(),
             consensus_handler_processed_bytes: register_int_counter_with_registry!(
                 "consensus_handler_processed_bytes",
                 "Number of bytes processed by consensus_handler",
@@ -1169,7 +1171,7 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let output_keys: Vec<_> = inner_temporary_store
+        let mut output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
             .map(|(id, obj)| {
@@ -1183,6 +1185,39 @@ impl AuthorityState {
                 }
             })
             .collect();
+
+        let deleted: HashMap<_, _> = effects
+            .deleted()
+            .iter()
+            .map(|oref| (oref.0, oref.1))
+            .collect();
+
+        // add deleted shared objects to the outputkeys that then get sent to notify_commit
+        let deleted_output_keys = deleted
+            .iter()
+            .filter(|(id, _)| {
+                inner_temporary_store
+                    .input_objects
+                    .get(id)
+                    .is_some_and(|obj| obj.is_shared())
+            })
+            .map(|(id, seq)| InputKey::VersionedObject {
+                id: *id,
+                version: *seq,
+            });
+        output_keys.extend(deleted_output_keys);
+
+        // For any previously deleted shared objects that appeared mutably in the transaction,
+        // synthesize a notification for the next version of the object.
+        let smeared_version = inner_temporary_store.lamport_version;
+        let deleted_accessed_objects = effects.deleted_mutably_accessed_shared_objects();
+        for object_id in deleted_accessed_objects.into_iter() {
+            let key = InputKey::VersionedObject {
+                id: object_id,
+                version: smeared_version,
+            };
+            output_keys.push(key);
+        }
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
@@ -1260,6 +1295,7 @@ impl AuthorityState {
             certificate,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
+            epoch_store.epoch(),
         )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
@@ -1495,6 +1531,7 @@ impl AuthorityState {
             protocol_config,
             &transaction_kind,
             gas_object,
+            epoch_store.epoch(),
         )?;
 
         let gas_budget = max_tx_gas;
@@ -4221,6 +4258,23 @@ impl AuthorityState {
             .send(())
             .unwrap();
     }
+
+    pub async fn prune_objects_and_compact_for_testing(&self) {
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.database.perpetual_tables,
+            &self.checkpoint_store,
+            &self.database.objects_lock_table,
+            pruning_config,
+            AuthorityStorePruningMetrics::new_for_test(),
+            usize::MAX,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.database.perpetual_tables);
+    }
 }
 
 #[async_trait]
@@ -4505,9 +4559,14 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for (obj_ref, _kind) in effects.input_shared_objects() {
-            if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
-                shared_objects.push(w)
+        for kind in effects.input_shared_objects() {
+            match kind {
+                InputSharedObject::Mutate(obj_ref) | InputSharedObject::ReadOnly(obj_ref) => {
+                    if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
+                        shared_objects.push(w)
+                    }
+                }
+                InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
             }
         }
 

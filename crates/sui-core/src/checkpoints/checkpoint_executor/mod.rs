@@ -587,6 +587,8 @@ impl CheckpointExecutor {
                     )
                     .await;
 
+                    fail_point_async!("prune-and-compact");
+
                     // For finalizing the checkpoint, we need to pass in all checkpoint
                     // transaction effects, not just the change_epoch tx effects. However,
                     // we have already notify awaited all tx effects separately (once
@@ -963,7 +965,7 @@ fn get_unexecuted_transactions(
                     )
                 );
                 // change epoch tx is handled specially in check_epoch_last_checkpoint
-                assert!(!tx.data().intent_message().value.is_change_epoch_tx());
+                assert!(!tx.data().intent_message().value.is_end_of_epoch_tx());
                 (
                     VerifiedExecutableTransaction::new_from_checkpoint(
                         tx,

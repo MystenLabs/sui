@@ -5,7 +5,6 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
@@ -101,6 +100,7 @@ mod checked {
             metrics,
             enable_expensive_checks,
             deny_cert,
+            false,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -213,6 +213,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         deny_cert: bool,
+        contains_deleted_input: bool,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -234,6 +235,11 @@ mod checked {
             let mut execution_result = if deny_cert {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::CertificateDenied,
+                    None,
+                ))
+            } else if contains_deleted_input {
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::InputObjectDeleted,
                     None,
                 ))
             } else {

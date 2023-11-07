@@ -58,7 +58,7 @@ module basics::object_basics {
         transfer::transfer(Wrapper { id: object::new(ctx), o }, tx_context::sender(ctx))
     }
 
-    public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
+    public entry fun unwrap(w: Wrapper, ctx: &TxContext) {
         let Wrapper { id, o } = w;
         object::delete(id);
         transfer::public_transfer(o, tx_context::sender(ctx))

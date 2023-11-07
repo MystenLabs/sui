@@ -21,6 +21,10 @@ const standards = [
 		],
 	},
 	'standards/display',
-	'standards/wallet-adapter',
+	{
+		type: 'link',
+		label: 'Wallet Kit',
+		href: 'https://sui-typescript-docs.vercel.app/wallet-kit',
+	},
 ];
 module.exports = standards;

@@ -15,7 +15,6 @@ use tracing::info;
 use types::{Transaction, TxResponse};
 
 /// Uses a map to allow running multiple Narwhal instances in the same process.
-/// TODO: after Rust 1.66, use BTreeMap::new() instead of wrapping it in an Option.
 static LOCAL_NARWHAL_CLIENTS: Mutex<BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>> =
     Mutex::new(BTreeMap::new());
 

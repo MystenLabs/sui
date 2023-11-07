@@ -27,12 +27,12 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder and double-click the appropriate binary to install, beginning with sui-`<OS>`-`<ARCHITECTURE>`:  
+1. Open the expanded folder and double-click the appropriate binary to install, beginning with sui-`<OS>`-`<ARCHITECTURE>`:
 
-    - sui-faucet-`<OS>`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.  
-    - sui-indexer-`<OS>`-`<ARCHITECTURE>`: An indexer for a local Sui network.  
-    - sui-`<OS>`-`<ARCHITECTURE>`: Main Sui binary.  
-    - sui-node-`<OS>`-`<ARCHITECTURE>`: Run a local node.  
+    - sui-faucet-`<OS>`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
+    - sui-indexer-`<OS>`-`<ARCHITECTURE>`: An indexer for a local Sui network.
+    - sui-`<OS>`-`<ARCHITECTURE>`: Main Sui binary.
+    - sui-node-`<OS>`-`<ARCHITECTURE>`: Run a local node.
     - sui-test-validator-`<OS>`-`<ARCHITECTURE>`: Run test validators on a local network for development.
     - sui-tool-`<OS>`-`<ARCHITECTURE>`: Provides utilities for Sui.
 
@@ -47,14 +47,9 @@ To confirm that Sui installed correctly, type `sui` and press Enter. You should 
 
 Follow the instructions in this topic to install the Rust crates (packages) required to interact with Sui networks, including the Sui CLI.
 
-The steps to install Sui include:
+To install Sui from source, you first need to install its [prerequisites](#prerequisites) for your operating system. After installing the supporting technologies, you can install [Sui binaries from source](#install-sui-binaries-from-source).
 
-1.  Install [prerequisites](#prerequisites) for your operating system.
-1.  Install [Sui binaries](#install-sui-binaries).
-1.  Configure an [Integrated Development Environment (IDE)](#integrated-development-environment).
-1.  Request [SUI test tokens](#sui-tokens) to use on Sui Devnet or Sui Testnet networks.
-
-You can also download the [source code](#source-code) to have local access to files.
+You can also download the [source code](./sui-environment) to have local access to files.
 
 ## Prerequisites {#prerequisites}
 
@@ -104,7 +99,9 @@ The prerequisites needed for the Linux operating system include:
 - build-essential
 
 :::info
+
 The Linux instructions assume a distribution that uses the APT package manager. You might need to adjust the instructions to use other package managers.
+
 :::
 
 Install the prerequisites listed in this section. Use the following command to update `apt-get`:
@@ -209,7 +206,7 @@ sudo apt-get install build-essential
 
 </TabItem>
 
-<TabItem value="mac" label="macOS">  
+<TabItem value="mac" label="macOS">
 
 The prerequisites needed for the macOS operating system include:
 
@@ -304,16 +301,42 @@ Sui requires the following additional tools on computers running Windows.
 - The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-15.0.7-win64.exe for 64-bit Windows, or LLVM-15.0.7-win32.exe for 32-bit Windows.
 
 **Known issue** - The `sui console` command does not work in PowerShell.
-        
+
 </TabItem>
 
 </Tabs>
 
+## Install Sui binaries from source {#install-sui-binaries-from-source}
+
+Run the following command to install Sui binaries from the `testnet` branch:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+```
+
+The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
+
+To update to the latest stable version of Rust:
+
+```shell
+rustup update stable
+```
+
+The command installs Sui components in the `~/.cargo/bin` folder.
+
+## Upgrade Sui binaries
+
+If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui
+```
+
 ## Next steps {#next-steps}
 
-Now that you have Sui installed, it's time to start developing. Checkout the following topics to start working with Sui:
+Now that you have Sui installed, it's time to start developing. Check out the following topics to start working with Sui:
 
-- [Get coins](./get-coins.mdx) - Get some coins on a development network to start using Sui.
-- [Connect to a Sui network](./connect.mdx) - Learn about the available networks and connect to one.
-- [Sui CLI](/references/cli.mdx) - The Sui CLI is the most straightforward way to start exploring Sui networks.
-- [Build your first dApp](../first-app.mdx) - You have Sui, time to start your on-chain journey.
+- Read about the [Sui CLI](/references/cli.mdx), the most straightforward way to start exploring Sui networks.
+- [Learn about the available networks](./connect.mdx) and connect to one.
+- [Get some coins](./get-coins.mdx) on a development network.
+- [Build your first dApp](../first-app.mdx) to start your on-chain journey.

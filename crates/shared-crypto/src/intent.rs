@@ -117,6 +117,14 @@ impl Intent {
         }
     }
 
+    pub fn personal_message() -> Self {
+        Self {
+            scope: IntentScope::PersonalMessage,
+            version: IntentVersion::V0,
+            app_id: AppId::Sui,
+        }
+    }
+
     pub fn narwhal_app(scope: IntentScope) -> Self {
         Self {
             scope,

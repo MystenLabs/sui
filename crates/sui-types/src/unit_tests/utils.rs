@@ -154,14 +154,11 @@ pub fn mock_certified_checkpoint<'a>(
 
 mod zk_login {
     use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
+    use shared_crypto::intent::PersonalMessage;
+
+    use crate::zk_login_util::get_zklogin_inputs;
 
     use super::*;
-
-    fn get_inputs() -> ZkLoginInputs {
-        thread_local! {
-        static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"17318089125952421736342263717932719437717844282410187957984751939942898251250\",\"11373966645469122582074082295985388258840681618268593976697325892280915681207\",\"1\"],\"b\":[[\"5939871147348834997361720122238980177152303274311047249905942384915768690895\",\"4533568271134785278731234570361482651996740791888285864966884032717049811708\"],[\"10564387285071555469753990661410840118635925466597037018058770041347518461368\",\"12597323547277579144698496372242615368085801313343155735511330003884767957854\"],[\"1\",\"0\"]],\"c\":[\"15791589472556826263231644728873337629015269984699404073623603352537678813171\",\"4547866499248881449676161158024748060485373250029423904113017422539037162527\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap(); }
-        ZKLOGIN_INPUTS.with(|a| a.clone())
-    }
 
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {
@@ -169,7 +166,7 @@ mod zk_login {
                 // Derive user address manually: Blake2b_256 hash of [zklogin_flag || iss_bytes_length || iss_bytes || address seed in bytes])
                 let mut hasher = DefaultHash::default();
                 hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-                let inputs = get_inputs();
+                let inputs = get_zklogin_inputs();
                 let iss_bytes = inputs.get_iss().as_bytes();
                 hasher.update([iss_bytes.len() as u8]);
                 hasher.update(iss_bytes);
@@ -221,13 +218,21 @@ mod zk_login {
         sign_zklogin_tx(data, legacy)
     }
 
+    pub fn sign_zklogin_personal_msg(data: PersonalMessage) -> (SuiAddress, GenericSignature) {
+        let inputs = get_zklogin_inputs();
+        let msg = IntentMessage::new(Intent::personal_message(), data);
+        let s = Signature::new_secure(&msg, &get_zklogin_user_key());
+        let authenticator =
+            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, s));
+        let address = get_zklogin_user_address();
+        (address, authenticator)
+    }
+
     pub fn sign_zklogin_tx(
         data: TransactionData,
         legacy: bool,
     ) -> (SuiAddress, Transaction, GenericSignature) {
         // Sign the user transaction with the user's ephemeral key.
-        //let tx = make_transaction(user_address, &user_key, Intent::sui_transaction());
-
         let tx = Transaction::from_data_and_signer(
             data,
             Intent::sui_transaction(),
@@ -242,7 +247,7 @@ mod zk_login {
         let inputs = if legacy {
             get_inputs_with_bad_address_seed()
         } else {
-            get_inputs()
+            get_zklogin_inputs()
         };
         // Construct the authenticator with all user submitted components.
         let authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(

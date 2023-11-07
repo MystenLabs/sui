@@ -1,7 +1,6 @@
 ---
 title: DeepBook Orders
 slug: /deepbook-orders
-
 ---
 
 ## Order Book Structure {#order-book-structure}
@@ -68,4 +67,40 @@ struct OrderFilled<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop 
     base_asset_quantity_remaining: u64,
     price: u64
 }
+```
+
+The following example uses the [Sui TypeScript SDK](https://sui-typescript-docs.vercel.app/typescript) to connect via websocket to listen to events.
+
+```typescript
+const local_client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443/' });
+const deepbook_client = new DeepBookClient(local_client);
+
+const deepbook = '0x000000000000000000000000000000000000000000000000000000000000dee9';
+const deepbookClobEventsFilter = {
+	MoveModule: { package: deepbook, module: 'clob_v2' },
+};
+
+// Note that these names must be exact
+const moveEventsFilter = {
+	MoveEventType:
+		'0xdee9::clob_v2::OrderPlaced<0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>',
+};
+const orderFilledFilter = {
+	MoveEventType:
+		'0xdee9::clob_v2::OrderFilled<0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN, 0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN>',
+};
+const poolFilter = {
+	MoveEventField: {
+		path: '/pool_id',
+		value: '0xd9e45ab5440d61cc52e3b2bd915cdd643146f7593d587c715bc7bfa48311d826',
+	},
+};
+
+deepbook_client.suiClient.subscribeEvent({
+	filter: moveEventsFilter,
+	onMessage(event) {
+		console.log(event);
+		// handle subscription notification message here
+	},
+});
 ```

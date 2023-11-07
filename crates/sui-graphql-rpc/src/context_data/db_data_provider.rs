@@ -40,15 +40,13 @@ use crate::{
         validator_set::ValidatorSet,
     },
 };
-use async_graphql::{
-    connection::{Connection, Edge},
-    ID,
-};
+use async_graphql::connection::{Connection, Edge};
 use diesel::{
     pg::Pg,
-    query_builder::{BoxedSelectStatement, FromClause},
+    query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment, QueryId},
+    sql_types::Text,
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
-    RunQueryDsl,
+    QueryResult, RunQueryDsl,
 };
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
@@ -66,7 +64,10 @@ use sui_indexer::{
     types_v2::OwnerType,
     PgConnectionPoolConfig,
 };
-use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
+use sui_json_rpc::{
+    coin_api::parse_to_type_tag,
+    name_service::{Domain, NameRecord, NameServiceConfig},
+};
 use sui_json_rpc_types::{
     EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as SuiStake,
     SuiTransactionBlockEffects,
@@ -93,7 +94,7 @@ use sui_types::{
     Identifier,
 };
 
-use super::{db_query_cost::extract_cost, DEFAULT_PAGE_SIZE};
+use super::DEFAULT_PAGE_SIZE;
 
 use super::sui_sdk_data_provider::convert_to_validators;
 
@@ -134,6 +135,65 @@ type BalanceQuery<'a> = BoxedSelectStatement<
     Pg,
     objects::dsl::coin_type,
 >;
+
+/// Allows .explain() method on any Diesel query
+pub trait Explain: Sized {
+    fn explain(self) -> Explained<Self>;
+}
+impl<T> Explain for T {
+    fn explain(self) -> Explained<Self> {
+        Explained { query: self }
+    }
+}
+
+/// Struct for custom diesel function
+#[derive(Debug, Clone, Copy)]
+pub struct Explained<T> {
+    query: T,
+}
+
+/// All queries need to implement QueryId
+impl<T: QueryId> QueryId for Explained<T> {
+    type QueryId = (T::QueryId, std::marker::PhantomData<&'static str>);
+    const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID;
+}
+
+/// Explained<T> is a fully structured query with return of type Text
+impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained<T> {
+    type SqlType = Text;
+}
+
+/// Allows methods like load(), get_result(), etc. on an Explained query
+impl<T> RunQueryDsl<PgConnection> for Explained<T> {}
+
+/// Implement logic for prefixing queries with "EXPLAIN"
+impl<T> QueryFragment<Pg> for Explained<T>
+where
+    T: QueryFragment<Pg>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
+        out.push_sql("EXPLAIN (FORMAT JSON) ");
+        self.query.walk_ast(out.reborrow())?;
+        Ok(())
+    }
+}
+
+pub fn extract_cost(explain_result: &str) -> Result<f64, Error> {
+    let parsed: serde_json::Value =
+        serde_json::from_str(explain_result).map_err(|e| Error::Internal(e.to_string()))?;
+    if let Some(cost) = parsed
+        .get(0)
+        .and_then(|entry| entry.get("Plan"))
+        .and_then(|plan| plan.get("Total Cost"))
+        .and_then(|cost| cost.as_f64())
+    {
+        Ok(cost)
+    } else {
+        Err(Error::Internal(
+            "Failed to get cost from query plan".to_string(),
+        ))
+    }
+}
 
 pub struct QueryBuilder;
 impl QueryBuilder {
@@ -236,7 +296,6 @@ impl QueryBuilder {
                     .into_iter()
                     .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
                     .collect::<Result<Vec<_>, _>>()?;
-
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
@@ -509,21 +568,24 @@ impl PgManager {
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
-    /// Takes a query fragment and a lambda that executes the query
+    /// Takes a query_builder_fn that returns Result<QueryFragment> and a lambda to execute the query
     /// Spawns a blocking task that determines the cost of the query fragment
-    /// And if within limits, executes the query
-    async fn run_query_async_with_cost<T, Q, EF, E, F>(
+    /// And if within limits, then executes the query
+    async fn run_query_async_with_cost<T, Q, QResult, EF, E, F>(
         &self,
-        query: Q,
+        mut query_builder_fn: Q,
         execute_fn: EF,
     ) -> Result<T, Error>
     where
-        Q: QueryDsl
+        Q: FnMut() -> Result<QResult, Error> + Send + 'static,
+        QResult: QueryDsl
             + RunQueryDsl<Pg>
             + diesel::query_builder::QueryFragment<diesel::pg::Pg>
+            + diesel::query_builder::Query
+            + diesel::query_builder::QueryId
             + Send
             + 'static,
-        EF: FnOnce(Q) -> F + Send + 'static,
+        EF: FnOnce(QResult) -> F + Send + 'static,
         F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
         E: From<diesel::result::Error> + std::error::Error + Send + 'static,
         T: Send + 'static,
@@ -531,7 +593,11 @@ impl PgManager {
         let max_db_query_cost = self.limits.max_db_query_cost;
         self.inner
             .spawn_blocking(move |this| {
-                let cost = extract_cost(&query, &this)?;
+                let query = query_builder_fn()?;
+                let explain_result: String = this
+                    .run_query(|conn| query.explain().get_result(conn))
+                    .map_err(|e| Error::Internal(e.to_string()))?;
+                let cost = extract_cost(&explain_result)?;
                 if cost > max_db_query_cost as f64 {
                     return Err(DbValidationError::QueryCostExceeded(
                         cost as u64,
@@ -540,6 +606,7 @@ impl PgManager {
                     .into());
                 }
 
+                let query = query_builder_fn()?;
                 let execute_closure = execute_fn(query);
                 this.run_query(execute_closure)
                     .map_err(|e| Error::Internal(e.to_string()))
@@ -551,9 +618,10 @@ impl PgManager {
 /// Implement methods to query db and return StoredData
 impl PgManager {
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
-        self.run_query_async_with_cost(QueryBuilder::get_tx_by_digest(digest), |query| {
-            move |conn| query.get_result::<StoredTransaction>(conn).optional()
-        })
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_tx_by_digest(digest.clone())),
+            |query| move |conn| query.get_result::<StoredTransaction>(conn).optional(),
+        )
         .await
     }
 
@@ -562,19 +630,22 @@ impl PgManager {
         address: Vec<u8>,
         version: Option<i64>,
     ) -> Result<Option<StoredObject>, Error> {
-        self.run_query_async_with_cost(QueryBuilder::get_obj(address, version), |query| {
-            move |conn| query.get_result::<StoredObject>(conn).optional()
-        })
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_obj(address.clone(), version)),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+        )
         .await
     }
 
     pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
-        let query = match epoch_id {
-            Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
-            None => QueryBuilder::get_latest_epoch(),
+        let query_fn = move || {
+            Ok(match epoch_id {
+                Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
+                None => QueryBuilder::get_latest_epoch(),
+            })
         };
 
-        self.run_query_async_with_cost(query, |query| {
+        self.run_query_async_with_cost(query_fn, |query| {
             move |conn| query.get_result::<StoredEpochInfo>(conn).optional()
         })
         .await
@@ -585,15 +656,17 @@ impl PgManager {
         digest: Option<Vec<u8>>,
         sequence_number: Option<i64>,
     ) -> Result<Option<StoredCheckpoint>, Error> {
-        let query = match (digest, sequence_number) {
-            (Some(digest), None) => QueryBuilder::get_checkpoint_by_digest(digest),
-            (None, Some(sequence_number)) => {
-                QueryBuilder::get_checkpoint_by_sequence_number(sequence_number)
-            }
-            (Some(_), Some(_)) => {
-                return Err(Error::InvalidCheckpointQuery);
-            }
-            _ => QueryBuilder::get_latest_checkpoint(),
+        let query = move || {
+            Ok(match (digest.clone(), sequence_number) {
+                (Some(digest), None) => QueryBuilder::get_checkpoint_by_digest(digest),
+                (None, Some(sequence_number)) => {
+                    QueryBuilder::get_checkpoint_by_sequence_number(sequence_number)
+                }
+                (Some(_), Some(_)) => {
+                    return Err(Error::InvalidCheckpointQuery);
+                }
+                _ => QueryBuilder::get_latest_checkpoint(),
+            })
         };
 
         self.run_query_async_with_cost(query, |query| {
@@ -634,7 +707,15 @@ impl PgManager {
 
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
-                QueryBuilder::multi_get_coins(cursor, descending_order, limit, address, coin_type),
+                move || {
+                    Ok(QueryBuilder::multi_get_coins(
+                        cursor.clone(),
+                        descending_order,
+                        limit,
+                        address.clone(),
+                        coin_type.clone(),
+                    ))
+                },
                 |query| move |conn| query.load(conn).optional(),
             )
             .await?;
@@ -656,9 +737,15 @@ impl PgManager {
         address: Vec<u8>,
         coin_type: String,
     ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
-        self.run_query_async_with_cost(QueryBuilder::get_balance(address, coin_type), |query| {
-            move |conn| query.get_result(conn).optional()
-        })
+        self.run_query_async_with_cost(
+            move || {
+                Ok(QueryBuilder::get_balance(
+                    address.clone(),
+                    coin_type.clone(),
+                ))
+            },
+            |query| move |conn| query.get_result(conn).optional(),
+        )
         .await
     }
 
@@ -676,9 +763,10 @@ impl PgManager {
             return Err(DbValidationError::PaginationDisabledOnBalances.into());
         }
 
-        self.run_query_async_with_cost(QueryBuilder::multi_get_balances(address), |query| {
-            move |conn| query.load(conn).optional()
-        })
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::multi_get_balances(address.clone())),
+            |query| move |conn| query.load(conn).optional(),
+        )
         .await
     }
 
@@ -735,14 +823,16 @@ impl PgManager {
             }
         }
 
-        let query = QueryBuilder::multi_get_txs(
-            cursor,
-            descending_order,
-            limit,
-            filter,
-            after_tx_seq_num,
-            before_tx_seq_num,
-        )?;
+        let query = move || {
+            QueryBuilder::multi_get_txs(
+                cursor,
+                descending_order,
+                limit,
+                filter.clone(),
+                after_tx_seq_num,
+                before_tx_seq_num,
+            )
+        };
 
         let result: Option<Vec<StoredTransaction>> = self
             .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
@@ -777,12 +867,14 @@ impl PgManager {
 
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
-                QueryBuilder::multi_get_checkpoints(
-                    cursor,
-                    descending_order,
-                    limit,
-                    epoch.map(|e| e as i64),
-                ),
+                move || {
+                    Ok(QueryBuilder::multi_get_checkpoints(
+                        cursor,
+                        descending_order,
+                        limit,
+                        epoch.map(|e| e as i64),
+                    ))
+                },
                 |query| move |conn| query.load(conn).optional(),
             )
             .await?;
@@ -815,8 +907,15 @@ impl PgManager {
             .transpose()?;
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
-        let query =
-            QueryBuilder::multi_get_objs(cursor, descending_order, limit, filter, owner_type)?;
+        let query = move || {
+            QueryBuilder::multi_get_objs(
+                cursor.clone(),
+                descending_order,
+                limit,
+                filter.clone(),
+                owner_type,
+            )
+        };
 
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
@@ -1202,7 +1301,14 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
+        let coin_type_tag = parse_to_type_tag(coin_type);
+        if coin_type_tag.is_err() {
+            // The provided `coin_type` cannot be parsed to a type tag so return None here.
+            return Ok(None);
+        }
+        let coin_type = coin_type_tag
+            .unwrap()
+            .to_canonical_string(/* with_prefix */ true);
         let result = self.get_balance(address, coin_type).await?;
 
         match result {
@@ -1210,7 +1316,7 @@ impl PgManager {
                 (Some(balance), Some(count), Some(coin_type)) => Ok(Some(Balance {
                     coin_object_count: Some(count as u64),
                     total_balance: Some(BigInt::from(balance)),
-                    coin_type: Some(coin_type),
+                    coin_type: Some(MoveType::new(coin_type)),
                 })),
                 (None, None, None) => Ok(None),
                 _ => Err(Error::Internal(
@@ -1244,7 +1350,7 @@ impl PgManager {
                         Balance {
                             coin_object_count: Some(count as u64),
                             total_balance: Some(BigInt::from(balance)),
-                            coin_type: Some(coin_type),
+                            coin_type: Some(MoveType::new(coin_type)),
                         },
                     ));
                 } else {
@@ -1282,7 +1388,15 @@ impl PgManager {
                     Coin::try_from(stored_obj)
                         .map_err(|e| eprintln!("Error converting object to coin: {:?}", e))
                         .ok()
-                        .map(|coin| Edge::new(coin.id.to_string(), coin))
+                        .map(|coin| {
+                            Edge::new(
+                                coin.move_obj
+                                    .native_object
+                                    .id()
+                                    .to_canonical_string(/* with_prefix */ true),
+                                coin,
+                            )
+                        })
                 }));
             Ok(Some(connection))
         } else {
@@ -1406,7 +1520,7 @@ impl PgManager {
         let obj_filter = ObjectFilter {
             package: None,
             module: None,
-            ty: Some(MoveObjectType::staked_sui().to_string()),
+            ty: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
             owner: Some(address),
             object_ids: None,
             object_keys: None,
@@ -1455,7 +1569,9 @@ impl PgManager {
                 .collect::<Vec<_>>();
 
             for stk in stakes {
-                let cursor = stk.staked_sui_id.to_string();
+                let cursor = stk
+                    .staked_sui_id
+                    .to_canonical_string(/* with_prefix */ true);
                 let stake = Stake::from(stk);
                 edges.push(Edge::new(cursor, stake));
             }
@@ -1528,12 +1644,13 @@ impl PgManager {
             connection.edges.extend(results.into_iter().map(|e| {
                 let cursor = String::from(e.id);
                 let event = Event {
-                    id: ID::from(cursor.clone()),
                     sending_module_id: Some(MoveModuleId {
                         package: SuiAddress::from_array(**e.package_id),
                         name: e.transaction_module.to_string(),
                     }),
-                    event_type: Some(MoveType::new(e.type_.to_string())),
+                    event_type: Some(MoveType::new(
+                        e.type_.to_canonical_string(/* with_prefix */ true),
+                    )),
                     senders: Some(vec![Address {
                         address: SuiAddress::from_array(e.sender.to_inner()),
                     }]),
@@ -1667,6 +1784,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             Ok(effects) => {
                 let transaction_effects = TransactionBlockEffects::from_stored_transaction(
                     balance_changes,
+                    tx.checkpoint_sequence_number as u64,
                     object_changes,
                     &effects,
                     digest,
@@ -1933,7 +2051,6 @@ impl From<&TransactionKind> for TransactionBlockKind {
 }
 
 // TODO fix this GenesisObject
-#[allow(unreachable_code)]
 impl From<GenesisObject> for SuiAddress {
     fn from(value: GenesisObject) -> Self {
         match value {
@@ -1948,18 +2065,10 @@ impl TryFrom<StoredObject> for Coin {
     type Error = Error;
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
-        let object_id = SuiAddress::try_from(o.object_id.clone()).map_err(|_| {
-            Error::Internal(format!(
-                "Failed to convert object_id {:?} to SuiAddress",
-                o.object_id
-            ))
-        })?;
-        let id = ID(object_id.to_string());
         let balance = o.coin_balance.map(BigInt::from);
         let native_object: SuiObject = o.try_into()?;
 
         Ok(Self {
-            id,
             balance,
             move_obj: MoveObject { native_object },
         })
@@ -1979,7 +2088,6 @@ impl From<SuiStake> for Stake {
         };
 
         Stake {
-            id: ID(value.staked_sui_id.to_string()),
             active_epoch_id: Some(value.stake_active_epoch),
             estimated_reward: reward,
             principal: Some(value.principal.into()),
@@ -2014,4 +2122,51 @@ pub(crate) fn validate_cursor_pagination(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invalid_json() {
+        let explain_result = "invalid json";
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_missing_entry_at_0() {
+        let explain_result = "[]";
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_missing_plan() {
+        let explain_result = r#"[{}]"#;
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_missing_total_cost() {
+        let explain_result = r#"[{"Plan": {}}]"#;
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_failure_on_conversion_to_f64() {
+        let explain_result = r#"[{"Plan": {"Total Cost": "string_instead_of_float"}}]"#;
+        let result = extract_cost(explain_result);
+        assert!(matches!(result, Err(Error::Internal(_))));
+    }
+
+    #[test]
+    fn test_happy_scenario() {
+        let explain_result = r#"[{"Plan": {"Total Cost": 1.0}}]"#;
+        let result = extract_cost(explain_result).unwrap();
+        assert_eq!(result, 1.0);
+    }
 }

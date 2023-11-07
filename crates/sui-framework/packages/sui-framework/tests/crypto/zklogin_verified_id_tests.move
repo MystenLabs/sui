@@ -6,7 +6,6 @@ module sui::zklogin_verified_id_tests {
     use sui::zklogin_verified_id::{check_zklogin_id, verify_zklogin_id, VerifiedID};
     use sui::address;
     use std::string::utf8;
-    use sui::bag::add;
     use sui::test_scenario;
 
     #[test]

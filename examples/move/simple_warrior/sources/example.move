@@ -42,7 +42,7 @@ module simple_warrior::example {
     }
 
     // === Tests ===
-    use sui::test_scenario as ts;
+    #[test_only] use sui::test_scenario as ts;
 
     #[test]
     fun test_equip_empty() {

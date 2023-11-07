@@ -139,7 +139,7 @@ module closed_loop::closed_loop {
     ///
     /// Aborts if the `Token.owner` is not the transaction sender.
     public fun transfer<T>(
-        t: Token<T>, recipient: address, ctx: &mut TxContext
+        t: Token<T>, recipient: address, ctx: &TxContext
     ): ActionRequest<T> {
         assert!(t.owner == tx_context::sender(ctx), ENotOwner);
         let amount = balance::value(&t.balance);

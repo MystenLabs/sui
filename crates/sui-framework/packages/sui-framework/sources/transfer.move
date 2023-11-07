@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(unused_const)]
 module sui::transfer {
 
     use sui::object::{Self, ID, UID};
@@ -21,10 +22,27 @@ module sui::transfer {
         version: u64,
     }
 
-    #[allow(unused_const)]
     /// Shared an object that was previously created. Shared objects must currently
     /// be constructed in the transaction they are created.
     const ESharedNonNewObject: u64 = 0;
+
+    #[allow(unused_const)]
+    /// Serialization of the object failed.
+    const EBCSSerializationFailure: u64 = 1;
+
+    #[allow(unused_const)]
+    /// The object being received is not of the expected type.
+    const EReceivingObjectTypeMismatch: u64 = 2;
+
+    #[allow(unused_const)]
+    /// Represents both the case where the object does not exist and the case where the object is not
+    /// able to be accessed through the parent that is passed-in.
+    const EUnableToReceiveObject: u64 = 3;
+
+    #[allow(unused_const)]
+    /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
+    const ESharedObjectOperationNotSupported: u64 = 4;
+
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
     /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
@@ -93,14 +111,19 @@ module sui::transfer {
         receive_impl(object::uid_to_address(parent), id, version)
     }
 
+    /// Return the object ID that the given `Receiving` argument references.
+    public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
+        receiving.id
+    }
+
     public(friend) native fun freeze_object_impl<T: key>(obj: T);
 
     spec freeze_object_impl {
         pragma opaque;
-        // never aborts as it requires object by-value and:
+        // aborts if shared object:
         // - it's OK to freeze whether object is fresh or owned
-        // - shared or immutable object cannot be passed by value
-        aborts_if [abstract] false;
+        // - immutable object cannot be passed by value
+        aborts_if [abstract] sui::prover::shared(obj);
         modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::IMMUTABLE;
@@ -121,10 +144,10 @@ module sui::transfer {
 
     spec transfer_impl {
         pragma opaque;
-        // never aborts as it requires object by-value and:
+        // aborts if shared object:
         // - it's OK to transfer whether object is fresh or already owned
-        // - shared or immutable object cannot be passed by value
-        aborts_if [abstract] false;
+        // - immutable object cannot be passed by value
+        aborts_if [abstract] sui::prover::shared(obj);
         modifies [abstract] global<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).owner == recipient;

@@ -25,8 +25,6 @@ use crate::{
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
@@ -55,7 +53,7 @@ impl Query {
     // dryRunTransactionBlock
     // coinMetadata
 
-    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Option<ObjectOwner> {
+    async fn owner(&self, address: SuiAddress) -> Option<ObjectOwner> {
         Some(ObjectOwner::Owner(Owner { address }))
     }
 
@@ -198,6 +196,7 @@ impl Query {
             .extend()
     }
 
+    /// Resolves the owner address of the provided domain name
     async fn resolve_name_service_address(
         &self,
         ctx: &Context<'_>,

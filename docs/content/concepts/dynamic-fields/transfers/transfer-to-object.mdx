@@ -140,7 +140,7 @@ module examples::account {
     use sui::dynamic_field as df;
     use sui::tx_context::TxContext;
 
-    const EBalanceDNE: u64 = 1;
+    const EBalanceDONE: u64 = 1;
 
     /// Account object that `Coin`s can be sent to. Balances of different types
     /// are held as dynamic fields indexed by the `Coin` type's `type_name`.
@@ -176,7 +176,7 @@ module examples::account {
         let account_balance_type = AccountBalance<T>{};
         let account_uid = &mut account.id;
         // Make sure what we are withdrawing exists
-        assert!(df::exists_(account_uid, account_balance_type), EBalanceDNE);
+        assert!(df::exists_(account_uid, account_balance_type), EBalanceDONE);
         let balance: &mut Coin<T> = df::borrow_mut(account_uid, account_balance_type);
         coin::split(balance, amount, ctx)
     }

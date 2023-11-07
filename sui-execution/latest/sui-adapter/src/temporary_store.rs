@@ -12,10 +12,12 @@ use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2};
+use sui_types::execution::{
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingStore, PackageObjectArc};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -113,6 +115,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
+            lamport_version: self.lamport_timestamp,
         }
     }
 
@@ -163,7 +166,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn into_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -203,6 +206,15 @@ impl<'backing> TemporaryStore<'backing> {
                 epoch,
             )
         } else {
+            let shared_object_refs = shared_object_refs
+                .into_iter()
+                .map(|shared_input| match shared_input {
+                    SharedInput::Existing(oref) => oref,
+                    SharedInput::Deleted(_) => {
+                        unreachable!("Shared object deletion not supported in effects v1")
+                    }
+                })
+                .collect();
             self.into_effects_v1(
                 shared_object_refs,
                 transaction_digest,
@@ -314,7 +326,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     fn into_effects_v2(
         self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -1086,17 +1098,23 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        if let Some(obj) = self.execution_results.written_objects.get(package_id) {
-            Ok(Some(obj.clone()))
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+        // We first check the objects in the temporary store because in non-production code path,
+        // it is possible to read packages that are just written in the same transaction.
+        // This can happen for example when we run the expensive conservation checks, where we may
+        // look into the types of each written object in the output, and some of them need the
+        // newly written packages for type checking.
+        // In production path though, this should never happen.
+        if let Some(obj) = self.read_object(package_id) {
+            Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
+                if let Some(v) = &obj {
                     // TODO: Can this lock ever block execution?
                     self.runtime_packages_loaded_from_db
                         .write()
-                        .insert(*package_id, v);
+                        .insert(*package_id, v.object().clone());
                 }
                 obj
             })
