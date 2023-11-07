@@ -51,6 +51,7 @@ pub trait KVWriteClient {
     }
 }
 
+#[derive(Clone)]
 pub struct DynamoDbClient {
     dynamo_client: dynamodb::Client,
     s3_client: s3::Client,
