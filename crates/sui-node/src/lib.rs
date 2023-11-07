@@ -1190,11 +1190,11 @@ impl SuiNode {
         // The consensus adapter allows the authority to send user certificates through consensus.
 
         ConsensusAdapter::new(
-            Box::new(Arc::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 consensus_config.address().to_owned(),
-            ))),
+            )),
             authority,
-            Box::new(connection_monitor_status),
+            connection_monitor_status,
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
             consensus_config.max_submit_position,
