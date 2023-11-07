@@ -1,5 +1,5 @@
 //# run
-module 0x42.m {
+module 0x1.m {
 
 entry foo() {
 label b0:
@@ -53,7 +53,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x22.m {
 
 entry foo() {
 label b0:
@@ -106,7 +106,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x3.m {
 
 entry foo() {
 label b0:
