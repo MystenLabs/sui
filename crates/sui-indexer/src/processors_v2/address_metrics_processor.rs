@@ -129,27 +129,28 @@ where
             let stored_senders = stored_senders_res?;
             let stored_senders_count = stored_senders.len();
             let senders_to_commit: Vec<AddressInfoToCommit> = stored_senders
-            .into_par_iter()
-            .filter_map(|sender| {
-                if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
-                    Some(AddressInfoToCommit {
-                        address: sender.sender,
-                        tx_seq: sender.tx_sequence_number,
-                        timestamp_ms: *timestamp_ms,
-                    })
-                } else {
-                    error!(
-                        "Failed to find timestamp for tx {}",
-                        sender.tx_sequence_number
-                    );
-                    None
-                }
-            })
-            .collect();
+                .into_par_iter()
+                .filter_map(|sender| {
+                    if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
+                        Some(AddressInfoToCommit {
+                            address: sender.sender,
+                            tx_seq: sender.tx_sequence_number,
+                            timestamp_ms: *timestamp_ms,
+                        })
+                    } else {
+                        error!(
+                            "Failed to find timestamp for tx {}",
+                            sender.tx_sequence_number
+                        );
+                        None
+                    }
+                })
+                .collect();
             if stored_senders_count != senders_to_commit.len() {
                 error!(
                     "Failed to find timestamp for {} senders in checkpoint {}",
-                    stored_senders_count - senders_to_commit.len(), end_cp.sequence_number
+                    stored_senders_count - senders_to_commit.len(),
+                    end_cp.sequence_number
                 );
                 continue;
             }
