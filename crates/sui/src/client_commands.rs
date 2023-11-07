@@ -1785,9 +1785,8 @@ pub fn write_transaction_response(
         writeln!(writer, "{}", e)?;
     }
 
-    writeln!(writer, "{}", "----- Events ----".bold())?;
     if let Some(e) = &response.events {
-        writeln!(writer, "{:#?}", json!(e))?;
+        writeln!(writer, "{}", e)?;
     }
 
     writeln!(writer, "{}", "----- Object changes ----".bold())?;

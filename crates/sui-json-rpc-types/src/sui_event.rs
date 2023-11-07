@@ -137,7 +137,8 @@ impl Display for SuiEvent {
             writeln!(f, " │ Timestamp: {}\n └──", ts)?;
         }
         writeln!(f, " │ ParsedJSON: {}\n", table.to_string())?;
-        for _ in rows {
+        // add the vertical line for rows - 1
+        for _ in 1..rows {
             writeln!(f, " │")?;
         }
         writeln!(f, " └──")
