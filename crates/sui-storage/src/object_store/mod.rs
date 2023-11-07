@@ -138,9 +138,7 @@ impl ObjectStoreConfig {
             builder = builder.with_secret_access_key(secret);
         }
         if let Some(endpoint) = &self.aws_endpoint {
-            builder = builder
-                .with_endpoint(endpoint)
-                .with_virtual_hosted_style_request(true);
+            builder = builder.with_endpoint(endpoint);
         }
         // if let Some(profile) = &self.aws_profile {
         //     builder = builder.with_profile(profile);
