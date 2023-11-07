@@ -69,6 +69,7 @@ function TokenRowButton({
 	coinBalance,
 	children,
 	to,
+	onClick,
 }: {
 	coinBalance: CoinBalanceType;
 	children: ReactNode;
@@ -79,6 +80,7 @@ function TokenRowButton({
 		<ButtonOrLink
 			to={to}
 			key={coinBalance.coinType}
+			onClick={onClick}
 			className="no-underline text-subtitle font-medium text-steel hover:font-semibold hover:text-hero"
 		>
 			{children}
@@ -137,14 +139,23 @@ export function TokenRow({
 								onClick={() =>
 									ampli.selectedCoin({
 										coinType: coinBalance.coinType,
-										totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
+										totalBalance: Number(formatted),
 									})
 								}
 							>
 								Send
 							</TokenRowButton>
 							{isRenderSwapButton && (
-								<TokenRowButton coinBalance={coinBalance} to={`/swap?${params.toString()}`}>
+								<TokenRowButton
+									coinBalance={coinBalance}
+									to={`/swap?${params.toString()}`}
+									onClick={() => {
+										ampli.clickedSwapCoin({
+											coinType: coinBalance.coinType,
+											totalBalance: Number(formatted),
+										});
+									}}
+								>
 									Swap
 								</TokenRowButton>
 							)}
@@ -311,6 +322,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const { providers } = useOnrampProviders();
 
 	const tokenBalance = BigInt(coinBalance?.totalBalance ?? 0);
+	const [formatted] = useFormatCoin(tokenBalance, activeCoinType);
 
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
@@ -435,6 +447,16 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 													  }).toString()}`
 													: ''
 											}`}
+											onClick={() => {
+												if (!coinBalance) {
+													return;
+												}
+
+												ampli.clickedSwapCoin({
+													coinType: coinBalance.coinType,
+													totalBalance: Number(formatted),
+												});
+											}}
 										>
 											Swap
 										</LargeButton>
