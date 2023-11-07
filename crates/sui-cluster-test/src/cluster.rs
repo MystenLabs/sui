@@ -164,11 +164,9 @@ impl LocalNewCluster {
 #[async_trait]
 impl Cluster for LocalNewCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
-        // TODO: options should contain port instead of address
-        let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
+        let fullnode_address = options.fullnode_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
                 .expect("Unable to parse fullnode address")
-                .port()
         });
 
         let indexer_address = options.indexer_address.as_ref().map(|addr| {
@@ -204,8 +202,8 @@ impl Cluster for LocalNewCluster {
             }
         }
 
-        if let Some(rpc_port) = fullnode_port {
-            cluster_builder = cluster_builder.with_fullnode_rpc_port(rpc_port);
+        if let Some(rpc_addr) = fullnode_address {
+            cluster_builder = cluster_builder.with_fullnode_rpc_addr(rpc_addr);
         }
 
         let mut test_cluster = cluster_builder.build().await;
