@@ -3,20 +3,19 @@
 
 import { useStore } from '@nanostores/react';
 import type { ReactNode } from 'react';
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useState } from 'react';
 
-import type { EnokiFlow } from './EnokiFlow.js';
+import type { EnokiFlowConfig } from './EnokiFlow.js';
+import { EnokiFlow } from './EnokiFlow.js';
 
 const EnokiFlowContext = createContext<EnokiFlow | null>(null);
 
-// TODO: Flatten props and construct an instance ourself.
-export function EnokiFlowProvider({
-	children,
-	enokiFlow,
-}: {
+export interface EnokiFlowProviderProps extends EnokiFlowConfig {
 	children: ReactNode;
-	enokiFlow: EnokiFlow;
-}) {
+}
+
+export function EnokiFlowProvider({ children, ...config }: EnokiFlowProviderProps) {
+	const [enokiFlow] = useState(() => new EnokiFlow(config));
 	return <EnokiFlowContext.Provider value={enokiFlow}>{children}</EnokiFlowContext.Provider>;
 }
 

@@ -48,7 +48,7 @@ export class EnokiClient {
 		});
 	}
 
-	createNonce(input: { ephemeralPublicKey: PublicKey }) {
+	createZkLoginNonce(input: { ephemeralPublicKey: PublicKey }) {
 		return this.#fetch<{
 			nonce: string;
 			randomness: string;

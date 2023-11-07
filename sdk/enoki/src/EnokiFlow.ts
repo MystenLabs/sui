@@ -104,12 +104,13 @@ export class EnokiFlow {
 	}
 
 	// TODO: Probably name this better:
-	async startFlow(
-		provider: AuthProvider,
-		clientId: string,
-		redirectUrl: string,
-		extraParams?: Record<string, unknown>,
-	) {
+	// Maybe something like `createAuthorizationURL`?
+	async startFlow(input: {
+		provider: AuthProvider;
+		clientId: string;
+		redirectUrl: string;
+		extraParams?: Record<string, unknown>;
+	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
 		const { nonce, randomness, maxEpoch, estimatedExpiration } =
 			await this.#enokiClient.createNonce({
@@ -117,23 +118,25 @@ export class EnokiFlow {
 			});
 
 		const params = new URLSearchParams({
-			...extraParams,
+			...input.extraParams,
 			nonce,
-			client_id: clientId,
-			redirect_uri: redirectUrl,
+			client_id: input.clientId,
+			redirect_uri: input.redirectUrl,
 			response_type: 'id_token',
 			// TODO: Eventually fetch the scopes for this client ID from the Enoki service:
 			scope: [
 				'openid',
 				// Merge the requested scopes in with the required openid scopes:
-				...(extraParams && 'scope' in extraParams ? (extraParams.scope as string[]) : []),
+				...(input.extraParams && 'scope' in input.extraParams
+					? (input.extraParams.scope as string[])
+					: []),
 			]
 				.filter(Boolean)
 				.join(' '),
 		});
 
 		let oauthUrl: string;
-		switch (provider) {
+		switch (input.provider) {
 			case 'google': {
 				oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 				break;
@@ -151,11 +154,11 @@ export class EnokiFlow {
 			}
 
 			default:
-				throw new Error(`Invalid provider: ${provider}`);
+				throw new Error(`Invalid provider: ${input.provider}`);
 		}
 
 		this.$state.set({
-			provider,
+			provider: input.provider,
 			zkp: {
 				expiresAt: estimatedExpiration,
 				maxEpoch,
@@ -171,6 +174,7 @@ export class EnokiFlow {
 	}
 
 	// TODO: Should our SDK manage this automatically in addition to exposing a method?
+	// TODO: Should we rename this? Something with "callback" maybe?
 	async handleAuthRedirect(hash: string = window.location.hash) {
 		const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 
