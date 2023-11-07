@@ -96,8 +96,8 @@ async fn main() -> Result<()> {
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
-        fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
-        indexer_address: with_indexer.then_some(format!("127.0.0.1:{}", indexer_rpc_port)),
+        fullnode_address: Some(format!("0.0.0.0:{}", fullnode_rpc_port)),
+        indexer_address: with_indexer.then_some(format!("0.0.0.0:{}", indexer_rpc_port)),
         pg_address: with_indexer.then_some(format!(
             "postgres://postgres@{pg_host}:{pg_port}/sui_indexer"
         )),
@@ -148,7 +148,7 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
                 .into_inner(),
         );
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     println!("Faucet URL: http://{}", addr);
 
