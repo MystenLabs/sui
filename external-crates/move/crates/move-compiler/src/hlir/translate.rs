@@ -85,7 +85,7 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 // Context
 //**************************************************************************************************
 
-const DEBUG_PRINT: bool = true;
+const DEBUG_PRINT: bool = false;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
