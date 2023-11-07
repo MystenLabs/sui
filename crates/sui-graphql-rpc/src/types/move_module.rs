@@ -15,8 +15,6 @@ pub(crate) struct MoveModule {
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl MoveModule {
     async fn file_format_version(&self) -> u32 {

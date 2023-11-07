@@ -5,7 +5,6 @@ use super::object::Object;
 use async_graphql::SimpleObject;
 
 #[derive(PartialEq, Eq, Clone, SimpleObject)]
-#[allow(dead_code)]
 pub(crate) struct ObjectChange {
     pub input_state: Option<Object>,
     pub output_state: Option<Object>,
