@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use mysten_metrics::{RegistryID, RegistryService};
+use mysticeti_core::commit_observer::SimpleCommitObserver;
 use mysticeti_core::committee::{Authority, Committee};
 use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
 use mysticeti_core::types::AuthorityIndex;
@@ -26,6 +27,7 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::Mutex;
 
 #[cfg(test)]
@@ -39,7 +41,10 @@ pub struct MysticetiManager {
     running: Mutex<Running>,
     metrics: ConsensusManagerMetrics,
     registry_service: RegistryService,
-    validator: ArcSwapOption<(Validator<SimpleBlockHandler>, RegistryID)>,
+    validator: ArcSwapOption<(
+        Validator<SimpleBlockHandler, SimpleCommitObserver>,
+        RegistryID,
+    )>,
 }
 
 impl MysticetiManager {
@@ -114,7 +119,10 @@ impl ConsensusManagerTrait for MysticetiManager {
         loop {
             let private_key = self.network_keypair.copy().private();
 
-            let (block_handler, _tx_sender) = SimpleBlockHandler::new();
+            // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
+            // is the one we want to go with.
+            #[allow(clippy::disallowed_methods)]
+            let (commit_sender, _commit_receiver) = unbounded_channel();
 
             match Validator::start_production(
                 authority_index,
@@ -123,6 +131,7 @@ impl ConsensusManagerTrait for MysticetiManager {
                 config.clone(),
                 registry.clone(),
                 Signer(Box::new(private_key.0.clone())),
+                commit_sender,
             )
             .await
             {
