@@ -6,7 +6,7 @@
   "author": "Patrick <patrick@mystenlabs.com>",
   "license": "MIT",
   "scripts": {
-    "start": "npx ts-node --esm src/index.ts"
+    "start": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
     "@mysten/sui.js": "^0.39.0",
