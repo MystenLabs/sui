@@ -5,6 +5,7 @@ use crate::consensus_handler::ConsensusHandlerInitializer;
 use crate::consensus_manager::mysticeti_manager::MysticetiManager;
 use crate::consensus_manager::narwhal_manager::{NarwhalConfiguration, NarwhalManager};
 use crate::consensus_validator::SuiTxValidator;
+use crate::mysticeti_adapter::LazyMysticetiClient;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair;
@@ -71,6 +72,24 @@ impl ConsensusManager {
         let metrics = ConsensusManagerMetrics::new(&registry_service.default_registry());
 
         Self::Narwhal(NarwhalManager::new(narwhal_config, metrics))
+    }
+
+    pub fn new_mysticeti(
+        config: &NodeConfig,
+        consensus_config: &ConsensusConfig,
+        registry_service: &RegistryService,
+        client: Arc<LazyMysticetiClient>,
+    ) -> Self {
+        let metrics = ConsensusManagerMetrics::new(&registry_service.default_registry());
+
+        Self::Mysticeti(MysticetiManager::new(
+            config.protocol_key_pair().copy(),
+            config.network_key_pair().copy(),
+            consensus_config.db_path().to_path_buf(),
+            metrics,
+            registry_service.clone(),
+            client,
+        ))
     }
 }
 
