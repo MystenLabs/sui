@@ -289,6 +289,10 @@ mod checked {
                     if !obj.is_address_owned() {
                         return Err(UserInputError::GasObjectNotOwnedObject { owner: obj.owner });
                     }
+                } else {
+                    // This case should never happen (because gas can't be a shared object), but we
+                    // handle this case for future-proofing
+                    return Err(UserInputError::MissingGasPayment);
                 }
             }
 
