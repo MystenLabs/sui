@@ -30,7 +30,7 @@ import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'classnames';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
