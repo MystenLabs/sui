@@ -5,8 +5,8 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    taskify, InitCommand, PrintBytecodeCommand, PrintBytecodeInputChoice, PublishCommand,
-    RunCommand, SyntaxChoice, TaskCommand, TaskInput,
+    taskify, InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice,
+    TaskCommand, TaskInput,
 };
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{CompiledModule, CompiledScript},
 };
-use move_bytecode_source_map::mapping::SourceMapping;
+use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::{
     address::ParsedAddress,
     env::read_bool_env_var,
@@ -41,7 +41,6 @@ use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
 use move_vm_runtime::session::SerializedReturnValues;
-use rayon::iter::Either;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Debug, Write as FmtWrite},
@@ -126,10 +125,10 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     ) -> (Self, Option<String>);
     async fn publish_modules(
         &mut self,
-        modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)>;
+    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>;
     async fn execute_script(
         &mut self,
         script: CompiledScript,
@@ -183,33 +182,37 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             TaskCommand::Init { .. } => {
                 panic!("The 'init' command is optional. But if used, it must be the first command")
             }
-            TaskCommand::PrintBytecode(PrintBytecodeCommand { input }) => {
-                let state = self.compiled_state();
-                let data = match data {
-                    Some(f) => f,
-                    None => panic!(
-                        "Expected a Move IR module text block following 'print-bytecode' starting on lines {}-{}",
-                        start_line, command_lines_stop
-                    ),
-                };
-                let compiled = match input {
-                    PrintBytecodeInputChoice::Script => {
-                        Either::Left(compile_ir_script(state, data.path())?)
-                    }
-                    PrintBytecodeInputChoice::Module => {
-                        Either::Right(compile_ir_module(state, data.path())?)
-                    }
-                };
-                let source_mapping = SourceMapping::new_from_view(
-                    match &compiled {
-                        Either::Left(script) => BinaryIndexedView::Script(script),
-                        Either::Right(module) => BinaryIndexedView::Module(module),
-                    },
-                    Spanned::unsafe_no_loc(()).loc,
+            TaskCommand::PrintBytecode(PrintBytecodeCommand { syntax }) => {
+                let syntax = syntax.unwrap_or_else(|| self.default_syntax());
+                let (warnings_opt, output, _data, modules) = compile_any(
+                    self,
+                    "publish",
+                    syntax,
+                    name,
+                    number,
+                    start_line,
+                    command_lines_stop,
+                    stop_line,
+                    data,
+                    |_adapter, modules| async { Ok((None, modules)) },
                 )
-                .expect("Unable to build dummy source mapping");
-                let disassembler = Disassembler::new(source_mapping, DisassemblerOptions::new());
-                Ok(Some(disassembler.disassemble()?))
+                .await?;
+                let output = merge_output(output, warnings_opt);
+                let output = modules.into_iter().fold(output, |output, m| {
+                    let MaybeNamedCompiledModule {
+                        module, source_map, ..
+                    } = m;
+                    let view = BinaryIndexedView::Module(&module);
+                    let source_mapping = match source_map {
+                        Some(m) => SourceMapping::new(m, view),
+                        None => SourceMapping::new_from_view(view, Spanned::unsafe_no_loc(()).loc)
+                            .expect("Unable to build dummy source mapping"),
+                    };
+                    let disassembler =
+                        Disassembler::new(source_mapping, DisassemblerOptions::new());
+                    merge_output(output, Some(disassembler.disassemble().unwrap()))
+                });
+                Ok(output)
             }
             TaskCommand::Publish(PublishCommand { gas_budget, syntax }, extra_args) => {
                 let syntax = syntax.unwrap_or_else(|| self.default_syntax());
@@ -329,10 +332,10 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
 }
 
 fn single_entry_function(
-    modules: &[(Option<Symbol>, CompiledModule)],
+    modules: &[MaybeNamedCompiledModule],
 ) -> anyhow::Result<(ModuleId, Identifier)> {
     anyhow::ensure!(modules.len() == 1, "Expected exactly one module");
-    let module = &modules[0].1;
+    let module = &modules[0].module;
     let entry_funs: Vec<_> = module
         .function_defs()
         .iter()
@@ -456,12 +459,17 @@ impl<'a> CompiledState<'a> {
 
     pub fn add_with_source_file(
         &mut self,
-        modules: Vec<(Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         (path, tempfile): (String, NamedTempFile),
     ) {
         let prev = self.temp_files.insert(path, tempfile);
         assert!(prev.is_none());
-        for (named_addr_opt, module) in modules {
+        for m in modules {
+            let MaybeNamedCompiledModule {
+                named_address: named_addr_opt,
+                module,
+                ..
+            } = m;
             let id = module.self_id();
             self.check_not_precompiled(&id);
             if let Some(named_addr) = named_addr_opt {
@@ -517,6 +525,12 @@ impl<'a> CompiledState<'a> {
     }
 }
 
+pub struct MaybeNamedCompiledModule {
+    pub named_address: Option<Symbol>,
+    pub module: CompiledModule,
+    pub source_map: Option<SourceMap>,
+}
+
 pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, R>(
     test_adapter: &'adapter mut A,
     command: &str,
@@ -532,12 +546,12 @@ pub async fn compile_any<'state, 'adapter: 'result, 'result, F, A, R>(
     Option<String>,
     Option<String>,
     NamedTempFile,
-    Vec<(Option<Symbol>, CompiledModule)>,
+    Vec<MaybeNamedCompiledModule>,
 )>
 where
     A: MoveTestAdapter<'state> + 'adapter,
-    F: FnOnce(&'adapter mut A, Vec<(Option<Symbol>, CompiledModule)>) -> R,
-    R: Future<Output = Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)>> + 'result,
+    F: FnOnce(&'adapter mut A, Vec<MaybeNamedCompiledModule>) -> R,
+    R: Future<Output = Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>> + 'result,
 {
     let data = match data {
         Some(f) => f,
@@ -557,7 +571,12 @@ where
                         let (named_addr_opt, _id) = annot_module.module_id();
                         let named_addr_opt = named_addr_opt.map(|n| n.value);
                         let module = annot_module.named_module.module;
-                        (named_addr_opt, module)
+                        let source_map = Some(annot_module.named_module.source_map);
+                        MaybeNamedCompiledModule {
+                            named_address: named_addr_opt,
+                            module,
+                            source_map,
+                        }
                     }
                     AnnotatedCompiledUnit::Script(_) => panic!(
                         "Expected a module text block, not a script, \
@@ -570,7 +589,14 @@ where
         }
         SyntaxChoice::IR => {
             let module = compile_ir_module(state, data.path())?;
-            (vec![(None, module)], None)
+            (
+                vec![MaybeNamedCompiledModule {
+                    named_address: None,
+                    module,
+                    source_map: None,
+                }],
+                None,
+            )
         }
     };
     let (output, modules) = handler(test_adapter, modules).await?;
@@ -581,7 +607,7 @@ pub fn store_modules<'a, A: MoveTestAdapter<'a>>(
     test_adapter: &mut A,
     syntax: SyntaxChoice,
     data: NamedTempFile,
-    mut modules: Vec<(Option<Symbol>, CompiledModule)>,
+    mut modules: Vec<MaybeNamedCompiledModule>,
 ) {
     match syntax {
         SyntaxChoice::Source => {
@@ -591,7 +617,7 @@ pub fn store_modules<'a, A: MoveTestAdapter<'a>>(
                 .add_with_source_file(modules, (path, data))
         }
         SyntaxChoice::IR => {
-            let module = modules.pop().unwrap().1;
+            let module = modules.pop().unwrap().module;
             test_adapter
                 .compiled_state()
                 .add_and_generate_interface_file(module);

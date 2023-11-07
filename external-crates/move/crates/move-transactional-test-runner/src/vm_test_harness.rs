@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{
-    framework::{run_test_impl, CompiledState, MoveTestAdapter},
+    framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
 use anyhow::{anyhow, Result};
@@ -142,20 +142,20 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
 
     async fn publish_modules(
         &mut self,
-        modules: Vec<(Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         let all_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes)?;
+                m.module.serialize(&mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<Result<_>>()?;
 
-        let id = modules.first().unwrap().1.self_id();
+        let id = modules.first().unwrap().module.self_id();
         let sender = *id.address();
         match self.perform_session_action(
             gas_budget,
