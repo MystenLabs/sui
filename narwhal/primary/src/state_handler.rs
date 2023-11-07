@@ -450,7 +450,7 @@ impl RandomnessState {
             .tx_system_messages
             .send(SystemMessage::RandomnessSignature(
                 self.randomness_round,
-                sig,
+                bcs::to_bytes(&sig).expect("signature serialization should not fail"),
             ))
             .await;
         self.last_randomness_round_sent = Some(self.randomness_round);
@@ -553,7 +553,7 @@ impl StateHandler {
                                 );
                             randomness_state.add_confirmation(conf.clone())
                         }
-                        SystemMessage::RandomnessSignature(round, _sig) => {
+                        SystemMessage::RandomnessSignature(round, _bytes) => {
                             randomness_state.update_randomness_round(*round + 1).await;
                         }
                     }

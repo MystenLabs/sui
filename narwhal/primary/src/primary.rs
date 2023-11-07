@@ -28,7 +28,10 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
-use crypto::{traits::EncodeDecodeBase64, RandomnessPartialSignature, RandomnessPrivateKey};
+use crypto::{
+    traits::EncodeDecodeBase64, RandomnessPartialSignature, RandomnessPrivateKey,
+    RandomnessSignature,
+};
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
 use fastcrypto::{
     hash::Hash,
@@ -771,14 +774,16 @@ impl PrimaryReceiverHandler {
                         DagError::InvalidSystemMessage
                     );
                 }
-                SystemMessage::RandomnessSignature(round, sig) => {
+                SystemMessage::RandomnessSignature(round, bytes) => {
+                    let sig: RandomnessSignature =
+                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
                     fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
                         self.randomness_vss_key_lock
                             .get()
                             .ok_or(DagError::RandomnessUnavailable)?
                             .c0(),
                         &round.signature_message(),
-                        sig,
+                        &sig,
                     )
                     .map_err(|_| DagError::InvalidRandomnessSignature)?;
                 }
