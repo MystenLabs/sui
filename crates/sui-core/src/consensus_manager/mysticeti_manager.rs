@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::consensus_handler::ConsensusHandlerInitializer;
+use crate::consensus_handler::{ConsensusHandlerInitializer, MysticetiConsensusHandler};
 use crate::consensus_manager::{
     ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
 };
 use crate::consensus_validator::SuiTxValidator;
+use crate::mysticeti_adapter::{LazyMysticetiClient, MysticetiClient};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use mysten_metrics::{RegistryID, RegistryService};
+use mysticeti_core::commit_observer::SimpleCommitObserver;
 use mysticeti_core::committee::{Authority, Committee};
 use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
 use mysticeti_core::types::AuthorityIndex;
 use mysticeti_core::validator::Validator;
-use mysticeti_core::{PublicKey, Signer};
+use mysticeti_core::{CommitConsumer, PublicKey, Signer, SimpleBlockHandler};
+use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
@@ -25,6 +28,7 @@ use sui_types::base_types::AuthorityName;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::Mutex;
 
 #[cfg(test)]
@@ -38,7 +42,14 @@ pub struct MysticetiManager {
     running: Mutex<Running>,
     metrics: ConsensusManagerMetrics,
     registry_service: RegistryService,
-    validator: ArcSwapOption<(Validator, RegistryID)>,
+    validator: ArcSwapOption<(
+        Validator<SimpleBlockHandler, SimpleCommitObserver>,
+        RegistryID,
+    )>,
+    // we use a shared lazy mysticeti client so we can update the internal mysticeti client that
+    // gets created for every new epoch.
+    client: Arc<LazyMysticetiClient>,
+    consensus_handler: ArcSwapOption<MysticetiConsensusHandler>,
 }
 
 impl MysticetiManager {
@@ -48,6 +59,7 @@ impl MysticetiManager {
         storage_base_path: PathBuf,
         metrics: ConsensusManagerMetrics,
         registry_service: RegistryService,
+        client: Arc<LazyMysticetiClient>,
     ) -> MysticetiManager {
         Self {
             keypair,
@@ -57,6 +69,8 @@ impl MysticetiManager {
             metrics,
             registry_service,
             validator: ArcSwapOption::empty(),
+            client,
+            consensus_handler: ArcSwapOption::empty(),
         }
     }
 
@@ -113,21 +127,41 @@ impl ConsensusManagerTrait for MysticetiManager {
         loop {
             let private_key = self.network_keypair.copy().private();
 
-            match Validator::start(
+            // TODO: that should be replaced by a metered channel. We can discuss if unbounded approach
+            // is the one we want to go with.
+            #[allow(clippy::disallowed_methods)]
+            let (commit_sender, commit_receiver) = unbounded_channel();
+
+            let consensus_handler = consensus_handler_initializer.new_consensus_handler();
+            let consumer = CommitConsumer::new(
+                commit_sender,
+                consensus_handler.last_executed_sub_dag_index().await,
+            );
+
+            match Validator::start_production(
                 authority_index,
                 committee.clone(),
                 &parameters,
                 config.clone(),
-                Some(registry.clone()),
+                registry.clone(),
                 Signer(Box::new(private_key.0.clone())),
+                consumer,
             )
             .await
             {
-                Ok(validator) => {
+                Ok((validator, tx_sender)) => {
                     let registry_id = self.registry_service.add(registry);
 
                     self.validator
                         .swap(Some(Arc::new((validator, registry_id))));
+
+                    // create the client to send transactions to Mysticeti and update it.
+                    self.client.set(MysticetiClient::new(tx_sender));
+
+                    // spin up the new mysticeti consensus handler to listen for committed sub dags
+                    let handler =
+                        MysticetiConsensusHandler::new(consensus_handler, commit_receiver);
+                    self.consensus_handler.store(Some(Arc::new(handler)));
 
                     break;
                 }
@@ -164,6 +198,9 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // shutdown the validator and wait for it
         validator.stop().await;
+
+        // drop the old consensus handler to force stop any underlying task running.
+        self.consensus_handler.store(None);
 
         // unregister the registry id
         self.registry_service.remove(registry_id);

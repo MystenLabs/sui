@@ -23,7 +23,7 @@ use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
 use prometheus::Registry;
 use sui_core::authority::CHAIN_IDENTIFIER;
-use sui_core::consensus_adapter::LazyNarwhalClient;
+use sui_core::consensus_adapter::{LazyNarwhalClient, SubmitToConsensus};
 use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::digests::ChainIdentifier;
@@ -48,7 +48,7 @@ use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_archival::writer::ArchiveWriter;
-use sui_config::node::DBCheckpointConfig;
+use sui_config::node::{ConsensusProtocol, DBCheckpointConfig};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -197,6 +197,7 @@ use simulator::*;
 #[cfg(msim)]
 pub use simulator::set_jwk_injector;
 use sui_core::consensus_handler::ConsensusHandlerInitializer;
+use sui_core::mysticeti_adapter::LazyMysticetiClient;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -992,16 +993,44 @@ impl SuiNode {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
-            &committee,
-            consensus_config,
-            state.name,
-            connection_monitor_status.clone(),
-            &registry_service.default_registry(),
-            epoch_store.protocol_config().clone(),
-        ));
-        let consensus_manager =
-            ConsensusManager::new_narwhal(config, consensus_config, registry_service);
+        let (consensus_adapter, consensus_manager) = match consensus_config.protocol {
+            ConsensusProtocol::Narwhal => {
+                let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
+                    &committee,
+                    consensus_config,
+                    state.name,
+                    connection_monitor_status.clone(),
+                    &registry_service.default_registry(),
+                    epoch_store.protocol_config().clone(),
+                    Arc::new(LazyNarwhalClient::new(
+                        consensus_config.address().to_owned(),
+                    )),
+                ));
+                let consensus_manager =
+                    ConsensusManager::new_narwhal(config, consensus_config, registry_service);
+                (consensus_adapter, consensus_manager)
+            }
+            ConsensusProtocol::Mysticeti => {
+                let client = Arc::new(LazyMysticetiClient::new());
+
+                let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
+                    &committee,
+                    consensus_config,
+                    state.name,
+                    connection_monitor_status.clone(),
+                    &registry_service.default_registry(),
+                    epoch_store.protocol_config().clone(),
+                    client.clone(),
+                ));
+                let consensus_manager = ConsensusManager::new_mysticeti(
+                    config,
+                    consensus_config,
+                    registry_service,
+                    client,
+                );
+                (consensus_adapter, consensus_manager)
+            }
+        };
 
         let mut consensus_epoch_data_remover =
             EpochDataRemover::new(consensus_manager.get_storage_base_path());
@@ -1185,16 +1214,15 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
         protocol_config: ProtocolConfig,
+        consensus_client: Arc<dyn SubmitToConsensus>,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
         ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
-                consensus_config.address().to_owned(),
-            )),
+            consensus_client,
             authority,
-            Box::new(connection_monitor_status),
+            connection_monitor_status,
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
             consensus_config.max_submit_position,

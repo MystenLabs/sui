@@ -9,6 +9,7 @@ use crate::consensus_manager::narwhal_manager::narwhal_manager_tests::checkpoint
 use crate::consensus_manager::ConsensusManagerMetrics;
 use crate::consensus_manager::ConsensusManagerTrait;
 use crate::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+use crate::mysticeti_adapter::LazyMysticetiClient;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use prometheus::Registry;
@@ -39,6 +40,7 @@ async fn test_mysticeti_manager() {
 
         let metrics = ConsensusManagerMetrics::new(&Registry::new());
         let epoch_store = state.epoch_store_for_testing();
+        let client = Arc::new(LazyMysticetiClient::default());
 
         let manager = MysticetiManager::new(
             config.protocol_key_pair().copy(),
@@ -46,6 +48,7 @@ async fn test_mysticeti_manager() {
             consensus_config.db_path().to_path_buf(),
             metrics,
             registry_service,
+            client,
         );
 
         let consensus_handler_initializer = ConsensusHandlerInitializer::new_for_testing(
