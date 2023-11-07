@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::chain_from_chain_id;
 use crate::{
     config::ReplayableNetworkConfigSet,
     data_fetcher::{
@@ -718,7 +719,7 @@ impl LocalExec {
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
         let protocol_config =
-            &ProtocolConfig::get_for_version(tx_info.protocol_version, Chain::Unknown);
+            &ProtocolConfig::get_for_version(tx_info.protocol_version, tx_info.chain);
 
         let metrics = self.metrics.clone();
 
@@ -819,7 +820,7 @@ impl LocalExec {
         let epoch_start_timestamp = pre_run_sandbox.transaction_info.epoch_start_timestamp;
         let protocol_config = ProtocolConfig::get_for_version(
             pre_run_sandbox.transaction_info.protocol_version,
-            Chain::Unknown,
+            pre_run_sandbox.transaction_info.chain,
         );
         let required_objects = pre_run_sandbox.required_objects.clone();
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
@@ -1308,19 +1309,17 @@ impl LocalExec {
     pub async fn get_protocol_config(
         &self,
         epoch_id: EpochId,
+        chain: Chain,
     ) -> Result<ProtocolConfig, ReplayEngineError> {
         match self.protocol_version_override {
             Some(x) if x < 0 => Ok(ProtocolConfig::get_for_max_version_UNSAFE()),
-            Some(v) => Ok(ProtocolConfig::get_for_version(
-                (v as u64).into(),
-                Chain::Unknown,
-            )),
+            Some(v) => Ok(ProtocolConfig::get_for_version((v as u64).into(), chain)),
             None => self
                 .protocol_version_epoch_table
                 .iter()
                 .rev()
                 .find(|(_, rg)| epoch_id >= rg.epoch_start)
-                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), Chain::Unknown)))
+                .map(|(p, _rg)| Ok(ProtocolConfig::get_for_version((*p).into(), chain)))
                 .unwrap_or_else(|| {
                     Err(ReplayEngineError::ProtocolVersionNotFound { epoch: epoch_id })
                 }),
@@ -1441,6 +1440,7 @@ impl LocalExec {
             .collect();
 
         let epoch_id = effects.executed_epoch;
+        let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
 
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, reference_gas_price) =
@@ -1460,11 +1460,12 @@ impl LocalExec {
             effects: SuiTransactionBlockEffects::V1(effects),
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-            protocol_version: self.get_protocol_config(epoch_id).await?.version,
+            protocol_version: self.get_protocol_config(epoch_id, chain).await?.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
             reference_gas_price,
+            chain,
         })
     }
 
@@ -1515,10 +1516,10 @@ impl LocalExec {
 
         let epoch_id = dp.node_state_dump.executed_epoch;
 
-        let protocol_config = ProtocolConfig::get_for_version(
-            dp.node_state_dump.protocol_version.into(),
-            Chain::Unknown,
-        );
+        let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
+
+        let protocol_config =
+            ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into(), chain);
         // Extract the epoch start timestamp
         let (epoch_start_timestamp, reference_gas_price) =
             self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
@@ -1540,6 +1541,7 @@ impl LocalExec {
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
             reference_gas_price,
+            chain,
         })
     }
 

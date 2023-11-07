@@ -19,6 +19,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_config::node::ExpensiveSafetyCheckConfig;
+use sui_protocol_config::Chain;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
@@ -31,6 +32,12 @@ pub mod types;
 
 static DEFAULT_SANDBOX_BASE_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sandbox_snapshots");
+
+pub(crate) const MAINNET_CHAIN_ID: &str = "35834a8a";
+// TODO: Since testnet periodically resets, we need to refresh this value
+// Come up with a better way to refresh this const
+// One option is by reconstructing the genesis
+pub(crate) const TESTNET_CHAIN_ID: &str = "4c78adac";
 
 #[cfg(test)]
 mod tests;
@@ -530,4 +537,12 @@ pub async fn execute_replay_command(
             }
         }
     })
+}
+
+pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
+    match chain {
+        MAINNET_CHAIN_ID => Chain::Mainnet,
+        TESTNET_CHAIN_ID => Chain::Testnet,
+        _ => Chain::Unknown,
+    }
 }

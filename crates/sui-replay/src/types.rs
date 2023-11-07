@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::fmt::Debug;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -52,6 +52,7 @@ pub struct OnChainTransactionInfo {
     pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
+    pub chain: Chain,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -180,6 +181,9 @@ pub enum ReplayEngineError {
         cfgs
     )]
     UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
+
+    #[error("Unable to get chain id: {}", err)]
+    UnableToGetChainId { err: String },
 }
 
 impl From<SuiObjectResponseError> for ReplayEngineError {
