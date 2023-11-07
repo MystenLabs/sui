@@ -18,7 +18,6 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
-use fastcrypto_tbls::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
 use once_cell::sync::{Lazy, OnceCell};
@@ -384,17 +383,12 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
 pub enum SystemMessage {
     // DKG is used to generate keys for use in the random beacon protocol.
     // `DkgMessage` is sent out at start-of-epoch to initiate the process.
-    DkgMessage(
-        fastcrypto_tbls::dkg::Message<
-            <ThresholdBls12381MinSig as ThresholdBls>::Public,
-            <ThresholdBls12381MinSig as ThresholdBls>::Public,
-        >,
-    ),
+    // Contents are a serialized `fastcrypto_tbls::dkg::Message`.
+    DkgMessage(Vec<u8>),
     // `DkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
     // `DkgMessages` have been received locally, to complete the key generation process.
-    DkgConfirmation(
-        fastcrypto_tbls::dkg::Confirmation<<ThresholdBls12381MinSig as ThresholdBls>::Public>,
-    ),
+    // Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
+    DkgConfirmation(Vec<u8>),
 }
 
 #[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
@@ -804,14 +798,12 @@ impl HeaderV2 {
         let mut has_dkg_confirmation = false;
         for m in self.system_messages.iter() {
             match m {
-                SystemMessage::DkgMessage(msg) => {
-                    ensure!(msg.sender == self.author.0, DagError::InvalidSystemMessage);
+                SystemMessage::DkgMessage(_) => {
                     // A header must have no more than one DkgMessage.
                     ensure!(!has_dkg_message, DagError::DuplicateSystemMessage);
                     has_dkg_message = true;
                 }
-                SystemMessage::DkgConfirmation(conf) => {
-                    ensure!(conf.sender == self.author.0, DagError::InvalidSystemMessage);
+                SystemMessage::DkgConfirmation(_) => {
                     // A header must have no more than one DkgConfirmation.
                     ensure!(!has_dkg_confirmation, DagError::DuplicateSystemMessage);
                     has_dkg_confirmation = true;
