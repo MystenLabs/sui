@@ -54,52 +54,45 @@ impl TransactionInputLoader {
             .into()
         );
 
-        let mut results = vec![None; input_object_kinds.len()];
+        let mut input_results = vec![None; input_object_kinds.len()];
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
         let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
 
         for (i, kind) in input_object_kinds.iter().enumerate() {
-            let obj_ref = match kind {
+            match kind {
                 // Packages are loaded one at a time via the cache
                 InputObjectKind::MovePackage(id) => {
                     let Some(package) = self.store.get_package_object(id)?.map(|o| o.into()) else {
                         return Err(SuiError::from(kind.object_not_found_error()));
                     };
-                    results[i] = Some(ObjectReadResult {
+                    input_results[i] = Some(ObjectReadResult {
                         input_object_kind: *kind,
                         object: ObjectReadResultKind::Object(package),
                     });
-                    continue;
                 }
-                InputObjectKind::SharedMoveObject { id, .. } => {
-                    match self.store.get_object(id)? {
-                        Some(object) => {
-                            results[i] = Some(ObjectReadResult::new(*kind, object.into()))
-                        }
-                        None => {
-                            if let Some((version, digest)) = self
-                                .store
-                                .get_last_shared_object_deletion_info(id, epoch_id)?
-                            {
-                                results[i] = Some(ObjectReadResult {
-                                    input_object_kind: *kind,
-                                    object: ObjectReadResultKind::DeletedSharedObject(
-                                        version, digest,
-                                    ),
-                                });
-                            } else {
-                                return Err(SuiError::from(kind.object_not_found_error()));
-                            }
+                InputObjectKind::SharedMoveObject { id, .. } => match self.store.get_object(id)? {
+                    Some(object) => {
+                        input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
+                    }
+                    None => {
+                        if let Some((version, digest)) = self
+                            .store
+                            .get_last_shared_object_deletion_info(id, epoch_id)?
+                        {
+                            input_results[i] = Some(ObjectReadResult {
+                                input_object_kind: *kind,
+                                object: ObjectReadResultKind::DeletedSharedObject(version, digest),
+                            });
+                        } else {
+                            return Err(SuiError::from(kind.object_not_found_error()));
                         }
                     }
-                    continue;
+                },
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    object_keys.push(ObjectKey::from(objref));
+                    fetch_indices.push(i);
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => Some(*objref),
             }
-            .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-
-            object_keys.push(ObjectKey::from(obj_ref));
-            fetch_indices.push(i);
         }
 
         let objects = self.store.multi_get_object_by_key(&object_keys)?;
@@ -108,7 +101,7 @@ impl TransactionInputLoader {
                 SuiError::from(input_object_kinds[index].object_not_found_error())
             })?;
 
-            results[index] = Some(ObjectReadResult {
+            input_results[index] = Some(ObjectReadResult {
                 input_object_kind: input_object_kinds[index],
                 object: ObjectReadResultKind::Object(Arc::new(object)),
             });
@@ -143,7 +136,7 @@ impl TransactionInputLoader {
         }
 
         Ok((
-            results
+            input_results
                 .into_iter()
                 .map(Option::unwrap)
                 .collect::<Vec<_>>()
@@ -218,11 +211,13 @@ impl TransactionInputLoader {
     /// All the owned input objects will likely have been loaded during transaction signing, and
     /// can be stored as a group with the transaction_digest as the key, allowing the lookup to
     /// proceed with only a single hash map lookup. (additional lookups may be necessary for shared
-    /// inputs, since the versions are not known at signing time).
+    /// inputs, since the versions are not known at signing time). Receiving objects could be
+    /// cached, but only with appropriate invalidation logic for when an object is received by a
+    /// different tx first.
     #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_execution(
         &self,
-        shared_lock_store: &dyn GetSharedLocks,
+        shared_lock_store: &impl GetSharedLocks,
         tx_digest: &TransactionDigest,
         input_object_kinds: &[InputObjectKind],
         epoch_id: EpochId,

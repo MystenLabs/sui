@@ -413,7 +413,6 @@ mod checked {
                         input_object_kind.is_mutable(),
                         *digest,
                     ));
-                    continue;
                 }
             }
         }
