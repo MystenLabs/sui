@@ -190,15 +190,14 @@ pub async fn start_test_indexer(
     (store, handle)
 }
 
-#[tokio::test]
-pub async fn simulator_commands_test() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn simulator_commands_test_impl() {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("test_infra")
         .join("example.move");
 
     // Read the file into a string
-    let file_contents = std::fs::read_to_string(&path)?;
+    let file_contents = std::fs::read_to_string(&path).unwrap();
 
     let (_output, adapter) = move_transactional_test_runner::framework::handle_actual_output::<
         sui_transactional_test_runner::test_adapter::SuiTestAdapter,
@@ -206,12 +205,11 @@ pub async fn simulator_commands_test() -> Result<(), Box<dyn std::error::Error>>
         &path,
         Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
     )
-    .await?;
+    .await
+    .unwrap();
 
-    let executor = adapter.executor();
-
-    let checkpoint = executor.get_latest_checkpoint_sequence_number().unwrap();
-    let checkpoint_info = executor
+    let checkpoint = adapter.get_latest_checkpoint_sequence_number().unwrap();
+    let checkpoint_info = adapter
         .get_verified_checkpoint_by_sequence_number(checkpoint)
         .unwrap();
 
@@ -230,5 +228,34 @@ pub async fn simulator_commands_test() -> Result<(), Box<dyn std::error::Error>>
         num_actual_epoch_commands - 1
     );
 
-    Ok(())
+    // Serve the data, start an indexer, and graphql server
+    let cluster = serve_executor(
+        ConnectionConfig::ci_integration_test_cfg(),
+        3000,
+        Arc::new(adapter),
+    )
+    .await;
+
+    let query = r#"{
+      checkpointConnection (last: 1) {
+        nodes {
+          sequenceNumber
+        }
+      }
+    }"#
+    .to_string();
+
+    // Get the latest checkpoint via graphql
+    let resp = cluster
+        .graphql_client
+        .execute(query, vec![])
+        .await
+        .unwrap()
+        .to_string();
+
+    // Result should be something like {"data":{"checkpointConnection":{"nodes":[{"sequenceNumber":XYZ}]}}}
+    // Where XYZ is the seq number of the latest checkpoint
+    let seq_num = resp.split(':').last().unwrap().split('}').next().unwrap();
+
+    assert_eq!(seq_num, format!("{}", checkpoint));
 }

@@ -885,6 +885,10 @@ impl<'a> SuiTestAdapter<'a> {
         &*self.executor
     }
 
+    pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
+        self.executor
+    }
+
     async fn upgrade_package(
         &mut self,
         before_upgrade: NumericalAddress,
@@ -1708,4 +1712,70 @@ fn init_sim_executor(
             accounts,
         },
     )
+}
+
+impl sui_rest_api::node_state_getter::NodeStateGetter for SuiTestAdapter<'_> {
+    fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::VerifiedCheckpoint> {
+        self.executor
+            .get_verified_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::CheckpointSequenceNumber> {
+        self.executor.get_latest_checkpoint_sequence_number()
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        content_digest: sui_types::messages_checkpoint::CheckpointContentsDigest,
+    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::CheckpointContents> {
+        self.executor.get_checkpoint_contents(content_digest)
+    }
+
+    fn multi_get_transaction_blocks(
+        &self,
+        tx_digests: &[sui_types::digests::TransactionDigest],
+    ) -> sui_types::error::SuiResult<Vec<Option<VerifiedTransaction>>> {
+        self.executor.multi_get_transaction_blocks(tx_digests)
+    }
+
+    fn multi_get_executed_effects(
+        &self,
+        digests: &[sui_types::digests::TransactionDigest],
+    ) -> sui_types::error::SuiResult<Vec<Option<sui_types::effects::TransactionEffects>>> {
+        self.executor.multi_get_executed_effects(digests)
+    }
+
+    fn multi_get_events(
+        &self,
+        event_digests: &[sui_types::digests::TransactionEventsDigest],
+    ) -> sui_types::error::SuiResult<Vec<Option<sui_types::effects::TransactionEvents>>> {
+        self.executor.multi_get_events(event_digests)
+    }
+
+    fn multi_get_object_by_key(
+        &self,
+        object_keys: &[sui_types::storage::ObjectKey],
+    ) -> Result<Vec<Option<Object>>, sui_types::error::SuiError> {
+        self.executor.multi_get_object_by_key(object_keys)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+        sui_types::storage::ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+    }
+
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+        sui_types::storage::ObjectStore::get_object(&*self.executor, object_id)
+    }
 }

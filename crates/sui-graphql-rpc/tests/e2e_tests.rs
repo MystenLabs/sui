@@ -161,4 +161,11 @@ mod tests {
     async fn test_query_complexity_metrics() {
         test_query_complexity_metrics_impl().await;
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn simulator_commands_test() {
+        use sui_graphql_rpc::test_infra::cluster::simulator_commands_test_impl;
+        simulator_commands_test_impl().await;
+    }
 }
