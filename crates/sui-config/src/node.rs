@@ -367,6 +367,7 @@ pub struct ConsensusConfig {
     pub narwhal_config: ConsensusParameters,
 
     /// The choice of consensus protocol to run. We default to Narwhal.
+    #[serde(skip)]
     #[serde(default = "default_consensus_protocol")]
     pub protocol: ConsensusProtocol,
 }
