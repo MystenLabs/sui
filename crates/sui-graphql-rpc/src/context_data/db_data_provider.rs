@@ -1800,6 +1800,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             epoch_id,
             kind: Some(kind),
             signatures: Some(signatures),
+            timestamp: DateTime::from_ms(tx.timestamp_ms),
         })
     }
 }

@@ -9,6 +9,7 @@ use super::{
     base64::Base64,
     big_int::BigInt,
     checkpoint::Checkpoint,
+    date_time::DateTime,
     digest::Digest,
     epoch::Epoch,
     gas::{GasEffects, GasInput},
@@ -50,6 +51,8 @@ pub(crate) struct TransactionBlock {
     pub kind: Option<TransactionBlockKind>,
     /// A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
     pub signatures: Option<Vec<Option<TransactionSignature>>>,
+    /// UTC timestamp in milliseconds since epoch (1/1/1970)
+    pub timestamp: Option<DateTime>,
 }
 
 #[ComplexObject]
