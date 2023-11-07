@@ -3,6 +3,7 @@
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
+use crate::sui_transaction::GenericSignature::Signature;
 use crate::{Filter, Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
@@ -23,6 +24,7 @@ use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
+use sui_types::crypto::SuiSignature;
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
@@ -1118,10 +1120,27 @@ impl SuiTransactionBlock {
 
 impl Display for SuiTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut writer = String::new();
-        writeln!(writer, "Transaction Signature: {:?}", self.tx_signatures)?;
-        write!(writer, "{}", &self.data)?;
-        write!(f, "{}", writer)
+        let mut builder = TableBuilder::default();
+
+        builder.push_record(vec![format!("{}", self.data)]);
+        builder.push_record(vec![format!("Signatures:")]);
+        for tx_sig in &self.tx_signatures {
+            builder.push_record(vec![format!(
+                "   {}\n",
+                match tx_sig {
+                    Signature(sig) => Base64::from_bytes(sig.signature_bytes()).encoded(),
+                    _ => Base64::from_bytes(tx_sig.as_ref()).encoded(), // the signatures for multisig and zklogin are not suited to be parsed out. they should be interpreted as a whole
+                }
+            )]);
+        }
+
+        let mut table = builder.build();
+        table.with(TablePanel::header("Transaction Data"));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
+        write!(f, "{}", table)
     }
 }
 
