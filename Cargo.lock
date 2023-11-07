@@ -5454,7 +5454,11 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/mysticeti?rev=18b27ff27c160f7f3f9705bee1d7c501e46e6beb#18b27ff27c160f7f3f9705bee1d7c501e46e6beb"
+=======
+source = "git+https://github.com/MystenLabs/mysticeti?rev=315917edbc14186d5bc24328a93eaaccabea673e#315917edbc14186d5bc24328a93eaaccabea673e"
+>>>>>>> 103c2e1b4d ([chore] update mysticeti ref)
 dependencies = [
  "memmap2 0.7.1",
  "serde",
@@ -5463,7 +5467,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=f87e013750a643815e699c7ea83cb3f97e7a3947#f87e013750a643815e699c7ea83cb3f97e7a3947"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=829665dccd53107d9445d4ad97c718e03e131780#829665dccd53107d9445d4ad97c718e03e131780"
 dependencies = [
  "memmap2 0.7.1",
  "serde",
@@ -6424,7 +6428,11 @@ dependencies = [
 [[package]]
 name = "mysticeti-core"
 version = "0.1.0"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/mysticeti?rev=18b27ff27c160f7f3f9705bee1d7c501e46e6beb#18b27ff27c160f7f3f9705bee1d7c501e46e6beb"
+=======
+source = "git+https://github.com/MystenLabs/mysticeti?rev=315917edbc14186d5bc24328a93eaaccabea673e#315917edbc14186d5bc24328a93eaaccabea673e"
+>>>>>>> 103c2e1b4d ([chore] update mysticeti ref)
 dependencies = [
  "async-trait",
  "axum",
@@ -6440,7 +6448,7 @@ dependencies = [
  "hyper",
  "libc",
  "memmap2 0.7.1",
- "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=0bc1ae8f6cc5b1eb22752fa37ba64bdaf358f7cf)",
+ "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=315917edbc14186d5bc24328a93eaaccabea673e)",
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",
@@ -6458,7 +6466,7 @@ dependencies = [
 [[package]]
 name = "mysticeti-core"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=f87e013750a643815e699c7ea83cb3f97e7a3947#f87e013750a643815e699c7ea83cb3f97e7a3947"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=829665dccd53107d9445d4ad97c718e03e131780#829665dccd53107d9445d4ad97c718e03e131780"
 dependencies = [
  "async-trait",
  "axum",
@@ -6474,7 +6482,7 @@ dependencies = [
  "hyper",
  "libc",
  "memmap2 0.7.1",
- "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=f87e013750a643815e699c7ea83cb3f97e7a3947)",
+ "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=829665dccd53107d9445d4ad97c718e03e131780)",
  "parking_lot 0.12.1",
  "prometheus",
  "rand 0.8.5",
@@ -10405,7 +10413,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "mysticeti-core 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=f87e013750a643815e699c7ea83cb3f97e7a3947)",
+ "mysticeti-core 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=315917edbc14186d5bc24328a93eaaccabea673e)",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-executor",
@@ -14336,7 +14344,7 @@ dependencies = [
  "migrations_macros",
  "mime",
  "mime_guess",
- "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=0bc1ae8f6cc5b1eb22752fa37ba64bdaf358f7cf)",
+ "minibytes 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=829665dccd53107d9445d4ad97c718e03e131780)",
  "minimal-lexical",
  "miniz_oxide",
  "mio 0.7.14",
@@ -14390,7 +14398,7 @@ dependencies = [
  "multihash",
  "multihash-derive",
  "multimap",
- "mysticeti-core 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=0bc1ae8f6cc5b1eb22752fa37ba64bdaf358f7cf)",
+ "mysticeti-core 0.1.0 (git+https://github.com/MystenLabs/mysticeti?rev=829665dccd53107d9445d4ad97c718e03e131780)",
  "named-lock",
  "nested",
  "newline-converter",
