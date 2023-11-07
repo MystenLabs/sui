@@ -292,7 +292,7 @@ type Event {
 	"""
 	json: String
 	"""
-	Base58 encoded bcs bytes of the Move event
+	Base64 encoded bcs bytes of the Move event
 	"""
 	bcs: Base64
 }
