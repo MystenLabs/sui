@@ -85,7 +85,7 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 // Context
 //**************************************************************************************************
 
-const DEBUG_PRINT: bool = false;
+const DEBUG_PRINT: bool = true;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -836,12 +836,13 @@ fn value(
         return result;
     } else if is_binop(&e) {
         let out_type = type_(context, e.ty.clone());
-        return process_binops(context, block, out_type, e);
+        let out_exp = process_binops(context, block, out_type, e);
+        return maybe_freeze(context, block, expected_type.cloned(), out_exp);
     } else if is_exp_list(&e) {
         let out_type = type_(context, e.ty.clone());
         let eloc = e.exp.loc;
         let out_vec = value_list(context, block, Some(&out_type), e);
-        return H::exp(out_type, sp(eloc, HE::Multiple(out_vec)));
+        return maybe_freeze(context, block, expected_type.cloned(), H::exp(out_type, sp(eloc, HE::Multiple(out_vec))));
     }
 
     let T::Exp {
@@ -1236,10 +1237,6 @@ fn value_block(
         _ => panic!("ICE last sequence item should be an exp"),
     }
 }
-
-// This is an slightly sub-optimal implementation of `value_list`, which we preserve in order to
-// accurately re-produce code that is already on-chain. When we support SHA-based source
-// verification, we should swap this version out with the optimized version below it.
 
 fn value_list(
     context: &mut Context,
