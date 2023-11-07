@@ -3,7 +3,10 @@
 
 use crate::error::SuiError;
 use crate::signature::{AuthenticatorTrait, VerifyParams};
-use crate::utils::{make_zklogin_tx, sign_zklogin_personal_msg};
+use crate::utils::{
+    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
+    sign_zklogin_personal_msg,
+};
 use crate::{
     base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
@@ -15,14 +18,15 @@ use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 
 #[test]
 fn zklogin_authenticator_jwk() {
-    let (user_address, tx, authenticator) = make_zklogin_tx(false);
+    let (user_address, tx, authenticator) = make_zklogin_tx(get_zklogin_user_address(), false);
     let intent_msg = IntentMessage::new(
         Intent::sui_transaction(),
         tx.into_data().transaction_data().clone(),
     );
 
     // Create sui address derived with a legacy way.
-    let (legacy_user_address, legacy_tx, legacy_authenticator) = make_zklogin_tx(true);
+    let (legacy_user_address, legacy_tx, legacy_authenticator) =
+        make_zklogin_tx(get_legacy_zklogin_user_address(), true);
     let legacy_intent_msg = IntentMessage::new(
         Intent::sui_transaction(),
         legacy_tx.into_data().transaction_data().clone(),
@@ -84,7 +88,7 @@ fn zklogin_authenticator_jwk() {
 
 #[test]
 fn test_serde_zk_login_signature() {
-    let (user_address, _tx, authenticator) = make_zklogin_tx(false);
+    let (user_address, _tx, authenticator) = make_zklogin_tx(get_zklogin_user_address(), false);
     let serialized = authenticator.as_ref();
     let deserialized = GenericSignature::from_bytes(serialized).unwrap();
     assert_eq!(deserialized, authenticator);

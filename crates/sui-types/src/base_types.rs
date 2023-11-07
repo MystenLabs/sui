@@ -650,8 +650,7 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 }
 
 /// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
-/// [zklogin_flag || iss_bytes_length || iss_bytes || address_seed in bytes] where
-/// AddressParams contains iss and aud string.
+/// [zklogin_flag || iss_bytes_length || iss_bytes || address_seed in bytes].
 impl TryFrom<&ZkLoginAuthenticator> for SuiAddress {
     type Error = SuiError;
     fn try_from(authenticator: &ZkLoginAuthenticator) -> SuiResult<Self> {

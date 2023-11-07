@@ -99,9 +99,9 @@ fn get_registry() -> Result<Registry> {
         },
     );
 
-    let sig1 = Signature::new_secure(&msg, &kp1);
-    let sig2 = Signature::new_secure(&msg, &kp2);
-    let sig3 = Signature::new_secure(&msg, &kp3);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &kp1).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &kp2).into();
+    let sig3: GenericSignature = Signature::new_secure(&msg, &kp3).into();
 
     let multi_sig =
         MultiSig::combine(vec![sig1.clone(), sig2.clone(), sig3.clone()], multisig_pk).unwrap();
@@ -110,12 +110,9 @@ fn get_registry() -> Result<Registry> {
     let generic_sig_multi = GenericSignature::MultiSig(multi_sig);
     tracer.trace_value(&mut samples, &generic_sig_multi)?;
 
-    let generic_sig_1 = GenericSignature::Signature(sig1);
-    tracer.trace_value(&mut samples, &generic_sig_1)?;
-    let generic_sig_2 = GenericSignature::Signature(sig2);
-    tracer.trace_value(&mut samples, &generic_sig_2)?;
-    let generic_sig_3 = GenericSignature::Signature(sig3);
-    tracer.trace_value(&mut samples, &generic_sig_3)?;
+    tracer.trace_value(&mut samples, &sig1)?;
+    tracer.trace_value(&mut samples, &sig2)?;
+    tracer.trace_value(&mut samples, &sig3)?;
 
     // ObjectID and SuiAddress are the same length
     let oid: ObjectID = addr.into();

@@ -5,13 +5,14 @@ use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use crate::{
     base_types::SuiAddress,
     crypto::{
-        get_key_pair, get_key_pair_from_rng, DefaultHash, Ed25519SuiSignature, PublicKey,
-        Signature, SuiKeyPair, SuiSignatureInner,
+        get_key_pair, get_key_pair_from_rng, CompressedSignature, DefaultHash, Ed25519SuiSignature,
+        PublicKey, Signature, SuiKeyPair, SuiSignatureInner, ZkLoginPublicIdentifier,
     },
     multisig::{as_indices, MultiSig, MAX_SIGNER_IN_MULTISIG},
     multisig_legacy::{bitmap_to_u16, MultiSigLegacy, MultiSigPublicKeyLegacy},
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
-    utils::keys,
+    utils::{keys, make_zklogin_tx, DEFAULT_ADDRESS_SEED, SHORT_ADDRESS_SEED},
+    zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::{
     ed25519::{Ed25519KeyPair, Ed25519PrivateKey},
@@ -20,6 +21,9 @@ use fastcrypto::{
     secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey},
     traits::ToFromBytes,
 };
+use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
@@ -32,7 +36,6 @@ fn multisig_scenarios() {
     let pk1 = keys[0].public();
     let pk2 = keys[1].public();
     let pk3 = keys[2].public();
-
     let multisig_pk = MultiSigPublicKey::new(
         vec![pk1.clone(), pk2.clone(), pk3.clone()],
         vec![1, 1, 1],
@@ -46,9 +49,9 @@ fn multisig_scenarios() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
-    let sig3 = Signature::new_secure(&msg, &keys[2]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
+    let sig3: GenericSignature = Signature::new_secure(&msg, &keys[2]).into();
 
     // Any 2 of 3 signatures verifies ok.
     let multi_sig1 =
@@ -145,7 +148,7 @@ fn multisig_scenarios() {
         .is_err());
 
     // A bad sig in the multisig fails, even though sig2 and sig3 verifies and weights meets threshold.
-    let bad_sig = Signature::new_secure(
+    let bad_sig = GenericSignature::Signature(Signature::new_secure(
         &IntentMessage::new(
             Intent::sui_transaction(),
             PersonalMessage {
@@ -153,7 +156,7 @@ fn multisig_scenarios() {
             },
         ),
         &keys[0],
-    );
+    ));
     let multi_sig_9 = MultiSig::combine(vec![bad_sig, sig2, sig3], multisig_pk_2).unwrap();
     assert!(multi_sig_9
         .verify_authenticator(&msg, addr_2, None, &VerifyParams::default())
@@ -188,9 +191,9 @@ fn test_combine_sigs() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &kp1);
-    let sig2 = Signature::new_secure(&msg, &kp2);
-    let sig3 = Signature::new_secure(&msg, &kp3);
+    let sig1 = Signature::new_secure(&msg, &kp1).into();
+    let sig2 = Signature::new_secure(&msg, &kp2).into();
+    let sig3 = Signature::new_secure(&msg, &kp3).into();
 
     // MultiSigPublicKey contains only 2 public key but 3 signatures are passed, fails to combine.
     assert!(MultiSig::combine(vec![sig1, sig2, sig3], multisig_pk.clone()).is_err());
@@ -210,7 +213,7 @@ fn test_serde_roundtrip() {
     for kp in keys() {
         let pk = kp.public();
         let multisig_pk = MultiSigPublicKey::new(vec![pk], vec![1], 1).unwrap();
-        let sig = Signature::new_secure(&msg, &kp);
+        let sig = Signature::new_secure(&msg, &kp).into();
         let multisig = MultiSig::combine(vec![sig], multisig_pk).unwrap();
         let plain_bytes = bcs::to_bytes(&multisig).unwrap();
 
@@ -358,7 +361,7 @@ fn test_max_sig() {
 
     for _ in 0..11 {
         let k = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1);
-        sigs.push(Signature::new_secure(&msg, &k));
+        sigs.push(Signature::new_secure(&msg, &k).into());
         pks.push(k.public());
         keys.push(k);
     }
@@ -399,7 +402,7 @@ fn test_max_sig() {
     )
     .unwrap();
     let address: SuiAddress = (&low_threshold_pk).into();
-    let sig = Signature::new_secure(&msg, &keys[0]);
+    let sig = Signature::new_secure(&msg, &keys[0]).into();
     let multisig = MultiSig::combine(vec![sig; 1], low_threshold_pk).unwrap();
     assert!(multisig
         .verify_authenticator(&msg, address, None, &VerifyParams::default())
@@ -461,8 +464,8 @@ fn multisig_serde_test() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &k1);
-    let sig2 = Signature::new_secure(&msg, &k2);
+    let sig1 = Signature::new_secure(&msg, &k1).into();
+    let sig2 = Signature::new_secure(&msg, &k2).into();
 
     let multi_sig = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
     assert_eq!(Base64::encode(multi_sig.as_bytes()), "AwIAvlJnUP0iJFZL+QTxkKC9FHZGwCa5I4TITHS/QDQ12q1sYW6SMt2Yp3PSNzsAay0Fp2MPVohqyyA02UtdQ2RNAQGH0eLk4ifl9h1I8Uc+4QlRYfJC21dUbP8aFaaRqiM/f32TKKg/4PSsGf9lFTGwKsHJYIMkDoqKwI8Xqr+3apQzAwADAFriILSy9l6XfBLt5hV5/1FwtsIsAGFow3tefGGvAYCDAQECHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzYCADtqJ7zOtqQtYqOo0CpvDXNlMhV3HeJDpjrASKGLWdopAwMA");
@@ -490,8 +493,8 @@ fn multisig_legacy_serde_test() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig0 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[2]);
+    let sig0 = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2 = Signature::new_secure(&msg, &keys[2]).into();
 
     let multisig_pk_legacy =
         MultiSigPublicKeyLegacy::new(vec![pk1, pk2, pk3], vec![1, 2, 3], 3).unwrap();
@@ -536,7 +539,7 @@ fn multisig_invalid_instance() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
 
     let public_keys_and_weights: Vec<(PublicKey, WeightUnit)> = vec![(pk1, 0)];
 
@@ -563,7 +566,7 @@ fn multisig_invalid_bitmap_instance() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
 
     let public_keys_and_weights: Vec<(PublicKey, WeightUnit)> = vec![(pk1, 1)];
 
@@ -629,8 +632,8 @@ fn multisig_user_authenticator_epoch() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
 
     let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
 
@@ -662,8 +665,8 @@ fn multisig_combine_invalid_multisig_publickey() {
 
     let invalid_multisig_pk = MultiSigPublicKey::construct(public_keys_and_weights, 2);
 
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
 
     assert!(MultiSig::combine(vec![sig1, sig2], invalid_multisig_pk).is_err());
 }
@@ -692,8 +695,8 @@ fn multisig_invalid_number_of_publickeys() {
 
     let addr = SuiAddress::from(&invalid_multisig_pk);
 
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
 
     let invalid_multisig = MultiSig::new(
         vec![sig1.to_compressed().unwrap(), sig2.to_compressed().unwrap()],
@@ -726,8 +729,8 @@ fn multisig_invalid_publickey_ed25519_signature() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig_ed25519 = Signature::new_secure(&msg, &keys[0]);
-    let sig_secp256k1 = Signature::new_secure(&msg, &keys[1]);
+    let sig_ed25519: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig_secp256k1: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
 
     // Change position for signatures is not ok with plain bitmap
     let multi_sig = MultiSig::combine(vec![sig_ed25519, sig_secp256k1], multisig_pk).unwrap();
@@ -758,8 +761,8 @@ fn multisig_invalid_publickey_secp256r1_signature() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig_ed25519 = Signature::new_secure(&msg, &keys[0]);
-    let sig_secp256r1 = Signature::new_secure(&msg, &keys[2]);
+    let sig_ed25519: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig_secp256r1: GenericSignature = Signature::new_secure(&msg, &keys[2]).into();
 
     // Change position for signatures is not ok with plain bitmap
     let multi_sig = MultiSig::combine(vec![sig_secp256r1, sig_ed25519], multisig_pk).unwrap();
@@ -783,8 +786,8 @@ fn multisig_get_pk() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
 
     let multi_sig = MultiSig::combine(vec![sig1, sig2], multisig_pk.clone()).unwrap();
 
@@ -804,8 +807,8 @@ fn multisig_get_sigs() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
 
     let multi_sig = MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk).unwrap();
 
@@ -828,9 +831,9 @@ fn multisig_get_indices() {
             message: "Hello".as_bytes().to_vec(),
         },
     );
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
-    let sig3 = Signature::new_secure(&msg, &keys[2]);
+    let sig1: GenericSignature = Signature::new_secure(&msg, &keys[0]).into();
+    let sig2: GenericSignature = Signature::new_secure(&msg, &keys[1]).into();
+    let sig3: GenericSignature = Signature::new_secure(&msg, &keys[2]).into();
 
     let multi_sig1 =
         MultiSig::combine(vec![sig2.clone(), sig3.clone()], multisig_pk.clone()).unwrap();
@@ -878,12 +881,110 @@ fn multisig_new_hashed_signature() {
     // To avoid changes in the hash functions, compare it to hardcoded data slice.
     assert!(hashed_msg == data_slice);
 
-    let sig2 = Signature::new_hashed(hashed_msg, &keys[1]);
-    let sig3 = Signature::new_hashed(hashed_msg, &keys[2]);
+    let sig2 = Signature::new_hashed(hashed_msg, &keys[1]).into();
+    let sig3 = Signature::new_hashed(hashed_msg, &keys[2]).into();
 
     let multi_sig = MultiSig::combine(vec![sig2, sig3], multisig_pk).unwrap();
 
     assert!(multi_sig
         .verify_authenticator(&msg, addr, None, &VerifyParams::default())
         .is_ok());
+}
+#[test]
+fn multisig_zklogin_scenarios() {
+    let keys = keys();
+    let pk1 = keys[0].public();
+
+    // pk consistent with the one in make_zklogin_tx
+    let pk2 = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, DEFAULT_ADDRESS_SEED)
+            .unwrap(),
+    );
+
+    // set up 1-out-of-2 multisig with one zklogin public identifier and one traditional public key.
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2], vec![1, 1], 1).unwrap();
+    let multisig_addr = SuiAddress::from(&multisig_pk);
+    assert_eq!(
+        multisig_addr,
+        SuiAddress::from_str("0xb9c0780a3943cde13a2409bf1a6f06ae60b0dff2b2f373260cf627aa4f43a588")
+            .unwrap()
+    );
+
+    let (_, envelop, zklogin_sig) = make_zklogin_tx(multisig_addr, false);
+    let intent_msg = &IntentMessage::new(
+        Intent::sui_transaction(),
+        envelop.into_data().transaction_data().clone(),
+    );
+
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+        .unwrap()
+        .into_iter()
+        .collect();
+
+    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true);
+
+    // 1 zklogin sig verifies.
+    let multisig = MultiSig::combine(vec![zklogin_sig.clone()], multisig_pk.clone()).unwrap();
+    let binding = GenericSignature::MultiSig(multisig);
+    let bytes = binding.as_ref();
+    assert_eq!(bytes, Base64::decode("AwEDA00xNzMxODA4OTEyNTk1MjQyMTczNjM0MjI2MzcxNzkzMjcxOTQzNzcxNzg0NDI4MjQxMDE4Nzk1Nzk4NDc1MTkzOTk0Mjg5ODI1MTI1ME0xMTM3Mzk2NjY0NTQ2OTEyMjU4MjA3NDA4MjI5NTk4NTM4ODI1ODg0MDY4MTYxODI2ODU5Mzk3NjY5NzMyNTg5MjI4MDkxNTY4MTIwNwExAwJMNTkzOTg3MTE0NzM0ODgzNDk5NzM2MTcyMDEyMjIzODk4MDE3NzE1MjMwMzI3NDMxMTA0NzI0OTkwNTk0MjM4NDkxNTc2ODY5MDg5NUw0NTMzNTY4MjcxMTM0Nzg1Mjc4NzMxMjM0NTcwMzYxNDgyNjUxOTk2NzQwNzkxODg4Mjg1ODY0OTY2ODg0MDMyNzE3MDQ5ODExNzA4Ak0xMDU2NDM4NzI4NTA3MTU1NTQ2OTc1Mzk5MDY2MTQxMDg0MDExODYzNTkyNTQ2NjU5NzAzNzAxODA1ODc3MDA0MTM0NzUxODQ2MTM2OE0xMjU5NzMyMzU0NzI3NzU3OTE0NDY5ODQ5NjM3MjI0MjYxNTM2ODA4NTgwMTMxMzM0MzE1NTczNTUxMTMzMDAwMzg4NDc2Nzk1Nzg1NAIBMQEwA00xNTc5MTU4OTQ3MjU1NjgyNjI2MzIzMTY0NDcyODg3MzMzNzYyOTAxNTI2OTk4NDY5OTQwNDA3MzYyMzYwMzM1MjUzNzY3ODgxMzE3MUw0NTQ3ODY2NDk5MjQ4ODgxNDQ5Njc2MTYxMTU4MDI0NzQ4MDYwNDg1MzczMjUwMDI5NDIzOTA0MTEzMDE3NDIyNTM5MDM3MTYyNTI3ATExd2lhWE56SWpvaWFIUjBjSE02THk5cFpDNTBkMmwwWTJndWRIWXZiMkYxZEdneUlpdwIyZXlKaGJHY2lPaUpTVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0lzSW10cFpDSTZJakVpZlFNMjA3OTQ3ODg1NTk2MjA2Njk1OTYyMDY0NTcwMjI5NjYxNzY5ODY2ODg3Mjc4NzYxMjgyMjM2MjgxMTM5MTYzODA5Mjc1MDI3Mzc5MTEKAAAAAAAAAGEAEemRDkm/GpuoIq2qH0zRTlzejeXrYHoAtU7EyrqexzTLcmVjwZ/Vmg8D3vp2ibrLckYFROyvLprF+odxWu1EDLnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIAAgACAA19qzWMja2qTvoASadbB0NlVbEKNoIZu2gPcFcTSdd1AQM8G2h0dHBzOi8vaWQudHdpdGNoLnR2L29hdXRoMi35buhGoP8xt7S3eQrWUWMfadbd+EaL1Up//rhxYmH3AQEA").unwrap());
+    let generic_sig = GenericSignature::from_bytes(bytes).unwrap();
+    match generic_sig {
+        GenericSignature::MultiSig(multisig) => {
+            assert!(multisig
+                .verify_authenticator(intent_msg, multisig_addr, Some(9), &aux_verify_data)
+                .is_ok());
+        }
+        _ => panic!("unexpected signature type"),
+    }
+
+    // use zklogin address instead of multisig address fails.
+    let zklogin_addr = SuiAddress::try_from(&zklogin_sig).unwrap();
+    let multisig = MultiSig::combine(vec![zklogin_sig], multisig_pk.clone()).unwrap();
+    assert!(multisig
+        .verify_authenticator(intent_msg, zklogin_addr, Some(10), &aux_verify_data)
+        .is_err());
+
+    // 1 traditional sig verifies.
+    let sig1 = Signature::new_secure(intent_msg, &keys[0]).into();
+    let multisig1 = MultiSig::combine(vec![sig1], multisig_pk).unwrap();
+    assert!(multisig1
+        .verify_authenticator(intent_msg, multisig_addr, Some(10), &aux_verify_data)
+        .is_ok());
+
+    // use zklogin address instead of multisig address fails.
+    assert!(multisig1
+        .verify_authenticator(intent_msg, zklogin_addr, Some(10), &aux_verify_data)
+        .is_err());
+}
+
+#[test]
+fn multisig_serde_zklogin() {
+    let multisig = MultiSig::from_bytes(&Base64::decode("AwEDA00xMTA3MTk2MDUwODg3NTA4OTIwMTA1NzczMDU2NTUxODEwMTU1Njc3NTQ3NTE2OTM3NTU3OTUwOTA2NTE0MDQ4OTAyNjA3NzA5OTY1NE0xNDE3NDkxMjQ3OTA4MTExOTg1MTk5NzUyODMyNzE1ODk5NTI3MzAwNjY5OTE0OTQ1NzUzMTYxODI0NjI5MjE0NjYxMzExMjM3Mjk0NAExAwJMNzIxNjk5MDI5ODY2MDc4MzMwMjE0Mzg5Njg1MzI4OTI5MDAyMTMyNjQzNjI0OTYyMzg2MDA1MTkwNDY3OTM1MTU4NTE3MzAxMjA0ME0xODA4NzcwMTE1MTk0MDkwMTI4MTk1ODYzNjM3NzA1NjYxODA5MDYxODIwODU3MzczMjU2OTc5MTU3OTcwMzY1MzQxMzk0Mzk4MzY5OQJNMTkyMjQ3NjMyODU3Mzk4NDE0MzAyNjU2MDUyNjg2ODc3MjAyMTAzMTMxNDU5OTg1MDM0Njg2MzU0NjQ3MDg1NzM0NTQzMjQwMTM3NDRNMTIzOTMyNDEzMTA0MzUwODI1OTgzNjA3NTM1NDU5MDk5ODkzMjYwMjc1MjQzOTU2MTM4ODI1NTI4NzM1NDQ4OTA1MDY0Mzg5MzUwMjcCATEBMANNMjA5ODM1NjE1NTU0Nzk3ODc3MTQzNjc5NDU2NTM4NTQxOTQyNzU5ODIyMjEzMTM5NjI2OTQwNzU3NDM4NzAyMjc4MTgzNTcyMjk0NTBNMTYwMjQ4MzQ2NTg4MTQwOTk4OTk1NDQ4NjU5NTE3MDg4MTIxODY4NDcxNDY2MTMwNzU2OTIzNDIyMzk1NDkzNTQyNDc5MDExODEzNDUBMTF5SnBjM01pT2lKb2RIUndjem92TDJGalkyOTFiblJ6TG1kdmIyZHNaUzVqYjIwaUxDAWZleUpoYkdjaU9pSlNVekkxTmlJc0ltdHBaQ0k2SW1NMk1qWXpaREE1TnpRMVlqVXdNekpsTlRkbVlUWmxNV1F3TkRGaU56ZGhOVFF3Tmpaa1ltUWlMQ0owZVhBaU9pSktWMVFpZlFNMTMzMTk5NjgyNDQyNDUzNDI3MDI5NDQzNjQ2MDgzMTY3Nzc3NzI1NDcyNTk3OTg0MjU2OTc5MjMwOTkzOTAzNTU1Mzg1Mjk5MzEyMTEKAAAAAAAAAGEAnR5aXx6mSFmFTaghl8pFm9LtTJm+K9c2UbhjmksW2qUsluzhVREBkYWzzv2oJ2KEESe+6sXgGzs3/1QrzSOLCrnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIAAQACAzwbaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tHXLVuWKZ0YRWr+lAR0ZRWMBuaVbAL5w4tETSyLG6z8sBAIxVMzXu6Aub+gxUSkX+Y0dKCd/5xLCzPbK2Yvk06kbEAQEA").unwrap()).unwrap();
+    assert_eq!(multisig.sigs.len(), 1);
+    if let CompressedSignature::ZkLogin(z) = &multisig.sigs[0] {
+        assert_eq!(z.get_iss(), OIDCProvider::Google.get_config().iss);
+        assert_eq!(z.get_max_epoch(), 10);
+    }
+}
+
+#[test]
+fn test_derive_multisig_address() {
+    let pk1 = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, DEFAULT_ADDRESS_SEED)
+            .unwrap(),
+    );
+    let pk2 = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, SHORT_ADDRESS_SEED)
+            .unwrap(),
+    );
+    assert_eq!(pk1.as_ref().len(), pk2.as_ref().len());
+
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2], vec![1, 1], 1).unwrap();
+    let multisig_addr = SuiAddress::from(&multisig_pk);
+    assert_eq!(
+        multisig_addr,
+        SuiAddress::from_str("0x77a9fbf3c695d78dd83449a81a9e70aa79a77dbfd6fb72037bf09201c12052cd")
+            .unwrap()
+    );
 }
