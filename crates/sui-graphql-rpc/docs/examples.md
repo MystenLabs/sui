@@ -1041,7 +1041,9 @@
 >    expiration {
 >      epochId
 >    }
->  	timestamp
+>    effects {
+>      timestamp
+>    }
 >  }
 >}</pre>
 

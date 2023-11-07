@@ -1162,10 +1162,6 @@ type TransactionBlock {
 	"""
 	signatures: [TransactionSignature]
 	"""
-	UTC timestamp in milliseconds since epoch (1/1/1970)
-	"""
-	timestamp: DateTime
-	"""
 	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
 	This serves as a unique id for the block on chain
 	"""
@@ -1212,6 +1208,12 @@ type TransactionBlockEffects {
 	errors: String
 	lamportVersion: Int
 	balanceChanges: [BalanceChange]
+	"""
+	UTC timestamp in milliseconds since epoch (1/1/1970)
+	representing the time when the checkpoint that contains
+	this transaction was created
+	"""
+	timestamp: DateTime
 	checkpoint: Checkpoint
 	dependencies: [TransactionBlock]
 	epoch: Epoch
