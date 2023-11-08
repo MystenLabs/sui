@@ -105,8 +105,7 @@ impl ConnectionConfig {
 
     pub fn ci_integration_test_cfg() -> Self {
         Self {
-            db_url: "postgres://0.0.0.0:5432/postgres".to_string(),
-            //db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
             ..Default::default()
         }
     }
