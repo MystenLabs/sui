@@ -42,10 +42,7 @@ pub struct MysticetiManager {
     running: Mutex<Running>,
     metrics: ConsensusManagerMetrics,
     registry_service: RegistryService,
-    validator: ArcSwapOption<(
-        Validator<SimpleBlockHandler, SimpleCommitObserver>,
-        RegistryID,
-    )>,
+    validator: ArcSwapOption<Validator<SimpleBlockHandler, SimpleCommitObserver>>,
     // we use a shared lazy mysticeti client so we can update the internal mysticeti client that
     // gets created for every new epoch.
     client: Arc<LazyMysticetiClient>,
@@ -118,8 +115,6 @@ impl ConsensusManagerTrait for MysticetiManager {
             .into();
         let config = PrivateConfig::new(self.get_store_path(epoch), authority_index);
 
-        let registry = Registry::new_custom(Some("mysticeti_".to_string()), None).unwrap();
-
         const MAX_RETRIES: u32 = 2;
         let mut retries = 0;
 
@@ -142,7 +137,7 @@ impl ConsensusManagerTrait for MysticetiManager {
                 committee.clone(),
                 &parameters,
                 config.clone(),
-                registry.clone(),
+                self.registry_service.default_registry(),
                 Signer(Box::new(private_key.0.clone())),
                 consumer,
                 tx_validator.clone(),
@@ -150,10 +145,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             .await
             {
                 Ok((validator, tx_sender)) => {
-                    let registry_id = self.registry_service.add(registry);
-
-                    self.validator
-                        .swap(Some(Arc::new((validator, registry_id))));
+                    self.validator.swap(Some(Arc::new(validator)));
 
                     // create the client to send transactions to Mysticeti and update it.
                     self.client.set(MysticetiClient::new(tx_sender));
@@ -192,7 +184,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // swap with empty to ensure there is no other reference to validator and we can safely do Arc unwrap
         let r = self.validator.swap(None).unwrap();
-        let Ok((validator, registry_id)) = Arc::try_unwrap(r) else {
+        let Ok(validator) = Arc::try_unwrap(r) else {
             panic!("Failed to retrieve the mysticeti validator");
         };
 
@@ -201,9 +193,6 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // drop the old consensus handler to force stop any underlying task running.
         self.consensus_handler.store(None);
-
-        // unregister the registry id
-        self.registry_service.remove(registry_id);
     }
 
     async fn is_running(&self) -> bool {
