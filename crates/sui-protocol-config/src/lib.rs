@@ -90,6 +90,7 @@ const MAX_PROTOCOL_VERSION: u64 = 31;
 //             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
 // Version 31: Add support for shared object deletion in devnet only.
 //             Add support for getting object ID referenced by receiving object in sui framework.
+//             Create new execution layer version, and preserve previous behavior in v1.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1638,6 +1639,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
                 31 => {
+                    cfg.execution_version = Some(2);
                     // Only enable shared object deletion on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shared_object_deletion = true;
