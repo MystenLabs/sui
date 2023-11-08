@@ -403,7 +403,7 @@ merlin = { version = "3" }
 migrations_internals = { version = "2", default-features = false }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
-minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "317e97896c598aee1cc35b101eba261fd19d70c8", default-features = false, features = ["frommmap"] }
+minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
@@ -452,7 +452,7 @@ multer = { version = "2" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
-mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "317e97896c598aee1cc35b101eba261fd19d70c8", default-features = false }
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 newline-converter = { version = "0.2", default-features = false }
@@ -1221,7 +1221,7 @@ migrations_internals = { version = "2", default-features = false }
 migrations_macros = { version = "2" }
 mime = { version = "0.3", default-features = false }
 mime_guess = { version = "2", default-features = false }
-minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "317e97896c598aee1cc35b101eba261fd19d70c8", default-features = false, features = ["frommmap"] }
+minibytes = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false, features = ["frommmap"] }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.6", default-features = false, features = ["with-alloc"] }
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
@@ -1274,7 +1274,7 @@ multibase = { version = "0.9" }
 multihash = { version = "0.17", default-features = false, features = ["identity", "multihash-impl", "std"] }
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
-mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "317e97896c598aee1cc35b101eba261fd19d70c8", default-features = false }
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59", default-features = false }
 named-lock = { version = "0.2", default-features = false }
 nested = { version = "0.1", default-features = false }
 newline-converter = { version = "0.2", default-features = false }
