@@ -1,5 +1,5 @@
+use std::cmp;
 use std::sync::Arc;
-use std::{cmp, time::SystemTime};
 
 use prometheus::Registry;
 use std::collections::HashMap;
@@ -31,6 +31,8 @@ use tokio::{
     time::MissedTickBehavior,
 };
 use typed_store::rocks::default_db_options;
+
+use crate::metrics::Metrics;
 
 use super::types::*;
 
@@ -384,7 +386,7 @@ impl SequenceWorkerState {
                         ground_truth_effects: Some(tx_effects.clone()),
                         child_inputs: None,
                         checkpoint_seq: Some(checkpoint_seq),
-                        timestamp: 0,
+                        timestamp: Metrics::now().as_secs_f64(),
                     };
 
                     for ew_id in &ew_ids {
@@ -479,7 +481,7 @@ impl SequenceWorkerState {
         ew_ids: Vec<UniqueId>,
         tx_count: u64,
         duration: Duration,
-    ) -> Instant {
+    ) {
         let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         println!("Setting up benchmark...");
         let start_time = std::time::Instant::now();
@@ -522,16 +524,16 @@ impl SequenceWorkerState {
         let mut interval = tokio::time::interval(Duration::from_millis(burst_duration));
         interval.set_missed_tick_behavior(MissedTickBehavior::Burst);
 
-        let benchmark_start_time = std::time::Instant::now();
+        // Ugly - wait for EWs to finish generating genesis objects.
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        // Send transactions.
         println!("Starting benchmark");
         for chunk in transactions.chunks(chunks_size) {
-            if counter % 1000 == 0 {
-                println!("Submitted {} txs", counter * chunks_size);
+            if counter % 1000 == 0 && counter != 0 {
+                tracing::debug!("Submitted {} txs", counter * chunks_size);
             }
-            let now = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis();
+            let now = Metrics::now().as_secs_f64();
             for tx in chunk {
                 let full_tx = TransactionWithEffects {
                     tx: tx.data().clone(),
@@ -555,7 +557,6 @@ impl SequenceWorkerState {
             interval.tick().await;
         }
         println!("[SW] Benchmark terminated");
-        benchmark_start_time
 
         // for tx in iterator.take(BURST_SIZE) {
         //     let full_tx = TransactionWithEffects {

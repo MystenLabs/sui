@@ -162,7 +162,7 @@ pub struct TransactionWithEffects {
     pub ground_truth_effects: Option<TransactionEffects>, // full effects of tx, as ground truth exec result
     pub child_inputs: Option<Vec<ObjectID>>,              // TODO: mark mutable
     pub checkpoint_seq: Option<u64>,
-    pub timestamp: u128,
+    pub timestamp: f64,
 }
 
 impl TransactionWithEffects {

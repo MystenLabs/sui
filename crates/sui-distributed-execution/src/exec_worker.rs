@@ -3,11 +3,8 @@ use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    time::SystemTime,
-};
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
@@ -36,7 +33,6 @@ use sui_types::temporary_store::TemporaryStore;
 use sui_types::transaction::{InputObjectKind, InputObjects, SenderSignedData, TransactionDataAPI};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
-use tokio::time::Instant;
 use tokio::time::{sleep, Duration};
 
 use crate::{
@@ -563,7 +559,7 @@ impl<
         }
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
-        let now = Instant::now();
+        // let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
         let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price) =
@@ -652,7 +648,11 @@ impl<
                         }
                     }
                     if num_tx % 10_000 == 0 {
-                        println!("[task-queue] EW {} executed {} txs", my_id, num_tx);
+                        tracing::debug!("[task-queue] EW {my_id} executed {num_tx} txs");
+                    }
+                    if num_tx == 1 {
+                        // Expose the start time as a metric. Should be done only once.
+                        worker_metrics.register_start_time();
                     }
                     self.update_metrics(&tx_with_results.full_tx, &worker_metrics);
                 },
@@ -788,7 +788,7 @@ impl<
                             manager.clean_up(&txid).await;
                             num_tx += 1;
                             if num_tx % 10_000 == 0 {
-                                println!("[tx-results] EW {} executed {} txs", my_id, num_tx);
+                                tracing::debug!("[tx-results] EW {my_id} executed {num_tx} txs");
                             }
                             epoch_txs_semaphore -= 1;
                             assert!(epoch_txs_semaphore >= 0);
@@ -860,12 +860,12 @@ impl<
         }
 
         // Print TPS
-        let elapsed = now.elapsed().as_secs_f64();
-        let tps = num_tx as f64 / elapsed;
-        println!(
-            "EW {} finished, executed {} txs ({:.2} tps)",
-            my_id, num_tx, tps
-        );
+        // let elapsed = now.elapsed().as_secs_f64();
+        // let tps = num_tx as f64 / elapsed;
+        // println!(
+        //     "EW {} finished, executed {} txs ({:.2} tps)",
+        //     my_id, num_tx, tps
+        // );
 
         // // todo - hack to get metrics (we should report live metrics instead)
         // for _ in 0..num_tx {
@@ -879,15 +879,8 @@ impl<
     }
 
     fn update_metrics(&self, tx: &TransactionWithEffects, metrics: &Arc<Metrics>) {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        let elapsed = (now - tx.timestamp) as f64 / 1000.0; // in fraction of seconds
-        metrics
-            .latency_s
-            .with_label_values(&["default"])
-            .observe(elapsed);
+        const WORKLOAD: &str = "default";
+        metrics.register_transaction(tx.timestamp, WORKLOAD);
     }
 }
 
