@@ -9,11 +9,11 @@ CREATE TABLE move_calls (
     move_function               TEXT    NOT NULL
 );
 CREATE INDEX idx_move_calls_epoch_etc ON move_calls (epoch, move_package, move_module, move_function);
+CREATE INDEX idx_move_calls_tx ON move_calls (transaction_sequence_number);
 
 CREATE TABLE move_call_metrics (
     -- Diesel only supports table with a primary key.
     id                          BIGSERIAL   PRIMARY KEY,
-    checkpoint_sequence_number  BIGINT      NOT NULL,
     epoch                       BIGINT      NOT NULL,
     day                         BIGINT      NOT NULL,
     move_package                TEXT        NOT NULL,
@@ -21,5 +21,4 @@ CREATE TABLE move_call_metrics (
     move_function               TEXT        NOT NULL,
     count                       BIGINT      NOT NULL
 );
-CREATE INDEX move_call_metrics_checkpoint ON move_call_metrics (checkpoint_sequence_number);
-CREATE INDEX move_call_metrics_day ON move_call_metrics (day);
+CREATE INDEX move_call_metrics_epoch_day ON move_call_metrics (epoch, day);

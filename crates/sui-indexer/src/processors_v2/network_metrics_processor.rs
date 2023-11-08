@@ -43,16 +43,22 @@ where
             .get_latest_epoch_peak_tps()
             .await
             .unwrap_or_default();
-        let mut last_processed_cp_seq = latest_tx_count_metrics.checkpoint_sequence_number;
-        let mut last_processed_peak_tps_epoch = latest_epoch_peak_tps.epoch;
+        let mut last_processed_cp_seq = latest_tx_count_metrics
+            .unwrap_or_default()
+            .checkpoint_sequence_number;
+        let mut last_processed_peak_tps_epoch = latest_epoch_peak_tps.unwrap_or_default().epoch;
         loop {
             let mut latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
-            while latest_stored_checkpoint.sequence_number
-                < last_processed_cp_seq + self.network_processor_metrics_batch_size
-            {
+            while if let Some(cp) = latest_stored_checkpoint {
+                cp.sequence_number
+                    < last_processed_cp_seq + self.network_processor_metrics_batch_size
+            } else {
+                true
+            } {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
             }
+
             self.store
                 .persist_tx_count_metrics(
                     last_processed_cp_seq + 1,
