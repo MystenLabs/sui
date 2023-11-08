@@ -14,7 +14,7 @@ use std::num::NonZeroUsize;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
-use rand::rngs::{OsRng, StdRng};
+use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -361,7 +361,7 @@ impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
     }
 }
 
-impl ObjectStore for Simulacrum<StdRng> {
+impl<T> ObjectStore for Simulacrum<T> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.store.get_object(object_id).cloned())
     }

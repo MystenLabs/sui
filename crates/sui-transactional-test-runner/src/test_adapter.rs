@@ -478,13 +478,25 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ViewCheckpoint => {
+                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
+                let chk = self
+                    .executor
+                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                Ok(Some(format!("{}", chk.data())))
+            }
             SuiSubcommand::CreateCheckpoint => {
                 self.executor.create_checkpoint().await?;
-                Ok(None)
+                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
+                Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
             SuiSubcommand::AdvanceEpoch => {
                 self.executor.advance_epoch().await?;
-                Ok(None)
+                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
+                let chk = self
+                    .executor
+                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                Ok(Some(format!("Epoch advanced: {}", chk.data().epoch)))
             }
             SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
                 self.executor

@@ -103,3 +103,5 @@ module test::m1 {
 // Advance third epoch
 //# advance-epoch
 
+//# view-checkpoint
+

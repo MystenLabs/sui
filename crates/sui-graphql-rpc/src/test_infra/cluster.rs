@@ -191,22 +191,42 @@ pub async fn start_test_indexer(
 }
 
 pub async fn simulator_commands_test_impl() {
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let test_file_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
         .join("test_infra")
+        .join("data")
         .join("example.move");
 
-    // Read the file into a string
-    let file_contents = std::fs::read_to_string(&path).unwrap();
+    let output_file_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("test_infra")
+        .join("data")
+        .join("example.exp");
 
-    let (_output, adapter) = move_transactional_test_runner::framework::handle_actual_output::<
+    // Read the file into a string
+    let file_contents = std::fs::read_to_string(&test_file_path).unwrap();
+
+    let (output, adapter) = move_transactional_test_runner::framework::handle_actual_output::<
         sui_transactional_test_runner::test_adapter::SuiTestAdapter,
     >(
-        &path,
+        &test_file_path,
         Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
     )
     .await
     .unwrap();
+
+    // Read the file into a string
+    let output_file_contents = match std::fs::read_to_string(&output_file_path) {
+        Ok(contents) => contents,
+        Err(_) => {
+            // If the file doesn't exist, create it
+            std::fs::write(&output_file_path, output.clone()).unwrap();
+            output.clone()
+        }
+    };
+
+    // Check that the output matches the expected output
+    assert_eq!(output_file_contents, output);
 
     let checkpoint = adapter.get_latest_checkpoint_sequence_number().unwrap();
     let checkpoint_info = adapter

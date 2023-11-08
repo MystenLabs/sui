@@ -158,6 +158,8 @@ pub enum SuiSubcommand {
     AdvanceEpoch,
     #[clap(name = "advance-clock")]
     AdvanceClock(AdvanceClockCommand),
+    #[clap(name = "view-checkpoint")]
+    ViewCheckpoint,
 }
 
 #[derive(Clone, Debug)]
