@@ -37,7 +37,8 @@
 #### &emsp;&emsp;[Filter Owner](#655351)
 #### &emsp;&emsp;[Object Connection](#655352)
 ### [Owner](#11)
-#### &emsp;&emsp;[Owner](#720885)
+#### &emsp;&emsp;[Dynamic Field Connection](#720885)
+#### &emsp;&emsp;[Owner](#720886)
 ### [Protocol Configs](#12)
 #### &emsp;&emsp;[Key Value](#786420)
 #### &emsp;&emsp;[Key Value Feature Flag](#786421)
@@ -838,6 +839,58 @@
 ## <a id=11></a>
 ## Owner
 ### <a id=720885></a>
+### Dynamic Field Connection
+####  defines a fragment for selecting fields from value matching either MoveValue or MoveObject
+####  a query that selects the name and value of the first dynamic field of the owner address
+
+><pre># defines a fragment for selecting fields from value matching either MoveValue or MoveObject
+>fragment DynamicFieldValueSelection on DynamicFieldValue {
+>  ... on MoveValue {
+>    type {
+>      repr
+>    }
+>    data
+>  }
+>  ... on MoveObject {
+>    hasPublicTransfer
+>    contents {
+>      type {
+>        repr
+>      }
+>      data
+>    }
+>  }
+>}
+>
+># a query that selects the name and value of the first dynamic field of the owner address
+>query DynamicFieldValue {
+>  owner(
+>    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+>  ) {
+>    dynamicFieldConnection(first:1){
+>      pageInfo {
+>        hasNextPage
+>        endCursor
+>      }
+>      edges {
+>        cursor
+>        node {
+>          name {
+>            type {
+>              repr
+>            }
+>            data
+>          }
+>          value {
+>            ...DynamicFieldValueSelection
+>          }
+>        }
+>      }
+>    }
+>  }
+>}</pre>
+
+### <a id=720886></a>
 ### Owner
 
 ><pre>{

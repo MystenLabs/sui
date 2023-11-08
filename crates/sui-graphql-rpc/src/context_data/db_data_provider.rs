@@ -13,6 +13,7 @@ use crate::{
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
+        dynamic_field::DynamicField,
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
@@ -88,9 +89,12 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
-use sui_types::{base_types::MoveObjectType, governance::StakedSui};
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, dynamic_field::Field, event::EventID,
+    base_types::{MoveObjectType, ObjectID},
+    digests::TransactionDigest,
+    dynamic_field::{DynamicFieldType, Field},
+    event::EventID,
+    governance::StakedSui,
     Identifier,
 };
 
@@ -551,7 +555,7 @@ impl PgManager {
     /// Create a new underlying reader, which is used by this type as well as other data providers.
     pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
-        config.set_pool_size(30);
+        config.set_pool_size(3);
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
@@ -1665,6 +1669,64 @@ impl PgManager {
         } else {
             Err(Error::InvalidFilter)
         }
+    }
+
+    pub(crate) async fn fetch_dynamic_fields(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        address: SuiAddress,
+    ) -> Result<Option<Connection<String, DynamicField>>, Error> {
+        let filter = ObjectFilter {
+            owner: Some(address),
+            ..Default::default()
+        };
+
+        let objs = self
+            .multi_get_objs(
+                first,
+                after,
+                last,
+                before,
+                Some(filter),
+                Some(OwnerType::Object),
+            )
+            .await?;
+
+        let Some((stored_objs, has_next_page)) = objs else {
+            return Ok(None);
+        };
+
+        let mut connection = Connection::new(false, has_next_page);
+
+        for stored_obj in stored_objs {
+            let df_object_id = stored_obj.df_object_id.as_ref().ok_or_else(|| {
+                Error::Internal("Dynamic field does not have df_object_id".to_string())
+            })?;
+            let cursor = SuiAddress::from_bytes(df_object_id)
+                .map_err(|e| Error::Internal(format!("{e}")))?;
+            let df_kind = match stored_obj.df_kind {
+                None => Err(Error::Internal("Dynamic field type is not set".to_string())),
+                Some(df_kind) => match df_kind {
+                    0 => Ok(DynamicFieldType::DynamicField),
+                    1 => Ok(DynamicFieldType::DynamicObject),
+                    _ => Err(Error::Internal("Unexpected df_kind value".to_string())),
+                },
+            }?;
+
+            connection.edges.push(Edge::new(
+                cursor.to_string(),
+                DynamicField {
+                    stored_object: stored_obj,
+                    df_object_id: cursor,
+                    df_kind,
+                },
+            ));
+        }
+
+        Ok(Some(connection))
     }
 }
 

@@ -14,6 +14,7 @@ type Address implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -224,6 +225,42 @@ type ConsensusCommitPrologueTransaction {
 }
 
 scalar DateTime
+
+type DynamicField {
+	name: MoveValue
+	value: DynamicFieldValue
+}
+
+type DynamicFieldConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [DynamicFieldEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DynamicField!]!
+}
+
+"""
+An edge in a connection.
+"""
+type DynamicFieldEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: DynamicField!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+union DynamicFieldValue = MoveObject | MoveValue
 
 type EndOfEpochData {
 	newCommittee: [CommitteeMember!]
@@ -678,6 +715,7 @@ type Object implements ObjectOwner {
 	The domain that a user address has explicitly configured as their default domain
 	"""
 	defaultNameServiceName: String
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
 type ObjectChange {
@@ -745,6 +783,7 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
 type Owner implements ObjectOwner {
@@ -760,6 +799,7 @@ type Owner implements ObjectOwner {
 	"""
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
 """

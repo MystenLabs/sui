@@ -4,11 +4,12 @@
 use async_graphql::{connection::Connection, *};
 use sui_json_rpc::name_service::NameServiceConfig;
 
-use crate::context_data::db_data_provider::PgManager;
+use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
     balance::Balance,
     coin::Coin,
+    dynamic_field::DynamicField,
     object::{Object, ObjectFilter},
     stake::Stake,
     sui_address::SuiAddress,
@@ -145,7 +146,6 @@ impl Address {
     // TODO disabled-for-rpc-1.5
     // pub async fn name_service_connection(
     //     &self,
-    //     ctx: &Context<'_>,
     //     first: Option<u64>,
     //     after: Option<String>,
     //     last: Option<u64>,
@@ -153,4 +153,14 @@ impl Address {
     // ) -> Result<Option<Connection<String, NameService>>> {
     //     unimplemented!()
     // }
+
+    pub async fn dynamic_field_connection(
+        &self,
+        _first: Option<u64>,
+        _after: Option<String>,
+        _last: Option<u64>,
+        _before: Option<String>,
+    ) -> Result<Option<Connection<String, DynamicField>>, Error> {
+        Err(crate::error::Error::DynamicFieldOnAddress)
+    }
 }

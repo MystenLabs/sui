@@ -11,6 +11,7 @@ pub(crate) mod committee_member;
 pub(crate) mod date_time;
 pub(crate) mod digest;
 pub(crate) mod display;
+pub(crate) mod dynamic_field;
 pub(crate) mod end_of_epoch_data;
 pub(crate) mod epoch;
 pub(crate) mod event;
