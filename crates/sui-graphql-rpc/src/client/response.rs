@@ -39,7 +39,7 @@ impl GraphqlResponse {
             .get(&VERSION_HEADER)
             .expect("Missing version header")
             .to_str()
-            .expect("Failed to parse version header")
+            .expect("Failed to parse version header to string")
             .to_string()
     }
 

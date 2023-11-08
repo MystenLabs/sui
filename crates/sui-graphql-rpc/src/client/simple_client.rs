@@ -7,7 +7,7 @@
 
 use axum::http::HeaderValue;
 use hyper::header;
-use reqwest::RequestBuilder;
+use reqwest::{RequestBuilder, Response};
 
 use crate::{
     config::{ConnectionConfig, ServiceConfig},
@@ -36,16 +36,7 @@ impl SimpleClient {
         query: String,
         headers: Vec<(header::HeaderName, header::HeaderValue)>,
     ) -> Result<serde_json::Value, reqwest::Error> {
-        let body = serde_json::json!({
-            "query": query,
-        });
-
-        let mut builder = self.inner.post(&self.url).json(&body);
-        for (key, value) in headers {
-            builder = builder.header(key, value);
-        }
-        let res = builder.send().await?;
-        res.json().await
+        self.execute_impl(query, headers).await?.json().await
     }
 
     pub async fn execute_to_graphql(
@@ -57,6 +48,14 @@ impl SimpleClient {
         if get_usage {
             headers.push((LIMITS_HEADER.clone(), HeaderValue::from_static("true")));
         }
+        Ok(GraphqlResponse::from_resp(self.execute_impl(query, headers).await?).await)
+    }
+
+    async fn execute_impl(
+        &self,
+        query: String,
+        headers: Vec<(header::HeaderName, header::HeaderValue)>,
+    ) -> Result<Response, reqwest::Error> {
         let body = serde_json::json!({
             "query": query,
         });
@@ -65,6 +64,6 @@ impl SimpleClient {
         for (key, value) in headers {
             builder = builder.header(key, value);
         }
-        Ok(GraphqlResponse::from_resp(builder.send().await?).await)
+        builder.send().await
     }
 }
