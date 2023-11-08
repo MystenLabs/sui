@@ -2,10 +2,6 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move/move-execution/v0/move-bytecode-verifier",
-    "external-crates/move/move-execution/v0/move-stdlib",
-    "external-crates/move/move-execution/v0/move-vm/runtime",
-
     "external-crates/move/crates/bytecode-interpreter-crypto",
     "external-crates/move/crates/bytecode-interpreter-testsuite",
     "external-crates/move/crates/bytecode-verifier-libfuzzer",
@@ -64,7 +60,12 @@ exclude = [
     "external-crates/move/crates/serializer-tests",
     "external-crates/move/crates/spec-flatten",
     "external-crates/move/crates/test-generation",
-
+    "external-crates/move/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move/move-execution/v0/move-stdlib",
+    "external-crates/move/move-execution/v0/move-vm/runtime",
+    "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v1/crates/move-stdlib",
+    "external-crates/move/move-execution/v1/crates/move-vm-runtime",
     "sdk/move-binary-format-wasm",
 ]
 
@@ -168,6 +169,9 @@ members = [
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
+    "sui-execution/v1/sui-adapter",
+    "sui-execution/v1/sui-move-natives",
+    "sui-execution/v1/sui-verifier",
 ]
 
 [workspace.package]
