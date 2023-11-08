@@ -84,10 +84,9 @@ impl MysticetiManager {
 
 #[async_trait]
 impl ConsensusManagerTrait for MysticetiManager {
-    #[allow(unused)]
     async fn start(
         &self,
-        config: &NodeConfig,
+        _config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
@@ -146,6 +145,7 @@ impl ConsensusManagerTrait for MysticetiManager {
                 registry.clone(),
                 Signer(Box::new(private_key.0.clone())),
                 consumer,
+                tx_validator.clone(),
             )
             .await
             {
