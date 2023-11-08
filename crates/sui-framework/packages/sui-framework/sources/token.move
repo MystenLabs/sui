@@ -74,7 +74,7 @@ module sui::token {
 
     /// `TokenPolicy` represents a set of rules that define what actions can be
     /// performed on a `Token` and which `Rules` must be satisfied for the
-    /// action for the transaction to succeeed.
+    /// action to succeed.
     ///
     /// - For the sake of availability, `TokenPolicy` is a `key`-only object.
     /// - Each `TokenPolicy` is managed by a matching `TokenPolicyCap`.
