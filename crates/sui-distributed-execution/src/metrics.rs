@@ -196,7 +196,7 @@ mod test {
     latency_s_count{workload="default"} 30001
     # HELP start_time_s Benchmark start time (time since UNIX epoch in seconds)
     # TYPE start_time_s counter
-    start_time_s 10
+    start_time_s 1699466202
     # HELP last_update_s Time since last update (time since UNIX epoch in seconds)
     # TYPE last_update_s counter
     last_update_s 1699466232"#;
@@ -212,6 +212,6 @@ mod test {
         assert_eq!(measurement.sum.as_secs_f64(), 486.526);
         assert_eq!(measurement.count, 30001);
 
-        assert_eq!(measurement.benchmark_duration().as_secs(), 1699466222);
+        assert_eq!(measurement.benchmark_duration().as_secs(), 30);
     }
 }
