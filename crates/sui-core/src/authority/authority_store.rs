@@ -20,8 +20,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, BackingPackageStore, ChildObjectResolver, MarkerTableQuery, MarkerValue, ObjectKey,
-    ObjectStore, PackageObjectArc,
+    get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
+    PackageObjectArc,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -421,11 +421,11 @@ impl AuthorityStore {
         }
     }
 
-    pub fn is_shared_object_deleted(
+    pub fn get_last_shared_object_deletion_info(
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<bool> {
+    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
         let object_key = ObjectKey::max_for_id(object_id);
         let marker_key = (epoch_id, object_key);
 
@@ -436,16 +436,19 @@ impl AuthorityStore {
             .skip_prior_to(&marker_key)?
             .next();
         match marker_entry {
-            Some(((epoch, key), marker)) => {
+            // Make sure the object was deleted or wrapped.
+            Some(((epoch, key), MarkerValue::SharedDeleted(digest))) => {
                 // Make sure object id matches and version is >= `version`
                 let object_id_matches = key.0 == *object_id;
                 // Make sure we don't have a stale epoch for some reason (e.g., a revert)
                 let epoch_data_ok = epoch == epoch_id;
-                // Make sure the object was deleted or wrapped.
-                let mark_data_ok = matches!(marker, MarkerValue::SharedDeleted(_));
-                Ok(object_id_matches && epoch_data_ok && mark_data_ok)
+                if object_id_matches && epoch_data_ok {
+                    Ok(Some((key.1, digest)))
+                } else {
+                    Ok(None)
+                }
             }
-            None => Ok(false),
+            _ => Ok(None),
         }
     }
 
@@ -1639,6 +1642,18 @@ impl AuthorityStore {
             .get_latest_object_ref_or_tombstone(object_id)
     }
 
+    /// Returns the latest object reference if and only if the object is still live (i.e. it does
+    /// not return tombstones)
+    pub fn get_latest_object_ref_if_alive(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        match self.get_latest_object_ref_or_tombstone(object_id)? {
+            Some(objref) if objref.2.is_alive() => Ok(Some(objref)),
+            _ => Ok(None),
+        }
+    }
+
     /// Returns the latest object we have for this object_id in the objects table.
     ///
     /// If no entry for the object_id is found, return None.
@@ -1964,33 +1979,6 @@ impl AuthorityStore {
             .collect();
         info!("Removing all versions of object: {:?}", entries);
         self.perpetual_tables.objects.multi_remove(entries).unwrap();
-    }
-}
-
-impl MarkerTableQuery for AuthorityStore {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.have_received_object_at_version(object_id, version, epoch_id)
-    }
-
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        Ok(self.get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)?)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.is_shared_object_deleted(object_id, epoch_id)
     }
 }
 

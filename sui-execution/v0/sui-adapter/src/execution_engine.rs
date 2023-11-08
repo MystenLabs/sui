@@ -38,7 +38,7 @@ mod checked {
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::transaction::InputObjects;
+    use sui_types::transaction::CheckedInputObjects;
     use sui_types::transaction::{
         Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
         TransactionKind,
@@ -55,7 +55,7 @@ mod checked {
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
@@ -73,6 +73,7 @@ mod checked {
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let input_objects = input_objects.into_inner();
         let shared_object_refs = input_objects.filter_shared_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let mut temporary_store =
@@ -183,9 +184,10 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         move_vm: &Arc<MoveVM>,
         tx_context: &mut TxContext,
-        input_objects: InputObjects,
+        input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let input_objects = input_objects.into_inner();
         let mut temporary_store =
             TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());

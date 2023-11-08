@@ -57,9 +57,9 @@ use sui_types::{
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{
-        CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-        TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
-        VerifiedTransaction,
+        CertifiedTransaction, CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
+        ObjectReadResultKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+        TransactionKind, VerifiedCertificate, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
 };
@@ -746,7 +746,7 @@ impl LocalExec {
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                input_objects,
+                CheckedInputObjects::new_for_replay(input_objects),
                 tx_info.gas.clone(),
                 gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
@@ -1553,15 +1553,14 @@ impl LocalExec {
         let mut imm_owned_inputs = vec![];
         let mut shared_inputs = vec![];
         let mut deleted_shared_info_map = BTreeMap::new();
-        let mut deleted_objects_mutability = BTreeMap::new();
 
         // for deleted shared objects, we need to look at the transaction dependencies to find the
         // correct transaction dependency for a deleted shared object.
         if !deleted_shared_objects.is_empty() {
             for tx_digest in tx_info.dependencies.iter() {
                 let tx_info = self.resolve_tx_components(tx_digest).await?;
-                for (obj_id, _, _) in tx_info.shared_object_refs.iter() {
-                    deleted_shared_info_map.insert(*obj_id, tx_info.tx_digest);
+                for (obj_id, version, _) in tx_info.shared_object_refs.iter() {
+                    deleted_shared_info_map.insert(*obj_id, (tx_info.tx_digest, *version));
                 }
             }
         }
@@ -1594,10 +1593,7 @@ impl LocalExec {
                         })
                     }
                 }
-                InputObjectKind::SharedMoveObject { id, mutable, .. } => {
-                    deleted_objects_mutability.insert(*id, *mutable);
-                    Ok(())
-                }
+                _ => Ok(()),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -1622,7 +1618,7 @@ impl LocalExec {
             .flat_map(|kind| match kind {
                 InputObjectKind::MovePackage(i) => {
                     // Okay to unwrap since we downloaded it
-                    Some((
+                    Some(ObjectReadResult::new(
                         *kind,
                         self.storage
                             .package_cache
@@ -1635,10 +1631,11 @@ impl LocalExec {
                                     .expect("Object download failed")
                                     .expect("Object not found on chain"),
                             )
-                            .clone(),
+                            .clone()
+                            .into(),
                     ))
                 }
-                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some((
+                InputObjectKind::ImmOrOwnedMoveObject(o_ref) => Some(ObjectReadResult::new(
                     *kind,
                     self.storage
                         .object_version_cache
@@ -1646,38 +1643,34 @@ impl LocalExec {
                         .expect("Cannot lock")
                         .get(&(o_ref.0, o_ref.1))
                         .unwrap()
-                        .clone(),
+                        .clone()
+                        .into(),
                 )),
-                InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version: _,
-                    mutable: _,
-                } if !deleted_shared_info_map.contains_key(id) => {
+                InputObjectKind::SharedMoveObject { id, .. }
+                    if !deleted_shared_info_map.contains_key(id) =>
+                {
                     // we already downloaded
-                    Some((
+                    Some(ObjectReadResult::new(
                         *kind,
-                        self.storage.live_objects_store.get(id).unwrap().clone(),
+                        self.storage
+                            .live_objects_store
+                            .get(id)
+                            .unwrap()
+                            .clone()
+                            .into(),
                     ))
                 }
-                InputObjectKind::SharedMoveObject { .. } => None,
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let (digest, version) = deleted_shared_info_map.get(id).unwrap();
+                    Some(ObjectReadResult::new(
+                        *kind,
+                        ObjectReadResultKind::DeletedSharedObject(*version, *digest),
+                    ))
+                }
             })
             .collect();
 
-        // Use the transaction dependency info that we computed above for the deleted shared
-        // objects to populated the deleted shared objects list for transaction inputs.
-        let mut deleted_objects = vec![];
-        for (obj_id, seqno, _) in deleted_shared_objects.iter() {
-            if let Some(tx_digest) = deleted_shared_info_map.get(obj_id) {
-                let object_mut = deleted_objects_mutability
-                    .get(obj_id)
-                    .expect("Deleted shared object must have a mutability entry");
-                deleted_objects.push((*obj_id, *seqno, *object_mut, *tx_digest));
-            } else {
-                panic!("Was unable to find the transaction dependency for the deleted shared object {}", obj_id);
-            }
-        }
-
-        Ok(InputObjects::new(resolved_input_objs, deleted_objects))
+        Ok(InputObjects::new(resolved_input_objs))
     }
 
     /// Given the OnChainTransactionInfo, download and store the input objects, and other info necessary
