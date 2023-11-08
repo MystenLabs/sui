@@ -13,8 +13,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { mainnetConnection } from '@mysten/sui.js/src/rpc/connection';
-import { JsonRpcProvider } from '@mysten/sui.js/src/providers/json-rpc-provider';
+
+import {SuiClient, ExecuteTransactionBlockParams} from "@mysten/sui.js/client";
+
+
+
 import { Label } from '@/components/ui/label';
 
 interface SignaturePubkeyPair {
@@ -77,7 +80,10 @@ export default function BroadcastTransaction() {
 	const [signature, setSignature] = useState('');
 	const [transaction, setTransaction] = useState('');
 	const [error, setError] = useState<Error | null>(null);
-	const provider = new JsonRpcProvider(mainnetConnection);
+	const [digest, setDigest] = useState('');
+	const client = new SuiClient({
+		url: "https://fullnode.mainnet.sui.io:443"
+		});
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -102,6 +108,13 @@ export default function BroadcastTransaction() {
 					try {
 						const parsedSignature = parseSerializedSignature(signature);
 						const parsedTransaction = transaction;
+						console.log(transaction);
+						const response = await client.executeTransactionBlock({
+							transactionBlock: parsedTransaction,
+							signature: parsedSignature.serializedSignature,
+						});
+						console.log(response);
+						setDigest(response.digest);
 					} catch (e) {
 						setError(e as Error);
 					}
@@ -126,9 +139,25 @@ export default function BroadcastTransaction() {
 					/>
 				</div>
 				<div>
-					<Button type="submit">Analyze Signature</Button>
+					<Button type="submit">Broadcast Transaction</Button>
 				</div>
 			</form>
+
+			{digest && (
+			<Card key={digest}>
+				<CardHeader>
+					<CardTitle>Sui Transaction Digest</CardTitle>
+						<CardDescription>
+							View TX Digest on <a className="text-blue-500" href={`https://suiexplorer.com/txblock/${digest}`}>Sui Explorer</a>
+						</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<div className="flex flex-col gap-2">
+						<div className="bg-muted rounded text-sm font-mono p-2 break-all">{digest}</div>
+					</div>
+				</CardContent>
+			</Card>
+			)}
 		</div>
 	);
 }
