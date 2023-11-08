@@ -44,7 +44,6 @@ use crate::committee::{Committee, EpochId, StakeUnit};
 use crate::error::{SuiError, SuiResult};
 use crate::signature::GenericSignature;
 use crate::sui_serde::{Readable, SuiBitmap};
-use crate::zk_login_authenticator::ZkLoginAuthenticator;
 pub use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::error::FastCryptoError;
@@ -1644,14 +1643,13 @@ impl SignatureScheme {
         }
     }
 }
-
 /// Unlike [enum Signature], [enum CompressedSignature] does not contain public key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub enum CompressedSignature {
     Ed25519(Ed25519SignatureAsBytes),
     Secp256k1(Secp256k1SignatureAsBytes),
     Secp256r1(Secp256r1SignatureAsBytes),
-    ZkLogin(ZkLoginAuthenticator),
+    ZkLogin(GenericSignature), // Rely on GenericSignature to handle serde.
 }
 
 impl AsRef<[u8]> for CompressedSignature {

@@ -12,11 +12,14 @@ import { Secp256r1Keypair } from '../keypairs/secp256r1/keypair.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import type { ExportedKeypair, Keypair } from './keypair.js';
 import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
-import { decodeMultiSig } from './multisig.js';
+import { decodeMultiSig, SIGNATURE_SCHEME_TO_PUBLIC_KEY } from './multisig.js';
 import type { PublicKey } from './publickey.js';
 import { SIGNATURE_FLAG_TO_SCHEME } from './signature-scheme.js';
 import type { SignatureScheme } from './signature-scheme.js';
 import type { SerializedSignature } from './signature.js';
+import { parseZkLoginSignature } from '../zklogin/signature.js';
+import { extractClaimValue } from '../zklogin/jwt-utils.js';
+import { toZkLoginPublicIdentifier } from '../keypairs/zklogin/publickey.js';
 
 /**
  * Pair of signature and corresponding public key
@@ -38,39 +41,48 @@ export function toParsedSignaturePubkeyPair(
 	const bytes = fromB64(serializedSignature);
 	const signatureScheme =
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
+	switch (signatureScheme) {
+		case 'MultiSig':
+			try {
+				return decodeMultiSig(serializedSignature);
+			} catch (e) {
+				// Legacy format multisig do not render.
+				throw new Error('legacy multisig viewing unsupported');
+			}
+		case 'ZkLogin':
+			const signatureBytes = bytes.slice(1);
+			console.log('!signatureBytes', signatureBytes);
+			const { inputs } = parseZkLoginSignature(signatureBytes);
+			console.log('inputs', inputs);
+			const { issBase64Details, addressSeed } = inputs;
+			console.log('issBase64Details', issBase64Details);
+			const iss = extractClaimValue<string>(issBase64Details, 'iss');
+			console.log('iss', iss);
+			const publicIdentifier = toZkLoginPublicIdentifier(BigInt(addressSeed), iss);
+			console.log('publicIdentifier', publicIdentifier);
+			return [
+				{
+					signatureScheme,
+					signature: signatureBytes,
+					pubKey: publicIdentifier,
+				},
+			];
+		case 'ED25519':
+		case 'Secp256k1':
+		case 'Secp256r1':
+			const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[signatureScheme];
+			const signature = bytes.slice(1, bytes.length - PublicKey.SIZE);
+			const pubkeyBytes = bytes.slice(1 + signature.length);
+			const pubKey = new PublicKey(pubkeyBytes);
 
-	if (signatureScheme === 'MultiSig') {
-		try {
-			return decodeMultiSig(serializedSignature);
-		} catch (e) {
-			// Legacy format multisig do not render.
-			throw new Error('legacy multisig viewing unsupported');
-		}
+			return [
+				{
+					signatureScheme,
+					signature,
+					pubKey,
+				},
+			];
 	}
-
-	if (signatureScheme === 'ZkLogin') {
-		throw new Error('ZkLogin signature not supported');
-	}
-
-	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
-		ED25519: Ed25519PublicKey,
-		Secp256k1: Secp256k1PublicKey,
-		Secp256r1: Secp256r1PublicKey,
-	};
-
-	const PublicKey = SIGNATURE_SCHEME_TO_PUBLIC_KEY[signatureScheme];
-
-	const signature = bytes.slice(1, bytes.length - PublicKey.SIZE);
-	const pubkeyBytes = bytes.slice(1 + signature.length);
-	const pubKey = new PublicKey(pubkeyBytes);
-
-	return [
-		{
-			signatureScheme,
-			signature,
-			pubKey,
-		},
-	];
 }
 
 /// Expects to parse a single signature pubkey pair from the serialized

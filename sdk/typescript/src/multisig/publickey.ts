@@ -21,9 +21,14 @@ import { publicKeyFromRawBytes } from '../verify/index.js';
 type CompressedSignature =
 	| { ED25519: number[] }
 	| { Secp256k1: number[] }
-	| { Secp256r1: number[] };
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
-type PublicKeyEnum = { ED25519: number[] } | { Secp256k1: number[] } | { Secp256r1: number[] };
+type PublicKeyEnum =
+	| { ED25519: number[] }
+	| { Secp256k1: number[] }
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
 type PubkeyEnumWeightPair = {
 	pubKey: PublicKeyEnum;
@@ -275,8 +280,7 @@ export class MultiSigPublicKey extends PublicKey {
 			bitmap,
 			multisig_pk: this.multisigPublicKey,
 		};
-
-		const bytes = bcs.MultiSig.serialize(multisig).toBytes();
+		const bytes = bcs.MultiSig.serialize(multisig, { maxSize: 2096 }).toBytes();
 		let tmp = new Uint8Array(bytes.length + 1);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 		tmp.set(bytes, 1);

@@ -441,8 +441,8 @@ impl KeyToolCommand {
                         .get(i as usize)
                         .ok_or(anyhow!("Invalid public keys index".to_string()))?;
                     output.participating_keys_signatures.push(DecodedMultiSig {
-                        public_base64_key: Base64::encode(sig.as_ref()).clone(),
-                        sig_base64: pk.encode_base64().clone(),
+                        public_base64_key: pk.encode_base64().clone(),
+                        sig_base64: Base64::encode(sig.as_ref()),
                         weight: w.to_string(),
                     })
                 }

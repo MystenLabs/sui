@@ -150,9 +150,9 @@ impl GenericSignature {
                     }),
                 }
             }
-            GenericSignature::ZkLoginAuthenticator(s) => {
-                Ok(CompressedSignature::ZkLogin(s.clone()))
-            }
+            GenericSignature::ZkLoginAuthenticator(s) => Ok(CompressedSignature::ZkLogin(
+                GenericSignature::ZkLoginAuthenticator(s.clone()),
+            )),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
             }),

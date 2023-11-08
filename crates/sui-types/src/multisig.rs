@@ -289,10 +289,13 @@ impl MultiSig {
 
         for s in sigs {
             match s {
-                CompressedSignature::ZkLogin(mut z) => {
-                    z.inputs.init()?;
-                    new_sigs.push(CompressedSignature::ZkLogin(z));
-                }
+                CompressedSignature::ZkLogin(mut s) => match s {
+                    GenericSignature::ZkLoginAuthenticator(ref mut z) => {
+                        z.inputs.init()?;
+                        new_sigs.push(CompressedSignature::ZkLogin(s));
+                    }
+                    _ => return Err(FastCryptoError::InvalidInput),
+                },
                 _ => new_sigs.push(s),
             }
         }
@@ -312,7 +315,9 @@ impl MultiSig {
         self.sigs
             .iter()
             .filter_map(|s| match s {
-                CompressedSignature::ZkLogin(z) => Some(z.clone()),
+                CompressedSignature::ZkLogin(GenericSignature::ZkLoginAuthenticator(z)) => {
+                    Some(z.to_owned())
+                }
                 _ => None,
             })
             .collect::<Vec<ZkLoginAuthenticator>>()
