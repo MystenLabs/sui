@@ -25,15 +25,14 @@ import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
+import { useAppsBackend, useCoinMetadata, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, parseStructTag, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
@@ -268,6 +267,23 @@ export function MyTokens({
 	);
 }
 
+function getMostNestedName(parsed: ReturnType<typeof parseStructTag>) {
+	if (parsed.typeParams.length === 0) {
+		return parsed.name;
+	}
+
+	if (typeof parsed.typeParams[0] === 'string') {
+		return parsed.typeParams[0];
+	}
+
+	return getMostNestedName(parsed.typeParams[0]);
+}
+
+function getFallbackSymbol(coinType: string) {
+	const parsed = parseStructTag(coinType);
+	return getMostNestedName(parsed);
+}
+
 function TokenDetails({ coinType }: TokenDetailsProps) {
 	const isDefiWalletEnabled = useIsWalletDefiEnabled();
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
@@ -325,7 +341,9 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const tokenBalance = BigInt(coinBalance?.totalBalance ?? 0);
 	const [formatted] = useFormatCoin(tokenBalance, activeCoinType);
 
-	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
+	const { data: coinMetadata } = useCoinMetadata(activeCoinType);
+	const coinSymbol = coinMetadata ? coinMetadata.symbol : getFallbackSymbol(activeCoinType);
+
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
 	const isFirstTimeLoading = isPending && !isFetched;
 
