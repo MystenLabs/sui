@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, *};
-use sui_json_rpc::name_service::NameServiceConfig;
-
 use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
+    coin::CoinMetadata,
     epoch::Epoch,
     event::{Event, EventFilter},
     object::{Object, ObjectFilter},
@@ -21,6 +19,8 @@ use crate::{
     context_data::db_data_provider::PgManager,
     error::{code, graphql_error, Error},
 };
+use async_graphql::{connection::Connection, *};
+use sui_json_rpc::{coin_api::parse_to_struct_tag, name_service::NameServiceConfig};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -213,5 +213,29 @@ impl Query {
             .fetch_latest_sui_system_state()
             .await
             .extend()
+    }
+
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>> {
+        let coin_struct = parse_to_struct_tag(&coin_type)?;
+        let coin_metadata = ctx
+            .data_unchecked::<PgManager>()
+            .inner
+            .get_coin_metadata_in_blocking_task(coin_struct.clone())
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))
+            .extend()?;
+
+        Ok(Some(CoinMetadata {
+            decimals: coin_metadata.as_ref().map(|c| c.decimals),
+            name: coin_metadata.as_ref().map(|c| c.name.clone()),
+            symbol: coin_metadata.as_ref().map(|c| c.symbol.clone()),
+            description: coin_metadata.as_ref().map(|c| c.description.clone()),
+            icon_url: coin_metadata.as_ref().and_then(|c| c.icon_url.clone()),
+            coin_type,
+        }))
     }
 }
