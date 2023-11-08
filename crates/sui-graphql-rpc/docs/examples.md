@@ -1415,10 +1415,10 @@
 >            }
 >          }
 >          amount
->        	coinType {
->            repr,
->            signature,
->            layout 
+>          coinType {
+>            repr
+>            signature
+>            layout
 >          }
 >        }
 >        dependencies {
