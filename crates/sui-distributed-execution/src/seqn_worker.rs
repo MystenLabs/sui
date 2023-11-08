@@ -1,5 +1,5 @@
-use std::cmp;
 use std::sync::Arc;
+use std::{cmp, time::SystemTime};
 
 use prometheus::Registry;
 use std::collections::HashMap;
@@ -384,6 +384,7 @@ impl SequenceWorkerState {
                         ground_truth_effects: Some(tx_effects.clone()),
                         child_inputs: None,
                         checkpoint_seq: Some(checkpoint_seq),
+                        timestamp: 0,
                     };
 
                     for ew_id in &ew_ids {
@@ -478,7 +479,7 @@ impl SequenceWorkerState {
         ew_ids: Vec<UniqueId>,
         tx_count: u64,
         duration: Duration,
-    ) {
+    ) -> Instant {
         let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         println!("Setting up benchmark...");
         let start_time = std::time::Instant::now();
@@ -521,28 +522,30 @@ impl SequenceWorkerState {
         let mut interval = tokio::time::interval(Duration::from_millis(burst_duration));
         interval.set_missed_tick_behavior(MissedTickBehavior::Burst);
 
-        let full_transactions: Vec<_> = transactions
-            .into_iter()
-            .map(|tx| TransactionWithEffects {
-                tx: tx.data().clone(),
-                ground_truth_effects: None,
-                child_inputs: None,
-                checkpoint_seq: None,
-            })
-            .collect();
-
+        let benchmark_start_time = std::time::Instant::now();
         println!("Starting benchmark");
-        for chunk in full_transactions.chunks(chunks_size) {
+        for chunk in transactions.chunks(chunks_size) {
             if counter % 1000 == 0 {
                 println!("Submitted {} txs", counter * chunks_size);
             }
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
             for tx in chunk {
+                let full_tx = TransactionWithEffects {
+                    tx: tx.data().clone(),
+                    ground_truth_effects: None,
+                    child_inputs: None,
+                    checkpoint_seq: None,
+                    timestamp: now,
+                };
                 for ew_id in &ew_ids {
                     out_to_network
                         .send(NetworkMessage {
                             src: 0,
                             dst: *ew_id,
-                            payload: SailfishMessage::ProposeExec(tx.clone()),
+                            payload: SailfishMessage::ProposeExec(full_tx.clone()),
                         })
                         .await
                         .expect("sending failed");
@@ -552,6 +555,7 @@ impl SequenceWorkerState {
             interval.tick().await;
         }
         println!("[SW] Benchmark terminated");
+        benchmark_start_time
 
         // for tx in iterator.take(BURST_SIZE) {
         //     let full_tx = TransactionWithEffects {

@@ -3,8 +3,11 @@ use dashmap::DashMap;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
-use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    time::SystemTime,
+};
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
@@ -36,10 +39,10 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tokio::time::{sleep, Duration};
 
-use crate::storage::WritableObjectStore;
 use crate::{
     metrics::Metrics,
     seqn_worker::{COMPONENT, WORKLOAD},
+    storage::WritableObjectStore,
 };
 
 use super::types::*;
@@ -506,8 +509,8 @@ impl<
     //     }
     // }
 
-    async fn init_genesis_objects(&self, tx_count: u64) {
-        let workload = Workload::new(tx_count, WORKLOAD);
+    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
+        let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         println!("Setting up accounts and gas...");
         let start_time = std::time::Instant::now();
         let ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
@@ -529,6 +532,7 @@ impl<
         &mut self,
         metrics: Arc<LimitsMetrics>,
         tx_count: u64,
+        duration: Duration,
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
         out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
@@ -555,7 +559,7 @@ impl<
 
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
-            self.init_genesis_objects(tx_count).await;
+            self.init_genesis_objects(tx_count, duration).await;
         }
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
@@ -647,10 +651,10 @@ impl<
                             eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
                         }
                     }
-                    if num_tx == tx_count {
-                        println!("EW {} executed {} txs", my_id, num_tx);
-                        break;
+                    if num_tx % 10_000 == 0 {
+                        println!("[task-queue] EW {} executed {} txs", my_id, num_tx);
                     }
+                    self.update_metrics(&tx_with_results.full_tx, &worker_metrics);
                 },
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(txid) = manager_receiver.recv() => {
@@ -783,9 +787,8 @@ impl<
                             }
                             manager.clean_up(&txid).await;
                             num_tx += 1;
-                            if num_tx == tx_count {
-                                println!("EW {} executed {} txs", my_id, num_tx);
-                                break;
+                            if num_tx % 10_000 == 0 {
+                                println!("[tx-results] EW {} executed {} txs", my_id, num_tx);
                             }
                             epoch_txs_semaphore -= 1;
                             assert!(epoch_txs_semaphore >= 0);
@@ -864,15 +867,27 @@ impl<
             my_id, num_tx, tps
         );
 
-        // todo - hack to get metrics (we should report live metrics instead)
-        for _ in 0..num_tx {
-            worker_metrics
-                .latency_s
-                .with_label_values(&["default"])
-                .observe(elapsed);
-        }
+        // // todo - hack to get metrics (we should report live metrics instead)
+        // for _ in 0..num_tx {
+        //     worker_metrics
+        //         .latency_s
+        //         .with_label_values(&["default"])
+        //         .observe(elapsed);
+        // }
 
         sleep(Duration::from_millis(1_000)).await;
+    }
+
+    fn update_metrics(&self, tx: &TransactionWithEffects, metrics: &Arc<Metrics>) {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let elapsed = (now - tx.timestamp) as f64 / 1000.0; // in fraction of seconds
+        metrics
+            .latency_s
+            .with_label_values(&["default"])
+            .observe(elapsed);
     }
 }
 

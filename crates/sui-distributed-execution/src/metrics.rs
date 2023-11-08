@@ -4,7 +4,7 @@
 use prometheus::{register_histogram_vec_with_registry, HistogramVec, Registry};
 
 pub const LATENCY_S: &str = "latency_s";
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 2.0];
+const LATENCY_SEC_BUCKETS: &[f64] = &[0.01, 0.015, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1., 2.0];
 
 #[derive(Clone)]
 pub struct Metrics {
