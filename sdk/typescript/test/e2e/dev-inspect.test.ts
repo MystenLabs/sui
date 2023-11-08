@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { TransactionBlock } from '../../src/builder';
-import { SuiClient, SuiObjectData } from '../../src/client';
+import { SuiClient } from '../../src/client';
 import { Keypair } from '../../src/cryptography';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -29,11 +29,11 @@ describe('Test dev inspect', () => {
 		const coins = await toolbox.getGasObjectsOwnedByAddress();
 
 		const tx = new TransactionBlock();
-		const coin_0 = coins[0].data as SuiObjectData;
+		const coin_0 = coins.data[0];
 		const obj = tx.moveCall({
 			target: `${packageId}::serializer_tests::return_struct`,
 			typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
-			arguments: [tx.pure(coin_0.objectId)],
+			arguments: [tx.pure(coin_0.coinObjectId)],
 		});
 
 		// TODO: Ideally dev inspect transactions wouldn't need this, but they do for now
