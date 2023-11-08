@@ -3,7 +3,6 @@
 
 import { SuiClient } from '@mysten/sui.js/client';
 import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui.js/cryptography';
-import { toB64 } from '@mysten/sui.js/utils';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
