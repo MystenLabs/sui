@@ -131,6 +131,43 @@ mod tests {
             .unwrap();
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn test_graphql_client_response() {
+        sleep(Duration::from_secs(5)).await;
+        let rng = StdRng::from_seed([12; 32]);
+        let mut sim = Simulacrum::new_with_rng(rng);
+
+        sim.create_checkpoint();
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let cluster =
+            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+
+        let query = r#"
+            query {
+                chainIdentifier
+            }
+        "#;
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, vec![])
+            .await
+            .unwrap();
+
+        assert_eq!(res.http_status().as_u16(), 200);
+        assert_eq!(res.http_version(), hyper::Version::HTTP_11);
+        assert!(res.graphql_version().unwrap().len() >= 5);
+        assert!(res.errors().is_empty());
+
+        let usage = res.usage().unwrap().unwrap();
+        assert_eq!(*usage.get("nodes").unwrap(), 1);
+        assert_eq!(*usage.get("depth").unwrap(), 1);
+        assert_eq!(*usage.get("variables").unwrap(), 0);
+        assert_eq!(*usage.get("fragments").unwrap(), 0);
+    }
+
     use sui_graphql_rpc::server::builder::tests::*;
 
     #[tokio::test]
