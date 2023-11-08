@@ -19,5 +19,5 @@ pub(crate) struct Balance {
 pub(crate) struct BalanceChange {
     pub(crate) owner: Option<Owner>,
     pub(crate) amount: Option<BigInt>,
-    // pub(crate) coin_type: MoveType,
+    pub(crate) coin_type: Option<MoveType>,
 }

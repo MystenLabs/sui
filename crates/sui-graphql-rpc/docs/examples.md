@@ -1415,6 +1415,11 @@
 >            }
 >          }
 >          amount
+>          coinType {
+>            repr
+>            signature
+>            layout
+>          }
 >        }
 >        dependencies {
 >          sender {

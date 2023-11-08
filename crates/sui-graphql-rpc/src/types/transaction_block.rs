@@ -12,6 +12,7 @@ use super::{
     digest::Digest,
     epoch::Epoch,
     gas::{GasEffects, GasInput},
+    move_type::MoveType,
     object_change::ObjectChange,
     owner::Owner,
     sui_address::SuiAddress,
@@ -263,6 +264,9 @@ impl BalanceChange {
             output.push(Some(BalanceChange {
                 owner: Some(owner),
                 amount: Some(amount),
+                coin_type: Some(MoveType::new(
+                    balance_change.coin_type.to_canonical_string(true),
+                )),
             }))
         }
         Ok(output)
