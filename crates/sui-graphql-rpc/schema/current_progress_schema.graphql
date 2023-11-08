@@ -46,6 +46,7 @@ type Balance {
 type BalanceChange {
 	owner: Owner
 	amount: BigInt
+	coinType: MoveType
 }
 
 type BalanceConnection {
