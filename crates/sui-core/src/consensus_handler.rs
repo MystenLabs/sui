@@ -334,8 +334,30 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                     ) {
                         stats.inc_num_user_transactions(authority_index as usize);
                     }
-                    let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, authority_index));
+                    if let ConsensusTransactionKind::RandomnessStateUpdate(
+                        randomness_round,
+                        bytes,
+                    ) = &transaction.kind
+                    {
+                        debug!("adding RandomnessStateUpdate tx for round {round:?}");
+                        let randomness_state_update_transaction = self
+                            .randomness_state_update_transaction(
+                                round,
+                                *randomness_round,
+                                bytes.clone(),
+                            );
+
+                        transactions.push((
+                            empty_bytes.as_slice(),
+                            SequencedConsensusTransactionKind::System(
+                                randomness_state_update_transaction,
+                            ),
+                            consensus_output.leader_author_index(),
+                        ));
+                    } else {
+                        let transaction = SequencedConsensusTransactionKind::External(transaction);
+                        transactions.push((serialized_transaction, transaction, authority_index));
+                    }
                 }
             }
         }
@@ -534,6 +556,27 @@ impl<T, C> ConsensusHandler<T, C> {
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 
+    fn randomness_state_update_transaction(
+        &self,
+        round: u64,
+        randomness_round: u64,
+        random_bytes: Vec<u8>,
+    ) -> VerifiedExecutableTransaction {
+        debug!("creating randomness state update transaction");
+        assert!(self.epoch_store.randomness_state_enabled());
+        let transaction = VerifiedTransaction::new_randomness_state_update(
+            self.epoch(),
+            round,
+            randomness_round,
+            random_bytes,
+            self.epoch_store
+                .epoch_start_config()
+                .randomness_obj_initial_shared_version()
+                .expect("randomness state obj must exist"),
+        );
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
     fn epoch(&self) -> EpochId {
         self.epoch_store.epoch()
     }
@@ -552,6 +595,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
         ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
+        ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
     }
 }
 

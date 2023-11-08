@@ -53,6 +53,8 @@ pub enum ConsensusTransactionKey {
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
     // the same id by malfunctioning providers.
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
+    // TODO-DNS is it ok for key to be unique only within epoch? If not need to add something besides randomness round
+    RandomnessStateUpdate(u64),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -79,6 +81,7 @@ impl Debug for ConsensusTransactionKey {
                     jwk
                 )
             }
+            Self::RandomnessStateUpdate(round) => write!(f, "RandomnessStateUpdate({round:?})"),
         }
     }
 }
@@ -146,7 +149,7 @@ pub enum ConsensusTransactionKind {
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityCapabilities),
     NewJWKFetched(AuthorityName, JwkId, JWK),
-    RandomnessStateUpdate, // TODO-DNS add state to this variant
+    RandomnessStateUpdate(u64, Vec<u8>),
 }
 
 impl ConsensusTransaction {
@@ -251,6 +254,9 @@ impl ConsensusTransaction {
                     id.clone(),
                     key.clone(),
                 )))
+            }
+            ConsensusTransactionKind::RandomnessStateUpdate(round, _bytes) => {
+                ConsensusTransactionKey::RandomnessStateUpdate(*round)
             }
         }
     }

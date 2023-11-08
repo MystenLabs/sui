@@ -13,8 +13,7 @@ use crate::{id::UID, SUI_FRAMEWORK_ADDRESS, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
 pub const RANDOMNESS_MODULE_NAME: &IdentStr = ident_str!("random");
 pub const RANDOMNESS_STATE_STRUCT_NAME: &IdentStr = ident_str!("Random");
-pub const RANDOMNESS_STATE_UPDATE_FUNCTION_NAME: &IdentStr =
-    ident_str!("update_randomness_state");
+pub const RANDOMNESS_STATE_UPDATE_FUNCTION_NAME: &IdentStr = ident_str!("update_randomness_state");
 pub const RANDOMNESS_STATE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const RESOLVED_SUI_RANDOMNESS_STATE: (&AccountAddress, &IdentStr, &IdentStr) = (
     &SUI_FRAMEWORK_ADDRESS,
@@ -39,9 +38,7 @@ pub struct RandomInner {
     pub random_bytes: Vec<u8>,
 }
 
-pub fn get_randomness_state(
-    object_store: &dyn ObjectStore,
-) -> SuiResult<Option<RandomInner>> {
+pub fn get_randomness_state(object_store: &dyn ObjectStore) -> SuiResult<Option<RandomInner>> {
     let outer = object_store.get_object(&SUI_RANDOMNESS_STATE_OBJECT_ID)?;
     let Some(outer) = outer else {
         return Ok(None);
@@ -56,8 +53,8 @@ pub fn get_randomness_state(
     assert_eq!(outer.version, RANDOMNESS_STATE_VERSION);
 
     let id = outer.id.id.bytes;
-    let inner: RandomInner =
-        get_dynamic_field_from_store(object_store, id, &outer.version).map_err(|err| {
+    let inner: RandomInner = get_dynamic_field_from_store(object_store, id, &outer.version)
+        .map_err(|err| {
             SuiError::DynamicFieldReadError(format!(
             "Failed to load sui system state inner object with ID {id:?} and version {:?}: {err:?}",
             outer.version,

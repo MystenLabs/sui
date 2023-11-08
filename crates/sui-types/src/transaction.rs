@@ -22,7 +22,8 @@ use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -1096,6 +1097,7 @@ impl TransactionKind {
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
                 | TransactionKind::AuthenticatorStateUpdate(_)
+                | TransactionKind::RandomnessStateUpdate(_)
                 | TransactionKind::EndOfEpochTransaction(_)
         )
     }
@@ -1151,6 +1153,13 @@ impl TransactionKind {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version,
+                    mutable: true,
+                })))
+            }
+            Self::RandomnessStateUpdate(update) => {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: update.randomness_obj_initial_shared_version,
                     mutable: true,
                 })))
             }
@@ -2363,6 +2372,24 @@ impl VerifiedTransaction {
             authenticator_obj_initial_shared_version,
         }
         .pipe(TransactionKind::AuthenticatorStateUpdate)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_randomness_state_update(
+        epoch: u64,
+        round: u64,
+        randomness_round: u64,
+        random_bytes: Vec<u8>,
+        randomness_obj_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        RandomnessStateUpdate {
+            epoch,
+            round,
+            randomness_round,
+            random_bytes,
+            randomness_obj_initial_shared_version,
+        }
+        .pipe(TransactionKind::RandomnessStateUpdate)
         .pipe(Self::new_system_transaction)
     }
 

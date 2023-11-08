@@ -775,10 +775,9 @@ impl AuthorityPerEpochStore {
             .is_some()
     }
 
-    // Returns true if authenticator state is enabled in the protocol config *and* the
-    // authenticator state object already exists
+    // Returns true if randomness state is enabled in the protocol config *and* the
+    // randomness state object already exists
     pub fn randomness_state_enabled(&self) -> bool {
-        // TODO-DNS use this somewhere?
         self.protocol_config().random_beacon() && self.randomness_state_exists()
     }
 
@@ -1988,6 +1987,10 @@ impl AuthorityPerEpochStore {
                     return None;
                 }
             }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
+                ..
+            }) => {} // TODO-DNS anything to verify?
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))
@@ -2479,6 +2482,13 @@ impl AuthorityPerEpochStore {
                     );
                 }
                 Ok(ConsensusCertificateResult::ConsensusMessage)
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessStateUpdate(_, _),
+                ..
+            }) => {
+                // These are always generated as System transactions (handled below).
+                panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
                 if !self

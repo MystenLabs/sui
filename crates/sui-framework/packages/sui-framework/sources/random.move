@@ -15,7 +15,6 @@ module sui::random {
     // Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
-    const EInvalidRandomnessUpdate: u64 = 2;
 
     const CurrentVersion: u64 = 1;
 
@@ -79,6 +78,7 @@ module sui::random {
         inner
     }
 
+    #[allow(unused_function)] // TODO: remove annotation after implementing user-facing API
     fun load_inner(
         self: &Random,
     ): &RandomInner {
@@ -103,14 +103,13 @@ let inner: &RandomInner = dynamic_field::borrow(&self.id, self.version);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
-        // Randomness should only be incremented.
+        // Randomness should only be incremented. Ignore out-of-order updates.
         let epoch = tx_context::epoch(ctx);
         let inner = load_inner_mut(self);
-        assert!(
-            (epoch == inner.epoch + 1 && inner.randomness_round == 0) ||
-                (new_round == inner.randomness_round + 1),
-            EInvalidRandomnessUpdate
-        );
+        if (!((epoch == inner.epoch + 1 && inner.randomness_round == 0) ||
+                new_round == inner.randomness_round + 1)) {
+            return
+        };
 
         inner.epoch = tx_context::epoch(ctx);
         inner.randomness_round = new_round;

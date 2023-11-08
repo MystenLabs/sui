@@ -5,7 +5,6 @@ use anyhow::{Context, Result};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use std::{fs, path::Path};
 use sui_types::authenticator_state::{
     get_authenticator_state, get_authenticator_state_obj_initial_shared_version,
@@ -20,6 +19,7 @@ use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
 };
+use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateTrait,
     SuiSystemStateWrapper, SuiValidatorGenesis,
