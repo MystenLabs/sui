@@ -1,5 +1,5 @@
-use std::cmp;
 use std::sync::Arc;
+use std::{cmp, time::SystemTime};
 
 use prometheus::Registry;
 use std::collections::HashMap;
@@ -25,8 +25,11 @@ use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
-use tokio::sync::{mpsc, watch};
 use tokio::time::{sleep, Duration};
+use tokio::{
+    sync::{mpsc, watch},
+    time::MissedTickBehavior,
+};
 use typed_store::rocks::default_db_options;
 
 use super::types::*;
@@ -381,6 +384,7 @@ impl SequenceWorkerState {
                         ground_truth_effects: Some(tx_effects.clone()),
                         child_inputs: None,
                         checkpoint_seq: Some(checkpoint_seq),
+                        timestamp: 0,
                     };
 
                     for ew_id in &ew_ids {
@@ -474,8 +478,9 @@ impl SequenceWorkerState {
         out_to_network: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
         tx_count: u64,
-    ) {
-        let workload = Workload::new(tx_count, WORKLOAD);
+        duration: Duration,
+    ) -> Instant {
+        let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         println!("Setting up benchmark...");
         let start_time = std::time::Instant::now();
         let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
@@ -510,23 +515,65 @@ impl SequenceWorkerState {
             1000f64 * workload.tx_count as f64 / elapsed,
         );
 
-        for tx in transactions {
-            let full_tx = TransactionWithEffects {
-                tx: tx.data().clone(),
-                ground_truth_effects: None,
-                child_inputs: None,
-                checkpoint_seq: None,
-            };
-            for ew_id in &ew_ids {
-                out_to_network
-                    .send(NetworkMessage {
-                        src: 0,
-                        dst: *ew_id,
-                        payload: SailfishMessage::ProposeExec(full_tx.clone()),
-                    })
-                    .await
-                    .expect("sending failed");
+        const PRECISION: u64 = 20;
+        let burst_duration = 1000 / PRECISION;
+        let chunks_size = (tx_count / PRECISION) as usize;
+        let mut counter = 0;
+        let mut interval = tokio::time::interval(Duration::from_millis(burst_duration));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Burst);
+
+        let benchmark_start_time = std::time::Instant::now();
+        println!("Starting benchmark");
+        for chunk in transactions.chunks(chunks_size) {
+            if counter % 1000 == 0 {
+                println!("Submitted {} txs", counter * chunks_size);
             }
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_millis();
+            for tx in chunk {
+                let full_tx = TransactionWithEffects {
+                    tx: tx.data().clone(),
+                    ground_truth_effects: None,
+                    child_inputs: None,
+                    checkpoint_seq: None,
+                    timestamp: now,
+                };
+                for ew_id in &ew_ids {
+                    out_to_network
+                        .send(NetworkMessage {
+                            src: 0,
+                            dst: *ew_id,
+                            payload: SailfishMessage::ProposeExec(full_tx.clone()),
+                        })
+                        .await
+                        .expect("sending failed");
+                }
+            }
+            counter += 1;
+            interval.tick().await;
         }
+        println!("[SW] Benchmark terminated");
+        benchmark_start_time
+
+        // for tx in iterator.take(BURST_SIZE) {
+        //     let full_tx = TransactionWithEffects {
+        //         tx: tx.data().clone(),
+        //         ground_truth_effects: None,
+        //         child_inputs: None,
+        //         checkpoint_seq: None,
+        //     };
+        //     for ew_id in &ew_ids {
+        //         out_to_network
+        //             .send(NetworkMessage {
+        //                 src: 0,
+        //                 dst: *ew_id,
+        //                 payload: SailfishMessage::ProposeExec(full_tx.clone()),
+        //             })
+        //             .await
+        //             .expect("sending failed");
+        //     }
+        // }
     }
 }
