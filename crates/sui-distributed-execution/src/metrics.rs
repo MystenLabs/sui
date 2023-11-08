@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io::BufRead, time::Duration};
+use std::{cmp::max, collections::HashMap, io::BufRead, time::Duration};
 
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_with_registry, HistogramVec,
@@ -60,11 +60,9 @@ impl Metrics {
 
     /// Register the start time. Should be called once before any transactions are registered.
     pub fn register_start_time(&self) {
-        let now = Self::now().as_secs();
-        if self.start_time_s.get() < now {
-            return;
+        if self.start_time_s.get() == 0 {
+            self.start_time_s.inc_by(Self::now().as_secs());
         }
-        self.start_time_s.inc_by(now);
     }
 
     /// Register a transaction. The parameter `tx_submission_timestamp` is the time since the UNIX
@@ -146,23 +144,19 @@ impl Measurement {
                     prometheus_parse::Value::Counter(value) => Duration::from_secs_f64(value),
                     _ => panic!("Unexpected scraped value"),
                 };
-                if time != Duration::default() {
-                    start_time = time;
-                }
+                start_time = max(start_time, time);
             } else if sample.metric == LAST_UPDATE_S {
                 let time = match sample.value {
                     prometheus_parse::Value::Counter(value) => Duration::from_secs_f64(value),
                     _ => panic!("Unexpected scraped value"),
                 };
-                if time != Duration::default() {
-                    last_update = time;
-                }
+                last_update = max(last_update, time);
             }
         }
 
         for measurement in measurements.values_mut() {
-            measurement.start_time = start_time;
-            measurement.last_update = last_update;
+            measurement.start_time = max(measurement.start_time, start_time);
+            measurement.last_update = max(measurement.last_update, last_update);
         }
         measurements
     }
