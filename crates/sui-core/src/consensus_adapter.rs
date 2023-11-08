@@ -289,7 +289,7 @@ impl SubmitToConsensus for LazyNarwhalClient {
 /// Submit Sui certificates to the consensus.
 pub struct ConsensusAdapter {
     /// The network client connecting to the consensus node of this authority.
-    consensus_client: Box<dyn SubmitToConsensus>,
+    consensus_client: Arc<dyn SubmitToConsensus>,
     /// Authority pubkey.
     authority: AuthorityName,
     /// The limit to number of inflight transactions at this node.
@@ -303,7 +303,7 @@ pub struct ConsensusAdapter {
     /// as delay step.
     submit_delay_step_override: Option<Duration>,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
-    connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+    connection_monitor_status: Arc<dyn CheckConnection>,
     /// A structure to check the reputation scores populated by Consensus
     low_scoring_authorities: ArcSwap<Arc<ArcSwap<HashMap<AuthorityName, u64>>>>,
     /// The throughput profiler to be used when making decisions to submit to consensus
@@ -337,9 +337,9 @@ pub struct ConnectionMonitorStatusForTests {}
 impl ConsensusAdapter {
     /// Make a new Consensus adapter instance.
     pub fn new(
-        consensus_client: Box<dyn SubmitToConsensus>,
+        consensus_client: Arc<dyn SubmitToConsensus>,
         authority: AuthorityName,
-        connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+        connection_monitor_status: Arc<dyn CheckConnection>,
         max_pending_transactions: usize,
         max_pending_local_submissions: usize,
         max_submit_position: Option<usize>,
@@ -1168,11 +1168,11 @@ mod adapter_tests {
 
         // When we define max submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
             )),
             *committee.authority_by_index(0).unwrap(),
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             Some(1),
@@ -1200,11 +1200,11 @@ mod adapter_tests {
 
         // Without submit position and delay step
         let consensus_adapter = ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(
+            Arc::new(LazyNarwhalClient::new(
                 "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
             )),
             *committee.authority_by_index(0).unwrap(),
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             None,

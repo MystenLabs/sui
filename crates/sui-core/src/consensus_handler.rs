@@ -79,7 +79,6 @@ impl ConsensusHandlerInitializer {
             )),
         }
     }
-
     pub fn new_consensus_handler(
         &self,
     ) -> ConsensusHandler<Arc<AuthorityStore>, CheckpointService> {
@@ -470,24 +469,30 @@ impl AsyncTransactionScheduler {
 /// During initialization, the sender is passed into Mysticeti which can send consensus output
 /// to the channel.
 pub struct MysticetiConsensusHandler {
-    _handle: tokio::task::JoinHandle<()>,
+    handle: tokio::task::JoinHandle<()>,
 }
 
 impl MysticetiConsensusHandler {
     pub fn new(
-        mut consensus_handler: ConsensusHandler<AuthorityStore, CheckpointService>,
-        mut receiver: tokio::sync::mpsc::Receiver<
+        mut consensus_handler: ConsensusHandler<Arc<AuthorityStore>, CheckpointService>,
+        mut receiver: tokio::sync::mpsc::UnboundedReceiver<
             mysticeti_core::consensus::linearizer::CommittedSubDag,
         >,
     ) -> Self {
-        let _handle = spawn_monitored_task!(async move {
+        let handle = spawn_monitored_task!(async move {
             while let Some(committed_subdag) = receiver.recv().await {
                 consensus_handler
                     .handle_consensus_output_internal(committed_subdag)
                     .await;
             }
         });
-        Self { _handle }
+        Self { handle }
+    }
+}
+
+impl Drop for MysticetiConsensusHandler {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }
 

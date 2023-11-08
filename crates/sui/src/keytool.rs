@@ -42,8 +42,8 @@ use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use sui_types::transaction::TransactionData;
-use sui_types::utils::get_inputs;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+use sui_types::zk_login_util::get_zklogin_inputs;
 use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
@@ -777,7 +777,7 @@ impl KeyToolCommand {
                 let s = Signature::new_secure(&intent_msg, &skp);
 
                 let sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
-                    get_inputs(), // this is for the fixed keypair
+                    get_zklogin_inputs(), // this is for the fixed keypair
                     10,
                     s,
                 ));

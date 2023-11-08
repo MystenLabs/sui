@@ -5,7 +5,7 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
-    "build": "docusaurus build",
+    "build": "node src/utils/getopenrpcspecs.js; docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -27,7 +27,7 @@
     "@mdx-js/react": "^1.6.22",
     "@mui/material": "^5.14.8",
     "autoprefixer": "^10.4.15",
-    "axios": "^1.5.1",
+    "axios": "^1.6.0",
     "clsx": "^2.0.0",
     "docusaurus-plugin-includes": "^1.1.4",
     "firebase": "^10.4.0",

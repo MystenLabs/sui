@@ -2,10 +2,6 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move/move-execution/v0/move-bytecode-verifier",
-    "external-crates/move/move-execution/v0/move-stdlib",
-    "external-crates/move/move-execution/v0/move-vm/runtime",
-
     "external-crates/move/crates/bytecode-interpreter-crypto",
     "external-crates/move/crates/bytecode-interpreter-testsuite",
     "external-crates/move/crates/bytecode-verifier-libfuzzer",
@@ -54,7 +50,6 @@ exclude = [
     "external-crates/move/crates/move-unit-test",
     "external-crates/move/crates/move-vm-config",
     "external-crates/move/crates/move-vm-integration-tests",
-    "external-crates/move/crates/move-vm-paranoid-tests",
     "external-crates/move/crates/move-vm-profiler",
     "external-crates/move/crates/move-vm-runtime",
     "external-crates/move/crates/move-vm-test-utils",
@@ -64,7 +59,12 @@ exclude = [
     "external-crates/move/crates/serializer-tests",
     "external-crates/move/crates/spec-flatten",
     "external-crates/move/crates/test-generation",
-
+    "external-crates/move/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move/move-execution/v0/move-stdlib",
+    "external-crates/move/move-execution/v0/move-vm/runtime",
+    "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v1/crates/move-stdlib",
+    "external-crates/move/move-execution/v1/crates/move-vm-runtime",
     "sdk/move-binary-format-wasm",
 ]
 
@@ -168,6 +168,9 @@ members = [
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
+    "sui-execution/v1/sui-adapter",
+    "sui-execution/v1/sui-move-natives",
+    "sui-execution/v1/sui-verifier",
 ]
 
 [workspace.package]
@@ -521,9 +524,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52"}
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "802c1ac98061687d6ce024849c747a250dbeea52", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc"}
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }

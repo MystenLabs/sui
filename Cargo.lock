@@ -3615,7 +3615,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.7"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=802c1ac98061687d6ce024849c747a250dbeea52#802c1ac98061687d6ce024849c747a250dbeea52"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=517ec93ad2eba1807c9508f14953814a33523edc#517ec93ad2eba1807c9508f14953814a33523edc"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3671,7 +3671,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=802c1ac98061687d6ce024849c747a250dbeea52#802c1ac98061687d6ce024849c747a250dbeea52"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=517ec93ad2eba1807c9508f14953814a33523edc#517ec93ad2eba1807c9508f14953814a33523edc"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -3682,7 +3682,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=802c1ac98061687d6ce024849c747a250dbeea52#802c1ac98061687d6ce024849c747a250dbeea52"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=517ec93ad2eba1807c9508f14953814a33523edc#517ec93ad2eba1807c9508f14953814a33523edc"
 dependencies = [
  "bcs",
  "bincode",
@@ -3694,6 +3694,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sha3 0.10.6",
+ "tap",
+ "tracing",
  "typenum",
  "zeroize",
 ]
@@ -3701,7 +3703,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.2"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=802c1ac98061687d6ce024849c747a250dbeea52#802c1ac98061687d6ce024849c747a250dbeea52"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=517ec93ad2eba1807c9508f14953814a33523edc#517ec93ad2eba1807c9508f14953814a33523edc"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -5454,7 +5456,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=18b27ff27c160f7f3f9705bee1d7c501e46e6beb#18b27ff27c160f7f3f9705bee1d7c501e46e6beb"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=318d61d27f47d257d99a86983d835e9e9756bc59#318d61d27f47d257d99a86983d835e9e9756bc59"
 dependencies = [
  "memmap2 0.7.1",
  "serde",
@@ -5618,6 +5620,18 @@ dependencies = [
 
 [[package]]
 name = "move-bytecode-verifier-v0"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
  "move-abstract-stack",
@@ -6066,6 +6080,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-v1"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-v1",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -6176,6 +6211,25 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v1"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -6415,7 +6469,7 @@ dependencies = [
 [[package]]
 name = "mysticeti-core"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=18b27ff27c160f7f3f9705bee1d7c501e46e6beb#18b27ff27c160f7f3f9705bee1d7c501e46e6beb"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=318d61d27f47d257d99a86983d835e9e9756bc59#318d61d27f47d257d99a86983d835e9e9756bc59"
 dependencies = [
  "async-trait",
  "axum",
@@ -6663,6 +6717,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tower",
  "tracing",
  "typed-store",
@@ -9698,8 +9753,10 @@ name = "simulacrum"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "fastcrypto",
+ "futures",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -10097,6 +10154,33 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-v0",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-adapter-v1"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-v1",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-v1",
+ "move-vm-types",
+ "parking_lot 0.12.1",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-v1",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-v1",
  "tracing",
  "workspace-hack",
 ]
@@ -10510,18 +10594,23 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-v1",
  "move-vm-config",
  "move-vm-runtime",
  "move-vm-runtime-v0",
+ "move-vm-runtime-v1",
  "petgraph 0.5.1",
  "sui-adapter-latest",
  "sui-adapter-v0",
+ "sui-adapter-v1",
  "sui-move-natives-latest",
  "sui-move-natives-v0",
+ "sui-move-natives-v1",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
  "sui-verifier-v0",
+ "sui-verifier-v1",
  "workspace-hack",
 ]
 
@@ -11090,6 +11179,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-move-natives-v1"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-v1",
+ "move-vm-runtime-v1",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
@@ -11516,6 +11625,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "once_cell",
  "prometheus",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -11524,6 +11634,7 @@ dependencies = [
  "sui-macros",
  "sui-protocol-config",
  "sui-simulator",
+ "sui-storage",
  "sui-test-transaction-builder",
  "sui-transaction-checks",
  "sui-types",
@@ -12053,6 +12164,20 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-v1"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-v1",
+ "move-core-types",
+ "move-vm-config",
  "sui-types",
  "workspace-hack",
 ]
@@ -14312,6 +14437,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-v1",
  "move-bytecode-viewer",
  "move-cli",
  "move-command-line-common",
@@ -14335,6 +14461,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-stdlib-v0",
+ "move-stdlib-v1",
  "move-symbol-pool",
  "move-transactional-test-runner",
  "move-unit-test",
@@ -14342,6 +14469,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-runtime-v0",
+ "move-vm-runtime-v1",
  "move-vm-test-utils",
  "move-vm-types",
  "multer",

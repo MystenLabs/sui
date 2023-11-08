@@ -309,6 +309,17 @@ impl MoveObjectType {
         }
     }
 
+    pub fn try_extract_field_value(&self) -> SuiResult<TypeTag> {
+        match &self.0 {
+            MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
+                Err(SuiError::ObjectDeserializationError {
+                    error: "Error extracting dynamic object value from Coin object".to_string(),
+                })
+            }
+            MoveObjectType_::Other(s) => DynamicFieldInfo::try_extract_field_value(s),
+        }
+    }
+
     pub fn is(&self, s: &StructTag) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin => GasCoin::is_gas_coin(s),

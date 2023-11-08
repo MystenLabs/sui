@@ -49,8 +49,6 @@ struct TypeOrigin {
     defining_id: SuiAddress,
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl MovePackage {
     /// A representation of the module called `name` in this package, including the
@@ -75,7 +73,6 @@ impl MovePackage {
     /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
-        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,

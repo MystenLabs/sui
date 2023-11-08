@@ -173,6 +173,12 @@ impl PackageObjectArc {
     }
 }
 
+impl From<PackageObjectArc> for Arc<Object> {
+    fn from(package_object_arc: PackageObjectArc) -> Self {
+        package_object_arc.package_object
+    }
+}
+
 pub trait BackingPackageStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>>;
 }
@@ -431,82 +437,6 @@ pub fn transaction_receiving_object_keys(tx: &SenderSignedData) -> Vec<ObjectKey
         .collect()
 }
 
-pub trait MarkerTableQuery {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError>;
-
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError>;
-
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError>;
-}
-
-impl<T: MarkerTableQuery> MarkerTableQuery for Arc<T> {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.as_ref()
-            .have_received_object_at_version(object_id, version, epoch_id)
-    }
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        self.as_ref()
-            .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.as_ref().is_shared_object_deleted(object_id, epoch_id)
-    }
-}
-
-impl<T: MarkerTableQuery> MarkerTableQuery for &T {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        (*self).have_received_object_at_version(object_id, version, epoch_id)
-    }
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: &SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        (*self).get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
-    }
-    fn is_shared_object_deleted(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        (*self).is_shared_object_deleted(object_id, epoch_id)
-    }
-}
-
 impl Display for DeleteKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -535,7 +465,7 @@ where
     }
 }
 
-pub trait GetSharedLocks {
+pub trait GetSharedLocks: Send + Sync {
     fn get_shared_locks(
         &self,
         transaction_digest: &TransactionDigest,

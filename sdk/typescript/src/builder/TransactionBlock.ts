@@ -8,7 +8,6 @@ import { is, mask } from 'superstruct';
 import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
-import { SUI_TYPE_ARG } from '../framework/framework.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
@@ -16,6 +15,7 @@ import {
 	getObjectReference,
 	SuiObjectRef,
 } from '../types/index.js';
+import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { ObjectCallArg } from './Inputs.js';
 import {

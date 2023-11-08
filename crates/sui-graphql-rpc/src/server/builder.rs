@@ -33,7 +33,6 @@ pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
 }
 
-#[allow(dead_code)]
 impl Server {
     pub async fn run(self) -> Result<(), Error> {
         get_or_init_server_start_time().await;

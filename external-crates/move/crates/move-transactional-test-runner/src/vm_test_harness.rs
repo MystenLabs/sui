@@ -48,12 +48,6 @@ struct SimpleVMTestAdapter<'a> {
 }
 
 #[derive(Debug, Parser)]
-pub struct AdapterExecuteArgs {
-    #[clap(long)]
-    pub check_runtime_types: bool,
-}
-
-#[derive(Debug, Parser)]
 pub struct AdapterInitArgs {
     #[clap(long = "edition")]
     pub edition: Option<Edition>,
@@ -64,7 +58,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = EmptyCommand;
     type ExtraValueArgs = ();
-    type ExtraRunArgs = AdapterExecuteArgs;
+    type ExtraRunArgs = EmptyCommand;
     type Subcommand = EmptyCommand;
 
     fn compiled_state(&mut self) -> &mut CompiledState<'a> {
@@ -184,7 +178,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         signers: Vec<ParsedAddress>,
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
-        extra_args: Self::ExtraRunArgs,
+        _extra_args: Self::ExtraRunArgs,
     ) -> Result<(Option<String>, SerializedReturnValues)> {
         let signers: Vec<_> = signers
             .into_iter()
@@ -215,7 +209,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
 
                     session.execute_script(script_bytes, type_args, args, gas_status)
                 },
-                VMConfig::from(extra_args),
+                test_vm_config(),
             )
             .map_err(|e| {
                 anyhow!(
@@ -234,7 +228,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         signers: Vec<ParsedAddress>,
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
-        extra_args: Self::ExtraRunArgs,
+        _extra_args: Self::ExtraRunArgs,
     ) -> Result<(Option<String>, SerializedReturnValues)> {
         let signers: Vec<_> = signers
             .into_iter()
@@ -264,7 +258,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                         module, function, type_args, args, gas_status,
                     )
                 },
-                VMConfig::from(extra_args),
+                test_vm_config(),
             )
             .map_err(|e| {
                 anyhow!(
@@ -394,17 +388,14 @@ static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     }
 });
 
+fn test_vm_config() -> VMConfig {
+    VMConfig {
+        enable_invariant_violation_check_in_swap_loc: false,
+        ..Default::default()
+    }
+}
+
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     run_test_impl::<SimpleVMTestAdapter>(path, Some(&*PRECOMPILED_MOVE_STDLIB)).await
-}
-
-impl From<AdapterExecuteArgs> for VMConfig {
-    fn from(arg: AdapterExecuteArgs) -> VMConfig {
-        VMConfig {
-            paranoid_type_checks: arg.check_runtime_types,
-            enable_invariant_violation_check_in_swap_loc: false,
-            ..Default::default()
-        }
-    }
 }

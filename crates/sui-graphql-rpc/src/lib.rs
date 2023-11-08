@@ -11,7 +11,7 @@ pub mod client;
 pub mod context_data;
 mod error;
 pub mod examples;
-mod extensions;
+pub mod extensions;
 mod metrics;
 pub mod test_infra;
 mod types;

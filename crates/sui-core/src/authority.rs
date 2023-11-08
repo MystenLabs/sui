@@ -138,6 +138,7 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
+use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
 
 #[cfg(test)]
@@ -617,6 +618,7 @@ pub struct AuthorityState {
     pub secret: StableSyncAuthoritySigner,
 
     /// The database
+    input_loader: TransactionInputLoader,
     pub database: Arc<AuthorityStore>, // TODO: remove pub
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
@@ -709,18 +711,45 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        let (_gas_status, input_objects) = sui_transaction_checks::check_transaction_input(
+        let tx_digest = transaction.digest();
+        let tx_data = transaction.data().transaction_data();
+
+        let input_object_kinds = tx_data.input_objects()?;
+        let receiving_objects_refs = tx_data.receiving_objects();
+
+        // Note: the deny checks may do redundant package loads but:
+        // - they only load packages when there is an active package deny map
+        // - the loads are cached anyway
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            tx_data,
+            transaction.tx_signatures(),
+            &input_object_kinds,
+            &receiving_objects_refs,
+            &self.transaction_deny_config,
             &self.database,
+        )?;
+
+        let (input_objects, receiving_objects) = self
+            .input_loader
+            .read_objects_for_signing(
+                tx_digest,
+                &input_object_kinds,
+                &receiving_objects_refs,
+                epoch_store.protocol_config(),
+                epoch_store.epoch(),
+            )
+            .await?;
+
+        let (_gas_status, checked_input_objects) = sui_transaction_checks::check_transaction_input(
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
-            epoch_store.epoch(),
-            transaction.data().transaction_data(),
-            transaction.tx_signatures(),
-            &self.transaction_deny_config,
+            tx_data,
+            input_objects,
+            receiving_objects,
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
-        let owned_objects = input_objects.filter_owned_objects();
+        let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
         let signed_transaction = VerifiedSignedTransaction::new(
             epoch_store.epoch(),
@@ -928,8 +957,31 @@ impl AuthorityState {
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
-        let tx_digest = *certificate.digest();
         debug!("execute_certificate_internal");
+
+        let tx_digest = certificate.digest();
+        let input_objects = {
+            let _scope = monitored_scope("Execution::load_input_objects");
+            let input_objects = &certificate.data().transaction_data().input_objects()?;
+            if certificate.data().transaction_data().is_end_of_epoch_tx() {
+                self.input_loader
+                    .read_objects_for_synchronous_execution(
+                        tx_digest,
+                        input_objects,
+                        epoch_store.protocol_config(),
+                    )
+                    .await?
+            } else {
+                self.input_loader
+                    .read_objects_for_execution(
+                        epoch_store.as_ref(),
+                        tx_digest,
+                        input_objects,
+                        epoch_store.epoch(),
+                    )
+                    .await?
+            }
+        };
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -937,9 +989,15 @@ impl AuthorityState {
         // may as well hold the lock and save the cpu time for other requests.
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
-        self.process_certificate(tx_guard, certificate, expected_effects_digest, epoch_store)
-            .await
-            .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
+        self.process_certificate(
+            tx_guard,
+            certificate,
+            input_objects,
+            expected_effects_digest,
+            epoch_store,
+        )
+        .await
+        .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -1016,6 +1074,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
+        input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
@@ -1057,7 +1116,7 @@ impl AuthorityState {
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
         let (inner_temporary_store, effects, execution_error_opt) = match self
-            .prepare_certificate(&execution_guard, certificate, epoch_store)
+            .prepare_certificate(&execution_guard, certificate, input_objects, epoch_store)
             .await
         {
             Err(e) => {
@@ -1118,7 +1177,7 @@ impl AuthorityState {
         .await?;
 
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
-            certificate.data().intent_message().value.kind()
+            certificate.data().transaction_data().kind()
         {
             if let Some(err) = &execution_error_opt {
                 error!("Authenticator state update failed: {err}");
@@ -1279,6 +1338,7 @@ impl AuthorityState {
         &self,
         _execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
+        input_objects: InputObjects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(
         InnerTemporaryStore,
@@ -1290,15 +1350,13 @@ impl AuthorityState {
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
-            &self.database,
-            epoch_store.as_ref(),
             certificate,
+            input_objects,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
-            epoch_store.epoch(),
         )?;
 
-        let owned_object_refs = input_objects.filter_owned_objects();
+        let owned_object_refs = input_objects.inner().filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
@@ -1353,9 +1411,31 @@ impl AuthorityState {
             });
         }
 
+        let input_object_kinds = transaction.input_objects()?;
+        let receiving_object_refs = transaction.receiving_objects();
+
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            &transaction,
+            &[],
+            &input_object_kinds,
+            &receiving_object_refs,
+            &self.transaction_deny_config,
+            &self.database,
+        )?;
+
+        let (input_objects, receiving_objects) = self
+            .input_loader
+            .read_objects_for_dry_run_exec(
+                &transaction_digest,
+                &input_object_kinds,
+                &receiving_object_refs,
+                epoch_store.protocol_config(),
+            )
+            .await?;
+
         // make a gas object if one was not provided
         let mut gas_object_refs = transaction.gas().to_vec();
-        let ((gas_status, input_objects), mock_gas) = if transaction.gas().is_empty() {
+        let ((gas_status, checked_input_objects), mock_gas) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
             // use a 1B sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
@@ -1371,11 +1451,11 @@ impl AuthorityState {
             gas_object_refs = vec![gas_object_ref];
             (
                 sui_transaction_checks::check_transaction_input_with_given_gas(
-                    &self.database,
                     epoch_store.protocol_config(),
                     epoch_store.reference_gas_price(),
-                    epoch_store.epoch(),
                     &transaction,
+                    input_objects,
+                    receiving_objects,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
@@ -1384,13 +1464,11 @@ impl AuthorityState {
         } else {
             (
                 sui_transaction_checks::check_transaction_input(
-                    &self.database,
                     epoch_store.protocol_config(),
                     epoch_store.reference_gas_price(),
-                    epoch_store.epoch(),
                     &transaction,
-                    &[],
-                    &self.transaction_deny_config,
+                    input_objects,
+                    receiving_objects,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
                 None,
@@ -1420,7 +1498,7 @@ impl AuthorityState {
                     .epoch_start_config()
                     .epoch_data()
                     .epoch_start_timestamp(),
-                input_objects,
+                checked_input_objects,
                 gas_object_refs,
                 gas_status,
                 kind,
@@ -1526,13 +1604,25 @@ impl AuthorityState {
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
-        let (gas_object_ref, input_objects) = sui_transaction_checks::check_dev_inspect_input(
-            &self.database,
-            protocol_config,
-            &transaction_kind,
-            gas_object,
-            epoch_store.epoch(),
-        )?;
+
+        let input_object_kinds = transaction_kind.input_objects()?;
+        let receiving_object_refs = transaction_kind.receiving_objects();
+        let (input_objects, receiving_objects) = self
+            .input_loader
+            .read_objects_for_dev_inspect(
+                &input_object_kinds,
+                &receiving_object_refs,
+                protocol_config,
+            )
+            .await?;
+        let (gas_object_ref, checked_input_objects) =
+            sui_transaction_checks::check_dev_inspect_input(
+                protocol_config,
+                &transaction_kind,
+                input_objects,
+                receiving_objects,
+                gas_object,
+            )?;
 
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
@@ -1542,6 +1632,7 @@ impl AuthorityState {
             gas_price,
             gas_budget,
         );
+
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let silent = true;
@@ -1564,7 +1655,7 @@ impl AuthorityState {
                 .epoch_start_config()
                 .epoch_data()
                 .epoch_start_timestamp(),
-            input_objects,
+            checked_input_objects,
             vec![gas_object_ref],
             gas_status,
             transaction_kind,
@@ -2083,10 +2174,12 @@ impl AuthorityState {
             indirect_objects_threshold,
             archive_readers,
         );
+        let input_loader = TransactionInputLoader::new(store.clone());
         let state = Arc::new(AuthorityState {
             name,
             secret,
             epoch_store: ArcSwap::new(epoch_store.clone()),
+            input_loader,
             database: store,
             indexes,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
@@ -4128,8 +4221,22 @@ impl AuthorityState {
             .database
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
+
+        let input_objects = self
+            .input_loader
+            .read_objects_for_synchronous_execution(
+                tx_digest,
+                &executable_tx
+                    .data()
+                    .intent_message()
+                    .value
+                    .input_objects()?,
+                epoch_store.protocol_config(),
+            )
+            .await?;
+
         let (temporary_store, effects, _execution_error_opt) = self
-            .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
+            .prepare_certificate(&execution_guard, &executable_tx, input_objects, epoch_store)
             .await?;
         let system_obj = get_sui_system_state(&temporary_store.written)
             .expect("change epoch tx must write to system object");
@@ -4614,7 +4721,7 @@ impl NodeStateDump {
             input_objects: inner_temporary_store
                 .input_objects
                 .values()
-                .cloned()
+                .map(|o| (**o).clone())
                 .collect(),
             computed_effects: effects.clone(),
             expected_effects_digest,
