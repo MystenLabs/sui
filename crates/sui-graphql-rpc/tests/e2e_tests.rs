@@ -158,10 +158,10 @@ mod tests {
 
         assert_eq!(res.http_status().as_u16(), 200);
         assert_eq!(res.http_version(), hyper::Version::HTTP_11);
-        assert!(res.graphql_version().len() >= 5);
+        assert!(res.graphql_version().unwrap().len() >= 5);
         assert!(res.errors().is_empty());
 
-        let usage = res.usage().unwrap();
+        let usage = res.usage().unwrap().unwrap();
         assert_eq!(*usage.get("nodes").unwrap(), 1);
         assert_eq!(*usage.get("depth").unwrap(), 1);
         assert_eq!(*usage.get("variables").unwrap(), 0);

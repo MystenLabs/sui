@@ -9,6 +9,7 @@ use axum::http::HeaderValue;
 use hyper::header;
 use reqwest::{RequestBuilder, Response};
 
+use crate::client::ClientError;
 use crate::{
     config::{ConnectionConfig, ServiceConfig},
     extensions::query_limits_checker::LIMITS_HEADER,
@@ -35,8 +36,12 @@ impl SimpleClient {
         &self,
         query: String,
         headers: Vec<(header::HeaderName, header::HeaderValue)>,
-    ) -> Result<serde_json::Value, reqwest::Error> {
-        self.execute_impl(query, headers).await?.json().await
+    ) -> Result<serde_json::Value, ClientError> {
+        self.execute_impl(query, headers)
+            .await?
+            .json()
+            .await
+            .map_err(|e| e.into())
     }
 
     pub async fn execute_to_graphql(
@@ -44,18 +49,18 @@ impl SimpleClient {
         query: String,
         get_usage: bool,
         mut headers: Vec<(header::HeaderName, header::HeaderValue)>,
-    ) -> Result<GraphqlResponse, reqwest::Error> {
+    ) -> Result<GraphqlResponse, ClientError> {
         if get_usage {
             headers.push((LIMITS_HEADER.clone(), HeaderValue::from_static("true")));
         }
-        Ok(GraphqlResponse::from_resp(self.execute_impl(query, headers).await?).await)
+        GraphqlResponse::from_resp(self.execute_impl(query, headers).await?).await
     }
 
     async fn execute_impl(
         &self,
         query: String,
         headers: Vec<(header::HeaderName, header::HeaderValue)>,
-    ) -> Result<Response, reqwest::Error> {
+    ) -> Result<Response, ClientError> {
         let body = serde_json::json!({
             "query": query,
         });
@@ -64,6 +69,6 @@ impl SimpleClient {
         for (key, value) in headers {
             builder = builder.header(key, value);
         }
-        builder.send().await
+        builder.send().await.map_err(|e| e.into())
     }
 }
