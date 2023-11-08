@@ -1,58 +1,58 @@
 processed 6 tasks
 
-task 0 'print-bytecode'. lines 1-6:
+task 0 'print-bytecode'. lines 1-8:
 // Move bytecode v6
-script {
+module 1.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Ret
 }
 }
 
-task 1 'print-bytecode'. lines 8-14:
+task 1 'print-bytecode'. lines 10-18:
 // Move bytecode v6
-script {
+module 2.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Ret
 }
 }
 
-task 2 'print-bytecode'. lines 16-20:
+task 2 'print-bytecode'. lines 20-26:
 // Move bytecode v6
-script {
+module 3.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Ret
 }
 }
 
-task 3 'print-bytecode'. lines 22-27:
+task 3 'print-bytecode'. lines 28-35:
 // Move bytecode v6
-script {
+module 4.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Ret
 }
 }
 
-task 4 'print-bytecode'. lines 29-36:
+task 4 'print-bytecode'. lines 37-46:
 Error: ParserError: Invalid Token: invalid token kind for statement Slash
 
-task 5 'print-bytecode'. lines 38-46:
+task 5 'print-bytecode'. lines 48-58:
 // Move bytecode v6
-script {
+module 6.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Ret
 }

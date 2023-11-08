@@ -27,7 +27,7 @@ label b0:
 }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x1d4.M {
     struct T { u: u64 }
 
@@ -62,7 +62,7 @@ module 0x1d4.M {
     }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x2d4.M {
     struct T<U> { u: U }
 
@@ -94,7 +94,7 @@ module 0x3d4.M {
 }
 
 
-//# print-bytecode --input=module
+//# print-bytecode
 // Attempting an immutable borrow of the field of a struct type defined in a
 // separate module is invalid.
 module 0x3d4.N {
@@ -112,6 +112,7 @@ module 0x3d4.N {
 }
 
 //# print-bytecode
+module 0x1.m {
 import 0x3d4.M;
 entry foo(account: signer) {
     let t: M.T;
@@ -121,8 +122,9 @@ label b0:
     _ = &(&mut t).T::b;
     return;
 }
+}
 
-//# print-bytecode --input=module
+//# print-bytecode
 // Attempting a mutable borrow of the field of a struct type defined in a
 // separate module is invalid.
 module 0x3d4.O {

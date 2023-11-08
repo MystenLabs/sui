@@ -18,8 +18,7 @@ label bar:
 }
 }
 
-//# print-bytecode --input=module
-module 0x3.m {
+//# print-bytecode
 // Jumping to a label that isn't declared in the same function is invalid.
 module 0x1.M {
     f() {
@@ -30,5 +29,4 @@ module 0x1.M {
     label bar:
         return;
     }
-}
 }

@@ -1,22 +1,22 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-6:
+task 0 'print-bytecode'. lines 1-8:
 // Move bytecode v6
-script {
+module 1.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Branch(0)
 }
 }
 
-task 1 'print-bytecode'. lines 8-15:
+task 1 'print-bytecode'. lines 10-19:
 // Move bytecode v6
-script {
+module 2.m {
 
 
-main() {
+entry foo() {
 B0:
 	0: Branch(1)
 B1:
@@ -24,5 +24,5 @@ B1:
 }
 }
 
-task 2 'print-bytecode'. lines 17-28:
+task 2 'print-bytecode'. lines 21-32:
 Error: Invalid block labels, labels were used without being declared (bar)
