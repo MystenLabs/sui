@@ -3,7 +3,7 @@
 
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
-import BroadcastTransaction from './broadcast-transaction';
+import BroadcastTransaction from './execute-transaction';
 import MultiSigCombinedSignatureGenerator from './combine-sigs';
 import MultiSigAddressGenerator from './multisig-address';
 import OfflineSigner from './offline-signer';
