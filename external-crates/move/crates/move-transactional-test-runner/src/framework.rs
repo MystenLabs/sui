@@ -129,15 +129,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)>;
-    async fn execute_script(
-        &mut self,
-        script: CompiledScript,
-        type_args: Vec<TypeTag>,
-        signers: Vec<ParsedAddress>,
-        args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
-        gas_budget: Option<u64>,
-        extra: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)>;
     async fn call_function(
         &mut self,
         module: &ModuleId,
