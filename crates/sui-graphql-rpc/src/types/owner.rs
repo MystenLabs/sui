@@ -68,14 +68,11 @@ use sui_json_rpc::name_service::NameServiceConfig;
     //     arg(name = "before", ty = "Option<String>")
     // )
     field(
-<<<<<<< HEAD
-=======
         name = "dynamic_field",
         ty = "Option<DynamicField>",
         arg(name = "dynamic_field_name", ty = "DynamicFieldName")
     ),
     field(
->>>>>>> 05930e71e1 (move dynamicFieldConnection implementation to ObjectOwner interface, implement for owner and object)
         name = "dynamic_field_connection",
         ty = "Option<Connection<String, DynamicField>>",
         arg(name = "first", ty = "Option<u64>"),

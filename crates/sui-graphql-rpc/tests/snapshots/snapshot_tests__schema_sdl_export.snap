@@ -281,8 +281,7 @@ type DynamicFieldEdge {
 input DynamicFieldName {
 	"""
 	The string type of the DynamicField's 'name' field.
-	This may be the string representation of a Move primitive like 'u64',
-	or a struct type like 0x2::kiosk::Listing.
+	A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
 	"""
 	type: String!
 	"""
@@ -668,7 +667,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-
+	
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -676,7 +675,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-
+	
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -1123,7 +1122,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-
+	
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
@@ -1425,3 +1424,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+

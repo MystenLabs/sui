@@ -31,7 +31,10 @@ pub(crate) enum DynamicFieldValue {
 
 #[derive(InputObject)] // used as input object
 pub(crate) struct DynamicFieldName {
+    /// The string type of the DynamicField's 'name' field.
+    /// A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
     pub type_: String,
+    /// The base64 encoded bcs serialization of the DynamicField's 'name' field.
     pub bcs: Base64,
 }
 
