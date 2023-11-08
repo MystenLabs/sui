@@ -96,6 +96,7 @@ impl TransactionInputLoader {
         }
 
         let objects = self.store.multi_get_object_by_key(&object_keys)?;
+        assert_eq!(objects.len(), object_keys.len());
         for (index, object) in fetch_indices.into_iter().zip(objects.into_iter()) {
             let object = object.ok_or_else(|| {
                 SuiError::from(input_object_kinds[index].object_not_found_error())
@@ -107,33 +108,7 @@ impl TransactionInputLoader {
             });
         }
 
-        // Load receiving objects
-        let mut receiving_results = Vec::with_capacity(receiving_objects.len());
-        for objref in receiving_objects {
-            // Note: the digest is checked later in check_transaction_input
-            let (object_id, version, _) = objref;
-
-            if self
-                .store
-                .have_received_object_at_version(object_id, *version, epoch_id)?
-            {
-                receiving_results.push(ReceivingObjectReadResult::new(
-                    *objref,
-                    ReceivingObjectReadResultKind::PreviouslyReceivedObject,
-                ));
-                continue;
-            }
-
-            let Some(object) = self.store.get_object(object_id)? else {
-                return Err(UserInputError::ObjectNotFound {
-                    object_id: *object_id,
-                    version: Some(*version),
-                }
-                .into());
-            };
-
-            receiving_results.push(ReceivingObjectReadResult::new(*objref, object.into()));
-        }
+        let receiving_results = self.read_receiving_objects(receiving_objects, epoch_id)?;
 
         Ok((
             input_results
@@ -141,7 +116,7 @@ impl TransactionInputLoader {
                 .map(Option::unwrap)
                 .collect::<Vec<_>>()
                 .into(),
-            receiving_results.into(),
+            receiving_results,
         ))
     }
 
@@ -345,6 +320,43 @@ impl TransactionInputLoader {
             .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
             results.push(ObjectReadResult::new(*kind, obj.into()));
         }
-        Ok((results.into(), vec![].into()))
+
+        let receiving_results = self.read_receiving_objects(receiving_objects, 0)?;
+
+        Ok((results.into(), receiving_results))
+    }
+
+    fn read_receiving_objects(
+        &self,
+        receiving_objects: &[ObjectRef],
+        epoch_id: EpochId,
+    ) -> SuiResult<ReceivingObjects> {
+        let mut receiving_results = Vec::with_capacity(receiving_objects.len());
+        for objref in receiving_objects {
+            // Note: the digest is checked later in check_transaction_input
+            let (object_id, version, _) = objref;
+
+            if self
+                .store
+                .have_received_object_at_version(object_id, *version, epoch_id)?
+            {
+                receiving_results.push(ReceivingObjectReadResult::new(
+                    *objref,
+                    ReceivingObjectReadResultKind::PreviouslyReceivedObject,
+                ));
+                continue;
+            }
+
+            let Some(object) = self.store.get_object(object_id)? else {
+                return Err(UserInputError::ObjectNotFound {
+                    object_id: *object_id,
+                    version: Some(*version),
+                }
+                .into());
+            };
+
+            receiving_results.push(ReceivingObjectReadResult::new(*objref, object.into()));
+        }
+        Ok(receiving_results.into())
     }
 }
