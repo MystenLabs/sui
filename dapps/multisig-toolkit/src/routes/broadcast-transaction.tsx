@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ExecuteTransactionBlockParams, SuiClient } from '@mysten/sui.js/client';
+import { SuiClient } from '@mysten/sui.js/client';
 import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
-//import { JsonRpcProvider, mainnetConnection } from '@mysten/sui.js';
-
-import { publicKeyFromRawBytes } from '@mysten/sui.js/verify';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
@@ -37,40 +34,40 @@ Single Sig
 AIYbCXAhPmILpWq6xsEY/Nu310Kednlb60Qcd/nD+u2WCXE/FvSXNRUQW9OQKGqt2CeskPyv2SEhaKMZ8gLkdQ8mmO01tDJz7vn6/2dqh+WEcmx7I/NKn8H6ornbk+HM4g==
 */
 
-function Signature({ signature, index }: { signature: SignaturePubkeyPair; index: number }) {
-	const suiAddress = signature.publicKey.toSuiAddress();
+// function Signature({ signature, index }: { signature: SignaturePubkeyPair; index: number }) {
+// 	const suiAddress = signature.publicKey.toSuiAddress();
 
-	const pubkey_base64_sui_format = signature.publicKey.toSuiPublicKey();
+// 	const pubkey_base64_sui_format = signature.publicKey.toSuiPublicKey();
 
-	const pubkey = signature.publicKey.toBase64();
-	const scheme = signature.signatureScheme.toString();
+// 	const pubkey = signature.publicKey.toBase64();
+// 	const scheme = signature.signatureScheme.toString();
 
-	const details = [
-		{ label: 'Signature Public Key', value: pubkey },
-		{ label: 'Sui Format Public Key ( flag | pk )', value: pubkey_base64_sui_format },
-		{ label: 'Sui Address', value: suiAddress },
-		{ label: 'Signature', value: toB64(signature.signature) },
-	];
+// 	const details = [
+// 		{ label: 'Signature Public Key', value: pubkey },
+// 		{ label: 'Sui Format Public Key ( flag | pk )', value: pubkey_base64_sui_format },
+// 		{ label: 'Sui Address', value: suiAddress },
+// 		{ label: 'Signature', value: toB64(signature.signature) },
+// 	];
 
-	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>Signature #{index}</CardTitle>
-				<CardDescription>{scheme}</CardDescription>
-			</CardHeader>
-			<CardContent>
-				<div className="flex flex-col gap-2">
-					{details.map(({ label, value }, index) => (
-						<div key={index} className="flex flex-col gap-1.5">
-							<div className="font-bold">{label}</div>
-							<div className="bg-muted rounded text-sm font-mono p-2 break-all">{value}</div>
-						</div>
-					))}
-				</div>
-			</CardContent>
-		</Card>
-	);
-}
+// 	return (
+// 		<Card>
+// 			<CardHeader>
+// 				<CardTitle>Signature #{index}</CardTitle>
+// 				<CardDescription>{scheme}</CardDescription>
+// 			</CardHeader>
+// 			<CardContent>
+// 				<div className="flex flex-col gap-2">
+// 					{details.map(({ label, value }, index) => (
+// 						<div key={index} className="flex flex-col gap-1.5">
+// 							<div className="font-bold">{label}</div>
+// 							<div className="bg-muted rounded text-sm font-mono p-2 break-all">{value}</div>
+// 						</div>
+// 					))}
+// 				</div>
+// 			</CardContent>
+// 		</Card>
+// 	);
+// }
 
 export default function BroadcastTransaction() {
 	const [signature, setSignature] = useState('');
@@ -104,12 +101,10 @@ export default function BroadcastTransaction() {
 					try {
 						const parsedSignature = parseSerializedSignature(signature);
 						const parsedTransaction = transaction;
-						console.log(transaction);
 						const response = await client.executeTransactionBlock({
 							transactionBlock: parsedTransaction,
 							signature: parsedSignature.serializedSignature,
 						});
-						console.log(response);
 						setDigest(response.digest);
 					} catch (e) {
 						setError(e as Error);
