@@ -147,8 +147,12 @@ mod tests {
         sim.create_checkpoint();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster =
-            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config,
+            3000,
+            Arc::new(sim),
+        )
+        .await;
 
         let query = r#"
             query {

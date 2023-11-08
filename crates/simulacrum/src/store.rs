@@ -37,6 +37,7 @@ pub struct InMemoryStore {
     transactions: HashMap<TransactionDigest, VerifiedTransaction>,
     effects: HashMap<TransactionDigest, TransactionEffects>,
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
+    // Map from transaction digest to events digest for easy lookup
     events_tx_digest_index: HashMap<TransactionDigest, TransactionEventsDigest>,
 
     // Committee data

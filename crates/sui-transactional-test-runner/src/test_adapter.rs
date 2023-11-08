@@ -1615,6 +1615,9 @@ fn create_accounts_objects(
     }
 }
 
+/// Create the executor for a validator with a fullnode
+/// The issue with this executor is we cannot control the checkpoint
+/// and epoch creation process
 async fn init_val_fullnode_executor(
     mut rng: StdRng,
     account_names: BTreeSet<String>,
@@ -1626,6 +1629,9 @@ async fn init_val_fullnode_executor(
     (Box::new(executor), acc_setup)
 }
 
+/// Create an executor using a simulator
+/// This means we can control the checkpoint, epoch creation process and
+/// manually advance clock as needed
 fn init_sim_executor(
     mut rng: StdRng,
     account_names: BTreeSet<String>,
