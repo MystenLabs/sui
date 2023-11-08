@@ -31,7 +31,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
+pub static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
 
 /// Only display usage information if this header was in the request.
 pub(crate) struct ShowUsage;

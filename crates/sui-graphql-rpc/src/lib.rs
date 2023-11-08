@@ -12,7 +12,7 @@ pub mod cluster;
 pub mod context_data;
 mod error;
 pub mod examples;
-mod extensions;
+pub mod extensions;
 mod metrics;
 mod types;
 pub mod utils;
