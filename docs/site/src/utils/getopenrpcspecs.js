@@ -8,50 +8,46 @@ const path = require('path');
 // Create directory
 
 const topdir = path.join(__dirname, "../open-spec");
-const mainnetdir = path.join(topdir, "mainnet");
-const testnetdir = path.join(topdir, "testnet");
-const devnetdir = path.join(topdir, "devnet");
 
 if (!fs.existsSync(topdir)){
     fs.mkdirSync(topdir);
 }
 
-const downloadFile = (url, rpcpath) => {
-    if (!fs.existsSync(rpcpath)){
-        fs.mkdirSync(rpcpath);
+const downloadFile = (branch) => {
+    const branchdir = path.join(topdir,branch);
+    if (!fs.existsSync(branchdir)){
+        fs.mkdirSync(branchdir);
     }
     axios({
         method: "get",
-        url,
+        url: `https://raw.githubusercontent.com/MystenLabs/sui/${branch}/crates/sui-open-rpc/spec/openrpc.json`,
         responseType: "blob"
     }).then((res) => {
-    
-        if (fs.existsSync(path.join(rpcpath, "openrpc_backup.json"))){
-            fs.unlink(path.join(rpcpath, "openrpc_backup.json"), (err) => {
+        if (fs.existsSync(path.join(__dirname, `../open-spec/${branch}/openrpc_backup.json`))){
+            fs.unlink(path.join(__dirname, `../open-spec/${branch}/openrpc_backup.json`), (err) => {
                 if (err) {
                     return console.log(err);
                 }
-                console.log("Deleted backup spec.")
+                console.log(`Deleted ${branch} backup spec.`)
             } )
         } else {
-            console.log("Backup file does not exist.")
+            console.log(`Backup file for ${branch} does not exist.`)
         }
-        if (fs.existsSync(path.join(rpcpath, "openrpc.json"))){
-            fs.renameSync(path.join(rpcpath, "openrpc.json"), path.join(rpcpath, "openrpc_backup.json"));
+        if (fs.existsSync(path.join(__dirname, `../open-spec/${branch}/openrpc.json`))){
+            fs.renameSync(path.join(__dirname, `../open-spec/${branch}/openrpc.json`), path.join(__dirname, `../open-spec/${branch}/openrpc_backup.json`));
         }
-        
-        fs.writeFileSync(path.join(rpcpath, "openrpc.json"), res.data, 'utf8');
+        fs.writeFileSync(path.join(__dirname, `../open-spec/${branch}/openrpc.json`), res.data, 'utf8');
     }).catch(err => {
-        console.log("Error downloading openrpc spec.");
+        console.log(`Error downloading ${branch} openrpc spec.`);
         console.error(err);
     })
 }
 
 // Download Mainnet OpenRPC spec
-downloadFile("https://raw.githubusercontent.com/MystenLabs/sui/mainnet/crates/sui-open-rpc/spec/openrpc.json", mainnetdir);
+downloadFile("mainnet");
 
 // Download Testnet OpenRPC spec
-downloadFile("https://raw.githubusercontent.com/MystenLabs/sui/testnet/crates/sui-open-rpc/spec/openrpc.json", testnetdir);
+downloadFile("testnet");
 
 // Download Devnet OpenRPC spec
-downloadFile("https://raw.githubusercontent.com/MystenLabs/sui/devnet/crates/sui-open-rpc/spec/openrpc.json", devnetdir);
+downloadFile("devnet");
