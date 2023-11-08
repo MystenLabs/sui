@@ -114,7 +114,7 @@ impl SWAgent {
                         .get(workload)
                         .map(|measurement| {
                             format!(
-                                "[SW{id}] TPS: {}\tLatency (avg): {:?}",
+                                "[EW{id}] TPS: {}tx/s\t\tLatency (avg): {:?}",
                                 measurement.tps(),
                                 measurement.average_latency()
                             )
