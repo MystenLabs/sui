@@ -6,7 +6,6 @@ use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI};
 use std::fmt::Display;
 use sui_types::messages_consensus::ConsensusTransaction;
-use sui_types::transaction::CertifiedTransaction;
 
 /// A list of tuples of:
 /// (certificate origin authority index, all transactions corresponding to the certificate).
@@ -121,18 +120,17 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
                 let author = block.author() as AuthorityIndex;
                 let transactions: Vec<_> = block
                     .shared_transactions()
-                    .flat_map(|(loc, tx)| {
-                        let cert = bcs::from_bytes::<CertifiedTransaction>(tx.data());
-                        match cert {
-                            Ok(cert) => Some((
+                    .flat_map(|(_loc, tx)| {
+                        let transaction = bcs::from_bytes::<ConsensusTransaction>(tx.data());
+                        match transaction {
+                            Ok(transaction) => Some((
                                 tx.data(),
-                                ConsensusTransaction::new_mysticeti_certificate(
-                                    round,
-                                    loc.offset(),
-                                    cert,
-                                ),
+                                transaction,
                             )),
-                            Err(_) => None,
+                            Err(err) => {
+                                tracing::error!("Failed to deserialize sequenced consensus transaction(this should not happen) {} from {author} at {round}", err);
+                                None
+                            },
                         }
                     })
                     .collect();
