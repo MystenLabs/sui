@@ -69,7 +69,7 @@ struct PendingCertificate {
     // When executing from checkpoint, the certified effects digest is provided, so that forks can
     // be detected prior to committing the transaction.
     expected_effects_digest: Option<TransactionEffectsDigest>,
-    // This certificate is waiting for these objects to become available in order to be executed.
+    // The input object this certifiate is waiting for to become available in order to be executed.
     waiting_input_objects: BTreeSet<InputKey>,
 }
 
@@ -214,9 +214,6 @@ struct Inner {
     epoch: EpochId,
 
     // Maps missing input objects to transactions in pending_certificates.
-    // Note that except for immutable objects, a given key may only have one TransactionDigest in
-    // the set. Unfortunately we cannot easily verify that this invariant is upheld, because you
-    // cannot determine from TransactionData whether an input is mutable or immutable.
     missing_inputs: HashMap<InputKey, BTreeSet<TransactionDigest>>,
 
     // Stores age info for all transactions depending on each object.
@@ -234,6 +231,7 @@ struct Inner {
 
     // Maps transaction digests to their content and missing input objects.
     pending_certificates: HashMap<TransactionDigest, PendingCertificate>,
+
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
 }
@@ -250,8 +248,8 @@ impl Inner {
         }
     }
 
-    // Checks if there is any transaction waiting on the lock of input_key, and try to
-    // update transactions that can acquire the lock.
+    // Checks if there is any transaction waiting on `input_key`. Returns all the pending
+    // transactions that are ready to be executed.
     // Must ensure input_key is available in storage before calling this function.
     fn check_pending_transaction_waiting_for_object(
         &mut self,
@@ -296,7 +294,7 @@ impl Inner {
             // Pending certificate must exist.
             let pending_cert = self.pending_certificates.get_mut(&digest).unwrap();
             assert!(pending_cert.waiting_input_objects.remove(&input_key));
-            // When a certificate has all locks acquired, it is ready to execute.
+            // When a certificate has all its input objects, it is ready to execute.
             if pending_cert.waiting_input_objects.is_empty() {
                 let pending_cert = self.pending_certificates.remove(&digest).unwrap();
                 ready_certificates.push(pending_cert);
@@ -484,7 +482,7 @@ impl TransactionManager {
 
         // Checking object availability without holding TM lock to reduce contention.
         // But input objects can become available before TM lock is acquired.
-        // So missing objects' availability are checked again after releasing the TM lock.
+        // So missing objects' availability are checked again after acquiring TM lock.
         let cache_miss_availability = self
             .authority_store
             .multi_input_objects_available(
@@ -541,8 +539,6 @@ impl TransactionManager {
             });
         }
 
-        // let mut missing_input_objects = Vec::new();
-
         for mut pending_cert in pending {
             // Tx lock is not held here, which makes it possible to send duplicated transactions to
             // the execution driver after crash-recovery, when the same transaction is recovered
@@ -597,6 +593,15 @@ impl TransactionManager {
                 if !object_availability[&key].unwrap() {
                     // The input object is not yet available.
                     pending_cert.waiting_input_objects.insert(key);
+
+                    assert!(
+                        inner.missing_inputs.entry(key).or_default().insert(digest),
+                        "Duplicated certificate {:?} for missing object {:?}",
+                        digest,
+                        key
+                    );
+                    let input_txns = inner.input_objects.entry(key.id()).or_default();
+                    input_txns.insert(digest, Instant::now());
                 }
             }
 
@@ -609,22 +614,6 @@ impl TransactionManager {
                 // Send to execution driver for execution.
                 self.certificate_ready(&mut inner, pending_cert);
                 continue;
-            }
-
-            // missing_input_objects.extend(pending_cert.waiting_input_objects.iter().cloned());
-            for input in &pending_cert.waiting_input_objects {
-                assert!(
-                    inner
-                        .missing_inputs
-                        .entry(*input)
-                        .or_default()
-                        .insert(digest),
-                    "Duplicated certificate {:?} for missing object {:?}",
-                    digest,
-                    input
-                );
-                let input_txns = inner.input_objects.entry(input.id()).or_default();
-                input_txns.insert(digest, Instant::now());
             }
 
             assert!(
@@ -745,8 +734,8 @@ impl TransactionManager {
         let cert = pending_certificate.certificate;
         let expected_effects_digest = pending_certificate.expected_effects_digest;
         trace!(tx_digest = ?cert.digest(), "certificate ready");
-        // Record as an executing certificate.
         assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
+        // Record as an executing certificate.
         assert!(inner.executing_certificates.insert(*cert.digest()));
         let _ = self
             .tx_ready_certificates
