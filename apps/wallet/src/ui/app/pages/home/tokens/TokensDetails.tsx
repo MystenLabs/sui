@@ -32,7 +32,7 @@ import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
 import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronDown12 } from '@mysten/icons';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { Link } from './Link';

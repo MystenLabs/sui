@@ -44,7 +44,7 @@ import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useWatch, type SubmitHandler } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
