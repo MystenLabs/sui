@@ -2415,15 +2415,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-vm-paranoid-tests"
-version = "0.1.0"
-dependencies = [
- "datatest-stable",
- "fail",
- "move-transactional-test-runner",
-]
-
-[[package]]
 name = "move-vm-profiler"
 version = "0.1.0"
 dependencies = [
