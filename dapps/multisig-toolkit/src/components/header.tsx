@@ -9,7 +9,7 @@ const links = [
 	{ to: '/signature-analyzer', label: 'Signature Analyzer' },
 	{ to: '/multisig-address', label: 'MultiSig Address' },
 	{ to: '/combine-signatures', label: 'Combine MultiSig Signatures' },
-	{ to: '/broadcast-transaction', label: 'Broadcast Transaction'},
+	{ to: '/broadcast-transaction', label: 'Broadcast Transaction' },
 ];
 
 export function Header() {

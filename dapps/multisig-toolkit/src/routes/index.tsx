@@ -3,12 +3,12 @@
 
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
+import BroadcastTransaction from './broadcast-transaction';
 import MultiSigCombinedSignatureGenerator from './combine-sigs';
 import MultiSigAddressGenerator from './multisig-address';
 import OfflineSigner from './offline-signer';
 import { Root } from './root';
 import SignatureAnalyzer from './signature-analyzer';
-import BroadcastTransaction from './broadcast-transaction';
 
 export const router = createBrowserRouter([
 	{
