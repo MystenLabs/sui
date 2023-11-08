@@ -15,7 +15,6 @@
 			"require": "./dist/index.js"
 		}
 	},
-	"sideEffects": false,
 	"files": [
 		"dist",
 		"src",

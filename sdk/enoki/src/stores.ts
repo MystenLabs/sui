@@ -2,42 +2,42 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * An asynchronous key-value store.
+ * An sync key-value store.
  */
-export interface AsyncStore {
-	get(key: string): Promise<string | null>;
-	set(key: string, value: string): Promise<void>;
-	delete(key: string): Promise<void>;
+export interface SyncStore {
+	get(key: string): string | null;
+	set(key: string, value: string): void;
+	delete(key: string): void;
 }
 
-function createWebStorage(storage: Storage): AsyncStore {
+function createWebStorage(storage: Storage): SyncStore {
 	return {
-		async get(key: string) {
+		get(key: string) {
 			return storage.getItem(key);
 		},
-		async set(key: string, value: string) {
+		set(key: string, value: string) {
 			storage.setItem(key, value);
 		},
-		async delete(key: string) {
+		delete(key: string) {
 			storage.removeItem(key);
 		},
 	};
 }
 
 /**
- * Create a story backed by memory.
+ * Create a storage interface backed by memory.
  * This is generally useful for server-side rendering, and test environments.
  */
-export function createInMemoryStorage(): AsyncStore {
+export function createInMemoryStorage(): SyncStore {
 	const store = new Map<string, string>();
 	return {
-		async get(key) {
+		get(key) {
 			return store.get(key) ?? null;
 		},
-		async set(key, value) {
+		set(key, value) {
 			store.set(key, value);
 		},
-		async delete(key) {
+		delete(key) {
 			store.delete(key);
 		},
 	};
@@ -46,7 +46,7 @@ export function createInMemoryStorage(): AsyncStore {
 /**
  * Create a store backed by `localStorage`.
  */
-export function createLocalStorage(): AsyncStore {
+export function createLocalStorage(): SyncStore {
 	if (typeof window === 'undefined') {
 		console.warn('`window.localStorage` is not available, falling back to in-memory storage');
 		return createInMemoryStorage();
@@ -58,7 +58,7 @@ export function createLocalStorage(): AsyncStore {
 /**
  * Create a store backed by `sessionStorage`.
  */
-export function createSessionStorage(): AsyncStore {
+export function createSessionStorage(): SyncStore {
 	if (typeof window === 'undefined') {
 		console.warn('`window.sessionStorage` is not available, falling back to in-memory storage');
 		return createInMemoryStorage();

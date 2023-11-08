@@ -1486,9 +1486,6 @@ importers:
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../typescript
-      '@mysten/wallet-standard':
-        specifier: workspace:*
-        version: link:../wallet-standard
       '@mysten/zklogin':
         specifier: workspace:*
         version: link:../zklogin

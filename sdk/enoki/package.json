@@ -10,12 +10,10 @@
 	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
 		"./react": {
-			"source": "./src/react.ts",
 			"import": "./dist/esm/react.js",
 			"require": "./dist/cjs/react.js"
 		}
@@ -56,7 +54,6 @@
 	"dependencies": {
 		"@metamask/browser-passworder": "^4.1.0",
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@nanostores/react": "^0.7.1",
 		"jose": "^4.14.4",

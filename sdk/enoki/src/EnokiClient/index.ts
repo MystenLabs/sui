@@ -1,10 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { PublicKey } from '@mysten/sui.js/cryptography';
-import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
+import type {
+	CreateZkLoginNonceApiInput,
+	CreateZkLoginNonceApiResponse,
+	CreateZkLoginZkpApiInput,
+	CreateZkLoginZkpApiResponse,
+	GetAppApiInput,
+	GetAppApiResponse,
+	GetZkLoginApiInput,
+	GetZkLoginApiResponse,
+} from './type.js';
 
 const DEFAULT_API_URL = 'https://api.enoki.mystenlabs.com';
+const ZKLOGIN_HEADER = 'zklogin-jwt';
 
 export interface EnokiClientConfig {
 	/** The API key for the Enoki app, available in the Enoki Portal. */
@@ -28,34 +37,23 @@ export class EnokiClient {
 		this.#apiKey = config.apiKey;
 	}
 
-	getAuthProviders() {
-		return this.#fetch<{
-			authenticationProviders: {
-				providerType: 'google' | 'facebook' | 'twitch';
-				clientId: string;
-			}[];
-		}>('config/auth-providers', {
+	getApp(_input?: GetAppApiInput) {
+		return this.#fetch<GetAppApiResponse>('app', {
 			method: 'GET',
 		});
 	}
 
-	getZkLogin(input: { jwt: string }) {
-		return this.#fetch<{ address: string; salt: string }>('zklogin', {
+	getZkLogin(input: GetZkLoginApiInput) {
+		return this.#fetch<GetZkLoginApiResponse>('zklogin', {
 			method: 'GET',
 			headers: {
-				'zk-login-jwt': input.jwt,
+				[ZKLOGIN_HEADER]: input.jwt,
 			},
 		});
 	}
 
-	createZkLoginNonce(input: { ephemeralPublicKey: PublicKey }) {
-		return this.#fetch<{
-			nonce: string;
-			randomness: string;
-			epoch: number;
-			maxEpoch: number;
-			estimatedExpiration: number;
-		}>('zklogin/nonce', {
+	createZkLoginNonce(input: CreateZkLoginNonceApiInput) {
+		return this.#fetch<CreateZkLoginNonceApiResponse>('zklogin/nonce', {
 			method: 'POST',
 			body: JSON.stringify({
 				ephemeralPublicKey: input.ephemeralPublicKey.toSuiPublicKey(),
@@ -63,16 +61,11 @@ export class EnokiClient {
 		});
 	}
 
-	createZkLoginZkp(input: {
-		jwt: string;
-		ephemeralPublicKey: PublicKey;
-		randomness: string;
-		maxEpoch: number;
-	}) {
-		return this.#fetch<ZkLoginSignatureInputs>('zklogin/kzp', {
+	createZkLoginZkp(input: CreateZkLoginZkpApiInput) {
+		return this.#fetch<CreateZkLoginZkpApiResponse>('zklogin/kzp', {
 			method: 'POST',
 			headers: {
-				'zk-login-jwt': input.jwt,
+				[ZKLOGIN_HEADER]: input.jwt,
 			},
 			body: JSON.stringify({
 				ephemeralPublicKey: input.ephemeralPublicKey.toSuiPublicKey(),

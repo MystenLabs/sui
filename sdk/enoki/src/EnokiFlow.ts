@@ -3,18 +3,17 @@
 
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { fromB64 } from '@mysten/sui.js/utils';
-import { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
+import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 import { decodeJwt } from 'jose';
 import type { WritableAtom } from 'nanostores';
-import { allTasks, atom, onMount, onSet, task } from 'nanostores';
+import { atom, onSet } from 'nanostores';
 
 import type { Encryption } from './encryption.js';
 import { createDefaultEncryption } from './encryption.js';
-import type { EnokiClientConfig } from './EnokiClient.js';
-import { EnokiClient } from './EnokiClient.js';
+import type { EnokiClientConfig } from './EnokiClient/index.js';
+import { EnokiClient } from './EnokiClient/index.js';
 import { EnokiKeypair } from './EnokiKeypair.js';
-import { validateJWT } from './jwt.js';
-import type { AsyncStore } from './stores.js';
+import type { SyncStore } from './stores.js';
 import { createSessionStorage } from './stores.js';
 
 export interface EnokiFlowConfig extends EnokiClientConfig {
@@ -22,80 +21,76 @@ export interface EnokiFlowConfig extends EnokiClientConfig {
 	 * The storage interface to persist Enoki data locally.
 	 * If not provided, it will use a sessionStorage-backed store.
 	 */
-	store?: AsyncStore;
-	/**
-	 * The key that will be used to store Enoki data locally.
-	 * This will be passed to the configured `store` interface.
-	 */
-	storeKey?: string;
+	store?: SyncStore;
 	/**
 	 * The encryption interface that will be used to encrypt data before storing it locally.
 	 * If not provided, it will use a default encryption interface.
 	 */
 	encryption?: Encryption;
-	/**
-	 * The encryption key that will be used to encrypt data before storing it locally.
-	 * If not provided, it will use your Enoki API key as an encryption key.
-	 */
-	encryptionKey?: string;
 }
 
-interface EnokiFlowState {
+// State that is not bound to a session, and is encrypted.
+export interface ZkLoginState {
 	provider?: AuthProvider;
 	address?: string;
 	salt?: string;
-	// Expiring data related to the proof:
-	zkp?: {
-		ephemeralKeyPair: string;
-		maxEpoch: number;
-		randomness: string;
-		expiresAt: number;
+}
 
-		jwt?: string;
-		proof?: ZkLoginSignatureInputs;
-	};
+// State that session-bound, and is encrypted in storage.
+export interface ZkLoginSession {
+	ephemeralKeyPair: string;
+	maxEpoch: number;
+	randomness: string;
+	expiresAt: number;
+
+	jwt?: string;
+	proof?: ZkLoginSignatureInputs;
 }
 
 export type AuthProvider = 'google' | 'facebook' | 'twitch';
 
-const DEFAULT_STORAGE_KEY = '@enoki/flow';
+const STORAGE_KEYS = {
+	STATE: '@enoki/flow/state',
+	SESSION: '@enoki/flow/session',
+};
 
 export class EnokiFlow {
 	#enokiClient: EnokiClient;
 	#encryption: Encryption;
 	#encryptionKey: string;
-	#store: AsyncStore;
-	#storeKey: string;
+	#store: SyncStore;
 
-	$initialized: WritableAtom<boolean>;
-	$state: WritableAtom<EnokiFlowState>;
+	#zkLoginSessionInitialized: boolean;
+	#zkLoginSession: ZkLoginSession | null;
+
+	$zkLoginState: WritableAtom<ZkLoginState>;
 
 	constructor(config: EnokiFlowConfig) {
-		this.$state = atom({});
-		this.$initialized = atom(false);
-
 		this.#enokiClient = new EnokiClient({
 			apiKey: config.apiKey,
 			apiUrl: config.apiUrl,
 		});
+		this.#encryptionKey = config.apiKey;
 		this.#encryption = config.encryption ?? createDefaultEncryption();
-		this.#encryptionKey = config.encryptionKey ?? config.apiKey;
 		this.#store = config.store ?? createSessionStorage();
-		this.#storeKey = config.storeKey ?? DEFAULT_STORAGE_KEY;
 
-		onSet(this.$state, ({ newValue }) => {
-			task(async () => {
-				const storedValue = await this.#encryption.encrypt(
-					this.#encryptionKey,
-					JSON.stringify(newValue),
-				);
+		let storedState = null;
+		try {
+			const rawStoredValue = this.#store.get(STORAGE_KEYS.STATE);
+			if (rawStoredValue) {
+				storedState = JSON.parse(rawStoredValue);
+			}
+		} catch {
+			// Ignore errors
+		}
 
-				await this.#store.set(this.#storeKey, storedValue);
-			});
-		});
+		this.$zkLoginState = atom(storedState || {});
 
-		onMount(this.$state, () => {
-			this.restore();
+		this.#zkLoginSessionInitialized = false;
+		this.#zkLoginSession = null;
+
+		onSet(this.$zkLoginState, ({ newValue }) => {
+			this.#store.set(STORAGE_KEYS.STATE, JSON.stringify(newValue));
 		});
 	}
 
@@ -103,9 +98,7 @@ export class EnokiFlow {
 		return this.#enokiClient;
 	}
 
-	// TODO: Probably name this better:
-	// Maybe something like `createAuthorizationURL`?
-	async startFlow(input: {
+	async createAuthorizationURL(input: {
 		provider: AuthProvider;
 		clientId: string;
 		redirectUrl: string;
@@ -113,7 +106,7 @@ export class EnokiFlow {
 	}) {
 		const ephemeralKeyPair = new Ed25519Keypair();
 		const { nonce, randomness, maxEpoch, estimatedExpiration } =
-			await this.#enokiClient.createNonce({
+			await this.#enokiClient.createZkLoginNonce({
 				ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 			});
 
@@ -157,32 +150,25 @@ export class EnokiFlow {
 				throw new Error(`Invalid provider: ${input.provider}`);
 		}
 
-		this.$state.set({
-			provider: input.provider,
-			zkp: {
-				expiresAt: estimatedExpiration,
-				maxEpoch,
-				randomness,
-				ephemeralKeyPair: ephemeralKeyPair.export().privateKey,
-			},
+		this.$zkLoginState.set({ provider: input.provider });
+		await this.#setSession({
+			expiresAt: estimatedExpiration,
+			maxEpoch,
+			randomness,
+			ephemeralKeyPair: ephemeralKeyPair.export().privateKey,
 		});
-
-		// Allow the state to persist into stores before we redirect:
-		await allTasks();
 
 		return oauthUrl;
 	}
 
 	// TODO: Should our SDK manage this automatically in addition to exposing a method?
-	// TODO: Should we rename this? Something with "callback" maybe?
-	async handleAuthRedirect(hash: string = window.location.hash) {
+	async handleAuthCallback(hash: string = window.location.hash) {
 		const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 
 		// Before we handle the auth redirect and get the state, we need to restore it:
-		await this.restore();
+		const zkp = await this.getSession();
 
-		const state = this.$state.get();
-		if (!state.zkp || !state.zkp.ephemeralKeyPair || !state.zkp.maxEpoch || !state.zkp.randomness) {
+		if (!zkp || !zkp.ephemeralKeyPair || !zkp.maxEpoch || !zkp.randomness) {
 			throw new Error(
 				'Start of sign-in flow could not be found. Ensure you have started the sign-in flow before calling this.',
 			);
@@ -198,57 +184,74 @@ export class EnokiFlow {
 			throw new Error('Missing JWT data');
 		}
 
-		// Verify the JWT, to ensure that we don't just get stuck with a random invalid JWT:
-		await validateJWT(jwt, decodedJwt);
-
 		const { address, salt } = await this.#enokiClient.getZkLogin({ jwt });
 
-		this.$state.set({
-			...state,
+		this.$zkLoginState.set({
+			...this.$zkLoginState.get(),
 			salt,
 			address,
-			zkp: {
-				...state.zkp,
-				jwt,
-			},
+		});
+		await this.#setSession({
+			...zkp,
+			jwt,
 		});
 
 		return params.get('state');
 	}
 
-	async restore() {
-		if (this.$initialized.get()) return;
+	async #setSession(newValue: ZkLoginSession | null) {
+		if (newValue) {
+			const storedValue = await this.#encryption.encrypt(
+				this.#encryptionKey,
+				JSON.stringify(newValue),
+			);
+
+			this.#store.set(STORAGE_KEYS.SESSION, storedValue);
+		} else {
+			this.#store.delete(STORAGE_KEYS.SESSION);
+		}
+
+		this.#zkLoginSession = newValue;
+	}
+
+	async getSession() {
+		if (this.#zkLoginSessionInitialized) {
+			return this.#zkLoginSession;
+		}
 
 		try {
-			const storedValue = await this.#store.get(this.#storeKey);
-			if (!storedValue) return;
-			const state: EnokiFlowState = JSON.parse(
+			const storedValue = this.#store.get(STORAGE_KEYS.SESSION);
+			if (!storedValue) return null;
+
+			const state: ZkLoginSession = JSON.parse(
 				await this.#encryption.decrypt(this.#encryptionKey, storedValue),
 			);
 
 			// TODO: Rather than having expiration act as a logout, we should keep the state that still is relevant,
-			// and just clear out the expired zkp.
-			if (state.zkp?.expiresAt && Date.now() > state.zkp.expiresAt) {
+			// and just clear out the expired session, but keep the other zkLogin state.
+			if (state?.expiresAt && Date.now() > state.expiresAt) {
 				await this.logout();
 			} else {
-				this.$state.set(state);
+				this.#zkLoginSession = state;
 			}
+
+			return this.#zkLoginSession;
 		} finally {
-			this.$initialized.set(true);
+			this.#zkLoginSessionInitialized = true;
 		}
 	}
 
 	async logout() {
-		this.$state.set({});
-		await allTasks();
-		this.#store.delete(this.#storeKey);
+		this.$zkLoginState.set({});
+		this.#store.delete(STORAGE_KEYS.STATE);
+
+		await this.#setSession(null);
 	}
 
+	// TODO: Should this return the proof if it already exists?
 	async getProof() {
-		await this.restore();
-
-		const state = this.$state.get();
-		const { zkp, salt } = state;
+		const zkp = await this.getSession();
+		const { salt } = this.$zkLoginState.get();
 
 		if (zkp?.proof) {
 			if (zkp.expiresAt && Date.now() > zkp.expiresAt) {
@@ -271,26 +274,22 @@ export class EnokiFlow {
 			ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 		});
 
-		this.$state.set({
-			...state,
-			zkp: {
-				...zkp,
-				proof,
-			},
+		await this.#setSession({
+			...zkp,
+			proof,
 		});
 
 		return proof;
 	}
 
 	async getKeypair() {
-		// Try to restore the state if it hasn't been restored yet:
-		await this.restore();
+		const zkp = await this.getSession();
 
 		// Get the proof, so that we ensure it exists in state:
 		await this.getProof();
 
 		// Check to see if we have the essentials for a keypair:
-		const { zkp, address } = this.$state.get();
+		const { address } = this.$zkLoginState.get();
 		if (!address || !zkp || !zkp.proof) {
 			throw new Error('Missing required data for keypair generation.');
 		}

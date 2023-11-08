@@ -19,7 +19,6 @@ export function EnokiFlowProvider({ children, ...config }: EnokiFlowProviderProp
 	return <EnokiFlowContext.Provider value={enokiFlow}>{children}</EnokiFlowContext.Provider>;
 }
 
-// TODO: Should this just subscribe to the store too?
 export function useEnokiFlow() {
 	const context = useContext(EnokiFlowContext);
 	if (!context) {
@@ -28,9 +27,7 @@ export function useEnokiFlow() {
 	return context;
 }
 
-export function useEnokiFlowState() {
+export function useZkLogin() {
 	const flow = useEnokiFlow();
-	const state = useStore(flow.$state);
-	const initialized = useStore(flow.$initialized);
-	return { ...state, initialized };
+	return useStore(flow.$zkLoginState);
 }
