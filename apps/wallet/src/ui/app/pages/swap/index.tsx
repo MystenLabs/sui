@@ -35,6 +35,7 @@ import {
 	isExceedingSlippageTolerance,
 	useSwapData,
 } from '_pages/swap/utils';
+import { ampli } from '_shared/analytics/ampli';
 import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/context';
 import { useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
@@ -339,6 +340,13 @@ export function SwapPageContent() {
 		onSuccess: (response) => {
 			queryClient.invalidateQueries({ queryKey: ['get-coins'] });
 			queryClient.invalidateQueries({ queryKey: ['coin-balance'] });
+
+			ampli.swappedCoin({
+				fromCoinType: isAsk ? baseCoinType : quoteCoinType,
+				toCoinType: isAsk ? quoteCoinType : baseCoinType,
+				totalBalance: Number(amount),
+				estimatedReturnBalance: Number(formattedBalance),
+			});
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
 				response.digest,
