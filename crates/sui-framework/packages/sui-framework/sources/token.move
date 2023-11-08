@@ -120,7 +120,7 @@ module sui::token {
     }
 
     /// Dynamic field key for the `TokenPolicy` to store the `Config` for a
-    /// specific `Rule` for an action. There can be only one configuration per
+    /// specific action `Rule`. There can be only one configuration per
     /// `Rule` per `TokenPolicy`.
     struct RuleKey<phantom T> has store, copy, drop { is_protected: bool }
 
