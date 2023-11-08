@@ -3,7 +3,9 @@
 
 use crate::config::Limits;
 use crate::config::ServiceConfig;
+use crate::error::code;
 use crate::error::code::INTERNAL_SERVER_ERROR;
+use crate::error::graphql_error;
 use crate::error::graphql_error_at_pos;
 use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
@@ -129,12 +131,12 @@ impl Extension for QueryLimitsChecker {
             .expect("No service config provided in schema data");
 
         if query.len() > cfg.limits.max_query_payload_size as usize {
-            return Err(ServerError::new(
+            return Err(graphql_error(
+                code::GRAPHQL_VALIDATION_FAILED,
                 format!(
                     "Query payload is too large. The maximum allowed is {} bytes",
                     cfg.limits.max_query_payload_size
                 ),
-                None,
             ));
         }
 

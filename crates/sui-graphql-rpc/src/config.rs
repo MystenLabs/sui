@@ -12,7 +12,7 @@ use crate::functional_group::FunctionalGroup;
 // TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 20;
 const MAX_QUERY_NODES: u32 = 200;
-const MAX_QUERY_PAYLOAD_SIZE: u64 = 5_000;
+const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const MAX_QUERY_VARIABLES: u32 = 50;
 const MAX_QUERY_FRAGMENTS: u32 = 50;
@@ -53,7 +53,7 @@ pub struct Limits {
     #[serde(default)]
     pub(crate) max_query_nodes: u32,
     #[serde(default)]
-    pub(crate) max_query_payload_size: u64,
+    pub(crate) max_query_payload_size: u32,
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
     #[serde(default)]
@@ -173,6 +173,11 @@ impl ServiceConfig {
     /// Maximum time in milliseconds that will be spent to serve one request.
     async fn request_timeout_ms(&self) -> BigInt {
         BigInt::from(self.limits.request_timeout_ms)
+    }
+
+    /// Maximum length of a query payload string.
+    async fn max_query_payload_size(&self) -> u32 {
+        self.limits.max_query_payload_size
     }
 }
 
