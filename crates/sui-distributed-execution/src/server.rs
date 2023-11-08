@@ -44,8 +44,8 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         mpsc::Sender<NetworkMessage>,
         mpsc::Receiver<NetworkMessage>,
     ) {
-        let (in_send, in_recv) = mpsc::channel(100);
-        let (out_send, out_recv) = mpsc::channel(100);
+        let (in_send, in_recv) = mpsc::channel(100_000);
+        let (out_send, out_recv) = mpsc::channel(100_000);
         let agent = T::new(id, in_recv, out_send, conf, metrics);
         return (agent, in_send, out_recv);
     }
@@ -174,7 +174,6 @@ impl NetworkManager {
         // check from messages from app and send them out
         tokio::spawn(async move {
             let mut waiting = FuturesUnordered::new();
-
             loop {
                 tokio::select! {
                     Some(message) = application_out.recv() => {
@@ -195,7 +194,7 @@ impl NetworkManager {
                             waiting.push(cancel_handler);
                         }
                     },
-                    Some(_result) = waiting.next() => {
+                    Some(_acresult) = waiting.next() => {
                         // Ignore the result. We do not expect failures in this example.
                     },
                     else => {
