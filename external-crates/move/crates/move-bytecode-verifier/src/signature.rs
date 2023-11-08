@@ -18,9 +18,11 @@ use move_binary_format::{
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
+use std::collections::{HashMap, HashSet};
 
 pub struct SignatureChecker<'a> {
     resolver: BinaryIndexedView<'a>,
+    abilities_cache: HashMap<SignatureIndex, HashSet<Vec<AbilitySet>>>,
 }
 
 impl<'a> SignatureChecker<'a> {
@@ -29,13 +31,14 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
-        let sig_check = Self {
+        let mut sig_check = Self {
             resolver: BinaryIndexedView::Module(module),
+            abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(module.signatures())?;
         sig_check.verify_function_signatures(module.function_handles())?;
         sig_check.verify_fields(module.struct_defs())?;
-        sig_check.verify_code_units(module.function_defs())
+        sig_check.verify_code_units(module.function_handles(), module.function_defs())
     }
 
     pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
@@ -43,8 +46,9 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn verify_script_impl(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let sig_check = Self {
+        let mut sig_check = Self {
             resolver: BinaryIndexedView::Script(script),
+            abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(script.signatures())?;
         sig_check.verify_function_signatures(script.function_handles())?;
@@ -60,7 +64,7 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn verify_function_signatures(
-        &self,
+        &mut self,
         function_handles: &[FunctionHandle],
     ) -> PartialVMResult<()> {
         let err_handler = |err: PartialVMError, idx| {
@@ -69,11 +73,7 @@ impl<'a> SignatureChecker<'a> {
         };
 
         for (idx, fh) in function_handles.iter().enumerate() {
-            self.check_signature(fh.return_)
-                .map_err(|err| err_handler(err, idx))?;
             self.check_instantiation(fh.return_, &fh.type_parameters)
-                .map_err(|err| err_handler(err, idx))?;
-            self.check_signature(fh.parameters)
                 .map_err(|err| err_handler(err, idx))?;
             self.check_instantiation(fh.parameters, &fh.type_parameters)
                 .map_err(|err| err_handler(err, idx))?;
@@ -112,14 +112,18 @@ impl<'a> SignatureChecker<'a> {
         Ok(())
     }
 
-    fn verify_code_units(&self, function_defs: &[FunctionDefinition]) -> PartialVMResult<()> {
+    fn verify_code_units(
+        &mut self,
+        function_handles: &[FunctionHandle],
+        function_defs: &[FunctionDefinition],
+    ) -> PartialVMResult<()> {
         for (func_def_idx, func_def) in function_defs.iter().enumerate() {
             // skip native functions
             let code = match &func_def.code {
                 Some(code) => code,
                 None => continue,
             };
-            let func_handle = self.resolver.function_handle_at(func_def.function);
+            let func_handle = &function_handles[func_def.function.0 as usize];
             self.verify_code(code, &func_handle.type_parameters)
                 .map_err(|err| {
                     err.at_index(IndexKind::Signature, code.locals.0)
@@ -129,8 +133,11 @@ impl<'a> SignatureChecker<'a> {
         Ok(())
     }
 
-    fn verify_code(&self, code: &CodeUnit, type_parameters: &[AbilitySet]) -> PartialVMResult<()> {
-        self.check_signature(code.locals)?;
+    fn verify_code(
+        &mut self,
+        code: &CodeUnit,
+        type_parameters: &[AbilitySet],
+    ) -> PartialVMResult<()> {
         self.check_instantiation(code.locals, type_parameters)?;
 
         // Check if the type actuals in certain bytecode instructions are well defined.
@@ -306,13 +313,20 @@ impl<'a> SignatureChecker<'a> {
     }
 
     fn check_instantiation(
-        &self,
+        &mut self,
         idx: SignatureIndex,
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
+        if let Some(checked_abilities) = self.abilities_cache.get(&idx) {
+            if checked_abilities.contains(type_parameters) {
+                return Ok(());
+            }
+        };
         for ty in &self.resolver.signature_at(idx).0 {
             self.check_type_instantiation(ty, type_parameters)?
         }
+        let checked_abilities = self.abilities_cache.entry(idx).or_default();
+        checked_abilities.insert(type_parameters.to_vec());
         Ok(())
     }
 
