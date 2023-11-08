@@ -48,7 +48,10 @@ impl Agent<SailfishMessage> for SWAgent {
         if my_attrs["mode"] == "channel" {
             // Run Sequence Worker asynchronously
             let tx_count = my_attrs["tx_count"].parse::<u64>().unwrap();
-            SequenceWorkerState::run_with_channel(&self.out_channel, ew_ids, tx_count).await;
+            let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
+            let duration = Duration::from_secs(duration_secs);
+            SequenceWorkerState::run_with_channel(&self.out_channel, ew_ids, tx_count, duration)
+                .await;
             println!("SW finished");
             loop {
                 sleep(Duration::from_millis(1_000)).await;

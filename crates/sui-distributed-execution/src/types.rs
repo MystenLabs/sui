@@ -53,6 +53,7 @@ impl ServerConfig {
                     ("metrics-address".to_string(), legacy_metrics.to_string()),
                     ("execute".to_string(), 100.to_string()),
                     ("mode".to_string(), "channel".to_string()),
+                    ("duration".to_string(), 300.to_string()),
                 ]
                 .iter()
                 .cloned()
