@@ -57,7 +57,7 @@ impl ExecutorShard {
 }
 
 /// Example config path.
-const DEFAULT_CONFIG_PATH: &str = "crates/sui-distributed-execution/src/configs/1sw1ew.json";
+const DEFAULT_CONFIG_PATH: &str = "crates/sui-distributed-execution/src/configs/1sw4ew.json";
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -86,7 +86,7 @@ enum Operation {
     /// Deploy a local testbed of executor shards.
     Testbed {
         /// Number of execution workers.
-        #[clap(long, default_value_t = 1)]
+        #[clap(long, default_value_t = 4)]
         execution_workers: usize,
     },
 }
