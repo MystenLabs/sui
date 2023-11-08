@@ -85,7 +85,7 @@ use sui_types::effects::{
     InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
@@ -1513,20 +1513,43 @@ impl AuthorityState {
 
         let tx_digest = *effects.transaction_digest();
 
+        let error_code = match execution_error.err() {
+            None => 0,
+            Some(e) => match *e.kind() {
+                ExecutionErrorKind::InvariantViolation => 1,
+                _ => 2,
+            },
+        };
+
         trace!(
             target: GAS_STATS_TARGET,
-            "GAS_STATS EFFECTS {}: {:?}, {}, {}, \
-                    {}, {},  {}, {}, {}, {}",
+            "GAS_STATS EFFECTS {}: {}, {}, {}, {}",
             tx_digest,
-            execution_error.err(),
-            effects.input_shared_objects().len(),
+            error_code,
             effects.created().len(),
             effects.mutated().len(),
-            effects.unwrapped().len(),
             effects.deleted().len(),
-            effects.unwrapped().len(),
-            effects.wrapped().len(),
-            signer,
+        );
+
+        trace!(
+            target: GAS_STATS_TARGET,
+            "GAS_STATS move calls {}: {:?}",
+            tx_digest,
+            transaction.move_calls(),
+        );
+
+        trace!(
+            target: GAS_STATS_TARGET,
+            "GAS_STATS input objects {}: {:?}",
+            tx_digest,
+            transaction.input_objects(),
+        );
+
+        trace!(
+            target: GAS_STATS_TARGET,
+            "GAS_STATS receiving objects {}: {:?}",
+            tx_digest,
+            transaction.receiving_objects(),
         );
 
         let module_cache =

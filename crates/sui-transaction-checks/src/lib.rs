@@ -152,6 +152,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             tx_data,
+            None,
         )?;
         check_objects(tx_data, &input_objects)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.

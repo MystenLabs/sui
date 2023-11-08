@@ -69,7 +69,7 @@ fn main() {
         .with_env()
         .with_prom_registry(&prometheus_registry);
 
-    match env::var_os("GAS_STATS_FILE") {
+    match env::var_os("x") {
         Some(file_path) => {
             telemetry_config = telemetry_config.with_log_file(file_path.to_str().unwrap());
         }

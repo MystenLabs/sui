@@ -167,10 +167,6 @@ impl GasStatus {
         )
     }
 
-    pub fn get_others_info(&self) -> Vec<(u64, u64, u64, u64)> {
-        vec![]
-    }
-
     pub fn push_stack(&mut self, pushes: u64) -> PartialVMResult<()> {
         match self.stack_height_current.checked_add(pushes) {
             // We should never hit this.

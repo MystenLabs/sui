@@ -282,7 +282,7 @@ mod checked {
             )
         }
 
-        fn write_gas_stats(&self, summary: &GasCostSummary, digest: TransactionDigest) {
+        fn get_gas_vals(&self) -> String {
             let gas_used = self.gas_status.gas_used_pre_gas_price();
             let gas_rounded = if gas_used > 0 && gas_used % 1000 == 0 {
                 gas_used * self.gas_price
@@ -297,11 +297,17 @@ mod checked {
 
             let (instr_count, stack_height, stack_size) = self.gas_status.get_status_info();
 
+            format!(
+                "{}, {}, {}, {}, {}",
+                instr_count, stack_height, stack_size, gas_used, computation_cost,
+            )
+        }
+
+        fn write_gas_stats(&self, summary: &GasCostSummary, digest: TransactionDigest) {
             #[skip_checked_arithmetic]
             trace!(
                 target: GAS_STATS_TARGET,
-                "GAS_STATS DATA {}: {}, {}, {}, {}, {}, \
-                {}, {}, {}, {}, {}, {}",
+                "GAS_STATS DATA {}: {}, {}, {}, {}, {}, {}, {:?}",
                 digest,
                 self.gas_budget,
                 self.gas_price,
@@ -309,39 +315,8 @@ mod checked {
                 summary.storage_cost,
                 summary.storage_rebate,
                 summary.non_refundable_storage_fee,
-                instr_count,
-                stack_height,
-                stack_size,
-                gas_used,
-                computation_cost,
+                 self.get_gas_vals(),
             );
-
-            let info = self.gas_status.get_others_info();
-            for (idx, (gas_used, instr_count, stack_height, stack_size)) in
-                info.into_iter().enumerate()
-            {
-                let bucket_cost = get_bucket_cost(&self.cost_table.computation_bucket, gas_used);
-                // charge extra on top of `computation_cost` to make the total computation
-                // cost a bucket value
-                let total_gas_used = bucket_cost * self.gas_price;
-                let computation_cost = if self.gas_budget <= total_gas_used {
-                    self.gas_budget
-                } else {
-                    total_gas_used
-                };
-
-                #[skip_checked_arithmetic]
-                trace!(
-                    target:GAS_STATS_TARGET,
-                    "GAS_STATS STACK {idx} {}: {}, {}, {}, {}, {}",
-                    digest,
-                    computation_cost,
-                    instr_count,
-                    stack_height,
-                    stack_size,
-                    gas_used,
-                );
-            }
         }
 
         // Check whether gas arguments are legit:
