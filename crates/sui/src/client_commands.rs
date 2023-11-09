@@ -1833,7 +1833,7 @@ fn write_obj_changes<T: Display>(
     if !values.is_empty() {
         writeln!(writer, "\n{} Objects: ", output_string)?;
         for obj in values {
-            writeln!(writer, "{}", obj)?;
+            write!(writer, "{}", obj)?;
         }
     }
     Ok(())
