@@ -197,7 +197,9 @@ impl Object {
             .extend()
     }
 
-    /// The `0x2::sui::Coin` objects owned by the given object.
+    /// The coin objects for the given address.
+    /// The type field is a string of the inner type of the coin
+    /// by which to filter (e.g., 0x2::sui::SUI).
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
