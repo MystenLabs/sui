@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use tracing::info;
+use tap::tap::TapFallible;
+use tracing::{error, info};
 
 use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
-const MOVE_CALL_PROCESSOR_BATCH_SIZE: i64 = 1000;
+const MOVE_CALL_PROCESSOR_BATCH_SIZE: usize = 80000;
+const PARALLELISM: usize = 10;
 
 pub struct MoveCallMetricsProcessor<S> {
     pub store: S,
-    pub move_call_processor_batch_size: i64,
+    pub move_call_processor_batch_size: usize,
+    pub move_call_processor_parallelism: usize,
 }
 
 impl<S> MoveCallMetricsProcessor<S>
@@ -19,11 +22,15 @@ where
 {
     pub fn new(store: S) -> MoveCallMetricsProcessor<S> {
         let move_call_processor_batch_size = std::env::var("MOVE_CALL_PROCESSOR_BATCH_SIZE")
-            .map(|s| s.parse::<i64>().unwrap_or(MOVE_CALL_PROCESSOR_BATCH_SIZE))
+            .map(|s| s.parse::<usize>().unwrap_or(MOVE_CALL_PROCESSOR_BATCH_SIZE))
             .unwrap_or(MOVE_CALL_PROCESSOR_BATCH_SIZE);
+        let move_call_processor_parallelism = std::env::var("MOVE_CALL_PROCESSOR_PARALLELISM")
+            .map(|s| s.parse::<usize>().unwrap_or(PARALLELISM))
+            .unwrap_or(PARALLELISM);
         Self {
             store,
             move_call_processor_batch_size,
+            move_call_processor_parallelism,
         }
     }
 
@@ -36,7 +43,8 @@ where
         loop {
             let mut latest_tx = self.store.get_latest_stored_transaction().await?;
             while if let Some(tx) = latest_tx {
-                tx.tx_sequence_number < last_processed_tx_seq + self.move_call_processor_batch_size
+                tx.tx_sequence_number
+                    < last_processed_tx_seq + self.move_call_processor_batch_size as i64
             } else {
                 true
             } {
@@ -44,14 +52,37 @@ where
                 latest_tx = self.store.get_latest_stored_transaction().await?;
             }
 
-            self.store
-                .persist_move_calls_in_tx_range(
-                    last_processed_tx_seq + 1,
-                    last_processed_tx_seq + self.move_call_processor_batch_size + 1,
-                )
-                .await?;
-            last_processed_tx_seq += self.move_call_processor_batch_size;
+            let batch_size = self.move_call_processor_batch_size;
+            let step_size = batch_size / self.move_call_processor_parallelism;
+            let mut persist_tasks = vec![];
+            for chunk_start_tx_seq in (last_processed_tx_seq + 1
+                ..last_processed_tx_seq + batch_size as i64 + 1)
+                .step_by(step_size)
+            {
+                let move_call_store = self.store.clone();
+                persist_tasks.push(tokio::task::spawn(async move {
+                    move_call_store
+                        .persist_move_calls_in_tx_range(
+                            chunk_start_tx_seq,
+                            chunk_start_tx_seq + step_size as i64,
+                        )
+                        .await
+                }));
+            }
+            futures::future::join_all(persist_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining move call persist tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error persisting move calls: {:?}", e);
+                })?;
             info!("Persisted move_calls at tx seq: {}", last_processed_tx_seq);
+            last_processed_tx_seq += batch_size as i64;
 
             let mut tx = self.store.get_tx(last_processed_tx_seq).await?;
             while tx.is_none() {

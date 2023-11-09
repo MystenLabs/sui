@@ -17,7 +17,6 @@ use crate::schema_v2::{move_call_metrics, move_calls};
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = move_calls)]
 pub struct StoredMoveCall {
-    pub id: Option<i64>,
     pub transaction_sequence_number: i64,
     pub checkpoint_sequence_number: i64,
     pub epoch: i64,

@@ -351,7 +351,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
     async fn get_latest_move_call_tx_seq(&self) -> IndexerResult<Option<TxSeq>> {
         let last_processed_tx_seq = read_only_blocking!(&self.blocking_cp, |conn| {
             move_calls::dsl::move_calls
-                .order(move_calls::dsl::id.desc())
+                .order(move_calls::dsl::transaction_sequence_number.desc())
                 .select((move_calls::dsl::transaction_sequence_number,))
                 .first::<TxSeq>(conn)
                 .optional()
@@ -578,9 +578,9 @@ fn construct_address_persisting_query(start_tx_seq: i64, end_tx_seq: i64) -> Str
       FROM union_address
       GROUP BY address
       ON CONFLICT (address) DO UPDATE
-      SET 
-        last_appearance_tx = EXCLUDED.last_appearance_tx,
-        last_appearance_time = EXCLUDED.last_appearance_time;
+      SET
+        last_appearance_tx = GREATEST(EXCLUDED.last_appearance_tx, addresses.last_appearance_tx),
+        last_appearance_time = GREATEST(EXCLUDED.last_appearance_time, addresses.last_appearance_time);
     ",
         start_tx_seq, end_tx_seq, start_tx_seq, end_tx_seq
     )
@@ -609,22 +609,16 @@ fn construct_active_address_persisting_query(start_tx_seq: i64, end_tx_seq: i64)
       GROUP BY address
       ON CONFLICT (address) DO UPDATE
       SET 
-        last_appearance_tx = EXCLUDED.last_appearance_tx,
-        last_appearance_time = EXCLUDED.last_appearance_time;",
+        last_appearance_tx = GREATEST(EXCLUDED.last_appearance_tx, active_addresses.last_appearance_tx),
+        last_appearance_time = GREATEST(EXCLUDED.last_appearance_time, active_addresses.last_appearance_time);
+    ",
         start_tx_seq, end_tx_seq
     )
 }
 
 fn construct_move_call_persist_query(start_tx_seq: i64, end_tx_seq: i64) -> String {
     format!(
-        "INSERT INTO move_calls (
-        transaction_sequence_number,
-        checkpoint_sequence_number,
-        epoch,
-        move_package,
-        move_module,
-        move_function
-    )
+        "INSERT INTO move_calls
     SELECT
         m.tx_sequence_number AS transaction_sequence_number,
         c.sequence_number AS checkpoint_sequence_number,
@@ -637,7 +631,9 @@ fn construct_move_call_persist_query(start_tx_seq: i64, end_tx_seq: i64) -> Stri
         ON m.tx_sequence_number = t.tx_sequence_number
     INNER JOIN checkpoints c
         ON t.checkpoint_sequence_number = c.sequence_number
-    WHERE m.tx_sequence_number >= {} AND m.tx_sequence_number < {};",
+    WHERE m.tx_sequence_number >= {} AND m.tx_sequence_number < {}
+    ON CONFLICT (transaction_sequence_number, move_package, move_module, move_function) DO NOTHING;
+    ",
         start_tx_seq, end_tx_seq
     )
 }
