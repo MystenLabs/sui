@@ -12,6 +12,7 @@ use crate::functional_group::FunctionalGroup;
 // TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 20;
 const MAX_QUERY_NODES: u32 = 200;
+const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const MAX_QUERY_VARIABLES: u32 = 50;
 const MAX_QUERY_FRAGMENTS: u32 = 50;
@@ -51,6 +52,8 @@ pub struct Limits {
     pub(crate) max_query_depth: u32,
     #[serde(default)]
     pub(crate) max_query_nodes: u32,
+    #[serde(default)]
+    pub(crate) max_query_payload_size: u32,
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
     #[serde(default)]
@@ -171,6 +174,11 @@ impl ServiceConfig {
     async fn request_timeout_ms(&self) -> BigInt {
         BigInt::from(self.limits.request_timeout_ms)
     }
+
+    /// Maximum length of a query payload string.
+    async fn max_query_payload_size(&self) -> u32 {
+        self.limits.max_query_payload_size
+    }
 }
 
 impl Default for ConnectionConfig {
@@ -190,6 +198,7 @@ impl Default for Limits {
         Self {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
+            max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: MAX_DB_QUERY_COST,
             max_query_variables: MAX_QUERY_VARIABLES,
             max_query_fragments: MAX_QUERY_FRAGMENTS,
@@ -285,6 +294,7 @@ mod tests {
             r#" [limits]
                 max-query-depth = 100
                 max-query-nodes = 300
+                max-query-payload-size = 2000
                 max-db-query-cost = 50
                 max-query-variables = 45
                 max-query-fragments = 32
@@ -297,6 +307,7 @@ mod tests {
             limits: Limits {
                 max_query_depth: 100,
                 max_query_nodes: 300,
+                max_query_payload_size: 2000,
                 max_db_query_cost: 50,
                 max_query_variables: 45,
                 max_query_fragments: 32,
@@ -354,6 +365,7 @@ mod tests {
                 [limits]
                 max-query-depth = 42
                 max-query-nodes = 320
+                max-query-payload-size = 200
                 max-db-query-cost = 20
                 max-query-variables = 34
                 max-query-fragments = 31
@@ -369,6 +381,7 @@ mod tests {
             limits: Limits {
                 max_query_depth: 42,
                 max_query_nodes: 320,
+                max_query_payload_size: 200,
                 max_db_query_cost: 20,
                 max_query_variables: 34,
                 max_query_fragments: 31,

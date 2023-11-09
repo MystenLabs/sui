@@ -840,7 +840,7 @@ type TransactionBlockEffects {
   objectReads: [Object]
   objectChanges: [ObjectChange]
   balanceChanges: [BalanceChange]
-
+  timestamp: DateTime
   epoch: Epoch
   checkpoint: Checkpoint
 

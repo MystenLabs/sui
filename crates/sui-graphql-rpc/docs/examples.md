@@ -51,7 +51,8 @@
 ### [Sui System State Summary](#15)
 #### &emsp;&emsp;[Sui System State Summary](#983025)
 ### [Transaction Block](#16)
-#### &emsp;&emsp;[Transaction Block Kind](#1048560)
+#### &emsp;&emsp;[Transaction Block](#1048560)
+#### &emsp;&emsp;[Transaction Block Kind](#1048561)
 ### [Transaction Block Connection](#17)
 #### &emsp;&emsp;[Before After Checkpoint](#1114095)
 #### &emsp;&emsp;[Changed Object Filter](#1114096)
@@ -1063,6 +1064,43 @@
 ## <a id=16></a>
 ## Transaction Block
 ### <a id=1048560></a>
+### Transaction Block
+####  Get the data for a TransactionBlock by its digest
+
+><pre>{
+>  transactionBlock(digest: "HvTjk3ELg8gRofmB1GgrpLHBFeA53QKmUKGEuhuypezg") {
+>    sender {
+>      location
+>    }
+>    gasInput {
+>      gasSponsor {
+>        location
+>      }
+>      gasPayment {
+>        nodes {
+>          location
+>        }
+>      }
+>      gasPrice
+>      gasBudget
+>    }
+>    kind {
+>      __typename
+>    }
+>    signatures {
+>      base64Sig
+>    }
+>    digest
+>    expiration {
+>      epochId
+>    }
+>    effects {
+>      timestamp
+>    }
+>  }
+>}</pre>
+
+### <a id=1048561></a>
 ### Transaction Block Kind
 
 ><pre>{
