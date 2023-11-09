@@ -474,8 +474,8 @@ module sui::token {
         assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
         assert!(object::id(self) == cap.for, ENotAuthorized);
         df::borrow_mut(&mut self.id, key<Rule>())
-
     }
+
     /// Remove a `Config` for a `Rule` in the `TokenPolicy`.
     /// Unlike the `add_rule_config`, this function does not require a `Rule`
     /// witness, hence can be performed by the `TokenPolicy` owner on their own.
