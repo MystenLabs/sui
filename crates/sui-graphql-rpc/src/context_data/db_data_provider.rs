@@ -1842,6 +1842,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
 
         let balance_changes = tx.balance_changes;
         let object_changes = tx.object_changes;
+        let timestamp = DateTime::from_ms(tx.timestamp_ms);
         let effects = match SuiTransactionBlockEffects::try_from(effects) {
             Ok(effects) => {
                 let transaction_effects = TransactionBlockEffects::from_stored_transaction(
@@ -1850,6 +1851,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
                     object_changes,
                     &effects,
                     digest,
+                    timestamp,
                 );
                 transaction_effects.map_err(|e| Error::Internal(e.message))
             }
