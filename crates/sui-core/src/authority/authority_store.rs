@@ -12,6 +12,7 @@ use crate::authority::authority_store_types::{
     get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
+use crate::transaction_output_writer::TransactionOutputs;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
@@ -419,7 +420,7 @@ impl AuthorityStore {
         object_id: &ObjectID,
         version: &SequenceNumber,
         epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, TypedStoreError> {
+    ) -> SuiResult<Option<TransactionDigest>> {
         let object_key = (epoch_id, ObjectKey(*object_id, *version));
 
         match self
@@ -1013,7 +1014,7 @@ impl AuthorityStore {
     #[instrument(level = "trace", skip_all)]
     async fn acquire_read_locks_for_indirect_objects(
         &self,
-        inner_temporary_store: &InnerTemporaryStore,
+        written: &WrittenObjects,
     ) -> Vec<RwLockGuard> {
         // locking is required to avoid potential race conditions with the pruner
         // potential race:
@@ -1023,8 +1024,7 @@ impl AuthorityStore {
         //   - tx executor commits ref count increment instead of the full value making object inaccessible
         // read locks are sufficient because ref count increments are safe,
         // concurrent transaction executions produce independent ref count increments and don't corrupt the state
-        let digests = inner_temporary_store
-            .written
+        let digests = written
             .values()
             .filter_map(|object| {
                 let StoreObjectPair(_, indirect_object) =
@@ -1042,14 +1042,22 @@ impl AuthorityStore {
     #[instrument(level = "debug", skip_all)]
     pub async fn update_state(
         &self,
-        inner_temporary_store: InnerTemporaryStore,
-        transaction: &VerifiedTransaction,
-        effects: &TransactionEffects,
         epoch_id: EpochId,
+        tx_outputs: TransactionOutputs,
     ) -> SuiResult {
-        let _locks = self
-            .acquire_read_locks_for_indirect_objects(&inner_temporary_store)
-            .await;
+        let TransactionOutputs {
+            transaction,
+            effects,
+            markers,
+            wrapped,
+            deleted,
+            locks_to_delete,
+            written,
+            events,
+        } = tx_outputs;
+
+        let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
+
         // Extract the new state from the execution
         let mut write_batch = self.perpetual_tables.transactions.batch();
 
@@ -1062,164 +1070,22 @@ impl AuthorityStore {
 
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
-        self.update_objects_and_locks(
-            &mut write_batch,
-            inner_temporary_store,
-            effects,
-            transaction,
-            epoch_id,
-        )
-        .await?;
-
-        // Store the signed effects of the transaction
-        // We can't write this until after sequencing succeeds (which happens in
-        // batch_update_objects), as effects_exists is used as a check in many places
-        // for "did the tx finish".
-        write_batch
-            .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?
-            .insert_batch(
-                &self.perpetual_tables.executed_effects,
-                [(transaction_digest, effects_digest)],
-            )?;
-
-        // test crashing before writing the batch
-        fail_point_async!("crash");
-
-        // Commit.
-        write_batch.write()?;
-
-        if transaction.transaction_data().is_end_of_epoch_tx() {
-            // At the end of epoch, since system packages may have been upgraded, force
-            // reload them in the cache.
-            self.force_reload_system_packages_into_cache();
-        }
-
-        // test crashing before notifying
-        fail_point_async!("crash");
-
-        self.executed_effects_digests_notify_read
-            .notify(transaction_digest, &effects_digest);
-        self.executed_effects_notify_read
-            .notify(transaction_digest, effects);
-
-        self.metrics
-            .pending_notify_read
-            .set(self.executed_effects_notify_read.num_pending() as i64);
-
-        debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
-
-        Ok(())
-    }
-
-    /// Helper function for updating the objects and locks in the state
-    #[instrument(level = "trace", skip_all)]
-    async fn update_objects_and_locks(
-        &self,
-        write_batch: &mut DBBatch,
-        inner_temporary_store: InnerTemporaryStore,
-        effects: &TransactionEffects,
-        transaction: &VerifiedTransaction,
-        epoch_id: EpochId,
-    ) -> SuiResult {
-        let InnerTemporaryStore {
-            input_objects,
-            mutable_inputs,
-            written,
-            events,
-            max_binary_format_version: _,
-            loaded_runtime_objects: _,
-            no_extraneous_module_bytes: _,
-            runtime_packages_loaded_from_db: _,
-            lamport_version,
-        } = inner_temporary_store;
-        trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
-               "batch_update_objects: temp store written");
-
-        let deleted: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
-
-        // Get the actual set of objects that have been received -- any received
-        // object will show up in the modified-at set.
-        let received_objects: Vec<_> = {
-            let modified_at: HashSet<_> = effects.modified_at_versions().into_iter().collect();
-            let possible_to_receive = transaction.transaction_data().receiving_objects();
-            possible_to_receive
-                .into_iter()
-                .filter(|obj_ref| modified_at.contains(&(obj_ref.0, obj_ref.1)))
-                .collect()
-        };
-
-        // We record any received or deleted objects since they could be pruned, and smear shared
-        // object deletions in the marker table. For deleted entries in the marker table we need to
-        // make sure we don't accidentally overwrite entries.
-        let markers_to_place = {
-            let received = received_objects.iter().map(|(object_id, version, _)| {
-                (
-                    (epoch_id, ObjectKey(*object_id, *version)),
-                    MarkerValue::Received,
-                )
-            });
-
-            let deleted = deleted.into_iter().map(|(object_id, version)| {
-                let object_key = (epoch_id, ObjectKey(object_id, version));
-                if input_objects
-                    .get(&object_id)
-                    .is_some_and(|object| object.is_shared())
-                {
-                    (
-                        object_key,
-                        MarkerValue::SharedDeleted(*transaction.digest()),
-                    )
-                } else {
-                    (object_key, MarkerValue::OwnedDeleted)
-                }
-            });
-
-            // We "smear" shared deleted objects in the marker table to allow for proper sequencing
-            // of transactions that are submitted after the deletion of the shared object.
-            // NB: that we do _not_ smear shared objects that were taken immutably in the
-            // transaction.
-            let smeared_objects = effects.deleted_mutably_accessed_shared_objects();
-            let shared_smears = smeared_objects.into_iter().map(move |object_id| {
-                let object_key = (epoch_id, ObjectKey(object_id, lamport_version));
-                (
-                    object_key,
-                    MarkerValue::SharedDeleted(*transaction.digest()),
-                )
-            });
-
-            received.chain(deleted).chain(shared_smears)
-        };
 
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table,
-            markers_to_place,
+            markers
+                .iter()
+                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
         )?;
 
-        let owned_inputs: Vec<_> = mutable_inputs
-            .into_iter()
-            .filter_map(|(id, ((version, digest), owner))| {
-                owner.is_address_owned().then_some((id, version, digest))
-            })
-            .collect();
-
-        let tombstones = effects
-            .deleted()
-            .into_iter()
-            .chain(effects.unwrapped_then_deleted())
-            .map(|oref| (oref, StoreObject::Deleted))
-            .chain(
-                effects
-                    .wrapped()
-                    .into_iter()
-                    .map(|oref| (oref, StoreObject::Wrapped)),
-            )
-            .map(|(oref, store_object)| {
-                (
-                    ObjectKey::from(oref),
-                    StoreObjectWrapper::from(store_object),
-                )
-            });
-        write_batch.insert_batch(&self.perpetual_tables.objects, tombstones)?;
+        write_batch.insert_batch(
+            &self.perpetual_tables.objects,
+            deleted
+                .into_iter()
+                .map(|key| (key, StoreObject::Deleted))
+                .chain(wrapped.into_iter().map(|key| (key, StoreObject::Wrapped)))
+                .map(|(key, store_object)| (key, StoreObjectWrapper::from(store_object))),
+        )?;
 
         // Insert each output object into the stores
         let (new_objects, new_indirect_move_objects): (Vec<_>, Vec<_>) = written
@@ -1293,15 +1159,51 @@ impl AuthorityStore {
         // 4. Locks may have existed when we started processing this tx, but could have since
         //    been deleted by a concurrent tx that finished first. In that case, check if the
         //    tx effects exist.
-        self.check_owned_object_locks_exist(&owned_inputs)?;
+        self.check_owned_object_locks_exist(&locks_to_delete)?;
 
-        self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
-        self.delete_locks(write_batch, &owned_inputs)?;
+        self.initialize_locks_impl(&mut write_batch, &new_locks_to_init, false)?;
 
-        // Make sure to delete the locks for any received objects.
-        // Any objects that occur as a `Receiving` argument but have not been received will not
-        // have their locks touched.
-        self.delete_locks(write_batch, &received_objects)
+        // Note: deletes locks for received objects as well (but not for objects that were in
+        // `Receiving` arguments which were not received)
+        self.delete_locks(&mut write_batch, &locks_to_delete)?;
+
+        write_batch
+            .insert_batch(
+                &self.perpetual_tables.effects,
+                [(effects_digest, effects.clone())],
+            )?
+            .insert_batch(
+                &self.perpetual_tables.executed_effects,
+                [(transaction_digest, effects_digest)],
+            )?;
+
+        // test crashing before writing the batch
+        fail_point_async!("crash");
+
+        // Commit.
+        write_batch.write()?;
+
+        if transaction.transaction_data().is_end_of_epoch_tx() {
+            // At the end of epoch, since system packages may have been upgraded, force
+            // reload them in the cache.
+            self.force_reload_system_packages_into_cache();
+        }
+
+        // test crashing before notifying
+        fail_point_async!("crash");
+
+        self.executed_effects_digests_notify_read
+            .notify(transaction_digest, &effects_digest);
+        self.executed_effects_notify_read
+            .notify(transaction_digest, &effects);
+
+        self.metrics
+            .pending_notify_read
+            .set(self.executed_effects_notify_read.num_pending() as i64);
+
+        debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
+
+        Ok(())
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously

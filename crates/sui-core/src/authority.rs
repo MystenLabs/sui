@@ -135,12 +135,14 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
+use crate::in_mem_execution_cache::{ExecutionCacheRead, InMemoryCache};
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
+use crate::transaction_output_writer::TransactionOutputWriter;
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
@@ -621,6 +623,9 @@ pub struct AuthorityState {
 
     /// The database
     input_loader: TransactionInputLoader,
+    output_writer: TransactionOutputWriter,
+    execution_cache: Arc<InMemoryCache>,
+
     pub database: Arc<AuthorityStore>, // TODO: remove pub
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
@@ -884,7 +889,11 @@ impl AuthorityState {
 
         if transaction.contains_shared_object() {
             epoch_store
-                .acquire_shared_locks_from_effects(transaction, effects.data(), &self.database)
+                .acquire_shared_locks_from_effects(
+                    transaction,
+                    effects.data(),
+                    self.execution_cache.as_ref(),
+                )
                 .await?;
         }
 
@@ -894,8 +903,8 @@ impl AuthorityState {
             .enqueue(vec![transaction.clone()], epoch_store)?;
 
         let observed_effects = self
-            .database
-            .notify_read_executed_effects(vec![digest])
+            .get_cache_reader()
+            .notify_read_executed_effects(&[digest])
             .instrument(tracing::debug_span!(
                 "notify_read_effects_in_execute_certificate_with_effects"
             ))
@@ -940,7 +949,12 @@ impl AuthorityState {
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store)?;
         }
 
-        let effects = self.notify_read_effects(certificate).await?;
+        let effects = self
+            .get_cache_reader()
+            .notify_read_executed_effects(&[*certificate.digest()])
+            .await?
+            .pop()
+            .expect("must return correct number of effects");
         self.sign_effects(effects, epoch_store)
     }
 
@@ -1027,15 +1041,11 @@ impl AuthorityState {
 
     pub async fn notify_read_effects(
         &self,
-        certificate: &VerifiedCertificate,
-    ) -> SuiResult<TransactionEffects> {
-        let tx_digest = *certificate.digest();
-        Ok(self
-            .database
-            .notify_read_executed_effects(vec![tx_digest])
-            .await?
-            .pop()
-            .expect("notify_read_effects should return exactly 1 element"))
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<TransactionEffects>> {
+        self.get_cache_reader()
+            .notify_read_executed_effects(digests)
+            .await
     }
 
     async fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
@@ -1273,12 +1283,12 @@ impl AuthorityState {
         // Allow testing what happens if we crash here.
         fail_point_async!("crash");
 
-        self.database
-            .update_state(
-                inner_temporary_store,
-                &certificate.clone().into_unsigned(),
-                effects,
+        self.output_writer
+            .write_transaction_outputs(
                 epoch_store.epoch(),
+                certificate.clone().into_unsigned(),
+                effects.clone(),
+                inner_temporary_store,
             )
             .await?;
 
@@ -2373,12 +2383,16 @@ impl AuthorityState {
             indirect_objects_threshold,
             archive_readers,
         );
-        let input_loader = TransactionInputLoader::new(store.clone());
+        let execution_cache = Arc::new(InMemoryCache::new(store.clone()));
+        let input_loader = TransactionInputLoader::new(execution_cache.clone());
+        let output_writer = TransactionOutputWriter::new(execution_cache.clone());
         let state = Arc::new(AuthorityState {
             name,
             secret,
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
+            output_writer,
+            execution_cache,
             database: store,
             indexes,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
@@ -2411,6 +2425,10 @@ impl AuthorityState {
             .expect("Error indexing genesis objects.");
 
         state
+    }
+
+    pub fn get_cache_reader(&self) -> &Arc<InMemoryCache> {
+        &self.execution_cache
     }
 
     pub async fn prune_checkpoints_for_eligible_epochs(

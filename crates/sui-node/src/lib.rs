@@ -1219,7 +1219,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_store,
             epoch_store,
-            Box::new(state.db()),
+            Box::new(state.get_cache_reader().clone().as_notify_read_wrapper()),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1343,8 +1343,7 @@ impl SuiNode {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
             self.checkpoint_store.clone(),
-            self.state.database.clone(),
-            self.state.transaction_manager().clone(),
+            self.state.clone(),
             self.accumulator.clone(),
             self.config.checkpoint_executor_config.clone(),
             &self.registry_service.default_registry(),
