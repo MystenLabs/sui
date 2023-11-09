@@ -203,7 +203,7 @@ module examples::regulated_coin_tests {
     // Test from allowed account is already covered in the
     // `test_limiter_transfer_allowed_pass`
 
-    #[test, expected_failure(abort_code = allowlist::ENotAllowed)]
+    #[test, expected_failure(abort_code = allowlist::EUserNotAllowed)]
     /// Try to `transfer` to a not allowed account.
     fun test_allowlist_transfer_to_not_allowed_fail() {
         let ctx = &mut test::ctx(ALICE);
@@ -217,7 +217,7 @@ module examples::regulated_coin_tests {
         abort 1337
     }
 
-    #[test, expected_failure(abort_code = allowlist::ENotAllowed)]
+    #[test, expected_failure(abort_code = allowlist::EUserNotAllowed)]
     /// Try to `from_coin` from a not allowed account.
     fun test_allowlist_from_coin_not_allowed_fail() {
         let ctx = &mut test::ctx(ALICE);

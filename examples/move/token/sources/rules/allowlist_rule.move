@@ -16,7 +16,7 @@ module examples::allowlist_rule {
     };
 
     /// The `sender` or `recipient` is not on the allowlist.
-    const ENotAllowed: u64 = 0;
+    const EUserNotAllowed: u64 = 0;
 
     /// The Rule witness.
     struct Allowlist has drop {}
@@ -33,17 +33,17 @@ module examples::allowlist_rule {
         request: &mut ActionRequest<T>,
         ctx: &mut TxContext
     ) {
-        assert!(has_config(policy), ENotAllowed);
+        assert!(has_config(policy), EUserNotAllowed);
 
         let config = config(policy);
         let sender = token::sender(request);
         let recipient = token::recipient(request);
 
-        assert!(bag::contains(config, sender), ENotAllowed);
+        assert!(bag::contains(config, sender), EUserNotAllowed);
 
         if (option::is_some(&recipient)) {
             let recipient = *option::borrow(&recipient);
-            assert!(bag::contains(config, recipient), ENotAllowed);
+            assert!(bag::contains(config, recipient), EUserNotAllowed);
         };
 
         token::add_approval(Allowlist {}, request, ctx);
