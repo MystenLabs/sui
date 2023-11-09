@@ -2,12 +2,13 @@ use std::{sync::Arc, time::Duration};
 
 use super::agents::*;
 use crate::{
-    metrics::Metrics,
+    metrics::{Measurement, Metrics},
     seqn_worker::{self, SequenceWorkerState},
     types::*,
 };
 use async_trait::async_trait;
-use tokio::{sync::mpsc, time::sleep};
+use futures::future;
+use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
 pub struct SWAgent {
     id: UniqueId,
@@ -46,10 +47,20 @@ impl Agent<SailfishMessage> for SWAgent {
         // extract my attrs from the global config
         let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
         if my_attrs["mode"] == "channel" {
+            // Periodically print metrics
+            let configs = self.attrs.clone();
+            let workload = "default".to_string();
+            let print_period = Duration::from_secs(10);
+            let _handle = Self::periodically_print_metrics(configs, workload, print_period);
+
             // Run Sequence Worker asynchronously
             let tx_count = my_attrs["tx_count"].parse::<u64>().unwrap();
-            SequenceWorkerState::run_with_channel(&self.out_channel, ew_ids, tx_count).await;
+            let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
+            let duration = Duration::from_secs(duration_secs);
+            SequenceWorkerState::run_with_channel(&self.out_channel, ew_ids, tx_count, duration)
+                .await;
             println!("SW finished");
+
             loop {
                 sleep(Duration::from_millis(1_000)).await;
             }
@@ -63,5 +74,55 @@ impl Agent<SailfishMessage> for SWAgent {
                 .run(&mut self.in_channel, &self.out_channel, ew_ids)
                 .await;
         }
+    }
+}
+
+impl SWAgent {
+    fn periodically_print_metrics(
+        global_configs: GlobalConfig,
+        workload: String,
+        period: Duration,
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            loop {
+                sleep(period).await;
+                let summary = Self::summarize_metrics(&global_configs, &workload)
+                    .await
+                    .expect("Failed to print metrics");
+                if !summary.is_empty() {
+                    println!("{summary}\n");
+                }
+            }
+        })
+    }
+
+    async fn summarize_metrics(
+        configs: &GlobalConfig,
+        workload: &str,
+    ) -> Result<String, reqwest::Error> {
+        let futures =
+            configs
+                .iter()
+                .filter(|(_, entry)| entry.kind == "EW")
+                .map(|(id, entry)| async move {
+                    let route = crate::prometheus::METRICS_ROUTE;
+                    let address = entry.metrics_address;
+                    let res = reqwest::get(format! {"http://{address}{route}"}).await?;
+                    let string = res.text().await?;
+                    let measurements = Measurement::from_prometheus(&string);
+                    let summary = measurements
+                        .get(workload)
+                        .map(|measurement| {
+                            format!(
+                                "[EW{id}] TPS: {}tx/s\t\tLatency (avg): {:?}",
+                                measurement.tps(),
+                                measurement.average_latency()
+                            )
+                        })
+                        .unwrap_or_default();
+                    Ok(summary)
+                });
+
+        future::try_join_all(futures).await.map(|v| v.join("\n"))
     }
 }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use super::agents::*;
 use crate::{
@@ -77,6 +77,8 @@ impl Agent<SailfishMessage> for EWAgent {
                 0
             }
         };
+        let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
+        let duration = Duration::from_secs(duration_secs);
 
         let mut ew_state = {
             if my_attrs["mode"] == "database" {
@@ -102,6 +104,7 @@ impl Agent<SailfishMessage> for EWAgent {
             .run(
                 metrics,
                 tx_count,
+                duration,
                 &mut self.in_channel,
                 &self.out_channel,
                 ew_ids,

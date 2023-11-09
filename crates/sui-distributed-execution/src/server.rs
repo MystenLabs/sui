@@ -154,7 +154,7 @@ impl NetworkManager {
                     dst: 0,
                     payload: SailfishMessage::Handshake {},
                 };
-                println!("[{}] Sending handshake to {:?}", self.my_id, addr);
+                tracing::debug!("[{}] Sending handshake to {:?}", self.my_id, addr);
                 let cancel_handler = sender
                     .send(
                         *addr,
@@ -167,7 +167,7 @@ impl NetworkManager {
                 sleep(Duration::from_millis(1_000)).await;
             }
         }
-        println!("Done connecting to everybody");
+        println!("[{}] Done connecting to everybody", self.my_id);
         sleep(Duration::from_millis(10_000)).await;
 
         let mut application_out = self.application_out;

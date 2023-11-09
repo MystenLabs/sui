@@ -53,6 +53,7 @@ impl ServerConfig {
                     ("metrics-address".to_string(), legacy_metrics.to_string()),
                     ("execute".to_string(), 100.to_string()),
                     ("mode".to_string(), "channel".to_string()),
+                    ("duration".to_string(), 60.to_string()),
                 ]
                 .iter()
                 .cloned()
@@ -162,6 +163,7 @@ pub struct TransactionWithEffects {
     pub ground_truth_effects: Option<TransactionEffects>, // full effects of tx, as ground truth exec result
     pub child_inputs: Option<Vec<ObjectID>>,              // TODO: mark mutable
     pub checkpoint_seq: Option<u64>,
+    pub timestamp: f64,
 }
 
 impl TransactionWithEffects {

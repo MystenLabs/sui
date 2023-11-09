@@ -33,13 +33,12 @@ use sui_types::temporary_store::TemporaryStore;
 use sui_types::transaction::{InputObjectKind, InputObjects, SenderSignedData, TransactionDataAPI};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
-use tokio::time::Instant;
 use tokio::time::{sleep, Duration};
 
-use crate::storage::WritableObjectStore;
 use crate::{
     metrics::Metrics,
     seqn_worker::{COMPONENT, WORKLOAD},
+    storage::WritableObjectStore,
 };
 
 use super::types::*;
@@ -521,8 +520,8 @@ impl<
     //     }
     // }
 
-    async fn init_genesis_objects(&self, tx_count: u64) {
-        let workload = Workload::new(tx_count, WORKLOAD);
+    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
+        let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
         println!("Setting up accounts and gas...");
         let start_time = std::time::Instant::now();
         let ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
@@ -544,6 +543,7 @@ impl<
         &mut self,
         metrics: Arc<LimitsMetrics>,
         tx_count: u64,
+        duration: Duration,
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
         out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
@@ -570,11 +570,11 @@ impl<
 
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
-            self.init_genesis_objects(tx_count).await;
+            self.init_genesis_objects(tx_count, duration).await;
         }
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;
-        let now = Instant::now();
+        // let now = Instant::now();
 
         // if we execute in channel mode, there is no need to wait for epoch start
         let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price) =
@@ -664,10 +664,14 @@ impl<
                             eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
                         }
                     }
-                    if num_tx == tx_count {
-                        println!("EW {} executed {} txs", my_id, num_tx);
-                        break;
+                    if num_tx % 10_000 == 0 {
+                        tracing::debug!("[task-queue] EW {my_id} executed {num_tx} txs");
                     }
+                    if num_tx == 1 {
+                        // Expose the start time as a metric. Should be done only once.
+                        worker_metrics.register_start_time();
+                    }
+                    self.update_metrics(&tx_with_results.full_tx, &worker_metrics);
                 },
                 // Received a tx from the queue mananger -> the tx is ready to be executed
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
@@ -807,10 +811,17 @@ impl<
                         // }
                         Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
                         num_tx += 1;
-                        if num_tx == tx_count {
-                            println!("EW {} executed {} txs", my_id, num_tx);
-                            break;
+                        if num_tx % 10_000 == 0 {
+                            tracing::debug!("[tx-results] EW {my_id} executed {num_tx} txs");
                         }
+                        if num_tx == 1 {
+                            // Expose the start time as a metric. Should be done only once.
+                            worker_metrics.register_start_time();
+                        }
+                        // if num_tx == tx_count {
+                        //     println!("EW {} executed {} txs", my_id, num_tx);
+                        //     break;
+                        // }
                         // epoch_txs_semaphore -= 1;
                         // assert!(epoch_txs_semaphore >= 0);
                     } else if let SailfishMessage::ProposeExec(full_tx) = msg {
@@ -878,21 +889,26 @@ impl<
         }
 
         // Print TPS
-        let elapsed = now.elapsed().as_secs_f64();
-        let tps = num_tx as f64 / elapsed;
-        println!(
-            "EW {} finished, executed {} txs ({:.2} tps)",
-            my_id, num_tx, tps
-        );
+        // let elapsed = now.elapsed().as_secs_f64();
+        // let tps = num_tx as f64 / elapsed;
+        // println!(
+        //     "EW {} finished, executed {} txs ({:.2} tps)",
+        //     my_id, num_tx, tps
+        // );
 
-        // todo - hack to get metrics (we should report live metrics instead)
-        for _ in 0..num_tx {
-            worker_metrics
-                .latency_s
-                .with_label_values(&["default"])
-                .observe(elapsed);
-        }
+        // // todo - hack to get metrics (we should report live metrics instead)
+        // for _ in 0..num_tx {
+        //     worker_metrics
+        //         .latency_s
+        //         .with_label_values(&["default"])
+        //         .observe(elapsed);
+        // }
 
         sleep(Duration::from_millis(1_000)).await;
+    }
+
+    fn update_metrics(&self, tx: &TransactionWithEffects, metrics: &Arc<Metrics>) {
+        const WORKLOAD: &str = "default";
+        metrics.register_transaction(tx.timestamp, WORKLOAD);
     }
 }
