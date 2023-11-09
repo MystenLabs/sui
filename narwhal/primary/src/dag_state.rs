@@ -309,24 +309,46 @@ impl Inner {
 
     fn try_propose(&mut self) -> ProposeResult {
         let highest_proposed_round = self.highest_proposed_round;
-        let mut parent_round = self.highest_known_round();
-        while parent_round >= highest_proposed_round {
-            let headers_by_round = &self.accepted_by_round[&parent_round];
-            // TODO(narwhalceti): wait for round leader(s).
-            if headers_by_round.quorum_time.is_some() {
-                break;
+        let mut parent_round = None;
+        let mut next_check_delay = Duration::from_millis(100);
+        let max_wait_threshold = Duration::from_millis(200);
+        for r in (highest_proposed_round..=self.highest_known_round()).rev() {
+            let headers_by_round = &self.accepted_by_round[&r];
+            let Some(quorum_time) = headers_by_round.quorum_time.clone() else {
+                continue;
+            };
+            let quorum_elapsed = Instant::now() - quorum_time;
+            let leaders = self.leader_schedule.leader_sequence(r);
+            let wait_interval = max_wait_threshold / leaders.len() as u32;
+            for (i, leader) in leaders.iter().enumerate() {
+                if !headers_by_round.authors.contains(leader) {
+                    continue;
+                }
+                let leader_wait_threshold = wait_interval * i as u32;
+                if quorum_elapsed >= leader_wait_threshold {
+                    parent_round = Some(r);
+                    break;
+                } else {
+                    next_check_delay = next_check_delay.min(leader_wait_threshold - quorum_elapsed);
+                }
             }
-            parent_round -= 1;
+            if quorum_elapsed >= max_wait_threshold {
+                parent_round = Some(r);
+                break;
+            } else {
+                next_check_delay =
+                    next_check_delay.min(max_wait_threshold - quorum_elapsed);
+            }
         }
         // There is no round above previously highest proposed round that has a quorum.
-        if parent_round < highest_proposed_round {
+        if parent_round.is_none() {
             return ProposeResult {
                 header_proposal: None,
-                next_check_delay: Duration::from_millis(100),
+                next_check_delay,
             };
         }
 
-        let header_round = parent_round + 1;
+        let header_round = parent_round.unwrap() + 1;
         let mut ancestors = vec![];
         let mut ancestor_max_ts_ms = 0;
         for index in 0..self.committee.size() {
@@ -352,7 +374,7 @@ impl Inner {
 
         ProposeResult {
             header_proposal: Some((header_round, ancestors, ancestor_max_ts_ms)),
-            next_check_delay: Duration::from_millis(100),
+            next_check_delay,
         }
     }
 
