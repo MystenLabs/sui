@@ -67,28 +67,30 @@ export function useSignPersonalMessage({
 			}
 
 			const signPersonalMessageFeature = currentWallet.features['sui:signPersonalMessage'];
-			if (!signPersonalMessageFeature) {
-				const signMessageFeature = currentWallet.features['sui:signMessage'];
-				if (signMessageFeature) {
-					console.warn(
-						"This wallet doesn't support the `signPersonalMessage` feature... falling back to `signMessage`.",
-					);
-
-					const { messageBytes, signature } = await signMessageFeature.signMessage({
-						...signPersonalMessageArgs,
-						account: signerAccount,
-					});
-					return { bytes: messageBytes, signature };
-				}
-				throw new WalletFeatureNotSupportedError(
-					"This wallet doesn't support the `signPersonalMessage` feature.",
-				);
+			if (signPersonalMessageFeature) {
+				return await signPersonalMessageFeature.signPersonalMessage({
+					...signPersonalMessageArgs,
+					account: signerAccount,
+				});
 			}
 
-			return await signPersonalMessageFeature.signPersonalMessage({
-				...signPersonalMessageArgs,
-				account: signerAccount,
-			});
+			// TODO: Remove this once we officially discontinue sui:signMessage in the wallet standard
+			const signMessageFeature = currentWallet.features['sui:signMessage'];
+			if (signMessageFeature) {
+				console.warn(
+					"This wallet doesn't support the `signPersonalMessage` feature... falling back to `signMessage`.",
+				);
+
+				const { messageBytes, signature } = await signMessageFeature.signMessage({
+					...signPersonalMessageArgs,
+					account: signerAccount,
+				});
+				return { bytes: messageBytes, signature };
+			}
+
+			throw new WalletFeatureNotSupportedError(
+				"This wallet doesn't support the `signPersonalMessage` feature.",
+			);
 		},
 		...mutationOptions,
 	});
