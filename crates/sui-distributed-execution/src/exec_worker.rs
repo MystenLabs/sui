@@ -892,7 +892,7 @@ fn select_ew_for_execution(
     if tx.is_epoch_change() || tx.get_read_set().contains(&ObjectID::from_single_byte(5)) {
         ew_ids[0]
     } else {
-        ew_ids[(txid.inner()[0] % 4) as usize]
+        ew_ids[txid.inner()[0] as usize % ew_ids.len()]
     }
 }
 
