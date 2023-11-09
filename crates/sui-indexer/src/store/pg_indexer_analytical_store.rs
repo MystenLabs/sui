@@ -157,6 +157,17 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(tx)
     }
 
+    async fn get_cp(&self, sequence_number: i64) -> IndexerResult<Option<StoredCheckpoint>> {
+        let cp = read_only_blocking!(&self.blocking_cp, |conn| {
+            checkpoints::dsl::checkpoints
+                .filter(checkpoints::dsl::sequence_number.eq(sequence_number))
+                .first::<StoredCheckpoint>(conn)
+                .optional()
+        })
+        .context("Failed reading checkpoint from PostgresDB")?;
+        Ok(cp)
+    }
+
     async fn get_latest_tx_count_metrics(&self) -> IndexerResult<Option<StoredTxCountMetrics>> {
         let latest_tx_count = read_only_blocking!(&self.blocking_cp, |conn| {
             tx_count_metrics::dsl::tx_count_metrics
@@ -244,7 +255,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(last_processed_tx_seq)
     }
 
-    fn persist_addresses_in_tx_range(
+    async fn persist_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
@@ -262,7 +273,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
-    fn persist_active_addresses_in_tx_range(
+    async fn persist_active_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
@@ -340,7 +351,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
     async fn get_latest_move_call_tx_seq(&self) -> IndexerResult<Option<TxSeq>> {
         let last_processed_tx_seq = read_only_blocking!(&self.blocking_cp, |conn| {
             move_calls::dsl::move_calls
-                .order(move_calls::dsl::transaction_sequence_number.desc())
+                .order(move_calls::dsl::id.desc())
                 .select((move_calls::dsl::transaction_sequence_number,))
                 .first::<TxSeq>(conn)
                 .optional()

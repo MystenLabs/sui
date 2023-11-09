@@ -50,12 +50,21 @@ where
                     last_processed_tx_seq + self.move_call_processor_batch_size + 1,
                 )
                 .await?;
-
             last_processed_tx_seq += self.move_call_processor_batch_size;
             info!("Persisted move_calls at tx seq: {}", last_processed_tx_seq);
 
-            // TODO: get the tx and then the cp for the epoch
-            let end_epoch = 100;
+            let mut tx = self.store.get_tx(last_processed_tx_seq).await?;
+            while tx.is_none() {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tx = self.store.get_tx(last_processed_tx_seq).await?;
+            }
+            let cp_seq = tx.unwrap().checkpoint_sequence_number;
+            let mut cp = self.store.get_cp(cp_seq).await?;
+            while cp.is_none() {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                cp = self.store.get_cp(cp_seq).await?;
+            }
+            let end_epoch = cp.unwrap().epoch;
             for epoch in last_processed_epoch + 1..end_epoch {
                 self.store
                     .calculate_and_persist_move_call_metrics(epoch)

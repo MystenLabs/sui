@@ -49,18 +49,22 @@ where
             let mut persist_tasks = vec![];
             let active_address_store = self.store.clone();
             let batch_size = self.address_processor_batch_size;
-            persist_tasks.push(tokio::task::spawn_blocking(move || {
-                active_address_store.persist_active_addresses_in_tx_range(
-                    last_processed_tx_seq + 1,
-                    last_processed_tx_seq + batch_size + 1,
-                )
+            persist_tasks.push(tokio::task::spawn(async move {
+                active_address_store
+                    .persist_active_addresses_in_tx_range(
+                        last_processed_tx_seq + 1,
+                        last_processed_tx_seq + batch_size + 1,
+                    )
+                    .await
             }));
             let address_store = self.store.clone();
-            persist_tasks.push(tokio::task::spawn_blocking(move || {
-                address_store.persist_addresses_in_tx_range(
-                    last_processed_tx_seq + 1,
-                    last_processed_tx_seq + batch_size + 1,
-                )
+            persist_tasks.push(tokio::task::spawn(async move {
+                address_store
+                    .persist_addresses_in_tx_range(
+                        last_processed_tx_seq + 1,
+                        last_processed_tx_seq + batch_size + 1,
+                    )
+                    .await
             }));
             futures::future::join_all(persist_tasks)
                 .await

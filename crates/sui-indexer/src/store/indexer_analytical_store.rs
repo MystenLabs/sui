@@ -38,6 +38,7 @@ pub trait IndexerAnalyticalStore {
         end_checkpoint: i64,
     ) -> IndexerResult<Vec<StoredTransactionSuccessCommandCount>>;
     async fn get_tx(&self, tx_sequence_number: i64) -> IndexerResult<Option<StoredTransaction>>;
+    async fn get_cp(&self, sequence_number: i64) -> IndexerResult<Option<StoredCheckpoint>>;
 
     // for network metrics including TPS and counts of objects etc.
     async fn get_latest_tx_count_metrics(&self) -> IndexerResult<Option<StoredTxCountMetrics>>;
@@ -51,12 +52,12 @@ pub trait IndexerAnalyticalStore {
 
     // for address metrics
     async fn get_address_metrics_last_processed_tx_seq(&self) -> IndexerResult<Option<TxSeq>>;
-    fn persist_addresses_in_tx_range(
+    async fn persist_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
     ) -> IndexerResult<()>;
-    fn persist_active_addresses_in_tx_range(
+    async fn persist_active_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,

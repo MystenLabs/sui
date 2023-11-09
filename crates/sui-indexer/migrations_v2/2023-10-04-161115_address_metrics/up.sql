@@ -17,7 +17,6 @@ CREATE TABLE active_addresses
     last_appearance_tx      BIGINT  NOT NULL,
     last_appearance_time    BIGINT  NOT NULL
 );
-CREATE INDEX active_addresses_last_appearance_tx_idx ON active_addresses (last_appearance_tx);
 
 CREATE TABLE address_metrics
 (
