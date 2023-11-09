@@ -138,7 +138,7 @@ export function OwnedObjects({ id }: { id: string }) {
 	}
 
 	return (
-		<div className={clsx(!noAssets && 'h-coinsAndAssetsContainer md:h-full')}>
+		<div className="h-full">
 			<div className={clsx('flex h-full overflow-hidden md:pl-10', !showPagination && 'pb-2')}>
 				<div className="relative flex h-full w-full flex-col gap-4">
 					<div className="flex w-full flex-col items-start gap-3 border-b border-gray-45 max-sm:pb-3 sm:h-14 sm:min-h-14 sm:flex-row sm:items-center">
@@ -198,7 +198,7 @@ export function OwnedObjects({ id }: { id: string }) {
 					</div>
 
 					{noAssets && (
-						<div className="flex h-20 items-center justify-center md:h-coinsAndAssetsContainer">
+						<div className="flex h-20 items-center justify-center md:h-full">
 							<Text variant="body/medium" color="steel-dark">
 								No Assets owned
 							</Text>

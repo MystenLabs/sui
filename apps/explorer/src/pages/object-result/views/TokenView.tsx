@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetDynamicFields, useGetObject, useGetOwnedObjects } from '@mysten/core';
+import { useGetDynamicFields, useGetObject } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { Heading } from '@mysten/ui';
@@ -204,51 +204,4 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 			)}
 		</>
 	);
-
-	// return (
-	// 	<div className="flex flex-col flex-nowrap gap-14">
-	// 		{/*<SplitPanes*/}
-	// 		{/*	autoSaveId={LOCAL_STORAGE_SPLIT_PANE_KEYS.OBJECT_VIEW_VERTICAL}*/}
-	// 		{/*	dividerSize="none"*/}
-	// 		{/*	splitPanels={[leftPane, rightPane]}*/}
-	// 		{/*	direction="horizontal"*/}
-	// 		{/*/>*/}
-	//
-	// 		<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
-	// 			<TabsList>
-	// 				<TabsTrigger value={TABS_VALUES.FIELDS}>
-	// 					<Heading variant="heading4/semibold">{fieldsCount} Fields</Heading>
-	// 				</TabsTrigger>
-	//
-	// 				{renderDynamicFields && (
-	// 					<TabsTrigger value={TABS_VALUES.DYNAMIC_FIELDS}>
-	// 						<Heading variant="heading4/semibold">Dynamic Fields</Heading>
-	// 					</TabsTrigger>
-	// 				)}
-	// 			</TabsList>
-	//
-	// 			<TabsContent value={TABS_VALUES.FIELDS}>
-	// 				<FieldsContainer>
-	// 					<ObjectFieldsCard
-	// 						objectType={objectType || ''}
-	// 						normalizedStructData={normalizedStructData}
-	// 						suiObjectResponseData={suiObjectResponseData}
-	// 						loading={objectFieldsCardLoading}
-	// 						error={objectFieldsCardError}
-	// 						id={objectId}
-	// 					/>
-	// 				</FieldsContainer>
-	// 			</TabsContent>
-	// 			{renderDynamicFields && (
-	// 				<TabsContent value={TABS_VALUES.DYNAMIC_FIELDS}>
-	// 					<FieldsContainer>
-	// 						<DynamicFieldsCard id={objectId} />
-	// 					</FieldsContainer>
-	// 				</TabsContent>
-	// 			)}
-	// 		</Tabs>
-	//
-	// 		<TransactionBlocksForAddress address={objectId} isObject />
-	// 	</div>
-	// );
 }
