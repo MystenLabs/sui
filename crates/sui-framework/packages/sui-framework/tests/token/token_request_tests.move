@@ -24,7 +24,7 @@ module sui::token_request_tests {
 
         let request = token::new_request(action, 100, none(), none(), ctx);
 
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap)
     }
 
@@ -49,7 +49,7 @@ module sui::token_request_tests {
 
         let request = token::new_request(action, 100, none(), none(), ctx);
 
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap)
     }
 
@@ -68,7 +68,7 @@ module sui::token_request_tests {
         token::add_approval(Rule1 {}, &mut request, ctx);
         token::add_approval(Rule2 {}, &mut request, ctx);
 
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap)
     }
 
@@ -84,7 +84,7 @@ module sui::token_request_tests {
         let request = token::new_request(action, 100, none(), none(), ctx);
 
         token::add_approval(Rule2 {}, &mut request, ctx);
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
 
         abort 1337
     }
