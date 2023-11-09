@@ -140,6 +140,7 @@ use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
+use crate::transaction_output_writer::TransactionOutputWriter;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -615,6 +616,7 @@ pub struct AuthorityState {
 
     /// The database
     input_loader: TransactionInputLoader,
+    output_writer: TransactionOutputWriter,
     pub database: Arc<AuthorityStore>, // TODO: remove pub
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
@@ -1261,12 +1263,12 @@ impl AuthorityState {
         // Allow testing what happens if we crash here.
         fail_point_async!("crash");
 
-        self.database
-            .update_state(
-                inner_temporary_store,
-                &certificate.clone().into_unsigned(),
-                effects,
+        self.output_writer
+            .write_transaction_outputs(
                 epoch_store.epoch(),
+                certificate.clone().into_unsigned(),
+                effects.clone(),
+                inner_temporary_store,
             )
             .await?;
 
@@ -2175,11 +2177,13 @@ impl AuthorityState {
             archive_readers,
         );
         let input_loader = TransactionInputLoader::new(store.clone());
+        let output_writer = TransactionOutputWriter::new(store.clone());
         let state = Arc::new(AuthorityState {
             name,
             secret,
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
+            output_writer,
             database: store,
             indexes,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
