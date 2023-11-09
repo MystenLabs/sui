@@ -577,7 +577,10 @@ fn construct_address_persisting_query(start_tx_seq: i64, end_tx_seq: i64) -> Str
         MAX(last_timestamp) AS last_appearance_time
       FROM union_address
       GROUP BY address
-      ON CONFLICT DO NOTHING;
+      ON CONFLICT (address) DO UPDATE
+      SET 
+        last_appearance_tx = EXCLUDED.last_appearance_tx,
+        last_appearance_time = EXCLUDED.last_appearance_time;
     ",
         start_tx_seq, end_tx_seq, start_tx_seq, end_tx_seq
     )
@@ -604,7 +607,10 @@ fn construct_active_address_persisting_query(start_tx_seq: i64, end_tx_seq: i64)
             MAX(timestamp_ms) AS last_appearance_time
       FROM senders
       GROUP BY address
-      ON CONFLICT DO NOTHING;",
+      ON CONFLICT (address) DO UPDATE
+      SET 
+        last_appearance_tx = EXCLUDED.last_appearance_tx,
+        last_appearance_time = EXCLUDED.last_appearance_time;",
         start_tx_seq, end_tx_seq
     )
 }

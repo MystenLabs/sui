@@ -46,6 +46,10 @@ where
                 latest_tx = self.store.get_latest_stored_transaction().await?;
             }
 
+            info!(
+                "Persisting addresses and active addresses for tx seq: {}",
+                last_processed_tx_seq + 1,
+            );
             let mut persist_tasks = vec![];
             let active_address_store = self.store.clone();
             let batch_size = self.address_processor_batch_size;
@@ -79,6 +83,10 @@ where
                     error!("Error persisting addresses or active addresses: {:?}", e);
                 })?;
             last_processed_tx_seq += self.address_processor_batch_size;
+            info!(
+                "Persisted addresses and active addresses for tx seq: {}",
+                last_processed_tx_seq,
+            );
 
             let mut last_processed_tx = self.store.get_tx(last_processed_tx_seq).await?;
             while last_processed_tx.is_none() {
@@ -87,10 +95,6 @@ where
             }
             // unwrap is safe here b/c we just checked that it's not None
             let last_processed_cp = last_processed_tx.unwrap().checkpoint_sequence_number;
-            info!(
-                "Persisted addresses and active addresses for tx seq: {}",
-                last_processed_tx_seq,
-            );
             self.store
                 .calculate_and_persist_address_metrics(last_processed_cp)
                 .await?;
