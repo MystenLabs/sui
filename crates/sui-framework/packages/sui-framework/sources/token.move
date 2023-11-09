@@ -316,8 +316,8 @@ module sui::token {
         request: ActionRequest<T>,
         _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
-        assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
         assert!(option::is_none(&request.spent_balance), ECantConsumeBalance);
+        assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
 
         let ActionRequest {
             name, approvals,
@@ -680,6 +680,9 @@ module sui::token {
     /// Create a new `RuleKey` for a `Rule`. The `is_protected` field is kept
     /// for potential future use, if Rules were to have a freely modifiable
     /// storage as addition / replacement for the `Config` system.
+    ///
+    /// The goal of `is_protected` is to potentially allow Rules store a mutable
+    /// version of their configuration and mutate state on user action.
     fun key<Rule>(): RuleKey<Rule> { RuleKey { is_protected: true } }
 
     // === Testing ===
