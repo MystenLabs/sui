@@ -140,7 +140,7 @@ impl Display for SuiEvent {
         }
         writeln!(f, " │ ParsedJSON:")?;
         let table_string = table.to_string();
-        let table_rows = table_string.split_inclusive("\n");
+        let table_rows = table_string.split_inclusive('\n');
         for r in table_rows {
             write!(f, " │   {r}")?;
         }
