@@ -79,6 +79,7 @@ static_symbols!(
     "event",
     "emit",
     "Receiving",
+    "receive",
 );
 
 /// The global, unique cache of strings.
