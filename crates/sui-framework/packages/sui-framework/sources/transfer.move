@@ -103,7 +103,22 @@ module sui::transfer {
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
     /// referencing an object of type `T` owned by `parent` use the `to_receive`
     /// argument to receive and return the referenced owned object of type `T`.
+    /// This function has custom rules performed by the Sui Move bytecode verifier that ensures
+    /// that `T` is an object defined in the module where `receive` is invoked. Use
+    /// `public_receive` to receivne an object with `store` outside of its module.
     public fun receive<T: key>(parent: &mut UID, to_receive: Receiving<T>): T {
+        let Receiving {
+            id,
+            version,
+        } = to_receive;
+        receive_impl(object::uid_to_address(parent), id, version)
+    }
+
+    /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
+    /// referencing an object of type `T` owned by `parent` use the `to_receive`
+    /// argument to receive and return the referenced owned object of type `T`.
+    /// The object must have `store` to be received outside of its defining module.
+    public fun public_receive<T: key + store>(parent: &mut UID, to_receive: Receiving<T>): T {
         let Receiving {
             id,
             version,

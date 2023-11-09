@@ -64,8 +64,8 @@ Version: 2
 Contents: tto::M1::Wrapper<tto::M1::A> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,9)}}, value: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: _}}, value: vector[119u8, 114u8, 97u8, 112u8, 112u8, 101u8, 100u8]}}
 
 task 13 'run'. lines 104-104:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 11) at offset 0, Abort Code: 2
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 11, instruction: 0, function_name: Some("receive_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(11), 0)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 2
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 2), source: Some(VMError { major_status: ABORTED, sub_status: Some(2), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }
 
 task 14 'run'. lines 106-106:
 created: object(14,0)
