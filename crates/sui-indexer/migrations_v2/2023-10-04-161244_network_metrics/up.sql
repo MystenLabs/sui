@@ -21,7 +21,7 @@ diff_checkpoints AS (
   SELECT
     MAX(sequence_number) as sequence_number,
     SUM(total_successful_transactions) as total_successful_transactions,
-    LAG(timestamp_ms) OVER (ORDER BY timestamp_ms DESC) - timestamp_ms AS time_diff
+    timestamp_ms - LAG(timestamp_ms) OVER (ORDER BY timestamp_ms) AS time_diff
   FROM
     recent_checkpoints
   GROUP BY

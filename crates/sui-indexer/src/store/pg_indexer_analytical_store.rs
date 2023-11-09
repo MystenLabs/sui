@@ -506,7 +506,7 @@ fn construct_peak_tps_query(epoch: i64, offset: i64) -> String {
               timestamp_ms
             FROM
               tx_count_metrics
-              WHERE epoch > ({} - {})
+              WHERE epoch > ({} - {}) AND epoch <= {}
             GROUP BY
               timestamp_ms
           ),
@@ -514,7 +514,7 @@ fn construct_peak_tps_query(epoch: i64, offset: i64) -> String {
             SELECT
               checkpoint_sequence_number,
               total_successful_transactions,
-              LAG(timestamp_ms) OVER (ORDER BY timestamp_ms DESC) - timestamp_ms AS time_diff
+              timestamp_ms - LAG(timestamp_ms) OVER (ORDER BY timestamp_ms) AS time_diff
             FROM 
               filtered_checkpoints
           )
@@ -525,7 +525,7 @@ fn construct_peak_tps_query(epoch: i64, offset: i64) -> String {
           WHERE 
             time_diff IS NOT NULL;
         ",
-        epoch, offset
+        epoch, offset, epoch
     )
 }
 
