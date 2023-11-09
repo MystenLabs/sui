@@ -19,7 +19,7 @@ use sui_types::object::Object;
 use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::config::ReplayableNetworkConfigSet;
 
@@ -52,7 +52,13 @@ pub struct OnChainTransactionInfo {
     pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
+    #[serde(default = "unspecified_chain")]
     pub chain: Chain,
+}
+
+fn unspecified_chain() -> Chain {
+    warn!("Unable to determine chain id. Defaulting to unknown");
+    Chain::Unknown
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
