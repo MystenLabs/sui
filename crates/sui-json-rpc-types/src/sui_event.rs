@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Base58;
-use json_to_table::json_to_table;
+use fastcrypto::encoding::{Base58, Encoding};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -10,14 +9,16 @@ use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use serde_with::{serde_as, DisplayFromStr};
 use std::fmt;
 use std::fmt::Display;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::event::{Event, EventEnvelope, EventID};
 use sui_types::sui_serde::BigInt;
+
+use json_to_table::json_to_table;
+use tabled::settings::Style as TableStyle;
 
 use crate::{type_and_fields_from_move_struct, Page};
 use sui_types::sui_serde::SuiStructTag;
@@ -127,21 +128,23 @@ impl SuiEvent {
 
 impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let parsed_json_table = json_to_table(&self.parsed_json);
-        let table = parsed_json_table.into_table();
-        let rows = table.count_rows();
+        let mut table = json_to_table(&self.parsed_json);
+        let style = TableStyle::modern();
+        table.collapse().with(style);
+        let bcs_base58 = Base58::encode(&self.bcs);
         write!(f,
-            " ┌──\n │ Event ID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n",
-            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_)?;
+            " ┌──\n │ EventID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n │ BCS (Base58):{}\n",
+            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_, bcs_base58)?;
         if let Some(ts) = self.timestamp_ms {
             writeln!(f, " │ Timestamp: {}\n └──", ts)?;
         }
-        writeln!(f, " │ ParsedJSON: {}\n", table.to_string())?;
-        // add the vertical line for rows - 1
-        for _ in 1..rows {
-            writeln!(f, " │")?;
+        writeln!(f, " │ ParsedJSON:")?;
+        let table_string = table.to_string();
+        let table_rows = table_string.split_inclusive("\n");
+        for r in table_rows {
+            write!(f, " │   {r}")?;
         }
-        writeln!(f, " └──")
+        write!(f, "\n └──")
     }
 }
 
