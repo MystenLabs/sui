@@ -66,14 +66,26 @@ export function useSignPersonalMessage({
 				);
 			}
 
-			const walletFeature = currentWallet.features['sui:signPersonalMessage'];
-			if (!walletFeature) {
+			const signPersonalMessageFeature = currentWallet.features['sui:signPersonalMessage'];
+			if (!signPersonalMessageFeature) {
+				const signMessageFeature = currentWallet.features['sui:signMessage'];
+				if (signMessageFeature) {
+					console.warn(
+						"This wallet doesn't support the `signPersonalMessage` feature... falling back to `signMessage`.",
+					);
+
+					const { messageBytes, signature } = await signMessageFeature.signMessage({
+						...signPersonalMessageArgs,
+						account: signerAccount,
+					});
+					return { bytes: messageBytes, signature };
+				}
 				throw new WalletFeatureNotSupportedError(
 					"This wallet doesn't support the `signPersonalMessage` feature.",
 				);
 			}
 
-			return await walletFeature.signPersonalMessage({
+			return await signPersonalMessageFeature.signPersonalMessage({
 				...signPersonalMessageArgs,
 				account: signerAccount,
 			});
