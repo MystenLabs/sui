@@ -838,7 +838,7 @@ impl Display for SuiTransactionBlockEvents {
             let mut builder = TableBuilder::default();
 
             for event in &self.data {
-                builder.push_record(vec![format!("{:?}", event)]);
+                builder.push_record(vec![format!("{}", event)]);
             }
 
             let mut table = builder.build();
