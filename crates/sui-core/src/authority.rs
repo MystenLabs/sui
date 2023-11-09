@@ -125,7 +125,7 @@ use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
-use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
+use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
@@ -1228,55 +1228,7 @@ impl AuthorityState {
         let shared_object_count = effects.input_shared_objects().len();
         let digest = *certificate.digest();
 
-        // If commit_certificate returns an error, tx_guard will be dropped and the certificate
-        // will be persisted in the log for later recovery.
-        let mut output_keys: Vec<_> = inner_temporary_store
-            .written
-            .iter()
-            .map(|(id, obj)| {
-                if obj.is_package() {
-                    InputKey::Package { id: *id }
-                } else {
-                    InputKey::VersionedObject {
-                        id: *id,
-                        version: obj.version(),
-                    }
-                }
-            })
-            .collect();
-
-        let deleted: HashMap<_, _> = effects
-            .deleted()
-            .iter()
-            .map(|oref| (oref.0, oref.1))
-            .collect();
-
-        // add deleted shared objects to the outputkeys that then get sent to notify_commit
-        let deleted_output_keys = deleted
-            .iter()
-            .filter(|(id, _)| {
-                inner_temporary_store
-                    .input_objects
-                    .get(id)
-                    .is_some_and(|obj| obj.is_shared())
-            })
-            .map(|(id, seq)| InputKey::VersionedObject {
-                id: *id,
-                version: *seq,
-            });
-        output_keys.extend(deleted_output_keys);
-
-        // For any previously deleted shared objects that appeared mutably in the transaction,
-        // synthesize a notification for the next version of the object.
-        let smeared_version = inner_temporary_store.lamport_version;
-        let deleted_accessed_objects = effects.deleted_mutably_accessed_shared_objects();
-        for object_id in deleted_accessed_objects.into_iter() {
-            let key = InputKey::VersionedObject {
-                id: object_id,
-                version: smeared_version,
-            };
-            output_keys.push(key);
-        }
+        let output_keys = inner_temporary_store.get_output_keys(effects);
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::hash::Hash;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
@@ -20,8 +19,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
-    PackageObjectArc,
+    get_module, BackingPackageStore, ChildObjectResolver, InputKey, MarkerValue, ObjectKey,
+    ObjectStore, PackageObjectArc,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -2155,47 +2154,6 @@ impl From<LockDetails> for LockDetailsWrapper {
     fn from(details: LockDetails) -> Self {
         // always use latest version.
         LockDetailsWrapper::V1(details)
-    }
-}
-
-/// A potential input to a transaction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum InputKey {
-    VersionedObject {
-        id: ObjectID,
-        version: SequenceNumber,
-    },
-    Package {
-        id: ObjectID,
-    },
-}
-
-impl InputKey {
-    pub fn id(&self) -> ObjectID {
-        match self {
-            InputKey::VersionedObject { id, .. } => *id,
-            InputKey::Package { id } => *id,
-        }
-    }
-
-    pub fn version(&self) -> Option<SequenceNumber> {
-        match self {
-            InputKey::VersionedObject { version, .. } => Some(*version),
-            InputKey::Package { .. } => None,
-        }
-    }
-}
-
-impl From<&Object> for InputKey {
-    fn from(obj: &Object) -> Self {
-        if obj.is_package() {
-            InputKey::Package { id: obj.id() }
-        } else {
-            InputKey::VersionedObject {
-                id: obj.id(),
-                version: obj.version(),
-            }
-        }
     }
 }
 
