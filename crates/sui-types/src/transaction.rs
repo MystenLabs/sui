@@ -1219,6 +1219,14 @@ impl TransactionKind {
         }
     }
 
+    /// number of transactions, or 1 if it is a system transaction
+    pub fn tx_count(&self) -> usize {
+        match self {
+            TransactionKind::ProgrammableTransaction(pt) => pt.commands.len(),
+            _ => 1,
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Self::ChangeEpoch(_) => "ChangeEpoch",

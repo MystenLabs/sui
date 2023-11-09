@@ -447,7 +447,7 @@ where
                 events,
                 transaction_kind,
                 successful_tx_num: if fx.status().is_ok() {
-                    tx.kind().num_commands() as u64
+                    tx.kind().tx_count() as u64
                 } else {
                     0
                 },
