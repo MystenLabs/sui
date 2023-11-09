@@ -3,9 +3,12 @@
 
 /// Module which defines instances of the poseidon hash functions.
 module sui::poseidon {
+
+    #[allow(unused_const)]
     /// Error if any of the inputs are larger than or equal to the BN254 field size.
     const ENonCanonicalInput: u64 = 0;
 
+    #[allow(unused_const)]
     /// Error if more than 32 inputs are provided.
     const ETooManyInputs: u64 = 1;
 
