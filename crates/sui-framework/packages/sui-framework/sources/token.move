@@ -97,7 +97,7 @@ module sui::token {
     }
 
     /// A request to perform an "Action" on a token. Stores the information
-    /// about the performed action and must be consumed by the `confirm_request`
+    /// about the action to be performed and must be consumed by the `confirm_request`
     /// or `confirm_request_mut` functions when the Rules are satisfied.
     struct ActionRequest<phantom T> {
         /// Name of the Action to look up in the Policy. Name can be one of the
