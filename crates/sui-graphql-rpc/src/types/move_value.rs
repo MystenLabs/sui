@@ -10,7 +10,9 @@ use move_core_types::{
     value,
 };
 use serde::{Deserialize, Serialize};
+use sui_package_resolver::Resolver;
 
+use crate::context_data::package_cache::PackageCache;
 use crate::{
     error::{code, graphql_error},
     types::json::Json,
@@ -79,7 +81,7 @@ pub(crate) struct MoveField {
 impl MoveValue {
     /// Structured contents of a Move value.
     async fn data(&self, ctx: &Context<'_>) -> Result<MoveData> {
-        let cache = ctx.data().map_err(|_| {
+        let resolver: &Resolver<PackageCache> = ctx.data().map_err(|_| {
             graphql_error(
                 code::INTERNAL_SERVER_ERROR,
                 "Unable to fetch Package Cache.",
@@ -87,7 +89,7 @@ impl MoveValue {
         })?;
 
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.data_impl(self.type_.layout_impl(cache).await?)
+        self.data_impl(self.type_.layout_impl(resolver).await?)
     }
 
     /// Representation of a Move value in JSON, where:
@@ -103,7 +105,7 @@ impl MoveValue {
     /// This form is offered as a less verbose convenience in cases where the layout of the type is
     /// known by the client.
     async fn json(&self, ctx: &Context<'_>) -> Result<Json> {
-        let cache = ctx.data().map_err(|_| {
+        let resolver = ctx.data::<Resolver<PackageCache>>().map_err(|_| {
             graphql_error(
                 code::INTERNAL_SERVER_ERROR,
                 "Unable to fetch Package Cache.",
@@ -111,7 +113,7 @@ impl MoveValue {
         })?;
 
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.json_impl(self.type_.layout_impl(cache).await?)
+        self.json_impl(self.type_.layout_impl(resolver).await?)
     }
 }
 

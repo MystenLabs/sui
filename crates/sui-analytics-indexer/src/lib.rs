@@ -44,6 +44,7 @@ pub mod analytics_metrics;
 pub mod analytics_processor;
 pub mod errors;
 mod handlers;
+mod package_store;
 pub mod tables;
 mod writers;
 
@@ -93,6 +94,15 @@ pub struct AnalyticsIndexerConfig {
     // Type of data to write i.e. checkpoint, object, transaction, etc
     #[clap(long, value_enum, long, global = true)]
     pub file_type: FileType,
+    // Directory to contain the package cache for pipelines
+    #[clap(
+        long,
+        value_enum,
+        long,
+        global = true,
+        default_value = "/opt/sui/db/package_cache"
+    )]
+    pub package_cache_path: PathBuf,
 }
 
 #[derive(
@@ -408,7 +418,10 @@ pub async fn make_object_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
-    let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new());
+    let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new(
+        &config.package_cache_path,
+        &config.rest_url,
+    ));
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(config.clone(), FileType::Object).await?;
     let writer = make_writer::<ObjectEntry>(
@@ -430,7 +443,10 @@ pub async fn make_event_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
-    let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new());
+    let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new(
+        &config.package_cache_path,
+        &config.rest_url,
+    ));
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(config.clone(), FileType::Event).await?;
     let writer =

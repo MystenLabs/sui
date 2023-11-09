@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::context_data::package_cache::DbPackageStore;
 use crate::{
     config::ServerConfig,
-    context_data::{db_data_provider::PgManager, package_cache::PackageCache},
+    context_data::db_data_provider::PgManager,
     error::Error,
     extensions::{
         feature_gate::FeatureGate,
@@ -27,6 +28,7 @@ use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use tokio::sync::OnceCell;
 
 pub struct Server {
@@ -54,7 +56,8 @@ impl Server {
         let reader = PgManager::reader(config.connection.db_url.clone())
             .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
-        let package_cache = PackageCache::new(reader);
+        let package_store = DbPackageStore(reader);
+        let package_cache = PackageStoreWithLruCache::new(package_store);
 
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -78,7 +81,7 @@ impl Server {
             .max_query_nodes(config.service.limits.max_query_nodes)
             .context_data(config.service.clone())
             .context_data(pg_conn_pool)
-            .context_data(package_cache)
+            .context_data(Resolver::new(package_cache))
             .context_data(name_service_config)
             .ide_title(config.ide.ide_title.clone())
             .context_data(Arc::new(metrics))
