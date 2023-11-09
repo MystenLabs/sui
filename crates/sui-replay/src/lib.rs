@@ -7,6 +7,8 @@ use config::ReplayableNetworkConfigSet;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
 use fuzz_mutations::base_fuzzers;
+use sui_types::digests::get_mainnet_chain_identifier;
+use sui_types::digests::get_testnet_chain_identifier;
 use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
@@ -32,12 +34,6 @@ pub mod types;
 
 static DEFAULT_SANDBOX_BASE_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sandbox_snapshots");
-
-pub(crate) const MAINNET_CHAIN_ID: &str = "35834a8a";
-// TODO: Since testnet periodically resets, we need to refresh this value
-// Come up with a better way to refresh this const
-// One option is by reconstructing the genesis
-pub(crate) const TESTNET_CHAIN_ID: &str = "4c78adac";
 
 #[cfg(test)]
 mod tests;
@@ -540,9 +536,16 @@ pub async fn execute_replay_command(
 }
 
 pub(crate) fn chain_from_chain_id(chain: &str) -> Chain {
-    match chain {
-        MAINNET_CHAIN_ID => Chain::Mainnet,
-        TESTNET_CHAIN_ID => Chain::Testnet,
-        _ => Chain::Unknown,
+    let mainnet_chain_id = format!("{}", get_mainnet_chain_identifier());
+    // TODO: Since testnet periodically resets, we need to ensure that the chain id
+    // is updated to the latest one.
+    let testnet_chain_id = format!("{}", get_testnet_chain_identifier());
+
+    if mainnet_chain_id == chain {
+        Chain::Mainnet
+    } else if testnet_chain_id == chain {
+        Chain::Testnet
+    } else {
+        Chain::Unknown
     }
 }
