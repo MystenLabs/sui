@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::VecDeque, sync::Arc, time::Duration};
+use std::{cmp::min, collections::VecDeque, mem::swap, sync::Arc, time::Duration};
 
 use config::{AuthorityIdentifier, Committee, WorkerCache};
 use crypto::{traits::Signer, NetworkKeyPair};
@@ -82,14 +82,17 @@ impl Producer {
     // TODO(narwhalceti): remove loop and let this be driven by Core instead.
     async fn run(&mut self) {
         self.rx_headers_accepted.borrow_and_update();
-        let mut our_digests = VecDeque::new();
+        let mut own_digest_messages = VecDeque::new();
         let propose_timer = sleep_until(Instant::now() + Duration::from_millis(100));
         tokio::pin!(propose_timer);
         loop {
             tokio::select! {
                 result = self.rx_our_digests.recv() => {
-                    if let Some(message) = result {
-                        our_digests.push_back(message);
+                    if let Some(mut message) = result {
+                        if let Some(ack) = message.ack_channel.take() {
+                            ack.send(()).unwrap();
+                        }
+                        own_digest_messages.push_back(message);
                     } else {
                         info!("Worker channel closed, shutting down!");
                         return;
@@ -119,9 +122,11 @@ impl Producer {
                 // DagState does not allow proposing a header. Retry later.
                 continue;
             };
-            let batch_digests = our_digests.split_off(min(our_digests.len(), 2000));
+            self.metrics.current_round.set(header_round as i64);
+            let mut batch_messages = own_digest_messages.split_off(std::cmp::min(own_digest_messages.len(), 2000));
+            swap(&mut batch_messages, &mut own_digest_messages);
             let signed_header = self
-                .make_header(header_round, ancestors, ancestor_max_ts_ms, batch_digests)
+                .make_header(header_round, ancestors, ancestor_max_ts_ms, batch_messages)
                 .await;
 
             // TODO(narwhalceti): persisence.
@@ -138,7 +143,7 @@ impl Producer {
         header_round: Round,
         ancestors: Vec<HeaderKey>,
         ancestor_max_ts_ms: TimestampMs,
-        batch_digests: VecDeque<OurDigestMessage>,
+        batch_messages: VecDeque<OurDigestMessage>,
     ) -> SignedHeader {
         self.metrics.header_parents.observe(ancestors.len() as f64);
 
@@ -160,7 +165,7 @@ impl Producer {
             self.authority_id,
             header_round,
             self.committee.epoch(),
-            batch_digests
+            batch_messages
                 .iter()
                 .map(|m| (m.digest, (m.worker_id, m.timestamp)))
                 .collect(),
@@ -172,7 +177,7 @@ impl Producer {
         debug!("Created header {header:?}");
 
         // Update metrics related to latency
-        for message in &batch_digests {
+        for message in batch_messages {
             let batch_inclusion_secs =
                 Duration::from_millis(*header.created_at() - message.timestamp).as_secs_f64();
 

@@ -1656,7 +1656,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
                     // Only enable narwhalceti on private testnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.narwhalceti = true;
                         cfg.narwhalceti_leaders_per_round = Some(5);
                     }

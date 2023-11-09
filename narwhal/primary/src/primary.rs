@@ -1674,22 +1674,16 @@ impl WorkerToPrimary for WorkerReceiverHandler {
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 
-        let (tx_ack, rx_ack) = oneshot::channel();
         let response = self
             .tx_our_digests
             .send(OurDigestMessage {
                 digest: message.digest,
                 worker_id: message.worker_id,
                 timestamp: *message.metadata.created_at(),
-                ack_channel: Some(tx_ack),
+                ack_channel: None,
             })
             .await
             .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-
-        // If we are ok, then wait for the ack
-        rx_ack
-            .await
             .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
 
         Ok(response)

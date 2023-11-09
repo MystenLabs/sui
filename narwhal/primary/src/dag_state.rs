@@ -11,8 +11,8 @@ use storage::HeaderStore;
 use tokio::time::Instant;
 use tracing::warn;
 use types::{
-    error::DagResult, CertificateV2, CommittedSubDag, HeaderAPI, HeaderKey, ReputationScores,
-    Round, SignedHeader, TimestampMs,
+    error::DagResult, Certificate, CertificateV2, CommittedSubDag, HeaderAPI, HeaderKey,
+    ReputationScores, Round, SignedHeader, TimestampMs,
 };
 
 use crate::consensus::LeaderSchedule;
@@ -314,7 +314,7 @@ impl Inner {
         let max_wait_threshold = Duration::from_millis(200);
         for r in (highest_proposed_round..=self.highest_known_round()).rev() {
             let headers_by_round = &self.accepted_by_round[&r];
-            let Some(quorum_time) = headers_by_round.quorum_time.clone() else {
+            let Some(quorum_time) = headers_by_round.quorum_time else {
                 continue;
             };
             let quorum_elapsed = Instant::now() - quorum_time;
@@ -336,8 +336,7 @@ impl Inner {
                 parent_round = Some(r);
                 break;
             } else {
-                next_check_delay =
-                    next_check_delay.min(max_wait_threshold - quorum_elapsed);
+                next_check_delay = next_check_delay.min(max_wait_threshold - quorum_elapsed);
             }
         }
         // There is no round above previously highest proposed round that has a quorum.
@@ -669,12 +668,53 @@ impl Inner {
             })
             .collect();
         let leader_certificate = certificates[0].clone();
+        let reputation_score = self.compute_reputation_score(&certificates);
         CommittedSubDag::new_narwhalceti(
             certificates,
             leader_certificate,
-            ReputationScores::default(),
+            reputation_score,
             self.recent_committed_sub_dag.back(),
         )
+    }
+
+    /// Calculates the reputation score for the current commit by taking into account the reputation
+    /// scores from the previous commit (assuming that exists). It returns the updated reputation score.
+    fn compute_reputation_score(&self, committed_sequence: &[Certificate]) -> ReputationScores {
+        // we reset the scores for every schedule change window, or initialise when it's the first
+        // sub dag we are going to create.
+        // TODO: when schedule change is implemented we should probably change a little bit
+        // this logic here.
+        const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 50;
+        let Some(last_committed_sub_dag) = self.recent_committed_sub_dag.back() else {
+            return ReputationScores::new(&self.committee);
+        };
+
+        let sub_dag_index = last_committed_sub_dag.sub_dag_index + 1;
+        let mut reputation_score = if sub_dag_index % NUM_SUB_DAGS_PER_SCHEDULE == 0 {
+            ReputationScores::new(&self.committee)
+        } else {
+            last_committed_sub_dag.reputation_score.clone()
+        };
+
+        // update the score for the previous leader. If no previous leader exists,
+        // then this is the first time we commit a leader, so no score update takes place
+        for certificate in committed_sequence {
+            reputation_score.add_score(certificate.origin(), 1);
+        }
+
+        // we check if this is the last sub dag of the current schedule. If yes then we mark the
+        // scores as final_of_schedule = true so any downstream user can now that those are the last
+        // ones calculated for the current schedule.
+        reputation_score.final_of_schedule = (sub_dag_index + 1) % NUM_SUB_DAGS_PER_SCHEDULE == 0;
+
+        // Always ensure that all the authorities are present in the reputation scores - even
+        // when score is zero.
+        assert_eq!(
+            reputation_score.total_authorities() as usize,
+            self.committee.size()
+        );
+
+        reputation_score
     }
 
     fn highest_known_round(&self) -> Round {

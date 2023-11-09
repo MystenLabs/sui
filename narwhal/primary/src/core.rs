@@ -79,6 +79,10 @@ impl Core {
             debug!("Received verified header: {:?}", header);
             let mut headers = vec![header];
             while let Ok(header) = self.rx_verified_header.try_recv() {
+                self.metrics
+                    .highest_received_round
+                    .with_label_values(&["other"])
+                    .set(header.round() as i64);
                 debug!("Received verified header without wait: {:?}", header);
                 headers.push(header);
             }
