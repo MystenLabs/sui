@@ -43,7 +43,7 @@ pub trait IndexerAnalyticalStore {
     // for network metrics including TPS and counts of objects etc.
     async fn get_latest_tx_count_metrics(&self) -> IndexerResult<Option<StoredTxCountMetrics>>;
     async fn get_latest_epoch_peak_tps(&self) -> IndexerResult<Option<StoredEpochPeakTps>>;
-    async fn persist_tx_count_metrics(
+    fn persist_tx_count_metrics(
         &self,
         start_checkpoint: i64,
         end_checkpoint: i64,

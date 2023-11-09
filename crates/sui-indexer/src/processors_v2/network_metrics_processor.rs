@@ -1,36 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use tracing::info;
+
+use tap::tap::TapFallible;
+use tracing::{error, info};
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
-const NETWORK_METRICS_PROCESSOR_BATCH_SIZE: i64 = 10;
+const NETWORK_METRICS_PROCESSOR_BATCH_SIZE: usize = 10;
+const PARALLELISM: usize = 1;
 
 pub struct NetworkMetricsProcessor<S> {
     pub store: S,
     metrics: IndexerMetrics,
-    pub network_processor_metrics_batch_size: i64,
+    pub network_processor_metrics_batch_size: usize,
+    pub network_processor_metrics_parallelism: usize,
 }
 
 impl<S> NetworkMetricsProcessor<S>
 where
-    S: IndexerAnalyticalStore + Sync + Send + 'static,
+    S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
     pub fn new(store: S, metrics: IndexerMetrics) -> NetworkMetricsProcessor<S> {
         let network_processor_metrics_batch_size =
             std::env::var("NETWORK_PROCESSOR_METRICS_BATCH_SIZE")
                 .map(|s| {
-                    s.parse::<i64>()
+                    s.parse::<usize>()
                         .unwrap_or(NETWORK_METRICS_PROCESSOR_BATCH_SIZE)
                 })
                 .unwrap_or(NETWORK_METRICS_PROCESSOR_BATCH_SIZE);
+        let network_processor_metrics_parallelism =
+            std::env::var("NETWORK_PROCESSOR_METRICS_PARALLELISM")
+                .map(|s| s.parse::<usize>().unwrap_or(PARALLELISM))
+                .unwrap_or(PARALLELISM);
         Self {
             store,
             metrics,
             network_processor_metrics_batch_size,
+            network_processor_metrics_parallelism,
         }
     }
 
@@ -54,7 +63,7 @@ where
             let mut latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
             while if let Some(cp) = latest_stored_checkpoint {
                 cp.sequence_number
-                    < last_processed_cp_seq + self.network_processor_metrics_batch_size
+                    < last_processed_cp_seq + self.network_processor_metrics_batch_size as i64
             } else {
                 true
             } {
@@ -66,13 +75,33 @@ where
                 "Persisting tx count metrics for checkpoint sequence number {}",
                 last_processed_cp_seq
             );
-            self.store
-                .persist_tx_count_metrics(
-                    last_processed_cp_seq + 1,
-                    last_processed_cp_seq + self.network_processor_metrics_batch_size,
-                )
-                .await?;
-            last_processed_cp_seq += self.network_processor_metrics_batch_size;
+
+            let batch_size = self.network_processor_metrics_batch_size;
+            let step_size = batch_size / self.network_processor_metrics_parallelism;
+            let mut persist_tasks = vec![];
+            for chunk_start_cp in (last_processed_cp_seq + 1
+                ..last_processed_cp_seq + batch_size as i64 + 1)
+                .step_by(step_size)
+            {
+                let store = self.store.clone();
+                persist_tasks.push(tokio::task::spawn_blocking(move || {
+                    store
+                        .persist_tx_count_metrics(chunk_start_cp, chunk_start_cp + step_size as i64)
+                }));
+            }
+            futures::future::join_all(persist_tasks)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining network persist tasks: {:?}", e);
+                })?
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error persisting tx count metrics: {:?}", e);
+                })?;
+            last_processed_cp_seq += batch_size as i64;
             info!(
                 "Persisted tx count metrics for checkpoint sequence number {}",
                 last_processed_cp_seq

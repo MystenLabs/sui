@@ -190,7 +190,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(latest_network_metrics)
     }
 
-    async fn persist_tx_count_metrics(
+    fn persist_tx_count_metrics(
         &self,
         start_checkpoint: i64,
         end_checkpoint: i64,
@@ -495,7 +495,7 @@ fn construct_checkpoint_tx_count_query(start_checkpoint: i64, end_checkpoint: i6
             SUM(success_command_count) AS total_successful_transactions
           FROM filtered_txns
           GROUP BY checkpoint_sequence_number, epoch ORDER BY checkpoint_sequence_number
-          ON CONFLICT (checkpoint_sequence_number) DO NOTHING;;
+          ON CONFLICT (checkpoint_sequence_number) DO NOTHING;
         ", start_checkpoint, end_checkpoint
     )
 }
