@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 use tap::tap::TapFallible;
-use tracing::error;
+use tracing::{error, info};
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
@@ -196,15 +196,17 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         end_checkpoint: i64,
     ) -> IndexerResult<()> {
         let tx_count_query = construct_checkpoint_tx_count_query(start_checkpoint, end_checkpoint);
+        info!("Persisting tx count metrics for cp {}", start_checkpoint);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
                 diesel::sql_query(tx_count_query.clone()).execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
-            Duration::from_secs(60)
+            Duration::from_secs(10)
         )
         .context("Failed persisting tx count metrics to PostgresDB")?;
+        info!("Persisted tx count metrics for cp {}", start_checkpoint);
         Ok(())
     }
 
@@ -237,7 +239,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
                     .on_conflict_do_nothing()
                     .execute(conn)
             },
-            Duration::from_secs(60)
+            Duration::from_secs(10)
         )
         .context("Failed persisting epoch peak TPS to PostgresDB.")?;
         Ok(())
@@ -492,7 +494,8 @@ fn construct_checkpoint_tx_count_query(start_checkpoint: i64, end_checkpoint: i6
             SUM(CASE WHEN success_command_count > 0 THEN 1 ELSE 0 END) AS total_successful_transaction_blocks,
             SUM(success_command_count) AS total_successful_transactions
           FROM filtered_txns
-          GROUP BY checkpoint_sequence_number, epoch ORDER BY checkpoint_sequence_number;
+          GROUP BY checkpoint_sequence_number, epoch ORDER BY checkpoint_sequence_number
+          ON CONFLICT (checkpoint_sequence_number) DO NOTHING;;
         ", start_checkpoint, end_checkpoint
     )
 }

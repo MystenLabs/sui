@@ -62,6 +62,10 @@ where
                 latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
             }
 
+            info!(
+                "Persisting tx count metrics for checkpoint sequence number {}",
+                last_processed_cp_seq
+            );
             self.store
                 .persist_tx_count_metrics(
                     last_processed_cp_seq + 1,
