@@ -410,6 +410,17 @@ module sui::coin {
         balance::destroy_for_testing(balance)
     }
 
+    #[test_only]
+    /// Create a `TreasuryCap` for any `Coin` for testing purposes.
+    public fun create_treasury_cap_for_testing<T>(
+        ctx: &mut TxContext
+    ): TreasuryCap<T> {
+        TreasuryCap {
+            id: object::new(ctx),
+            total_supply: balance::create_supply_for_testing()
+        }
+    }
+
     // === Deprecated code ===
 
     // oops, wanted treasury: &TreasuryCap<T>

@@ -146,6 +146,7 @@ module sui::token {
         (policy, cap)
     }
 
+    #[lint_allow(share_owned)]
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {
@@ -273,6 +274,7 @@ module sui::token {
         object::delete(id);
     }
 
+    #[lint_allow(self_transfer)]
     /// Transfer the `Token` to the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
         transfer::transfer(token, tx_context::sender(ctx))
@@ -542,7 +544,6 @@ module sui::token {
     ///
     /// Aborts if the `TokenPolicyCap` is not matching the `TokenPolicy`.
     public fun add_rule_for_action<T, Rule: drop>(
-        // _rule: Rule, // TODO: keep or remove
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         action: String,
@@ -646,8 +647,8 @@ module sui::token {
 
     // === Action Request Fields ==
 
-    /// Name of the `ActionRequest`.
-    public fun name<T>(self: &ActionRequest<T>): String { self.name }
+    /// The Action in the `ActionRequest`.
+    public fun action<T>(self: &ActionRequest<T>): String { self.name }
 
     /// Amount of the `ActionRequest`.
     public fun amount<T>(self: &ActionRequest<T>): u64 { self.amount }
