@@ -540,7 +540,7 @@ impl AuthorityStorePruner {
         let pruning_initial_delay = if cfg!(msim) {
             Duration::from_millis(1)
         } else {
-            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 60))
+            Duration::from_secs(config.pruning_run_delay_seconds.unwrap_or(60 * 5))
         };
         let mut objects_prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
