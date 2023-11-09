@@ -1326,8 +1326,9 @@ impl PgManager {
             name_bcs_value,
         )
         .expect("oops");
+        println!("input type tag: {}", type_tag.to_canonical_string(true));
 
-        println!("id: {:?}", id);
+        println!("derived dynamic field id: {}", id);
 
         let stored_obj = self.get_obj(id.to_vec(), None).await?;
         if let Some(stored_object) = stored_obj {
@@ -1336,13 +1337,14 @@ impl PgManager {
             })?;
             let df_object_id = SuiAddress::from_bytes(df_object_id)
                 .map_err(|e| Error::Internal(format!("{e}")))?;
-            println!("df_object_id: {:?}", df_object_id);
+            println!("df_object_id for graphql::DynamicField: {}", df_object_id);
             return Ok(Some(DynamicField {
                 stored_object,
                 df_object_id,
                 df_kind: DynamicFieldType::DynamicField,
             }));
         }
+        println!("Dynamic field not found, trying as dynamic object field");
 
         // Try reading as dynamic field object by wrapping the inner T back into Wrapper<T> of DF<Wrapper<T>, V>
         let dynamic_object_field_struct =
@@ -1354,16 +1356,22 @@ impl PgManager {
             name_bcs_value,
         )
         .expect("deriving dynamic field id can't fail");
-        println!("dynamic_object_field_id: {:?}", dynamic_object_field_id);
+        println!(
+            "dynamic_object_field_type: {}",
+            dynamic_object_field_type.to_canonical_string(true)
+        );
+        println!("dynamic_object_field_id: {}", dynamic_object_field_id);
 
         let stored_obj = self.get_obj(dynamic_object_field_id.to_vec(), None).await?;
         if let Some(stored_object) = stored_obj {
+            // this loads the wrapper object
+            // and then we grab indexerv2::df_object_id
             let df_object_id = stored_object.df_object_id.as_ref().ok_or_else(|| {
                 Error::Internal("Dynamic field does not have df_object_id".to_string())
             })?;
             let df_object_id = SuiAddress::from_bytes(df_object_id)
                 .map_err(|e| Error::Internal(format!("{e}")))?;
-            println!("df_object_id: {:?}", df_object_id);
+            println!("df_object_id for graphql::DynamicField: {}", df_object_id);
             return Ok(Some(DynamicField {
                 stored_object,
                 df_object_id,
