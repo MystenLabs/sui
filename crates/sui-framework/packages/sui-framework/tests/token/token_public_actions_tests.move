@@ -11,7 +11,7 @@ module sui::token_public_actions_tests {
     /// Scenario: mint a Token, split it, merge back, then issue a zero and
     /// destroy it.
     fun test_public_split_join_zero_destroy() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let token = test::mint(100, ctx);
 
         let split = token::split(&mut token, 50, ctx);
@@ -28,7 +28,7 @@ module sui::token_public_actions_tests {
     #[test, expected_failure(abort_code = token::ENotZero)]
     /// Scenario: try to destroy a non-zero Token.
     fun test_public_destroy_non_zero_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let token = test::mint(100, ctx);
 
         token::destroy_zero(token)
@@ -37,7 +37,7 @@ module sui::token_public_actions_tests {
     #[test, expected_failure(abort_code = token::EBalanceTooLow)]
     /// Scenario: try to split more than in the Token.
     fun test_split_excessive_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let token = test::mint(0, ctx);
 
         let _t = token::split(&mut token, 100, ctx);

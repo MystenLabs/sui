@@ -26,6 +26,7 @@
 /// - KYC in this example is represented by an allowlist rule
 module examples::regulated_coin {
     use std::option;
+    use sui::vec_map;
     use sui::transfer;
     use sui::coin::{Self, TreasuryCap};
     use sui::tx_context::{sender, TxContext};
@@ -35,7 +36,7 @@ module examples::regulated_coin {
     // import rules and use them for this app
     use examples::allowlist_rule::Allowlist;
     use examples::denylist_rule::Denylist;
-    use examples::limiter_rule as limiter;
+    use examples::limiter_rule::{Self as limiter, Limiter};
 
     /// OTW and the type for the Token.
     struct REGULATED_COIN has drop {}
@@ -70,8 +71,17 @@ module examples::regulated_coin {
 
         // Set limits for each action:
         // transfer - 3000.00 REG, to_coin - 1000.00 REG
-        limiter::add_for(policy, cap, token::transfer_action(), 3000_000000, ctx);
-        limiter::add_for(policy, cap, token::to_coin_action(), 1000_000000, ctx);
+        token::add_rule_for_action<T, Limiter>(policy, cap, token::transfer_action(), ctx);
+        token::add_rule_for_action<T, Limiter>(policy, cap, token::to_coin_action(), ctx);
+
+        let config = {
+            let config = vec_map::empty();
+            vec_map::insert(&mut config, token::transfer_action(), 3000_000000);
+            vec_map::insert(&mut config, token::to_coin_action(), 1000_000000);
+            config
+        };
+
+        limiter::set_config(policy, cap, config, ctx);
 
         // Using allowlist to mock a KYC process; transfer and from_coin can
         // only be performed by KYC-d (allowed) addresses. Just like a Bank
@@ -128,7 +138,7 @@ module examples::regulated_coin_tests {
     #[test]
     /// Transfer 3000 REG to self
     fun test_limiter_transfer_allowed_pass() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, cap) = policy_with_allowlist(ctx);
 
         let token = test::mint(3000_000000, ctx);
@@ -138,14 +148,14 @@ module examples::regulated_coin_tests {
         denylist::verify(&policy, &mut request, ctx);
         allowlist::verify(&policy, &mut request, ctx);
 
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap);
     }
 
     #[test, expected_failure(abort_code = limiter::ELimitExceeded)]
     /// Try to transfer more than 3000.00 REG.
     fun test_limiter_transfer_to_not_allowed_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_allowlist(ctx);
 
         let token = test::mint(3001_000000, ctx);
@@ -159,7 +169,7 @@ module examples::regulated_coin_tests {
     #[test]
     /// Turn 1000 REG into Coin from.
     fun test_limiter_to_coin_allowed_pass() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, cap) = policy_with_allowlist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -169,7 +179,7 @@ module examples::regulated_coin_tests {
         denylist::verify(&policy, &mut request, ctx);
         allowlist::verify(&policy, &mut request, ctx);
 
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap);
         coin::burn_for_testing(coin);
     }
@@ -177,7 +187,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = limiter::ELimitExceeded)]
     /// Try to convert more than 1000.00 REG in a single operation.
     fun test_limiter_to_coin_exceeded_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_allowlist(ctx);
 
         let token = test::mint(1001_000000, ctx);
@@ -196,7 +206,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = allowlist::ENotAllowed)]
     /// Try to `transfer` to a not allowed account.
     fun test_allowlist_transfer_to_not_allowed_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_allowlist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -210,7 +220,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = allowlist::ENotAllowed)]
     /// Try to `from_coin` from a not allowed account.
     fun test_allowlist_from_coin_not_allowed_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, cap) = test::get_policy(ctx);
 
         set_rules(&mut policy, &cap, ctx);
@@ -228,7 +238,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `transfer` from a blocked account.
     fun test_denylist_transfer_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -242,7 +252,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `transfer` to a blocked account.
     fun test_denylist_transfer_to_recipient_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -256,14 +266,14 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `spend` from a blocked account.
     fun test_denylist_spend_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(BOB);
         let (policy, cap) = test::get_policy(ctx);
 
         set_rules(&mut policy, &cap, ctx);
-        denylist::add_records(&mut policy, &cap, vector[ BOB ]);
+        denylist::add_records(&mut policy, &cap, vector[ BOB ], ctx);
 
         let token = test::mint(1000_000000, ctx);
-        let request = token::transfer(token, BOB, ctx);
+        let request = token::spend(token, ctx);
 
         denylist::verify(&policy, &mut request, ctx);
 
@@ -273,7 +283,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `to_coin` from a blocked account.
     fun test_denylist_to_coin_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let token = test::mint(1000_000000, ctx);
@@ -287,7 +297,7 @@ module examples::regulated_coin_tests {
     #[test, expected_failure(abort_code = denylist::EUserBlocked)]
     /// Try to `from_coin` from a blocked account.
     fun test_denylist_from_coin_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(ALICE);
         let (policy, _cap) = policy_with_denylist(ctx);
 
         let coin = coin::mint_for_testing(1000_000000, ctx);
@@ -303,7 +313,7 @@ module examples::regulated_coin_tests {
         let (policy, cap) = test::get_policy(ctx);
         set_rules(&mut policy, &cap, ctx);
 
-        denylist::add_records(&mut policy, &cap, vector[ ALICE ]);
+        denylist::add_records(&mut policy, &cap, vector[ ALICE ], ctx);
         (policy, cap)
     }
 
@@ -312,7 +322,7 @@ module examples::regulated_coin_tests {
         let (policy, cap) = test::get_policy(ctx);
         set_rules(&mut policy, &cap, ctx);
 
-        allowlist::add_records(&mut policy, &cap, vector[ ALICE ]);
+        allowlist::add_records(&mut policy, &cap, vector[ ALICE ], ctx);
         (policy, cap)
     }
 }

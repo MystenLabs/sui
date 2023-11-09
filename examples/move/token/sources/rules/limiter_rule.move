@@ -26,26 +26,6 @@ module examples::limiter_rule {
         limits: VecMap<String, u64>
     }
 
-    /// Adds a limiter rule to the `TokenPolicy` with the given limit per
-    /// operation.
-    public fun add_for<T>(
-        policy: &mut TokenPolicy<T>,
-        cap: &TokenPolicyCap<T>,
-        action: String,
-        limit: u64,
-        ctx: &mut TxContext
-    ) {
-        // if there's no stored config for the rule, add a new one
-        if (!token::has_rule_config<T, Limiter>(policy)) {
-            let config = Config { limits: vec_map::empty() };
-            token::add_rule_config(Limiter {}, policy, cap, config, ctx);
-        };
-
-        let config: &mut Config = token::rule_config_mut(Limiter {}, policy, cap);
-        vec_map::insert(&mut config.limits, action, limit);
-        token::add_rule_for_action<T, Limiter>(policy, cap, action, ctx);
-    }
-
     /// Verifies that the request does not exceed the limit and adds an approval
     /// to the `ActionRequest`.
     public fun verify<T>(
@@ -53,21 +33,54 @@ module examples::limiter_rule {
         request: &mut ActionRequest<T>,
         ctx: &mut TxContext
     ) {
+        if (!token::has_rule_config<T, Limiter>(policy)) {
+            return token::add_approval(Limiter {}, request, ctx)
+        };
+
         let config: &Config = token::rule_config(Limiter {}, policy);
+        if (!vec_map::contains(&config.limits, &token::action(request))) {
+            return token::add_approval(Limiter {}, request, ctx)
+        };
+
         let action_limit = *vec_map::get(&config.limits, &token::action(request));
 
         assert!(token::amount(request) <= action_limit, ELimitExceeded);
         token::add_approval(Limiter {}, request, ctx);
     }
+
+    /// Updates the config for the `Limiter` rule. Uses the `VecMap` to store
+    /// the limits for each action.
+    public fun set_config<T>(
+        policy: &mut TokenPolicy<T>,
+        cap: &TokenPolicyCap<T>,
+        limits: VecMap<String, u64>,
+        ctx: &mut TxContext
+    ) {
+        // if there's no stored config for the rule, add a new one
+        if (!token::has_rule_config<T, Limiter>(policy)) {
+            let config = Config { limits };
+            token::add_rule_config(Limiter {}, policy, cap, config, ctx);
+        } else {
+            let config: &mut Config = token::rule_config_mut(Limiter {}, policy, cap);
+            config.limits = limits;
+        }
+    }
+
+    /// Returns the config for the `Limiter` rule.
+    public fun get_config<T>(policy: &TokenPolicy<T>): VecMap<String, u64> {
+        token::rule_config<T, Limiter, Config>(Limiter {}, policy).limits
+    }
 }
 
 #[test_only]
 module examples::limiter_rule_tests {
-    use examples::limiter_rule as limiter;
     use std::string::utf8;
     use std::option::{none, /* some */};
     use sui::token;
-    use sui::token_test_utils as test;
+    use sui::vec_map;
+    use sui::token_test_utils::{Self as test, TEST};
+
+    use examples::limiter_rule::{Self as limiter, Limiter};
 
     #[test]
     // Scenario: add a limiter rule for 100 tokens per operation, verify that
@@ -76,13 +89,13 @@ module examples::limiter_rule_tests {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        limiter::add_for(&mut policy, &cap, utf8(b"action"), 100, ctx);
+        token::add_rule_for_action<TEST, Limiter>(&mut policy, &cap, utf8(b"action"), ctx);
 
         let request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
         limiter::verify(&policy, &mut request, ctx);
 
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap);
     }
 
@@ -94,27 +107,32 @@ module examples::limiter_rule_tests {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
+        let config = vec_map::empty();
+        vec_map::insert(&mut config, utf8(b"action"), 100);
+        limiter::set_config(&mut policy, &cap, config, ctx);
+
         // adding limiter - confirmation required
-        limiter::add_for(&mut policy, &cap, utf8(b"action"), 100, ctx);
+        token::add_rule_for_action<TEST, Limiter>(&mut policy, &cap, utf8(b"action"), ctx);
         {
             let request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
             limiter::verify(&policy, &mut request, ctx);
-            token::confirm_request(&mut policy, request, ctx);
+            token::confirm_request(&policy, request, ctx);
         };
 
         // limiter removed - no confirmation required
-        limiter::remove_for(&mut policy, &cap, utf8(b"action"), ctx);
+        token::remove_rule_for_action<TEST, Limiter>(&mut policy, &cap, utf8(b"action"), ctx);
         {
             let request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
-            token::confirm_request(&mut policy, request, ctx);
+            token::confirm_request(&policy, request, ctx);
         };
 
-        // adding again to make sure the config was removed and can be re-added.
-        limiter::add_for(&mut policy, &cap, utf8(b"action"), 100, ctx);
+        // limiter added but no limit now
+        limiter::set_config(&mut policy, &cap, vec_map::empty(), ctx);
+        token::add_rule_for_action<TEST, Limiter>(&mut policy, &cap, utf8(b"action"), ctx);
         {
             let request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
             limiter::verify(&policy, &mut request, ctx);
-            token::confirm_request(&mut policy, request, ctx);
+            token::confirm_request(&policy, request, ctx);
         };
 
         test::return_policy(policy, cap);
@@ -127,7 +145,11 @@ module examples::limiter_rule_tests {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        limiter::add_for(&mut policy, &cap, utf8(b"action"), 100, ctx);
+        let config = vec_map::empty();
+        vec_map::insert(&mut config, utf8(b"action"), 100);
+        limiter::set_config(&mut policy, &cap, config, ctx);
+
+        token::add_rule_for_action<TEST, Limiter>(&mut policy, &cap, utf8(b"action"), ctx);
 
         let request = token::new_request(utf8(b"action"), 101, none(), none(), ctx);
         limiter::verify(&policy, &mut request, ctx);

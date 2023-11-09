@@ -16,7 +16,7 @@ module sui::token_actions_tests {
     /// Scenario: perform a transfer operation, and confirm that the request
     /// is well-formed.
     fun test_transfer_action() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
 
         let token = test::mint(1000, ctx);
@@ -40,7 +40,7 @@ module sui::token_actions_tests {
     /// Scenario: spend 1000 tokens, make sure the request is well-formed, and
     /// confirm request in the policy making sure the balance is updated.
     fun test_spend_action() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
 
         let token = test::mint(1000, ctx);
@@ -66,7 +66,7 @@ module sui::token_actions_tests {
     /// Scenario: turn 1000 tokens into Coin, make sure the request is well-formed,
     /// and perform a from_coin action to turn the Coin back into tokens.
     fun test_to_from_coin_action() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
 
         let token = test::mint(1000, ctx);
@@ -97,7 +97,7 @@ module sui::token_actions_tests {
     /// that the request matches the expected values, and confirm it in the
     /// policy.
     fun test_custom_action() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let custom_action = string::utf8(b"custom");
 

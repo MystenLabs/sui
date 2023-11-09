@@ -23,20 +23,27 @@ module examples::allowlist_rule {
 
     /// Verifies that the sender and the recipient (if set) are both on the
     /// `allowlist_rule` for a given action.
+    ///
+    /// Aborts if:
+    /// - there's no config
+    /// - the sender is not on the allowlist
+    /// - the recipient is not on the allowlist
     public fun verify<T>(
         policy: &TokenPolicy<T>,
         request: &mut ActionRequest<T>,
         ctx: &mut TxContext
     ) {
+        assert!(has_config(policy), ENotAllowed);
+
         let config = config(policy);
         let sender = token::sender(request);
-        let receiver = token::recipient(request);
+        let recipient = token::recipient(request);
 
         assert!(bag::contains(config, sender), ENotAllowed);
 
-        if (option::is_some(&receiver)) {
-            let receiver = *option::borrow(&receiver);
-            assert!(bag::contains(config, receiver), ENotAllowed);
+        if (option::is_some(&recipient)) {
+            let recipient = *option::borrow(&recipient);
+            assert!(bag::contains(config, recipient), ENotAllowed);
         };
 
         token::add_approval(Allowlist {}, request, ctx);
@@ -50,7 +57,12 @@ module examples::allowlist_rule {
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         addresses: vector<address>,
+        ctx: &mut TxContext,
     ) {
+        if (!has_config(policy)) {
+            token::add_rule_config(Allowlist {}, policy, cap, bag::new(ctx), ctx);
+        };
+
         let config_mut = config_mut(policy, cap);
         while (vector::length(&addresses) > 0) {
             bag::add(config_mut, vector::pop_back(&mut addresses), true)
@@ -73,6 +85,10 @@ module examples::allowlist_rule {
     }
 
     // === Internal ===
+
+    fun has_config<T>(self: &TokenPolicy<T>): bool {
+        token::has_rule_config_with_type<T, Allowlist, Bag>(self)
+    }
 
     fun config<T>(self: &TokenPolicy<T>): &Bag {
         token::rule_config<T, Allowlist, Bag>(Allowlist {}, self)

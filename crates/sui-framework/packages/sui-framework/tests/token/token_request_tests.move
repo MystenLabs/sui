@@ -16,7 +16,7 @@ module sui::token_request_tests {
     #[test]
     /// Scenario: allow test action, create request, confirm request
     fun test_request_confirm() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
@@ -31,7 +31,7 @@ module sui::token_request_tests {
     #[test]
     /// Scenario: issue a non-spend request, confirm with `TokenPolicyCap`
     fun test_request_confirm_with_cap() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
 
@@ -43,7 +43,7 @@ module sui::token_request_tests {
     #[test, expected_failure(abort_code = token::EUnknownAction)]
     /// Scenario: Policy does not allow test action, create request, try confirm
     fun test_request_confirm_unknown_action_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
@@ -57,7 +57,7 @@ module sui::token_request_tests {
     /// Scenario: Policy requires only Rule1 but request gets approval from
     /// Rule2 and Rule1
     fun test_request_confirm_excessive_approvals_pass() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
@@ -75,7 +75,7 @@ module sui::token_request_tests {
     #[test, expected_failure(abort_code = token::ENotApproved)]
     /// Scenario: Policy requires Rule1 but request gets approval from Rule2
     fun test_request_confirm_not_approved_fail() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let action = string::utf8(b"test");
 
@@ -92,7 +92,7 @@ module sui::token_request_tests {
     #[test, expected_failure(abort_code = token::ECantConsumeBalance)]
     /// Scenario: issue a Spend request, try to confirm it with `TokenPolicyCap`
     fun test_request_cant_consume_balance_with_cap() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (_policy, cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
         let request = token::spend(token, ctx);

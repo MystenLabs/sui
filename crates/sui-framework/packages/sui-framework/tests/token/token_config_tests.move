@@ -17,7 +17,7 @@ module sui::token_config_tests {
     #[test]
     /// Scenario: create a Config, read it, mutate it, check existence and remove
     fun test_create_and_use_rule_config() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
 
@@ -42,7 +42,7 @@ module sui::token_config_tests {
     #[test, expected_failure(abort_code = token::ENotAuthorized)]
     /// Scenario: try to add config while not being authorized
     fun test_add_config_fail_not_authorized() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, _cap) = test::get_policy(ctx);
         let (_policy, cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
@@ -55,7 +55,7 @@ module sui::token_config_tests {
     #[test, expected_failure(abort_code = token::ENotAuthorized)]
     /// Scenario: try to add config while not being authorized
     fun test_remove_config_fail_not_authorized() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let (_policy, wrong_cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };
@@ -69,7 +69,7 @@ module sui::token_config_tests {
     #[test, expected_failure(abort_code = token::ENotAuthorized)]
     /// Scenario: try to mutate config while not being authorized
     fun test_mutate_config_fail_not_authorized() {
-        let ctx = &mut test::ctx();
+        let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let (_policy, wrong_cap) = test::get_policy(ctx);
         let config = Config1 { value: 0 };

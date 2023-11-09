@@ -80,10 +80,9 @@ module examples::gem {
     fun init(otw: GEM, ctx: &mut TxContext) {
         let (treasury_cap, coin_metadata) = coin::create_currency(
             otw, 0, b"GEM", b"Capy Gems", // otw, decimal, symbol, name
-            b"In-game currency for Capy Miners", // description
-            none(), ctx // url
+            b"In-game currency for Capy Miners", none(), // description, url
+            ctx
         );
-
 
         // create a `TokenPolicy` for GEMs
         let (policy, cap) = token::new(&treasury_cap, ctx);

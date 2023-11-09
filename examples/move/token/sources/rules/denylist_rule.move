@@ -18,12 +18,7 @@ module examples::denylist_rule {
     use std::vector;
     use sui::bag::{Self, Bag};
     use sui::tx_context::TxContext;
-    use sui::token::{
-        Self,
-        TokenPolicy,
-        TokenPolicyCap,
-        ActionRequest
-    };
+    use sui::token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest};
 
     /// Trying to `verify` but the sender or the recipient is on the denylist.
     const EUserBlocked: u64 = 0;
@@ -38,6 +33,12 @@ module examples::denylist_rule {
         request: &mut ActionRequest<T>,
         ctx: &mut TxContext
     ) {
+        // early return if no records are added;
+        if (!has_config(policy)) {
+            token::add_approval(Denylist {}, request, ctx);
+            return
+        };
+
         let config = config(policy);
         let sender = token::sender(request);
         let receiver = token::recipient(request);
@@ -60,7 +61,12 @@ module examples::denylist_rule {
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         addresses: vector<address>,
+        ctx: &mut TxContext
     ) {
+        if (!has_config(policy)) {
+            token::add_rule_config(Denylist {}, policy, cap, bag::new(ctx), ctx);
+        };
+
         let config_mut = config_mut(policy, cap);
         while (vector::length(&addresses) > 0) {
             bag::add(config_mut, vector::pop_back(&mut addresses), true)
@@ -73,16 +79,23 @@ module examples::denylist_rule {
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         addresses: vector<address>,
+        _ctx: &mut TxContext
     ) {
         let config_mut = config_mut(policy, cap);
 
         while (vector::length(&addresses) > 0) {
             let record = vector::pop_back(&mut addresses);
-            let _: bool = bag::remove(config_mut, record);
+            if (bag::contains(config_mut, record)) {
+                let _: bool = bag::remove(config_mut, record);
+            };
         };
     }
 
     // === Internal ===
+
+    fun has_config<T>(self: &TokenPolicy<T>): bool {
+        token::has_rule_config_with_type<T, Denylist, Bag>(self)
+    }
 
     fun config<T>(self: &TokenPolicy<T>): &Bag {
         token::rule_config<T, Denylist, Bag>(Denylist {}, self)
@@ -95,11 +108,12 @@ module examples::denylist_rule {
 
 #[test_only]
 module examples::denylist_rule_tests {
-    use examples::denylist_rule as denylist;
     use std::string::utf8;
     use std::option::{none, some};
     use sui::token;
-    use sui::token_test_utils as test;
+    use sui::token_test_utils::{Self as test, TEST};
+
+    use examples::denylist_rule::{Self as denylist, Denylist};
 
     #[test]
     // Scenario: add a denylist with addresses, sender is not on the list and
@@ -109,13 +123,13 @@ module examples::denylist_rule_tests {
         let (policy, cap) = test::get_policy(ctx);
 
         // first add the list for action and then add records
-        denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records(&mut policy, &cap, vector[ @0x1 ]);
+        token::add_rule_for_action<TEST, Denylist>(&mut policy, &cap, utf8(b"action"), ctx);
+        denylist::add_records(&mut policy, &cap, vector[ @0x1 ], ctx);
 
         let request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
         denylist::verify(&policy, &mut request, ctx);
-        token::confirm_request(&mut policy, request, ctx);
+        token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap);
     }
 
@@ -126,8 +140,8 @@ module examples::denylist_rule_tests {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records(&mut policy, &cap, vector[ @0x0 ]);
+        token::add_rule_for_action<TEST, Denylist>(&mut policy, &cap, utf8(b"action"), ctx);
+        denylist::add_records(&mut policy, &cap, vector[ @0x0 ], ctx);
 
         let request = token::new_request(utf8(b"action"), 100, none(), none(), ctx);
 
@@ -143,8 +157,8 @@ module examples::denylist_rule_tests {
         let ctx = &mut sui::tx_context::dummy();
         let (policy, cap) = test::get_policy(ctx);
 
-        denylist::add_for(&mut policy, &cap, utf8(b"action"), ctx);
-        denylist::add_records(&mut policy, &cap, vector[ @0x1 ]);
+        token::add_rule_for_action<TEST, Denylist>(&mut policy, &cap, utf8(b"action"), ctx);
+        denylist::add_records(&mut policy, &cap, vector[ @0x1 ], ctx);
 
         let request = token::new_request(utf8(b"action"), 100, some(@0x1), none(), ctx);
 
