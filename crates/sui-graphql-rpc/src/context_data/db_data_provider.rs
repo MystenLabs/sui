@@ -22,10 +22,10 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
-        object::{Object, ObjectFilter, ObjectKind},
+        object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
-        stake::{Stake, StakeStatus},
+        stake::Stake,
         stake_subsidy::StakeSubsidy,
         storage_fund::StorageFund,
         sui_address::SuiAddress,
@@ -70,7 +70,7 @@ use sui_json_rpc::{
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
 use sui_json_rpc_types::{
-    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as SuiStake,
+    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as RpcStakedSui,
     SuiTransactionBlockEffects,
 };
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -81,7 +81,6 @@ use sui_sdk::types::{
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
-    object::Object as SuiObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
@@ -1183,7 +1182,6 @@ impl PgManager {
         let version = version.map(|v| v as i64);
 
         let stored_obj = self.get_obj(address, version).await?;
-
         stored_obj.map(Object::try_from).transpose()
     }
 
@@ -1192,14 +1190,13 @@ impl PgManager {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<MoveObject>, Error> {
-        let address = address.into_vec();
-        let version = version.map(|v| v as i64);
+        let Some(object) = self.fetch_obj(address, version).await? else {
+            return Ok(None);
+        };
 
-        let stored_obj = self.get_obj(address, version).await?;
-        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
-        let move_object = sui_object.map(|o| MoveObject { native_object: o });
-
-        Ok(move_object)
+        Ok(Some(MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!("{address} is not an object"))
+        })?))
     }
 
     pub(crate) async fn fetch_move_package(
@@ -1207,14 +1204,13 @@ impl PgManager {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<MovePackage>, Error> {
-        let address = address.into_vec();
-        let version = version.map(|v| v as i64);
+        let Some(object) = self.fetch_obj(address, version).await? else {
+            return Ok(None);
+        };
 
-        let stored_obj = self.get_obj(address, version).await?;
-        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
-        let move_package = sui_object.map(|o| MovePackage { native_object: o });
-
-        Ok(move_package)
+        Ok(Some(MovePackage::try_from(&object).map_err(|_| {
+            Error::Internal(format!("{address} is not a package"))
+        })?))
     }
 
     pub(crate) async fn fetch_owned_objs(
@@ -1384,28 +1380,37 @@ impl PgManager {
             .multi_get_coins(address, coin_type, first, after, last, before)
             .await?;
 
-        if let Some((stored_objs, has_next_page)) = coins {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(stored_objs.into_iter().filter_map(|stored_obj| {
-                    Coin::try_from(stored_obj)
-                        .map_err(|e| eprintln!("Error converting object to coin: {:?}", e))
-                        .ok()
-                        .map(|coin| {
-                            Edge::new(
-                                coin.move_obj
-                                    .native_object
-                                    .id()
-                                    .to_canonical_string(/* with_prefix */ true),
-                                coin,
-                            )
-                        })
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
+        let Some((stored_objs, has_next_page)) = coins else {
+            return Ok(None);
+        };
+
+        let mut connection = Connection::new(false, has_next_page);
+        for stored_obj in stored_objs {
+            let object = Object::try_from(stored_obj)?;
+
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a coin, but it's not an object",
+                    object.address,
+                ))
+            })?;
+
+            let coin_object = Coin::try_from(&move_object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a coin, but it is not",
+                    object.address,
+                ))
+            })?;
+
+            let cursor = move_object
+                .native
+                .id()
+                .to_canonical_string(/* with_prefix */ true);
+
+            connection.edges.push(Edge::new(cursor, coin_object));
         }
+
+        Ok(Some(connection))
     }
 
     pub(crate) async fn resolve_name_service_address(
@@ -1511,8 +1516,6 @@ impl PgManager {
         })
     }
 
-    //TODO this does not compute estimated reward because of some perf issues
-    // to be revisited once we figure out what's going on there
     pub(crate) async fn fetch_staked_sui(
         &self,
         address: SuiAddress,
@@ -1541,49 +1544,65 @@ impl PgManager {
             )
             .await?;
 
-        if let Some((stored_objs, has_next_page)) = objs {
-            let mut connection = Connection::new(false, has_next_page);
-            let mut edges = vec![];
-            let governance_api = GovernanceReadApiV2::new(self.inner.clone());
+        let Some((stored_objs, has_next_page)) = objs else {
+            return Ok(None);
+        };
 
-            // convert the stored objects into staked sui type
-            let stakes = stored_objs
-                .into_iter()
-                .flat_map(|stored_obj| {
-                    let object = sui_types::object::Object::try_from(stored_obj)
-                        .map_err(|_| eprintln!("Error converting from StoredObject to Object"))
-                        .ok()?;
-                    let stake_object = StakedSui::try_from(&object)
-                        .map_err(|_| eprintln!("Error converting from Object to StakedSui"))
-                        .ok()?;
-                    Some(stake_object)
-                })
-                .collect::<Vec<_>>();
+        let mut connection = Connection::new(false, has_next_page);
+        for stored_obj in stored_objs {
+            let object = Object::try_from(stored_obj)?;
 
-            // retrieve the delegated stakes
-            // at the first invocation, it will likely fail because data is not cached
-            let delegated_stakes = governance_api
-                .get_delegated_stakes(stakes)
-                .await
-                .map_err(|e| Error::Internal(format!("Error fetching delegated stakes. {e}")))?;
+            let move_object = MoveObject::try_from(&object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a staked sui, but it is not an object.",
+                    object.address,
+                ))
+            })?;
 
-            let stakes = delegated_stakes
-                .into_iter()
-                .flat_map(|x| x.stakes)
-                .collect::<Vec<_>>();
+            let stake_object = Stake::try_from(&move_object).map_err(|_| {
+                Error::Internal(format!(
+                    "Expected {} to be a staked sui, but it is not.",
+                    object.address,
+                ))
+            })?;
 
-            for stk in stakes {
-                let cursor = stk
-                    .staked_sui_id
-                    .to_canonical_string(/* with_prefix */ true);
-                let stake = Stake::from(stk);
-                edges.push(Edge::new(cursor, stake));
-            }
-            connection.edges.extend(edges);
-            Ok(Some(connection))
-        } else {
-            Ok(None)
+            let cursor = move_object
+                .native
+                .id()
+                .to_canonical_string(/* with_prefix */ true);
+
+            connection.edges.push(Edge::new(cursor, stake_object));
         }
+
+        Ok(Some(connection))
+    }
+
+    /// Make a request to the RPC for its representations of the staked sui we parsed out of the
+    /// object.  Used to implement fields that are implemented in JSON-RPC but not GraphQL (yet).
+    pub(crate) async fn fetch_rpc_staked_sui(
+        &self,
+        stake: StakedSui,
+    ) -> Result<RpcStakedSui, Error> {
+        let governance_api = GovernanceReadApiV2::new(self.inner.clone());
+
+        let mut delegated_stakes = governance_api
+            .get_delegated_stakes(vec![stake])
+            .await
+            .map_err(|e| Error::Internal(format!("Error fetching delegated stake. {e}")))?;
+
+        let Some(mut delegated_stake) = delegated_stakes.pop() else {
+            return Err(Error::Internal(
+                "Error fetching delegated stake. No pools returned.".to_string(),
+            ));
+        };
+
+        let Some(stake) = delegated_stake.stakes.pop() else {
+            return Err(Error::Internal(
+                "Error fetching delegated stake. No stake in pool.".to_string(),
+            ));
+        };
+
+        Ok(stake)
     }
 
     pub(crate) async fn fetch_events(
@@ -1890,55 +1909,6 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
     }
 }
 
-impl TryFrom<StoredObject> for Object {
-    type Error = Error;
-
-    fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
-        let version = o.object_version as u64;
-        let (object_id, _sequence_number, digest) = &o.get_object_ref()?;
-        let object: SuiObject = o.try_into()?;
-
-        let kind = if object.owner.is_immutable() {
-            Some(ObjectKind::Immutable)
-        } else if object.owner.is_shared() {
-            Some(ObjectKind::Shared)
-        } else if object.owner.is_child_object() {
-            Some(ObjectKind::Child)
-        } else if object.owner.is_address_owned() {
-            Some(ObjectKind::Owned)
-        } else {
-            None
-        };
-
-        let owner_address = object.owner.get_owner_address().ok();
-        if matches!(kind, Some(ObjectKind::Immutable) | Some(ObjectKind::Shared))
-            && owner_address.is_some()
-        {
-            return Err(Error::Internal(
-                "Immutable or Shared object should not have an owner_id".to_string(),
-            ));
-        }
-
-        let bcs = Base64::from(
-            bcs::to_bytes(&object)
-                .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))?,
-        );
-
-        Ok(Self {
-            address: SuiAddress::from_array(***object_id),
-            version,
-            digest: digest.base58_encode(),
-            storage_rebate: Some(BigInt::from(object.storage_rebate)),
-            owner: owner_address.map(SuiAddress::from),
-            bcs: Some(bcs),
-            previous_transaction: Some(Digest::from_array(
-                object.previous_transaction.into_inner(),
-            )),
-            kind,
-        })
-    }
-}
-
 impl TryFrom<StoredEpochInfo> for Epoch {
     type Error = Error;
     fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
@@ -2121,43 +2091,6 @@ impl From<GenesisObject> for SuiAddress {
             GenesisObject::RawObject { data, owner: _ } => {
                 SuiAddress::from_bytes(data.id().to_vec()).unwrap()
             }
-        }
-    }
-}
-
-impl TryFrom<StoredObject> for Coin {
-    type Error = Error;
-
-    fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
-        let balance = o.coin_balance.map(BigInt::from);
-        let native_object: SuiObject = o.try_into()?;
-
-        Ok(Self {
-            balance,
-            move_obj: MoveObject { native_object },
-        })
-    }
-}
-
-impl From<SuiStake> for Stake {
-    fn from(value: SuiStake) -> Self {
-        let mut reward = None;
-        let status = match value.status {
-            sui_json_rpc_types::StakeStatus::Pending => StakeStatus::Pending,
-            sui_json_rpc_types::StakeStatus::Active { estimated_reward } => {
-                reward = Some(estimated_reward.into());
-                StakeStatus::Active
-            }
-            sui_json_rpc_types::StakeStatus::Unstaked => StakeStatus::Unstaked,
-        };
-
-        Stake {
-            active_epoch_id: Some(value.stake_active_epoch),
-            estimated_reward: reward,
-            principal: Some(value.principal.into()),
-            request_epoch_id: Some(value.stake_request_epoch),
-            status: Some(status),
-            staked_sui_id: value.staked_sui_id,
         }
     }
 }

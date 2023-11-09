@@ -9,8 +9,7 @@ use move_core_types::account_address::AccountAddress;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::{indexer_reader::IndexerReader, schema_v2::objects};
 use sui_package_resolver::{
-    error::Error as PackageResolverError, make_package, Package, PackageStore,
-    PackageStoreWithLruCache, Result,
+    error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
 use sui_types::{base_types::SequenceNumber, object::Object};
 use thiserror::Error;
@@ -44,6 +43,7 @@ impl PackageStore for DbPackageStore {
     async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
         get_package_version_from_db(id, &self.0).await
     }
+
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         let package = get_package_from_db(id, &self.0).await?;
         Ok(Arc::new(package))
@@ -71,21 +71,17 @@ async fn get_package_version_from_db(
 
 async fn get_package_from_db(id: AccountAddress, sui_indexer: &IndexerReader) -> Result<Package> {
     let query = objects::dsl::objects
-        .select((
-            objects::dsl::object_version,
-            objects::dsl::serialized_object,
-        ))
+        .select(objects::dsl::serialized_object)
         .filter(objects::dsl::object_id.eq(id.to_vec()));
 
-    let Some((version, bcs)) = sui_indexer
-        .run_query_async(move |conn| query.get_result::<(i64, Vec<u8>)>(conn).optional())
+    let Some(bcs) = sui_indexer
+        .run_query_async(move |conn| query.get_result::<Vec<u8>>(conn).optional())
         .await
         .map_err(Error::Indexer)?
     else {
         return Err(PackageResolverError::PackageNotFound(id));
     };
 
-    let version = SequenceNumber::from_u64(version as u64);
     let object = bcs::from_bytes::<Object>(&bcs)?;
-    make_package(id, version, &object)
+    Package::read(&object)
 }
