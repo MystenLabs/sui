@@ -29,7 +29,7 @@ use cached::proc_macro::cached;
 use cached::SizedCache;
 use diesel::{
     r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
-    RunQueryDsl,
+    RunQueryDsl, TextExpressionMethods, sql_types::Bool, dsl::sql,
 };
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
@@ -559,11 +559,9 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        let object_types = Self::extract_struct_filters(filter)?;
-        self.spawn_blocking(move |this| {
-            this.get_owned_objects_impl(address, object_types, cursor, limit)
-        })
-        .await
+        // let object_types = Self::extract_struct_filters(filter)?;
+        self.spawn_blocking(move |this| this.get_owned_objects_impl(address, filter, cursor, limit))
+            .await
     }
 
     fn extract_struct_filters(
@@ -593,7 +591,7 @@ impl IndexerReader {
     fn get_owned_objects_impl(
         &self,
         address: SuiAddress,
-        object_types: Option<Vec<String>>,
+        filter: Option<SuiObjectDataFilter>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
@@ -603,14 +601,59 @@ impl IndexerReader {
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
                 .limit(limit as i64)
                 .into_boxed();
-            if let Some(object_types) = object_types {
-                query = query.filter(objects::dsl::object_type.eq_any(object_types));
+            if let Some(filter) = filter {
+                match filter {
+                    SuiObjectDataFilter::StructType (struct_tag ) => {
+                        let object_type = struct_tag.to_string();
+                        query = query.filter(objects::dsl::object_type.like(format!("{}%",object_type)));
+                    },
+                    SuiObjectDataFilter::MatchAny(filters) => {
+                        let mut condition = "(".to_string();
+                        for (i, filter) in filters.iter().enumerate() {
+                            if let SuiObjectDataFilter::StructType (struct_tag) = filter {
+                                let object_type = struct_tag.to_string();
+                                if i == 0 {
+                                    condition += format!("objects.object_type LIKE '{}%'",object_type).as_str();
+                                } else {
+                                    condition += format!(" OR objects.object_type LIKE '{}%'",object_type).as_str();
+                                }
+                            } else {
+                                return Err(IndexerError::InvalidArgumentError(
+                                    "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
+                                ));
+                            }
+                        }
+                        condition += ")";
+                        println!("condition: {}", condition);
+                        query = query.filter(sql::<Bool>(&condition));
+                    },
+                    SuiObjectDataFilter::MatchNone(filters) => {
+                        for filter in filters {
+                            if let SuiObjectDataFilter::StructType (struct_tag) = filter {
+                                let object_type = struct_tag.to_string();
+                                query = query.filter(objects::dsl::object_type.not_like(format!("{}%",object_type)));
+                            } else {
+                                return Err(IndexerError::InvalidArgumentError(
+                                    "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
+                                ));
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(IndexerError::InvalidArgumentError(
+                            "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
+                        ));
+                    }
+                }
             }
 
             if let Some(object_cursor) = cursor {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
-            query.load::<StoredObject>(conn)
+            let debug_sql = diesel::debug_query::<diesel::pg::Pg, _>(&query);
+
+            println!("{:?}", debug_sql);
+            query.load::<StoredObject>(conn).map_err(|e| IndexerError::PostgresReadError(e.to_string()))
         })
     }
 
