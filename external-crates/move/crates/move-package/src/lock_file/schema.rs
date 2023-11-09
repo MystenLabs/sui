@@ -123,11 +123,9 @@ impl CompilerToolchain {
 
     pub fn write<W: Write>(
         writer: &mut W,
-        _compiler_version: String,
-        _compiler_flags: Vec<String>,
+        compiler_version: String,
+        compiler_flags: Vec<String>,
     ) -> Result<()> {
-        let compiler_version = env!("CARGO_PKG_VERSION").into(); // TODO
-        let compiler_flags = vec![]; // TODO
         let compiler_toolchain = toml::ser::to_string(&Schema {
             move_: CompilerToolchain {
                 compiler_version,

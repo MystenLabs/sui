@@ -12,6 +12,7 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
+use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
     Flags,
@@ -23,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::Write,
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
@@ -218,5 +219,26 @@ impl BuildConfig {
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_silence_warnings(self.silence_warnings)
+    }
+
+    pub fn update_lock_with_compiler_toolchain(self) -> Result<()> {
+        let lock_file_path = self.lock_file.unwrap();
+        // let install_dir = self.install_dir.unwrap();
+        let install_dir = PathBuf::from(".");
+        let lock = LockFile::new_from_existing(install_dir, lock_file_path.clone())?;
+        let mut writer = BufWriter::new(&*lock);
+        lock_file::schema::CompilerToolchain::write(
+            &mut writer,
+            env!("CARGO_PKG_VERSION").into(),
+            vec![],
+        )?;
+        writer.flush()?;
+        std::mem::drop(writer);
+        let _mutx = PackageLock::lock(); // hold mutex so we can commit
+        lock.commit(lock_file_path)
+
+        // TODO: Write Move.lock with compiler toolchain / version info on success here.
+        // Grab compiler version from env!("CARGO_PKG_VERSION")
+        // Grab flags from build_config.compiler_flags.
     }
 }
