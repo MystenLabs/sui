@@ -44,8 +44,8 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         mpsc::Sender<NetworkMessage>,
         mpsc::Receiver<NetworkMessage>,
     ) {
-        let (in_send, in_recv) = mpsc::channel(200_000);
-        let (out_send, out_recv) = mpsc::channel(200_000);
+        let (in_send, in_recv) = mpsc::channel(1_000_000);
+        let (out_send, out_recv) = mpsc::channel(1_000_000);
         let agent = T::new(id, in_recv, out_send, conf, metrics);
         return (agent, in_send, out_recv);
     }
@@ -180,21 +180,22 @@ impl NetworkManager {
                         let mut message = message;
                         message.src = self.my_id; // set source to self
                         let dst = message.dst;
-                        if dst == self.my_id {
-                            self.application_in
-                                .send(message)
-                                .await
-                                .expect("send to self failed");
-                        } else {
+                        // if dst == self.my_id {
+                        //     self.application_in
+                        //         .send(message)
+                        //         .await
+                        //         .expect("send to self failed");
+                        // } else {
                             // get address from id
                             let address = self.addr_table.get(&dst).unwrap();
                             let cancel_handler = sender
                                 .send(*address, Bytes::from(bincode::serialize(&message).unwrap()))
                                 .await;
                             waiting.push(cancel_handler);
-                        }
+
+                        // }
                     },
-                    Some(_acresult) = waiting.next() => {
+                    Some(_result) = waiting.next() => {
                         // Ignore the result. We do not expect failures in this example.
                     },
                     else => {

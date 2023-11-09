@@ -104,14 +104,15 @@ impl QueuesManager {
 
     /// Cleans up after a completed transaction
     async fn clean_up(&mut self, txid: &TransactionDigest) {
-        let completed_tx = self.tx_store.remove(txid).unwrap();
-        assert!(self.wait_table.get(txid).is_none());
+        if let Some(completed_tx) = self.tx_store.remove(txid) {
+            assert!(self.wait_table.get(txid).is_none());
 
-        // Remove tx itself from objects where it is still marked as their current writer
-        for obj in completed_tx.get_read_write_set().iter() {
-            if let Some(t) = self.writing_tx.get(obj) {
-                if t == txid {
-                    self.writing_tx.remove(obj);
+            // Remove tx itself from objects where it is still marked as their current writer
+            for obj in completed_tx.get_read_write_set().iter() {
+                if let Some(t) = self.writing_tx.get(obj) {
+                    if t == txid {
+                        self.writing_tx.remove(obj);
+                    }
                 }
             }
         }
@@ -251,10 +252,15 @@ impl<
         memory_store: Arc<S>,
         deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
         written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        my_id: u8,
+        ew_ids: &Vec<UniqueId>,
     ) {
         // And now we mutate the store.
         // First delete:
         for (id, (ver, kind)) in deleted {
+            if get_ew_owner_for_object(id, ew_ids) != my_id as UniqueId {
+                continue;
+            }
             let old_obj_opt = memory_store.get_object(&id).unwrap();
             assert!(
                 old_obj_opt.is_some(),
@@ -274,6 +280,9 @@ impl<
             }
         }
         for (id, (oref, obj, _)) in written {
+            if get_ew_owner_for_object(id, ew_ids) != my_id as UniqueId {
+                continue;
+            }
             memory_store.insert(id, (oref, obj));
         }
     }
@@ -348,6 +357,8 @@ impl<
             self.memory_store.clone(),
             inner_temp_store.deleted,
             inner_temp_store.written,
+            0,
+            &[0 as UniqueId].to_vec(),
         );
     }
 
@@ -411,11 +422,15 @@ impl<
             }
         }
 
-        if missing_objs.is_empty() && my_id as UniqueId == ew_ids[0] {
+        if missing_objs.is_empty()
+            && get_ews_for_tx(&full_tx, ew_ids).contains(&(my_id as UniqueId))
+        {
             Self::write_updates_to_store(
                 memory_store,
                 inner_temp_store.deleted.clone(),
                 inner_temp_store.written.clone(),
+                my_id,
+                ew_ids,
             );
         }
 
@@ -541,7 +556,7 @@ impl<
         let mut manager = QueuesManager::new(manager_sender);
         let mut tasks_queue: JoinSet<TransactionWithResults> = JoinSet::new();
 
-        let num_ews = ew_ids.len() as u8;
+        // let num_ews = ew_ids.len() as u8;
 
         /* Semaphore to keep track of un-executed transactions in the current epoch, used
         * to schedule epoch change:
@@ -550,7 +565,7 @@ impl<
             3. Do epoch change when epoch_change_tx is Some, and epoch_txs_semaphore is 0
             4. Reset semaphore after epoch change
         */
-        let mut epoch_txs_semaphore = 0;
+        let epoch_txs_semaphore = 0;
         let mut epoch_change_tx: Option<TransactionWithEffects> = None;
 
         if self.mode == ExecutionMode::Channel {
@@ -593,22 +608,23 @@ impl<
                     let tx_with_results = tx_with_results.expect("tx task failed");
                     let txid = tx_with_results.full_tx.tx.digest();
 
-                    if !tx_with_results.missing_objs.is_empty() {
-                        self.waiting_child_objs.entry(txid).or_default().extend(tx_with_results.missing_objs.iter());
-                        self.ready_txs.insert(txid, ());
-                        // println!("Sending MissingObjects message for tx {}", txid);
-                        for ew_id in &ew_ids {
-                            let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::MissingObjects {
-                                txid,
-                                ew: my_id as u8,
-                                missing_objects: tx_with_results.missing_objs.clone()
-                            }};
-                            if out_channel.send(msg).await.is_err() {
-                                eprintln!("EW {} could not send MissingObjects; EW {} already stopped.", my_id, ew_id);
-                            }
-                        }
-                        continue;
-                    }
+                    // TODO uncomment this when we have to send MissingObjects
+                    // if !tx_with_results.missing_objs.is_empty() {
+                    //     self.waiting_child_objs.entry(txid).or_default().extend(tx_with_results.missing_objs.iter());
+                    //     self.ready_txs.insert(txid, ());
+                    //     // println!("Sending MissingObjects message for tx {}", txid);
+                    //     for ew_id in &ew_ids {
+                    //         let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::MissingObjects {
+                    //             txid,
+                    //             ew: my_id as u8,
+                    //             missing_objects: tx_with_results.missing_objs.clone()
+                    //         }};
+                    //         if out_channel.send(msg).await.is_err() {
+                    //             eprintln!("EW {} could not send MissingObjects; EW {} already stopped.", my_id, ew_id);
+                    //         }
+                    //     }
+                    //     continue;
+                    // }
 
                     self.locked_exec_count.remove(&txid);
                     self.received_objs.remove(&txid);
@@ -616,8 +632,8 @@ impl<
                     self.waiting_child_objs.remove(&txid);
 
                     num_tx += 1;
-                    epoch_txs_semaphore -= 1;
-                    assert!(epoch_txs_semaphore >= 0);
+                    // epoch_txs_semaphore -= 1;
+                    // assert!(epoch_txs_semaphore >= 0);
 
                     let full_tx = &tx_with_results.full_tx;
                     if full_tx.checkpoint_seq.is_some() {
@@ -634,6 +650,7 @@ impl<
                     manager.clean_up(&txid).await;
 
                     // println!("Sending TxResults message for tx {}", txid);
+                    // TODO send only to owners of objects in deleted & written
                     for ew_id in &ew_ids {
                         if *ew_id == my_id {
                             continue;
@@ -652,6 +669,7 @@ impl<
                         break;
                     }
                 },
+                // Received a tx from the queue mananger -> the tx is ready to be executed
                 // Must poll from manager_receiver before sw_receiver, to avoid deadlock
                 Some(txid) = manager_receiver.recv() => {
                     let full_tx = manager.get_tx(&txid);
@@ -659,7 +677,7 @@ impl<
 
                     let mut locked_objs = Vec::new();
                     for obj_id in full_tx.get_read_set() {
-                        if my_id != select_ew_for_object(obj_id, &ew_ids) {
+                        if my_id != get_ew_owner_for_object(obj_id, &ew_ids) {
                             continue;
                         }
                         let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(obj_id).unwrap();
@@ -671,12 +689,12 @@ impl<
                         }
                     }
 
-                    let execute_on_ew = select_ew_for_execution(txid, full_tx,&ew_ids);
+                    let execute_on_ew = get_designated_executor_for_tx(txid, full_tx,&ew_ids);
                     let msg = NetworkMessage{
                         src:0,
                         dst:execute_on_ew as u16,
-                        payload: SailfishMessage::LockedExec { txid, objects: locked_objs.clone(), child_objects: Vec::new() }};
-                    // println!("Sending LockedExec for tx {} to EW {}", txid, execute_on_ew);
+                        payload: SailfishMessage::LockedExec { full_tx: full_tx.clone(), objects: locked_objs.clone(), child_objects: Vec::new() }};
+                    // println!("EW {} Sending LockedExec for tx {} to EW {}", my_id, txid, execute_on_ew);
                     if out_channel.send(msg).await.is_err() {
                         eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, execute_on_ew);
                     }
@@ -684,30 +702,32 @@ impl<
                 Some(msg) = in_channel.recv() => {
                     let msg = msg.payload;
                     // println!("EW {} received {:?}", my_id, msg);
-                    if let SailfishMessage::MissingObjects { txid, ew, missing_objects } = msg {
-                        let mut locked_objs = Vec::new();
-                        for obj_id in &missing_objects {
-                            if my_id != select_ew_for_object(*obj_id, &ew_ids) {
-                                continue;
-                            }
-                            let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(*obj_id).unwrap();
-                            let obj_opt = self.memory_store.get_object(obj_id).unwrap();
-                            if let (Some(obj_ref), Some(obj)) = (obj_ref_opt, obj_opt) {
-                                locked_objs.push(Some((obj_ref, obj)));
-                            } else {
-                                locked_objs.push(None);
-                            }
-                        }
-                        // println!("Sending LockedExec for tx {} in response to MissingObjects", txid);
-                        let msg = NetworkMessage{
-                            src:0,
-                            dst:ew as u16,
-                            payload:SailfishMessage::LockedExec { txid, objects: Vec::new(), child_objects: locked_objs.clone() }};
-                        if out_channel.send(msg).await.is_err() {
-                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew);
-                        }
-                    } else if let SailfishMessage::LockedExec { txid, mut objects, mut child_objects } = msg {
+                    if let SailfishMessage::MissingObjects { txid: _txid, ew: _ew, missing_objects: _missing_objects } = msg {
+                        panic!("Should not receive MissingObjects with simple workload");
+                        // let mut locked_objs = Vec::new();
+                        // for obj_id in &missing_objects {
+                        //     if my_id != get_ew_owner_for_object(*obj_id, &ew_ids) {
+                        //         continue;
+                        //     }
+                        //     let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(*obj_id).unwrap();
+                        //     let obj_opt = self.memory_store.get_object(obj_id).unwrap();
+                        //     if let (Some(obj_ref), Some(obj)) = (obj_ref_opt, obj_opt) {
+                        //         locked_objs.push(Some((obj_ref, obj)));
+                        //     } else {
+                        //         locked_objs.push(None);
+                        //     }
+                        // }
+                        // // println!("Sending LockedExec for tx {} in response to MissingObjects", txid);
+                        // let msg = NetworkMessage{
+                        //     src:0,
+                        //     dst:ew as u16,
+                        //     payload:SailfishMessage::LockedExec { txid, objects: Vec::new(), child_objects: locked_objs.clone() }};
+                        // if out_channel.send(msg).await.is_err() {
+                        //     eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew);
+                        // }
+                    } else if let SailfishMessage::LockedExec { full_tx , mut objects, mut child_objects } = msg {
                         // TODO: deal with possible duplicate LockedExec messages
+                        let txid = full_tx.tx.digest();
                         let mut list = self.received_objs.entry(txid).or_default();
                         list.append(&mut objects);
 
@@ -718,8 +738,10 @@ impl<
                         let mut child_list = self.received_child_objs.entry(txid).or_default();
                         child_list.append(&mut child_objects);
 
-                        if *ctr == num_ews && self.ready_txs.contains_key(&txid) && (self.waiting_child_objs.get(&txid).is_none() || child_list.len() == self.waiting_child_objs.get(&txid).unwrap().len()) {
-                            let tx = manager.get_tx(&txid).clone();
+                        // if *ctr == num_ews && self.ready_txs.contains_key(&txid) && (self.waiting_child_objs.get(&txid).is_none() || child_list.len() == self.waiting_child_objs.get(&txid).unwrap().len()) {
+                        if *ctr == get_ews_for_tx(&full_tx, &ew_ids).len() as u8 {
+                            // let tx = manager.get_tx(&txid).clone();
+                            let tx = full_tx;
                             self.ready_txs.remove(&txid);
                             *ctr = 0;
 
@@ -778,27 +800,26 @@ impl<
                         }
                     } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
                         if let Some(_) = self.ready_txs.remove(&txid) {
-                            if my_id == ew_ids[0] {
-                                Self::write_updates_to_store(self.memory_store.clone(), deleted, written);
-                            }
                             manager.clean_up(&txid).await;
-                            num_tx += 1;
-                            if num_tx == tx_count {
-                                println!("EW {} executed {} txs", my_id, num_tx);
-                                break;
-                            }
-                            epoch_txs_semaphore -= 1;
-                            assert!(epoch_txs_semaphore >= 0);
-                        } else {
-                            unreachable!("tx already executed though we did not send LockedExec");
                         }
+                        // else {
+                        //     unreachable!("tx already executed though we did not send LockedExec");
+                        // }
+                        Self::write_updates_to_store(self.memory_store.clone(), deleted, written, my_id as u8, &ew_ids);
+                        num_tx += 1;
+                        if num_tx == tx_count {
+                            println!("EW {} executed {} txs", my_id, num_tx);
+                            break;
+                        }
+                        // epoch_txs_semaphore -= 1;
+                        // assert!(epoch_txs_semaphore >= 0);
                     } else if let SailfishMessage::ProposeExec(full_tx) = msg {
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);
                         } else {
                             manager.queue_tx(full_tx).await;
-                            epoch_txs_semaphore += 1;
+                            // epoch_txs_semaphore += 1;
                         }
                     } else {
                         eprintln!("EW {} received unexpected message from: {:?}", my_id, msg);
@@ -817,7 +838,7 @@ impl<
                     let full_tx = epoch_change_tx.as_ref().unwrap();
                     let txid = full_tx.tx.digest();
 
-                    if my_id == select_ew_for_execution(txid, full_tx, &ew_ids) {
+                    if my_id == get_designated_executor_for_tx(txid, full_tx, &ew_ids) {
                         self.execute_tx(
                             full_tx,
                             &protocol_config,
@@ -874,20 +895,4 @@ impl<
 
         sleep(Duration::from_millis(1_000)).await;
     }
-}
-
-fn select_ew_for_execution(
-    txid: TransactionDigest,
-    tx: &TransactionWithEffects,
-    ew_ids: &Vec<UniqueId>,
-) -> UniqueId {
-    if tx.is_epoch_change() || tx.get_read_set().contains(&ObjectID::from_single_byte(5)) {
-        ew_ids[0]
-    } else {
-        ew_ids[(txid.inner()[0] % 4) as usize]
-    }
-}
-
-fn select_ew_for_object(_obj_id: ObjectID, ew_ids: &Vec<UniqueId>) -> UniqueId {
-    ew_ids[0]
 }

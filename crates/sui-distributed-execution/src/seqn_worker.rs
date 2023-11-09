@@ -517,7 +517,7 @@ impl SequenceWorkerState {
                 child_inputs: None,
                 checkpoint_seq: None,
             };
-            for ew_id in &ew_ids {
+            for ew_id in &get_ews_for_tx(&full_tx, &ew_ids) {
                 out_to_network
                     .send(NetworkMessage {
                         src: 0,

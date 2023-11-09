@@ -122,7 +122,8 @@ pub enum SailfishMessage {
     // Execution Worker <-> Execution Worker
     //LockedExec { tx: TransactionDigest, objects: Vec<(ObjectRef, Object)> },
     LockedExec {
-        txid: TransactionDigest,
+        // txid: TransactionDigest,
+        full_tx: TransactionWithEffects,
         objects: Vec<Option<(ObjectRef, Object)>>,
         child_objects: Vec<Option<(ObjectRef, Object)>>,
     },
@@ -276,4 +277,30 @@ pub struct TransactionWithResults {
 pub enum ExecutionMode {
     Channel,
     Database,
+}
+
+pub fn get_designated_executor_for_tx(
+    txid: TransactionDigest,
+    tx: &TransactionWithEffects,
+    ew_ids: &Vec<UniqueId>,
+) -> UniqueId {
+    if tx.is_epoch_change() || tx.get_read_set().contains(&ObjectID::from_single_byte(5)) {
+        ew_ids[0]
+    } else {
+        ew_ids[(txid.inner()[0] % ew_ids.len() as u8) as usize]
+    }
+}
+
+pub fn get_ew_owner_for_object(_obj_id: ObjectID, ew_ids: &Vec<UniqueId>) -> UniqueId {
+    // ew_ids[0]
+    ew_ids[(_obj_id[0] % ew_ids.len() as u8) as usize]
+}
+
+pub fn get_ews_for_tx(tx: &TransactionWithEffects, ew_ids: &Vec<UniqueId>) -> HashSet<UniqueId> {
+    let rw_set = tx.get_read_write_set();
+
+    rw_set
+        .into_iter()
+        .map(|obj_id| get_ew_owner_for_object(obj_id, ew_ids))
+        .collect()
 }
