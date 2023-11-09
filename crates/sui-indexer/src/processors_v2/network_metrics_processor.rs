@@ -3,6 +3,7 @@
 use tracing::info;
 
 use crate::errors::IndexerError;
+use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
@@ -10,6 +11,7 @@ const NETWORK_METRICS_PROCESSOR_BATCH_SIZE: i64 = 10;
 
 pub struct NetworkMetricsProcessor<S> {
     pub store: S,
+    metrics: IndexerMetrics,
     pub network_processor_metrics_batch_size: i64,
 }
 
@@ -17,7 +19,7 @@ impl<S> NetworkMetricsProcessor<S>
 where
     S: IndexerAnalyticalStore + Sync + Send + 'static,
 {
-    pub fn new(store: S) -> NetworkMetricsProcessor<S> {
+    pub fn new(store: S, metrics: IndexerMetrics) -> NetworkMetricsProcessor<S> {
         let network_processor_metrics_batch_size =
             std::env::var("NETWORK_PROCESSOR_METRICS_BATCH_SIZE")
                 .map(|s| {
@@ -27,6 +29,7 @@ where
                 .unwrap_or(NETWORK_METRICS_PROCESSOR_BATCH_SIZE);
         Self {
             store,
+            metrics,
             network_processor_metrics_batch_size,
         }
     }
@@ -70,6 +73,9 @@ where
                 "Persisted tx count metrics for checkpoint sequence number {}",
                 last_processed_cp_seq
             );
+            self.metrics
+                .latest_network_metrics_cp_seq
+                .set(last_processed_cp_seq);
 
             let end_cp = self
                 .store

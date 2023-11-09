@@ -255,7 +255,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(last_processed_tx_seq)
     }
 
-    async fn persist_addresses_in_tx_range(
+    fn persist_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
@@ -273,7 +273,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
-    async fn persist_active_addresses_in_tx_range(
+    fn persist_active_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
@@ -371,7 +371,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(latest_move_call_metrics.map(|m| m.into()))
     }
 
-    async fn persist_move_calls_in_tx_range(
+    fn persist_move_calls_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,

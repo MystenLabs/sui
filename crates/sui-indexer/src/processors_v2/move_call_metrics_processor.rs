@@ -4,6 +4,7 @@
 use tap::tap::TapFallible;
 use tracing::{error, info};
 
+use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
@@ -12,6 +13,7 @@ const PARALLELISM: usize = 10;
 
 pub struct MoveCallMetricsProcessor<S> {
     pub store: S,
+    metrics: IndexerMetrics,
     pub move_call_processor_batch_size: usize,
     pub move_call_processor_parallelism: usize,
 }
@@ -20,7 +22,7 @@ impl<S> MoveCallMetricsProcessor<S>
 where
     S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
-    pub fn new(store: S) -> MoveCallMetricsProcessor<S> {
+    pub fn new(store: S, metrics: IndexerMetrics) -> MoveCallMetricsProcessor<S> {
         let move_call_processor_batch_size = std::env::var("MOVE_CALL_PROCESSOR_BATCH_SIZE")
             .map(|s| s.parse::<usize>().unwrap_or(MOVE_CALL_PROCESSOR_BATCH_SIZE))
             .unwrap_or(MOVE_CALL_PROCESSOR_BATCH_SIZE);
@@ -29,6 +31,7 @@ where
             .unwrap_or(PARALLELISM);
         Self {
             store,
+            metrics,
             move_call_processor_batch_size,
             move_call_processor_parallelism,
         }
@@ -60,13 +63,11 @@ where
                 .step_by(step_size)
             {
                 let move_call_store = self.store.clone();
-                persist_tasks.push(tokio::task::spawn(async move {
-                    move_call_store
-                        .persist_move_calls_in_tx_range(
-                            chunk_start_tx_seq,
-                            chunk_start_tx_seq + step_size as i64,
-                        )
-                        .await
+                persist_tasks.push(tokio::task::spawn_blocking(move || {
+                    move_call_store.persist_move_calls_in_tx_range(
+                        chunk_start_tx_seq,
+                        chunk_start_tx_seq + step_size as i64,
+                    )
                 }));
             }
             futures::future::join_all(persist_tasks)
@@ -81,8 +82,11 @@ where
                 .tap_err(|e| {
                     error!("Error persisting move calls: {:?}", e);
                 })?;
-            info!("Persisted move_calls at tx seq: {}", last_processed_tx_seq);
             last_processed_tx_seq += batch_size as i64;
+            info!("Persisted move_calls at tx seq: {}", last_processed_tx_seq);
+            self.metrics
+                .latest_move_call_metrics_tx_seq
+                .set(last_processed_tx_seq);
 
             let mut tx = self.store.get_tx(last_processed_tx_seq).await?;
             while tx.is_none() {

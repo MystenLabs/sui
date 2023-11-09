@@ -4,6 +4,7 @@
 use tap::tap::TapFallible;
 use tracing::{error, info};
 
+use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
@@ -12,6 +13,7 @@ const PARALLELISM: usize = 10;
 
 pub struct AddressMetricsProcessor<S> {
     pub store: S,
+    metrics: IndexerMetrics,
     pub address_processor_batch_size: usize,
     pub address_processor_parallelism: usize,
 }
@@ -20,7 +22,7 @@ impl<S> AddressMetricsProcessor<S>
 where
     S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
-    pub fn new(store: S) -> AddressMetricsProcessor<S> {
+    pub fn new(store: S, metrics: IndexerMetrics) -> AddressMetricsProcessor<S> {
         let address_processor_batch_size = std::env::var("ADDRESS_PROCESSOR_BATCH_SIZE")
             .map(|s| s.parse::<usize>().unwrap_or(ADDRESS_PROCESSOR_BATCH_SIZE))
             .unwrap_or(ADDRESS_PROCESSOR_BATCH_SIZE);
@@ -29,6 +31,7 @@ where
             .unwrap_or(PARALLELISM);
         Self {
             store,
+            metrics,
             address_processor_batch_size,
             address_processor_parallelism,
         }
@@ -53,10 +56,6 @@ where
                 latest_tx = self.store.get_latest_stored_transaction().await?;
             }
 
-            info!(
-                "Persisting addresses and active addresses for tx seq: {}",
-                last_processed_tx_seq + 1,
-            );
             let mut persist_tasks = vec![];
             let batch_size = self.address_processor_batch_size;
             let step_size = batch_size / self.address_processor_parallelism;
@@ -65,13 +64,11 @@ where
                 .step_by(step_size)
             {
                 let active_address_store = self.store.clone();
-                persist_tasks.push(tokio::task::spawn(async move {
-                    active_address_store
-                        .persist_active_addresses_in_tx_range(
-                            chunk_start_tx_seq,
-                            chunk_start_tx_seq + step_size as i64,
-                        )
-                        .await
+                persist_tasks.push(tokio::task::spawn_blocking(move || {
+                    active_address_store.persist_active_addresses_in_tx_range(
+                        chunk_start_tx_seq,
+                        chunk_start_tx_seq + step_size as i64,
+                    )
                 }));
             }
             for chunk_start_tx_seq in (last_processed_tx_seq + 1
@@ -79,13 +76,11 @@ where
                 .step_by(step_size)
             {
                 let address_store = self.store.clone();
-                persist_tasks.push(tokio::task::spawn(async move {
-                    address_store
-                        .persist_addresses_in_tx_range(
-                            chunk_start_tx_seq,
-                            chunk_start_tx_seq + step_size as i64,
-                        )
-                        .await
+                persist_tasks.push(tokio::task::spawn_blocking(move || {
+                    address_store.persist_addresses_in_tx_range(
+                        chunk_start_tx_seq,
+                        chunk_start_tx_seq + step_size as i64,
+                    )
                 }));
             }
             futures::future::join_all(persist_tasks)
@@ -105,6 +100,10 @@ where
                 "Persisted addresses and active addresses for tx seq: {}",
                 last_processed_tx_seq,
             );
+            self.metrics
+                .latest_address_metrics_tx_seq
+                .set(last_processed_tx_seq);
+
             let mut last_processed_tx = self.store.get_tx(last_processed_tx_seq).await?;
             while last_processed_tx.is_none() {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;

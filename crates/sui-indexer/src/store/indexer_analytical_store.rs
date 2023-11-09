@@ -52,12 +52,12 @@ pub trait IndexerAnalyticalStore {
 
     // for address metrics
     async fn get_address_metrics_last_processed_tx_seq(&self) -> IndexerResult<Option<TxSeq>>;
-    async fn persist_addresses_in_tx_range(
+    fn persist_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
     ) -> IndexerResult<()>;
-    async fn persist_active_addresses_in_tx_range(
+    fn persist_active_addresses_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
@@ -67,7 +67,7 @@ pub trait IndexerAnalyticalStore {
     // for move call metrics
     async fn get_latest_move_call_metrics(&self) -> IndexerResult<Option<StoredMoveCallMetrics>>;
     async fn get_latest_move_call_tx_seq(&self) -> IndexerResult<Option<TxSeq>>;
-    async fn persist_move_calls_in_tx_range(
+    fn persist_move_calls_in_tx_range(
         &self,
         start_tx_seq: i64,
         end_tx_seq: i64,
