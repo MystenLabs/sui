@@ -967,6 +967,10 @@ type ServiceConfig {
 	Maximum time in milliseconds that will be spent to serve one request.
 	"""
 	requestTimeoutMs: BigInt!
+	"""
+	Maximum length of a query payload string.
+	"""
+	maxQueryPayloadSize: Int!
 }
 
 type Stake {
