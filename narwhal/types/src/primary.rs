@@ -2407,6 +2407,20 @@ pub struct FetchCertificatesResponse {
     pub certificates: Vec<Certificate>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FetchHeadersRequest {
+    /// The exclusive lower bound are header keys where each primary should return headers above that.
+    pub exclusive_lower_bounds: Vec<(AuthorityIdentifier, Round)>,
+    /// Maximum number of headers that should be returned.
+    pub max_items: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FetchHeadersResponse {
+    /// Headers sorted from lower to higher rounds.
+    pub headers: Vec<SignedHeader>,
+}
+
 /// Used by the primary to request that the worker sync the target missing batches.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {

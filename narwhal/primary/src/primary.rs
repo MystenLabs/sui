@@ -74,11 +74,12 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
-    CommittedSubDag, FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI,
-    HeaderValidationResult, MetadataAPI, PreSubscribedBroadcastSender, PrimaryToPrimary,
-    PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
-    SendCertificateResponse, SendHeaderRequest, SendHeaderResponse, Vote, VoteInfoAPI,
-    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    CommittedSubDag, FetchCertificatesRequest, FetchCertificatesResponse, FetchHeadersRequest,
+    FetchHeadersResponse, Header, HeaderAPI, HeaderValidationResult, MetadataAPI,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SendHeaderRequest,
+    SendHeaderResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage, WorkerOwnBatchMessage,
+    WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(test)]
@@ -665,6 +666,9 @@ impl Primary {
         )))
         .add_layer_for_send_header(InboundRequestLayer::new(
             inflight_limit::InflightLimitLayer::new(100, inflight_limit::WaitMode::Block),
+        ))
+        .add_layer_for_fetch_headers(InboundRequestLayer::new(
+            inflight_limit::InflightLimitLayer::new(1, inflight_limit::WaitMode::Block),
         ));
 
         let worker_receiver_handler = WorkerReceiverHandler {
@@ -1335,13 +1339,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         }
     }
 
-    async fn send_header(
-        &self,
-        _request: anemo::Request<SendHeaderRequest>,
-    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
-        Err(anemo::rpc::Status::internal("send_header unimplemented!"))
-    }
-
     async fn request_vote(
         &self,
         request: anemo::Request<RequestVoteRequest>,
@@ -1467,6 +1464,26 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         // any missing parents.
         Ok(anemo::Response::new(response))
     }
+
+    async fn send_header(
+        &self,
+        _request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        Err(anemo::rpc::Status::new_with_message(
+            StatusCode::NotFound,
+            "send_header unimplemented",
+        ))
+    }
+
+    async fn fetch_headers(
+        &self,
+        _request: anemo::Request<FetchHeadersRequest>,
+    ) -> Result<anemo::Response<FetchHeadersResponse>, anemo::rpc::Status> {
+        Err(anemo::rpc::Status::new_with_message(
+            StatusCode::NotFound,
+            "fetch_header unimplemented",
+        ))
+    }
 }
 
 /// Handler for incoming Mysticeti primary messages.
@@ -1487,52 +1504,20 @@ impl PrimaryToPrimary for PrimaryToPrimaryHandler {
         &self,
         _request: anemo::Request<SendCertificateRequest>,
     ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
-        return Err(anemo::rpc::Status::new_with_message(
+        Err(anemo::rpc::Status::new_with_message(
             StatusCode::NotFound,
             "send_certificate unimplemented",
-        ));
-    }
-
-    async fn send_header(
-        &self,
-        request: anemo::Request<SendHeaderRequest>,
-    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
-        let signed_header = request.into_body().signed_header;
-        let Header::V3(_header) = signed_header.header() else {
-            return Err(anemo::rpc::Status::new_with_message(
-                StatusCode::BadRequest,
-                "Invalid header version",
-            ));
-        };
-        let guard = self.verifier.load();
-        let Some(verifier) = guard.as_ref() else {
-            // TODO: add a Service Unavailable error code to anemo.
-            return Err(anemo::rpc::Status::new_with_message(
-                StatusCode::InternalServerError,
-                "Verifier unavailable",
-            ));
-        };
-
-        verifier.verify(signed_header).await.map_err(|e| {
-            anemo::rpc::Status::new_with_message(
-                StatusCode::BadRequest,
-                format!("Failed to verify header: {e}"),
-            )
-        })?;
-
-        Ok(anemo::Response::new(SendHeaderResponse {
-            result: HeaderValidationResult::Ok,
-        }))
+        ))
     }
 
     async fn request_vote(
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
-        return Err(anemo::rpc::Status::new_with_message(
+        Err(anemo::rpc::Status::new_with_message(
             StatusCode::NotFound,
             "request_vote unimplemented",
-        ));
+        ))
     }
 
     #[instrument(level = "debug", skip_all, peer = ?request.peer_id())]
@@ -1540,10 +1525,10 @@ impl PrimaryToPrimary for PrimaryToPrimaryHandler {
         &self,
         _request: anemo::Request<FetchCertificatesRequest>,
     ) -> Result<anemo::Response<FetchCertificatesResponse>, anemo::rpc::Status> {
-        return Err(anemo::rpc::Status::new_with_message(
+        Err(anemo::rpc::Status::new_with_message(
             StatusCode::NotFound,
             "fetch_certificates unimplemented",
-        ));
+        ))
         // let time_start = Instant::now();
         // let peer = request
         //     .peer_id()
@@ -1632,6 +1617,45 @@ impl PrimaryToPrimary for PrimaryToPrimaryHandler {
         // // The requestor should be able to process certificates returned in this order without
         // // any missing parents.
         // Ok(anemo::Response::new(response))
+    }
+
+    async fn send_header(
+        &self,
+        request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        let signed_header = request.into_body().signed_header;
+        let Header::V3(_header) = signed_header.header() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "Invalid header version",
+            ));
+        };
+        let guard = self.verifier.load();
+        let Some(verifier) = guard.as_ref() else {
+            // TODO: add a Service Unavailable error code to anemo.
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::InternalServerError,
+                "Verifier unavailable",
+            ));
+        };
+
+        verifier.verify(signed_header).await.map_err(|e| {
+            anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                format!("Failed to verify header: {e}"),
+            )
+        })?;
+
+        Ok(anemo::Response::new(SendHeaderResponse {
+            result: HeaderValidationResult::Ok,
+        }))
+    }
+
+    async fn fetch_headers(
+        &self,
+        _request: anemo::Request<FetchHeadersRequest>,
+    ) -> Result<anemo::Response<FetchHeadersResponse>, anemo::rpc::Status> {
+        Err(anemo::rpc::Status::internal("fetch_header unimplemented!"))
     }
 }
 

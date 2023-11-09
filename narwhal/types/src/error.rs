@@ -133,6 +133,9 @@ pub enum DagError {
     #[error("No peer can be reached for fetching certificates! Check if network is healthy.")]
     NoCertificateFetched,
 
+    #[error("No peer can be reached for fetching headers! Check if network is healthy.")]
+    NoHeaderFetched,
+
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),
 

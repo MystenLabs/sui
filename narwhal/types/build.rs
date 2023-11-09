@@ -63,15 +63,6 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
-                .name("send_header")
-                .route_name("SendHeader")
-                .request_type("crate::SendHeaderRequest")
-                .response_type("crate::SendHeaderResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            anemo_build::manual::Method::builder()
                 .name("request_vote")
                 .route_name("RequestVote")
                 .request_type("crate::RequestVoteRequest")
@@ -85,6 +76,24 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchCertificates")
                 .request_type("crate::FetchCertificatesRequest")
                 .response_type("crate::FetchCertificatesResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("send_header")
+                .route_name("SendHeader")
+                .request_type("crate::SendHeaderRequest")
+                .response_type("crate::SendHeaderResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("fetch_headers")
+                .route_name("FetchHeaders")
+                .request_type("crate::FetchHeadersRequest")
+                .response_type("crate::FetchHeadersResponse")
                 .codec_path(codec_path)
                 .build(),
         )

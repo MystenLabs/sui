@@ -75,6 +75,7 @@ impl Core {
                 info!("Core loop shutting down!");
                 return;
             };
+
             debug!("Received verified header: {:?}", header);
             let mut headers = vec![header];
             while let Ok(header) = self.rx_verified_header.try_recv() {
@@ -86,23 +87,22 @@ impl Core {
                 Ok(n) => n,
                 Err(e) => {
                     warn!("Failed to accept headers: {:?}", e);
-                    continue;
+                    0
                 }
             };
-            if num_accepted == 0 {
-                continue;
-            }
 
-            for commit in self.dag_state.try_commit() {
-                if let Err(e) = self.tx_sequence.send(commit).await {
-                    warn!("Failed to send commit to consensus, shutting down. {:?}", e);
+            if num_accepted > 0 {
+                for commit in self.dag_state.try_commit() {
+                    if let Err(e) = self.tx_sequence.send(commit).await {
+                        warn!("Failed to send commit to consensus, shutting down. {:?}", e);
+                        return;
+                    };
+                }
+
+                if let Err(e) = self.tx_headers_accepted.send(()) {
+                    warn!("Failed to notify header producer, shutting down: {:?}", e);
                     return;
-                };
-            }
-
-            if let Err(e) = self.tx_headers_accepted.send(()) {
-                warn!("Failed to notify header producer, shutting down: {:?}", e);
-                return;
+                }
             }
         }
     }

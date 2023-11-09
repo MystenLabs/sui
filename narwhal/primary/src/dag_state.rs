@@ -109,6 +109,17 @@ impl DagState {
         committed_sub_dags
     }
 
+    pub(crate) fn last_header_per_authority(&self) -> BTreeMap<AuthorityIdentifier, Round> {
+        let mut keys = BTreeMap::new();
+        let inner = self.inner.lock();
+        for headers in &inner.accepted_by_author {
+            if let Some(key) = headers.last() {
+                keys.insert(key.author(), key.round());
+            }
+        }
+        keys
+    }
+
     #[cfg(test)]
     fn get_headers_at_round(&self, round: Round) -> Vec<SignedHeader> {
         let inner = self.inner.lock();

@@ -27,6 +27,8 @@ use tokio::{
     },
     time::sleep,
 };
+use types::FetchHeadersRequest;
+use types::FetchHeadersResponse;
 use types::SendHeaderRequest;
 use types::SendHeaderResponse;
 use types::SystemMessage;
@@ -56,13 +58,6 @@ impl PrimaryToPrimary for NetworkProxy {
         );
     }
 
-    async fn send_header(
-        &self,
-        _request: anemo::Request<SendHeaderRequest>,
-    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
     async fn request_vote(
         &self,
         _request: anemo::Request<RequestVoteRequest>,
@@ -81,6 +76,20 @@ impl PrimaryToPrimary for NetworkProxy {
         Ok(anemo::Response::new(
             self.response.lock().await.recv().await.unwrap(),
         ))
+    }
+
+    async fn send_header(
+        &self,
+        _request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn fetch_headers(
+        &self,
+        _request: anemo::Request<FetchHeadersRequest>,
+    ) -> Result<anemo::Response<FetchHeadersResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 }
 
