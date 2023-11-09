@@ -227,20 +227,25 @@ impl Query {
         coin_type: String,
     ) -> Result<Option<CoinMetadata>> {
         let coin_struct = parse_to_struct_tag(&coin_type)?;
-        let coin_metadata = ctx
+        let Some(coin_metadata) = ctx
             .data_unchecked::<PgManager>()
             .inner
             .get_coin_metadata_in_blocking_task(coin_struct.clone())
             .await
             .map_err(|e| Error::Internal(e.to_string()))
-            .extend()?;
+            .extend()?
+        else {
+            return Ok(None);
+        };
+
+        // pass in the object to CoinMetadata, and lift these fields to the top-level?
 
         Ok(Some(CoinMetadata {
-            decimals: coin_metadata.as_ref().map(|c| c.decimals),
-            name: coin_metadata.as_ref().map(|c| c.name.clone()),
-            symbol: coin_metadata.as_ref().map(|c| c.symbol.clone()),
-            description: coin_metadata.as_ref().map(|c| c.description.clone()),
-            icon_url: coin_metadata.as_ref().and_then(|c| c.icon_url.clone()),
+            decimals: Some(coin_metadata.decimals),
+            name: Some(coin_metadata.name.clone()),
+            symbol: Some(coin_metadata.symbol.clone()),
+            description: Some(coin_metadata.description.clone()),
+            icon_url: coin_metadata.icon_url.clone(),
             coin_type,
         }))
     }

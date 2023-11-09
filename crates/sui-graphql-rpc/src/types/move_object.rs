@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::big_int::BigInt;
 use super::coin::CoinDowncastError;
+use super::coin::CoinMetadata;
 use super::move_value::MoveValue;
 use super::stake::StakedSuiDowncastError;
 use super::{coin::Coin, object::Object};
 use crate::error::Error;
 use crate::types::stake::StakedSui;
 use async_graphql::*;
-use move_core_types::language_storage::StructTag;
-use sui_types::object::{Data, MoveObject as NativeMoveObject};
+use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_types::coin::CoinMetadata as SuiCoinMetadata;
+use sui_types::governance::StakedSui;
+use sui_types::object::{Data, MoveObject as NativeMoveObject, Object as NativeSuiObject};
 
 #[derive(Clone)]
 pub(crate) struct MoveObject {
@@ -82,5 +86,25 @@ impl TryFrom<&Object> for MoveObject {
         } else {
             Err(MoveObjectDowncastError)
         }
+    }
+
+    async fn as_coin_metadata(&self) -> Result<Option<CoinMetadata>> {
+        let coin_metadata = SuiCoinMetadata::try_from(&self.native_object)
+            .map_err(|e| Error::Internal(e.to_string()))?;
+
+        let coin_struct = self.native_object.data.struct_tag();
+
+        let Some(coin_type) = coin_struct else {
+            return Ok(None);
+        };
+
+        Ok(Some(CoinMetadata {
+            decimals: Some(coin_metadata.decimals),
+            name: Some(coin_metadata.name.clone()),
+            symbol: Some(coin_metadata.symbol.clone()),
+            description: Some(coin_metadata.description.clone()),
+            icon_url: coin_metadata.icon_url.clone(),
+            coin_type: coin_type.to_canonical_string(true),
+        }))
     }
 }
