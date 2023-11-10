@@ -277,17 +277,20 @@ pub fn get_path(prefix: &str) -> Path {
 pub async fn write_snapshot_manifest(
     dir: &Path,
     local_disk: Arc<DynObjectStore>,
+    epoch_prefix: String,
 ) -> Result<(), object_store::Error> {
     let mut file_names = vec![];
     let mut paths = local_disk.list(Some(dir)).await?;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             // trim the "epoch_XX/" dir prefix here
-            let path_str = object_metadata.location.to_string();
-            let mut path_parts: Vec<&str> = path_str.split('/').collect();
-            path_parts.remove(0);
-
-            file_names.push(path_parts.join("/"));
+            let mut path_str = object_metadata.location.to_string();
+            if path_str.starts_with(&epoch_prefix) {
+                path_str = String::from(&path_str[epoch_prefix.len()..]);
+                file_names.push(path_str);
+            } else {
+                warn!("{path_str}, should be coming from the files in the {epoch_prefix} dir",)
+            }
         } else {
             return Err(res.err().unwrap());
         }
@@ -391,7 +394,12 @@ mod tests {
         }
         .make()?;
 
-        write_snapshot_manifest(&Path::from("epoch_0"), input_store).await?;
+        write_snapshot_manifest(
+            &Path::from("epoch_0"),
+            input_store,
+            String::from("epoch_0/"),
+        )
+        .await?;
 
         assert!(input_path.join("epoch_0").join(MANIFEST_FILENAME).exists());
         let content = fs::read_to_string(input_path.join("epoch_0").join(MANIFEST_FILENAME))?;

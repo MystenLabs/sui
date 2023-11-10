@@ -273,7 +273,12 @@ impl DBCheckpointHandler {
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
                 // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
-                write_snapshot_manifest(db_path, self.input_object_store.clone()).await?;
+                write_snapshot_manifest(
+                    db_path,
+                    self.input_object_store.clone(),
+                    format!("epoch_{}/", epoch),
+                )
+                .await?;
 
                 if self.prune_and_compact_before_upload {
                     // Convert `db_path` to the local filesystem path to where db checkpoint is stored
