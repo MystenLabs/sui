@@ -1591,10 +1591,30 @@ impl IndexerReader {
             .await
     }
 
+    pub async fn get_coin_metadata_raw_in_blocking_task(
+        &self,
+        coin_struct: StructTag,
+    ) -> Result<Option<StoredObject>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_coin_metadata_raw(coin_struct))
+            .await
+    }
+
     fn get_coin_metadata(
         &self,
         coin_struct: StructTag,
     ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
+        let Some(stored_object) = self.get_coin_metadata_raw(coin_struct)? else {
+            return Ok(None);
+        };
+        let object: Object = stored_object.try_into()?;
+
+        Ok(SuiCoinMetadata::try_from(object).ok())
+    }
+
+    fn get_coin_metadata_raw(
+        &self,
+        coin_struct: StructTag,
+    ) -> Result<Option<StoredObject>, IndexerError> {
         let package_id = coin_struct.address.into();
         let coin_metadata_type =
             // CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
@@ -1603,8 +1623,7 @@ impl IndexerReader {
             get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type)?;
         println!("coin_metadata_obj_id: {:?}", coin_metadata_obj_id);
         if let Some(id) = coin_metadata_obj_id {
-            let metadata_object = self.get_object(&id, None)?;
-            Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
+            self.get_object_from_db(&id, None)
         } else {
             Ok(None)
         }

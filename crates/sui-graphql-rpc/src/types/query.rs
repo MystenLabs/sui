@@ -230,7 +230,7 @@ impl Query {
         let Some(coin_metadata) = ctx
             .data_unchecked::<PgManager>()
             .inner
-            .get_coin_metadata_in_blocking_task(coin_struct.clone())
+            .get_coin_metadata_raw_in_blocking_task(coin_struct.clone())
             .await
             .map_err(|e| Error::Internal(e.to_string()))
             .extend()?

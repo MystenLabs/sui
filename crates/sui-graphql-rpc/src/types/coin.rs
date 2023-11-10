@@ -87,3 +87,24 @@ impl CoinMetadata {
         Ok(Some(BigInt::from(total_supply.value)))
     }
 }
+
+pub(crate) enum CoinMetadataDowncastError {
+    NotACoinMetadata,
+    Bcs(bcs::Error),
+}
+
+impl TryFrom<&MoveObject> for CoinMetadata {
+    type Error = CoinMetadataDowncastError;
+
+    fn try_from(move_object: &MoveObject) -> Result<Self, Self::Error> {
+        if !move_object.native.is_coin() {
+            return Err(CoinDowncastError::NotACoin);
+        }
+
+        Ok(Self {
+            super_: move_object.clone(),
+            native: bcs::from_bytes(move_object.native.contents())
+                .map_err(CoinDowncastError::Bcs)?,
+        })
+    }
+}

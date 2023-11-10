@@ -10,7 +10,7 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
-        coin::Coin,
+        coin::{Coin, CoinMetadata},
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
@@ -60,7 +60,7 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::{
-    coin_api::parse_to_type_tag,
+    coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
 use sui_json_rpc_types::{
@@ -1351,6 +1351,23 @@ impl PgManager {
                 df_kind: kind,
             }));
         }
+        Ok(None)
+    }
+    pub(crate) async fn fetch_coin_metadata(
+        &self,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>, Error> {
+        let coin_struct = parse_to_struct_tag(&coin_type)
+            .map_err(|e| Error::Internal("client error".to_string()))?;
+        let Some(coin_metadata) = self
+            .inner
+            .get_coin_metadata_raw_in_blocking_task(coin_struct.clone())
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?
+        else {
+            return Ok(None);
+        };
+
         Ok(None)
     }
 }
