@@ -324,7 +324,7 @@ impl<'a> Compiler<'a> {
 
     pub fn check_and_report(self) -> anyhow::Result<FilesSourceText> {
         let (files, res) = self.check()?;
-        unwrap_or_report_diagnostics(&files, res);
+        unwrap_or_report_diagnostics(&files, res, true /* report */);
         Ok(files)
     }
 
@@ -343,7 +343,8 @@ impl<'a> Compiler<'a> {
 
     pub fn build_and_report(self) -> anyhow::Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)> {
         let (files, units_res) = self.build()?;
-        let (units, warnings) = unwrap_or_report_diagnostics(&files, units_res);
+        let (units, warnings) =
+            unwrap_or_report_diagnostics(&files, units_res, true /* report */);
         report_warnings(&files, warnings);
         Ok((files, units))
     }
@@ -459,7 +460,7 @@ macro_rules! ast_stepped_compilers {
 
                 pub fn check_and_report(self, files: &FilesSourceText)  {
                     let errors_result = self.check();
-                    unwrap_or_report_diagnostics(&files, errors_result);
+                    unwrap_or_report_diagnostics(&files, errors_result, true /*report */);
                 }
 
                 pub fn build_and_report(
@@ -467,7 +468,7 @@ macro_rules! ast_stepped_compilers {
                     files: &FilesSourceText,
                 ) -> Vec<AnnotatedCompiledUnit> {
                     let units_result = self.build();
-                    let (units, warnings) = unwrap_or_report_diagnostics(&files, units_result);
+                    let (units, warnings) = unwrap_or_report_diagnostics(&files, units_result, true /* report */);
                     report_warnings(&files, warnings);
                     units
                 }
@@ -614,7 +615,7 @@ pub fn sanity_check_compiled_units(
 ) {
     let ice_errors = compiled_unit::verify_units(compiled_units);
     if !ice_errors.is_empty() {
-        report_diagnostics(&files, ice_errors)
+        report_diagnostics(&files, ice_errors, true /* report */)
     }
 }
 
@@ -678,7 +679,7 @@ pub fn output_compiled_units(
     }
 
     if !ice_errors.is_empty() {
-        report_diagnostics(&files, ice_errors)
+        report_diagnostics(&files, ice_errors, true /* report */)
     }
     Ok(())
 }

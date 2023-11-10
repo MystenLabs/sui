@@ -354,7 +354,7 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         Ok(stdlib) => stdlib,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
-            move_compiler::diagnostics::report_diagnostics(&files, errors)
+            move_compiler::diagnostics::report_diagnostics(&files, errors, true /* report */)
         }
     }
 });
@@ -370,11 +370,11 @@ static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     match units_res {
         Err(diags) => {
             eprintln!("!!!Standard library failed to compile!!!");
-            move_compiler::diagnostics::report_diagnostics(&files, diags)
+            move_compiler::diagnostics::report_diagnostics(&files, diags, true /* report */)
         }
         Ok((_, warnings)) if !warnings.is_empty() => {
             eprintln!("!!!Standard library failed to compile!!!");
-            move_compiler::diagnostics::report_diagnostics(&files, warnings)
+            move_compiler::diagnostics::report_diagnostics(&files, warnings, true /* report */)
         }
         Ok((units, _warnings)) => units
             .into_iter()

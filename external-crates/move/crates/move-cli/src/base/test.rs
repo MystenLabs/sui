@@ -109,6 +109,7 @@ impl Test {
             compute_coverage,
             &mut std::io::stdout(),
             &mut std::io::stdout(),
+            true, // report_diags
         )?;
 
         // Return a non-zero exit code if any test failed
@@ -135,6 +136,7 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     compute_coverage: bool,
     compiler_writer: &mut CW,
     test_writer: &mut TW,
+    report_diags: bool,
 ) -> Result<UnitTestResult> {
     let mut test_plan = None;
     build_config.test_mode = true;
@@ -181,16 +183,21 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // control back to the Move package system.
     build_plan.compile_with_driver(compiler_writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
-        let (_, compiler) =
-            diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
+        let (_, compiler) = diagnostics::unwrap_or_report_diagnostics(
+            &files,
+            comments_and_compiler_res,
+            report_diags,
+        );
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
-            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
-        diagnostics::report_warnings(&files, warnings);
+            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result, report_diags);
+        if report_diags {
+            diagnostics::report_warnings(&files, warnings);
+        }
         test_plan = Some((built_test_plan, files.clone(), units.clone()));
         Ok((files, units))
     })?;

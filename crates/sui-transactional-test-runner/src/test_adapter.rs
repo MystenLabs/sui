@@ -1501,7 +1501,7 @@ pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     match fully_compiled_res {
         Err((files, diags)) => {
             eprintln!("!!!Sui framework failed to compile!!!");
-            move_compiler::diagnostics::report_diagnostics(&files, diags)
+            move_compiler::diagnostics::report_diagnostics(&files, diags, true /* report */)
         }
         Ok(res) => res,
     }

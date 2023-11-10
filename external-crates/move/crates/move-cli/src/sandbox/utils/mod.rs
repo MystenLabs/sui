@@ -276,7 +276,7 @@ pub(crate) fn explain_publish_error(
                     }
                 }
             }
-            report_diagnostics(&files, diags)
+            report_diagnostics(&files, diags, true /* report */)
         }
         VMStatus::Error(status_code) => {
             println!("Publishing failed with unexpected error {:?}", status_code)

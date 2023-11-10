@@ -91,9 +91,11 @@ enum UnprefixedWarningFilters {
 // Reporting
 //**************************************************************************************************
 
-pub fn report_diagnostics(files: &FilesSourceText, diags: Diagnostics) -> ! {
+pub fn report_diagnostics(files: &FilesSourceText, diags: Diagnostics, report: bool) -> ! {
     let should_exit = true;
-    report_diagnostics_impl(files, diags, should_exit);
+    if report {
+        report_diagnostics_impl(files, diags, should_exit);
+    }
     std::process::exit(1)
 }
 
@@ -119,12 +121,16 @@ fn report_diagnostics_impl(files: &FilesSourceText, diags: Diagnostics, should_e
     }
 }
 
-pub fn unwrap_or_report_diagnostics<T>(files: &FilesSourceText, res: Result<T, Diagnostics>) -> T {
+pub fn unwrap_or_report_diagnostics<T>(
+    files: &FilesSourceText,
+    res: Result<T, Diagnostics>,
+    report: bool,
+) -> T {
     match res {
         Ok(t) => t,
         Err(diags) => {
             assert!(!diags.is_empty());
-            report_diagnostics(files, diags)
+            report_diagnostics(files, diags, report)
         }
     }
 }

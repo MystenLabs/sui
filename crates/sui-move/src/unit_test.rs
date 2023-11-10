@@ -122,6 +122,7 @@ pub fn run_move_unit_tests(
         compute_coverage,
         &mut std::io::sink(),
         &mut std::io::stdout(),
+        false, // report_diags
     )
 }
 
