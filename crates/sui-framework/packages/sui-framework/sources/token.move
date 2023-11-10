@@ -165,7 +165,7 @@ module sui::token {
         transfer::transfer(t, recipient);
 
         new_request(
-            string::utf8(TRANSFER),
+            transfer_action(),
             amount,
             option::some(recipient),
             option::none(),
@@ -184,7 +184,7 @@ module sui::token {
         object::delete(id);
 
         new_request(
-            string::utf8(SPEND),
+            spend_action(),
             balance::value(&balance),
             option::none(),
             option::some(balance),
@@ -204,7 +204,7 @@ module sui::token {
         (
             coin::from_balance(balance, ctx),
             new_request(
-                string::utf8(TO_COIN),
+                to_coin_action(),
                 amount,
                 option::none(),
                 option::none(),
@@ -227,7 +227,7 @@ module sui::token {
         (
             token,
             new_request(
-                string::utf8(FROM_COIN),
+                from_coin_action(),
                 amount,
                 option::none(),
                 option::none(),
