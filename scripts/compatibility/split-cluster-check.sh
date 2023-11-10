@@ -7,7 +7,7 @@
 #
 # Usage:
 #
-# WORKING_DIR=/tmp/split-cluster-check ./scripts/split-cluster-check.sh
+# WORKING_DIR=/tmp/split-cluster-check ./scripts/compatibility/split-cluster-check.sh
 #
 # You can then re-run using the same WORKING_DIR to skip building the binaries
 # every time. If you omit WORKING_DIR, a temp dir will be created and used.
