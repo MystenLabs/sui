@@ -4601,7 +4601,7 @@ impl NodeStateDump {
             .runtime_packages_loaded_from_db
             .values()
         {
-            runtime_reads.push(obj.clone());
+            runtime_reads.push(obj.object().clone());
         }
 
         // All other input objects should already be in `inner_temporary_store.objects`

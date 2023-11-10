@@ -5,6 +5,7 @@ use crate::base_types::{SequenceNumber, VersionDigest};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::storage::InputKey;
+use crate::storage::PackageObjectArc;
 use crate::{
     base_types::ObjectID,
     object::{Object, Owner},
@@ -20,7 +21,7 @@ pub type WrittenObjects = BTreeMap<ObjectID, Object>;
 pub type ObjectMap = BTreeMap<ObjectID, Arc<Object>>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
@@ -30,7 +31,7 @@ pub struct InnerTemporaryStore {
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
-    pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
+    pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, PackageObjectArc>,
     pub lamport_version: SequenceNumber,
 }
 

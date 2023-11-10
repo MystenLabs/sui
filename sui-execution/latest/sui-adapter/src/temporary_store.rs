@@ -54,7 +54,7 @@ pub struct TemporaryStore<'backing> {
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObjectArc>>,
 
     /// The set of objects that we may receive during execution. Not guaranteed to receive all, or
     /// any of the objects referenced in this set.
@@ -1107,16 +1107,25 @@ impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
         // look into the types of each written object in the output, and some of them need the
         // newly written packages for type checking.
         // In production path though, this should never happen.
-        if let Some(obj) = self.read_object(package_id) {
+        if let Some(obj) = self.execution_results.written_objects.get(package_id) {
             Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
                 if let Some(v) = &obj {
-                    // TODO: Can this lock ever block execution?
-                    self.runtime_packages_loaded_from_db
-                        .write()
-                        .insert(*package_id, v.object().clone());
+                    if !self
+                        .runtime_packages_loaded_from_db
+                        .read()
+                        .contains_key(package_id)
+                    {
+                        // TODO: Can this lock ever block execution?
+                        // TODO: Another way to avoid the cost of maintaining this map is to not
+                        // enable it in normal runs, and if a fork is detected, rerun it with a flag
+                        // turned on and start populating this field.
+                        self.runtime_packages_loaded_from_db
+                            .write()
+                            .insert(*package_id, v.clone());
+                    }
                 }
                 obj
             })
