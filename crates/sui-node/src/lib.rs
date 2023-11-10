@@ -828,24 +828,42 @@ impl SuiNode {
         DBCheckpointConfig,
         Option<tokio::sync::broadcast::Sender<()>>,
     )> {
+        let checkpoint_path = Some(
+            config
+                .db_checkpoint_config
+                .checkpoint_path
+                .clone()
+                .unwrap_or_else(|| config.db_checkpoint_path()),
+        );
         let db_checkpoint_config = if config.db_checkpoint_config.checkpoint_path.is_none() {
             DBCheckpointConfig {
-                checkpoint_path: Some(config.db_checkpoint_path()),
+                checkpoint_path,
+                perform_db_checkpoints_at_epoch_end: if state_snapshot_enabled {
+                    true
+                } else {
+                    config
+                        .db_checkpoint_config
+                        .perform_db_checkpoints_at_epoch_end
+                },
                 ..config.db_checkpoint_config.clone()
             }
         } else {
             config.db_checkpoint_config.clone()
         };
 
-        match db_checkpoint_config
-            .checkpoint_path
-            .as_ref()
-            .zip(db_checkpoint_config.object_store_config.as_ref())
-        {
-            Some((path, object_store_config)) => {
+        match (
+            db_checkpoint_config.object_store_config.as_ref(),
+            state_snapshot_enabled,
+        ) {
+            // If db checkpoint config object store not specified but
+            // state snapshot object store is specified, create handler
+            // anyway for marking db checkpoints as completed so that they
+            // can be uploaded as state snapshots.
+            (None, false) => Ok((db_checkpoint_config, None)),
+            (_, _) => {
                 let handler = DBCheckpointHandler::new(
-                    path,
-                    object_store_config,
+                    &db_checkpoint_config.checkpoint_path.clone().unwrap(),
+                    db_checkpoint_config.object_store_config.as_ref(),
                     60,
                     db_checkpoint_config
                         .prune_and_compact_before_upload
@@ -860,7 +878,6 @@ impl SuiNode {
                     Some(DBCheckpointHandler::start(handler)),
                 ))
             }
-            None => Ok((db_checkpoint_config, None)),
         }
     }
 

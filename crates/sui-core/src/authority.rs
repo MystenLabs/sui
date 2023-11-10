@@ -633,7 +633,7 @@ pub struct AuthorityState {
     _pruner: AuthorityStorePruner,
     _authority_per_epoch_pruner: AuthorityPerEpochStorePruner,
 
-    /// Take db checkpoints af different dbs
+    /// Take db checkpoints of different dbs
     db_checkpoint_config: DBCheckpointConfig,
 
     /// Config controlling what kind of expensive safety checks to perform.
