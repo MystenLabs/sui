@@ -27,6 +27,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, DefaultHash, SuiAuthoritySignature,
 };
+use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
@@ -691,9 +692,11 @@ fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
     // We have a circular dependency here. Protocol config depends on chain ID, which
     // depends on genesis checkpoint (digest), which depends on genesis transaction, which
     // depends on protocol config.
-    // However since we know there are no chain specific protocol config options in genesis,
-    // we use Chain::Unknown here.
-    ProtocolConfig::get_for_version(version, Chain::Unknown)
+    //
+    // ChainIdentifier::default().chain() which can be overridden by the
+    // SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE if necessary (this is mainly used for compatibility tests
+    // in which we want to start a cluster that thinks it is mainnet).
+    ProtocolConfig::get_for_version(version, ChainIdentifier::default().chain())
 }
 
 fn build_unsigned_genesis_data(
