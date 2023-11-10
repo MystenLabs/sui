@@ -339,21 +339,25 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                         bytes,
                     ) = &transaction.kind
                     {
-                        debug!("adding RandomnessStateUpdate tx for round {round:?}");
-                        let randomness_state_update_transaction = self
-                            .randomness_state_update_transaction(
-                                round,
-                                *randomness_round,
-                                bytes.clone(),
-                            );
+                        if self.epoch_store.randomness_state_enabled() {
+                            debug!("adding RandomnessStateUpdate tx for round {round:?}");
+                            let randomness_state_update_transaction = self
+                                .randomness_state_update_transaction(
+                                    round,
+                                    *randomness_round,
+                                    bytes.clone(),
+                                );
 
-                        transactions.push((
-                            empty_bytes.as_slice(),
-                            SequencedConsensusTransactionKind::System(
-                                randomness_state_update_transaction,
-                            ),
-                            consensus_output.leader_author_index(),
-                        ));
+                            transactions.push((
+                                empty_bytes.as_slice(),
+                                SequencedConsensusTransactionKind::System(
+                                    randomness_state_update_transaction,
+                                ),
+                                consensus_output.leader_author_index(),
+                            ));
+                        } else {
+                            debug!("ignoring RandomnessStateUpdate tx for round {round:?}: randomness state is not enabled on this node")
+                        }
                     } else {
                         let transaction = SequencedConsensusTransactionKind::External(transaction);
                         transactions.push((serialized_transaction, transaction, authority_index));

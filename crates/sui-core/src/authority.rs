@@ -4025,6 +4025,9 @@ impl AuthorityState {
         if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
             txns.push(tx);
         }
+        if let Some(tx) = self.create_randomness_state_tx(epoch_store) {
+            txns.push(tx);
+        }
 
         let next_epoch = epoch_store.epoch() + 1;
 
