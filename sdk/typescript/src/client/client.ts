@@ -579,7 +579,7 @@ export class SuiClient {
 
 		return await this.transport.request({
 			method: 'sui_devInspectTransactionBlock',
-			params: [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
+			params: [input.sender, devInspectTxBytes, input.gasPrice?.toString(), input.epoch],
 		});
 	}
 
