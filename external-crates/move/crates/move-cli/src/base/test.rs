@@ -100,7 +100,6 @@ impl Test {
             verbose: verbose_mode,
             ..UnitTestingConfig::default_with_bound(None)
         };
-
         let result = run_move_unit_tests(
             &rerooted_path,
             config,

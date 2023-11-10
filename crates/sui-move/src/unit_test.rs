@@ -43,6 +43,11 @@ impl Test {
         build_config: BuildConfig,
         unit_test_config: UnitTestingConfig,
     ) -> anyhow::Result<UnitTestResult> {
+        if !cfg!(debug_assertions) && self.test.compute_coverage {
+            return Err(anyhow::anyhow!(
+                "The --coverage flag is currently supported only in debug builds. Please build the Sui CLI from source in debug mode."
+            ));
+        }
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         // pre build for Sui-specific verifications
@@ -104,11 +109,6 @@ pub fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
 ) -> anyhow::Result<UnitTestResult> {
-    if !cfg!(debug_assertions) && compute_coverage {
-        return Err(anyhow::anyhow!(
-            "--coverage flag is currently supported only in debug builds"
-        ));
-    }
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
 
