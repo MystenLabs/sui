@@ -8,14 +8,15 @@ use once_cell::unsync::OnceCell;
 use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest, VersionNumber,
 };
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    get_module_by_id, load_package_object_from_object_store, BackingPackageStore,
-    ChildObjectResolver, GetSharedLocks, ObjectStore, PackageObjectArc, ParentSync,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
+    PackageObjectArc, ParentSync,
 };
 use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult};
 
@@ -23,6 +24,7 @@ use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult};
 #[derive(Clone)]
 pub(crate) struct InMemoryObjectStore {
     objects: Arc<HashMap<ObjectID, Object>>,
+    package_cache: Arc<PackageObjectCache>,
     num_object_reads: Arc<AtomicU64>,
 }
 
@@ -30,6 +32,7 @@ impl InMemoryObjectStore {
     pub(crate) fn new(objects: HashMap<ObjectID, Object>) -> Self {
         Self {
             objects: Arc::new(objects),
+            package_cache: PackageObjectCache::new(),
             num_object_reads: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -134,7 +137,7 @@ impl ObjectStore for InMemoryObjectStore {
 
 impl BackingPackageStore for InMemoryObjectStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
-        load_package_object_from_object_store(self, package_id)
+        self.package_cache.get_package_object(package_id, self)
     }
 }
 
