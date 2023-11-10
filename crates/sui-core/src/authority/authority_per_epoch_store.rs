@@ -1325,6 +1325,7 @@ impl AuthorityPerEpochStore {
     /// Lock a sequence number for the shared objects of the input transaction based on the effects
     /// of that transaction.
     /// Used by full nodes who don't listen to consensus, and validators who catch up by state sync.
+    #[instrument(level = "trace", skip_all)]
     pub async fn acquire_shared_locks_from_effects(
         &self,
         certificate: &VerifiedExecutableTransaction,
