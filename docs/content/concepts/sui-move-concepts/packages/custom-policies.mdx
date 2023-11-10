@@ -1,18 +1,12 @@
 ---
-title: Custom Policies
+title: Custom Upgrade Policies
 ---
 
-The ability to upgrade Sui Move packages provides the opportunity to iterate your package development, whether to continuously improve features or address logic defects. The `sui client upgrade` command offers an approachable way to upgrade packages when the CLI active address owns the `UpgradeCap` object associated with those packages.
+Protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
 
-Using the Sui Client CLI is useful to get started with upgrades, or in the early stages of package development, but protecting the ability to upgrade a package on chain using a single key can pose a security risk for several reasons:
+{@include: ../../../snippets/upgrade-single-key-risk.mdx}
 
-- The entity owning that key might make changes that are in their own interests but not the interests of the broader community.
-- Upgrades might happen without enough time for package users to consult on the change or stop using the package if they disagree.
-- The key might get lost.
-
-You can make a package _immutable_ when it goes live to mitigate this risk using the Move `sui::package::make_immutable` function to destroy its `UpgradeCap`. Making the package immutable, however, prevents future bug fixes and new features, which might not be practical or desired.
-
-To address the security risk a single key poses while still providing the opportunity to upgrade live packages, Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
+To address the security risk of single-key upgrade ownership poses while still providing the opportunity to [upgrade live packages](./upgrade.mdx), Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
 
 ## Compatibility {#compatibility}
 
@@ -133,14 +127,14 @@ bytecode or source code for ahead of time. Sui calculates the digest as follows:
 
 Refer to the [implementation for digest calculation](https://github.com/MystenLabs/sui/blob/d8cb153d886d54752763fbdab631b062da7d894b/crates/sui-types/src/move_package.rs#L232-L251) for more information, but in most cases, you can rely on the Move toolchain to output the digest as part of the build, when passing the `--dump-bytecode-as-base64` flag:
 
-```bash
-sui move build --dump-bytecode-as-base64
-FETCHING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
-INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY MoveStdlib
-BUILDING test
-{"modules":[<MODULE-BYTES-BASE64>],"dependencies":[<DEPENDENCY-IDS>],"digest":[59,43,173,195,216,88,176,182,18,8,24,200,200,192,196,197,248,35,118,184,207,205,33,59,228,109,184,230,50,31,235,201]}
-```
+    ```
+    sui move build --dump-bytecode-as-base64
+    FETCHING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+    INCLUDING DEPENDENCY Sui
+    INCLUDING DEPENDENCY MoveStdlib
+    BUILDING test
+    {"modules":[<MODULE-BYTES-BASE64>],"dependencies":[<DEPENDENCY-IDS>],"digest":[59,43,173,195,216,88,176,182,18,8,24,200,200,192,196,197,248,35,118,184,207,205,33,59,228,109,184,230,50,31,235,201]}
+    ```
 
 ## UpgradeReceipt {#upgradereceipt}
 
@@ -163,7 +157,7 @@ After Sui creates an `UpgradeReceipt`, you must use it to update its `UpgradeCap
 
 When writing custom upgrade policies, prefer:
 
-- separating them into their own package, (i.e. not co-located with the code they govern the upgradeability of),
+- separating them into their own package (not co-located with the code they govern the upgradeability of),
 - making that package immutable (not upgradeable), and
 - locking in the policy of the `UpgradeCap`, so that the policy cannot be made less restrictive later.
 
@@ -342,13 +336,6 @@ sui client publish --gas-budget 100000000
 
 A successful publish returns the following:
 
-```mdx-code-block
-<details>
-  <summary>
-  Show output
-  </summary>
-```
-
 ```bash
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
@@ -428,10 +415,6 @@ Array [
 ]
 ```
 
-```mdx-code-block
-</details>
-```
-
 Following best practices, use the Sui Client CLI to call `sui::package::make_immutable` on the `UpgradeCap` to make the policy immutable.
 
 ```bash
@@ -442,12 +425,7 @@ sui client call --gas-budget 10000000 \
     --args '<POLICY-UPGRADE-CAP>'
 ```
 
-```mdx-code-block
-<details>
-  <summary>
-  Show output
-  </summary>
-```
+If successful, the response resembles the following:
 
 ```bash
 ----- Transaction Digest ----
@@ -502,10 +480,6 @@ Array [
 ]
 ```
 
-```mdx-code-block
-</details>
-```
-
 ### Creating a package for testing {#creating-testing-package}
 
 With a policy now available on chain, you need a package to upgrade. This topic creates a basic package and references it in the following scenarios, but you can use any package you might have available instead of creating a new one.
@@ -556,7 +530,7 @@ const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
 ```
 
-Next, add boilerplate code to get the keypair for the currently active address in the Sui Client CLI:
+Next, add boilerplate code to get the key pair for the currently active address in the Sui Client CLI:
 
 ```js
 import { execSync } from 'child_process';
@@ -633,7 +607,7 @@ tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
 And finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Replace all `localnetConnection` references with `devnetConnection`, `testnetConnection`, or `mainnetConnection` to run on Devnet, Testnet, or Mainnet respectively:
 
 ```js
-import { JsonRpcProvider, RawSigner, localnetConnection }
+import { JsonRpcProvider, RawSigner, localnetConnection };
 const provider = new JsonRpcProvider(localnetConnection);
 const signer = new RawSigner(keyPair, provider);
 
@@ -645,7 +619,8 @@ const result = await signer.signAndExecuteTransactionBlock({
     }
 });
 
-console.log(result)
+console.log(result);
+
 ```
 
 Save your `publish.js` file, and then use Node.js to run the script:
@@ -656,12 +631,6 @@ node publish.js
 
 If the script is successful, the console prints the following response:
 
-```mdx-code-block
-<details>
-  <summary>
-  Show output
-  </summary>
-```
 
 ```bash
 INCLUDING DEPENDENCY Sui
@@ -722,9 +691,6 @@ BUILDING example
 }
 ```
 
-```mdx-code-block
-</details>
-```
 
 :::tip
 
