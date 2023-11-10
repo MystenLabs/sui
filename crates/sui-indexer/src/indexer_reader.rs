@@ -27,17 +27,19 @@ use anyhow::{anyhow, Result};
 use cached::proc_macro::cached;
 use cached::SizedCache;
 use diesel::{
-    r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
-    RunQueryDsl, TextExpressionMethods, sql_types::Bool, dsl::sql,
+    dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
+    PgConnection, QueryDsl, RunQueryDsl, TextExpressionMethods,
 };
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use itertools::{any, Itertools};
 use move_core_types::language_storage::StructTag;
+use move_core_types::value::MoveStructLayout;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
+use sui_json_rpc_types::DisplayFieldsResponse;
 use sui_json_rpc_types::{
     AddressMetrics, CheckpointId, EpochInfo, EventFilter, MoveCallMetrics, MoveFunctionName,
     NetworkMetrics, SuiEvent, SuiObjectDataFilter, SuiTransactionBlockResponse, TransactionFilter,
@@ -558,33 +560,8 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        // let object_types = Self::extract_struct_filters(filter)?;
         self.spawn_blocking(move |this| this.get_owned_objects_impl(address, filter, cursor, limit))
             .await
-    }
-
-    fn extract_struct_filters(
-        filter: Option<SuiObjectDataFilter>,
-    ) -> Result<Option<Vec<String>>, IndexerError> {
-        if filter.is_none() {
-            return Ok(None);
-        }
-        match filter.unwrap() {
-            SuiObjectDataFilter::StructType (struct_tag ) => Ok(Some(vec![struct_tag.to_canonical_string(/* with_prefix */ true)])),
-            SuiObjectDataFilter::MatchAny(filters) => {
-                filters.iter().map(|filter| {
-                    match filter {
-                        SuiObjectDataFilter::StructType (struct_tag ) => Ok(struct_tag.to_canonical_string(/* with_prefix */ true)),
-                        _ => Err(IndexerError::InvalidArgumentError(
-                            "Invalid filter type. Only struct filters and MatchAny of struct filters are supported.".into(),
-                        )),
-                    }
-                }).collect::<Result<Vec<_>, _>>().map(Some)
-            }
-            _ => Err(IndexerError::InvalidArgumentError(
-                "Invalid filter type. Only struct filters and MatchAny of struct filters are supported.".into(),
-            )),
-        }
     }
 
     fn get_owned_objects_impl(
@@ -623,14 +600,13 @@ impl IndexerReader {
                             }
                         }
                         condition += ")";
-                        println!("condition: {}", condition);
                         query = query.filter(sql::<Bool>(&condition));
                     },
                     SuiObjectDataFilter::MatchNone(filters) => {
                         for filter in filters {
                             if let SuiObjectDataFilter::StructType (struct_tag) = filter {
                                 let object_type = struct_tag.to_string();
-                                query = query.filter(objects::dsl::object_type.not_like(format!("{}%",object_type)));
+                                query = query.filter(objects::dsl::object_type.ne(object_type));
                             } else {
                                 return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
@@ -649,9 +625,9 @@ impl IndexerReader {
             if let Some(object_cursor) = cursor {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
-            let debug_sql = diesel::debug_query::<diesel::pg::Pg, _>(&query);
+            let debug_query = diesel::debug_query::<diesel::pg::Pg, _>(&query);
 
-            println!("{:?}", debug_sql);
+            println!("{:?}", debug_query);
             query.load::<StoredObject>(conn).map_err(|e| IndexerError::PostgresReadError(e.to_string()))
         })
     }
@@ -1579,6 +1555,33 @@ impl IndexerReader {
             .into_iter()
             .map(|stored_address_metrics| stored_address_metrics.into())
             .collect())
+    }
+
+    pub(crate) async fn get_display_fields(
+        &self,
+        original_object: &sui_types::object::Object,
+        original_layout: &Option<MoveStructLayout>,
+    ) -> Result<DisplayFieldsResponse, IndexerError> {
+        let (object_type, layout) = if let Some((object_type, layout)) =
+            sui_json_rpc::read_api::get_object_type_and_struct(original_object, original_layout)
+                .map_err(|e| IndexerError::GenericError(e.to_string()))?
+        {
+            (object_type, layout)
+        } else {
+            return Ok(DisplayFieldsResponse {
+                data: None,
+                error: None,
+            });
+        };
+
+        if let Some(display_object) = self.get_display_object_by_type(&object_type).await? {
+            return sui_json_rpc::read_api::get_rendered_fields(display_object.fields, &layout)
+                .map_err(|e| IndexerError::GenericError(e.to_string()));
+        }
+        Ok(DisplayFieldsResponse {
+            data: None,
+            error: None,
+        })
     }
 
     pub async fn get_coin_metadata_in_blocking_task(
