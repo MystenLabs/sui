@@ -50,6 +50,7 @@ impl IndexerApiV2 {
     ) -> RpcResult<ObjectsPage> {
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
+        let timer = tokio::time::Instant::now();
         let objects = self
             .inner
             .get_owned_objects_in_blocking_task(address, filter, cursor, limit + 1)
@@ -65,8 +66,10 @@ impl IndexerApiV2 {
             .await?;
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
+        tracing::info!("time on owned object query {}", timer.elapsed().as_millis());
 
         let next_cursor = objects.last().map(|o_read| o_read.object_id());
+        let timer = tokio::time::Instant::now();
         let mut parallel_tasks = vec![];
         for o in objects {
             let inner_clone = self.inner.clone();
@@ -113,6 +116,7 @@ impl IndexerApiV2 {
             .map_err(|e: tokio::task::JoinError| anyhow::anyhow!(e))?
             .into_iter()
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
+        tracing::info!("get display info: {}", timer.elapsed().as_millis());
 
         Ok(Page {
             data,
