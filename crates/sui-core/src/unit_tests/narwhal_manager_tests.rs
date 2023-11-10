@@ -78,7 +78,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
-        Box::new(state.db()),
+        Box::new(state.get_cache_reader().clone().as_notify_read_wrapper()),
         Arc::new(accumulator),
         Box::new(output),
         Box::new(certified_output),

@@ -4,7 +4,6 @@
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_macros::sim_test;
@@ -59,12 +58,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
         .await?;
 
     // Wait for data sync to catch up
-    handle
-        .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
-        .await
-        .unwrap();
+    handle.state().notify_read_effects(&[digest]).await.unwrap();
 
     // Transaction Orchestrator proactivcely executes txn locally
     let txn = txns.swap_remove(0);
