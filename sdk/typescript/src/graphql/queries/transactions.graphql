@@ -23,6 +23,8 @@ query queryTransactionBlocks(
 	) {
 		pageInfo {
 			hasNextPage
+			hasPreviousPage
+			startCursor
 			endCursor
 		}
 		nodes {
@@ -59,6 +61,8 @@ query multiGetTransactionBlocks(
 	transactionBlockConnection(first: $limit, after: $cursor, filter: { transactionIds: $digests }) {
 		pageInfo {
 			hasNextPage
+			hasPreviousPage
+			startCursor
 			endCursor
 		}
 		nodes {

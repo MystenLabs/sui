@@ -24,7 +24,12 @@ const config: CodegenConfig = {
 					},
 				},
 				'typescript',
-				'typescript-document-nodes',
+				'typescript-operations',
+				{
+					'typed-document-node': {
+						documentMode: 'string',
+					},
+				},
 			],
 		},
 	},

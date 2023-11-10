@@ -111,8 +111,10 @@
 	"devDependencies": {
 		"@graphql-codegen/add": "^5.0.0",
 		"@graphql-codegen/cli": "5.0.0",
+		"@graphql-codegen/typed-document-node": "^5.0.1",
 		"@graphql-codegen/typescript": "4.0.1",
 		"@graphql-codegen/typescript-document-nodes": "4.0.1",
+		"@graphql-codegen/typescript-operations": "^4.0.1",
 		"@iarna/toml": "^2.2.5",
 		"@mysten/build-scripts": "workspace:*",
 		"@parcel/watcher": "^2.3.0",

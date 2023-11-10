@@ -8,13 +8,17 @@ query queryEvents(
 	# - TimeRange
 	# - All, Any, And, Or
 	# missing order
-	$limit: Int
-	$cursor: String
+	$before: String
+	$after: String
+	$first: Int
+	$last: Int
 ) {
-	eventConnection(filter: $filter, first: $limit, after: $cursor) {
+	eventConnection(filter: $filter, first: $first, after: $after, last: $last, before: $before) {
 		pageInfo {
 			hasNextPage
+			hasPreviousPage
 			endCursor
+			startCursor
 		}
 		nodes {
 			id

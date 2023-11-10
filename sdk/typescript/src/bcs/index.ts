@@ -424,8 +424,6 @@ const MultiSig = bcs.struct('MultiSig', {
 	multisig_pk: MultiSigPublicKey,
 });
 
-MultiSig.serialize(data, { maxSize: 123 });
-
 const base64String = bcs.vector(bcs.u8()).transform({
 	input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
 	output: (val) => toB64(new Uint8Array(val)),
