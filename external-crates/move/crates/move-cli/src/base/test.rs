@@ -66,7 +66,7 @@ pub struct Test {
     /// Verbose mode
     #[clap(long = "verbose")]
     pub verbose_mode: bool,
-    /// Collect coverage information for later use with the various `move coverage` subcommands
+    /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
 }
@@ -100,6 +100,7 @@ impl Test {
             verbose: verbose_mode,
             ..UnitTestingConfig::default_with_bound(None)
         };
+
         let result = run_move_unit_tests(
             &rerooted_path,
             config,

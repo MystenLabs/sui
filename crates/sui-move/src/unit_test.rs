@@ -104,6 +104,11 @@ pub fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
 ) -> anyhow::Result<UnitTestResult> {
+    if !cfg!(debug_assertions) && compute_coverage {
+        return Err(anyhow::anyhow!(
+            "--coverage flag is currently supported only in debug builds"
+        ));
+    }
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
 
