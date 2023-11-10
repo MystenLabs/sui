@@ -1003,6 +1003,38 @@ impl AuthorityStore {
         Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
     }
 
+    fn force_reload_system_packages_into_cache(&self) {
+        info!("Reload all system packages in the cache");
+        self.package_cache
+            .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
+    }
+
+    /// Acquires read locks for affected indirect objects
+    #[instrument(level = "trace", skip_all)]
+    async fn acquire_read_locks_for_indirect_objects(
+        &self,
+        inner_temporary_store: &InnerTemporaryStore,
+    ) -> Vec<RwLockGuard> {
+        // locking is required to avoid potential race conditions with the pruner
+        // potential race:
+        //   - transaction execution branches to reference count increment
+        //   - pruner decrements ref count to 0
+        //   - compaction job compresses existing merge values to an empty vector
+        //   - tx executor commits ref count increment instead of the full value making object inaccessible
+        // read locks are sufficient because ref count increments are safe,
+        // concurrent transaction executions produce independent ref count increments and don't corrupt the state
+        let digests = inner_temporary_store
+            .written
+            .values()
+            .filter_map(|object| {
+                let StoreObjectPair(_, indirect_object) =
+                    get_store_object_pair(object.clone(), self.indirect_objects_threshold);
+                indirect_object.map(|obj| obj.inner().digest())
+            })
+            .collect();
+        self.objects_lock_table.acquire_read_locks(digests).await
+    }
+
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
@@ -1077,38 +1109,6 @@ impl AuthorityStore {
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
         Ok(())
-    }
-
-    fn force_reload_system_packages_into_cache(&self) {
-        info!("Reload all system packages in the cache");
-        self.package_cache
-            .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
-    }
-
-    /// Acquires read locks for affected indirect objects
-    #[instrument(level = "trace", skip_all)]
-    async fn acquire_read_locks_for_indirect_objects(
-        &self,
-        inner_temporary_store: &InnerTemporaryStore,
-    ) -> Vec<RwLockGuard> {
-        // locking is required to avoid potential race conditions with the pruner
-        // potential race:
-        //   - transaction execution branches to reference count increment
-        //   - pruner decrements ref count to 0
-        //   - compaction job compresses existing merge values to an empty vector
-        //   - tx executor commits ref count increment instead of the full value making object inaccessible
-        // read locks are sufficient because ref count increments are safe,
-        // concurrent transaction executions produce independent ref count increments and don't corrupt the state
-        let digests = inner_temporary_store
-            .written
-            .values()
-            .filter_map(|object| {
-                let StoreObjectPair(_, indirect_object) =
-                    get_store_object_pair(object.clone(), self.indirect_objects_threshold);
-                indirect_object.map(|obj| obj.inner().digest())
-            })
-            .collect();
-        self.objects_lock_table.acquire_read_locks(digests).await
     }
 
     /// Helper function for updating the objects and locks in the state
