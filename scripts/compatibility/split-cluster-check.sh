@@ -98,4 +98,6 @@ if ! grep -q "Node State has been reconfigured" "$LOG_DIR/fullnode.log"; then
   exit 1
 fi
 
+echo "Cluster reconfigured successfully"
+
 exit 0
