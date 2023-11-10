@@ -224,7 +224,7 @@ fn mysticeti_committee(committee: &narwhal_config::Committee) -> Arc<Committee> 
             Authority::new(authority.stake(), PublicKey(authority.network_key().0))
         })
         .collect_vec();
-    Committee::new(authorities.clone())
+    Committee::new(authorities.clone(), committee.epoch())
 }
 
 fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
