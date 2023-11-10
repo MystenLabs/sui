@@ -25,6 +25,20 @@ describe('Test dev inspect', () => {
 		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success');
 	});
 
+	it('can set gas price as number', async () => {
+		const tx = new TransactionBlock();
+		const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
+		tx.transferObjects([coin], tx.pure(toolbox.address()));
+		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success', 2000);
+	});
+
+	it('can set gas price as bigint', async () => {
+		const tx = new TransactionBlock();
+		const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
+		tx.transferObjects([coin], tx.pure(toolbox.address()));
+		await validateDevInspectTransaction(toolbox.client, toolbox.keypair, tx, 'success', 2000n);
+	});
+
 	it('Move Call that returns struct', async () => {
 		const coins = await toolbox.getGasObjectsOwnedByAddress();
 
@@ -59,10 +73,12 @@ async function validateDevInspectTransaction(
 	signer: Keypair,
 	transactionBlock: TransactionBlock,
 	status: 'success' | 'failure',
+	gasPrice?: number | bigint,
 ) {
 	const result = await client.devInspectTransactionBlock({
 		transactionBlock,
 		sender: signer.getPublicKey().toSuiAddress(),
+		gasPrice,
 	});
 	expect(result.effects.status.status).toEqual(status);
 }
