@@ -7,7 +7,6 @@ use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::OverloadThresholdConfig;
-use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
@@ -133,8 +132,7 @@ async fn shared_object_deletion_multiple_times() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(digests)
+        .notify_read_effects(&digests)
         .await
         .unwrap();
 }
@@ -189,8 +187,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(digests)
+        .notify_read_effects(&digests)
         .await
         .unwrap();
 }
@@ -302,8 +299,7 @@ async fn shared_object_deletion_multi_certs() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![inc_tx_a_digest, inc_tx_b_digest])
+        .notify_read_effects(&[inc_tx_a_digest, inc_tx_b_digest])
         .await
         .unwrap();
 }

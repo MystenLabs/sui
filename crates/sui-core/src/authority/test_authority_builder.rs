@@ -8,6 +8,7 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::in_mem_execution_cache::InMemoryCache;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -260,7 +261,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             name,
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
-            authority_store,
+            authority_store.clone(),
+            InMemoryCache::new(authority_store).into(),
             epoch_store,
             committee_store,
             index_store,

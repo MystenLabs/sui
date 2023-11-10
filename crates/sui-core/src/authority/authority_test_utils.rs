@@ -343,7 +343,11 @@ pub async fn enqueue_all_and_execute_all(
         .unwrap();
     let mut output = Vec::new();
     for cert in certificates {
-        let effects = authority.notify_read_effects(&cert).await?;
+        let effects = authority
+            .notify_read_effects(&[*cert.digest()])
+            .await?
+            .pop()
+            .unwrap();
         output.push(effects);
     }
     Ok(output)
@@ -375,7 +379,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.db(),
+            authority.get_cache_reader().as_ref(),
             &authority.metrics.skipped_consensus_txns,
         )
         .await
@@ -399,7 +403,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            &authority.db(),
+            authority.get_cache_reader().as_ref(),
             &authority.metrics.skipped_consensus_txns,
         )
         .await
