@@ -11,6 +11,7 @@ use sui_types::{
     crypto::deterministic_random_account_key,
     digests::TransactionEffectsDigest,
     object::Object,
+    storage::InputKey,
     transaction::{CallArg, ObjectArg},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -20,9 +21,7 @@ use tokio::{
 };
 
 use crate::{
-    authority::{
-        authority_store::InputKey, authority_tests::init_state_with_objects, AuthorityState,
-    },
+    authority::{authority_tests::init_state_with_objects, AuthorityState},
     transaction_manager::TransactionManager,
 };
 

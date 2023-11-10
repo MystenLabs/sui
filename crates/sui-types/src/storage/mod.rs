@@ -31,6 +31,47 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 pub use write_store::WriteStore;
 
+/// A potential input to a transaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum InputKey {
+    VersionedObject {
+        id: ObjectID,
+        version: SequenceNumber,
+    },
+    Package {
+        id: ObjectID,
+    },
+}
+
+impl InputKey {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            InputKey::VersionedObject { id, .. } => *id,
+            InputKey::Package { id } => *id,
+        }
+    }
+
+    pub fn version(&self) -> Option<SequenceNumber> {
+        match self {
+            InputKey::VersionedObject { version, .. } => Some(*version),
+            InputKey::Package { .. } => None,
+        }
+    }
+}
+
+impl From<&Object> for InputKey {
+    fn from(obj: &Object) -> Self {
+        if obj.is_package() {
+            InputKey::Package { id: obj.id() }
+        } else {
+            InputKey::VersionedObject {
+                id: obj.id(),
+                version: obj.version(),
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum WriteKind {
     /// The object was in storage already but has been modified

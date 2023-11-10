@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::hash::Hash;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
@@ -20,8 +19,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
-    PackageObjectArc,
+    get_module, BackingPackageStore, ChildObjectResolver, InputKey, MarkerValue, ObjectKey,
+    ObjectStore, PackageObjectArc,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -48,6 +47,8 @@ use typed_store::rocks::util::is_ref_count_value;
 const NUM_SHARDS: usize = 4096;
 
 struct AuthorityStoreMetrics {
+    pending_notify_read: IntGauge,
+
     sui_conservation_check_latency: IntGauge,
     sui_conservation_live_object_count: IntGauge,
     sui_conservation_live_object_size: IntGauge,
@@ -60,6 +61,12 @@ struct AuthorityStoreMetrics {
 impl AuthorityStoreMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            pending_notify_read: register_int_gauge_with_registry!(
+                "pending_notify_read",
+                "Pending notify read requests",
+                registry,
+            )
+                .unwrap(),
             sui_conservation_check_latency: register_int_gauge_with_registry!(
                 "sui_conservation_check_latency",
                 "Number of seconds took to scan all live objects in the store for SUI conservation check",
@@ -1024,6 +1031,12 @@ impl AuthorityStore {
             .notify(transaction_digest, &effects_digest);
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);
+
+        self.metrics
+            .pending_notify_read
+            .set(self.executed_effects_notify_read.num_pending() as i64);
+
+        debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
         Ok(())
     }
@@ -2155,47 +2168,6 @@ impl From<LockDetails> for LockDetailsWrapper {
     fn from(details: LockDetails) -> Self {
         // always use latest version.
         LockDetailsWrapper::V1(details)
-    }
-}
-
-/// A potential input to a transaction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum InputKey {
-    VersionedObject {
-        id: ObjectID,
-        version: SequenceNumber,
-    },
-    Package {
-        id: ObjectID,
-    },
-}
-
-impl InputKey {
-    pub fn id(&self) -> ObjectID {
-        match self {
-            InputKey::VersionedObject { id, .. } => *id,
-            InputKey::Package { id } => *id,
-        }
-    }
-
-    pub fn version(&self) -> Option<SequenceNumber> {
-        match self {
-            InputKey::VersionedObject { version, .. } => Some(*version),
-            InputKey::Package { .. } => None,
-        }
-    }
-}
-
-impl From<&Object> for InputKey {
-    fn from(obj: &Object) -> Self {
-        if obj.is_package() {
-            InputKey::Package { id: obj.id() }
-        } else {
-            InputKey::VersionedObject {
-                id: obj.id(),
-                version: obj.version(),
-            }
-        }
     }
 }
 
