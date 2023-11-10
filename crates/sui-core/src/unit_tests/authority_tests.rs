@@ -4753,7 +4753,12 @@ async fn test_shared_object_transaction_ok() {
     authority.try_execute_for_test(&certificate).await.unwrap();
 
     // Ensure transaction effects are available.
-    authority.notify_read_effects(&certificate).await.unwrap();
+    authority
+        .notify_read_effects(&[*certificate.digest()])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
 
     // Ensure shared object sequence number increased.
     let shared_object_version = authority
@@ -4853,7 +4858,7 @@ async fn test_consensus_message_processed() {
                 .acquire_shared_locks_from_effects(
                     &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                     &effects1,
-                    authority2.db(),
+                    authority2.get_cache_reader().as_ref(),
                 )
                 .await
                 .unwrap();

@@ -286,8 +286,7 @@ impl SingleValidator {
         let checkpoint_executor = CheckpointExecutor::new_for_tests(
             ckpt_receiver,
             validator.get_checkpoint_store().clone(),
-            validator.db(),
-            validator.transaction_manager().clone(),
+            validator.clone(),
             Arc::new(StateAccumulator::new(validator.db())),
         );
         (checkpoint_executor, ckpt_sender)

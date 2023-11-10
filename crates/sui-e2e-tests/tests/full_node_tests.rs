@@ -12,7 +12,6 @@ use serde_json::json;
 use std::sync::Arc;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
-use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
     type_and_fields_from_move_struct, EventPage, SuiEvent, SuiExecutionStatus,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -72,8 +71,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .notify_read_effects(&[digest])
         .await
         .unwrap();
 
@@ -118,8 +116,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     handle
         .sui_node
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .notify_read_effects(&[digest])
         .await
         .unwrap();
 
@@ -511,8 +508,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .notify_read_effects(&[digest])
         .await
         .unwrap();
 
@@ -613,18 +609,19 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     }
 
     // make sure the node syncs up to the last digest sent by each task.
-    let digests = future::join_all(futures)
+    let digests: Vec<_> = future::join_all(futures)
         .await
         .iter()
         .map(|r| r.clone().unwrap())
         .flat_map(|(a, b)| std::iter::once(a).chain(std::iter::once(b)))
         .collect();
-    fullnode
-        .state()
-        .db()
-        .notify_read_executed_effects(digests)
-        .await
-        .unwrap();
+    for digest in digests.into_iter() {
+        fullnode
+            .state()
+            .notify_read_effects(&[digest])
+            .await
+            .unwrap();
+    }
 
     Ok(())
 }
@@ -658,11 +655,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .unwrap();
 
     let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
-    node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
-        .await
-        .unwrap();
+    node.state().notify_read_effects(&[digest]).await.unwrap();
 
     // Wait for streaming
     let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
@@ -900,8 +893,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(!is_executed_locally);
     fullnode
         .state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
+        .notify_read_effects(&[digest])
         .await
         .unwrap();
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store).await
@@ -1199,11 +1191,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .await
         .sui_node;
 
-    node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest])
-        .await
-        .unwrap();
+    node.state().notify_read_effects(&[digest]).await.unwrap();
 
     loop {
         // Ensure this full node is able to transition to the next epoch
@@ -1220,8 +1208,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     let (_transferred_object, _, _, digest_after_restore, ..) =
         transfer_coin(&test_cluster.wallet).await?;
     node.state()
-        .db()
-        .notify_read_executed_effects(vec![digest_after_restore])
+        .notify_read_effects(&[digest_after_restore])
         .await
         .unwrap();
     Ok(())

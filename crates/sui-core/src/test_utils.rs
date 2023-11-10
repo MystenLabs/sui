@@ -45,11 +45,10 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use crate::authority::{
-    test_authority_builder::TestAuthorityBuilder, AuthorityState, EffectsNotifyRead,
-};
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
 use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
 use crate::epoch::committee_store::CommitteeStore;
+use crate::in_mem_execution_cache::ExecutionCacheRead;
 use crate::state_accumulator::StateAccumulator;
 use crate::test_authority_clients::LocalAuthorityClient;
 
@@ -125,7 +124,9 @@ where
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_executed_effects(vec![digest]),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&[digest]),
     )
     .await
     {
@@ -140,7 +141,9 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_executed_effects(digests.clone()),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&digests),
     )
     .await
     {

@@ -3,6 +3,7 @@
 
 use parking_lot::Mutex;
 use std::sync::Arc;
+use typed_store::TypedStoreError;
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
@@ -21,15 +22,16 @@ use sui_types::object::Object;
 use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
-use typed_store::Map;
 
 use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::in_mem_execution_cache::ExecutionCacheRead;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
     authority_store: Arc<AuthorityStore>,
+    execution_cache: Arc<dyn ExecutionCacheRead>,
     committee_store: Arc<CommitteeStore>,
     checkpoint_store: Arc<CheckpointStore>,
     // in memory checkpoint watermark sequence numbers
@@ -40,11 +42,13 @@ pub struct RocksDbStore {
 impl RocksDbStore {
     pub fn new(
         authority_store: Arc<AuthorityStore>,
+        execution_cache: Arc<dyn ExecutionCacheRead>,
         committee_store: Arc<CommitteeStore>,
         checkpoint_store: Arc<CheckpointStore>,
     ) -> Self {
         Self {
             authority_store,
+            execution_cache,
             committee_store,
             checkpoint_store,
             highest_verified_checkpoint: Arc::new(Mutex::new(None)),
@@ -53,7 +57,7 @@ impl RocksDbStore {
     }
 
     pub fn get_objects(&self, object_keys: &[ObjectKey]) -> Result<Vec<Option<Object>>, SuiError> {
-        self.authority_store.multi_get_object_by_key(object_keys)
+        self.execution_cache.multi_get_object_by_key(object_keys)
     }
 
     pub fn get_last_executed_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, SuiError> {
@@ -148,21 +152,40 @@ impl ReadStore for RocksDbStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        self.authority_store.get_transaction_block(digest)
+        self.execution_cache
+            .get_transaction_block(digest)
+            .map(|tx| tx.map(|tx| (*tx).clone()))
+            // TODO: remove this when https://github.com/MystenLabs/sui/pull/15685 is merged.
+            .map_err(|err| match err {
+                SuiError::StorageError(err) => err,
+                _ => TypedStoreError::RocksDBError(err.to_string()),
+            })
     }
 
     fn get_transaction_effects(
         &self,
         digest: &TransactionEffectsDigest,
     ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.authority_store.perpetual_tables.effects.get(digest)
+        self.execution_cache
+            .get_effects(digest)
+            // TODO: remove this when https://github.com/MystenLabs/sui/pull/15685 is merged.
+            .map_err(|err| match err {
+                SuiError::StorageError(err) => err,
+                _ => TypedStoreError::RocksDBError(err.to_string()),
+            })
     }
 
     fn get_transaction_events(
         &self,
         digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, Self::Error> {
-        self.authority_store.get_events(digest)
+        self.execution_cache
+            .get_events(digest)
+            // TODO: remove this when https://github.com/MystenLabs/sui/pull/15685 is merged.
+            .map_err(|err| match err {
+                SuiError::StorageError(err) => err,
+                _ => TypedStoreError::RocksDBError(err.to_string()),
+            })
     }
 }
 
