@@ -20,7 +20,7 @@ RUN cargo build --profile ${PROFILE} --bin sui-test-validator
 # Production Image
 FROM debian:bullseye-slim AS runtime
 # Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates libpq-dev
+RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates libpq-dev curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
