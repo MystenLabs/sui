@@ -308,6 +308,10 @@ export class BCS {
 	 * ```
 	 */
 	public registerAlias(name: string, forType: string): BCS {
+		if (this.types.has(name)) {
+			throw new Error(`Type ${name} already registered`);
+		}
+
 		this.types.set(name, forType);
 		return this;
 	}
@@ -350,6 +354,10 @@ export class BCS {
 		validateCb: (data: any) => boolean = () => true,
 	): BCS {
 		const { name, params: generics } = this.parseTypeName(typeName);
+
+		if (this.types.has(name)) {
+			throw new Error(`Type ${name} already registered`);
+		}
 
 		this.types.set(name, {
 			encode(self: BCS, data, options: BcsWriterOptions, typeParams) {

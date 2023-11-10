@@ -18,7 +18,7 @@ interface PackageJSON {
 	sideEffects?: boolean;
 }
 
-const ignorePatterns = [/\.test.ts$/];
+const ignorePatterns = [/\.test.ts$/, /\.graphql$/];
 
 export async function buildPackage(buildOptions?: BuildOptions) {
 	const allFiles = await findAllFiles(path.join(process.cwd(), 'src'));

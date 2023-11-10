@@ -434,7 +434,9 @@ const SenderSignedTransaction = bcs.struct('SenderSignedTransaction', {
 	txSignatures: bcs.vector(base64String),
 });
 
-const SenderSignedData = bcs.vector(SenderSignedTransaction);
+const SenderSignedData = bcs.vector(SenderSignedTransaction, {
+	name: 'SenderSignedData',
+});
 
 const suiBcs = {
 	...bcs,

@@ -220,7 +220,7 @@ export class GraphQLSuiClient extends SuiClient {
 		return {
 			data: coins.map((coin) => ({
 				balance: coin.balance,
-				coinObjectId: coin.coinObjectId,
+				coinObjectId: 'TODO',
 				coinType: coin.asMoveObject?.contents?.type.repr!,
 				digest: coin.asMoveObject?.asObject?.digest!,
 				previousTransaction: coin.asMoveObject?.asObject?.previousTransactionBlock?.digest!,
@@ -767,7 +767,7 @@ export class GraphQLSuiClient extends SuiClient {
 			nextCursor: (pagination.last ? pageInfo.endCursor : pageInfo.startCursor) as never,
 			data: events.map((event) => ({
 				bcs: event.bcs,
-				id: event.id as never, // TODO: turn id into an object
+				id: 'TODO' as never, // TODO: turn id into an object
 				packageId: event.sendingModuleId?.package.asObject?.location!,
 				parsedJson: event.json,
 				sender: event.senders?.[0]?.location,
