@@ -39,6 +39,7 @@ fn run_tests_for_pkg(path_to_pkg: impl Into<String>, include_nursery_natives: bo
         /* compute_coverage */ false,
         &mut std::io::stdout(),
         &mut std::io::stdout(),
+        true, // report_diags
     )
     .unwrap();
     if result != UnitTestResult::Success {

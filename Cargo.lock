@@ -11097,6 +11097,7 @@ dependencies = [
  "jsonrpsee",
  "move-binary-format",
  "move-cli",
+ "move-compiler",
  "move-disassembler",
  "move-ir-types",
  "move-package",
