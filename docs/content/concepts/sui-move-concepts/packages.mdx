@@ -11,7 +11,7 @@ After you publish a package object on chain to Mainnet, it lives there forever. 
 
 ## Upgrading packages
 
-While you can't manipulate on-chain packages directly, you do have the ability to upgrade them. Upgrading on-chain packages provides a way to improve your code or add features without affecting packages that use the original package. See [Package Upgrades](./packages/upgrade.mdx) to learn more about the process.
+While you can't manipulate on-chain packages directly, you do have the ability to upgrade them. Upgrading on-chain packages provides a way to improve your code or add features without affecting packages that use the original package. When you upgrade a package, you're creating a new object on chain instead of modifying the original package. See [Upgrading Packages](./packages/upgrade.mdx) to learn more about the process.
 
 ## Using Sui Client CLI to upgrade packages
 
@@ -26,9 +26,3 @@ Using the Sui CLI is useful to get started with upgrades, or in the early stages
 You can make a package _immutable_ when it goes live to mitigate the single-key risk using the Move `sui::package::make_immutable` function to destroy its `UpgradeCap`. Making the package immutable, however, prevents future bug fixes and new features, which might not be practical or desired.
 
 To protect your package from single-key risk on chain, see [Custom Upgrade Policies](./packages/custom-policies.mdx).
-
-
-
-
-
-
