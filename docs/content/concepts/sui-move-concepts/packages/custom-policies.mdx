@@ -557,6 +557,7 @@ Next, add boilerplate code to get the signer key pair for the currently active a
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
+import path from 'path';
 
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { fromB64 } from '@mysten/sui.js/utils';
@@ -590,7 +591,6 @@ Next, define the path of the package you are publishing. The following snippet a
 `publish.js`, called `example`:
 
 ```js
-import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
