@@ -66,7 +66,7 @@ pub struct Test {
     /// Verbose mode
     #[clap(long = "verbose")]
     pub verbose_mode: bool,
-    /// Collect coverage information for later use with the various `move coverage` subcommands
+    /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
 }

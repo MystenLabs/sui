@@ -43,6 +43,11 @@ impl Test {
         build_config: BuildConfig,
         unit_test_config: UnitTestingConfig,
     ) -> anyhow::Result<UnitTestResult> {
+        if !cfg!(debug_assertions) && self.test.compute_coverage {
+            return Err(anyhow::anyhow!(
+                "The --coverage flag is currently supported only in debug builds. Please build the Sui CLI from source in debug mode."
+            ));
+        }
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         // pre build for Sui-specific verifications
