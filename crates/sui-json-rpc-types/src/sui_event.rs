@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Encoding};
+use fastcrypto::encoding::{Base58, Base64, Encoding};
+use fastcrypto::traits::EncodeDecodeBase64;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -128,7 +129,9 @@ impl SuiEvent {
 
 impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut table = json_to_table(&self.parsed_json);
+        let j = &mut self.parsed_json.clone();
+        bytes_array_to_base64(j);
+        let mut table = json_to_table(&j);
         let style = TableStyle::modern();
         table.collapse().with(style);
         let bcs_base58 = Base58::encode(&self.bcs);
@@ -144,8 +147,56 @@ impl Display for SuiEvent {
         for r in table_rows {
             write!(f, " │   {r}")?;
         }
+
         write!(f, "\n └──")
     }
+}
+
+// Transform an array of bytes into a Base64 string
+fn bytes_array_to_base64(v: &mut Value) {
+    match v {
+        Value::Null => return,
+        Value::Bool(_) => return,
+        Value::Number(_) => return,
+        Value::String(_) => return,
+        Value::Array(ref mut x) => {
+            if x.iter().all(|val| check_is_number(val)) {
+                let new_vals = x
+                    .iter()
+                    .map(|a| a.as_u64().unwrap() as u8)
+                    .collect::<Vec<_>>();
+                let new_val = serde_json::json!(Base64::from_bytes(&new_vals).encoded());
+                *v = new_val;
+            } else {
+                for mut i in x {
+                    bytes_array_to_base64(&mut i)
+                }
+            }
+        }
+        Value::Object(m) => {
+            for a in m.values_mut() {
+                bytes_array_to_base64(a)
+            }
+        }
+    }
+}
+
+fn check_is_number(v: &Value) -> bool {
+    if v.is_number() {
+        if v.is_u64() {
+            let value = v.as_u64().unwrap();
+            return 0 >= value && value <= 255;
+        }
+        if v.is_i64() {
+            let value = v.as_i64().unwrap();
+            return 0i64 >= value && value <= 255i64;
+        }
+        if v.is_f64() {
+            let value = v.as_f64().unwrap();
+            return 0f64 >= value && value <= 255f64;
+        }
+    }
+    false
 }
 
 #[serde_as]
