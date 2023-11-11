@@ -10,6 +10,7 @@
 		"LICENSE",
 		"README.md",
 		"dist",
+		"experimental",
 		"src"
 	],
 	"type": "commonjs",
@@ -25,6 +26,10 @@
 		"./dist/index.css": {
 			"import": "./dist/esm/index.css",
 			"require": "./dist/cjs/index.css"
+		},
+		"./experimental/next": {
+			"import": "./dist/esm/experimental/next/index.js",
+			"require": "./dist/cjs/experimental/next/index.js"
 		}
 	},
 	"scripts": {
@@ -71,6 +76,7 @@
 		"@vanilla-extract/esbuild-plugin": "^2.3.0",
 		"@vanilla-extract/vite-plugin": "^3.9.0",
 		"happy-dom": "^10.5.1",
+		"next": "^13.4.15",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"size-limit": "^8.2.6",
@@ -89,14 +95,21 @@
 		"@vanilla-extract/dynamic": "^2.0.3",
 		"@vanilla-extract/recipes": "^0.5.0",
 		"clsx": "^2.0.0",
+		"next-client-cookies": "^1.0.6",
 		"zustand": "^4.4.1"
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^5.0.0",
-		"react": "*"
+		"react": "*",
+		"next": "*"
 	},
 	"sideEffects": [
 		"*.css.ts",
 		"*.css"
-	]
+	],
+	"peerDependenciesMeta": {
+		"next": {
+			"optional": true
+		}
+	}
 }

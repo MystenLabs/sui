@@ -6,6 +6,8 @@ import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { DEFAULT_STORAGE_KEY } from './constants/defaults.js';
+
 type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
 type WalletAutoConnectionStatus = 'disabled' | 'idle' | 'settled';
@@ -41,12 +43,45 @@ export type StoreState = {
 	autoConnectionStatus: WalletAutoConnectionStatus;
 } & WalletActions;
 
+export type PersistedState = {
+	lastConnectedWalletName: string;
+	lastConnectedAccountAddress: string;
+};
+
 type WalletConfiguration = {
 	wallets: WalletWithRequiredFeatures[];
 	autoConnect: boolean;
-	storage: StateStorage;
+	storage?: StateStorage | null;
 	storageKey: string;
 };
+
+export async function readStorageState(
+	storage: StateStorage,
+	storageKey: string = DEFAULT_STORAGE_KEY,
+): Promise<PersistedState | null> {
+	const store = createJSONStorage<PersistedState>(() => storage);
+	if (!store) return null;
+
+	const persisted = await store.getItem(storageKey);
+	if (!persisted) return null;
+
+	return persisted.state;
+}
+
+function createInMemoryStore(): StateStorage {
+	const store = new Map();
+	return {
+		getItem(key: string) {
+			return store.get(key);
+		},
+		setItem(key: string, value: string) {
+			store.set(key, value);
+		},
+		removeItem(key: string) {
+			store.delete(key);
+		},
+	};
+}
 
 export function createWalletStore({
 	wallets,
@@ -132,7 +167,11 @@ export function createWalletStore({
 			}),
 			{
 				name: storageKey,
-				storage: createJSONStorage(() => storage),
+				storage: createJSONStorage(() =>
+					storage === null || typeof window === 'undefined'
+						? createInMemoryStore()
+						: storage || localStorage,
+				),
 				partialize: ({ lastConnectedWalletName, lastConnectedAccountAddress }) => ({
 					lastConnectedWalletName,
 					lastConnectedAccountAddress,
