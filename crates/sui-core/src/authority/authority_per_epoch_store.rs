@@ -32,10 +32,11 @@ use sui_types::transaction::{
     TransactionDataAPI, VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::{debug, error, info, instrument, trace, warn};
-use typed_store::rocks::{
-    default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
-};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::{
+    rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf},
+    TypedStoreError,
+};
 
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};

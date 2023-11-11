@@ -12146,7 +12146,7 @@ dependencies = [
  "thiserror",
  "tonic 0.10.0",
  "tracing",
- "typed-store",
+ "typed-store-error",
  "workspace-hack",
 ]
 
@@ -13284,6 +13284,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store-derive",
+ "typed-store-error",
  "uint",
  "workspace-hack",
 ]
@@ -13300,6 +13301,15 @@ dependencies = [
  "tempfile",
  "tokio",
  "typed-store",
+ "workspace-hack",
+]
+
+[[package]]
+name = "typed-store-error"
+version = "0.4.0"
+dependencies = [
+ "serde",
+ "thiserror",
  "workspace-hack",
 ]
 

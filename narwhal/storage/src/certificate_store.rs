@@ -14,10 +14,7 @@ use tap::Tap;
 use crate::StoreResult;
 use config::AuthorityIdentifier;
 use mysten_common::sync::notify_read::NotifyRead;
-use store::{
-    rocks::{DBMap, TypedStoreError::RocksDBError},
-    Map,
-};
+use store::{rocks::DBMap, Map, TypedStoreError::RocksDBError};
 use types::{Certificate, CertificateDigest, Round};
 
 #[derive(Clone)]

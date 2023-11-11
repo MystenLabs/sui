@@ -149,6 +149,7 @@ members = [
     "crates/transaction-fuzzer",
     "crates/typed-store",
     "crates/typed-store-derive",
+    "crates/typed-store-error",
     "crates/workspace-hack",
     "crates/x",
     "narwhal/config",
@@ -610,6 +611,7 @@ test-cluster = { path = "crates/test-cluster" }
 transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }
+typed-store-error = { path = "crates/typed-store-error" }
 workspace-hack = "0.1.0"
 x = { path = "crates/x" }
 
