@@ -11,12 +11,10 @@
 //! [`Simulacrum`]: crate::Simulacrum
 
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
-use store::persisted_store::PersistedStore;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -104,7 +102,7 @@ where
             .with_chain_start_timestamp_ms(1)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .build();
-        Self::new_with_network_config(&config, rng)
+        Self::new_with_network_config_in_mem(&config, rng)
     }
 
     pub fn new_with_protocol_version_and_accounts(
@@ -120,53 +118,21 @@ where
             .with_protocol_version(protocol_version)
             .with_accounts(account_configs)
             .build();
-        Self::new_with_network_config(&config, rng)
+        Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    fn new_with_network_config(config: &NetworkConfig, rng: R) -> Self {
-        let keystore = KeyStore::from_network_config(config);
+    fn new_with_network_config_in_mem(config: &NetworkConfig, rng: R) -> Self {
         let store = InMemoryStore::new(&config.genesis);
-        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
-
-        let genesis = &config.genesis;
-        let epoch_state = EpochState::new(genesis.sui_system_object());
-
-        Self {
-            rng,
-            keystore,
-            genesis: genesis.clone(),
-            store,
-            checkpoint_builder,
-            epoch_state,
-            deny_config: TransactionDenyConfig::default(),
-        }
+        Self::new_with_network_config_store(config, rng, store)
     }
 }
 
-impl<R> Simulacrum<R, PersistedStore>
-where
-    R: rand::RngCore + rand::CryptoRng,
-{
-    pub fn new_persisted_with_protocol_version_and_accounts(
-        mut rng: R,
-        chain_start_timestamp_ms: u64,
-        protocol_version: ProtocolVersion,
-        account_configs: Vec<AccountConfig>,
-        path: Option<PathBuf>,
-    ) -> Self {
-        let config = ConfigBuilder::new_with_temp_dir()
-            .rng(&mut rng)
-            .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
-            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
-            .with_protocol_version(protocol_version)
-            .with_accounts(account_configs)
-            .build();
-        let genesis = &config.genesis;
-
-        let keystore = KeyStore::from_network_config(&config);
-        let store = PersistedStore::new(genesis, path);
+impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
+    pub fn new_with_network_config_store(config: &NetworkConfig, rng: R, store: S) -> Self {
+        let keystore = KeyStore::from_network_config(config);
         let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
 
+        let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
 
         Self {

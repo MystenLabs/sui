@@ -5,6 +5,7 @@
 
 pub mod args;
 pub mod programmable_transaction_test_parser;
+mod simulator_persisted_store;
 pub mod test_adapter;
 
 use move_transactional_test_runner::framework::run_test_impl;

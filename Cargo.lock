@@ -9755,7 +9755,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "eyre",
  "fastcrypto",
  "futures",
  "move-binary-format",
@@ -9765,7 +9764,6 @@ dependencies = [
  "once_cell",
  "prometheus",
  "rand 0.8.5",
- "rocksdb",
  "serde",
  "shared-crypto",
  "sui-config",
@@ -9778,10 +9776,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-transaction-checks",
  "sui-types",
- "tempfile",
  "tracing",
- "typed-store",
- "typed-store-derive",
  "workspace-hack",
 ]
 
@@ -12065,6 +12060,7 @@ dependencies = [
  "bcs",
  "bimap",
  "clap",
+ "eyre",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12078,7 +12074,9 @@ dependencies = [
  "msim",
  "once_cell",
  "rand 0.8.5",
+ "rocksdb",
  "simulacrum",
+ "sui-config",
  "sui-core",
  "sui-framework",
  "sui-framework-snapshot",
@@ -12091,6 +12089,8 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tokio",
+ "typed-store",
+ "typed-store-derive",
  "workspace-hack",
 ]
 
