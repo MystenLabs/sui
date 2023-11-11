@@ -266,16 +266,23 @@ pub async fn simulator_commands_test_impl() {
     .to_string();
 
     // Get the latest checkpoint via graphql
-    let resp = cluster
-        .graphql_client
-        .execute(query, vec![])
-        .await
-        .unwrap()
-        .to_string();
+    let resp = cluster.graphql_client.execute(query, vec![]).await.unwrap();
 
     // Result should be something like {"data":{"checkpointConnection":{"nodes":[{"sequenceNumber":XYZ}]}}}
     // Where XYZ is the seq number of the latest checkpoint
-    let seq_num = resp.split(':').last().unwrap().split('}').next().unwrap();
+    let fetched_chk = resp
+        .get("data")
+        .unwrap()
+        .get("checkpointConnection")
+        .unwrap()
+        .get("nodes")
+        .unwrap()
+        .as_array()
+        .unwrap()[0]
+        .get("sequenceNumber")
+        .unwrap()
+        .as_i64()
+        .unwrap();
 
-    assert_eq!(seq_num, format!("{}", checkpoint));
+    assert_eq!(fetched_chk as u64, checkpoint);
 }
