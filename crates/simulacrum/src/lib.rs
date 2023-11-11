@@ -145,9 +145,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             deny_config: TransactionDenyConfig::default(),
         }
     }
-}
 
-impl<R> Simulacrum<R> {
     /// Attempts to execute the provided Transaction.
     ///
     /// The provided Transaction undergoes the same types of checks that a Validator does prior to
@@ -261,7 +259,7 @@ impl<R> Simulacrum<R> {
         self.epoch_state = new_epoch_state;
     }
 
-    pub fn store(&self) -> &InMemoryStore {
+    pub fn store(&self) -> &dyn SimulatorStore {
         &self.store
     }
 
@@ -402,7 +400,7 @@ mod tests {
     fn deterministic_genesis() {
         let rng = StdRng::from_seed([9; 32]);
         let chain1 = Simulacrum::new_with_rng(rng);
-        let genesis_checkpoint_digest1 = chain1
+        let genesis_checkpoint_digest1 = *chain1
             .store()
             .get_checkpoint_by_sequence_number(0)
             .unwrap()
@@ -410,7 +408,7 @@ mod tests {
 
         let rng = StdRng::from_seed([9; 32]);
         let chain2 = Simulacrum::new_with_rng(rng);
-        let genesis_checkpoint_digest2 = chain2
+        let genesis_checkpoint_digest2 = *chain2
             .store()
             .get_checkpoint_by_sequence_number(0)
             .unwrap()
@@ -476,7 +474,7 @@ mod tests {
             .owned_objects(sender)
             .find(|object| object.is_gas_coin())
             .unwrap();
-        let gas_coin = GasCoin::try_from(object).unwrap();
+        let gas_coin = GasCoin::try_from(&object).unwrap();
         let gas_id = object.id();
         let transfer_amount = gas_coin.value() / 2;
 
@@ -503,9 +501,8 @@ mod tests {
 
         assert_eq!(
             (transfer_amount as i64 - gas_paid) as u64,
-            sim.store()
-                .get_object(&gas_id)
-                .and_then(|object| GasCoin::try_from(object).ok())
+            store::SimulatorStore::get_object(sim.store(), &gas_id)
+                .and_then(|object| GasCoin::try_from(&object).ok())
                 .unwrap()
                 .value()
         );
@@ -515,7 +512,7 @@ mod tests {
             sim.store()
                 .owned_objects(recipient)
                 .next()
-                .and_then(|object| GasCoin::try_from(object).ok())
+                .and_then(|object| GasCoin::try_from(&object).ok())
                 .unwrap()
                 .value()
         );

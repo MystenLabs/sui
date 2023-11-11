@@ -119,8 +119,7 @@ impl SimulatorStore for PersistedStore {
             } else {
                 BTreeMap::new()
             };
-            o.insert(version, object.clone())
-                .expect("Fatal: DB write failed");
+            o.insert(version, object.clone());
             self.objects
                 .insert(&object_id, &o)
                 .expect("Fatal: DB write failed");
@@ -334,6 +333,10 @@ impl SimulatorStore for PersistedStore {
                 .expect("Fatal: DB write failed");
         }
     }
+
+    fn backing_store(&self) -> &dyn sui_types::storage::BackingStore {
+        self
+    }
 }
 
 impl BackingPackageStore for PersistedStore {
@@ -448,5 +451,59 @@ impl ParentSync for PersistedStore {
         _object_id: ObjectID,
     ) -> sui_types::error::SuiResult<Option<sui_types::base_types::ObjectRef>> {
         panic!("Never called in newer protocol versions")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    #[tokio::test]
+    async fn deterministic_genesis() {
+        let rng = StdRng::from_seed([9; 32]);
+        let chain1 = PersistedStore::_new_sim_with_protocol_version_and_accounts(
+            rng,
+            0,
+            ProtocolVersion::MAX,
+            vec![],
+            None,
+        );
+        let genesis_checkpoint_digest1 = *chain1
+            .store()
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .digest();
+
+        let rng = StdRng::from_seed([9; 32]);
+        let chain2 = PersistedStore::_new_sim_with_protocol_version_and_accounts(
+            rng,
+            0,
+            ProtocolVersion::MAX,
+            vec![],
+            None,
+        );
+        let genesis_checkpoint_digest2 = *chain2
+            .store()
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .digest();
+
+        assert_eq!(genesis_checkpoint_digest1, genesis_checkpoint_digest2);
+
+        // Ensure the committees are different when using different seeds
+        let rng = StdRng::from_seed([0; 32]);
+        let chain3 = PersistedStore::_new_sim_with_protocol_version_and_accounts(
+            rng,
+            0,
+            ProtocolVersion::MAX,
+            vec![],
+            None,
+        );
+
+        assert_ne!(
+            chain1.store().get_committee_by_epoch(0),
+            chain3.store().get_committee_by_epoch(0),
+        );
     }
 }

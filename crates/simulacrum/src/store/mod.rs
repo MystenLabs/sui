@@ -3,23 +3,33 @@
 
 use std::collections::BTreeMap;
 use sui_config::genesis;
+use sui_types::base_types::ObjectRef;
+use sui_types::error::UserInputError;
+use sui_types::transaction::InputObjects;
+use sui_types::transaction::ObjectReadResult;
+use sui_types::transaction::ReceivingObjectReadResult;
+use sui_types::transaction::ReceivingObjects;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
+    error::SuiResult,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::Object,
-    transaction::VerifiedTransaction,
+    storage::{BackingStore, ChildObjectResolver, ParentSync},
+    transaction::{InputObjectKind, VerifiedTransaction},
 };
-
 pub mod in_mem_store;
 
 pub trait SimulatorStore:
-    sui_types::storage::BackingPackageStore + sui_types::storage::ObjectStore
+    sui_types::storage::BackingPackageStore
+    + sui_types::storage::ObjectStore
+    + ParentSync
+    + ChildObjectResolver
 {
     fn init_with_genesis(&mut self, genesis: &genesis::Genesis) {
         self.insert_checkpoint(genesis.checkpoint());
@@ -102,4 +112,51 @@ pub trait SimulatorStore:
         written_objects: BTreeMap<ObjectID, Object>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     );
+
+    fn backing_store(&self) -> &dyn BackingStore;
+
+    // TODO: After we abstract object storage into the ExecutionCache trait, we can replace this with
+    // sui_core::TransactionInputLoad using an appropriate cache implementation.
+    fn read_objects_for_synchronous_execution(
+        &self,
+        _tx_digest: &TransactionDigest,
+        input_object_kinds: &[InputObjectKind],
+        receiving_object_refs: &[ObjectRef],
+    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
+        let mut input_objects = Vec::new();
+        for kind in input_object_kinds {
+            let obj = match kind {
+                InputObjectKind::MovePackage(id) => {
+                    crate::store::SimulatorStore::get_object(self, id)
+                }
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
+
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    crate::store::SimulatorStore::get_object(self, id)
+                }
+            };
+
+            input_objects.push(ObjectReadResult::new(
+                *kind,
+                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
+            ));
+        }
+
+        let mut receiving_objects = Vec::new();
+        for objref in receiving_object_refs {
+            // no need for marker table check in simulacrum
+            let Some(obj) = crate::store::SimulatorStore::get_object(self, &objref.0) else {
+                return Err(UserInputError::ObjectNotFound {
+                    object_id: objref.0,
+                    version: Some(objref.1),
+                }
+                .into());
+            };
+            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj.into()));
+        }
+
+        Ok((input_objects.into(), receiving_objects.into()))
+    }
 }
