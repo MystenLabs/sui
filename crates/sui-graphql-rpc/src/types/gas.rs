@@ -6,7 +6,7 @@ use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc_types::{OwnedObjectRef, SuiGasData};
-use sui_sdk::types::{
+use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     gas::GasCostSummary as NativeGasCostSummary,
     transaction::GasData,
