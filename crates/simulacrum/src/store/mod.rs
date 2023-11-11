@@ -17,7 +17,6 @@ use sui_types::{
 };
 
 pub mod in_mem_store;
-pub mod persisted_store;
 
 pub trait SimulatorStore:
     sui_types::storage::BackingPackageStore + sui_types::storage::ObjectStore
