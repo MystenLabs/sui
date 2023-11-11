@@ -65,7 +65,6 @@ export function WalletProvider({
 			wallets: getRegisteredWallets(preferredWallets, requiredFeatures),
 			storageKey,
 			storage,
-			autoConnect,
 		}),
 	);
 

@@ -9,7 +9,6 @@ export * from './hooks/networkConfig.js';
 export * from './hooks/useResolveSuiNSNames.js';
 export * from './hooks/useSuiClient.js';
 export * from './hooks/useSuiClientInfiniteQuery.js';
-export * from './hooks/useSuiClientInfiniteQuery.js';
 export * from './hooks/useSuiClientMutation.js';
 export * from './hooks/useSuiClientQuery.js';
 export * from './hooks/wallet/useAccounts.js';
