@@ -10,6 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 use sui_protocol_config::Chain;
+use tracing::info;
 
 /// A representation of a 32 byte digest
 #[serde_as]
@@ -165,6 +166,7 @@ const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONF
 
 static SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: Lazy<Option<Chain>> = Lazy::new(|| {
     if let Ok(s) = env::var(SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME) {
+        info!("SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {:?}", s);
         match s.as_str() {
             "mainnet" => Some(Chain::Mainnet),
             "testnet" => Some(Chain::Testnet),
