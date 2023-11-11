@@ -4,6 +4,7 @@
 use futures::future::try_join_all;
 use tracing::{error, info};
 
+use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
 
 use super::address_metrics_processor::AddressMetricsProcessor;
@@ -12,20 +13,21 @@ use super::network_metrics_processor::NetworkMetricsProcessor;
 
 pub struct ProcessorOrchestratorV2<S> {
     store: S,
+    metrics: IndexerMetrics,
 }
 
 impl<S> ProcessorOrchestratorV2<S>
 where
-    S: IndexerAnalyticalStore + Send + Sync + 'static + Clone,
+    S: IndexerAnalyticalStore + Clone + Send + Sync + 'static,
 {
-    pub fn new(store: S) -> Self {
-        Self { store }
+    pub fn new(store: S, metrics: IndexerMetrics) -> Self {
+        Self { store, metrics }
     }
 
     pub async fn run_forever(&mut self) {
         info!("Processor orchestrator started...");
-        // TODO(gegaowp): add metrics for each processor to monitor health and progress
-        let network_metrics_processor = NetworkMetricsProcessor::new(self.store.clone());
+        let network_metrics_processor =
+            NetworkMetricsProcessor::new(self.store.clone(), self.metrics.clone());
         let network_metrics_handle = tokio::task::spawn(async move {
             loop {
                 let network_metrics_res = network_metrics_processor.start().await;
@@ -39,7 +41,8 @@ where
             }
         });
 
-        let addr_metrics_processor = AddressMetricsProcessor::new(self.store.clone());
+        let addr_metrics_processor =
+            AddressMetricsProcessor::new(self.store.clone(), self.metrics.clone());
         let addr_metrics_handle = tokio::task::spawn(async move {
             loop {
                 let addr_metrics_res = addr_metrics_processor.start().await;
@@ -53,7 +56,8 @@ where
             }
         });
 
-        let move_call_metrics_processor = MoveCallMetricsProcessor::new(self.store.clone());
+        let move_call_metrics_processor =
+            MoveCallMetricsProcessor::new(self.store.clone(), self.metrics.clone());
         let move_call_metrics_handle = tokio::task::spawn(async move {
             loop {
                 let move_call_metrics_res = move_call_metrics_processor.start().await;

@@ -64,6 +64,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    epoch_peak_tps (epoch) {
+        epoch -> Int8,
+        peak_tps -> Float8,
+        peak_tps_30d -> Float8,
+    }
+}
+
+diesel::table! {
     epochs (epoch) {
         epoch -> Int8,
         validators -> Array<Nullable<Bytea>>,
@@ -107,7 +115,6 @@ diesel::table! {
 diesel::table! {
     move_call_metrics (id) {
         id -> Int8,
-        checkpoint_sequence_number -> Int8,
         epoch -> Int8,
         day -> Int8,
         move_package -> Text,
@@ -118,27 +125,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    move_calls (id) {
-        id -> Int8,
+    move_calls (transaction_sequence_number, move_package, move_module, move_function) {
         transaction_sequence_number -> Int8,
         checkpoint_sequence_number -> Int8,
         epoch -> Int8,
         move_package -> Bytea,
         move_module -> Text,
         move_function -> Text,
-    }
-}
-
-diesel::table! {
-    network_metrics (checkpoint) {
-        checkpoint -> Int8,
-        epoch -> Int8,
-        timestamp_ms -> Int8,
-        real_time_tps -> Float8,
-        peak_tps_30d -> Float8,
-        total_addresses -> Int8,
-        total_objects -> Int8,
-        total_packages -> Int8,
     }
 }
 
@@ -180,6 +173,7 @@ diesel::table! {
         balance_changes -> Array<Nullable<Bytea>>,
         events -> Array<Nullable<Bytea>>,
         transaction_kind -> Int2,
+        success_command_count -> Int2,
     }
 }
 
@@ -207,9 +201,6 @@ diesel::table! {
         total_transaction_blocks -> Int8,
         total_successful_transaction_blocks -> Int8,
         total_successful_transactions -> Int8,
-        network_total_transaction_blocks -> Int8,
-        network_total_successful_transactions -> Int8,
-        network_total_successful_transaction_blocks -> Int8,
     }
 }
 
@@ -256,11 +247,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     addresses,
     checkpoints,
     display,
+    epoch_peak_tps,
     epochs,
     events,
     move_call_metrics,
     move_calls,
-    network_metrics,
     objects,
     packages,
     transactions,

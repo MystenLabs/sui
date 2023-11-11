@@ -1,164 +1,123 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
+use tap::tap::TapFallible;
 use tracing::{error, info};
 
-use crate::errors::IndexerError;
-use crate::models_v2::address_metrics::{
-    dedup_addresses, AddressInfoToCommit, StoredActiveAddress, StoredAddress,
-};
+use crate::metrics::IndexerMetrics;
 use crate::store::IndexerAnalyticalStore;
 use crate::types_v2::IndexerResult;
 
-const ADDRESS_PROCESSOR_BATCH_SIZE: i64 = 1000;
+const ADDRESS_PROCESSOR_BATCH_SIZE: usize = 80000;
+const PARALLELISM: usize = 10;
 
 pub struct AddressMetricsProcessor<S> {
     pub store: S,
+    metrics: IndexerMetrics,
+    pub address_processor_batch_size: usize,
+    pub address_processor_parallelism: usize,
 }
 
 impl<S> AddressMetricsProcessor<S>
 where
-    S: IndexerAnalyticalStore + Sync + Send + 'static,
+    S: IndexerAnalyticalStore + Clone + Sync + Send + 'static,
 {
-    pub fn new(store: S) -> AddressMetricsProcessor<S> {
-        Self { store }
+    pub fn new(store: S, metrics: IndexerMetrics) -> AddressMetricsProcessor<S> {
+        let address_processor_batch_size = std::env::var("ADDRESS_PROCESSOR_BATCH_SIZE")
+            .map(|s| s.parse::<usize>().unwrap_or(ADDRESS_PROCESSOR_BATCH_SIZE))
+            .unwrap_or(ADDRESS_PROCESSOR_BATCH_SIZE);
+        let address_processor_parallelism = std::env::var("ADDRESS_PROCESSOR_PARALLELISM")
+            .map(|s| s.parse::<usize>().unwrap_or(PARALLELISM))
+            .unwrap_or(PARALLELISM);
+        Self {
+            store,
+            metrics,
+            address_processor_batch_size,
+            address_processor_parallelism,
+        }
     }
 
     pub async fn start(&self) -> IndexerResult<()> {
         info!("Indexer address metrics async processor started...");
-        let latest_address_metrics = self
+        let latest_tx_seq = self
             .store
-            .get_latest_address_metrics()
-            .await
-            .unwrap_or_default();
-        let mut last_end_cp_seq = latest_address_metrics.checkpoint;
+            .get_address_metrics_last_processed_tx_seq()
+            .await?;
+        let mut last_processed_tx_seq = latest_tx_seq.unwrap_or_default().seq;
         loop {
-            let mut latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
-            while latest_stored_checkpoint.sequence_number
-                < last_end_cp_seq + ADDRESS_PROCESSOR_BATCH_SIZE
-            {
+            let mut latest_tx = self.store.get_latest_stored_transaction().await?;
+            while if let Some(tx) = latest_tx {
+                tx.tx_sequence_number
+                    < last_processed_tx_seq + self.address_processor_batch_size as i64
+            } else {
+                true
+            } {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                latest_stored_checkpoint = self.store.get_latest_stored_checkpoint().await?;
+                latest_tx = self.store.get_latest_stored_transaction().await?;
             }
 
-            let end_cp = self
-                .store
-                .get_checkpoints_in_range(
-                    last_end_cp_seq + ADDRESS_PROCESSOR_BATCH_SIZE,
-                    last_end_cp_seq + ADDRESS_PROCESSOR_BATCH_SIZE + 1,
-                )
-                .await?
-                .first()
-                .ok_or(IndexerError::PostgresReadError(
-                    "Cannot read checkpoint from PG for address metrics".to_string(),
-                ))?
-                .clone();
-
-            // +1 b/c get_tx_indices_in_checkpoint_range is left-inclusive, right-exclusive,
-            // but we want left-exclusive, right-inclusive, as latest_address_metrics has been processed.
-            let tx_timestamps = self
-                .store
-                .get_tx_timestamps_in_checkpoint_range(
-                    latest_address_metrics.checkpoint + 1,
-                    end_cp.sequence_number + 1,
-                )
-                .await?;
-            let start_tx_seq = tx_timestamps
-                .first()
-                .ok_or(IndexerError::PostgresReadError(
-                    "Cannot read first tx from PG for address metrics".to_string(),
-                ))?
-                .tx_sequence_number;
-            let end_tx_seq = tx_timestamps
-                .last()
-                .ok_or(IndexerError::PostgresReadError(
-                    "Cannot read last tx from PG for address metrics".to_string(),
-                ))?
-                .tx_sequence_number;
-            let tx_timestamp_map = tx_timestamps
-                .iter()
-                .map(|tx| (tx.tx_sequence_number, tx.timestamp_ms))
-                .collect::<HashMap<_, _>>();
-
-            let stored_senders = self
-                .store
-                .get_senders_in_tx_range(start_tx_seq, end_tx_seq + 1)
-                .await?;
-            let stored_recipients = self
-                .store
-                .get_recipients_in_tx_range(start_tx_seq, end_tx_seq + 1)
-                .await?;
-            // replace cp seq with its timestamp
-            let senders_to_commit: Vec<AddressInfoToCommit> = stored_senders
+            let mut persist_tasks = vec![];
+            let batch_size = self.address_processor_batch_size;
+            let step_size = batch_size / self.address_processor_parallelism;
+            for chunk_start_tx_seq in (last_processed_tx_seq + 1
+                ..last_processed_tx_seq + batch_size as i64 + 1)
+                .step_by(step_size)
+            {
+                let active_address_store = self.store.clone();
+                persist_tasks.push(tokio::task::spawn_blocking(move || {
+                    active_address_store.persist_active_addresses_in_tx_range(
+                        chunk_start_tx_seq,
+                        chunk_start_tx_seq + step_size as i64,
+                    )
+                }));
+            }
+            for chunk_start_tx_seq in (last_processed_tx_seq + 1
+                ..last_processed_tx_seq + batch_size as i64 + 1)
+                .step_by(step_size)
+            {
+                let address_store = self.store.clone();
+                persist_tasks.push(tokio::task::spawn_blocking(move || {
+                    address_store.persist_addresses_in_tx_range(
+                        chunk_start_tx_seq,
+                        chunk_start_tx_seq + step_size as i64,
+                    )
+                }));
+            }
+            futures::future::join_all(persist_tasks)
+                .await
                 .into_iter()
-                .filter_map(|sender| {
-                    if let Some(timestamp_ms) = tx_timestamp_map.get(&sender.tx_sequence_number) {
-                        Some(AddressInfoToCommit {
-                            address: sender.sender,
-                            tx_seq: sender.tx_sequence_number,
-                            timestamp_ms: *timestamp_ms,
-                        })
-                    } else {
-                        error!(
-                            "Failed to find timestamp for tx {}",
-                            sender.tx_sequence_number
-                        );
-                        None
-                    }
-                })
-                .collect();
-            let recipients_to_commit: Vec<AddressInfoToCommit> = stored_recipients
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error joining address persist tasks: {:?}", e);
+                })?
                 .into_iter()
-                .filter_map(|recipient| {
-                    if let Some(timestamp_ms) = tx_timestamp_map.get(&recipient.tx_sequence_number)
-                    {
-                        Some(AddressInfoToCommit {
-                            address: recipient.recipient,
-                            tx_seq: recipient.tx_sequence_number,
-                            timestamp_ms: *timestamp_ms,
-                        })
-                    } else {
-                        error!(
-                            "Failed to find timestamp for tx {}",
-                            recipient.tx_sequence_number
-                        );
-                        None
-                    }
-                })
-                .collect();
-            let sneders_recipients_to_commit: Vec<AddressInfoToCommit> = senders_to_commit
-                .clone()
-                .into_iter()
-                .chain(recipients_to_commit.into_iter())
-                .collect::<Vec<AddressInfoToCommit>>();
+                .collect::<Result<Vec<_>, _>>()
+                .tap_err(|e| {
+                    error!("Error persisting addresses or active addresses: {:?}", e);
+                })?;
+            last_processed_tx_seq += self.address_processor_batch_size as i64;
+            info!(
+                "Persisted addresses and active addresses for tx seq: {}",
+                last_processed_tx_seq,
+            );
+            self.metrics
+                .latest_address_metrics_tx_seq
+                .set(last_processed_tx_seq);
 
-            // de-dup senders with earliest and latest timestamps
-            let active_addresses_to_commit: Vec<StoredActiveAddress> =
-                dedup_addresses(senders_to_commit)
-                    .into_iter()
-                    .map(StoredActiveAddress::from)
-                    .collect();
-            let addresses_to_commit: Vec<StoredAddress> =
-                dedup_addresses(sneders_recipients_to_commit);
-
-            let end_cp_seq = end_cp.sequence_number;
-            self.store.persist_addresses(addresses_to_commit).await?;
+            let mut last_processed_tx = self.store.get_tx(last_processed_tx_seq).await?;
+            while last_processed_tx.is_none() {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                last_processed_tx = self.store.get_tx(last_processed_tx_seq).await?;
+            }
+            // unwrap is safe here b/c we just checked that it's not None
+            let last_processed_cp = last_processed_tx.unwrap().checkpoint_sequence_number;
             self.store
-                .persist_active_addresses(active_addresses_to_commit)
+                .calculate_and_persist_address_metrics(last_processed_cp)
                 .await?;
             info!(
-                "Persisted addresses and active addresses for checkpoint: {}",
-                end_cp_seq,
+                "Persisted address metrics for checkpoint: {}",
+                last_processed_cp
             );
-
-            let address_metrics_to_commit = self.store.calculate_address_metrics(end_cp).await?;
-            self.store
-                .persist_address_metrics(address_metrics_to_commit)
-                .await?;
-            last_end_cp_seq = end_cp_seq;
-            info!("Persisted address metrics for checkpoint: {}", end_cp_seq);
         }
     }
 }
