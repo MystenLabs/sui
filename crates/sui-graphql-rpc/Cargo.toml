@@ -47,6 +47,7 @@ uuid.workspace = true
 # TODO: put these behind feature flag to prevent leakage
 # Used for dummy data
 bcs.workspace = true
+move-transactional-test-runner.workspace = true
 simulacrum.workspace = true  # todo: cleanup test only deps
 sui-transactional-test-runner.workspace = true # todo: cleanup test only deps
 sui-sdk.workspace = true

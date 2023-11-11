@@ -32,7 +32,8 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster = sui_graphql_rpc::cluster::start_cluster(connection_config, None).await;
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
 
         // Wait for servers to start and catchup
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
@@ -85,8 +86,12 @@ mod tests {
             chain_id_actual
         );
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster =
-            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config,
+            3000,
+            Arc::new(sim),
+        )
+        .await;
 
         let query = r#"
             query {
@@ -142,8 +147,12 @@ mod tests {
         sim.create_checkpoint();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster =
-            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config,
+            3000,
+            Arc::new(sim),
+        )
+        .await;
 
         let query = r#"
             query {
@@ -192,5 +201,12 @@ mod tests {
     #[serial]
     async fn test_query_complexity_metrics() {
         test_query_complexity_metrics_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn simulator_commands_test() {
+        use sui_graphql_rpc::test_infra::cluster::simulator_commands_test_impl;
+        simulator_commands_test_impl().await;
     }
 }

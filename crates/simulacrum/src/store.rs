@@ -37,6 +37,8 @@ pub struct InMemoryStore {
     transactions: HashMap<TransactionDigest, VerifiedTransaction>,
     effects: HashMap<TransactionDigest, TransactionEffects>,
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
+    // Map from transaction digest to events digest for easy lookup
+    events_tx_digest_index: HashMap<TransactionDigest, TransactionEventsDigest>,
 
     // Committee data
     epoch_to_committee: Vec<Committee>,
@@ -57,7 +59,10 @@ impl InMemoryStore {
             genesis.transaction().clone(),
         ));
         store.insert_transaction_effects(genesis.effects().clone());
-        store.insert_events(genesis.events().clone());
+        store.insert_events(
+            genesis.effects().transaction_digest(),
+            genesis.events().clone(),
+        );
 
         for object in genesis.objects() {
             let object_id = object.id();
@@ -122,6 +127,15 @@ impl InMemoryStore {
         digest: &TransactionEventsDigest,
     ) -> Option<&TransactionEvents> {
         self.events.get(digest)
+    }
+
+    pub fn get_transaction_events_by_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<&TransactionEvents> {
+        self.events_tx_digest_index
+            .get(tx_digest)
+            .and_then(|x| self.events.get(x))
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -201,9 +215,10 @@ impl InMemoryStore {
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
         let deleted_objects = effects.deleted();
+        let tx_digest = *effects.transaction_digest();
         self.insert_transaction(transaction);
         self.insert_transaction_effects(effects);
-        self.insert_events(events);
+        self.insert_events(&tx_digest, events);
         self.update_objects(written_objects, deleted_objects);
     }
 
@@ -215,7 +230,9 @@ impl InMemoryStore {
         self.effects.insert(*effects.transaction_digest(), effects);
     }
 
-    pub fn insert_events(&mut self, events: TransactionEvents) {
+    pub fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
+        self.events_tx_digest_index
+            .insert(*tx_digest, events.digest());
         self.events.insert(events.digest(), events);
     }
 
@@ -486,7 +503,7 @@ pub trait SimulatorStore:
 
     fn insert_transaction_effects(&mut self, effects: TransactionEffects);
 
-    fn insert_events(&mut self, events: TransactionEvents);
+    fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents);
 
     fn update_objects(
         &mut self,
@@ -587,8 +604,8 @@ impl SimulatorStore for InMemoryStore {
         self.insert_transaction_effects(effects)
     }
 
-    fn insert_events(&mut self, events: TransactionEvents) {
-        self.insert_events(events)
+    fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
+        self.insert_events(tx_digest, events)
     }
 
     fn update_objects(

@@ -9,9 +9,9 @@ mod tests {
     use simulacrum::Simulacrum;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_graphql_rpc::cluster::SimulatorCluster;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::examples::{load_examples, ExampleQuery, ExampleQueryGroup};
+    use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 
     fn bad_examples() -> ExampleQueryGroup {
         ExampleQueryGroup {
@@ -43,7 +43,7 @@ mod tests {
     }
 
     async fn validate_example_query_group(
-        cluster: &SimulatorCluster,
+        cluster: &ExecutorCluster,
         group: &ExampleQueryGroup,
     ) -> Vec<String> {
         let mut errors = vec![];
@@ -76,8 +76,12 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config,
+            3000,
+            Arc::new(sim),
+        )
+        .await;
 
         let groups = load_examples().expect("Could not load examples");
 
@@ -99,8 +103,12 @@ mod tests {
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-        let cluster =
-            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config,
+            3000,
+            Arc::new(sim),
+        )
+        .await;
 
         let bad_examples = bad_examples();
         let errors = validate_example_query_group(&cluster, &bad_examples).await;

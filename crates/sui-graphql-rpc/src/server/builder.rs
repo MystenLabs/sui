@@ -251,12 +251,12 @@ async fn get_or_init_server_start_time() -> &'static Instant {
 pub mod tests {
     use super::*;
     use crate::{
-        cluster::SimulatorCluster,
         config::{ConnectionConfig, Limits, ServiceConfig},
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
         metrics::RequestMetrics,
+        test_infra::cluster::{serve_executor, ExecutorCluster},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -268,7 +268,7 @@ pub mod tests {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    async fn prep_cluster() -> (ConnectionConfig, SimulatorCluster) {
+    async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
         sleep(Duration::from_secs(2)).await;
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
@@ -279,7 +279,7 @@ pub mod tests {
 
         (
             connection_config.clone(),
-            crate::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await,
+            serve_executor(connection_config, 3000, Arc::new(sim)).await,
         )
     }
 
