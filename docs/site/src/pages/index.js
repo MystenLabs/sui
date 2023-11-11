@@ -168,9 +168,9 @@ export default function Home() {
           <HomeCard title="Resources" aux>
             <Link
               className={`${cardlinks} text-md`}
-              to="https://sui.directory/"
+              to="https://sui.directory/?_project_type=api%2Cdeveloper-tools%2Cinfrastructure%2Csdk"
             >
-              Sui partner packages
+              Sui ecosystem directory
             </Link>
             <Link className={`${cardlinks} text-md`} to="https://blog.sui.io/">
               Sui blog
