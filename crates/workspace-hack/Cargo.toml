@@ -378,7 +378,6 @@ lexical-write-float = { version = "0.8", default-features = false }
 lexical-write-integer = { version = "0.8", default-features = false }
 libc = { version = "0.2" }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.6", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -583,7 +582,6 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
@@ -1198,7 +1196,6 @@ lexical-write-integer = { version = "0.8", default-features = false }
 libc = { version = "0.2" }
 libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
-librocksdb-sys = { version = "0.11", features = ["lz4", "snappy", "zlib", "zstd"] }
 libtest-mimic = { version = "0.6", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
@@ -1439,7 +1436,6 @@ rfc6979-9fbad63c4bcf4a8f = { package = "rfc6979", version = "0.4", default-featu
 ring = { version = "0.16" }
 ripemd = { version = "0.1", default-features = false }
 roaring = { version = "0.10", default-features = false }
-rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 ron = { version = "0.8" }
 rsa = { version = "0.8", features = ["sha2"] }
 rstest = { version = "0.16" }
