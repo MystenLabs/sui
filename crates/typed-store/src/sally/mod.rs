@@ -10,6 +10,7 @@
 //!
 //! ```
 //! use typed_store::rocks::*;
+//! use typed_store::*;
 //! use typed_store::test_db::*;
 //! use typed_store::sally::SallyDBOptions;
 //! use typed_store_derive::SallyDB;
