@@ -48,7 +48,7 @@ export class Context {
         command: (context: Readonly<Context>, ...args: Array<any>) => any,
     ): void {
         const disposable = vscode.commands.registerCommand(
-            `move-analyzer.${name}`,
+            `move.${name}`,
             async (...args: Array<any>) : Promise<any> => {
                 const ret = await command(this, ...args);
                 return ret;
@@ -118,7 +118,7 @@ export class Context {
         // that is 'Move Language Server'). For more information, see:
         // https://code.visualstudio.com/api/language-extensions/language-server-extension-guide#logging-support-for-language-server
         const traceOutputChannel = vscode.window.createOutputChannel(
-            'Move Analyzer Language Server Trace',
+            'Move Language Server Trace',
         );
         const clientOptions: lc.LanguageClientOptions = {
             documentSelector: [{ scheme: 'file', language: 'move' }],
@@ -126,8 +126,8 @@ export class Context {
         };
 
         const client = new lc.LanguageClient(
-            'move-analyzer',
-            'Move Language Server',
+            'move',
+            'Move',
             serverOptions,
             clientOptions,
         );
