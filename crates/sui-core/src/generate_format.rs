@@ -47,7 +47,7 @@ use sui_types::{
         Argument, CallArg, Command, EndOfEpochTransactionKind, ObjectArg, TransactionKind,
     },
 };
-use typed_store::rocks::TypedStoreError;
+use typed_store::TypedStoreError;
 
 fn get_registry() -> Result<Registry> {
     let config = TracerConfig::default()

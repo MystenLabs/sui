@@ -51,10 +51,11 @@
 use crate::{
     rocks::{
         default_db_options, keys::Keys, values::Values, DBBatch, DBMap, DBOptions,
-        RocksDBAccessType, TypedStoreError,
+        RocksDBAccessType,
     },
     test_db::{TestDB, TestDBKeys, TestDBValues, TestDBWriteBatch},
     traits::{AsyncMap, Map},
+    TypedStoreError,
 };
 
 use crate::rocks::safe_iter::{SafeIter as RocksDBIter, SafeRevIter};

@@ -6,6 +6,11 @@ use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_types::{
+    get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
+};
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
@@ -27,14 +32,12 @@ use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentS
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
-use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
+use typed_store::rocks::errors::typed_store_err_from_bcs_err;
 use typed_store::traits::Map;
-
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_types::{
-    get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
+use typed_store::{
+    rocks::{DBBatch, DBMap},
+    TypedStoreError,
 };
-use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
@@ -1752,7 +1755,9 @@ impl AuthorityStore {
                 raw_bytes_option
                     .map(|tx_bytes| {
                         let tx: VerifiedTransaction =
-                            bcs::from_bytes::<TrustedTransaction>(&tx_bytes)?.into();
+                            bcs::from_bytes::<TrustedTransaction>(&tx_bytes)
+                                .map_err(typed_store_err_from_bcs_err)?
+                                .into();
                         Ok((tx, tx_bytes.len()))
                     })
                     .transpose()
