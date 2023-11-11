@@ -1,0 +1,26 @@
+# multiple filters
+{
+  transactionBlockConnection(
+    filter: {
+      inputObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
+      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ) {
+    nodes {
+      sender {
+        location
+      }
+      effects {
+        gasEffects {
+          gasObject {
+            location
+          }
+        }
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

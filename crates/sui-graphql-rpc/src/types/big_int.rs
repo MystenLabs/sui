@@ -37,8 +37,8 @@ impl FromStr for BigInt {
         let mut r = s;
         let mut signed = false;
         // check that all are digits and first can start with -
-        if s.starts_with('-') {
-            r = s.strip_prefix('-').unwrap();
+        if let Some(suffix) = s.strip_prefix('-') {
+            r = suffix;
             signed = true;
         }
         r = r.trim_start_matches('0');

@@ -16,6 +16,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::ToFromBytes,
 };
+
 use json_to_table::json_to_table;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
@@ -34,12 +35,13 @@ use sui_json_rpc_types::{
     SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
+use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
+use sui_replay::ReplayToolCommand;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
@@ -403,9 +405,9 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
 
-        /// If `true`, enable linters
+        /// If `true`, disable linters
         #[clap(long, global = true)]
-        lint: bool,
+        no_lint: bool,
     },
 
     /// Split a coin object into multiple coins.
@@ -566,9 +568,9 @@ pub enum SuiClientCommands {
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
 
-        /// If `true`, enable linters
+        /// If `true`, disable linters
         #[clap(long, global = true)]
-        lint: bool,
+        no_lint: bool,
     },
 
     /// Run the bytecode verifier on the package
@@ -607,6 +609,42 @@ pub enum SuiClientCommands {
         #[clap(long)]
         address_override: Option<ObjectID>,
     },
+
+    /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
+    #[clap(name = "replay-transaction")]
+    ReplayTransaction {
+        /// The digest of the transaction to replay
+        #[arg(long, short)]
+        tx_digest: String,
+    },
+
+    /// Replay transactions listed in a file.
+    #[clap(name = "replay-batch")]
+    ReplayBatch {
+        /// The path to the file of transaction digests to replay, with one digest per line
+        #[arg(long, short)]
+        path: PathBuf,
+
+        /// If an error is encountered during a transaction, this specifies whether to terminate or continue
+        #[arg(long, short)]
+        terminate_early: bool,
+    },
+
+    /// Replay all transactions in a range of checkpoints.
+    #[command(name = "replay-checkpoint")]
+    ReplayCheckpoints {
+        /// The starting checkpoint sequence number of the range of checkpoints to replay
+        #[arg(long, short)]
+        start: u64,
+
+        /// The ending checkpoint sequence number of the range of checkpoints to replay
+        #[arg(long, short)]
+        end: u64,
+
+        /// If an error is encountered during a transaction, this specifies whether to terminate or continue
+        #[arg(long, short)]
+        terminate_early: bool,
+    },
 }
 
 impl SuiClientCommands {
@@ -615,6 +653,49 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
+            SuiClientCommands::ReplayTransaction { tx_digest } => {
+                let cmd = ReplayToolCommand::ReplayTransaction {
+                    tx_digest,
+                    show_effects: true,
+                    diag: false,
+                    executor_version_override: None,
+                    protocol_version_override: None,
+                };
+                let rpc = context.config.get_active_env()?.rpc.clone();
+                let _command_result =
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
+                SuiClientCommandResult::ReplayTransaction
+            }
+            SuiClientCommands::ReplayBatch {
+                path,
+                terminate_early,
+            } => {
+                let cmd = ReplayToolCommand::ReplayBatch {
+                    path,
+                    terminate_early,
+                    batch_size: 16,
+                };
+                let rpc = context.config.get_active_env()?.rpc.clone();
+                let _command_result =
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
+                SuiClientCommandResult::ReplayBatch
+            }
+            SuiClientCommands::ReplayCheckpoints {
+                start,
+                end,
+                terminate_early,
+            } => {
+                let cmd = ReplayToolCommand::ReplayCheckpoints {
+                    start,
+                    end,
+                    terminate_early,
+                    max_tasks: 16,
+                };
+                let rpc = context.config.get_active_env()?.rpc.clone();
+                let _command_result =
+                    sui_replay::execute_replay_command(Some(rpc), false, false, None, cmd).await?;
+                SuiClientCommandResult::ReplayCheckpoints
+            }
             SuiClientCommands::Addresses => {
                 let active_address = context.active_address()?;
                 let addresses = context.config.keystore.addresses();
@@ -623,7 +704,6 @@ impl SuiClientCommands {
                     active_address,
                 })
             }
-
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
                 let client = context.get_client().await?;
                 let df_read = client
@@ -643,7 +723,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                lint,
+                no_lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -656,7 +736,7 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
-                        lint,
+                        !no_lint,
                     )
                     .await?;
 
@@ -732,7 +812,7 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                lint,
+                no_lint,
             } => {
                 if build_config.test_mode {
                     return Err(SuiError::ModulePublishFailure {
@@ -759,7 +839,7 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
-                    lint,
+                    !no_lint,
                 )
                 .await?;
 
@@ -1637,6 +1717,9 @@ impl Display for SuiClientCommandResult {
                 table.with(tabled::settings::style::BorderSpanCorrection);
                 writeln!(f, "{}", table)?;
             }
+            SuiClientCommandResult::ReplayTransaction => {}
+            SuiClientCommandResult::ReplayBatch => {}
+            SuiClientCommandResult::ReplayCheckpoints => {}
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }
@@ -1694,12 +1777,10 @@ pub fn write_transaction_response(
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
     writeln!(writer, "{}", response.digest)?;
-    writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
     if let Some(t) = &response.transaction {
         writeln!(writer, "{}", t)?;
     }
 
-    writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
     if let Some(e) = &response.effects {
         writeln!(writer, "{}", e)?;
     }
@@ -1711,14 +1792,51 @@ pub fn write_transaction_response(
 
     writeln!(writer, "{}", "----- Object changes ----".bold())?;
     if let Some(e) = &response.object_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        // Note that this will be refactored under Display for SuiTransactionBlockResponse
+        // as soon I implement all of the Display traits for all the types
+        let (mut created, mut deleted, mut mutated, mut published, mut transferred, mut wrapped) =
+            (vec![], vec![], vec![], vec![], vec![], vec![]);
+
+        for obj in e {
+            match obj {
+                ObjectChange::Created { .. } => created.push(obj),
+                ObjectChange::Deleted { .. } => deleted.push(obj),
+                ObjectChange::Mutated { .. } => mutated.push(obj),
+                ObjectChange::Published { .. } => published.push(obj),
+                ObjectChange::Transferred { .. } => transferred.push(obj),
+                ObjectChange::Wrapped { .. } => wrapped.push(obj),
+            };
+        }
+
+        write_obj_changes(created, "Created", &mut writer)?;
+        write_obj_changes(deleted, "Deleted", &mut writer)?;
+        write_obj_changes(mutated, "Mutated", &mut writer)?;
+        write_obj_changes(published, "Published", &mut writer)?;
+        write_obj_changes(transferred, "Transferred", &mut writer)?;
+        write_obj_changes(wrapped, "Wrapped", &mut writer)?;
     }
 
     writeln!(writer, "{}", "----- Balance changes ----".bold())?;
     if let Some(e) = &response.balance_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        for balance in e {
+            writeln!(writer, "{}", balance)?;
+        }
     }
     Ok(writer)
+}
+
+fn write_obj_changes<T: Display>(
+    values: Vec<T>,
+    output_string: &str,
+    writer: &mut String,
+) -> std::fmt::Result {
+    if !values.is_empty() {
+        writeln!(writer, "\n{} Objects: ", output_string)?;
+        for obj in values {
+            write!(writer, "{}", obj)?;
+        }
+    }
+    Ok(())
 }
 
 impl Debug for SuiClientCommandResult {
@@ -1949,6 +2067,9 @@ pub enum SuiClientCommandResult {
         used_module_ticks: u128,
     },
     VerifySource,
+    ReplayTransaction,
+    ReplayBatch,
+    ReplayCheckpoints,
 }
 
 #[derive(Serialize, Clone, Debug)]

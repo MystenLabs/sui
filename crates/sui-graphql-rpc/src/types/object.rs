@@ -6,16 +6,16 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::big_int::BigInt;
 use super::digest::Digest;
+use super::dynamic_field::DynamicField;
+use super::move_object::MoveObject;
 use super::move_package::MovePackage;
-use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
+use crate::error::{code, graphql_error};
 use crate::types::base64::Base64;
-use sui_types::digests::TransactionDigest as NativeSuiTransactionDigest;
-use sui_types::move_package::MovePackage as NativeSuiMovePackage;
 use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -38,7 +38,7 @@ pub(crate) enum ObjectKind {
     Immutable,
 }
 
-#[derive(InputObject, Default)]
+#[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
     pub package: Option<SuiAddress>,
     pub module: Option<String>,
@@ -49,33 +49,35 @@ pub(crate) struct ObjectFilter {
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Clone)]
 pub(crate) struct ObjectKey {
     object_id: SuiAddress,
     version: u64,
 }
 
-#[allow(clippy::diverging_sub_expression)]
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
 #[Object]
 impl Object {
     async fn version(&self) -> u64 {
         self.version
     }
 
-    async fn digest(&self) -> String {
-        self.digest.clone()
+    /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
+    async fn digest(&self) -> &str {
+        &self.digest
     }
 
-    async fn storage_rebate(&self) -> Option<BigInt> {
-        self.storage_rebate.clone()
+    /// The amount of SUI we would rebate if this object gets deleted or mutated.
+    /// This number is recalculated based on the present storage gas price.    
+    async fn storage_rebate(&self) -> Option<&BigInt> {
+        self.storage_rebate.as_ref()
     }
 
-    async fn bcs(&self) -> Option<Base64> {
-        self.bcs.clone()
+    /// The Base64 encoded bcs serialization of the object's content.    
+    async fn bcs(&self) -> Option<&Base64> {
+        self.bcs.as_ref()
     }
 
+    /// The transaction block that created this version of the object.    
     async fn previous_transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -90,40 +92,69 @@ impl Object {
         }
     }
 
+    /// Objects can either be immutable, shared, owned by an address,
+    /// or are child objects (part of a dynamic field)
     async fn kind(&self) -> Option<ObjectKind> {
         self.kind
     }
 
+    /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
     }
 
+    /// Attempts to convert the object into a MoveObject
+    async fn as_move_object(&self) -> Result<Option<MoveObject>> {
+        let Some(bcs) = &self.bcs else {
+            return Ok(None);
+        };
+
+        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|e| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Failed to deserialize object at {}: {e}", self.address),
+            )
+        })?;
+
+        Ok(
+            if matches!(native_object.data, NativeSuiObjectData::Move(_)) {
+                Some(MoveObject { native_object })
+            } else {
+                None
+            },
+        )
+    }
+
+    /// Attempts to convert the object into a MovePackage
     async fn as_move_package(&self) -> Result<Option<MovePackage>> {
-        if let Some(bcs) = &self.bcs {
-            let bytes = bcs.0.as_slice();
+        let Some(bcs) = &self.bcs else {
+            return Ok(None);
+        };
 
-            let package = bcs::from_bytes::<NativeSuiMovePackage>(bytes)
-                .map_err(|e| Error::from(format!("Failed to deserialize package: {}", e)))?;
+        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|_| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Failed to deserialize object with ID: {}", self.address),
+            )
+        })?;
 
-            Ok(Some(MovePackage {
-                native_object: NativeSuiObject::new_package_from_data(
-                    NativeSuiObjectData::Package(package),
-                    self.previous_transaction
-                        .map(|x| NativeSuiTransactionDigest::new(x.into_array()))
-                        .ok_or(Error::new("Object must have a previous transaction digest"))?,
-                ),
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(
+            if matches!(native_object.data, NativeSuiObjectData::Package(_)) {
+                Some(MovePackage { native_object })
+            } else {
+                None
+            },
+        )
     }
 
     // =========== Owner interface methods =============
 
+    /// The address of the object, named as such to avoid conflict with the address type.
     pub async fn location(&self) -> SuiAddress {
         self.address
     }
 
+    /// The objects owned by this object
     pub async fn object_connection(
         &self,
         ctx: &Context<'_>,
@@ -139,6 +170,7 @@ impl Object {
             .extend()
     }
 
+    /// The balance of coin objects of a particular coin type owned by the object.
     pub async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -150,6 +182,7 @@ impl Object {
             .extend()
     }
 
+    /// The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
     pub async fn balance_connection(
         &self,
         ctx: &Context<'_>,
@@ -164,6 +197,9 @@ impl Object {
             .extend()
     }
 
+    /// The coin objects for the given address.
+    /// The type field is a string of the inner type of the coin
+    /// by which to filter (e.g., 0x2::sui::SUI).
     pub async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -179,6 +215,7 @@ impl Object {
             .extend()
     }
 
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
     pub async fn stake_connection(
         &self,
         ctx: &Context<'_>,
@@ -193,6 +230,7 @@ impl Object {
             .extend()
     }
 
+    /// The domain that a user address has explicitly configured as their default domain
     pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
             .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
@@ -200,15 +238,30 @@ impl Object {
             .extend()
     }
 
-    pub async fn name_service_connection(
+    // TODO disabled-for-rpc-1.5
+    // pub async fn name_service_connection(
+    //     &self,
+    //     ctx: &Context<'_>,
+    //     first: Option<u64>,
+    //     after: Option<String>,
+    //     last: Option<u64>,
+    //     before: Option<String>,
+    // ) -> Result<Option<Connection<String, NameService>>> {
+    //     unimplemented!()
+    // }
+
+    pub async fn dynamic_field_connection(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, NameService>>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, DynamicField>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_fields(first, after, last, before, self.address)
+            .await
+            .extend()
     }
 }
 
@@ -230,15 +283,12 @@ impl From<&NativeSuiObject> for Object {
             panic!("Immutable or Shared object should not have an owner_id");
         }
 
-        let bcs = match &o.data {
-            // Do we BCS serialize packages?
-            NativeSuiObjectData::Package(package) => Base64::from(
-                bcs::to_bytes(package)
-                    .expect("Failed to serialize package")
-                    .to_vec(),
-            ),
-            NativeSuiObjectData::Move(move_object) => Base64::from(move_object.contents()),
-        };
+        let bcs = Base64::from(
+            bcs::to_bytes(o)
+                // TODO: Shouldn't panic here.
+                .expect("Failed to serialize object")
+                .to_vec(),
+        );
 
         Self {
             address: SuiAddress::from_array(o.id().into_bytes()),

@@ -1,0 +1,5 @@
+Running Move unit tests
+[ PASS    ] 0x1::M::correct_address
+[ PASS    ] 0x1::M::correct_addresses
+[ PASS    ] 0x1::M::wrong_address
+Test result: OK. Total tests: 3; passed: 3; failed: 0

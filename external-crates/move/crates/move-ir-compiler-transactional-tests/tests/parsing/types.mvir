@@ -1,0 +1,13 @@
+//# print-bytecode
+// Struct field specifiers in immutable borrows must not be qualified.
+main() {
+label b0:
+    _ = &(&mut t).M.T::f;
+}
+
+//# print-bytecode
+// Struct field specifiers in mutable borrows must not be qualified.
+main() {
+label b0:
+    _ = &mut (&mut t).M.T::f;
+}

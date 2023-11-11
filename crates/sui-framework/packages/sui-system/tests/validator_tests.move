@@ -405,10 +405,10 @@ module sui_system::validator_tests {
         test_scenario::next_tx(scenario, sender);
         {
             // Current epoch
-            assert!(validator::name(&mut validator) == &string::from_ascii(ascii::string(b"new_name")), 0);
-            assert!(validator::description(&mut validator) == &string::from_ascii(ascii::string(b"new_desc")), 0);
-            assert!(validator::image_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_image_url"), 0);
-            assert!(validator::project_url(&mut validator) == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
+            assert!(validator::name(&validator) == &string::from_ascii(ascii::string(b"new_name")), 0);
+            assert!(validator::description(&validator) == &string::from_ascii(ascii::string(b"new_desc")), 0);
+            assert!(validator::image_url(&validator) == &url::new_unsafe_from_bytes(b"new_image_url"), 0);
+            assert!(validator::project_url(&validator) == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
             assert!(validator::network_address(&validator) == &string::from_ascii(ascii::string(VALID_NET_ADDR)), 0);
             assert!(validator::p2p_address(&validator) == &string::from_ascii(ascii::string(VALID_P2P_ADDR)), 0);
             assert!(validator::primary_address(&validator) == &string::from_ascii(ascii::string(VALID_CONSENSUS_ADDR)), 0);

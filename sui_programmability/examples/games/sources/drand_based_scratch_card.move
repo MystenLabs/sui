@@ -39,7 +39,6 @@ module games::drand_based_scratch_card {
     const EInvalidDeposit: u64 = 0;
     const EInvalidEpoch: u64 = 1;
     const EInvalidTicket: u64 = 2;
-    const EInvalidRandomness: u64 = 3;
     const EInvalidReward: u64 = 4;
     const ETooSoonToRedeem: u64 = 5;
     const EInvalidGame: u64 = 6;

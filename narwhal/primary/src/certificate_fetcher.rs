@@ -1,19 +1,17 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::consensus::ConsensusRound;
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Request;
 use config::{AuthorityIdentifier, Committee};
-use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
-use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
-use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -21,10 +19,9 @@ use std::{
 };
 use storage::CertificateStore;
 use sui_protocol_config::ProtocolConfig;
-use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
     sync::watch,
-    task::JoinHandle,
+    task::{spawn_blocking, JoinHandle, JoinSet},
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
@@ -32,7 +29,7 @@ use types::{
     error::{DagError, DagResult},
     validate_received_certificate_version, Certificate, CertificateAPI,
     ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse, HeaderAPI,
-    Round, SignatureVerificationState,
+    Round,
 };
 
 #[cfg(test)]
@@ -50,10 +47,6 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 // Batch size is chosen so that verifying a batch takes non-trival
 // time (verifying a batch of 200 certificates should take > 100ms).
 const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
-// Number of leaf certificates to verify in a batch. Verifications in each
-// batch run serially. Smaller batch size is chosen as there are significantly
-// less certificates we are verifying when verifiying leaves only
-const VERIFY_LEAF_CERTIFICATES_BATCH_SIZE: usize = 10;
 
 #[derive(Clone, Debug)]
 pub enum CertificateFetcherCommand {
@@ -317,7 +310,7 @@ impl CertificateFetcher {
                         );
                     }
                     Err(e) => {
-                        warn!("Error from task to fetch certificates: {e}");
+                        warn!("Error from fetch certificates task: {e}");
                     }
                 };
 
@@ -461,18 +454,32 @@ async fn process_certificates_helper(
             MAX_CERTIFICATES_TO_FETCH,
         ));
     }
+
+    // We should not be getting mixed versions of certificates from a
+    // validator, so any individual certificate with mismatched versions
+    // should cancel processing for the entire batch of fetched certificates.
+    let certificates = response
+        .certificates
+        .into_iter()
+        .map(|cert| {
+            validate_received_certificate_version(cert, protocol_config).map_err(|err| {
+                error!("fetched certficate processing error: {err}");
+                DagError::InvalidCertificateVersion
+            })
+        })
+        .collect::<DagResult<Vec<Certificate>>>()?;
+
     // In PrimaryReceiverHandler, certificates already in storage are ignored.
     // The check is unnecessary here, because there is no concurrent processing of older
     // certificates. For byzantine failures, the check will not be effective anyway.
-    let _verify_scope = monitored_scope("VerifyingFetchedCertificates");
+    let _scope = monitored_scope("ProcessingFetchedCertificates");
 
-    // Verify certificates in parallel. If we are using CertificateV2 only verify
-    // the tip of a certificate chain and verify the parent certificates of that tip
-    // indirectly.
     if protocol_config.narwhal_certificate_v2() {
-        process_certificates_v2_helper(protocol_config, response, synchronizer, metrics).await?;
+        synchronizer
+            .try_accept_fetched_certificates(certificates)
+            .await?;
     } else {
-        process_certificates_v1_helper(protocol_config, response, synchronizer, metrics).await?;
+        process_certificates_v1_helper(certificates, synchronizer, metrics).await?;
     }
 
     trace!("Fetched certificates have been processed");
@@ -480,25 +487,13 @@ async fn process_certificates_helper(
     Ok(())
 }
 
+// Verify certificates in parallel.
 async fn process_certificates_v1_helper(
-    protocol_config: &ProtocolConfig,
-    response: FetchCertificatesResponse,
+    certificates: Vec<Certificate>,
     synchronizer: &Synchronizer,
     metrics: Arc<PrimaryMetrics>,
 ) -> DagResult<()> {
-    let mut all_certificates = vec![];
-    for cert in response.certificates {
-        // We should not be getting mixed versions of certificates from a
-        // validator, so any individual certificate with mismatched versions
-        // should cancel processing for the entire batch of fetched certificates.
-        all_certificates.push(
-            validate_received_certificate_version(cert, protocol_config).map_err(|err| {
-                error!("fetched certficate processing error: {err}");
-                DagError::InvalidCertificateVersion
-            })?,
-        );
-    }
-    let verify_tasks = all_certificates
+    let verify_tasks = certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
         .map(|certs| {
             let certs = certs.to_vec();
@@ -528,113 +523,6 @@ async fn process_certificates_v1_helper(
                 // so not stopping early.
                 warn!("Failed to accept fetched certificate: {e}");
             }
-        }
-        metrics
-            .certificate_fetcher_total_accept_us
-            .inc_by(now.elapsed().as_micros() as u64);
-    }
-
-    Ok(())
-}
-
-async fn process_certificates_v2_helper(
-    protocol_config: &ProtocolConfig,
-    response: FetchCertificatesResponse,
-    synchronizer: &Synchronizer,
-    metrics: Arc<PrimaryMetrics>,
-) -> DagResult<()> {
-    let mut all_certificates = vec![];
-    let mut all_parents = HashSet::new();
-    for cert in response.certificates {
-        // We should not be getting mixed versions of certificates from a
-        // validator, so any individual certificate with mismatched versions
-        // should cancel processing for the entire batch of fetched certificates.
-        all_certificates.push(
-            validate_received_certificate_version(cert.clone(), protocol_config).map_err(
-                |err| {
-                    error!("fetched certficate processing error: {err}");
-                    DagError::InvalidCertificateVersion
-                },
-            )?,
-        );
-
-        for parent_digest in cert.header().parents() {
-            all_parents.insert(*parent_digest);
-        }
-    }
-
-    let all_certificates_count = all_certificates.len() as u64;
-
-    // Identify leaf certs and preemptively set the parent certificates
-    // as verified indirectly. This is safe because any leaf certs that
-    // fail verification will cancel processing for all fetched certs.
-    let mut leaf_certs = Vec::new();
-    for (idx, c) in all_certificates.iter_mut().enumerate() {
-        if !all_parents.contains(&c.digest()) {
-            leaf_certs.push((idx, c.clone()));
-        } else {
-            c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
-                c.aggregated_signature()
-                    .ok_or(DagError::InvalidSignature)?
-                    .clone(),
-            ))
-        }
-    }
-    let leaves_count = leaf_certs.len() as u64;
-
-    // Create verify tasks only for leaf certs as parent certs can skip this completely.
-    let leaf_verify_tasks = leaf_certs
-        .chunks(VERIFY_LEAF_CERTIFICATES_BATCH_SIZE)
-        .map(|chunk| {
-            let certs = chunk.to_vec();
-            let sync = synchronizer.clone();
-            let metrics = metrics.clone();
-            spawn_blocking(move || {
-                let now = Instant::now();
-                let mut sanitized_certs = Vec::new();
-                for (idx, c) in certs {
-                    sanitized_certs.push((idx, sync.sanitize_certificate(c)?));
-                }
-                metrics
-                    .certificate_fetcher_total_verification_us
-                    .inc_by(now.elapsed().as_micros() as u64);
-                Ok::<Vec<(usize, Certificate)>, DagError>(sanitized_certs)
-            })
-        })
-        .collect_vec();
-
-    // We ensure sanitization of certificates completes for all leaves
-    // fetched certificates before accepting any certficates.
-    for task in leaf_verify_tasks.into_iter() {
-        // Any certificates that fail to be verified should cancel the entire
-        // batch of fetched certficates.
-        let idx_and_certs = task.await.map_err(|err| {
-            error!("Cancelling due to {err:?}");
-            DagError::Canceled
-        })??;
-        for (idx, cert) in idx_and_certs {
-            all_certificates[idx] = cert;
-        }
-    }
-
-    metrics
-        .fetched_certificates_verified_directly
-        .inc_by(leaves_count);
-    metrics
-        .fetched_certificates_verified_indirectly
-        .inc_by(all_certificates_count.saturating_sub(leaves_count));
-
-    // Accept verified certificates in the same order as received.
-    for cert in all_certificates {
-        let cert_digest = cert.digest();
-        let now = Instant::now();
-        if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
-            // It is possible that subsequent certificates are useful,
-            // so not stopping early.
-            warn!(
-                "Failed to accept fetched certificate {:?}: {e}",
-                cert_digest
-            );
         }
         metrics
             .certificate_fetcher_total_accept_us

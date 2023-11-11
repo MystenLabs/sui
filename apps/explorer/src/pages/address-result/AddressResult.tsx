@@ -16,28 +16,30 @@ import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { LOCAL_STORAGE_SPLIT_PANE_KEYS, SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader, TabsList, TabsTrigger } from '~/ui/Tabs';
+import { TotalStaked } from './TotalStaked';
 
 const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 const TOP_PANEL_MIN_SIZE = 20;
 
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
-	const { data: domainName, isFetching } = useResolveSuiNSName(address);
+	const { data: domainName, isLoading } = useResolveSuiNSName(address);
 
 	return (
 		<PageHeader
-			loading={loading || isFetching}
+			loading={loading || isLoading}
 			type="Address"
 			title={address}
 			subtitle={domainName}
 			before={<Domain32 className="h-6 w-6 text-steel-darker sm:h-10 sm:w-10" />}
+			after={<TotalStaked address={address} />}
 		/>
 	);
 }
 
 function SuiNSAddressResultPageHeader({ name }: { name: string }) {
-	const { data: address, isFetching } = useResolveSuiNSAddress(name);
+	const { data: address, isLoading } = useResolveSuiNSAddress(name);
 
-	return <AddressResultPageHeader address={address ?? name} loading={isFetching} />;
+	return <AddressResultPageHeader address={address ?? name} loading={isLoading} />;
 }
 
 function AddressResult({ address }: { address: string }) {

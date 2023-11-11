@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::FileFormat;
+use crate::{FileFormat, ParquetSchema};
 use anyhow::Result;
 use serde::Serialize;
 use sui_types::base_types::EpochId;
 
 pub mod csv_writer;
+pub mod parquet_writer;
 
-pub trait AnalyticsWriter<S: Serialize>: Send + Sync + 'static {
+pub trait AnalyticsWriter<S: Serialize + ParquetSchema>: Send + Sync + 'static {
     /// File format i.e. csv, parquet, etc
     fn file_format(&self) -> Result<FileFormat>;
     /// Persist given rows into a file

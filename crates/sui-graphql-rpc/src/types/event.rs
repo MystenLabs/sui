@@ -10,12 +10,16 @@ use super::{
 
 #[derive(SimpleObject)]
 pub(crate) struct Event {
-    pub id: ID,
-    pub sending_module_id: Option<MoveModuleId>, // Module that the event was emitted by
+    /// Package id and module name of Move module that the event was emitted in
+    pub sending_module_id: Option<MoveModuleId>,
+    /// Package, module, and type of the event
     pub event_type: Option<MoveType>,
     pub senders: Option<Vec<Address>>,
+    /// UTC timestamp in milliseconds since epoch (1/1/1970)
     pub timestamp: Option<DateTime>,
+    /// JSON string representation of the event
     pub json: Option<String>,
+    /// Base64 encoded bcs bytes of the Move event
     pub bcs: Option<Base64>,
 }
 

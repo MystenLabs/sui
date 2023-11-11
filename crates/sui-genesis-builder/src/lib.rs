@@ -27,6 +27,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, DefaultHash, SuiAuthoritySignature,
 };
+use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
@@ -42,7 +43,9 @@ use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSystemStateTrait};
-use sui_types::transaction::{CallArg, Command, InputObjectKind, InputObjects, Transaction};
+use sui_types::transaction::{
+    CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
+};
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 use validator_info::{GenesisValidatorInfo, GenesisValidatorMetadata, ValidatorInfo};
@@ -689,9 +692,11 @@ fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
     // We have a circular dependency here. Protocol config depends on chain ID, which
     // depends on genesis checkpoint (digest), which depends on genesis transaction, which
     // depends on protocol config.
-    // However since we know there are no chain specific protocol config options in genesis,
-    // we use Chain::Unknown here.
-    ProtocolConfig::get_for_version(version, Chain::Unknown)
+    //
+    // ChainIdentifier::default().chain() which can be overridden by the
+    // SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE if necessary (this is mainly used for compatibility tests
+    // in which we want to start a cluster that thinks it is mainnet).
+    ProtocolConfig::get_for_version(version, ChainIdentifier::default().chain())
 }
 
 fn build_unsigned_genesis_data(
@@ -840,7 +845,7 @@ fn create_genesis_transaction(
         let certificate_deny_set = HashSet::new();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let input_objects = InputObjects::new(vec![]);
+        let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
@@ -963,9 +968,9 @@ fn process_package(
         .iter()
         .zip(dependency_objects)
         .filter_map(|(dependency, object)| {
-            Some((
+            Some(ObjectReadResult::new(
                 InputObjectKind::MovePackage(*dependency),
-                object?.to_owned(),
+                object?.clone().into(),
             ))
         })
         .collect();
@@ -989,7 +994,7 @@ fn process_package(
         protocol_config,
         metrics,
         ctx,
-        InputObjects::new(loaded_dependencies),
+        CheckedInputObjects::new_for_genesis(loaded_dependencies),
         pt,
     )?;
 
@@ -1084,7 +1089,7 @@ pub fn generate_genesis_system_object(
         &protocol_config,
         metrics,
         genesis_ctx,
-        InputObjects::new(vec![]),
+        CheckedInputObjects::new_for_genesis(vec![]),
         pt,
     )?;
 

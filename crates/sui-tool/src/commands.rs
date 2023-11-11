@@ -3,8 +3,8 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, get_object, get_transaction_block, make_clients,
-    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
+    download_db_snapshot, download_formal_snapshot, get_object, get_transaction_block,
+    make_clients, restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
     verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::{anyhow, Result};
@@ -12,7 +12,9 @@ use std::env;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
+use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
+use telemetry_subscribers::TracingHandle;
 
 use sui_types::{base_types::*, object::Owner};
 
@@ -204,27 +206,58 @@ pub enum ToolCommand {
     #[clap(name = "download-db-snapshot")]
     DownloadDBSnapshot {
         #[clap(long = "epoch")]
-        epoch: u32,
+        epoch: u64,
         #[clap(long = "genesis")]
         genesis: PathBuf,
         #[clap(long = "path", default_value = "/tmp")]
         path: PathBuf,
-        // skip downloading checkpoints dir
+        /// skip downloading checkpoints dir. Overridden to `true` if `--formal` flag specified
         #[clap(long = "skip-checkpoints")]
         skip_checkpoints: bool,
-        // skip downloading indexes dir
+        /// skip downloading indexes dir. Overridden to `true` if `--formal` flag specified,
+        /// as index staging is not yet supported for formal snapshots.
         #[clap(long = "skip-indexes")]
         skip_indexes: bool,
-        #[clap(long = "num-parallel-downloads", default_value = "2")]
-        num_parallel_downloads: usize,
-        #[clap(long = "snapshot-bucket", default_value = "mysten-mainnet-snapshots")]
-        snapshot_bucket: String,
-        #[clap(long = "snapshot-bucket-type", default_value = "s3")]
-        snapshot_bucket_type: ObjectStoreType,
-        #[clap(long = "archive-bucket", default_value = "mysten-mainnet-archives")]
-        archive_bucket: String,
+        /// Number of parallel downloads to perform. Defaults to a reasonable
+        /// value based on number of available logical cores.
+        #[clap(long = "num-parallel-downloads")]
+        num_parallel_downloads: Option<usize>,
+        /// If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
+        /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
+        /// epoch 20+, and for testnet this is epoch 12+
+        #[clap(long = "formal")]
+        formal: bool,
+        /// If true, perform snapshot and checkpoint summary verification. Only
+        /// applicable if `--formal` flag is specified. Defaults to true.
+        #[clap(long = "verify")]
+        verify: Option<bool>,
+        /// Network to download snapshot for. Defaults to "mainnet".
+        /// If `--snapshot-bucket` or `--archive-bucket` is not specified,
+        /// the value of this flag is used to construct default bucket names.
+        #[clap(long = "network", default_value = "mainnet")]
+        network: Chain,
+        /// Snapshot bucket name. If not specified, defaults are
+        /// based on value of `--network` and `--formal` flags.
+        #[clap(long = "snapshot-bucket")]
+        snapshot_bucket: Option<String>,
+        /// Snapshot bucket type. Defaults to "gcs" if `--formal`
+        /// flag specified, otherwise "s3".
+        #[clap(long = "snapshot-bucket-type")]
+        snapshot_bucket_type: Option<ObjectStoreType>,
+        /// Path to snapshot directory on local filesystem.
+        /// Only applicable if `--snapshot-bucket-type` is "file".
+        #[clap(long = "snapshot-path")]
+        snapshot_path: Option<PathBuf>,
+        /// Archival bucket name. If not specified, defaults are
+        /// based on value of `--network` and `--formal` flags.
+        #[clap(long = "archive-bucket")]
+        archive_bucket: Option<String>,
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
+        /// If false (default), log level will be overridden to "off",
+        /// and output will be reduced to necessary status information.
+        #[clap(long = "formal")]
+        verbose: bool,
     },
 
     #[clap(name = "replay")]
@@ -310,7 +343,7 @@ impl std::fmt::Display for OwnerOutput {
 
 impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
-    pub async fn execute(self) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, tracing_handle: TracingHandle) -> Result<(), anyhow::Error> {
         match self {
             ToolCommand::FetchObject {
                 id,
@@ -420,11 +453,56 @@ impl ToolCommand {
                 skip_checkpoints,
                 skip_indexes,
                 num_parallel_downloads,
+                formal,
+                verify,
+                network,
                 snapshot_bucket,
                 snapshot_bucket_type,
+                snapshot_path,
                 archive_bucket,
                 archive_bucket_type,
+                verbose,
             } => {
+                if !verbose {
+                    tracing_handle
+                        .update_log("off")
+                        .expect("Failed to update log level");
+                }
+                let num_parallel_downloads = num_parallel_downloads.unwrap_or_else(|| {
+                    num_cpus::get()
+                        .checked_sub(1)
+                        .expect("Failed to get number of CPUs")
+                });
+                let snapshot_bucket = snapshot_bucket.unwrap_or_else(|| match (formal, network) {
+                    (true, Chain::Mainnet) => "mysten-mainnet-formal".to_string(),
+                    (false, Chain::Mainnet) => "mysten-mainnet-snapshots".to_string(),
+                    (true, Chain::Testnet) => "mysten-testnet-formal".to_string(),
+                    (false, Chain::Testnet) => "mysten-testnet-snapshots".to_string(),
+                    (_, Chain::Unknown) => {
+                        panic!("Cannot generate default snapshot bucket for unknown network");
+                    }
+                });
+                let archive_bucket = archive_bucket.unwrap_or_else(|| match network {
+                    Chain::Mainnet => "mysten-mainnet-archives".to_string(),
+                    Chain::Testnet => "mysten-testnet-archives".to_string(),
+                    Chain::Unknown => {
+                        panic!("Cannot generate default archive bucket for unknown network");
+                    }
+                });
+                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or({
+                    if formal {
+                        ObjectStoreType::GCS
+                    } else {
+                        ObjectStoreType::S3
+                    }
+                });
+
+                // index staging is not yet supported for formal snapshots
+                let skip_indexes = skip_indexes || formal;
+                // Checkpoint db does not exist in formal snapshots and
+                // is not reconstructed during formal snapshot restore
+                let skip_checkpoints = skip_checkpoints || formal;
+
                 let snapshot_store_config = match snapshot_bucket_type {
                     ObjectStoreType::S3 => {
                         ObjectStoreConfig {
@@ -468,7 +546,17 @@ impl ToolCommand {
                             ..Default::default()
                         }
                     },
-                    ObjectStoreType::File => panic!("Download from local filesystem is not supported")
+                    ObjectStoreType::File => {
+                        if snapshot_path.is_some() {
+                            ObjectStoreConfig {
+                                object_store: Some(ObjectStoreType::File),
+                                directory: snapshot_path,
+                                ..Default::default()
+                            }
+                        } else {
+                            panic!("--snapshot-path must be specified for --snapshot-bucket-type=file");
+                        }
+                    }
                 };
 
                 let archive_store_config = match archive_bucket_type {
@@ -517,17 +605,32 @@ impl ToolCommand {
                     ObjectStoreType::File => panic!("Download from local filesystem is not supported")
                 };
 
-                download_db_snapshot(
-                    &path,
-                    epoch,
-                    &genesis,
-                    snapshot_store_config,
-                    archive_store_config,
-                    skip_checkpoints,
-                    skip_indexes,
-                    num_parallel_downloads,
-                )
-                .await?;
+                if formal {
+                    let verify = verify.unwrap_or(true);
+                    download_formal_snapshot(
+                        &path,
+                        epoch,
+                        &genesis,
+                        snapshot_store_config,
+                        archive_store_config,
+                        num_parallel_downloads,
+                        network,
+                        verify,
+                    )
+                    .await?;
+                } else {
+                    download_db_snapshot(
+                        &path,
+                        epoch,
+                        &genesis,
+                        snapshot_store_config,
+                        archive_store_config,
+                        skip_checkpoints,
+                        skip_indexes,
+                        num_parallel_downloads,
+                    )
+                    .await?;
+                }
             }
             ToolCommand::Replay {
                 rpc_url,

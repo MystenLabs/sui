@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    certificate_fetcher::CertificateFetcherCommand, common::create_db_stores,
-    metrics::PrimaryMetrics, synchronizer::Synchronizer, PrimaryChannelMetrics,
+    certificate_fetcher::CertificateFetcherCommand,
+    common::create_db_stores,
+    consensus::{gc_round, ConsensusRound},
+    metrics::PrimaryMetrics,
+    synchronizer::Synchronizer,
+    PrimaryChannelMetrics,
 };
 use config::Committee;
-use consensus::consensus::ConsensusRound;
-use consensus::utils::gc_round;
+use crypto::AggregateSignatureBytes;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -96,11 +99,11 @@ async fn accept_certificates() {
     // The first messages are the Synchronizer letting us know about the round of parent certificates
     for _i in 0..3 {
         let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
+        assert_eq!(received, (vec![], 0));
     }
     // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();
-    assert_eq!(received, (certificates.clone(), 1, 0));
+    assert_eq!(received, (certificates.clone(), 1));
 
     // Ensure the Synchronizer sends the certificates to the consensus.
     for x in certificates.clone() {
@@ -328,7 +331,6 @@ async fn synchronizer_recover_basic() {
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.1, 1);
-    assert_eq!(received.2, 0);
     assert_eq!(received.0.len(), certificates.len());
     for c in &certificates {
         assert!(received.0.contains(c));
@@ -451,13 +453,12 @@ async fn synchronizer_recover_partial_certs() {
 
     for _ in 0..2 {
         let received = rx_parents.recv().await.unwrap();
-        assert_eq!(received, (vec![], 0, 0));
+        assert_eq!(received, (vec![], 0));
     }
 
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.1, 1);
-    assert_eq!(received.2, 0);
     assert_eq!(received.0.len(), certificates.len());
     for c in &certificates {
         assert!(received.0.contains(c));
@@ -579,7 +580,6 @@ async fn synchronizer_recover_previous_round() {
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.0.len(), round_1_certificates.len());
     assert_eq!(received.1, 1);
-    assert_eq!(received.2, 0);
     for c in &round_1_certificates {
         assert!(received.0.contains(c));
     }
@@ -702,7 +702,6 @@ async fn deliver_certificate_not_found_parents() {
     let keys = fixture
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
-        .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) = make_optimal_signed_certificates(
         1..=4,
@@ -737,6 +736,138 @@ async fn deliver_certificate_not_found_parents() {
     };
 
     assert_eq!(certificate, test_certificate);
+}
+
+#[tokio::test]
+async fn sanitize_fetched_certificates() {
+    let fixture = CommitteeFixture::builder().build();
+    let primary = fixture.authorities().next().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
+    let name = primary.id();
+    let committee = fixture.committee();
+    let worker_cache = fixture.worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
+
+    let (certificates_store, payload_store) = create_db_stores();
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(10000);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(10000);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
+
+    let synchronizer = Synchronizer::new(
+        name,
+        fixture.committee(),
+        latest_protocol_version(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        client,
+        certificates_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        metrics.clone(),
+        &primary_channel_metrics,
+    );
+
+    // create some certificates in a complete DAG form
+    let genesis_certs = Certificate::genesis(&latest_protocol_version(), &committee);
+    let genesis = genesis_certs
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+
+    let keys = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect::<Vec<_>>();
+    let (verified_certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=60,
+        &genesis,
+        &committee,
+        &latest_protocol_version(),
+        &keys,
+    );
+
+    const VERIFICATION_ROUND: u64 = 50;
+    const LEAF_ROUND: u64 = 60;
+
+    // Able to verify a batch of certificates with good signatures.
+    synchronizer
+        .sanitize_fetched_certificates(verified_certificates.iter().cloned().collect_vec())
+        .await
+        .unwrap();
+
+    // Fail to verify a batch of certificates with good signatures for leaves,
+    // but bad signatures at other rounds including the verification round.
+    let mut certs = Vec::new();
+    for cert in &verified_certificates {
+        let r = cert.round();
+        let mut cert = cert.clone();
+        if r != LEAF_ROUND {
+            cert.set_signature_verification_state(SignatureVerificationState::Unverified(
+                AggregateSignatureBytes::default(),
+            ));
+        }
+        certs.push(cert);
+    }
+    synchronizer
+        .sanitize_fetched_certificates(certs)
+        .await
+        .unwrap_err();
+
+    // Fail to verify a batch of certificates with bad signatures for leaves and the verification
+    // round, but good signatures at other rounds.
+    let mut certs = Vec::new();
+    for cert in &verified_certificates {
+        let r = cert.round();
+        let mut cert = cert.clone();
+        if r == VERIFICATION_ROUND || r == LEAF_ROUND {
+            cert.set_signature_verification_state(SignatureVerificationState::Unverified(
+                AggregateSignatureBytes::default(),
+            ));
+        }
+        certs.push(cert);
+    }
+    synchronizer
+        .sanitize_fetched_certificates(certs)
+        .await
+        .unwrap_err();
+
+    // Able to verify a batch of certificates with good signatures for leaves and the verification
+    // round, but bad signatures at other rounds.
+    let mut certs = Vec::new();
+    for cert in &verified_certificates {
+        let r = cert.round();
+        let mut cert = cert.clone();
+        if r != VERIFICATION_ROUND && r != LEAF_ROUND {
+            cert.set_signature_verification_state(SignatureVerificationState::Unverified(
+                AggregateSignatureBytes::default(),
+            ));
+        }
+        certs.push(cert);
+    }
+    synchronizer
+        .sanitize_fetched_certificates(certs)
+        .await
+        .unwrap();
+
+    // Able to verify a batch of certificates with good signatures, but leaves in more rounds.
+    let mut certs = Vec::new();
+    for cert in &verified_certificates {
+        let r = cert.round();
+        if r % 5 == 0 {
+            continue;
+        }
+        certs.push(cert.clone());
+    }
+    synchronizer
+        .sanitize_fetched_certificates(certs)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -779,17 +910,16 @@ async fn sync_batches_drops_old() {
 
     let mut certificates = HashMap::new();
     for _ in 0..3 {
-        let header = Header::V1(
-            author
-                .header_builder(&latest_protocol_version(), &fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
-                    0,
-                    0,
-                )
-                .build()
-                .unwrap(),
-        );
+        let header: Header = author
+            .header_builder(&latest_protocol_version(), &fixture.committee())
+            .with_payload_batch(
+                test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
+                0,
+                0,
+            )
+            .build()
+            .unwrap()
+            .into();
 
         let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
@@ -800,19 +930,18 @@ async fn sync_batches_drops_old() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .round(2)
-            .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
-                1,
-                0,
-            )
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
+            1,
+            0,
+        )
+        .build()
+        .unwrap()
+        .into();
 
     tokio::task::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;

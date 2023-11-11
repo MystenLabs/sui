@@ -9,6 +9,7 @@ use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
 
 use crate::get_db_entries;
+use move_core_types::language_storage::ModuleId;
 use std::fmt::Debug;
 use sui_storage::IndexStoreTables;
 use sui_types::{
@@ -135,7 +136,38 @@ pub fn search_index(
                 termination
             )
         }
-
+        "event_by_event_module" => {
+            get_db_entries!(
+                db_read_only_handle.event_by_event_module,
+                from_module_id_and_event_id,
+                start,
+                termination
+            )
+        }
+        "event_by_move_module" => {
+            get_db_entries!(
+                db_read_only_handle.event_by_move_module,
+                from_module_id_and_event_id,
+                start,
+                termination
+            )
+        }
+        "event_order" => {
+            get_db_entries!(
+                db_read_only_handle.event_order,
+                from_event_id,
+                start,
+                termination
+            )
+        }
+        "event_by_sender" => {
+            get_db_entries!(
+                db_read_only_handle.event_by_sender,
+                from_address_and_event_id,
+                start,
+                termination
+            )
+        }
         _ => Err(anyhow!("Invalid or unsupported table: {}", table_name)),
     }
 }
@@ -298,4 +330,51 @@ fn from_oid_oid(s: &str) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let oid2: ObjectID = ObjectID::from_str(tokens[1].trim())?;
 
     Ok((oid1, oid2))
+}
+
+fn from_module_id_and_event_id(
+    s: &str,
+) -> Result<(ModuleId, (TxSequenceNumber, usize)), anyhow::Error> {
+    // Example: "0x1::Event 1234 5"
+    let tokens = s.split(' ').collect::<Vec<&str>>();
+    if tokens.len() != 3 {
+        return Err(anyhow!("Invalid input"));
+    }
+    let tx_seq = TxSequenceNumber::from_str(tokens[1])?;
+    let event_seq = usize::from_str(tokens[2])?;
+    let tokens = tokens[0].split("::").collect::<Vec<&str>>();
+    if tokens.len() != 2 {
+        return Err(anyhow!("Invalid module id"));
+    }
+    let package = ObjectID::from_str(tokens[0].trim())?;
+
+    Ok((
+        ModuleId::new(package.into(), Identifier::from_str(tokens[1].trim())?),
+        (tx_seq, event_seq),
+    ))
+}
+
+fn from_event_id(s: &str) -> Result<(TxSequenceNumber, usize), anyhow::Error> {
+    // Example: "1234 5"
+    let tokens = s.split(' ').collect::<Vec<&str>>();
+    if tokens.len() != 2 {
+        return Err(anyhow!("Invalid input"));
+    }
+    let tx_seq = TxSequenceNumber::from_str(tokens[0])?;
+    let event_seq = usize::from_str(tokens[1])?;
+    Ok((tx_seq, event_seq))
+}
+
+fn from_address_and_event_id(
+    s: &str,
+) -> Result<(SuiAddress, (TxSequenceNumber, usize)), anyhow::Error> {
+    // Example: "0x1 1234 5"
+    let tokens = s.split(' ').collect::<Vec<&str>>();
+    if tokens.len() != 3 {
+        return Err(anyhow!("Invalid input"));
+    }
+    let tx_seq = TxSequenceNumber::from_str(tokens[1])?;
+    let event_seq = usize::from_str(tokens[2])?;
+    let address = SuiAddress::from_str(tokens[0].trim())?;
+    Ok((address, (tx_seq, event_seq)))
 }

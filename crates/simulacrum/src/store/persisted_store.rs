@@ -19,7 +19,8 @@ use sui_types::{
     },
     object::{Object, Owner},
     storage::{
-        BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, ReceivedMarkerQuery,
+        load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
+        ObjectStore, PackageObjectArc, ParentSync,
     },
     transaction::VerifiedTransaction,
 };
@@ -47,6 +48,7 @@ pub struct PersistedStore {
     transactions: DBMap<TransactionDigest, sui_types::transaction::TrustedTransaction>,
     effects: DBMap<TransactionDigest, TransactionEffects>,
     events: DBMap<TransactionEventsDigest, TransactionEvents>,
+    events_tx_digest_index: DBMap<TransactionDigest, TransactionEventsDigest>,
 
     // Committee data
     epoch_to_committee: DBMap<(), Vec<Committee>>,
@@ -157,6 +159,16 @@ impl SimulatorStore for PersistedStore {
         self.events.get(digest).expect("Fatal: DB read failed")
     }
 
+    fn get_transaction_events_by_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEvents> {
+        self.events_tx_digest_index
+            .get(tx_digest)
+            .expect("Fatal: DB read failed")
+            .and_then(|x| self.events.get(&x).expect("Fatal: DB read failed"))
+    }
+
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
         let version = self.live_objects.get(id).expect("Fatal: DB read failed")?;
         self.get_object_at_version(id, version)
@@ -239,9 +251,10 @@ impl SimulatorStore for PersistedStore {
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
         let deleted_objects = effects.deleted();
+        let tx_digest = *effects.transaction_digest();
         self.insert_transaction(transaction);
         self.insert_transaction_effects(effects);
-        self.insert_events(events);
+        self.insert_events(&tx_digest, events);
         self.update_objects(written_objects, deleted_objects);
     }
 
@@ -257,7 +270,10 @@ impl SimulatorStore for PersistedStore {
             .expect("Fatal: DB write failed");
     }
 
-    fn insert_events(&mut self, events: TransactionEvents) {
+    fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
+        self.events_tx_digest_index
+            .insert(tx_digest, &events.digest())
+            .expect("Fatal: DB write failed");
         self.events
             .insert(&events.digest(), &events)
             .expect("Fatal: DB write failed");
@@ -297,8 +313,8 @@ impl BackingPackageStore for PersistedStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<Object>> {
-        Ok(SimulatorStore::get_object(self, package_id))
+    ) -> sui_types::error::SuiResult<Option<PackageObjectArc>> {
+        load_package_object_from_object_store(self, package_id)
     }
 }
 
@@ -355,20 +371,6 @@ impl ChildObjectResolver for PersistedStore {
     }
 }
 
-impl ReceivedMarkerQuery for PersistedStore {
-    fn have_received_object_at_version(
-        &self,
-        _object_id: &ObjectID,
-        _version: sui_types::base_types::VersionNumber,
-        _epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        // In simulation, we always have the object don't have a marker table, and we don't need to
-        // worry about equivocation protection. So we simply return false if ever asked if we
-        // received this object.
-        Ok(false)
-    }
-}
-
 impl GetModule for PersistedStore {
     type Error = SuiError;
     type Item = CompiledModule;
@@ -385,9 +387,10 @@ impl ModuleResolver for PersistedStore {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
+            .get_package_object(&ObjectID::from(*module_id.address()))?
             .and_then(|package| {
                 package
+                    .move_package()
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()

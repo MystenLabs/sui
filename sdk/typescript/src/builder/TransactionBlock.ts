@@ -8,7 +8,6 @@ import { is, mask } from 'superstruct';
 import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
-import { SUI_TYPE_ARG } from '../framework/framework.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
@@ -16,6 +15,7 @@ import {
 	getObjectReference,
 	SuiObjectRef,
 } from '../types/index.js';
+import { SUI_TYPE_ARG } from '../utils/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { ObjectCallArg } from './Inputs.js';
 import {
@@ -92,6 +92,18 @@ function createTransactionResult(index: number): TransactionResult {
 			return nestedResultFor(resultIndex);
 		},
 	}) as TransactionResult;
+}
+
+function isReceivingType(normalizedType: SuiMoveNormalizedType): boolean {
+	const tag = extractStructTag(normalizedType);
+	if (tag) {
+		return (
+			tag.Struct.address === '0x2' &&
+			tag.Struct.module === 'transfer' &&
+			tag.Struct.name === 'Receiving'
+		);
+	}
+	return false;
 }
 
 function expectClient(options: BuildOptions): SuiClient {
@@ -309,6 +321,14 @@ export class TransactionBlock {
 	 */
 	objectRef(...args: Parameters<(typeof Inputs)['ObjectRef']>) {
 		return this.object(Inputs.ObjectRef(...args));
+	}
+
+	/**
+	 * Add a new receiving input to the transaction using the fully-resolved object reference.
+	 * If you only have an object ID, use `builder.object(id)` instead.
+	 */
+	receivingRef(...args: Parameters<(typeof Inputs)['ReceivingRef']>) {
+		return this.object(Inputs.ReceivingRef(...args));
 	}
 
 	/**
@@ -758,6 +778,8 @@ export class TransactionBlock {
 						initialSharedVersion,
 						mutable,
 					});
+				} else if (normalizedType && isReceivingType(normalizedType)) {
+					input.value = Inputs.ReceivingRef(getObjectReference(object)!);
 				} else {
 					input.value = Inputs.ObjectRef(getObjectReference(object as SuiObjectResponse)!);
 				}

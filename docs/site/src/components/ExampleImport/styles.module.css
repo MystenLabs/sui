@@ -1,0 +1,13 @@
+.lineNumbers {
+    color: #aaa;
+    font-size: 10px;
+    vertical-align: middle;
+}
+
+.token-line span:first-child {
+    margin-left: 1rem;
+}
+
+.token-line .highlighted {
+    background-color: #fff000;
+}

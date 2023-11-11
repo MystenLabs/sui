@@ -125,10 +125,10 @@ module sui::object_bag_tests {
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
         let counter = new(&mut scenario);
-        assert!(!contains(&mut bag, 0), 0);
+        assert!(!contains(&bag, 0), 0);
         add(&mut bag, 0, counter);
-        assert!(contains(&mut bag, 0), 0);
-        assert!(!contains(&mut bag, 1), 0);
+        assert!(contains(&bag, 0), 0);
+        assert!(!contains(&bag, 1), 0);
         ts::end(scenario);
         destroy(remove(&mut bag, 0));
         object_bag::destroy_empty(bag)
@@ -140,8 +140,8 @@ module sui::object_bag_tests {
         let scenario = ts::begin(sender);
         let bag = object_bag::new(ts::ctx(&mut scenario));
         let counter = new(&mut scenario);
-        assert!(!contains_with_type<u64, Counter>(&mut bag, 0), 0);
-        assert!(!contains_with_type<u64, Fake>(&mut bag, 0), 0);
+        assert!(!contains_with_type<u64, Counter>(&bag, 0), 0);
+        assert!(!contains_with_type<u64, Fake>(&bag, 0), 0);
         add(&mut bag, 0, counter);
         assert!(contains_with_type<u64, Counter>(&bag, 0), 0);
         assert!(!contains_with_type<u8, Counter>(&bag, 0), 0);

@@ -260,11 +260,11 @@ const attachStrongRoyalties = async () => {
 
 	// The environment on which we're referecing the rules package.
 	// Use `mainnetEnvironment` for mainnet.
-	const enviroment = testnetEnvironment;
+	const environment = testnetEnvironment;
 
 	const tx = new TransactionBlock();
 
-	attachKioskLockRule(tx, type, policyId, policyCapId, enviroment);
+	attachKioskLockRule(tx, type, policyId, policyCapId, environment);
 	attachRoyaltyRule(
 		tx,
 		type,
@@ -272,7 +272,7 @@ const attachStrongRoyalties = async () => {
 		policyCapId,
 		percentageToBasisPoints(percentage),
 		minAmount,
-		enviroment,
+		environment,
 	);
 
 	// ... continue to sign and execute the transaction

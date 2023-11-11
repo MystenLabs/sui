@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use sui_single_node_benchmark::command::Command;
-use sui_single_node_benchmark::execution::run_benchmark;
+use sui_single_node_benchmark::run_benchmark;
 use sui_single_node_benchmark::workload::Workload;
 
 #[tokio::main]
@@ -15,7 +15,7 @@ async fn main() {
 
     let args = Command::parse();
     run_benchmark(
-        Workload::new(args.tx_count, args.workload),
+        Workload::new(args.tx_count, args.workload, args.num_input_objects),
         args.component,
         args.checkpoint_size,
     )

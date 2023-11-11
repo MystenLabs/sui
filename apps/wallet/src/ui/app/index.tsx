@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAppDispatch, useAppSelector } from '_hooks';
+import { SwapPage } from '_pages/swap';
+import { FromAssets } from '_pages/swap/FromAssets';
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
@@ -153,7 +155,7 @@ const App = () => {
 	}, [backgroundClient, autoLockEnabled]);
 
 	const storageMigration = useStorageMigrationStatus();
-	if (storageMigration.isLoading || !storageMigration?.data) {
+	if (storageMigration.isPending || !storageMigration?.data) {
 		return null;
 	}
 	if (storageMigration.data !== 'ready') {
@@ -173,6 +175,8 @@ const App = () => {
 				<Route path="send" element={<TransferCoinPage />} />
 				<Route path="send/select" element={<CoinsSelectorPage />} />
 				<Route path="stake/*" element={<Staking />} />
+				<Route path="swap/*" element={<SwapPage />} />
+				<Route path="swap/from-assets" element={<FromAssets />} />
 				<Route path="tokens/*" element={<TokenDetailsPage />} />
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />

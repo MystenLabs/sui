@@ -27,6 +27,13 @@ pub struct Command {
     pub checkpoint_size: usize,
     #[arg(
         long,
+        default_value_t = 2,
+        help = "Number of address owned input objects per transaction.\
+            This represents the amount of DB reads per transaction prior to execution."
+    )]
+    pub num_input_objects: u8,
+    #[arg(
+        long,
         default_value = "baseline",
         ignore_case = true,
         help = "Which component to benchmark"
@@ -38,6 +45,7 @@ pub struct Command {
 
 #[derive(Copy, Clone, EnumIter, ValueEnum)]
 pub enum Component {
+    ExecutionOnly,
     /// Baseline includes the execution and storage layer only.
     Baseline,
     /// On top of Baseline, this schedules transactions through the transaction manager.
@@ -62,13 +70,6 @@ pub enum Component {
 pub enum WorkloadKind {
     NoMove,
     Move {
-        #[arg(
-            long,
-            default_value_t = 2,
-            help = "Number of address owned input objects per transaction.\
-            This represents the amount of DB reads per transaction prior to execution."
-        )]
-        num_input_objects: u8,
         #[arg(
             long,
             default_value_t = 0,

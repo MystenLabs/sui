@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { UseMutationOptions } from '@tanstack/react-query';
+import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
@@ -22,7 +22,11 @@ type UseDisconnectWalletMutationOptions = Omit<
 export function useDisconnectWallet({
 	mutationKey,
 	...mutationOptions
-}: UseDisconnectWalletMutationOptions = {}) {
+}: UseDisconnectWalletMutationOptions = {}): UseMutationResult<
+	void,
+	UseDisconnectWalletError,
+	void
+> {
 	const { currentWallet } = useCurrentWallet();
 	const setWalletDisconnected = useWalletStore((state) => state.setWalletDisconnected);
 

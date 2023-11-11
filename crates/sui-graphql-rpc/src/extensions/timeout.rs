@@ -9,49 +9,32 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
 
-// 10s
-const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_millis(20_000);
-
-#[derive(Clone, Debug, Copy)]
-pub(crate) struct TimeoutConfig {
-    pub request_timeout: Duration,
-}
-
-impl Default for TimeoutConfig {
-    fn default() -> Self {
-        Self {
-            request_timeout: DEFAULT_REQUEST_TIMEOUT,
-        }
-    }
-}
+use crate::config::ServiceConfig;
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct Timeout {
-    pub config: TimeoutConfig,
-}
+pub(crate) struct Timeout;
 
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(TimeoutExtension {
-            config: self.config,
-        })
+        Arc::new(Timeout)
     }
 }
 
-struct TimeoutExtension {
-    config: TimeoutConfig,
-}
-
 #[async_trait::async_trait]
-impl Extension for TimeoutExtension {
+impl Extension for Timeout {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
-        timeout(self.config.request_timeout, next.run(ctx))
+        let cfg = ctx
+            .data::<ServiceConfig>()
+            .expect("No service config provided in schema data");
+        let request_timeout = Duration::from_millis(cfg.limits.request_timeout_ms);
+
+        timeout(request_timeout, next.run(ctx))
             .await
             .unwrap_or_else(|_| {
                 Response::from_errors(vec![ServerError::new(
                     format!(
                         "Request timed out. Limit: {}s",
-                        self.config.request_timeout.as_secs_f32()
+                        request_timeout.as_secs_f32()
                     ),
                     None,
                 )])

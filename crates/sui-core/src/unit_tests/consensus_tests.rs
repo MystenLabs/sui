@@ -109,6 +109,7 @@ async fn submit_transaction_to_consensus_adapter() {
     objects.push(Object::shared_for_testing());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
+    let epoch_store = state.epoch_store_for_testing();
 
     let metrics = ConsensusAdapterMetrics::new_test();
 
@@ -135,20 +136,20 @@ async fn submit_transaction_to_consensus_adapter() {
     }
     // Make a new consensus adapter instance.
     let adapter = Arc::new(ConsensusAdapter::new(
-        Box::new(SubmitDirectly(state.clone())),
+        Arc::new(SubmitDirectly(state.clone())),
         state.name,
-        Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+        Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
         100_000,
         None,
         None,
         metrics,
+        epoch_store.protocol_config().clone(),
     ));
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
     let transaction = ConsensusTransaction::new_certificate_message(&state.name, certificate);
-    let epoch_store = state.epoch_store_for_testing();
     let waiter = adapter
         .submit(
             transaction.clone(),

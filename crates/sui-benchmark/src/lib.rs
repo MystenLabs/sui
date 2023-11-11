@@ -72,7 +72,7 @@ pub mod util;
 pub mod workloads;
 use futures::FutureExt;
 use sui_types::messages_grpc::{HandleCertificateResponse, TransactionStatus};
-use sui_types::quorum_driver_types::QuorumDriverResponse;
+use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
@@ -373,6 +373,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         effects_cert.into(),
                         events,
                     ));
+                }
+                Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
+                    bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
                 }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));

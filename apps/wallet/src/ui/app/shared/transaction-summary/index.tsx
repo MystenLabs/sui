@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { type TransactionSummary as TransactionSummaryType } from '@mysten/core';
-import clsx from 'classnames';
+import clsx from 'clsx';
 
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
 import { Heading } from '../heading';

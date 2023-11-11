@@ -24,9 +24,9 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
-use crate::{AnalyticsIndexerConfig, FileMetadata, EPOCH_DIR_PREFIX};
+use crate::{AnalyticsIndexerConfig, FileMetadata, ParquetSchema, EPOCH_DIR_PREFIX};
 
-pub struct AnalyticsProcessor<S: Serialize> {
+pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     handler: Box<dyn AnalyticsHandler<S>>,
     writer: Box<dyn AnalyticsWriter<S>>,
     current_epoch: u64,
@@ -40,7 +40,7 @@ pub struct AnalyticsProcessor<S: Serialize> {
 }
 
 #[async_trait::async_trait]
-impl<S: Serialize + 'static> Handler for AnalyticsProcessor<S> {
+impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
     fn name(&self) -> &str {
         self.handler.name()
     }
@@ -88,7 +88,7 @@ impl<S: Serialize + 'static> Handler for AnalyticsProcessor<S> {
     }
 }
 
-impl<S: Serialize + 'static> AnalyticsProcessor<S> {
+impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     pub async fn new(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,

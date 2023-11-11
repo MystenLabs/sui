@@ -97,9 +97,7 @@ export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: Conne
 
 	return (
 		<Dialog.Root open={open ?? isModalOpen} onOpenChange={handleOpenChange}>
-			<StyleMarker>
-				<Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
-			</StyleMarker>
+			<Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
 			<Dialog.Portal>
 				<StyleMarker>
 					<Dialog.Overlay className={styles.overlay}>

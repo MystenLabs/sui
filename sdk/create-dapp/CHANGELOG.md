@@ -1,5 +1,31 @@
 # @mysten/create-dapp
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [b359868e3]
+- Updated dependencies [5d7055365]
+- Updated dependencies [30b47b758]
+  - @mysten/dapp-kit@0.7.0
+  - @mysten/sui.js@0.45.1
+
+## 0.1.0
+
+### Minor Changes
+
+- d4d9c9218: Upgrade dapp-kit and the scaffold applications to react-query v5
+
+### Patch Changes
+
+- Updated dependencies [d4d9c9218]
+- Updated dependencies [fb0ce3485]
+- Updated dependencies [09c103002]
+- Updated dependencies [e0578094b]
+- Updated dependencies [b9afb5567]
+  - @mysten/dapp-kit@0.6.0
+  - @mysten/sui.js@0.45.0
+
 ## 0.0.5
 
 ### Patch Changes

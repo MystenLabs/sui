@@ -9,11 +9,15 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::ops::Deref;
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2};
+use sui_types::execution::{
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::BackingStore;
@@ -40,7 +44,7 @@ pub struct TemporaryStore<'backing> {
     // objects
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
-    input_objects: BTreeMap<ObjectID, Object>,
+    input_objects: BTreeMap<ObjectID, Arc<Object>>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -71,6 +75,7 @@ impl<'backing> TemporaryStore<'backing> {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let objects = input_objects.into_object_map();
+
         Self {
             store,
             tx_digest,
@@ -86,7 +91,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     // Helpers to access private fields
-    pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
+    pub fn objects(&self) -> &BTreeMap<ObjectID, Arc<Object>> {
         &self.input_objects
     }
 
@@ -114,6 +119,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
+            lamport_version: self.lamport_timestamp,
         }
     }
 
@@ -132,7 +138,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.mutate_input_object(object);
+            self.mutate_input_object(object.deref().clone());
         }
     }
 
@@ -164,7 +170,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn into_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -337,7 +343,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results
             .written_objects
             .get(id)
-            .or_else(|| self.input_objects.get(id))
+            .or_else(|| self.input_objects.get(id).map(|o| o.deref()))
     }
 
     pub fn save_loaded_runtime_objects(

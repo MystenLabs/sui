@@ -12,7 +12,6 @@ module sui_system::voting_power_tests {
     use sui_system::validator::{Self, Validator};
 
     const TOTAL_VOTING_POWER: u64 = 10_000;
-    const MAX_VOTING_POWER: u64 = 1_000;
 
     fun check(stakes: vector<u64>, voting_power: vector<u64>, ctx: &mut TxContext) {
         let validators = gtu::create_validators_with_stakes(stakes, ctx);

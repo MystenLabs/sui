@@ -84,9 +84,6 @@ module capy::capy_winter {
     /// Emitted when a premium gift was received.
     struct PremiumTicketReceived has copy, drop { id: ID }
 
-    /// Emitted when a premium ticket was used.
-    struct PremiumTicketUsed has copy, drop { id: ID }
-
     /// Emitted when a premium box was purchased.
     struct PremiumPurchased has copy, drop { id: ID }
 
@@ -96,7 +93,6 @@ module capy::capy_winter {
     // ========= Dynamic Parameters Keys =========
 
     struct SentKey has store, copy, drop { sender: address }
-    struct OpenedKey has store, copy, drop { sender: address }
 
     #[allow(unused_function)]
     /// Build a CapyPost office and offer gifts to send and buy.

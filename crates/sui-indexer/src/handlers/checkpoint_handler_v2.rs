@@ -447,7 +447,7 @@ where
                 events,
                 transaction_kind,
                 successful_tx_num: if fx.status().is_ok() {
-                    tx.kind().num_commands() as u64
+                    tx.kind().tx_count() as u64
                 } else {
                     0
                 },
@@ -698,7 +698,7 @@ fn try_create_dynamic_field_info(
                 name,
                 bcs_name,
                 type_,
-                object_type: object_type.to_string(),
+                object_type: object_type.to_canonical_string(/* with_prefix */ true),
                 object_id,
                 version,
                 digest,
@@ -708,7 +708,8 @@ fn try_create_dynamic_field_info(
             name,
             bcs_name,
             type_,
-            object_type: move_object.into_type().into_type_params()[1].to_string(),
+            object_type: move_object.into_type().into_type_params()[1]
+                .to_canonical_string(/* with_prefix */ true),
             object_id: o.id(),
             version: o.version(),
             digest: o.digest(),

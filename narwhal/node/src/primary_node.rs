@@ -4,16 +4,15 @@ use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
-use consensus::bullshark::Bullshark;
-use consensus::consensus::{ConsensusRound, LeaderSchedule};
-use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
-use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use mysten_metrics::metered_channel;
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
+use primary::consensus::{
+    Bullshark, ChannelMetrics, Consensus, ConsensusMetrics, ConsensusRound, LeaderSchedule,
+};
 use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
@@ -43,8 +42,6 @@ struct PrimaryNodeInner {
 }
 
 impl PrimaryNodeInner {
-    /// The default channel capacity.
-    pub const CHANNEL_CAPACITY: usize = 1_000;
     /// The window where the schedule change takes place in consensus. It represents number
     /// of committed sub dags.
     /// TODO: move this to node properties
@@ -213,7 +210,7 @@ impl PrimaryNodeInner {
         )
         .unwrap();
         let (tx_new_certificates, rx_new_certificates) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &new_certificates_counter);
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &new_certificates_counter);
 
         let committed_certificates_counter = IntGauge::new(
             PrimaryChannelMetrics::NAME_COMMITTED_CERTS,
@@ -221,7 +218,7 @@ impl PrimaryNodeInner {
         )
         .unwrap();
         let (tx_committed_certificates, rx_committed_certificates) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &committed_certificates_counter);
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &committed_certificates_counter);
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
@@ -308,7 +305,7 @@ impl PrimaryNodeInner {
         let channel_metrics = ChannelMetrics::new(registry);
 
         let (tx_sequence, rx_sequence) =
-            metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
 
         // Check for any sub-dags that have been sent by consensus but were not processed by the executor.
         let restored_consensus_output = get_restored_consensus_output(

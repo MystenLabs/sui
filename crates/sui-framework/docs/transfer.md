@@ -81,6 +81,16 @@ be constructed in the transaction they are created.
 
 
 
+<a name="0x2_transfer_ESharedObjectOperationNotSupported"></a>
+
+Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
+
+
+<pre><code><b>const</b> <a href="transfer.md#0x2_transfer_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="0x2_transfer_transfer"></a>
 
 ## Function `transfer`
@@ -316,7 +326,7 @@ argument to receive and return the referenced owned object of type <code>T</code
 
 
 <pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] <b>false</b>;
+<b>aborts_if</b> [abstract] sui::prover::shared(obj);
 <b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
 <b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
 <b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).status == <a href="prover.md#0x2_prover_IMMUTABLE">prover::IMMUTABLE</a>;
@@ -392,7 +402,7 @@ argument to receive and return the referenced owned object of type <code>T</code
 
 
 <pre><code><b>pragma</b> opaque;
-<b>aborts_if</b> [abstract] <b>false</b>;
+<b>aborts_if</b> [abstract] sui::prover::shared(obj);
 <b>modifies</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
 <b>ensures</b> [abstract] <b>exists</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes);
 <b>ensures</b> [abstract] <b>global</b>&lt;<a href="object.md#0x2_object_Ownership">object::Ownership</a>&gt;(<a href="object.md#0x2_object_id">object::id</a>(obj).bytes).owner == recipient;

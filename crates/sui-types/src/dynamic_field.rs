@@ -139,6 +139,15 @@ impl DynamicFieldInfo {
         }
     }
 
+    pub fn try_extract_field_value(tag: &StructTag) -> SuiResult<TypeTag> {
+        match tag.type_params.last() {
+            Some(value_type) => Ok(value_type.clone()),
+            None => Err(SuiError::ObjectDeserializationError {
+                error: format!("Error extracting dynamic object value from object: {tag}"),
+            }),
+        }
+    }
+
     pub fn parse_move_object(
         move_struct: &MoveStruct,
     ) -> SuiResult<(MoveValue, DynamicFieldType, ObjectID)> {
@@ -189,7 +198,7 @@ impl DynamicFieldInfo {
     }
 }
 
-fn extract_field_from_move_struct<'a>(
+pub fn extract_field_from_move_struct<'a>(
     move_struct: &'a MoveStruct,
     field_name: &str,
 ) -> Option<&'a MoveValue> {

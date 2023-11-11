@@ -34,6 +34,7 @@ use sui_types::base_types::{
 };
 use sui_types::id::{ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
+use sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
 use sui_types::MOVE_STDLIB_ADDRESS;
 
 const HEX_PREFIX: &str = "0x";
@@ -816,6 +817,22 @@ fn resolve_call_arg(
             arg
         ),
     }
+}
+
+pub fn is_receiving_argument(view: &BinaryIndexedView, arg_type: &SignatureToken) -> bool {
+    use SignatureToken as ST;
+
+    // Progress down into references to determine if the underlying type is a receiving
+    // type or not.
+    let mut token = arg_type;
+    while let ST::Reference(inner) | ST::MutableReference(inner) = token {
+        token = inner;
+    }
+
+    matches!(
+        token,
+        ST::StructInstantiation(idx, targs) if resolve_struct(view, *idx) == RESOLVED_RECEIVING_STRUCT && targs.len() == 1
+    )
 }
 
 fn resolve_call_args(

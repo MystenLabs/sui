@@ -15,7 +15,7 @@ type DelegatedAPYProps = {
 };
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
-	const { data, isLoading } = useSuiClientQuery('getLatestSuiSystemState');
+	const { data, isPending } = useSuiClientQuery('getLatestSuiSystemState');
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 
 	const averageNetworkAPY = useMemo(() => {
@@ -32,7 +32,7 @@ export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
 		return roundFloat(averageAPY || 0, APY_DECIMALS);
 	}, [data, rollingAverageApys, stakedValidators]);
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

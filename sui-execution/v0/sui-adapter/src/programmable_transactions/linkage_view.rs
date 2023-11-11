@@ -13,12 +13,12 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
+use sui_types::storage::{get_module, PackageObjectArc};
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError, SuiResult},
     execution::SuiResolver,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
-    object::Object,
     storage::BackingPackageStore,
 };
 
@@ -302,7 +302,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
         }
 
         let storage_id = ObjectID::from(*self.relocate(runtime_id)?.address());
-        let Some(package) = self.resolver.get_package(&storage_id)? else {
+        let Some(package) = self.resolver.get_package_object(&storage_id)? else {
             invariant_violation!("Missing dependent package in store: {storage_id}",)
         };
 
@@ -310,7 +310,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
             module_name,
             struct_name,
             package,
-        } in package.type_origin_table()
+        } in package.move_package().type_origin_table()
         {
             if module_name == runtime_id.name().as_str() && struct_name == struct_.as_str() {
                 self.add_type_origin(runtime_id.clone(), struct_.to_owned(), *package)?;
@@ -320,7 +320,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
 
         invariant_violation!(
             "{runtime_id}::{struct_} not found in type origin table in {storage_id} (v{})",
-            package.version(),
+            package.move_package().version(),
         )
     }
 }
@@ -343,12 +343,12 @@ impl<'state> ModuleResolver for LinkageView<'state> {
     type Error = SuiError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.resolver.get_module(id)
+        get_module(self, id)
     }
 }
 
 impl<'state> BackingPackageStore for LinkageView<'state> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         self.resolver.get_package_object(package_id)
     }
 }

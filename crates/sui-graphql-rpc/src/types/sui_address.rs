@@ -6,6 +6,7 @@ use std::str::FromStr;
 use async_graphql::*;
 use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
+use sui_types::base_types::ObjectID;
 use thiserror::Error;
 
 const SUI_ADDRESS_LENGTH: usize = 32;
@@ -51,7 +52,6 @@ impl ScalarType for SuiAddress {
 }
 
 impl SuiAddress {
-    #[allow(dead_code)]
     pub fn into_array(self) -> [u8; SUI_ADDRESS_LENGTH] {
         self.0
     }
@@ -85,6 +85,12 @@ impl TryFrom<Vec<u8>> for SuiAddress {
 
 impl From<AccountAddress> for SuiAddress {
     fn from(value: AccountAddress) -> Self {
+        SuiAddress(value.into_bytes())
+    }
+}
+
+impl From<ObjectID> for SuiAddress {
+    fn from(value: ObjectID) -> Self {
         SuiAddress(value.into_bytes())
     }
 }

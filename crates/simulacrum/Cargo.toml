@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+async-trait.workspace = true   
 anyhow.workspace = true
 bcs.workspace = true
 eyre.workspace = true
@@ -18,6 +19,7 @@ rand.workspace = true
 serde.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
+futures.workspace = true
 
 move-bytecode-utils.workspace = true
 narwhal-config.workspace = true

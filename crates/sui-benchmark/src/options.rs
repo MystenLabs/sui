@@ -175,6 +175,9 @@ pub enum RunSpec {
         // relative weight of adversarial transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         adversarial: Vec<u32>,
+        // relative weight of adversarial transactions in the benchmark workload
+        #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
+        shared_deletion: Vec<u32>,
 
         // --- workload-specific options --- (TODO: use subcommands or similar)
         // 100 for max hotness i.e all requests target
@@ -185,6 +188,12 @@ pub enum RunSpec {
         // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [50])]
         shared_counter_hotness_factor: Vec<u32>,
+        // The number of shared counters this stress client will create and use.
+        // This parameter takes precedence over `shared_counter_hotness_factor`, meaning that when this
+        // parameter is specified, `shared_counter_hotness_factor` is ignored when deciding the number of shared
+        // counters to create.
+        #[clap(long, num_args(1..), value_delimiter = ',')]
+        num_shared_counters: Option<Vec<u64>>,
         // Maximum gas price increment over the RGP for shared counter transactions.
         // The actual increment for each transaction is chosen at random a value between 0 and this value.
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]

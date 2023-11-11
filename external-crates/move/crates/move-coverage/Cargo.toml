@@ -1,0 +1,29 @@
+[package]
+name = "move-coverage"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem Move VM code coverage"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+petgraph.workspace = true
+clap.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+codespan = { workspace = true, features = ["serialization"] }
+colored.workspace = true
+
+bcs.workspace = true
+
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
+
+[features]
+default = []

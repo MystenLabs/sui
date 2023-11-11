@@ -204,5 +204,4 @@ execution_version: 1
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
-random_beacon_reduction_allowed_delta: 800
 

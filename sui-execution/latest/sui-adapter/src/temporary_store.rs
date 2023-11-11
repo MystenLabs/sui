@@ -2,22 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::language_storage::StructTag;
+use move_core_types::resolver::ResourceResolver;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::ops::Deref;
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2};
+use sui_types::execution::{
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingStore, PackageObjectArc};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -41,7 +43,7 @@ pub struct TemporaryStore<'backing> {
     // objects
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
-    input_objects: BTreeMap<ObjectID, Object>,
+    input_objects: BTreeMap<ObjectID, Arc<Object>>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -52,7 +54,7 @@ pub struct TemporaryStore<'backing> {
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObjectArc>>,
 
     /// The set of objects that we may receive during execution. Not guaranteed to receive all, or
     /// any of the objects referenced in this set.
@@ -87,7 +89,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     // Helpers to access private fields
-    pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
+    pub fn objects(&self) -> &BTreeMap<ObjectID, Arc<Object>> {
         &self.input_objects
     }
 
@@ -115,6 +117,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
+            lamport_version: self.lamport_timestamp,
         }
     }
 
@@ -133,7 +136,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.mutate_input_object(object);
+            self.mutate_input_object(object.deref().clone());
         }
     }
 
@@ -165,7 +168,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn into_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -205,6 +208,15 @@ impl<'backing> TemporaryStore<'backing> {
                 epoch,
             )
         } else {
+            let shared_object_refs = shared_object_refs
+                .into_iter()
+                .map(|shared_input| match shared_input {
+                    SharedInput::Existing(oref) => oref,
+                    SharedInput::Deleted(_) => {
+                        unreachable!("Shared object deletion not supported in effects v1")
+                    }
+                })
+                .collect();
             self.into_effects_v1(
                 shared_object_refs,
                 transaction_digest,
@@ -316,7 +328,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     fn into_effects_v2(
         self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -466,7 +478,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results
             .written_objects
             .get(id)
-            .or_else(|| self.input_objects.get(id))
+            .or_else(|| self.input_objects.get(id).map(|o| o.deref()))
     }
 
     pub fn save_loaded_runtime_objects(
@@ -1088,49 +1100,35 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+        // We first check the objects in the temporary store because in non-production code path,
+        // it is possible to read packages that are just written in the same transaction.
+        // This can happen for example when we run the expensive conservation checks, where we may
+        // look into the types of each written object in the output, and some of them need the
+        // newly written packages for type checking.
+        // In production path though, this should never happen.
         if let Some(obj) = self.execution_results.written_objects.get(package_id) {
-            Ok(Some(obj.clone()))
+            Ok(Some(PackageObjectArc::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged
-                if let Some(v) = obj.clone() {
-                    // TODO: Can this lock ever block execution?
-                    self.runtime_packages_loaded_from_db
-                        .write()
-                        .insert(*package_id, v);
+                if let Some(v) = &obj {
+                    if !self
+                        .runtime_packages_loaded_from_db
+                        .read()
+                        .contains_key(package_id)
+                    {
+                        // TODO: Can this lock ever block execution?
+                        // TODO: Another way to avoid the cost of maintaining this map is to not
+                        // enable it in normal runs, and if a fork is detected, rerun it with a flag
+                        // turned on and start populating this field.
+                        self.runtime_packages_loaded_from_db
+                            .write()
+                            .insert(*package_id, v.clone());
+                    }
                 }
                 obj
             })
-        }
-    }
-}
-
-impl<'backing> ModuleResolver for TemporaryStore<'backing> {
-    type Error = SuiError;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        let package_obj;
-        let package = match self.read_object(package_id) {
-            Some(object) => object,
-            None => match self.store.get_package_object(package_id)? {
-                Some(object) => {
-                    package_obj = object;
-                    &package_obj
-                }
-                None => {
-                    return Ok(None);
-                }
-            },
-        };
-        match &package.data {
-            Data::Package(c) => Ok(c
-                .serialized_module_map()
-                .get(module_id.name().as_str())
-                .cloned()),
-            _ => Err(SuiError::BadObjectType {
-                error: "Expected module object".to_string(),
-            }),
         }
     }
 }
@@ -1179,28 +1177,5 @@ impl<'backing> ParentSync for TemporaryStore<'backing> {
         _object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         unreachable!("Never called in newer protocol versions")
-    }
-}
-
-impl<'backing> GetModule for TemporaryStore<'backing> {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        if let Some(obj) = self.execution_results.written_objects.get(package_id) {
-            Ok(Some(
-                obj.data
-                    .try_as_package()
-                    .expect("Bad object type--expected package")
-                    .deserialize_module(
-                        &module_id.name().to_owned(),
-                        self.protocol_config.move_binary_format_version(),
-                        self.protocol_config.no_extraneous_module_bytes(),
-                    )?,
-            ))
-        } else {
-            self.store.get_module_by_id(module_id)
-        }
     }
 }

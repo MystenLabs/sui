@@ -7,7 +7,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
-    effects::{TransactionEffects, TransactionEvents},
+    effects::{TransactionEffects, TransactionEvents, TransactionEffectsAPI},
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
@@ -20,9 +20,7 @@ pub mod in_mem_store;
 pub mod persisted_store;
 
 pub trait SimulatorStore:
-    sui_types::storage::BackingPackageStore
-    + sui_types::storage::ObjectStore
-    + sui_types::storage::ReceivedMarkerQuery
+    sui_types::storage::BackingPackageStore + sui_types::storage::ObjectStore
 {
     fn init_with_genesis(&mut self, genesis: &genesis::Genesis) {
         self.insert_checkpoint(genesis.checkpoint());
@@ -32,7 +30,10 @@ pub trait SimulatorStore:
             genesis.transaction().clone(),
         ));
         self.insert_transaction_effects(genesis.effects().clone());
-        self.insert_events(genesis.events().clone());
+        self.insert_events(
+            genesis.effects().transaction_digest(),
+            genesis.events().clone(),
+        );
 
         self.insert_to_live_objects(genesis.objects());
     }
@@ -62,6 +63,11 @@ pub trait SimulatorStore:
     fn get_transaction_events(&self, digest: &TransactionEventsDigest)
         -> Option<TransactionEvents>;
 
+    fn get_transaction_events_by_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEvents>;
+
     fn get_object(&self, id: &ObjectID) -> Option<Object>;
 
     fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object>;
@@ -90,7 +96,7 @@ pub trait SimulatorStore:
 
     fn insert_transaction_effects(&mut self, effects: TransactionEffects);
 
-    fn insert_events(&mut self, events: TransactionEvents);
+    fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents);
 
     fn update_objects(
         &mut self,

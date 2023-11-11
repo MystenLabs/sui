@@ -4,7 +4,7 @@
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { CheckFill16 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import cn from 'classnames';
+import cn from 'clsx';
 
 import { AccountIcon } from './AccountIcon';
 import { AccountItem } from './AccountItem';

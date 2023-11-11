@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use crate::indexer_reader::IndexerReader;
 use crate::IndexerError;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee::types::SubscriptionEmptyError;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 use sui_json_rpc::api::{cap_page_limit, IndexerApiServer};
@@ -48,17 +45,10 @@ impl IndexerApiV2 {
         limit: usize,
     ) -> RpcResult<ObjectsPage> {
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
-        if filter.is_some() {
-            // TODO: do we want to support this?
-            return Err(IndexerError::NotSupportedError(
-                "Indexer does not support querying owned objects with filters".into(),
-            )
-            .into());
-        }
         let options = options.unwrap_or_default();
         let objects = self
             .inner
-            .get_owned_objects_in_blocking_task(address, None, cursor, limit + 1)
+            .get_owned_objects_in_blocking_task(address, filter, cursor, limit + 1)
             .await?;
         let mut objects = self
             .inner
@@ -245,16 +235,16 @@ impl IndexerApiServer for IndexerApiV2 {
         ))
     }
 
-    fn subscribe_event(&self, sink: SubscriptionSink, filter: EventFilter) -> SubscriptionResult {
-        unimplemented!()
+    fn subscribe_event(&self, _sink: SubscriptionSink, _filter: EventFilter) -> SubscriptionResult {
+        Err(SubscriptionEmptyError)
     }
 
     fn subscribe_transaction(
         &self,
-        sink: SubscriptionSink,
-        filter: TransactionFilter,
+        _sink: SubscriptionSink,
+        _filter: TransactionFilter,
     ) -> SubscriptionResult {
-        unimplemented!()
+        Err(SubscriptionEmptyError)
     }
 
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
@@ -287,8 +277,8 @@ impl IndexerApiServer for IndexerApiV2 {
     async fn resolve_name_service_names(
         &self,
         address: SuiAddress,
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
+        _cursor: Option<ObjectID>,
+        _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
         let reverse_record_id = self.name_service_config.reverse_record_field_id(address);
 

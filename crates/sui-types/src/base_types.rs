@@ -4,6 +4,7 @@
 
 use crate::coin::Coin;
 use crate::coin::CoinMetadata;
+use crate::coin::TreasuryCap;
 use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
@@ -279,6 +280,15 @@ impl MoveObjectType {
         }
     }
 
+    pub fn is_treasury_cap(&self) -> bool {
+        match &self.0 {
+            MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
+                false
+            }
+            MoveObjectType_::Other(s) => TreasuryCap::is_treasury_type(s),
+        }
+    }
+
     pub fn is_dynamic_field(&self) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
@@ -299,6 +309,17 @@ impl MoveObjectType {
         }
     }
 
+    pub fn try_extract_field_value(&self) -> SuiResult<TypeTag> {
+        match &self.0 {
+            MoveObjectType_::GasCoin | MoveObjectType_::StakedSui | MoveObjectType_::Coin(_) => {
+                Err(SuiError::ObjectDeserializationError {
+                    error: "Error extracting dynamic object value from Coin object".to_string(),
+                })
+            }
+            MoveObjectType_::Other(s) => DynamicFieldInfo::try_extract_field_value(s),
+        }
+    }
+
     pub fn is(&self, s: &StructTag) -> bool {
         match &self.0 {
             MoveObjectType_::GasCoin => GasCoin::is_gas_coin(s),
@@ -308,6 +329,11 @@ impl MoveObjectType {
             }
             MoveObjectType_::Other(o) => s == o,
         }
+    }
+
+    /// Returns the string representation of this object's type using the canonical display.    
+    pub fn to_canonical_string(&self, with_prefix: bool) -> String {
+        StructTag::from(self.clone()).to_canonical_string(with_prefix)
     }
 }
 

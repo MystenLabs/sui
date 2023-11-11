@@ -19,8 +19,8 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-vm-types.workspace = true
 
-move-stdlib = { path = "../../../external-crates/move/move-stdlib" }
-move-vm-runtime = { path = "../../../external-crates/move/move-vm/runtime" }
+move-stdlib = { path = "../../../external-crates/move/crates/move-stdlib" }
+move-vm-runtime = { path = "../../../external-crates/move/crates/move-vm-runtime" }
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true

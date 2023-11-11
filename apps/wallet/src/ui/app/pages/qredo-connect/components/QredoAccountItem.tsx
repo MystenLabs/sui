@@ -6,7 +6,7 @@ import { BadgeLabel } from '_src/ui/app/components/BadgeLabel';
 import { Text } from '_src/ui/app/shared/text';
 import { CheckFill16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
-import cn from 'classnames';
+import cn from 'clsx';
 
 export type QredoAccountItemProps = Wallet & {
 	selected: boolean;

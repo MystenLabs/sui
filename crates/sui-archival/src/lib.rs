@@ -35,7 +35,7 @@ use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
 use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
-use tracing::info;
+use tracing::{error, info};
 
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
 /// by duration or file size. Committed files are synced with the remote store continuously. Files are
@@ -314,6 +314,7 @@ pub async fn verify_archive_with_genesis_config(
     remote_store_config: ObjectStoreConfig,
     concurrency: usize,
     interactive: bool,
+    num_retries: u32,
 ) -> Result<()> {
     let genesis = Genesis::load(genesis).unwrap();
     let genesis_committee = genesis.committee()?;
@@ -331,7 +332,29 @@ pub async fn verify_archive_with_genesis_config(
         VerifiedCheckpointContents::new_unchecked(fullcheckpoint_contents),
         genesis_committee,
     );
-    verify_archive_with_local_store(store, remote_store_config, concurrency, interactive).await
+
+    let num_retries = std::cmp::max(num_retries, 1);
+    for _ in 0..num_retries {
+        match verify_archive_with_local_store(
+            store.clone(),
+            remote_store_config.clone(),
+            concurrency,
+            interactive,
+        )
+        .await
+        {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                error!("Error while verifying archive: {}", e);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        }
+    }
+
+    Err::<(), anyhow::Error>(anyhow!(
+        "Failed to verify archive after {} retries",
+        num_retries
+    ))
 }
 
 pub async fn verify_archive_with_checksums(
@@ -418,10 +441,31 @@ where
         });
         Some(progress_bar)
     } else {
+        let cloned_store = store.clone();
+        tokio::spawn(async move {
+            loop {
+                let latest_checkpoint = cloned_store
+                    .get_highest_synced_checkpoint()
+                    .map_err(|_| anyhow!("Failed to read highest synced checkpoint"))?
+                    .sequence_number;
+                let percent = (latest_checkpoint * 100) / latest_checkpoint_in_archive;
+                info!("done = {percent}%");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if percent >= 100 {
+                    break;
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        });
         None
     };
     archive_reader
-        .read(store.clone(), 1..u64::MAX, txn_counter, checkpoint_counter)
+        .read(
+            store.clone(),
+            (latest_checkpoint + 1)..u64::MAX,
+            txn_counter,
+            checkpoint_counter,
+        )
         .await?;
     progress_bar.iter().for_each(|p| p.finish_and_clear());
     let end = store

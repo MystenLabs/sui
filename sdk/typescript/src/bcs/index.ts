@@ -36,7 +36,10 @@ export type SharedObjectRef = {
 /**
  * An object argument.
  */
-export type ObjectArg = { ImmOrOwned: SuiObjectRefType } | { Shared: SharedObjectRef };
+export type ObjectArg =
+	| { ImmOrOwned: SuiObjectRefType }
+	| { Shared: SharedObjectRef }
+	| { Receiving: SuiObjectRefType };
 
 /**
  * A pure argument.
@@ -179,7 +182,7 @@ function enumKind<T extends object, Input extends object>(type: BcsType<T, Input
 const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	input: (val: string | Uint8Array) =>
 		typeof val === 'string' ? fromHEX(normalizeSuiAddress(val)) : val,
-	output: (val) => toHEX(val),
+	output: (val) => normalizeSuiAddress(toHEX(val)),
 });
 
 const ObjectDigest = bcs.vector(bcs.u8()).transform({
@@ -203,6 +206,7 @@ const SharedObjectRef = bcs.struct('SharedObjectRef', {
 const ObjectArg = bcs.enum('ObjectArg', {
 	ImmOrOwned: SuiObjectRef,
 	Shared: SharedObjectRef,
+	Receiving: SuiObjectRef,
 });
 
 const CallArg = bcs.enum('CallArg', {

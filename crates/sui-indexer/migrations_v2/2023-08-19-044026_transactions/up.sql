@@ -14,7 +14,10 @@ CREATE TABLE transactions (
     -- array of bcs serialized StoredEvent bytes
     events                      bytea[]      NOT NULL,
     -- SystemTransaction/ProgrammableTransaction. See types_v2.rs
-    transaction_kind            smallint     NOT NULL
+    transaction_kind            smallint     NOT NULL,
+    -- number of successful commands in this transaction, bound by number of command
+    -- in a programmaable transaction.
+    success_command_count       smallint     NOT NULL
 );
 
 CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest);

@@ -16,7 +16,7 @@ interface Props {
 
 export function GasFees({ sender, transaction }: Props) {
 	const { data: transactionData } = useTransactionData(sender, transaction);
-	const { data: gasBudget, isLoading, isError } = useTransactionGasBudget(sender, transaction);
+	const { data: gasBudget, isPending, isError } = useTransactionGasBudget(sender, transaction);
 	const isSponsored =
 		transactionData?.gasConfig.owner && transactionData.sender !== transactionData.gasConfig.owner;
 	return (
@@ -33,7 +33,7 @@ export function GasFees({ sender, transaction }: Props) {
 		>
 			<DescriptionList>
 				<DescriptionItem title="You Pay">
-					{isLoading
+					{isPending
 						? 'Estimating...'
 						: isError
 						? 'Gas estimation failed'

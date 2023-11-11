@@ -16,14 +16,14 @@ function Home() {
 
 	const {
 		data: ownedKiosk,
-		isLoading,
+		isPending,
 		refetch: refetchOwnedKiosk,
 	} = useOwnedKiosk(currentAccount?.address);
 
 	const { selected, setSelected, showKioskSelector } = useKioskSelector(currentAccount?.address);
 
 	// Return loading state.
-	if (isLoading) return <Loading />;
+	if (isPending) return <Loading />;
 
 	// Return wallet not connected state.
 	if (!currentAccount?.address) return <WalletNotConnected />;

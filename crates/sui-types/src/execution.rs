@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin::Coin,
     digests::{ObjectDigest, TransactionDigest},
     error::{ExecutionError, ExecutionErrorKind, SuiError},
@@ -13,25 +13,37 @@ use crate::{
     transfer::Receiving,
 };
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::{
-    identifier::IdentStr,
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{identifier::IdentStr, resolver::ResourceResolver};
 use move_vm_types::loaded_data::runtime_types::Type;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-pub trait SuiResolver:
-    ResourceResolver<Error = SuiError> + ModuleResolver<Error = SuiError> + BackingPackageStore
-{
+pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
+}
+
+/// A type containing all of the information needed to work with a deleted shared object in
+/// execution and when commiting the execution effects of the transaction. This holds:
+/// 0. The object ID of the deleted shared object.
+/// 1. The version of the shared object.
+/// 2. Whether the object appeared as mutable (or owned) in the transaction, or as a read-only shared object.
+/// 3. The transaction digest of the previous transaction that used this shared object mutably or
+///    took it by value.
+pub type DeletedSharedObjectInfo = (ObjectID, SequenceNumber, bool, TransactionDigest);
+
+/// A sequence of information about deleted shared objects in the transaction's inputs.
+pub type DeletedSharedObjects = Vec<DeletedSharedObjectInfo>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SharedInput {
+    Existing(ObjectRef),
+    Deleted(DeletedSharedObjectInfo),
 }
 
 impl<T> SuiResolver for T
 where
     T: ResourceResolver<Error = SuiError>,
-    T: ModuleResolver<Error = SuiError>,
     T: BackingPackageStore,
 {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
@@ -60,13 +72,8 @@ where
 }
 
 /// View of the store necessary to produce the layouts of types.
-pub trait TypeLayoutStore: BackingPackageStore + ModuleResolver<Error = SuiError> {}
-impl<T> TypeLayoutStore for T
-where
-    T: BackingPackageStore,
-    T: ModuleResolver<Error = SuiError>,
-{
-}
+pub trait TypeLayoutStore: BackingPackageStore {}
+impl<T> TypeLayoutStore for T where T: BackingPackageStore {}
 
 #[derive(Debug)]
 pub enum ExecutionResults {

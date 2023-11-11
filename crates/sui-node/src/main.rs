@@ -20,7 +20,7 @@ const GIT_REVISION: &str = {
         revision
     } else {
         let version = git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
+            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
             fallback = ""
         );
 
@@ -64,8 +64,6 @@ fn main() {
 
     // Initialize logging
     let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        // Set a default
-        .with_sample_nth(10)
         .with_target_prefix("sui_json_rpc")
         .with_env()
         .with_prom_registry(&prometheus_registry)

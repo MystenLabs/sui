@@ -11,6 +11,7 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::execution::SharedInput;
 use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
@@ -33,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -1217,6 +1219,14 @@ impl TransactionKind {
         }
     }
 
+    /// number of transactions, or 1 if it is a system transaction
+    pub fn tx_count(&self) -> usize {
+        match self {
+            TransactionKind::ProgrammableTransaction(pt) => pt.commands.len(),
+            _ => 1,
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Self::ChangeEpoch(_) => "ChangeEpoch",
@@ -1749,7 +1759,6 @@ pub trait TransactionDataAPI {
     fn check_sponsorship(&self) -> UserInputResult;
 
     fn is_system_tx(&self) -> bool;
-    fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
     /// returns true if the transaction is one that is specially sequenced to run at the very end
@@ -1884,12 +1893,11 @@ impl TransactionDataAPI for TransactionDataV1 {
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
     }
 
-    fn is_change_epoch_tx(&self) -> bool {
-        matches!(self.kind, TransactionKind::ChangeEpoch(_))
-    }
-
     fn is_end_of_epoch_tx(&self) -> bool {
-        self.is_change_epoch_tx() || matches!(self.kind, TransactionKind::EndOfEpochTransaction(_))
+        matches!(
+            self.kind,
+            TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+        )
     }
 
     fn is_system_tx(&self) -> bool {
@@ -2408,15 +2416,204 @@ impl InputObjectKind {
     pub fn is_shared_object(&self) -> bool {
         matches!(self, Self::SharedMoveObject { .. })
     }
+
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            Self::MovePackage(..) => false,
+            Self::ImmOrOwnedMoveObject((_, _, _)) => true,
+            Self::SharedMoveObject { mutable, .. } => *mutable,
+        }
+    }
+}
+
+/// The result of reading an object for execution. Because shared objects may be deleted, one
+/// possible result of reading a shared object is that ObjectReadResultKind::Deleted is returned.
+#[derive(Clone, Debug)]
+pub struct ObjectReadResult {
+    pub input_object_kind: InputObjectKind,
+    pub object: ObjectReadResultKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum ObjectReadResultKind {
+    Object(Arc<Object>),
+    // The version of the object that the transaction intended to read, and the digest of the tx
+    // that deleted it.
+    DeletedSharedObject(SequenceNumber, TransactionDigest),
+}
+
+impl From<Object> for ObjectReadResultKind {
+    fn from(object: Object) -> Self {
+        Self::Object(Arc::new(object))
+    }
+}
+
+impl From<Arc<Object>> for ObjectReadResultKind {
+    fn from(object: Arc<Object>) -> Self {
+        Self::Object(object)
+    }
+}
+
+impl ObjectReadResult {
+    pub fn new(input_object_kind: InputObjectKind, object: ObjectReadResultKind) -> Self {
+        if let (
+            InputObjectKind::ImmOrOwnedMoveObject(_),
+            ObjectReadResultKind::DeletedSharedObject(_, _),
+        ) = (&input_object_kind, &object)
+        {
+            panic!("only shared objects can be DeletedSharedObject");
+        }
+
+        Self {
+            input_object_kind,
+            object,
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        self.input_object_kind.object_id()
+    }
+
+    pub fn as_object(&self) -> Option<&Arc<Object>> {
+        match &self.object {
+            ObjectReadResultKind::Object(object) => Some(object),
+            ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+        }
+    }
+
+    pub fn new_from_gas_object(gas: &Object) -> Self {
+        let objref = gas.compute_object_reference();
+        Self {
+            input_object_kind: InputObjectKind::ImmOrOwnedMoveObject(objref),
+            object: ObjectReadResultKind::Object(Arc::new(gas.clone())),
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        match (&self.input_object_kind, &self.object) {
+            (InputObjectKind::MovePackage(_), _) => false,
+            (InputObjectKind::ImmOrOwnedMoveObject(_), ObjectReadResultKind::Object(object)) => {
+                !object.is_immutable()
+            }
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::DeletedSharedObject(_, _),
+            ) => unreachable!(),
+            (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
+        }
+    }
+
+    pub fn is_shared_object(&self) -> bool {
+        self.input_object_kind.is_shared_object()
+    }
+
+    pub fn is_deleted_shared_object(&self) -> bool {
+        self.deletion_info().is_some()
+    }
+
+    pub fn deletion_info(&self) -> Option<(SequenceNumber, TransactionDigest)> {
+        match &self.object {
+            ObjectReadResultKind::DeletedSharedObject(v, tx) => Some((*v, *tx)),
+            _ => None,
+        }
+    }
+
+    /// Return the object ref iff the object is an owned object (i.e. not shared, not immutable).
+    pub fn get_owned_objref(&self) -> Option<ObjectRef> {
+        match (&self.input_object_kind, &self.object) {
+            (InputObjectKind::MovePackage(_), _) => None,
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(objref),
+                ObjectReadResultKind::Object(object),
+            ) => {
+                if object.is_immutable() {
+                    None
+                } else {
+                    Some(*objref)
+                }
+            }
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::DeletedSharedObject(_, _),
+            ) => unreachable!(),
+            (InputObjectKind::SharedMoveObject { .. }, _) => None,
+        }
+    }
+
+    pub fn is_owned(&self) -> bool {
+        self.get_owned_objref().is_some()
+    }
+
+    pub fn to_shared_input(&self) -> Option<SharedInput> {
+        match self.input_object_kind {
+            InputObjectKind::MovePackage(_) => None,
+            InputObjectKind::ImmOrOwnedMoveObject(_) => None,
+            InputObjectKind::SharedMoveObject { id, mutable, .. } => Some(match &self.object {
+                ObjectReadResultKind::Object(obj) => {
+                    SharedInput::Existing(obj.compute_object_reference())
+                }
+                ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
+                    SharedInput::Deleted((id, *seq, mutable, *digest))
+                }
+            }),
+        }
+    }
+
+    pub fn get_previous_transaction(&self) -> TransactionDigest {
+        match &self.object {
+            ObjectReadResultKind::Object(obj) => obj.previous_transaction,
+            ObjectReadResultKind::DeletedSharedObject(_, digest) => *digest,
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct InputObjects {
-    objects: Vec<(InputObjectKind, Object)>,
+    objects: Vec<ObjectReadResult>,
+}
+
+// An InputObjects new-type that has been verified by sui-transaction-checks, and can be
+// safely passed to execution.
+pub struct CheckedInputObjects(InputObjects);
+
+// DO NOT CALL outside of sui-transaction-checks, genesis, or replay.
+//
+// CheckedInputObjects should really be defined in sui-transaction-checks so that we can
+// make public construction impossible. But we can't do that because it would result in circular
+// dependencies.
+impl CheckedInputObjects {
+    // Only called by sui-transaction-checks.
+    pub fn new_with_checked_transaction_inputs(inputs: InputObjects) -> Self {
+        Self(inputs)
+    }
+
+    // Only called when building the genesis transaction
+    pub fn new_for_genesis(input_objects: Vec<ObjectReadResult>) -> Self {
+        Self(InputObjects::new(input_objects))
+    }
+
+    // Only called from the replay tool.
+    pub fn new_for_replay(input_objects: InputObjects) -> Self {
+        Self(input_objects)
+    }
+
+    pub fn inner(&self) -> &InputObjects {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> InputObjects {
+        self.0
+    }
+}
+
+impl From<Vec<ObjectReadResult>> for InputObjects {
+    fn from(objects: Vec<ObjectReadResult>) -> Self {
+        Self::new(objects)
+    }
 }
 
 impl InputObjects {
-    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
+    pub fn new(objects: Vec<ObjectReadResult>) -> Self {
         Self { objects }
     }
 
@@ -2428,21 +2625,17 @@ impl InputObjects {
         self.objects.is_empty()
     }
 
+    pub fn contains_deleted_objects(&self) -> bool {
+        self.objects
+            .iter()
+            .any(|obj| obj.is_deleted_shared_object())
+    }
+
     pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
         let owned_objects: Vec<_> = self
             .objects
             .iter()
-            .filter_map(|(object_kind, object)| match object_kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some(*object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject { .. } => None,
-            })
+            .filter_map(|obj| obj.get_owned_objref())
             .collect();
 
         trace!(
@@ -2453,42 +2646,66 @@ impl InputObjects {
         owned_objects
     }
 
-    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
+    pub fn filter_shared_objects(&self) -> Vec<SharedInput> {
         self.objects
             .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject { .. }))
-            .map(|(_, obj)| obj.compute_object_reference())
+            .filter(|obj| obj.is_shared_object())
+            .map(|obj| {
+                obj.to_shared_input()
+                    .expect("already filtered for shared objects")
+            })
             .collect()
     }
 
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
         self.objects
             .iter()
-            .map(|(_, obj)| obj.previous_transaction)
+            .map(|obj| obj.get_previous_transaction())
             .collect()
     }
 
     pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
         self.objects
             .iter()
-            .filter_map(|(kind, object)| match kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    if object.is_immutable() {
-                        None
-                    } else {
-                        Some((object_ref.0, ((object_ref.1, object_ref.2), object.owner)))
+            .filter_map(
+                |ObjectReadResult {
+                     input_object_kind,
+                     object,
+                 }| match (input_object_kind, object) {
+                    (InputObjectKind::MovePackage(_), _) => None,
+                    (
+                        InputObjectKind::ImmOrOwnedMoveObject(object_ref),
+                        ObjectReadResultKind::Object(object),
+                    ) => {
+                        if object.is_immutable() {
+                            None
+                        } else {
+                            Some((object_ref.0, ((object_ref.1, object_ref.2), object.owner)))
+                        }
                     }
-                }
-                InputObjectKind::SharedMoveObject { mutable, .. } => {
-                    if *mutable {
-                        let oref = object.compute_object_reference();
-                        Some((oref.0, ((oref.1, oref.2), object.owner)))
-                    } else {
-                        None
+                    (
+                        InputObjectKind::ImmOrOwnedMoveObject(_),
+                        ObjectReadResultKind::DeletedSharedObject(_, _),
+                    ) => {
+                        unreachable!()
                     }
-                }
-            })
+                    (
+                        InputObjectKind::SharedMoveObject { .. },
+                        ObjectReadResultKind::DeletedSharedObject(_, _),
+                    ) => None,
+                    (
+                        InputObjectKind::SharedMoveObject { mutable, .. },
+                        ObjectReadResultKind::Object(object),
+                    ) => {
+                        if *mutable {
+                            let oref = object.compute_object_reference();
+                            Some((oref.0, ((oref.1, oref.2), object.owner)))
+                        } else {
+                            None
+                        }
+                    }
+                },
+            )
             .collect()
     }
 
@@ -2499,25 +2716,97 @@ impl InputObjects {
         let input_versions = self
             .objects
             .iter()
-            .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version))
+            .filter_map(|object| match &object.object {
+                ObjectReadResultKind::Object(object) => {
+                    object.data.try_as_move().map(MoveObject::version)
+                }
+                ObjectReadResultKind::DeletedSharedObject(v, _) => Some(*v),
+            })
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 
         SequenceNumber::lamport_increment(input_versions)
     }
 
-    pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
-        self.objects
-    }
-
     pub fn object_kinds(&self) -> impl Iterator<Item = &InputObjectKind> {
-        self.objects.iter().map(|(kind, _)| kind)
+        self.objects.iter().map(
+            |ObjectReadResult {
+                 input_object_kind, ..
+             }| input_object_kind,
+        )
     }
 
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Arc<Object>> {
         self.objects
             .into_iter()
-            .map(|(_, object)| (object.id(), object))
+            .filter_map(|o| o.as_object().map(|object| (o.id(), object.clone())))
             .collect()
+    }
+
+    pub fn push(&mut self, object: ObjectReadResult) {
+        self.objects.push(object);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &ObjectReadResult> {
+        self.objects.iter()
+    }
+}
+
+// Result of attempting to read a receiving object (currently only at signing time).
+// Because an object may have been previously received and deleted, the result may be
+// ReceivingObjectReadResultKind::PreviouslyReceivedObject.
+#[derive(Clone, Debug)]
+pub enum ReceivingObjectReadResultKind {
+    Object(Arc<Object>),
+    // The object was received by some other transaction, and we were not able to read it
+    PreviouslyReceivedObject,
+}
+
+impl ReceivingObjectReadResultKind {
+    pub fn as_object(&self) -> Option<&Arc<Object>> {
+        match &self {
+            Self::Object(object) => Some(object),
+            Self::PreviouslyReceivedObject => None,
+        }
+    }
+}
+
+pub struct ReceivingObjectReadResult {
+    pub object_ref: ObjectRef,
+    pub object: ReceivingObjectReadResultKind,
+}
+
+impl ReceivingObjectReadResult {
+    pub fn new(object_ref: ObjectRef, object: ReceivingObjectReadResultKind) -> Self {
+        Self { object_ref, object }
+    }
+
+    pub fn is_previously_received(&self) -> bool {
+        matches!(
+            self.object,
+            ReceivingObjectReadResultKind::PreviouslyReceivedObject
+        )
+    }
+}
+
+impl From<Object> for ReceivingObjectReadResultKind {
+    fn from(object: Object) -> Self {
+        Self::Object(Arc::new(object))
+    }
+}
+
+pub struct ReceivingObjects {
+    pub objects: Vec<ReceivingObjectReadResult>,
+}
+
+impl ReceivingObjects {
+    pub fn iter(&self) -> impl Iterator<Item = &ReceivingObjectReadResult> {
+        self.objects.iter()
+    }
+}
+
+impl From<Vec<ReceivingObjectReadResult>> for ReceivingObjects {
+    fn from(objects: Vec<ReceivingObjectReadResult>) -> Self {
+        Self { objects }
     }
 }
 
