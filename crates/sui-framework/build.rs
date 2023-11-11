@@ -15,10 +15,10 @@ use sui_move_build::{BuildConfig, SuiPackageHooks};
 const DOCS_DIR: &str = "docs";
 
 /// Save revision info to environment variable
-fn main() {
+fn main() -> Result<(), std::env::VarError> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let packages_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("packages");
+    let packages_path = Path::new(&env::var("CARGO_MANIFEST_DIR")?).join("packages");
 
     let deepbook_path = packages_path.join("deepbook");
     let sui_system_path = packages_path.join("sui-system");
@@ -75,6 +75,7 @@ fn main() {
         "cargo:rerun-if-changed={}",
         move_stdlib_path.join("sources").display()
     );
+    Ok(())
 }
 
 fn build_packages(
