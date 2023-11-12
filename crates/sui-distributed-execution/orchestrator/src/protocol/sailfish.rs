@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    env,
     fmt::{Debug, Display},
     net::IpAddr,
     path::PathBuf,
@@ -215,14 +214,18 @@ impl SailfishProtocol {
     }
 }
 
-impl ProtocolMetrics for SailfishProtocol {
+impl ProtocolMetrics<SailfishBenchmarkType> for SailfishProtocol {
     const BENCHMARK_DURATION: &'static str = "benchmark_duration";
     const TOTAL_TRANSACTIONS: &'static str = "latency_s_count";
     const LATENCY_BUCKETS: &'static str = sui_distributed_execution::metrics::LATENCY_S;
     const LATENCY_SUM: &'static str = "latency_s_sum";
     const LATENCY_SQUARED_SUM: &'static str = "latency_squared_s";
 
-    fn nodes_metrics_path<I>(&self, instances: I) -> Vec<(Instance, String)>
+    fn nodes_metrics_path<I>(
+        &self,
+        instances: I,
+        parameters: &BenchmarkParameters<SailfishBenchmarkType>,
+    ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
@@ -230,7 +233,8 @@ impl ProtocolMetrics for SailfishProtocol {
             .into_iter()
             .map(|x| (IpAddr::V4(x.main_ip), x))
             .unzip();
-        let metrics_paths = GlobalConfig::new_for_benchmark(ips)
+        let sequence_workers = parameters.benchmark_type.sequence_workers;
+        let metrics_paths = GlobalConfig::new_for_benchmark(ips, sequence_workers)
             .execution_workers_metric_addresses()
             .into_iter()
             .map(|x| {
@@ -243,11 +247,15 @@ impl ProtocolMetrics for SailfishProtocol {
         instances.into_iter().zip(metrics_paths).collect()
     }
 
-    fn clients_metrics_path<I>(&self, instances: I) -> Vec<(Instance, String)>
+    fn clients_metrics_path<I>(
+        &self,
+        instances: I,
+        parameters: &BenchmarkParameters<SailfishBenchmarkType>,
+    ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
         // TODO: hack until we have benchmark clients.
-        self.nodes_metrics_path(instances)
+        self.nodes_metrics_path(instances, parameters)
     }
 }

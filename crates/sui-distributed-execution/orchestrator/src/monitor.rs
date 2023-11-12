@@ -6,6 +6,7 @@ use std::{fs, net::SocketAddr, path::PathBuf};
 use tokio::sync::mpsc;
 
 use crate::{
+    benchmark::{BenchmarkParameters, BenchmarkType},
     client::Instance,
     error::{MonitorError, MonitorResult},
     protocol::ProtocolMetrics,
@@ -57,9 +58,10 @@ impl Monitor {
     }
 
     /// Start a prometheus instance on each remote machine.
-    pub async fn start_prometheus<P: ProtocolMetrics>(
+    pub async fn start_prometheus<P: ProtocolMetrics<T>, T: BenchmarkType>(
         &self,
         protocol_commands: &P,
+        parameters: &BenchmarkParameters<T>,
     ) -> MonitorResult<()> {
         // Select the instances to monitor.
         let instances: Vec<_> = if self.dedicated_clients {
@@ -74,7 +76,7 @@ impl Monitor {
 
         // Configure and reload prometheus.
         let instance = std::iter::once(self.instance.clone());
-        let commands = Prometheus::setup_commands(instances, protocol_commands);
+        let commands = Prometheus::setup_commands(instances, protocol_commands, parameters);
         self.ssh_manager
             .execute(instance, commands, CommandContext::default())
             .await?;
@@ -119,15 +121,20 @@ impl Prometheus {
     }
 
     /// Generate the commands to update the prometheus configuration and restart prometheus.
-    pub fn setup_commands<I, P>(instances: I, protocol: &P) -> String
+    pub fn setup_commands<I, P, T>(
+        instances: I,
+        protocol: &P,
+        parameters: &BenchmarkParameters<T>,
+    ) -> String
     where
         I: IntoIterator<Item = Instance>,
-        P: ProtocolMetrics,
+        P: ProtocolMetrics<T>,
+        T: BenchmarkType,
     {
         // Generate the prometheus configuration.
         let mut config = vec![Self::global_configuration()];
 
-        let nodes_metrics_path = protocol.nodes_metrics_path(instances);
+        let nodes_metrics_path = protocol.nodes_metrics_path(instances, parameters);
         for (i, (_, nodes_metrics_path)) in nodes_metrics_path.into_iter().enumerate() {
             let scrape_config = Self::scrape_configuration(i, &nodes_metrics_path);
             config.push(scrape_config);

@@ -210,7 +210,7 @@ impl<P, T> Orchestrator<P, T> {
     }
 }
 
-impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P, T> {
+impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator<P, T> {
     /// Boot one node per instance.
     async fn boot_nodes(
         &self,
@@ -234,7 +234,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
         // Wait until all nodes are reachable.
         let commands = self
             .protocol_commands
-            .nodes_metrics_command(instances.clone());
+            .nodes_metrics_command(instances.clone(), parameters);
         self.ssh_manager.wait_for_success(commands).await;
 
         self.start_monitor(instances)
@@ -347,7 +347,9 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
                 self.ssh_manager.clone(),
                 self.dedicated_clients != 0,
             );
-            monitor.start_prometheus(&self.protocol_commands).await?;
+            monitor
+                .start_prometheus(&self.protocol_commands, parameters)
+                .await?;
             monitor.start_grafana().await?;
 
             display::done();
@@ -477,7 +479,9 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
             .await?;
 
         // Wait until all load generators are reachable.
-        let commands = self.protocol_commands.clients_metrics_command(clients);
+        let commands = self
+            .protocol_commands
+            .clients_metrics_command(clients, parameters);
         self.ssh_manager.wait_for_success(commands).await;
 
         display::done();
@@ -499,7 +503,9 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
         let mut killed_nodes: Vec<Instance> = Vec::new();
 
         // Regularly scrape the client metrics.
-        let metrics_commands = self.protocol_commands.clients_metrics_command(clients);
+        let metrics_commands = self
+            .protocol_commands
+            .clients_metrics_command(clients, parameters);
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut metrics_interval = time::interval(self.scrape_interval);
@@ -526,7 +532,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
                         .execute_per_instance(instances, CommandContext::default())
                         .await?;
                     for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                        for (label, measurement) in Measurement::from_prometheus::<P>(stdout) {
+                        for (label, measurement) in Measurement::from_prometheus::<P,T>(stdout) {
                             aggregator.add(i, label,measurement);
                         }
                     }

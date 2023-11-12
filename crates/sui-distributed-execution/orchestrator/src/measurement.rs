@@ -42,7 +42,9 @@ pub struct Measurement {
 
 impl Measurement {
     /// Make new measurements from the text exposed by prometheus. Every measurement is identified by a unique label.
-    pub fn from_prometheus<M: ProtocolMetrics>(text: &str) -> HashMap<Label, Self> {
+    pub fn from_prometheus<M: ProtocolMetrics<T>, T: BenchmarkType>(
+        text: &str,
+    ) -> HashMap<Label, Self> {
         let br = std::io::BufReader::new(text.as_bytes());
         let parsed = Scrape::parse(br.lines()).unwrap();
 
@@ -319,7 +321,7 @@ mod test {
     use std::{collections::HashMap, time::Duration};
 
     use crate::{
-        benchmark::test::TestBenchmarkType, protocol::test_protocol_metrics::TestProtocolMetrics,
+        protocol::test_protocol_metrics::{TestBenchmarkType, TestProtocolMetrics},
         settings::Settings,
     };
 
@@ -411,7 +413,7 @@ mod test {
             latency_squared_s{workload="owned"} 952.8160642745289
         "#;
 
-        let measurements = Measurement::from_prometheus::<TestProtocolMetrics>(report);
+        let measurements = Measurement::from_prometheus::<TestProtocolMetrics, _>(report);
         let settings = Settings::new_for_test();
         let mut aggregator = MeasurementsCollection::<TestBenchmarkType>::new(
             &settings,

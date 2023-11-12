@@ -274,38 +274,13 @@ impl<T: BenchmarkType> BenchmarkParametersGenerator<T> {
 
 #[cfg(test)]
 pub mod test {
-    use std::{fmt::Display, str::FromStr};
-
-    use serde::{Deserialize, Serialize};
-
     use crate::{
         measurement::{Measurement, MeasurementsCollection},
+        protocol::test_protocol_metrics::TestBenchmarkType,
         settings::Settings,
     };
 
-    use super::{BenchmarkParametersGenerator, BenchmarkType, LoadType};
-
-    /// Mock benchmark type for unit tests.
-    #[derive(
-        Serialize, Deserialize, Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default,
-    )]
-    pub struct TestBenchmarkType;
-
-    impl Display for TestBenchmarkType {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "TestBenchmarkType")
-        }
-    }
-
-    impl FromStr for TestBenchmarkType {
-        type Err = ();
-
-        fn from_str(_s: &str) -> Result<Self, Self::Err> {
-            Ok(Self {})
-        }
-    }
-
-    impl BenchmarkType for TestBenchmarkType {}
+    use super::{BenchmarkParametersGenerator, LoadType};
 
     #[test]
     fn set_lower_bound() {

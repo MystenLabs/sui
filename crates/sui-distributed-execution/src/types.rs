@@ -43,8 +43,10 @@ impl GlobalConfig {
         self.0.iter()
     }
 
-    /// Create a new global config for benchmarking.
-    pub fn new_for_benchmark(ips: Vec<IpAddr>) -> Self {
+    /// Create a new global config for benchmarking. The number of execution workers is
+    /// equals `ips.len() - sequence_workers`.
+    pub fn new_for_benchmark(ips: Vec<IpAddr>, sequence_workers: usize) -> Self {
+        assert!(ips.len() >= sequence_workers && sequence_workers > 0);
         let benchmark_port_offset = ips.len() as u16;
         let mut global_config = HashMap::new();
         for (i, ip) in ips.into_iter().enumerate() {

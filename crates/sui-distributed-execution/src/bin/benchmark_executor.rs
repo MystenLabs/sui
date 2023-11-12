@@ -93,6 +93,9 @@ enum Operation {
         /// The list of ip addresses of the all validators.
         #[clap(long, value_name = "ADDR", value_delimiter = ' ', num_args(4..))]
         ips: Vec<IpAddr>,
+        /// Number of sequence workers.
+        #[clap(long, default_value_t = 1)]
+        sequence_workers: usize,
         /// The working directory where the files will be generated.
         #[clap(long, value_name = "FILE", default_value = "genesis")]
         working_directory: PathBuf,
@@ -123,6 +126,7 @@ async fn main() {
         }
         Operation::Genesis {
             ips,
+            sequence_workers,
             working_directory,
         } => {
             tracing::info!("Generating benchmark genesis files");
@@ -131,7 +135,7 @@ async fn main() {
                 working_directory.display()
             ));
             let path = working_directory.join("configs.json");
-            GlobalConfig::new_for_benchmark(ips).export(path);
+            GlobalConfig::new_for_benchmark(ips, sequence_workers).export(path);
             tracing::info!("Generated configs.json");
         }
     }
@@ -139,8 +143,9 @@ async fn main() {
 
 /// Deploy a local testbed of executor shards.
 async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig {
+    let sequence_workers = 1;
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
-    let mut global_configs = GlobalConfig::new_for_benchmark(ips);
+    let mut global_configs = GlobalConfig::new_for_benchmark(ips, sequence_workers);
 
     // Insert workload.
     for id in 0..execution_workers + 1 {
