@@ -48,7 +48,6 @@ use sui_json_rpc_types::{
     Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI,
 };
-use sui_types::error::SuiObjectResponseError;
 use sui_types::{balance::Supply, coin::TreasuryCap, dynamic_field::DynamicFieldName};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -576,6 +575,7 @@ impl IndexerReader {
             let mut query = objects::dsl::objects
                 .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
+                .order(objects::dsl::object_id.asc())
                 .limit(limit as i64)
                 .into_boxed();
             if let Some(filter) = filter {
@@ -607,7 +607,7 @@ impl IndexerReader {
                         for filter in filters {
                             if let SuiObjectDataFilter::StructType (struct_tag) = filter {
                                 let object_type = struct_tag.to_string();
-                                query = query.filter(objects::dsl::object_type.ne(object_type));
+                                query = query.filter(objects::dsl::object_type.not_like(format!("{}%", object_type)));
                             } else {
                                 return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
@@ -626,9 +626,6 @@ impl IndexerReader {
             if let Some(object_cursor) = cursor {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
-            let debug_query = diesel::debug_query::<diesel::pg::Pg, _>(&query);
-
-            println!("{:?}", debug_query);
             query.load::<StoredObject>(conn).map_err(|e| IndexerError::PostgresReadError(e.to_string()))
         })
     }

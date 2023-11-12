@@ -12,7 +12,6 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;

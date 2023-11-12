@@ -4,7 +4,6 @@
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_core_types::value::MoveStructLayout;
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_types::error::SuiObjectResponseError;
 use sui_types::object::ObjectRead;
@@ -14,9 +13,9 @@ use crate::indexer_reader::IndexerReader;
 use sui_json_rpc::api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, ProtocolConfigResponse,
-    SuiEvent, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
