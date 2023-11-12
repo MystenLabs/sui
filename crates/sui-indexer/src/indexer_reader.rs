@@ -14,12 +14,11 @@ use crate::{
         objects::{CoinBalance, ObjectRefColumn, StoredObject},
         packages::StoredPackage,
         transactions::StoredTransaction,
-        tx_count_metrics::StoredTxCountMetrics,
         tx_indices::TxSequenceNumber,
     },
     schema_v2::{
-        address_metrics, checkpoints, display, epochs, events, move_call_metrics, network_metrics,
-        objects, packages, transactions, tx_count_metrics,
+        address_metrics, checkpoints, display, epochs, events, move_call_metrics, objects,
+        packages, transactions,
     },
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
@@ -1427,12 +1426,11 @@ impl IndexerReader {
     }
 
     pub fn get_latest_network_metrics(&self) -> IndexerResult<NetworkMetrics> {
-        let stored_network_metrics = self.run_query(|conn| {
-            network_metrics::table
-                .order(network_metrics::dsl::checkpoint.desc())
-                .first::<StoredNetworkMetrics>(conn)
+        let metrics = self.run_query(|conn| {
+            diesel::sql_query("SELECT * FROM network_metrics;")
+                .get_result::<StoredNetworkMetrics>(conn)
         })?;
-        Ok(stored_network_metrics.into())
+        Ok(metrics.into())
     }
 
     pub fn get_latest_move_call_metrics(&self) -> IndexerResult<MoveCallMetrics> {
@@ -1538,22 +1536,6 @@ impl IndexerReader {
             .into_iter()
             .map(|stored_address_metrics| stored_address_metrics.into())
             .collect())
-    }
-
-    pub fn get_total_transactions(&self) -> IndexerResult<i64> {
-        let latest_tx_count_metrics = self.run_query(|conn| {
-            tx_count_metrics::table
-                .order(tx_count_metrics::dsl::checkpoint_sequence_number.desc())
-                .first::<StoredTxCountMetrics>(conn)
-        })?;
-        // NOTE: tx are counted as:
-        // - if a tx is successful, it is counted as # of commands in the tx
-        // - otherwise, it is counted as 1.
-        Ok(
-            latest_tx_count_metrics.network_total_successful_transactions
-                + latest_tx_count_metrics.network_total_transaction_blocks
-                - latest_tx_count_metrics.network_total_successful_transaction_blocks,
-        )
     }
 
     pub async fn get_coin_metadata_in_blocking_task(
