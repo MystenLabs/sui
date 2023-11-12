@@ -130,7 +130,7 @@ impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let parsed_json = &mut self.parsed_json.clone();
         bytes_array_to_base64(parsed_json);
-        let mut table = json_to_table(&parsed_json);
+        let mut table = json_to_table(parsed_json);
         let style = TableStyle::modern();
         table.collapse().with(style);
         let bcs_base58 = Base58::encode(&self.bcs);
@@ -154,9 +154,9 @@ impl Display for SuiEvent {
 // Transform in-place a JSON array of bytes into a Base64 string
 fn bytes_array_to_base64(v: &mut Value) {
     match v {
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => return,
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => (),
         Value::Array(ref mut vals) => {
-            if vals.iter().all(|val| check_is_number(val)) {
+            if vals.iter().all(check_is_number) {
                 let new_vals = vals
                     .iter()
                     .map(|num| num.as_u64().unwrap() as u8)
@@ -164,8 +164,8 @@ fn bytes_array_to_base64(v: &mut Value) {
                 let new_val = serde_json::json!(Base64::from_bytes(&new_vals).encoded());
                 *v = new_val;
             } else {
-                for mut val in vals {
-                    bytes_array_to_base64(&mut val)
+                for val in vals {
+                    bytes_array_to_base64(val)
                 }
             }
         }
