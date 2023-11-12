@@ -96,7 +96,7 @@ impl SWAgent {
         })
     }
 
-    async fn summarize_metrics(
+    pub async fn summarize_metrics(
         configs: &GlobalConfig,
         workload: &str,
     ) -> Result<String, reqwest::Error> {
