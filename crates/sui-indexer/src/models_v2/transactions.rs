@@ -50,6 +50,14 @@ pub struct StoredTransactionCheckpoint {
     pub checkpoint_sequence_number: i64,
 }
 
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionSuccessCommandCount {
+    pub tx_sequence_number: i64,
+    pub checkpoint_sequence_number: i64,
+    pub success_command_count: i16,
+    pub timestamp_ms: i64,
+}
+
 impl From<&IndexedTransaction> for StoredTransaction {
     fn from(tx: &IndexedTransaction) -> Self {
         StoredTransaction {
