@@ -103,7 +103,7 @@ pub enum Operation {
 
         /// The number of instances running exclusively load generators. If set to zero the
         /// orchestrator collocates one load generator with each node.
-        #[clap(long, value_name = "INT", default_value = "0", global = true)]
+        #[clap(long, value_name = "INT", default_value = "1", global = true)]
         dedicated_clients: usize,
 
         /// Whether boot prometheus and grafana on a dedicated machine to monitor the benchmark.

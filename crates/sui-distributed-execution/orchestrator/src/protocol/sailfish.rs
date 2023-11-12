@@ -256,6 +256,7 @@ impl ProtocolMetrics<SailfishBenchmarkType> for SailfishProtocol {
         I: IntoIterator<Item = Instance>,
     {
         // TODO: hack until we have benchmark clients.
-        self.nodes_metrics_path(instances, parameters)
+        // self.nodes_metrics_path(instances, parameters)
+        todo!()
     }
 }
