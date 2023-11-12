@@ -38,6 +38,17 @@ pub struct StoredTransaction {
     pub transaction_kind: i16,
 }
 
+#[derive(Debug, Queryable)]
+pub struct TxSeq {
+    pub seq: i64,
+}
+
+impl Default for TxSeq {
+    fn default() -> Self {
+        Self { seq: -1 }
+    }
+}
+
 #[derive(Clone, Debug, Queryable)]
 pub struct StoredTransactionTimestamp {
     pub tx_sequence_number: i64,
@@ -66,6 +77,7 @@ impl From<&IndexedTransaction> for StoredTransaction {
             raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
             raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
             checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
+            timestamp_ms: tx.timestamp_ms as i64,
             object_changes: tx
                 .object_changes
                 .iter()
@@ -82,7 +94,7 @@ impl From<&IndexedTransaction> for StoredTransaction {
                 .map(|e| Some(bcs::to_bytes(&e).unwrap()))
                 .collect(),
             transaction_kind: tx.transaction_kind.clone() as i16,
-            timestamp_ms: tx.timestamp_ms as i64,
+            success_command_count: tx.successful_tx_num as i16,
         }
     }
 }

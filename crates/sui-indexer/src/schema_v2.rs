@@ -115,7 +115,6 @@ diesel::table! {
 diesel::table! {
     move_call_metrics (id) {
         id -> Int8,
-        checkpoint_sequence_number -> Int8,
         epoch -> Int8,
         day -> Int8,
         move_package -> Text,
@@ -126,8 +125,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    move_calls (id) {
-        id -> Int8,
+    move_calls (transaction_sequence_number, move_package, move_module, move_function) {
         transaction_sequence_number -> Int8,
         checkpoint_sequence_number -> Int8,
         epoch -> Int8,
