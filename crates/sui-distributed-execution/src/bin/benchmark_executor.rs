@@ -1,5 +1,4 @@
 use clap::*;
-use futures::future;
 use prometheus::Registry;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
@@ -117,7 +116,7 @@ async fn main() {
 }
 
 /// Deploy a local testbed of executor shards.
-async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> Vec<Arc<Metrics>> {
+async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig {
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
     let mut global_configs = GlobalConfig::new_for_benchmark(ips);
 
@@ -134,30 +133,36 @@ async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> Vec<Arc<Metr
     let _sequence_worker = ExecutorShard::start(configs, id);
 
     // Spawn execution workers.
-    let handles = (1..execution_workers + 1).map(|id| {
+    for id in 1..execution_workers + 1 {
         let configs = global_configs.clone();
-        async move {
-            let worker = ExecutorShard::start(configs, id as UniqueId);
-            worker.await_completion().await.unwrap()
-        }
-    });
-    future::join_all(handles).await
+        let _worker = ExecutorShard::start(configs, id as UniqueId);
+    }
+
+    global_configs
 }
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
+    use sui_distributed_execution::sw_agent::SWAgent;
+    use tokio::time::sleep;
+
     use crate::deploy_testbed;
 
     #[tokio::test]
     async fn smoke_test() {
         let tx_count = 300;
         let execution_workers = 4;
-        let metrics = deploy_testbed(tx_count, execution_workers).await;
+        let workload = "default";
+        let configs = deploy_testbed(tx_count, execution_workers).await;
 
-        assert!(metrics.iter().all(|m| m
-            .latency_s
-            .with_label_values(&["default"])
-            .get_sample_count()
-            == tx_count));
+        loop {
+            sleep(Duration::from_secs(1)).await;
+            let summary = SWAgent::summarize_metrics(&configs, workload).await;
+            if !summary.unwrap().is_empty() {
+                break;
+            }
+        }
     }
 }

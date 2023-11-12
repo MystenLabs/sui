@@ -86,7 +86,7 @@ impl SWAgent {
         tokio::spawn(async move {
             loop {
                 sleep(period).await;
-                let summary = Self::summarize_metrics(global_configs.clone(), &workload)
+                let summary = Self::summarize_metrics(&global_configs, &workload)
                     .await
                     .expect("Failed to print metrics");
                 if !summary.is_empty() {
@@ -96,8 +96,8 @@ impl SWAgent {
         })
     }
 
-    async fn summarize_metrics(
-        configs: GlobalConfig,
+    pub async fn summarize_metrics(
+        configs: &GlobalConfig,
         workload: &str,
     ) -> Result<String, reqwest::Error> {
         let futures =
