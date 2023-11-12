@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Client, HTTPTransport, RequestManager } from '@open-rpc/client-js';
-
 import type { WebsocketClientOptions } from '../rpc/websocket-client.js';
 import { WebsocketClient } from '../rpc/websocket-client.js';
 import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
@@ -43,34 +41,55 @@ export interface SuiTransport {
 }
 
 export class SuiHTTPTransport implements SuiTransport {
-	private rpcClient: Client;
-	private websocketClient: WebsocketClient;
+	#requestId = 0;
+	#options: SuiHTTPTransportOptions;
+	#websocketClient?: WebsocketClient;
 
-	constructor({
-		url,
-		websocket: { url: websocketUrl, ...websocketOptions } = {},
-		rpc,
-	}: SuiHTTPTransportOptions) {
-		const transport = new HTTPTransport(rpc?.url ?? url, {
+	constructor(options: SuiHTTPTransportOptions) {
+		this.#options = options;
+	}
+
+	#getWebsocketClient(): WebsocketClient {
+		if (!this.#websocketClient) {
+			this.#websocketClient = new WebsocketClient(
+				this.#options.websocket?.url ?? this.#options.url,
+				this.#options.websocket,
+			);
+		}
+
+		return this.#websocketClient;
+	}
+
+	async request<T>(input: SuiTransportRequestOptions): Promise<T> {
+		this.#requestId += 1;
+
+		const res = await fetch(this.#options.rpc?.url ?? this.#options.url, {
 			headers: {
 				'Content-Type': 'application/json',
 				'Client-Sdk-Type': 'typescript',
 				'Client-Sdk-Version': PACKAGE_VERSION,
 				'Client-Target-Api-Version': TARGETED_RPC_VERSION,
-				...rpc?.headers,
+				...this.#options.rpc?.headers,
 			},
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: this.#requestId,
+				method: input.method,
+				params: input.params,
+			}),
 		});
 
-		this.rpcClient = new Client(new RequestManager([transport]));
-		this.websocketClient = new WebsocketClient(websocketUrl ?? url, websocketOptions);
-	}
+		if (!res.ok) {
+			throw new Error('TODO: Real error:');
+		}
 
-	async request<T>(input: SuiTransportRequestOptions): Promise<T> {
-		return await this.rpcClient.request(input);
+		const data = await res.json();
+
+		return data.result;
 	}
 
 	async subscribe<T>(input: SuiTransportSubscribeOptions<T>): Promise<() => Promise<boolean>> {
-		const unsubscribe = await this.websocketClient.request(input);
+		const unsubscribe = await this.#getWebsocketClient().request(input);
 
 		return async () => !!(await unsubscribe());
 	}

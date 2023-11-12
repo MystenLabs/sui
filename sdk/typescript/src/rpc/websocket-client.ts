@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Client, RequestManager, WebSocketTransport } from '@open-rpc/client-js';
-
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
 	const url = new URL(httpUrl);
 	url.protocol = url.protocol.replace('http', 'ws');
@@ -31,6 +29,10 @@ type SubscriptionRequest<T = any> = {
  */
 export type WebsocketClientOptions = {
 	/**
+	 * Custom WebSocket class to use. Defaults to the global WebSocket class, if available.
+	 */
+	WebSocketConstructor?: typeof WebSocket;
+	/**
 	 * Milliseconds before timing out while calling an RPC method
 	 */
 	callTimeout?: number;
@@ -45,6 +47,10 @@ export type WebsocketClientOptions = {
 };
 
 export const DEFAULT_CLIENT_OPTIONS = {
+	// We fudge the typing because we also check for undefined in the constructor:
+	WebSocketConstructor: (typeof WebSocket !== 'undefined'
+		? WebSocket
+		: undefined) as typeof WebSocket,
 	callTimeout: 30000,
 	reconnectTimeout: 3000,
 	maxReconnects: 5,
@@ -53,37 +59,39 @@ export const DEFAULT_CLIENT_OPTIONS = {
 export class WebsocketClient {
 	endpoint: string;
 	options: Required<WebsocketClientOptions>;
-	#client: Client | null;
+	#webSocket: WebSocket | null;
 	#subscriptions: Map<number, SubscriptionRequest & { id: number }>;
 	#disconnects: number;
 
 	constructor(endpoint: string, options: WebsocketClientOptions = {}) {
 		this.endpoint = endpoint;
+
 		this.options = { ...DEFAULT_CLIENT_OPTIONS, ...options };
+		if (!this.options.WebSocketConstructor) {
+			throw new Error('Missing WebSocket constructor');
+		}
 
 		if (this.endpoint.startsWith('http')) {
 			this.endpoint = getWebsocketUrl(this.endpoint);
 		}
 
-		this.#client = null;
+		this.#webSocket = null;
 		this.#subscriptions = new Map();
 		this.#disconnects = 0;
 	}
 
-	#setupClient() {
-		if (this.#client) {
-			return this.#client;
+	#setupWebSocket() {
+		if (this.#webSocket) {
+			return this.#webSocket;
 		}
 
-		const transport = new WebSocketTransport(this.endpoint);
-		const requestManager = new RequestManager([transport]);
-		this.#client = new Client(requestManager);
+		this.#webSocket = new WebSocket(this.endpoint);
 
-		transport.connection.addEventListener('open', () => {
+		this.#webSocket.addEventListener('open', () => {
 			this.#disconnects = 0;
 		});
 
-		transport.connection.addEventListener('close', () => {
+		this.#webSocket.addEventListener('close', () => {
 			this.#disconnects++;
 			if (this.#disconnects <= this.options.maxReconnects) {
 				setTimeout(() => {
@@ -92,7 +100,7 @@ export class WebsocketClient {
 			}
 		});
 
-		this.#client.onNotification((data) => {
+		this.#webSocket.addEventListener('message', ({ data }) => {
 			const params = data.params as NotificationMessageParams;
 
 			this.#subscriptions.forEach((subscription) => {
@@ -102,22 +110,20 @@ export class WebsocketClient {
 			});
 		});
 
-		return this.#client;
+		return this.#webSocket;
 	}
 
 	#reconnect() {
-		this.#client?.close();
-		this.#client = null;
+		this.#webSocket?.close();
+		this.#webSocket = null;
 
 		this.#subscriptions.forEach((subscription) => this.request(subscription));
 	}
 
 	async request<T>(input: SubscriptionRequest<T>) {
-		const client = this.#setupClient();
-		const id = await client.request(
-			{ method: input.method, params: input.params },
-			this.options.callTimeout,
-		);
+		const webSocket = this.#setupWebSocket();
+		// TODO: Need to wrap this up into a request / response model so that we actually can await this to get the ID:
+		const id = webSocket.send(JSON.stringify({ method: input.method, params: input.params }));
 		const initialId = input.initialId || id;
 		this.#subscriptions.set(initialId, {
 			...input,
@@ -127,16 +133,17 @@ export class WebsocketClient {
 		});
 
 		return async () => {
-			const client = this.#setupClient();
+			const webSocket = this.#setupWebSocket();
 			// NOTE: Due to reconnects, the inner subscription ID could have actually changed:
 			const subscription = this.#subscriptions.get(initialId);
 			if (!subscription) return false;
 
 			this.#subscriptions.delete(initialId);
 
-			return client.request(
-				{ method: input.unsubscribe, params: [subscription.id] },
-				this.options.callTimeout,
+			return webSocket.send(
+				JSON.stringify({ method: input.unsubscribe, params: [subscription.id] }),
+				// TODO:
+				// this.options.callTimeout,
 			);
 		};
 	}
