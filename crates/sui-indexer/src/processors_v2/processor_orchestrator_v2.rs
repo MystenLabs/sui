@@ -16,7 +16,7 @@ pub struct ProcessorOrchestratorV2<S> {
 
 impl<S> ProcessorOrchestratorV2<S>
 where
-    S: IndexerAnalyticalStore + Send + Sync + 'static + Clone,
+    S: IndexerAnalyticalStore + Clone + Send + Sync + 'static,
 {
     pub fn new(store: S) -> Self {
         Self { store }

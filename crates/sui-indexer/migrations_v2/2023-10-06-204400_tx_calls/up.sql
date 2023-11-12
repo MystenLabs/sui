@@ -11,3 +11,4 @@ CREATE TABLE tx_calls (
 
 CREATE INDEX tx_calls_module ON tx_calls (package, module, tx_sequence_number);
 CREATE INDEX tx_calls_func ON tx_calls (package, module, func, tx_sequence_number);
+CREATE INDEX tx_calls_tx_sequence_number ON tx_calls (tx_sequence_number);

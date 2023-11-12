@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::time::Duration;
+use tap::tap::TapFallible;
+use tracing::error;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
@@ -33,8 +35,6 @@ use crate::types_v2::IndexerResult;
 use crate::PgConnectionPool;
 
 use super::IndexerAnalyticalStore;
-
-const PG_COMMIT_CHUNK_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct PgIndexerAnalyticalStore {
@@ -246,23 +246,20 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(recipients)
     }
 
-    async fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()> {
+    fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(addresses::table)
-                        .values(address_chunk)
-                        .on_conflict(addresses::address)
-                        .do_update()
-                        .set((
-                            addresses::last_appearance_time
-                                .eq(excluded(addresses::last_appearance_time)),
-                            addresses::last_appearance_tx
-                                .eq(excluded(addresses::last_appearance_tx)),
-                        ))
-                        .execute(conn)?;
-                }
+                diesel::insert_into(addresses::table)
+                    .values(addresses.clone())
+                    .on_conflict(addresses::address)
+                    .do_update()
+                    .set((
+                        addresses::last_appearance_time
+                            .eq(excluded(addresses::last_appearance_time)),
+                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -271,26 +268,24 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
-    async fn persist_active_addresses(
+    fn persist_active_addresses(
         &self,
         active_addresses: Vec<StoredActiveAddress>,
     ) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(active_addresses::table)
-                        .values(active_address_chunk)
-                        .on_conflict(active_addresses::address)
-                        .do_update()
-                        .set((
-                            active_addresses::last_appearance_time
-                                .eq(excluded(active_addresses::last_appearance_time)),
-                            active_addresses::last_appearance_tx
-                                .eq(excluded(active_addresses::last_appearance_tx)),
-                        ))
-                        .execute(conn)?;
-                }
+                diesel::insert_into(active_addresses::table)
+                    .values(active_addresses.clone())
+                    .on_conflict(active_addresses::address)
+                    .do_update()
+                    .set((
+                        active_addresses::last_appearance_time
+                            .eq(excluded(active_addresses::last_appearance_time)),
+                        active_addresses::last_appearance_tx
+                            .eq(excluded(active_addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -378,16 +373,14 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(move_calls)
     }
 
-    async fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()> {
+    fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for move_call_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(move_calls::table)
-                        .values(move_call_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)?;
-                }
+                diesel::insert_into(move_calls::table)
+                    .values(move_calls.clone())
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -405,21 +398,41 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         let move_call_query_7d = build_move_call_metric_query(epoch, 7);
         let move_call_query_30d = build_move_call_metric_query(epoch, 30);
 
-        let move_call_metrics_3d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-        let move_call_metrics_7d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-        let move_call_metrics_30d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-
-        let chained = move_call_metrics_3d
+        let mut calculate_tasks = vec![];
+        let blocking_cp_3d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_3d, |conn| {
+                diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let blocking_cp_7d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_7d, |conn| {
+                diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let blocking_cp_30d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_30d, |conn| {
+                diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let chained = futures::future::join_all(calculate_tasks)
+            .await
             .into_iter()
-            .chain(move_call_metrics_7d)
-            .chain(move_call_metrics_30d)
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
+                error!("Error joining move call calculation tasks: {:?}", e);
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
+                error!("Error calculating move call metrics: {:?}", e);
+            })?
+            .into_iter()
+            .flatten()
             .collect::<Vec<_>>();
+
         let move_call_metrics: Vec<StoredMoveCallMetrics> = chained
             .into_iter()
             .filter_map(|queried_move_metrics| {
