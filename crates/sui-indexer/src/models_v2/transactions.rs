@@ -39,6 +39,17 @@ pub struct StoredTransaction {
     pub success_command_count: i16,
 }
 
+#[derive(Debug, Queryable)]
+pub struct TxSeq {
+    pub seq: i64,
+}
+
+impl Default for TxSeq {
+    fn default() -> Self {
+        Self { seq: -1 }
+    }
+}
+
 #[derive(Clone, Debug, Queryable)]
 pub struct StoredTransactionTimestamp {
     pub tx_sequence_number: i64,
