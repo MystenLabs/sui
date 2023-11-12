@@ -29,15 +29,24 @@ pub struct ServerConfig {
     pub attrs: HashMap<String, String>,
 }
 
-pub type GlobalConfig = HashMap<UniqueId, ServerConfig>;
+#[derive(Clone, Deserialize, Debug)]
+pub struct GlobalConfig(pub HashMap<UniqueId, ServerConfig>);
 
-impl ServerConfig {
+impl GlobalConfig {
     pub const BENCHMARK_BASE_PORT: u16 = 1500;
 
+    pub fn get(&self, id: &UniqueId) -> Option<&ServerConfig> {
+        self.0.get(id)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&UniqueId, &ServerConfig)> {
+        self.0.iter()
+    }
+
     /// Create a new global config for benchmarking.
-    pub fn new_for_benchmark(ips: Vec<IpAddr>) -> GlobalConfig {
+    pub fn new_for_benchmark(ips: Vec<IpAddr>) -> Self {
         let benchmark_port_offset = ips.len() as u16;
-        let mut global_config = GlobalConfig::new();
+        let mut global_config = HashMap::new();
         for (i, ip) in ips.into_iter().enumerate() {
             let network_port = Self::BENCHMARK_BASE_PORT + i as u16;
             let metrics_port = benchmark_port_offset + network_port;
@@ -61,13 +70,22 @@ impl ServerConfig {
             };
             global_config.insert(i as u16, config);
         }
-        global_config
+        Self(global_config)
     }
 
     /// Load a global config from a file.
-    pub fn from_path<P: AsRef<Path>>(path: P) -> GlobalConfig {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
         let config_json = fs::read_to_string(path).expect("Failed to read config file");
         serde_json::from_str(&config_json).expect("Failed to parse config file")
+    }
+
+    /// Return the metrics address of all execution workers.
+    pub fn execution_workers_metric_addresses(&self) -> Vec<SocketAddr> {
+        self.0
+            .iter()
+            .filter(|(_, config)| config.kind == "EW")
+            .map(|(_, config)| config.metrics_address)
+            .collect()
     }
 }
 

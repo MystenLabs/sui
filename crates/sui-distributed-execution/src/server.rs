@@ -54,9 +54,10 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     pub async fn run(&mut self, metrics: Arc<Metrics>) {
         // Initialize map from id to address
         let mut addr_table: HashMap<UniqueId, SocketAddr> = HashMap::new();
-        for (id, entry) in &self.global_config {
-            assert!(!addr_table.contains_key(&id), "ids must be unique");
-            addr_table.insert(*id, SocketAddr::new(entry.ip_addr, entry.port));
+        for (id, entry) in self.global_config.iter() {
+            println!("ID: {}", id);
+            let old = addr_table.insert(*id, SocketAddr::new(entry.ip_addr, entry.port));
+            assert!(old.is_none(), "ids must be unique");
         }
 
         // Initialize Agent and Network Manager

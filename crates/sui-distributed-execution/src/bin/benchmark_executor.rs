@@ -99,8 +99,8 @@ async fn main() {
     match args.operation {
         Operation::Run { id, config_path } => {
             // Parse config from json
-            let mut global_config = ServerConfig::from_path(config_path);
-            global_config.entry(id).and_modify(|e| {
+            let mut global_config = GlobalConfig::from_path(config_path);
+            global_config.0.entry(id).and_modify(|e| {
                 e.attrs.insert("tx_count".to_string(), tx_count.to_string());
             });
 
@@ -119,11 +119,11 @@ async fn main() {
 /// Deploy a local testbed of executor shards.
 async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> Vec<Arc<Metrics>> {
     let ips = vec![IpAddr::V4(Ipv4Addr::LOCALHOST); execution_workers + 1];
-    let mut global_configs = ServerConfig::new_for_benchmark(ips);
+    let mut global_configs = GlobalConfig::new_for_benchmark(ips);
 
     // Insert workload.
     for id in 0..execution_workers + 1 {
-        global_configs.entry(id as UniqueId).and_modify(|e| {
+        global_configs.0.entry(id as UniqueId).and_modify(|e| {
             e.attrs.insert("tx_count".to_string(), tx_count.to_string());
         });
     }

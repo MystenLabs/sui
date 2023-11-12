@@ -44,7 +44,7 @@ impl Agent<SailfishMessage> for EWAgent {
         // extract list of all EWs
         let mut ew_ids: Vec<UniqueId> = Vec::new();
         let mut sw_id: UniqueId = 0;
-        for (id, entry) in &self.attrs {
+        for (id, entry) in self.attrs.iter() {
             if entry.kind == "EW" {
                 ew_ids.push(*id);
             } else {

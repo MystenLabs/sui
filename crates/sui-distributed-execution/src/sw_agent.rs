@@ -38,7 +38,7 @@ impl Agent<SailfishMessage> for SWAgent {
         println!("Starting SW agent {}", self.id);
         // extract list of all EWs
         let mut ew_ids: Vec<UniqueId> = Vec::new();
-        for (id, entry) in &self.attrs {
+        for (id, entry) in self.attrs.iter() {
             if entry.kind == "EW" {
                 ew_ids.push(*id);
             }
@@ -86,7 +86,7 @@ impl SWAgent {
         tokio::spawn(async move {
             loop {
                 sleep(period).await;
-                let summary = Self::summarize_metrics(&global_configs, &workload)
+                let summary = Self::summarize_metrics(global_configs.clone(), &workload)
                     .await
                     .expect("Failed to print metrics");
                 if !summary.is_empty() {
@@ -97,7 +97,7 @@ impl SWAgent {
     }
 
     async fn summarize_metrics(
-        configs: &GlobalConfig,
+        configs: GlobalConfig,
         workload: &str,
     ) -> Result<String, reqwest::Error> {
         let futures =
