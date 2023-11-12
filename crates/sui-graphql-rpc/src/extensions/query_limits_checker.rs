@@ -123,7 +123,6 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        // TODO: limit number of variables, fragments, etc
         // TODO: limit/ban directives for now
 
         let cfg = ctx
