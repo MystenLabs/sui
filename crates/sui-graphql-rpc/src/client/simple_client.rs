@@ -1,69 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: Remove these when we have examples driver which uses this client
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::client::ClientError;
+use crate::extensions::query_limits_checker::LIMITS_HEADER;
 use axum::http::HeaderValue;
 use hyper::header;
-use reqwest::{RequestBuilder, Response};
+use reqwest::Response;
 use serde_json::Value;
-
-use crate::client::ClientError;
-use crate::{
-    config::{ConnectionConfig, ServiceConfig},
-    extensions::query_limits_checker::LIMITS_HEADER,
-    server::simple_server::start_example_server,
-    utils::reset_db,
-};
+use std::collections::BTreeMap;
 
 use super::response::GraphqlResponse;
 
-pub struct GraphqlVariable {
+pub struct GraphqlQueryVariable {
     pub name: String,
     pub ty: String,
     pub value: Value,
 }
-
-pub struct GraphqlVariables {
-    // A list of the variable name to its type
-    pub type_defintions: Vec<(String, String)>,
-    // Maps the variable names to the values
-    pub value_mappings: BTreeMap<String, Value>,
-}
-
-// impl GraphqlVariables {
-
-//     pub fn new() -> Self {
-//         Self {
-//             type_defintions: vec![],
-//             value_mappings: BTreeMap::new(),
-//         }
-//     }
-
-//     pu
-
-//     pub fn validate(&self) -> Result<(), ClientError> {
-//         if self.value_mappings.len() != self.type_defintions.len() {
-//             return Err(ClientError::VariableLengthMismatch {
-//                 def_len: self.type_defintions.len(),
-//                 val_len: self.value_mappings.len(),
-//             });
-//         }
-//         for (name, ty) in &self.type_defintions {
-//             if !self.value_mappings.contains_key(name) {
-//                 return Err(ClientError::VariableNotSet {
-//                     var_name: name.to_owned(),
-//                     var_type: ty.to_string(),
-//                 });
-//             }
-//         }
-//         Ok(())
-//     }
-// }
 
 #[derive(Clone)]
 pub struct SimpleClient {
@@ -95,7 +47,7 @@ impl SimpleClient {
         &self,
         query: String,
         get_usage: bool,
-        variables: Vec<GraphqlVariable>,
+        variables: Vec<GraphqlQueryVariable>,
         mut headers: Vec<(header::HeaderName, header::HeaderValue)>,
     ) -> Result<GraphqlResponse, ClientError> {
         if get_usage {
@@ -107,7 +59,7 @@ impl SimpleClient {
     async fn execute_impl(
         &self,
         query: String,
-        variables: Vec<GraphqlVariable>,
+        variables: Vec<GraphqlQueryVariable>,
         headers: Vec<(header::HeaderName, header::HeaderValue)>,
     ) -> Result<Response, ClientError> {
         let (type_defs, var_vals) = resolve_variables(&variables)?;
@@ -139,12 +91,12 @@ impl SimpleClient {
 
 #[allow(clippy::type_complexity)]
 pub fn resolve_variables(
-    vars: &[GraphqlVariable],
+    vars: &[GraphqlQueryVariable],
 ) -> Result<(BTreeMap<String, String>, BTreeMap<String, Value>), ClientError> {
     let mut type_defs: BTreeMap<String, String> = BTreeMap::new();
     let mut var_vals: BTreeMap<String, Value> = BTreeMap::new();
 
-    for (idx, GraphqlVariable { name, ty, value }) in vars.iter().enumerate() {
+    for (idx, GraphqlQueryVariable { name, ty, value }) in vars.iter().enumerate() {
         // todo: check that name is valid identifier
         if name.trim().is_empty() {
             return Err(ClientError::InvalidEmptyItem {

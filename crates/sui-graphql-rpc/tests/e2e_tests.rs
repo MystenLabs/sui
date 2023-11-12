@@ -13,7 +13,7 @@ mod tests {
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
-    use sui_graphql_rpc::client::simple_client::GraphqlVariable;
+    use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
     use sui_indexer::indexer_reader::IndexerReader;
@@ -202,12 +202,12 @@ mod tests {
         let query = r#"{obj1: object(address: $framework_addr) {location}
             obj2: object(address: $deepbook_addr) {location}}"#;
         let variables = vec![
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "framework_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0x2"),
             },
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "deepbook_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0xdee9"),
@@ -242,17 +242,17 @@ mod tests {
         );
 
         let bad_variables = vec![
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "framework_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0x2"),
             },
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "deepbook_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0xdee9"),
             },
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "deepbook_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0xdee96666666"),
@@ -266,17 +266,17 @@ mod tests {
         assert!(res.is_err());
 
         let bad_variables = vec![
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "framework_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0x2"),
             },
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "deepbook_addr".to_string(),
                 ty: "SuiAddress!".to_string(),
                 value: json!("0xdee9"),
             },
-            GraphqlVariable {
+            GraphqlQueryVariable {
                 name: "deepbook_addr".to_string(),
                 ty: "SuiAddressP!".to_string(),
                 value: json!("0xdee9"),

@@ -26,13 +26,15 @@ pub enum ClientError {
     },
     #[error("{item_type} at pos {idx} must not be empty")]
     InvalidEmptyItem { item_type: String, idx: usize },
-    #[error("Variable {var_name} previously defined {var_type_prev} vs {var_type_curr}")]
+    #[error(
+        "Conflicting type definitions for variable {var_name}: {var_type_prev} vs {var_type_curr}"
+    )]
     VariableDefinitionConflict {
         var_name: String,
         var_type_prev: String,
         var_type_curr: String,
     },
-    #[error("Variable {var_name} previously set to {var_val_prev} vs {var_val_curr}")]
+    #[error("Conflicting values for variable {var_name}: {var_val_prev} vs {var_val_curr}")]
     VariableValueConflict {
         var_name: String,
         var_val_prev: serde_json::Value,
