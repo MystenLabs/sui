@@ -10,6 +10,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use sui_distributed_execution::types::GlobalConfig;
 
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkType},
@@ -229,13 +230,15 @@ impl ProtocolMetrics for SailfishProtocol {
             .into_iter()
             .map(|x| (IpAddr::V4(x.main_ip), x))
             .unzip();
-        let parameters = config::Parameters::new_for_benchmarks(ips);
-        let metrics_paths = parameters.execution_workers_metric_addresses().map(|x| {
-            format!(
-                "{x}{}",
-                sui_distributed_execution::prometheus::METRICS_ROUTE
-            )
-        });
+        let metrics_paths = GlobalConfig::new_for_benchmark(ips)
+            .execution_workers_metric_addresses()
+            .into_iter()
+            .map(|x| {
+                format!(
+                    "{x}{}",
+                    sui_distributed_execution::prometheus::METRICS_ROUTE
+                )
+            });
 
         instances.into_iter().zip(metrics_paths).collect()
     }

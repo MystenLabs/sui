@@ -1,7 +1,7 @@
 use clap::*;
 use prometheus::Registry;
-use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
+use std::{fs, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
 use sui_distributed_execution::sw_agent::*;
 use sui_distributed_execution::types::*;
@@ -88,6 +88,15 @@ enum Operation {
         #[clap(long, default_value_t = 4)]
         execution_workers: usize,
     },
+    /// Generate a parameters files.
+    Genesis {
+        /// The list of ip addresses of the all validators.
+        #[clap(long, value_name = "ADDR", value_delimiter = ' ', num_args(4..))]
+        ips: Vec<IpAddr>,
+        /// The working directory where the files will be generated.
+        #[clap(long, value_name = "FILE", default_value = "genesis")]
+        working_directory: PathBuf,
+    },
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -111,6 +120,19 @@ async fn main() {
         }
         Operation::Testbed { execution_workers } => {
             deploy_testbed(tx_count, execution_workers).await;
+        }
+        Operation::Genesis {
+            ips,
+            working_directory,
+        } => {
+            tracing::info!("Generating benchmark genesis files");
+            fs::create_dir_all(&working_directory).expect(&format!(
+                "Failed to create directory '{}'",
+                working_directory.display()
+            ));
+            let path = working_directory.join("configs.json");
+            GlobalConfig::new_for_benchmark(ips).export(path);
+            tracing::info!("Generated configs.json");
         }
     }
 }

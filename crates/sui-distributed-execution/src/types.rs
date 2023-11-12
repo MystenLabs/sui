@@ -20,7 +20,7 @@ use sui_types::{
 
 pub type UniqueId = u16;
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ServerConfig {
     pub kind: String,
     pub ip_addr: IpAddr,
@@ -29,7 +29,7 @@ pub struct ServerConfig {
     pub attrs: HashMap<String, String>,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GlobalConfig(pub HashMap<UniqueId, ServerConfig>);
 
 impl GlobalConfig {
@@ -77,6 +77,11 @@ impl GlobalConfig {
     pub fn from_path<P: AsRef<Path>>(path: P) -> Self {
         let config_json = fs::read_to_string(path).expect("Failed to read config file");
         serde_json::from_str(&config_json).expect("Failed to parse config file")
+    }
+
+    pub fn export<P: AsRef<Path>>(&self, path: P) {
+        let config = serde_json::to_string_pretty(&self).expect("Failed to serialize config file");
+        fs::write(path, config).expect("Failed to write config file");
     }
 
     /// Return the metrics address of all execution workers.
