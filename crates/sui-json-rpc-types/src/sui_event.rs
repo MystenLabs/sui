@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::{Base58, Base64, Encoding};
-use fastcrypto::traits::EncodeDecodeBase64;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -129,9 +128,9 @@ impl SuiEvent {
 
 impl Display for SuiEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let j = &mut self.parsed_json.clone();
-        bytes_array_to_base64(j);
-        let mut table = json_to_table(&j);
+        let parsed_json = &mut self.parsed_json.clone();
+        bytes_array_to_base64(parsed_json);
+        let mut table = json_to_table(&parsed_json);
         let style = TableStyle::modern();
         table.collapse().with(style);
         let bcs_base58 = Base58::encode(&self.bcs);
@@ -152,51 +151,38 @@ impl Display for SuiEvent {
     }
 }
 
-// Transform an array of bytes into a Base64 string
+// Transform in-place a JSON array of bytes into a Base64 string
 fn bytes_array_to_base64(v: &mut Value) {
     match v {
-        Value::Null => return,
-        Value::Bool(_) => return,
-        Value::Number(_) => return,
-        Value::String(_) => return,
-        Value::Array(ref mut x) => {
-            if x.iter().all(|val| check_is_number(val)) {
-                let new_vals = x
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => return,
+        Value::Array(ref mut vals) => {
+            if vals.iter().all(|val| check_is_number(val)) {
+                let new_vals = vals
                     .iter()
-                    .map(|a| a.as_u64().unwrap() as u8)
+                    .map(|num| num.as_u64().unwrap() as u8)
                     .collect::<Vec<_>>();
                 let new_val = serde_json::json!(Base64::from_bytes(&new_vals).encoded());
                 *v = new_val;
             } else {
-                for mut i in x {
-                    bytes_array_to_base64(&mut i)
+                for mut val in vals {
+                    bytes_array_to_base64(&mut val)
                 }
             }
         }
-        Value::Object(m) => {
-            for a in m.values_mut() {
-                bytes_array_to_base64(a)
+        Value::Object(map) => {
+            for val in map.values_mut() {
+                bytes_array_to_base64(val)
             }
         }
     }
 }
 
 fn check_is_number(v: &Value) -> bool {
-    if v.is_number() {
-        if v.is_u64() {
-            let value = v.as_u64().unwrap();
-            return 0 >= value && value <= 255;
-        }
-        if v.is_i64() {
-            let value = v.as_i64().unwrap();
-            return 0i64 >= value && value <= 255i64;
-        }
-        if v.is_f64() {
-            let value = v.as_f64().unwrap();
-            return 0f64 >= value && value <= 255f64;
-        }
+    if let Some(num) = v.as_u64() {
+        num <= 255u64
+    } else {
+        false
     }
-    false
 }
 
 #[serde_as]
