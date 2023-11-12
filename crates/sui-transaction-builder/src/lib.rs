@@ -434,6 +434,17 @@ impl TransactionBuilder {
         Ok(args)
     }
 
+    /// Publish a Sui Move package to the network.
+    ///
+    /// The `sender` address is used to author the transaction.
+    ///
+    /// In order to obtain the package's `compiled_modules: Vec<Vec<u8>>` and the `ObjectID`s
+    /// of its dependencies, `dep_ids: Vec<ObjectID>`, use the public API for
+    /// [`sui_move_build::CompiledPackage`].
+    ///
+    /// Specifically:
+    /// * the [`sui_move_build::CompiledPackage::get_package_bytes`] function, and
+    /// * the [`sui_move_build::CompiledPackage::dependency_ids`] field
     pub async fn publish(
         &self,
         sender: SuiAddress,
@@ -456,6 +467,24 @@ impl TransactionBuilder {
         ))
     }
 
+    /// Upgrade a Sui Move package which is published on the network.
+    ///
+    /// * The `sender` address is used to author the upgrade transaction,
+    /// * `package_id` is the [`sui_types::base_types::ObjectID`] of the published package, and
+    /// * `upgrade_capability` is the [`sui_types::base_types::ObjectID`] of the
+    ///   `UpgradeCapability` object associated with the published package.
+    ///
+    /// In order to obtain
+    /// * the package's `compiled_modules: Vec<Vec<u8>>`,
+    /// * the `ObjectID`s of its dependencies, `dep_ids: Vec<ObjectID>`, and
+    /// * and its `digest: Vec<u8>`
+    ///
+    /// use the public API for [`sui_move_build::CompiledPackage`].
+    ///
+    /// Specifically:
+    /// * the [`sui_move_build::CompiledPackage::get_package_bytes`] function, and
+    /// * the [`sui_move_build::CompiledPackage::dependency_ids`] field
+    /// * the [`sui_move_build::CompiledPackage::get_package_digest`] function
     pub async fn upgrade(
         &self,
         sender: SuiAddress,
