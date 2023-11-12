@@ -53,7 +53,7 @@ pub trait IndexerAnalyticalStore {
 
     // for address metrics
     async fn get_latest_address_metrics(&self) -> IndexerResult<StoredAddressMetrics>;
-    async fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()>;
+    fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()>;
     async fn get_senders_in_tx_range(
         &self,
         start_tx_seq: i64,
@@ -64,7 +64,7 @@ pub trait IndexerAnalyticalStore {
         start_tx_seq: i64,
         end_tx_seq: i64,
     ) -> IndexerResult<Vec<StoredTxRecipients>>;
-    async fn persist_active_addresses(
+    fn persist_active_addresses(
         &self,
         active_addresses: Vec<StoredActiveAddress>,
     ) -> IndexerResult<()>;
@@ -84,7 +84,7 @@ pub trait IndexerAnalyticalStore {
         start_tx_seq: i64,
         end_tx_seq: i64,
     ) -> IndexerResult<Vec<StoredTxCalls>>;
-    async fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()>;
+    fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()>;
     async fn calculate_move_call_metrics(
         &self,
         checkpoint: StoredCheckpoint,

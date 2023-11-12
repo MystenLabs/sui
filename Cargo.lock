@@ -10763,6 +10763,7 @@ dependencies = [
  "mysten-metrics",
  "ntest",
  "prometheus",
+ "rayon",
  "regex",
  "serde",
  "serde_json",
