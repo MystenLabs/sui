@@ -77,7 +77,7 @@ impl Stake {
     /// - `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
     /// - `current_stake_rate` is the stake rate in the current epoch.
     ///
-    /// This value is only avaiable if the stake is active.
+    /// This value is only available if the stake is active.
     async fn estimated_reward(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, Error> {
         let RpcStakeStatus::Active { estimated_reward } = self.rpc_stake(ctx).await?.status else {
             return Ok(None);
