@@ -7,6 +7,7 @@ use crate::{
     object::{Object, Owner},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct EffectsObjectChange {
@@ -26,7 +27,7 @@ pub struct EffectsObjectChange {
 impl EffectsObjectChange {
     pub fn new(
         modified_at: Option<(VersionDigest, Owner)>,
-        written: Option<&Object>,
+        written: Option<&Arc<Object>>,
         id_created: bool,
         id_deleted: bool,
     ) -> Self {

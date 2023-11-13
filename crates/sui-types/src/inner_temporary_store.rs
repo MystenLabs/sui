@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub type WrittenObjects = BTreeMap<ObjectID, Object>;
+pub type WrittenObjects = BTreeMap<ObjectID, Arc<Object>>;
 pub type ObjectMap = BTreeMap<ObjectID, Arc<Object>>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 

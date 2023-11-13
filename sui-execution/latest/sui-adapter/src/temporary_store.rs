@@ -404,7 +404,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     /// Mutate a mutable input object. This is used to mutate input objects outside of PT execution.
-    pub fn mutate_input_object(&mut self, object: Object) {
+    pub fn mutate_input_object(&mut self, object: Arc<Object>) {
         let id = object.id();
         self.execution_results.modified_objects.insert(id);
         self.execution_results.written_objects.insert(id, object);
@@ -413,7 +413,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Mutate a child object outside of PT. This should be used extremely rarely.
     /// Currently it's only used by advance_epoch_safe_mode because it's all native
     /// without PT. This should almost never be used otherwise.
-    pub fn mutate_child_object(&mut self, old_object: Object, new_object: Object) {
+    pub fn mutate_child_object(&mut self, old_object: Arc<Object>, new_object: Arc<Object>) {
         let id = new_object.id();
         let old_ref = old_object.compute_object_reference();
         debug_assert_eq!(old_ref.0, id);
@@ -472,7 +472,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.drop_writes();
     }
 
-    pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    pub fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         // there should be no read after delete
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
         self.execution_results
@@ -1052,7 +1052,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
         debug_assert!(!self
@@ -1077,7 +1077,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         self.drop_writes();
     }
 
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         TemporaryStore::read_object(self, id)
     }
 

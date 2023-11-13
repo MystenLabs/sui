@@ -160,7 +160,7 @@ pub trait ChildObjectResolver {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>>;
+    ) -> SuiResult<Option<Arc<Object>>>;
 
     /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
     /// `get_object_received_at_version` must be the exact version at which the object will be received,
@@ -173,14 +173,14 @@ pub trait ChildObjectResolver {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>>;
+    ) -> SuiResult<Option<Arc<Object>>>;
 }
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
 pub trait Storage {
     fn reset(&mut self);
 
-    fn read_object(&self, id: &ObjectID) -> Option<&Object>;
+    fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>>;
 
     fn record_execution_results(&mut self, results: ExecutionResults);
 
@@ -198,11 +198,9 @@ pub struct PackageObjectArc {
 }
 
 impl PackageObjectArc {
-    pub fn new(package_object: Object) -> Self {
+    pub fn new(package_object: Arc<Object>) -> Self {
         assert!(package_object.is_package());
-        Self {
-            package_object: Arc::new(package_object),
-        }
+        Self { package_object }
     }
 
     pub fn object(&self) -> &Object {
@@ -347,7 +345,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         ChildObjectResolver::read_child_object(
             self.as_ref(),
             parent,
@@ -361,7 +359,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         ChildObjectResolver::get_object_received_at_version(
             self.as_ref(),
             owner,
@@ -378,7 +376,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
@@ -387,7 +385,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
             owner,
@@ -404,7 +402,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
     fn get_object_received_at_version(
@@ -413,7 +411,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
             owner,

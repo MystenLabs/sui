@@ -26,6 +26,7 @@ use serde_with::DisplayFromStr;
 use shared_crypto::intent::HashingIntentScope;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 
 const DYNAMIC_FIELD_MODULE_NAME: &IdentStr = ident_str!("dynamic_field");
 const DYNAMIC_FIELD_FIELD_STRUCT_NAME: &IdentStr = ident_str!("Field");
@@ -293,7 +294,7 @@ pub fn get_dynamic_field_object_from_store<K>(
     object_store: &dyn ObjectStore,
     parent_id: ObjectID,
     key: &K,
-) -> Result<Object, SuiError>
+) -> Result<Arc<Object>, SuiError>
 where
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {

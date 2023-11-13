@@ -51,7 +51,7 @@ pub struct TemporaryStore<'backing> {
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.
-    written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
+    written: BTreeMap<ObjectID, (Arc<Object>, WriteKind)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
     /// Child objects loaded during dynamic field opers
@@ -374,7 +374,7 @@ impl<'backing> TemporaryStore<'backing> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self.written.insert(object.id(), (object, kind));
+        self.written.insert(object.id(), (object.into(), kind));
     }
 
     pub fn delete_object(&mut self, id: &ObjectID, kind: DeleteKindWithOldVersion) {
@@ -410,13 +410,13 @@ impl<'backing> TemporaryStore<'backing> {
         self.events.push(event)
     }
 
-    pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    pub fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(id).is_none());
         self.written
             .get(id)
             .map(|(obj, _kind)| obj)
-            .or_else(|| self.input_objects.get(id).map(|o| o.deref()))
+            .or_else(|| self.input_objects.get(id))
     }
 
     pub fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
@@ -482,6 +482,7 @@ impl<'backing> TemporaryStore<'backing> {
         let mut system_state_wrapper = self
             .read_object(&SUI_SYSTEM_STATE_OBJECT_ID)
             .expect("0x5 object must be muated in system tx with unmetered storage rebate")
+            .deref()
             .clone();
         // In unmetered execution, storage_rebate field of mutated object must be 0.
         // If not, we would be dropping SUI on the floor by overriding it.
@@ -719,6 +720,7 @@ impl<'backing> TemporaryStore<'backing> {
         // Write all objects at the end only if all previous gas charges succeeded.
         // This avoids polluting the temporary store state if this function failed.
         for (object, write_kind) in objects_to_update {
+            let object = (*object).clone();
             self.write_object(object, write_kind);
         }
     }
@@ -936,7 +938,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(child).is_none());
         let obj_opt = self.written.get(child).map(|(obj, _kind)| obj);
@@ -954,7 +956,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
         debug_assert!(self.deleted.get(receiving_object_id).is_none());
@@ -973,7 +975,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         TemporaryStore::drop_writes(self);
     }
 
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         TemporaryStore::read_object(self, id)
     }
 

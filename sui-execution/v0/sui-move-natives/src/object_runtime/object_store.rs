@@ -47,7 +47,7 @@ struct Inner<'a> {
     root_version: BTreeMap<ObjectID, SequenceNumber>,
     // cached objects from the resolver. An object might be in this map but not in the store
     // if it's existence was queried, but the value was not used.
-    cached_objects: BTreeMap<ObjectID, Option<Object>>,
+    cached_objects: BTreeMap<ObjectID, Option<Arc<Object>>>,
     // whether or not this TX is gas metered
     is_metered: bool,
     // Local protocol config used to enforce limits
@@ -396,7 +396,7 @@ impl<'a> ObjectStore<'a> {
         Ok(())
     }
 
-    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Object>> {
+    pub(super) fn cached_objects(&self) -> &BTreeMap<ObjectID, Option<Arc<Object>>> {
         &self.inner.cached_objects
     }
 

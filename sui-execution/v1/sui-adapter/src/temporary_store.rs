@@ -407,13 +407,15 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn mutate_input_object(&mut self, object: Object) {
         let id = object.id();
         self.execution_results.modified_objects.insert(id);
-        self.execution_results.written_objects.insert(id, object);
+        self.execution_results
+            .written_objects
+            .insert(id, object.into());
     }
 
     /// Mutate a child object outside of PT. This should be used extremely rarely.
     /// Currently it's only used by advance_epoch_safe_mode because it's all native
     /// without PT. This should almost never be used otherwise.
-    pub fn mutate_child_object(&mut self, old_object: Object, new_object: Object) {
+    pub fn mutate_child_object(&mut self, old_object: Arc<Object>, new_object: Arc<Object>) {
         let id = new_object.id();
         let old_ref = old_object.compute_object_reference();
         debug_assert_eq!(old_ref.0, id);
@@ -430,7 +432,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.modified_objects.insert(id);
         self.execution_results
             .written_objects
-            .insert(id, new_object);
+            .insert(id, new_object.into());
     }
 
     /// Upgrade system package during epoch change. This requires special treatment
@@ -442,7 +444,9 @@ impl<'backing> TemporaryStore<'backing> {
         let id = package.id();
         assert!(package.is_package() && is_system_package(id));
         self.execution_results.modified_objects.insert(id);
-        self.execution_results.written_objects.insert(id, package);
+        self.execution_results
+            .written_objects
+            .insert(id, package.into());
     }
 
     /// Crate a new objcet. This is used to create objects outside of PT execution.
@@ -457,7 +461,9 @@ impl<'backing> TemporaryStore<'backing> {
         );
         let id = object.id();
         self.execution_results.created_object_ids.insert(id);
-        self.execution_results.written_objects.insert(id, object);
+        self.execution_results
+            .written_objects
+            .insert(id, object.into());
     }
 
     /// Delete a mutable input object. This is used to delete input objects outside of PT execution.
@@ -472,13 +478,13 @@ impl<'backing> TemporaryStore<'backing> {
         self.execution_results.drop_writes();
     }
 
-    pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    pub fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         // there should be no read after delete
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
         self.execution_results
             .written_objects
             .get(id)
-            .or_else(|| self.input_objects.get(id).map(|o| o.deref()))
+            .or_else(|| self.input_objects.get(id))
     }
 
     pub fn save_loaded_runtime_objects(
@@ -557,6 +563,7 @@ impl<'backing> TemporaryStore<'backing> {
         let mut system_state_wrapper = self
             .read_object(&SUI_SYSTEM_STATE_OBJECT_ID)
             .expect("0x5 object must be muated in system tx with unmetered storage rebate")
+            .deref()
             .clone();
         // In unmetered execution, storage_rebate field of mutated object must be 0.
         // If not, we would be dropping SUI on the floor by overriding it.
@@ -1036,7 +1043,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         let obj_opt = self.execution_results.written_objects.get(child);
         if obj_opt.is_some() {
             Ok(obj_opt.cloned())
@@ -1052,7 +1059,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
         debug_assert!(!self
@@ -1077,7 +1084,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         self.drop_writes();
     }
 
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+    fn read_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         TemporaryStore::read_object(self, id)
     }
 

@@ -19,6 +19,7 @@ use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructT
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::sync::Arc;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorV1};
@@ -81,11 +82,11 @@ impl SuiSystemStateWrapper {
         params: &AdvanceEpochParams,
         object_store: &dyn ObjectStore,
         protocol_config: &ProtocolConfig,
-    ) -> (Object, Object) {
+    ) -> (Arc<Object>, Arc<Object>) {
         let id = self.id.id.bytes;
         let old_field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
             .expect("Dynamic field object of wrapper should always be present in the object store");
-        let mut new_field_object = old_field_object.clone();
+        let mut new_field_object = (*old_field_object).clone();
         let move_object = new_field_object
             .data
             .try_as_move_mut()
@@ -131,7 +132,7 @@ impl SuiSystemStateWrapper {
             }
             _ => unreachable!(),
         }
-        (old_field_object, new_field_object)
+        (old_field_object, new_field_object.into())
     }
 
     fn advance_epoch_safe_mode_impl<T>(

@@ -17,12 +17,13 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
 #[derive(Debug, Default)]
 pub struct InMemoryStorage {
-    persistent: BTreeMap<ObjectID, Object>,
+    persistent: BTreeMap<ObjectID, Arc<Object>>,
 }
 
 impl BackingPackageStore for InMemoryStorage {
@@ -37,7 +38,7 @@ impl ChildObjectResolver for InMemoryStorage {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         let child_object = match self.persistent.get(child).cloned() {
             None => return Ok(None),
             Some(obj) => obj,
@@ -65,7 +66,7 @@ impl ChildObjectResolver for InMemoryStorage {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         let recv_object = match self.persistent.get(receiving_object_id).cloned() {
             None => return Ok(None),
             Some(obj) => obj,
@@ -107,7 +108,7 @@ impl ModuleResolver for &mut InMemoryStorage {
 }
 
 impl ObjectStore for InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.persistent.get(object_id).cloned())
     }
 
@@ -115,7 +116,7 @@ impl ObjectStore for InMemoryStorage {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self
             .persistent
             .get(object_id)
@@ -131,7 +132,7 @@ impl ObjectStore for InMemoryStorage {
 }
 
 impl ObjectStore for &mut InMemoryStorage {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.persistent.get(object_id).cloned())
     }
 
@@ -139,7 +140,7 @@ impl ObjectStore for &mut InMemoryStorage {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self
             .persistent
             .get(object_id)
@@ -164,7 +165,7 @@ impl GetModule for InMemoryStorage {
 }
 
 impl InMemoryStorage {
-    pub fn new(objects: Vec<Object>) -> Self {
+    pub fn new(objects: Vec<Arc<Object>>) -> Self {
         let mut persistent = BTreeMap::new();
         for o in objects {
             persistent.insert(o.id(), o);
@@ -172,11 +173,11 @@ impl InMemoryStorage {
         Self { persistent }
     }
 
-    pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
+    pub fn get_object(&self, id: &ObjectID) -> Option<&Arc<Object>> {
         self.persistent.get(id)
     }
 
-    pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<&Object>> {
+    pub fn get_objects(&self, objects: &[ObjectID]) -> Vec<Option<&Arc<Object>>> {
         let mut result = Vec::new();
         for id in objects {
             result.push(self.get_object(id));
@@ -184,16 +185,16 @@ impl InMemoryStorage {
         result
     }
 
-    pub fn insert_object(&mut self, object: Object) {
+    pub fn insert_object(&mut self, object: Arc<Object>) {
         let id = object.id();
         self.persistent.insert(id, object);
     }
 
-    pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
+    pub fn objects(&self) -> &BTreeMap<ObjectID, Arc<Object>> {
         &self.persistent
     }
 
-    pub fn into_inner(self) -> BTreeMap<ObjectID, Object> {
+    pub fn into_inner(self) -> BTreeMap<ObjectID, Arc<Object>> {
         self.persistent
     }
 

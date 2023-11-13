@@ -18,6 +18,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::sync::Arc;
 
 pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
@@ -93,7 +94,7 @@ pub struct ExecutionResultsV1 {
 #[derive(Debug, Default)]
 pub struct ExecutionResultsV2 {
     /// All objects written regardless of whether they were mutated, created, or unwrapped.
-    pub written_objects: BTreeMap<ObjectID, Object>,
+    pub written_objects: BTreeMap<ObjectID, Arc<Object>>,
     /// All objects that existed prior to this transaction, and are modified in this transaction.
     /// This includes any type of modification, including mutated, wrapped and deleted objects.
     pub modified_objects: BTreeSet<ObjectID>,
@@ -131,6 +132,8 @@ impl ExecutionResultsV2 {
         prev_tx: TransactionDigest,
     ) {
         for (id, obj) in self.written_objects.iter_mut() {
+            let obj = Arc::make_mut(obj);
+
             // TODO: We can now get rid of the following logic by passing in lamport version
             // into the execution layer, and create new objects using the lamport version directly.
 

@@ -9,14 +9,15 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 pub trait ObjectStore {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError>;
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError>;
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError>;
+    ) -> Result<Option<Arc<Object>>, SuiError>;
 }
 
+/*
 impl ObjectStore for &[Object] {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         Ok(self.iter().find(|o| o.id() == *object_id).cloned())
@@ -33,9 +34,10 @@ impl ObjectStore for &[Object] {
             .cloned())
     }
 }
+*/
 
-impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Arc<Object>, WriteKind)> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.get(object_id).map(|(_, obj, _)| obj).cloned())
     }
 
@@ -43,7 +45,7 @@ impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self
             .get(object_id)
             .and_then(|(_, obj, _)| {
@@ -57,8 +59,8 @@ impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
     }
 }
 
-impl ObjectStore for BTreeMap<ObjectID, Object> {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+impl ObjectStore for BTreeMap<ObjectID, Arc<Object>> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.get(object_id).cloned())
     }
 
@@ -66,7 +68,7 @@ impl ObjectStore for BTreeMap<ObjectID, Object> {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.get(object_id).and_then(|o| {
             if o.version() == version {
                 Some(o.clone())
@@ -78,7 +80,7 @@ impl ObjectStore for BTreeMap<ObjectID, Object> {
 }
 
 impl<T: ObjectStore> ObjectStore for Arc<T> {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         self.as_ref().get_object(object_id)
     }
 
@@ -86,13 +88,13 @@ impl<T: ObjectStore> ObjectStore for Arc<T> {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         self.as_ref().get_object_by_key(object_id, version)
     }
 }
 
 impl<T: ObjectStore> ObjectStore for &T {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         ObjectStore::get_object(*self, object_id)
     }
 
@@ -100,7 +102,7 @@ impl<T: ObjectStore> ObjectStore for &T {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         ObjectStore::get_object_by_key(*self, object_id, version)
     }
 }
