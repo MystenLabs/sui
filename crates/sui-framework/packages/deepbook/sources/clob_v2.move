@@ -249,6 +249,20 @@ module deepbook::clob_v2 {
     }
 
     /// Capability granting permission to access an entry in `Pool.quote_asset_trading_fees`.
+    /// The pool objects created for older pools do not have a PoolOwnerCap because they were created
+    /// prior to the addition of this feature. Here is a list of 11 pools on mainnet that 
+    /// do not have this capability: 
+    /// 0x31d1790e617eef7f516555124155b28d663e5c600317c769a75ee6336a54c07f
+    /// 0x6e417ee1c12ad5f2600a66bc80c7bd52ff3cb7c072d508700d17cf1325324527
+    /// 0x17625f1a241d34d2da0dc113086f67a2b832e3e8cd8006887c195cd24d3598a3
+    /// 0x276ff4d99ecb3175091ba4baffa9b07590f84e2344e3f16e95d30d2c1678b84c
+    /// 0xd1f0a9baacc1864ab19534e2d4c5d6c14f2e071a1f075e8e7f9d51f2c17dc238
+    /// 0x4405b50d791fd3346754e8171aaab6bc2ed26c2c46efdd033c14b30ae507ac33
+    /// 0xf0f663cf87f1eb124da2fc9be813e0ce262146f3df60bc2052d738eb41a25899
+    /// 0xd9e45ab5440d61cc52e3b2bd915cdd643146f7593d587c715bc7bfa48311d826
+    /// 0x5deafda22b6b86127ea4299503362638bea0ca33bb212ea3a67b029356b8b955
+    /// 0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7
+    /// 0x18d871e3c3da99046dfc0d3de612c5d88859bc03b8f0568bd127d0e70dbc58be
     struct PoolOwnerCap has key, store {
         id: UID,
         /// The owner of this AccountCap. Note: this is
@@ -258,13 +272,19 @@ module deepbook::clob_v2 {
 
     /// Function to withdraw fees created from a pool
     public fun withdraw_fees<BaseAsset, QuoteAsset>(
-        pool: &mut Pool<BaseAsset, QuoteAsset>,
         _pool_owner_cap: &PoolOwnerCap,
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
         ctx: &mut TxContext,
     ): Coin<QuoteAsset> {
-        let quanity = quote_asset_trading_fees_value(pool);
-        let to_withdraw = balance::split(&mut pool.quote_asset_trading_fees, quanity);
+        let quantity = quote_asset_trading_fees_value(pool);
+        let to_withdraw = balance::split(&mut pool.quote_asset_trading_fees, quantity);
         coin::from_balance(to_withdraw, ctx)
+    }
+
+    /// Destroy the given `pool_owner_cap` object
+    public fun delete_pool_owner_cap(pool_owner_cap: PoolOwnerCap) {
+        let PoolOwnerCap { id, owner: _ } = pool_owner_cap;
+        object::delete(id)
     }
 
     fun destroy_empty_level(level: TickLevel) {
@@ -288,16 +308,17 @@ module deepbook::clob_v2 {
         creation_fee: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
-        transfer::share_object(
-            create_pool_with_return_<BaseAsset, QuoteAsset>(
-                taker_fee_rate,
-                maker_rebate_rate,
-                tick_size,
-                lot_size,
-                creation_fee,
-                ctx
-            )
+        let (pool, pool_owner_cap) = create_pool_with_return_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            creation_fee,
+            ctx
         );
+
+        transfer::public_transfer(pool_owner_cap, tx_context::sender(ctx));
+        transfer::share_object(pool);
     }
 
     public fun create_pool<BaseAsset, QuoteAsset>(
@@ -345,7 +366,7 @@ module deepbook::clob_v2 {
         lot_size: u64,
         creation_fee: Balance<SUI>,
         ctx: &mut TxContext,
-    ) : Pool<BaseAsset, QuoteAsset> {
+    ): (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
         assert!(balance::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
 
         let base_type_name = type_name::get<BaseAsset>();
@@ -365,7 +386,6 @@ module deepbook::clob_v2 {
             id, 
             owner
         };
-        transfer::public_transfer(pool_owner_cap, tx_context::sender(ctx));
 
         event::emit(PoolCreated {
             pool_id,
@@ -376,7 +396,7 @@ module deepbook::clob_v2 {
             tick_size,
             lot_size,
         });
-        Pool<BaseAsset, QuoteAsset> {
+        (Pool<BaseAsset, QuoteAsset> {
             id: pool_uid,
             bids: critbit::new(ctx),
             asks: critbit::new(ctx),
@@ -392,7 +412,7 @@ module deepbook::clob_v2 {
             creation_fee,
             base_asset_trading_fees: balance::zero(),
             quote_asset_trading_fees: balance::zero(),
-        }
+        }, pool_owner_cap)
     }
 
     /// Function for creating an external pool. This API can be used to wrap deepbook pools into other objects.
@@ -401,7 +421,7 @@ module deepbook::clob_v2 {
         lot_size: u64,
         creation_fee: Coin<SUI>,
         ctx: &mut TxContext,
-    ) : Pool<BaseAsset, QuoteAsset> {
+    ): Pool<BaseAsset, QuoteAsset> {
         create_customized_pool_with_return<BaseAsset, QuoteAsset>(
             tick_size,
             lot_size,
@@ -423,6 +443,29 @@ module deepbook::clob_v2 {
         creation_fee: Coin<SUI>,
         ctx: &mut TxContext,
     ) : Pool<BaseAsset, QuoteAsset> {
+        let (pool, pool_owner_cap) = create_pool_with_return_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            coin::into_balance(creation_fee),
+            ctx
+        );
+        transfer::public_transfer(pool_owner_cap, tx_context::sender(ctx));
+        pool
+    }
+
+    /// A V2 function for creating customized pools for better PTB friendliness/compostability. 
+    /// If a user wants to create a pool and then destroy/lock the pool_owner_cap one can do 
+    /// so with this function.
+    public fun create_customized_pool_v2<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) : (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
         create_pool_with_return_<BaseAsset, QuoteAsset>(
             taker_fee_rate,
             maker_rebate_rate,
@@ -1925,7 +1968,7 @@ module deepbook::clob_v2 {
 
         test_scenario::next_tx(scenario, sender);
         {
-            let pool = create_pool_with_return_<SUI, USD>(
+            let (pool, pool_owner_cap) = create_pool_with_return_<SUI, USD>(
                 taker_fee_rate,
                 maker_rebate_rate,
                 tick_size,
@@ -1933,11 +1976,11 @@ module deepbook::clob_v2 {
                 balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
                 test_scenario::ctx(scenario)
             );
-            // let pool =
             transfer::share_object(WrappedPool {
                 id: object::new(test_scenario::ctx(scenario)),
                 pool
             });
+            delete_pool_owner_cap(pool_owner_cap);
         };
     }
 
