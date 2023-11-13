@@ -4,10 +4,9 @@
 use async_graphql::*;
 use move_core_types::{
     account_address::AccountAddress,
-    ident_str,
+    annotated_value as A, ident_str,
     identifier::{IdentStr, Identifier},
     language_storage::{StructTag, TypeTag},
-    value,
 };
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::Resolver;
@@ -123,7 +122,7 @@ impl MoveValue {
         Self { type_, bcs }
     }
 
-    fn value_impl(&self, layout: value::MoveTypeLayout) -> Result<value::MoveValue> {
+    fn value_impl(&self, layout: A::MoveTypeLayout) -> Result<A::MoveValue> {
         // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
         // deserializing via `value::MoveValue` (but this is significantly more code).
         Ok(bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
@@ -138,20 +137,20 @@ impl MoveValue {
         })?)
     }
 
-    fn data_impl(&self, layout: value::MoveTypeLayout) -> Result<MoveData> {
+    fn data_impl(&self, layout: A::MoveTypeLayout) -> Result<MoveData> {
         MoveData::try_from(self.value_impl(layout)?)
     }
 
-    fn json_impl(&self, layout: value::MoveTypeLayout) -> Result<Json> {
+    fn json_impl(&self, layout: A::MoveTypeLayout) -> Result<Json> {
         Ok(try_to_json_value(self.value_impl(layout)?)?.into())
     }
 }
 
-impl TryFrom<value::MoveValue> for MoveData {
+impl TryFrom<A::MoveValue> for MoveData {
     type Error = async_graphql::Error;
 
-    fn try_from(value: value::MoveValue) -> Result<Self> {
-        use value::MoveValue as V;
+    fn try_from(value: A::MoveValue) -> Result<Self> {
+        use A::MoveValue as V;
 
         Ok(match value {
             V::U8(n) => Self::Number(BigInt::from(n)),
@@ -171,7 +170,7 @@ impl TryFrom<value::MoveValue> for MoveData {
             ),
 
             V::Struct(s) => {
-                let (type_, fields) = with_type(s)?;
+                let A::MoveStruct { type_, fields } = s;
                 if is_type(&type_, &STD, MOD_OPTION, TYP_OPTION) {
                     // 0x1::option::Option
                     Self::Option(match extract_option(&type_, fields)? {
@@ -200,10 +199,10 @@ impl TryFrom<value::MoveValue> for MoveData {
     }
 }
 
-impl TryFrom<(Identifier, value::MoveValue)> for MoveField {
+impl TryFrom<(Identifier, A::MoveValue)> for MoveField {
     type Error = async_graphql::Error;
 
-    fn try_from((ident, value): (Identifier, value::MoveValue)) -> Result<Self> {
+    fn try_from((ident, value): (Identifier, A::MoveValue)) -> Result<Self> {
         Ok(MoveField {
             name: ident.to_string(),
             value: MoveData::try_from(value)?,
@@ -211,8 +210,8 @@ impl TryFrom<(Identifier, value::MoveValue)> for MoveField {
     }
 }
 
-fn try_to_json_value(value: value::MoveValue) -> Result<Value> {
-    use value::MoveValue as V;
+fn try_to_json_value(value: A::MoveValue) -> Result<Value> {
+    use A::MoveValue as V;
     Ok(match value {
         V::U8(n) => Value::Number(n.into()),
         V::U16(n) => Value::Number(n.into()),
@@ -231,7 +230,7 @@ fn try_to_json_value(value: value::MoveValue) -> Result<Value> {
         ),
 
         V::Struct(s) => {
-            let (type_, fields) = with_type(s)?;
+            let A::MoveStruct { type_, fields } = s;
             if is_type(&type_, &STD, MOD_OPTION, TYP_OPTION) {
                 // 0x1::option::Option
                 match extract_option(&type_, fields)? {
@@ -272,20 +271,6 @@ fn is_type(tag: &StructTag, address: &AccountAddress, module: &IdentStr, name: &
         && tag.name.as_ident_str() == name
 }
 
-fn with_type(
-    struct_: value::MoveStruct,
-) -> Result<(StructTag, Vec<(Identifier, value::MoveValue)>)> {
-    if let value::MoveStruct::WithTypes { type_, fields } = struct_ {
-        Ok((type_, fields))
-    } else {
-        Err(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Move Struct without type information.",
-        )
-        .into())
-    }
-}
-
 macro_rules! extract_field {
     ($type:expr, $fields:expr, $name:ident) => {{
         let _name = ident_str!(stringify!($name));
@@ -307,8 +292,8 @@ macro_rules! extract_field {
 
 /// Extracts a vector of bytes from `value`, assuming it's a `MoveValue::Vector` where all the
 /// values are `MoveValue::U8`s.
-fn extract_bytes(value: value::MoveValue) -> Result<Vec<u8>> {
-    use value::MoveValue as V;
+fn extract_bytes(value: A::MoveValue) -> Result<Vec<u8>> {
+    use A::MoveValue as V;
     let V::Vector(elements) = value else {
         return Err(graphql_error(code::INTERNAL_SERVER_ERROR, "Expected a vector.").into());
     };
@@ -332,10 +317,7 @@ fn extract_bytes(value: value::MoveValue) -> Result<Vec<u8>> {
 /// ```
 ///
 /// Which is conformed to by both `std::ascii::String` and `std::string::String`.
-fn extract_string(
-    type_: &StructTag,
-    fields: Vec<(Identifier, value::MoveValue)>,
-) -> Result<String> {
+fn extract_string(type_: &StructTag, fields: Vec<(Identifier, A::MoveValue)>) -> Result<String> {
     let bytes = extract_bytes(extract_field!(type_, fields, bytes))?;
     String::from_utf8(bytes).map_err(|e| {
         const PREFIX: usize = 30;
@@ -362,9 +344,9 @@ fn extract_string(
 /// Which matches `0x2::object::UID`.
 fn extract_uid(
     type_: &StructTag,
-    fields: Vec<(Identifier, value::MoveValue)>,
+    fields: Vec<(Identifier, A::MoveValue)>,
 ) -> Result<AccountAddress> {
-    use value::MoveValue as V;
+    use A::MoveValue as V;
     let V::Struct(s) = extract_field!(type_, fields, id) else {
         return Err(graphql_error(
             code::INTERNAL_SERVER_ERROR,
@@ -373,7 +355,7 @@ fn extract_uid(
         .into());
     };
 
-    let (type_, fields) = with_type(s)?;
+    let A::MoveStruct { type_, fields } = s;
     if !is_type(&type_, &SUI, MOD_OBJECT, TYP_ID) {
         return Err(graphql_error(
             code::INTERNAL_SERVER_ERROR,
@@ -403,9 +385,9 @@ fn extract_uid(
 /// Where `vec` contains at most one element.  This matches the shape of `0x1::option::Option<T>`.
 fn extract_option(
     type_: &StructTag,
-    fields: Vec<(Identifier, value::MoveValue)>,
-) -> Result<Option<value::MoveValue>> {
-    let value::MoveValue::Vector(mut elements) = extract_field!(type_, fields, vec) else {
+    fields: Vec<(Identifier, A::MoveValue)>,
+) -> Result<Option<A::MoveValue>> {
+    let A::MoveValue::Vector(mut elements) = extract_field!(type_, fields, vec) else {
         return Err(graphql_error(
             code::INTERNAL_SERVER_ERROR,
             "Expected Option.vec to be a vector.",
@@ -430,15 +412,15 @@ mod tests {
 
     use expect_test::expect;
     use move_core_types::{
-        u256::U256, value::MoveFieldLayout, value::MoveStructLayout as S,
-        value::MoveTypeLayout as L,
+        annotated_value::{self as A, MoveFieldLayout, MoveStructLayout as S, MoveTypeLayout as L},
+        u256::U256,
     };
 
     use super::*;
 
     macro_rules! struct_layout {
         ($type:literal { $($name:literal : $layout:expr),* $(,)?}) => {
-            value::MoveTypeLayout::Struct(S::WithTypes {
+            A::MoveTypeLayout::Struct(S {
                 type_: StructTag::from_str($type).expect("Failed to parse struct"),
                 fields: vec![$(MoveFieldLayout {
                     name: ident_str!($name).to_owned(),
@@ -450,7 +432,7 @@ mod tests {
 
     macro_rules! vector_layout {
         ($inner:expr) => {
-            value::MoveTypeLayout::Vector(Box::new($inner))
+            A::MoveTypeLayout::Vector(Box::new($inner))
         };
     }
 
@@ -458,7 +440,7 @@ mod tests {
         SuiAddress::from_str(a).unwrap()
     }
 
-    fn data<T: Serialize>(layout: value::MoveTypeLayout, data: T) -> Result<MoveData> {
+    fn data<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<MoveData> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
 
         // The format for type from its `Display` impl does not technically match the format that
@@ -469,7 +451,7 @@ mod tests {
 
     fn data_with_tag<T: Serialize>(
         tag: impl Into<String>,
-        layout: value::MoveTypeLayout,
+        layout: A::MoveTypeLayout,
         data: T,
     ) -> Result<MoveData> {
         let type_ = MoveType::new(tag.into());
@@ -477,7 +459,7 @@ mod tests {
         MoveValue { type_, bcs }.data_impl(layout)
     }
 
-    fn json<T: Serialize>(layout: value::MoveTypeLayout, data: T) -> Result<Json> {
+    fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
         let type_ = MoveType::new(tag.to_canonical_string(/* with_prefix */ true));
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
@@ -901,42 +883,7 @@ mod tests {
     }
 
     #[test]
-    fn no_type_information() {
-        // This layout looks like a string, but we don't have the type information, so we can't say
-        // for sure -- so we always require that move struct come `WithTypes`.
-        let l = L::Struct(S::WithFields(vec![MoveFieldLayout {
-            name: ident_str!("bytes").to_owned(),
-            layout: vector_layout!(L::U8),
-        }]));
-
-        let v = data_with_tag("0x1::string::String", l, "Hello, world!");
-        let expect = expect![[r#"
-            Err(
-                Error {
-                    message: "Move Struct without type information.",
-                    extensions: None,
-                },
-            )"#]];
-        expect.assert_eq(&format!("{v:#?}"));
-    }
-
-    #[test]
-    fn no_field_information() {
-        // Even less information about the layout -- even less likely to succeed.
-        let l = L::Struct(S::Runtime(vec![vector_layout!(L::U8)]));
-        let v = data_with_tag("0x1::string::String", l, "Hello, world!");
-        let expect = expect![[r#"
-            Err(
-                Error {
-                    message: "Move Struct without type information.",
-                    extensions: None,
-                },
-            )"#]];
-        expect.assert_eq(&format!("{v:#?}"));
-    }
-
-    #[test]
-    fn signer_data() {
+    fn signer_value() {
         let v = data(L::Signer, address("0x42"));
         let expect = expect![[r#"
             Err(

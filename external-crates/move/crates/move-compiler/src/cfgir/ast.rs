@@ -12,7 +12,7 @@ use crate::{
     parser::ast::{ConstantName, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{ast_debug::*, unique_map::UniqueMap},
 };
-use move_core_types::value::MoveValue;
+use move_core_types::runtime_value::MoveValue;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, VecDeque};

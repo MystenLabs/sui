@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_core_types::value::MoveStructLayout;
+use move_core_types::annotated_value::MoveStructLayout;
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_types::error::SuiObjectResponseError;
 use sui_types::object::ObjectRead;

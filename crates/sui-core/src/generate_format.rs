@@ -4,7 +4,6 @@
 use clap::*;
 use move_core_types::{
     language_storage::{StructTag, TypeTag},
-    value::{MoveStructLayout, MoveTypeLayout},
     vm_status::AbortLocation,
 };
 use pretty_assertions::assert_str_eq;
@@ -151,8 +150,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TypedStoreError>(&samples)?;
     tracer.trace_type::<ObjectInfoRequestKind>(&samples)?;
     tracer.trace_type::<TransactionKind>(&samples)?;
-    tracer.trace_type::<MoveStructLayout>(&samples)?;
-    tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<MoveObjectType>(&samples)?;
     tracer.trace_type::<MoveObjectType_>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;

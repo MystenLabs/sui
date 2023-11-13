@@ -2075,14 +2075,14 @@ async fn test_conflicting_transactions() {
         let object_info = authority_state
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 object.id(),
-                None,
+                LayoutGenerationOption::None,
             ))
             .await
             .unwrap();
         let gas_info = authority_state
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 gas_object.id(),
-                None,
+                LayoutGenerationOption::None,
             ))
             .await
             .unwrap();

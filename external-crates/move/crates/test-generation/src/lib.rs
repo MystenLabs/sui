@@ -31,7 +31,7 @@ use move_core_types::{
     effects::{ChangeSet, Op},
     language_storage::TypeTag,
     resolver::MoveResolver,
-    value::MoveValue,
+    runtime_value::MoveValue,
     vm_status::{StatusCode, VMStatus},
 };
 use move_vm_runtime::move_vm::MoveVM;

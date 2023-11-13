@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
+use move_core_types::annotated_value::{self as A, MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{self, MoveStruct, MoveTypeLayout};
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldInfo;
@@ -52,28 +52,23 @@ impl DynamicField {
         // Get TypeTag of the DynamicField name from StructTag of the MoveStruct
         let type_tag = DynamicFieldInfo::try_extract_field_name(&struct_tag, &self.df_kind)
             .map_err(|e| Error::Internal(e.to_string()).extend())?;
-        let undecorated: Option<value::MoveValue>;
 
         let name_move_value = extract_field_from_move_struct(move_struct, "name")?;
 
-        if self.df_kind == DynamicFieldType::DynamicObject {
+        let undecorated = if self.df_kind == DynamicFieldType::DynamicObject {
             let inner_name_move_value = match name_move_value {
-                value::MoveValue::Struct(inner_struct) => {
+                A::MoveValue::Struct(inner_struct) => {
                     extract_field_from_move_struct(inner_struct, "name")
                 }
                 _ => Err(Error::Internal("Expected a wrapper struct".to_string()).extend()),
             }?;
-            undecorated = Some(inner_name_move_value.undecorate());
+            inner_name_move_value.undecorate()
         } else {
-            undecorated = Some(name_move_value.undecorate());
-        }
+            name_move_value.undecorate()
+        };
 
-        let bcs = if let Some(ref undec) = undecorated {
-            bcs::to_bytes(undec)
-                .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")).extend())
-        } else {
-            Err(Error::Internal("No value to serialize".to_string()).extend())
-        }?;
+        let bcs = bcs::to_bytes(&undecorated)
+            .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")).extend())?;
 
         Ok(Some(MoveValue::new(
             type_tag.to_canonical_string(true),
@@ -145,18 +140,16 @@ pub(crate) async fn deserialize_move_struct(
 pub fn extract_field_from_move_struct(
     move_struct: MoveStruct,
     field_name: &str,
-) -> Result<value::MoveValue> {
-    match move_struct {
-        MoveStruct::WithTypes { fields, .. } => {
-            fields.into_iter().find_map(|(id, value)| {
-                if id.to_string() == field_name {
-                    Some(value)
-                } else {
-                    None
-                }
-            })
-        }
-        .ok_or_else(|| Error::Internal(format!("Field '{}' not found", field_name)).extend()),
-        _ => Err(Error::Internal("Unexpected Move struct type".to_string()).extend()),
-    }
+) -> Result<A::MoveValue> {
+    move_struct
+        .fields
+        .into_iter()
+        .find_map(|(id, value)| {
+            if id.to_string() == field_name {
+                Some(value)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| Error::Internal(format!("Field '{}' not found", field_name)).extend())
 }

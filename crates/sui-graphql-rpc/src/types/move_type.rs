@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
-use move_core_types::{language_storage::TypeTag, value};
+use move_core_types::{annotated_value as A, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::Resolver;
 
@@ -129,7 +129,7 @@ impl MoveType {
     pub(crate) async fn layout_impl(
         &self,
         resolver: &Resolver<PackageCache>,
-    ) -> Result<value::MoveTypeLayout> {
+    ) -> Result<A::MoveTypeLayout> {
         resolver
             .type_layout(self.native_type_tag()?)
             .await
@@ -188,12 +188,12 @@ impl TryFrom<TypeTag> for MoveTypeSignature {
     }
 }
 
-impl TryFrom<value::MoveTypeLayout> for MoveTypeLayout {
+impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
     type Error = async_graphql::Error;
 
-    fn try_from(layout: value::MoveTypeLayout) -> Result<Self> {
-        use value::MoveStructLayout as SL;
-        use value::MoveTypeLayout as TL;
+    fn try_from(layout: A::MoveTypeLayout) -> Result<Self> {
+        use A::MoveStructLayout as SL;
+        use A::MoveTypeLayout as TL;
 
         Ok(match layout {
             TL::Signer => return Err(unexpected_signer_error()),
@@ -210,15 +210,7 @@ impl TryFrom<value::MoveTypeLayout> for MoveTypeLayout {
 
             TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
 
-            TL::Struct(SL::Runtime(_)) => {
-                return Err(graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    "Move Struct Layout without field names.",
-                )
-                .into())
-            }
-
-            TL::Struct(SL::WithFields(fields) | SL::WithTypes { fields, .. }) => Self::Struct(
+            TL::Struct(SL { fields, .. }) => Self::Struct(
                 fields
                     .into_iter()
                     .map(MoveFieldLayout::try_from)
@@ -228,10 +220,10 @@ impl TryFrom<value::MoveTypeLayout> for MoveTypeLayout {
     }
 }
 
-impl TryFrom<value::MoveFieldLayout> for MoveFieldLayout {
+impl TryFrom<A::MoveFieldLayout> for MoveFieldLayout {
     type Error = async_graphql::Error;
 
-    fn try_from(layout: value::MoveFieldLayout) -> Result<Self> {
+    fn try_from(layout: A::MoveFieldLayout) -> Result<Self> {
         Ok(Self {
             name: layout.name.to_string(),
             layout: layout.layout.try_into()?,

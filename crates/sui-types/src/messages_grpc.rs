@@ -6,9 +6,9 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::object::{Object, ObjectFormatOptions};
+use crate::object::Object;
 use crate::transaction::{SenderSignedData, SignedTransaction};
-use move_core_types::value::MoveStructLayout;
+use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -22,14 +22,21 @@ pub enum ObjectInfoRequestKind {
     PastObjectInfoDebug(SequenceNumber),
 }
 
+/// Layout generation options -- you can either generate or not generate the layout.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum LayoutGenerationOption {
+    Generate,
+    None,
+}
+
 /// A request for information about an object and optionally its
 /// parent certificate at a specific version.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoRequest {
     /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
-    /// if a format option is provided, return the layout of the object in the given format.
-    pub object_format_options: Option<ObjectFormatOptions>,
+    /// if true return the layout of the object.
+    pub generate_layout: LayoutGenerationOption,
     /// The type of request, either latest object info or the past.
     pub request_kind: ObjectInfoRequestKind,
 }
@@ -38,22 +45,22 @@ impl ObjectInfoRequest {
     pub fn past_object_info_debug_request(
         object_id: ObjectID,
         version: SequenceNumber,
-        layout: Option<ObjectFormatOptions>,
+        generate_layout: LayoutGenerationOption,
     ) -> Self {
         ObjectInfoRequest {
             object_id,
-            object_format_options: layout,
+            generate_layout,
             request_kind: ObjectInfoRequestKind::PastObjectInfoDebug(version),
         }
     }
 
     pub fn latest_object_info_request(
         object_id: ObjectID,
-        layout: Option<ObjectFormatOptions>,
+        generate_layout: LayoutGenerationOption,
     ) -> Self {
         ObjectInfoRequest {
             object_id,
-            object_format_options: layout,
+            generate_layout,
             request_kind: ObjectInfoRequestKind::LatestObjectInfo,
         }
     }

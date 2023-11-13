@@ -5,14 +5,14 @@ use std::str::FromStr;
 
 use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::MoveStruct;
 use move_core_types::identifier::Identifier;
-use move_core_types::value::MoveStruct;
 
 use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
-use sui_types::object::{MoveObject, ObjectFormatOptions};
+use sui_types::object::MoveObject;
 use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
@@ -107,11 +107,7 @@ impl StoredEvent {
 
         let type_ = parse_sui_struct_tag(&self.event_type)?;
 
-        let layout = MoveObject::get_layout_from_struct_tag(
-            type_.clone(),
-            ObjectFormatOptions::default(),
-            module_cache,
-        )?;
+        let layout = MoveObject::get_layout_from_struct_tag(type_.clone(), module_cache)?;
         let move_object = MoveStruct::simple_deserialize(&self.bcs, &layout)
             .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
         let parsed_json = SuiMoveStruct::from(move_object).to_json_value();

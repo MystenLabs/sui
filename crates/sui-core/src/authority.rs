@@ -15,8 +15,8 @@ use futures::stream::FuturesUnordered;
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::value::MoveStructLayout;
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -101,8 +101,8 @@ use sui_types::messages_checkpoint::{
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::messages_consensus::AuthorityCapabilities;
 use sui_types::messages_grpc::{
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
-    TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
+    HandleTransactionResponse, LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind,
+    ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
@@ -116,7 +116,7 @@ use sui_types::{
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_ensure,
-    object::{Object, ObjectFormatOptions, ObjectRead},
+    object::{Object, ObjectRead},
     transaction::*,
     SUI_SYSTEM_ADDRESS,
 };
@@ -1853,8 +1853,7 @@ impl AuthorityState {
         if !move_object.type_().is_dynamic_field() {
             return Ok(None);
         }
-        let move_struct =
-            move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)?;
+        let move_struct = move_object.to_move_struct_with_resolver(resolver)?;
 
         let (name_value, type_, object_id) =
             DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
@@ -2048,14 +2047,14 @@ impl AuthorityState {
                 })
             })?;
 
-        let layout = if let (Some(format), Some(move_obj)) =
-            (request.object_format_options, object.data.try_as_move())
+        let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
+            (request.generate_layout, object.data.try_as_move())
         {
             Some(
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     .type_layout_resolver(Box::new(self.database.as_ref()))
-                    .get_layout(move_obj, format)?,
+                    .get_annotated_layout(move_obj)?,
             )
         } else {
             None
@@ -2854,7 +2853,7 @@ impl AuthorityState {
                 self.load_epoch_store_one_call_per_task()
                     .executor()
                     .type_layout_resolver(Box::new(self.database.as_ref()))
-                    .get_layout(object, ObjectFormatOptions::default())
+                    .get_annotated_layout(object)
             })
             .transpose()?;
         Ok(layout)

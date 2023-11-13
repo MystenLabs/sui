@@ -27,7 +27,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_stdlib::move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;

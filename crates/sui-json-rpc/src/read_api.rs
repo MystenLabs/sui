@@ -12,8 +12,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
 use tracing::{debug, error, info, instrument, warn};
 
