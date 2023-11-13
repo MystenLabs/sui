@@ -107,14 +107,16 @@ The response can include a large number of events. Add pagination to the respons
 You can add the `txDigest` value instead of the first `null` within the `params`. The second `null` is an integer that defines how many results (up to 1000) to return and the `true` means ascending order. You can use the `nextCursor` so the response starts from a desired point.
 
 The `id` field of any transaction looks like:
+
 ```bash
 "id": {
-         "txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2",
-         "eventSeq": 6019
-       }
+    "txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2",
+    "eventSeq": 6019
+}
 ```
 
 With this data, create a `nextCursor` as follows:
+
 ```bash
 nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventSeq": 6019}
 ```
