@@ -968,6 +968,7 @@ pub async fn download_db_snapshot(
     skip_indexes: bool,
     num_parallel_downloads: usize,
 ) -> Result<(), anyhow::Error> {
+    // TODO: Enable downloading db snapshots with no sign requests
     let remote_store = snapshot_store_config.make()?;
     let entries = remote_store.list_with_delimiter(None).await?;
     let epoch_path = format!("epoch_{}", epoch);
@@ -1133,13 +1134,7 @@ pub async fn download_db_snapshot(
                 let counter_cloned = file_counter.clone();
                 async move {
                     counter_cloned.fetch_add(1, Ordering::Relaxed);
-                    copy_file(
-                        file.location.clone(),
-                        file.location.clone(),
-                        remote_store.clone(),
-                        local_store.clone(),
-                    )
-                    .await?;
+                    copy_file(&file.location, &file.location, &remote_store, &local_store).await?;
                     Ok::<(::object_store::path::Path, usize), anyhow::Error>((
                         file.location.clone(),
                         file.size,
