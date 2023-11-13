@@ -68,8 +68,8 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        let test_cluster = build_test_cluster(4, 10000).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
