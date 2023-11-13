@@ -273,7 +273,6 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         let install_node_exporter =
             include_str!("../assets/install_node_exporter.sh").replace('\n', "\\n");
         let basic_commands = [
-            "sudo rm -r project-mysticeti",
             "sudo apt-get update",
             "sudo apt-get -y upgrade",
             "sudo apt-get -y autoremove",
@@ -283,8 +282,9 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
             // * build-essential: prevent the error: [error: linker `cc` not found].
             // * sysstat - for getting disk stats
             // * iftop - for getting network stats
-            // * libssl-dev - Required to compile the orchestrator, todo remove this dependency
-            "sudo apt-get -y install build-essential sysstat iftop libssl-dev",
+            // * the other dependencies are required by Sui
+            "sudo apt-get -y install build-essential sysstat iftop libssl-dev pkg-config libclang-dev libpq-dev",
+            "sudo apt-get -y install libfontconfig-dev",
             // * linux-tools-common linux-tools-generic linux-tools-* - installs perf
             // Perf is optional because sometimes aws release new kernel without publishing linux-tools package.
             // We don't want to just fail entire deployment when this happens.
@@ -300,8 +300,8 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
             "chmod +x install_node_exporter.sh",
             "./install_node_exporter.sh",
 
-            "sudo sysctl net.ipv4.tcp_rmem=\"8192 262144 536870912\"",
-            "sudo sysctl net.ipv4.tcp_wmem=\"4096 16384 536870912\"",
+            // "sudo sysctl net.ipv4.tcp_rmem=\"8192 262144 536870912\"",
+            // "sudo sysctl net.ipv4.tcp_wmem=\"4096 16384 536870912\"",
 
             // Create the working directory.
             &format!("mkdir -p {working_dir}"),
@@ -372,7 +372,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
             &format!("git fetch origin {commit}"),
             &format!("(git checkout -b {commit} {commit} || git checkout origin/{commit})"),
             "source $HOME/.cargo/env",
-            "cargo build --release",
+            &format!("cargo run --release --bin {} -- --help", P::BIN_NAME),
         ]
         .join(" && ");
 
@@ -404,13 +404,23 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         let (clients, nodes, _) = self.select_instances(parameters)?;
 
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
+        let id = "configure";
+        let all: Vec<_> = clients.into_iter().chain(nodes).collect();
         let command = self
             .protocol_commands
-            .genesis_command(nodes.iter(), parameters);
+            .genesis_command(all.iter(), parameters);
         let repo_name = self.settings.repository_name();
-        let context = CommandContext::new().with_execute_from_path(repo_name.into());
-        let all = clients.into_iter().chain(nodes);
-        self.ssh_manager.execute(all, command, context).await?;
+        let context = CommandContext::new()
+            .run_background(id.into())
+            .with_execute_from_path(repo_name.into());
+        self.ssh_manager
+            .execute(all.clone().into_iter(), command, context)
+            .await?;
+
+        // Wait until the command finished running.
+        self.ssh_manager
+            .wait_for_command(all.into_iter(), id, CommandStatus::Terminated)
+            .await?;
 
         display::done();
         Ok(())
@@ -493,11 +503,6 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         &self,
         parameters: &BenchmarkParameters<T>,
     ) -> TestbedResult<MeasurementsCollection<T>> {
-        display::action(format!(
-            "Scraping metrics (at least {}s)",
-            parameters.duration.as_secs()
-        ));
-
         // Select the instances to run.
         let (clients, nodes, _) = self.select_instances(parameters)?;
         let mut killed_nodes: Vec<Instance> = Vec::new();
@@ -505,7 +510,10 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         // Regularly scrape the client metrics.
         let metrics_commands = self
             .protocol_commands
-            .clients_metrics_command(clients, parameters);
+            .nodes_metrics_command(clients, parameters);
+        for (instance, address) in &metrics_commands {
+            display::config(&format!("Metrics address ({})", instance.main_ip), address);
+        }
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut metrics_interval = time::interval(self.scrape_interval);
@@ -516,6 +524,10 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         let mut faults_interval = time::interval(self.crash_interval);
         faults_interval.tick().await; // The first tick returns immediately.
 
+        display::action(format!(
+            "Scraping metrics (at least {}s)",
+            parameters.duration.as_secs()
+        ));
         let start = Instant::now();
         loop {
             tokio::select! {

@@ -9,7 +9,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use sui_distributed_execution::types::GlobalConfig;
+use sui_distributed_execution::types::{GlobalConfig, UniqueId};
 
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkType},
@@ -26,9 +26,9 @@ const RUST_FLAGS: &str = "RUSTFLAGS=-C\\ target-cpu=native";
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SailfishBenchmarkType {
     /// Number of sequence workers.
-    sequence_workers: usize,
+    pub sequence_workers: usize,
     /// Number of execution workers.
-    execution_workers: usize,
+    pub execution_workers: usize,
 }
 
 impl Default for SailfishBenchmarkType {
@@ -80,6 +80,8 @@ pub struct SailfishProtocol {
 }
 
 impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
+    const BIN_NAME: &'static str = "benchmark_executor";
+
     fn protocol_dependencies(&self) -> Vec<&'static str> {
         vec![]
     }
@@ -100,32 +102,24 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
     where
         I: Iterator<Item = &'a Instance>,
     {
-        // let ips = instances
-        //     .map(|x| x.main_ip.to_string())
-        //     .collect::<Vec<_>>()
-        //     .join(" ");
-        // let working_directory = self.working_dir.display();
+        let ips = instances
+            .map(|x| x.main_ip.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let working_directory = self.working_dir.display();
+        let sequence_workers = parameters.benchmark_type.sequence_workers;
 
-        // let disable_pipeline = if parameters.benchmark_type.disable_pipeline {
-        //     "--disable-pipeline"
-        // } else {
-        //     ""
-        // };
-        // let number_of_leaders = parameters.benchmark_type.number_of_leaders;
+        let genesis = [
+            &format!("{RUST_FLAGS} cargo run {CARGO_FLAGS} --bin {} --", Self::BIN_NAME),
+            "genesis",
+            &format!("--ips {ips} --working-directory {working_directory} --sequence-workers {sequence_workers}"),
+        ]
+        .join(" ");
 
-        // let genesis = [
-        //     &format!("{RUST_FLAGS} cargo run {CARGO_FLAGS} --bin mysticeti --"),
-        //     "benchmark-genesis",
-        //     &format!("--ips {ips} --working-directory {working_directory} {disable_pipeline} --number-of-leaders {number_of_leaders}"),
-        // ]
-        // .join(" ");
-
-        // ["source $HOME/.cargo/env", &genesis].join(" && ")
-
-        todo!()
+        ["source $HOME/.cargo/env", &genesis].join(" && ")
     }
 
-    fn monitor_command<I>(&self, instances: I) -> Vec<(Instance, String)>
+    fn monitor_command<I>(&self, _instances: I) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
@@ -140,68 +134,72 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
-        // instances
-        //     .into_iter()
-        //     .enumerate()
-        //     .map(|(i, instance)| {
-        //         let authority = i as AuthorityIndex;
-        //         let committee_path: PathBuf =
-        //             [&self.working_dir, &Committee::DEFAULT_FILENAME.into()]
-        //                 .iter()
-        //                 .collect();
-        //         let parameters_path: PathBuf =
-        //             [&self.working_dir, &Parameters::DEFAULT_FILENAME.into()]
-        //                 .iter()
-        //                 .collect();
-        //         let private_configs_path: PathBuf = [
-        //             &self.working_dir,
-        //             &PrivateConfig::default_filename(authority),
-        //         ]
-        //         .iter()
-        //         .collect();
+        instances
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let id = (i + parameters.benchmark_type.sequence_workers) as UniqueId;
+                let config_path: PathBuf =
+                    [&self.working_dir, &GlobalConfig::DEFAULT_CONFIG_NAME.into()]
+                        .iter()
+                        .collect();
 
-        //         let env = env::var("ENV").unwrap_or_default();
-        //         let run = [
-        //             &env,
-        //             &format!("{RUST_FLAGS} cargo run {CARGO_FLAGS} --bin mysticeti --"),
-        //             "run",
-        //             &format!(
-        //                 "--authority {authority} --committee-path {}",
-        //                 committee_path.display()
-        //             ),
-        //             &format!(
-        //                 "--parameters-path {} --private-config-path {}",
-        //                 parameters_path.display(),
-        //                 private_configs_path.display()
-        //             ),
-        //         ]
-        //         .join(" ");
-        //         let tps = format!("export TPS={}", parameters.load / parameters.nodes);
-        //         let tx_size = format!("export TRANSACTION_SIZE={}", parameters.benchmark_type.transaction_size);
-        //         let consensus_only = if parameters.benchmark_type.consensus_only {
-        //             format!("export CONSENSUS_ONLY={}", 1)
-        //         } else {
-        //             "".to_string()
-        //         };
-        //         let syncer = format!("export USE_SYNCER={}", 1);
-        //         let command = ["#!/bin/bash -e", "source $HOME/.cargo/env", &tps, &tx_size, &consensus_only, &syncer, &run].join("\\n");
-        //         let command = format!("echo -e '{command}' > mysticeti-start.sh && chmod +x mysticeti-start.sh && ./mysticeti-start.sh");
+                let run = [
+                    &format!(
+                        "{RUST_FLAGS} cargo run {CARGO_FLAGS} --bin {} --",
+                        Self::BIN_NAME
+                    ),
+                    "run",
+                    &format!("--id {id} --config-path {}", config_path.display()),
+                ]
+                .join(" ");
 
-        //         (instance, command)
-        //     })
-        //     .collect()
-        todo!()
+                let command = ["#!/bin/bash -e", "source $HOME/.cargo/env", &run].join("\\n");
+                let command = format!(
+                    "echo -e '{command}' > ew-start.sh && chmod +x ew-start.sh && ./ew-start.sh"
+                );
+
+                (instance, command)
+            })
+            .collect()
     }
 
     fn client_command<I>(
         &self,
-        _instances: I,
+        instances: I,
         _parameters: &BenchmarkParameters<SailfishBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
-        todo!()
+        instances
+            .into_iter()
+            .enumerate()
+            .map(|(i, instance)| {
+                let id = i as UniqueId;
+                let config_path: PathBuf =
+                    [&self.working_dir, &GlobalConfig::DEFAULT_CONFIG_NAME.into()]
+                        .iter()
+                        .collect();
+
+                let run = [
+                    &format!(
+                        "{RUST_FLAGS} cargo run {CARGO_FLAGS} --bin {} --",
+                        Self::BIN_NAME
+                    ),
+                    "run",
+                    &format!("--id {id} --config-path {}", config_path.display()),
+                ]
+                .join(" ");
+
+                let command = ["#!/bin/bash -e", "source $HOME/.cargo/env", &run].join("\\n");
+                let command = format!(
+                    "echo -e '{command}' > sw-start.sh && chmod +x sw-start.sh && ./sw-start.sh"
+                );
+
+                (instance, command)
+            })
+            .collect()
     }
 }
 
@@ -249,8 +247,8 @@ impl ProtocolMetrics<SailfishBenchmarkType> for SailfishProtocol {
 
     fn clients_metrics_path<I>(
         &self,
-        instances: I,
-        parameters: &BenchmarkParameters<SailfishBenchmarkType>,
+        _instances: I,
+        _parameters: &BenchmarkParameters<SailfishBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,

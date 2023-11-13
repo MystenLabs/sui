@@ -2,11 +2,11 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{stream::FuturesUnordered, SinkExt, StreamExt};
 use network::{MessageHandler, Receiver, ReliableSender, Writer};
-use std::error::Error;
-use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::{collections::HashMap, sync::Arc};
+use std::{error::Error, net::IpAddr};
+use std::{fmt::Debug, net::Ipv4Addr};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::time::{sleep, Duration};
@@ -138,8 +138,10 @@ impl NetworkManager {
     }
 
     async fn run(self) {
+        let mut address = self.my_addr.clone();
+        address.set_ip(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         Receiver::spawn(
-            self.my_addr,
+            address,
             ChannelHandler {
                 deliver_to_app: self.application_in.clone(),
             },

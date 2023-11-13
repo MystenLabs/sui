@@ -134,7 +134,7 @@ async fn main() {
                 "Failed to create directory '{}'",
                 working_directory.display()
             ));
-            let path = working_directory.join("configs.json");
+            let path = working_directory.join(GlobalConfig::DEFAULT_CONFIG_NAME);
             GlobalConfig::new_for_benchmark(ips, sequence_workers).export(path);
             tracing::info!("Generated configs.json");
         }

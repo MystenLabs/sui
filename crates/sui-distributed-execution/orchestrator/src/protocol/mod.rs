@@ -13,6 +13,9 @@ pub mod sailfish;
 /// The minimum interface that the protocol should implement to allow benchmarks from
 /// the orchestrator.
 pub trait ProtocolCommands<T: BenchmarkType> {
+    /// The name of the binary to run.
+    const BIN_NAME: &'static str;
+
     /// The list of dependencies to install (e.g., through apt-get).
     fn protocol_dependencies(&self) -> Vec<&'static str>;
 

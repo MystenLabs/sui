@@ -40,22 +40,11 @@ Create a file called `settings.json` that contains all the configuration paramet
   "cloud_provider": "aws",
   "token_file": "/Users/alberto/.aws/credentials",
   "ssh_private_key_file": "/Users/alberto/.ssh/aws",
-  "regions": [
-    "us-east-1",
-    "us-west-2",
-    "ca-central-1",
-    "eu-central-1",
-    "ap-northeast-1",
-    "eu-west-1",
-    "eu-west-2",
-    "ap-south-1",
-    "ap-southeast-1",
-    "ap-southeast-2"
-  ],
+  "regions": ["us-east-1"],
   "specs": "m5d.8xlarge",
   "repository": {
-    "url": "http://github.com/mystenlabs/project-mysticeti.git",
-    "commit": "orchestrator"
+    "url": "http://github.com/mystenlabs/sui.git",
+    "commit": "sharded-execution"
   },
   "results_directory": "./results",
   "logs_directory": "./logs"
@@ -66,7 +55,7 @@ The documentation of the `Settings` struct in `./src/settings.rs` provides detai
 
 ```json
 "repository": {
-  "url": "http://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@github.com/mystenlabs/project-mysticeti.git",
+  "url": "http://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@github.com/mystenlabs/sui.git",
   "commit": "orchestrator"
 }
 ```

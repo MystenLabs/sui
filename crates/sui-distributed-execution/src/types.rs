@@ -34,6 +34,7 @@ pub struct GlobalConfig(pub HashMap<UniqueId, ServerConfig>);
 
 impl GlobalConfig {
     pub const BENCHMARK_BASE_PORT: u16 = 1500;
+    pub const DEFAULT_CONFIG_NAME: &'static str = "configs.json";
 
     pub fn get(&self, id: &UniqueId) -> Option<&ServerConfig> {
         self.0.get(id)

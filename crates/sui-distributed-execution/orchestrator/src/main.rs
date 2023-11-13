@@ -41,7 +41,7 @@ pub struct Opts {
     #[clap(
         long,
         value_name = "FILE",
-        default_value = "orchestrator/assets/settings.json",
+        default_value = "crates/sui-distributed-execution/orchestrator/assets/settings.json",
         global = true
     )]
     settings_path: String,
@@ -61,14 +61,13 @@ pub enum Operation {
 
     /// Run a benchmark on the specified testbed.
     Benchmark {
-        /// Transaction size in bytes.
-        #[clap(long, default_value = "", global = true)]
+        /// Transaction size in bytes. Default is 1 SW and 4 EW.
+        #[clap(long, default_value = "1-4", global = true)]
         benchmark_type: String,
 
-        /// The committee size to deploy.
-        #[clap(long, value_name = "INT")]
-        committee: usize,
-
+        // /// The committee size to deploy.
+        // #[clap(long, value_name = "INT", default_value = "1")]
+        // committee: usize,
         /// Number of faulty nodes.
         #[clap(long, value_name = "INT", default_value = "0", global = true)]
         faults: usize,
@@ -82,7 +81,7 @@ pub enum Operation {
         crash_interval: Duration,
 
         /// The minimum duration of the benchmark in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "600", global = true)]
+        #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
         duration: Duration,
 
         /// The interval between measurements collection in seconds.
@@ -259,7 +258,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
         // Run benchmarks.
         Operation::Benchmark {
             benchmark_type,
-            committee,
+            // committee,
             faults,
             crash_recovery,
             crash_interval,
@@ -289,7 +288,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .wrap_err("Failed to load testbed setup commands")?;
 
             let protocol_commands = Protocol::new(&settings);
-            let sui_benchmark_type = BenchmarkType::from_str(&benchmark_type)
+            let parsed_benchmark_type = BenchmarkType::from_str(&benchmark_type)
                 .map_err(|e| eyre!(e))
                 .wrap_err("Failed to parse benchmark parameters")?;
 
@@ -316,8 +315,9 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 }
             };
 
-            let generator = BenchmarkParametersGenerator::new(committee, load)
-                .with_benchmark_type(sui_benchmark_type)
+            let execution_workers = parsed_benchmark_type.execution_workers;
+            let generator = BenchmarkParametersGenerator::new(execution_workers, load)
+                .with_benchmark_type(parsed_benchmark_type)
                 .with_custom_duration(duration)
                 .with_faults(fault_type);
 
