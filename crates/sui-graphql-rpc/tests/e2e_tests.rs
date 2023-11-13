@@ -8,10 +8,12 @@ mod tests {
     use diesel::{ExpressionMethods, QueryDsl};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use serde_json::json;
     use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
     use sui_indexer::indexer_reader::IndexerReader;
@@ -21,6 +23,8 @@ mod tests {
     use sui_indexer::utils::reset_database;
     use sui_indexer::PgConnectionPoolConfig;
     use sui_types::digests::ChainIdentifier;
+    use sui_types::DEEPBOOK_ADDRESS;
+    use sui_types::SUI_FRAMEWORK_ADDRESS;
     use tokio::time::sleep;
 
     #[tokio::test]
@@ -39,7 +43,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
         let query = r#"
-            query {
+            {
                 chainIdentifier
             }
         "#;
@@ -94,7 +98,7 @@ mod tests {
         .await;
 
         let query = r#"
-            query {
+            {
                 chainIdentifier
             }
         "#;
@@ -155,13 +159,13 @@ mod tests {
         .await;
 
         let query = r#"
-            query {
+            {
                 chainIdentifier
             }
         "#;
         let res = cluster
             .graphql_client
-            .execute_to_graphql(query.to_string(), true, vec![])
+            .execute_to_graphql(query.to_string(), true, vec![], vec![])
             .await
             .unwrap();
 
@@ -175,6 +179,115 @@ mod tests {
         assert_eq!(*usage.get("depth").unwrap(), 1);
         assert_eq!(*usage.get("variables").unwrap(), 0);
         assert_eq!(*usage.get("fragments").unwrap(), 0);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_graphql_client_variables() {
+        sleep(Duration::from_secs(5)).await;
+        let rng = StdRng::from_seed([12; 32]);
+        let mut sim = Simulacrum::new_with_rng(rng);
+
+        sim.create_checkpoint();
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
+            connection_config,
+            3000,
+            Arc::new(sim),
+        )
+        .await;
+
+        let query = r#"{obj1: object(address: $framework_addr) {location}
+            obj2: object(address: $deepbook_addr) {location}}"#;
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "framework_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0x2"),
+            },
+            GraphqlQueryVariable {
+                name: "deepbook_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+
+        assert!(res.errors().is_empty());
+        let data = res.response_body().data.clone().into_json().unwrap();
+        data.get("obj1").unwrap().get("location").unwrap();
+        assert_eq!(
+            data.get("obj1")
+                .unwrap()
+                .get("location")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            SUI_FRAMEWORK_ADDRESS.to_canonical_string(true)
+        );
+        assert_eq!(
+            data.get("obj2")
+                .unwrap()
+                .get("location")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            DEEPBOOK_ADDRESS.to_canonical_string(true)
+        );
+
+        let bad_variables = vec![
+            GraphqlQueryVariable {
+                name: "framework_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0x2"),
+            },
+            GraphqlQueryVariable {
+                name: "deepbook_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: "deepbook_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee96666666"),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, bad_variables, vec![])
+            .await;
+
+        assert!(res.is_err());
+
+        let bad_variables = vec![
+            GraphqlQueryVariable {
+                name: "framework_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0x2"),
+            },
+            GraphqlQueryVariable {
+                name: "deepbook_addr".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!("0xdee9"),
+            },
+            GraphqlQueryVariable {
+                name: "deepbook_addr".to_string(),
+                ty: "SuiAddressP!".to_string(),
+                value: json!("0xdee9"),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, bad_variables, vec![])
+            .await;
+
+        assert!(res.is_err());
     }
 
     use sui_graphql_rpc::server::builder::tests::*;
