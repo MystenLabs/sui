@@ -48,6 +48,9 @@ module sui::token {
     /// Trying to perform an owner-gated action without being the owner.
     /// Rule is trying to access a missing config (with type).
     const ENoConfig: u64 = 7;
+    /// Using `confirm_request_mut` without `spent_balance`. Immutable version
+    /// of the function must be used instead.
+    const EUseImmutableConfirm: u64 = 8;
 
     // === Protected Actions ===
 
@@ -354,12 +357,12 @@ module sui::token {
         ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
-        if (option::is_some(&request.spent_balance)) {
-            balance::join(
-                &mut policy.spent_balance,
-                option::extract(&mut request.spent_balance)
-            );
-        };
+        assert!(option::is_some(&request.spent_balance), EUseImmutableConfirm);
+
+        balance::join(
+            &mut policy.spent_balance,
+            option::extract(&mut request.spent_balance)
+        );
 
         confirm_request(policy, request, ctx)
     }
@@ -662,8 +665,8 @@ module sui::token {
     }
 
     /// Approvals of the `ActionRequest`.
-    public fun approvals<T>(self: &ActionRequest<T>): &VecSet<TypeName> {
-        &self.approvals
+    public fun approvals<T>(self: &ActionRequest<T>): VecSet<TypeName> {
+        self.approvals
     }
 
     /// Burned balance of the `ActionRequest`.
