@@ -28,9 +28,7 @@ export class Context {
         if (!commandExistsSync(configuration.serverPath)) {
             return new Error(
                 `language server executable '${configuration.serverPath}' could not be found, so ` +
-                'most extension features will be unavailable to you. Follow the instructions in ' +
-                'the move-analyzer Visual Studio Code extension README to install the language ' +
-                'server.',
+                'most extension features will be unavailable to you.',
             );
         }
         return new Context(extensionContext, configuration);
