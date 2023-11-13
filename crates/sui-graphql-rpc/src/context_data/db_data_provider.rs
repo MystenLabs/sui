@@ -93,6 +93,7 @@ use sui_types::{
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
     event::EventID,
+    gas_coin::GAS,
     governance::StakedSui,
     Identifier,
 };
@@ -393,7 +394,7 @@ impl QueryBuilder {
         descending_order: bool,
         limit: i64,
         address: Vec<u8>,
-        coin_type: Option<String>,
+        coin_type: String,
     ) -> objects::BoxedQuery<'a, Pg> {
         let mut query = objects::dsl::objects.into_boxed();
         if let Some(cursor) = cursor {
@@ -412,11 +413,9 @@ impl QueryBuilder {
 
         query = query
             .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16)); // Leverage index on objects table
+            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16)) // Leverage index on objects table
+            .filter(objects::dsl::coin_type.eq(coin_type));
 
-        if let Some(coin_type) = coin_type {
-            query = query.filter(objects::dsl::coin_type.eq(coin_type));
-        }
         query
     }
 
@@ -695,7 +694,7 @@ impl PgManager {
     async fn multi_get_coins(
         &self,
         address: Vec<u8>,
-        coin_type: Option<String>,
+        coin_type: String,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
@@ -1375,6 +1374,9 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>, Error> {
         let address = address.into_vec();
+        let coin_type = coin_type.unwrap_or_else(|| {
+            GAS::type_().to_canonical_string(/* with_prefix */ true)
+        });
 
         let coins = self
             .multi_get_coins(address, coin_type, first, after, last, before)
