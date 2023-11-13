@@ -10805,7 +10805,6 @@ dependencies = [
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-rest-api",
- "sui-sdk",
  "sui-swarm-config",
  "sui-transactional-test-runner",
  "sui-types",
