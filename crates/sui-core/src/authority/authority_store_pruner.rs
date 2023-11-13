@@ -56,6 +56,7 @@ pub struct AuthorityStorePruner {
 pub struct AuthorityStorePruningMetrics {
     pub last_pruned_checkpoint: IntGauge,
     pub num_pruned_objects: IntCounter,
+    pub num_pruned_tombstones: IntCounter,
     pub last_pruned_effects_checkpoint: IntGauge,
 }
 
@@ -71,6 +72,12 @@ impl AuthorityStorePruningMetrics {
             num_pruned_objects: register_int_counter_with_registry!(
                 "num_pruned_objects",
                 "Number of pruned objects",
+                registry
+            )
+            .unwrap(),
+            num_pruned_tombstones: register_int_counter_with_registry!(
+                "num_pruned_tombstones",
+                "Number of pruned tombstones",
                 registry
             )
             .unwrap(),
@@ -127,7 +134,10 @@ impl AuthorityStorePruner {
 
         metrics
             .num_pruned_objects
-            .inc_by((live_object_keys_to_prune.len() + object_tombstones_to_prune.len()) as u64);
+            .inc_by(live_object_keys_to_prune.len() as u64);
+        metrics
+            .num_pruned_tombstones
+            .inc_by(object_tombstones_to_prune.len() as u64);
 
         let mut indirect_objects: HashMap<_, i64> = HashMap::new();
         if indirect_objects_threshold > 0 && indirect_objects_threshold < usize::MAX {
