@@ -102,30 +102,6 @@ impl PersistedStore {
 }
 
 impl SimulatorStore for PersistedStore {
-    fn insert_to_live_objects(&mut self, objects: &[Object]) {
-        for object in objects {
-            let object_id = object.id();
-            let version = object.version();
-            self.live_objects
-                .insert(&object_id, &version)
-                .expect("Fatal: DB write failed");
-
-            let mut o = if let Some(q) = self
-                .objects
-                .get(&object_id)
-                .expect("Fatal: DB write failed")
-            {
-                q
-            } else {
-                BTreeMap::new()
-            };
-            o.insert(version, object.clone());
-            self.objects
-                .insert(&object_id, &o)
-                .expect("Fatal: DB write failed");
-        }
-    }
-
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,

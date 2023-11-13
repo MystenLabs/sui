@@ -60,6 +60,7 @@ impl InMemoryStore {
     ) -> Option<&VerifiedCheckpoint> {
         self.checkpoints.get(&sequence_number)
     }
+
     pub fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -68,17 +69,20 @@ impl InMemoryStore {
             .get(digest)
             .and_then(|sequence_number| self.get_checkpoint_by_sequence_number(*sequence_number))
     }
+
     pub fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint> {
         self.checkpoints
             .last_key_value()
             .map(|(_, checkpoint)| checkpoint)
     }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<&CheckpointContents> {
         self.checkpoint_contents.get(digest)
     }
+
     pub fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
         self.epoch_to_committee.get(epoch as usize)
     }
@@ -92,30 +96,36 @@ impl InMemoryStore {
     ) -> Option<&TransactionEffects> {
         self.effects.get(digest)
     }
+
     pub fn get_transaction_events(
         &self,
         digest: &TransactionEventsDigest,
     ) -> Option<&TransactionEvents> {
         self.events.get(digest)
     }
+
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
         let version = self.live_objects.get(id)?;
         self.get_object_at_version(id, *version)
     }
+
     pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {
         self.objects
             .get(id)
             .and_then(|versions| versions.get(&version))
     }
+
     pub fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
         sui_types::sui_system_state::get_sui_system_state(self).expect("system state must exist")
     }
+
     pub fn get_clock(&self) -> sui_types::clock::Clock {
         self.get_object(&sui_types::SUI_CLOCK_OBJECT_ID)
             .expect("clock should exist")
             .to_rust()
             .expect("clock object should deserialize")
     }
+
     pub fn owned_objects(&self, owner: SuiAddress) -> impl Iterator<Item = &Object> {
         self.live_objects
             .iter()
@@ -365,18 +375,6 @@ impl KeyStore {
 }
 
 impl SimulatorStore for InMemoryStore {
-    fn insert_to_live_objects(&mut self, objects: &[Object]) {
-        for object in objects {
-            let object_id = object.id();
-            let version = object.version();
-            self.live_objects.insert(object_id, version);
-            self.objects
-                .entry(object_id)
-                .or_default()
-                .insert(version, object.clone());
-        }
-    }
-
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,

@@ -44,10 +44,15 @@ pub trait SimulatorStore:
             genesis.events().clone(),
         );
 
-        self.insert_to_live_objects(genesis.objects());
+        self.update_objects(
+            genesis
+                .objects()
+                .iter()
+                .map(|o| (o.id(), o.clone()))
+                .collect(),
+            vec![],
+        );
     }
-
-    fn insert_to_live_objects(&mut self, objects: &[Object]);
 
     fn get_checkpoint_by_sequence_number(
         &self,
