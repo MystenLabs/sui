@@ -19,7 +19,7 @@ pub(crate) struct CoinMetadata {
 
 #[Object]
 impl CoinMetadata {
-    /// Convert the coin object into a Move object
+    /// Convert the coin metadata object into a Move object
     async fn as_move_object(&self) -> &MoveObject {
         &self.super_
     }

@@ -231,6 +231,19 @@ type CoinEdge {
 	cursor: String!
 }
 
+type CoinMetadata {
+	"""
+	Convert the coin metadata object into a Move object
+	"""
+	asMoveObject: MoveObject!
+	decimals: Int
+	name: String
+	symbol: String
+	description: String
+	iconUrl: String
+	supply: BigInt
+}
+
 type CommitteeMember {
 	authorityName: String
 	stakeUnit: Int
@@ -590,6 +603,10 @@ type MoveObject {
 	Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
 	"""
 	asStakedSui: StakedSui
+	"""
+	Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
+	"""
+	asCoinMetadata: CoinMetadata
 }
 
 type MovePackage {
@@ -676,7 +693,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -684,7 +701,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -997,6 +1014,7 @@ type Query {
 	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
+	coinMetadata(coinType: String!): CoinMetadata
 }
 
 type RandomnessStateUpdate {
@@ -1119,14 +1137,14 @@ type StakedSui {
 	principal: BigInt
 	"""
 	The estimated reward for this stake object, calculated as:
-	
+
 	principal * (initial_stake_rate / current_stake_rate - 1.0)
-	
+
 	Or 0, if this value is negative, where:
-	
+
 	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
 	- `current_stake_rate` is the stake rate in the current epoch.
-	
+
 	This value is only available if the stake is active.
 	"""
 	estimatedReward: BigInt
@@ -1175,7 +1193,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-	
+
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
@@ -1477,4 +1495,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-
