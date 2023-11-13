@@ -923,6 +923,10 @@ type Query {
 	latestSuiSystemState: SuiSystemStateSummary!
 }
 
+type RandomnessStateUpdate {
+	value: String!
+}
+
 """
 Information about whether epoch changes are using safe mode.
 """
@@ -1298,7 +1302,7 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | EndOfEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | RandomnessStateUpdate | EndOfEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX
