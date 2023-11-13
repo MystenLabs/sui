@@ -199,11 +199,63 @@ pub struct DBWithThreadModeWrapper {
     pub db_path: PathBuf,
 }
 
+impl DBWithThreadModeWrapper {
+    fn new(
+        underlying: rocksdb::DBWithThreadMode<MultiThreaded>,
+        metric_conf: MetricConf,
+        db_path: PathBuf,
+    ) -> Self {
+        DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
+        Self {
+            underlying,
+            metric_conf,
+            db_path,
+        }
+    }
+}
+
+impl Drop for DBWithThreadModeWrapper {
+    fn drop(&mut self) {
+        DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
+        println!(
+            "Dropping db {} {}",
+            self.metric_conf.db_name,
+            self.db_path.display()
+        );
+    }
+}
+
 #[derive(Debug)]
 pub struct OptimisticTransactionDBWrapper {
     pub underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
     pub metric_conf: MetricConf,
     pub db_path: PathBuf,
+}
+
+impl OptimisticTransactionDBWrapper {
+    fn new(
+        underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
+        metric_conf: MetricConf,
+        db_path: PathBuf,
+    ) -> Self {
+        DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
+        Self {
+            underlying,
+            metric_conf,
+            db_path,
+        }
+    }
+}
+
+impl Drop for OptimisticTransactionDBWrapper {
+    fn drop(&mut self) {
+        DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
+        println!(
+            "Dropping db {} {}",
+            self.metric_conf.db_name,
+            self.db_path.display()
+        );
+    }
 }
 
 /// Thin wrapper to unify interface across different db types
@@ -511,29 +563,13 @@ impl RocksDB {
 
     pub fn db_name(&self) -> String {
         match self {
-            Self::DBWithThreadMode(d) => d
-                .metric_conf
-                .db_name_override
-                .clone()
-                .unwrap_or_else(|| self.default_db_name()),
-            Self::OptimisticTransactionDB(d) => d
-                .metric_conf
-                .db_name_override
-                .clone()
-                .unwrap_or_else(|| self.default_db_name()),
+            Self::DBWithThreadMode(d) => d.metric_conf.db_name.clone(),
+            Self::OptimisticTransactionDB(d) => d.metric_conf.db_name.clone(),
         }
     }
 
     pub fn live_files(&self) -> Result<Vec<LiveFile>, Error> {
         delegate_call!(self.live_files())
-    }
-
-    fn default_db_name(&self) -> String {
-        self.path()
-            .file_name()
-            .and_then(|f| f.to_str())
-            .unwrap_or("unknown")
-            .to_string()
     }
 }
 
@@ -633,24 +669,25 @@ impl RocksDBBatch {
 
 #[derive(Debug, Default)]
 pub struct MetricConf {
-    pub db_name_override: Option<String>,
+    pub db_name: String,
     pub read_sample_interval: SamplingInterval,
     pub write_sample_interval: SamplingInterval,
     pub iter_sample_interval: SamplingInterval,
 }
 
 impl MetricConf {
-    pub fn with_db_name(db_name: &str) -> Self {
+    pub fn new(db_name: &str) -> Self {
         Self {
-            db_name_override: Some(db_name.to_string()),
+            db_name: db_name.to_string(),
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
         }
     }
-    pub fn with_sampling(read_interval: SamplingInterval) -> Self {
+
+    pub fn with_sampling(self, read_interval: SamplingInterval) -> Self {
         Self {
-            db_name_override: None,
+            db_name: self.db_name,
             read_sample_interval: read_interval,
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
@@ -2432,11 +2469,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
             )?
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
-            DBWithThreadModeWrapper {
-                underlying: rocksdb,
-                metric_conf,
-                db_path: PathBuf::from(path),
-            },
+            DBWithThreadModeWrapper::new(rocksdb, metric_conf, PathBuf::from(path)),
         )))
     })
 }
@@ -2461,11 +2494,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
                 .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts)),
         )?;
         Ok(Arc::new(RocksDB::OptimisticTransactionDB(
-            OptimisticTransactionDBWrapper {
-                underlying: rocksdb,
-                metric_conf,
-                db_path: PathBuf::from(path),
-            },
+            OptimisticTransactionDBWrapper::new(rocksdb, metric_conf, PathBuf::from(path)),
         )))
     })
 }
@@ -2525,11 +2554,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             db
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
-            DBWithThreadModeWrapper {
-                underlying: rocksdb,
-                metric_conf,
-                db_path: secondary_path,
-            },
+            DBWithThreadModeWrapper::new(rocksdb, metric_conf, secondary_path),
         )))
     })
 }
