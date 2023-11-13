@@ -25,7 +25,7 @@ use crate::{
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
-        stake::Stake,
+        stake::StakedSui,
         stake_subsidy::StakeSubsidy,
         storage_fund::StorageFund,
         sui_address::SuiAddress,
@@ -85,7 +85,7 @@ use sui_types::{
     effects::TransactionEffects,
     event::EventID,
     gas_coin::GAS,
-    governance::StakedSui,
+    governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
@@ -1523,7 +1523,7 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Stake>>, Error> {
+    ) -> Result<Option<Connection<String, StakedSui>>, Error> {
         let obj_filter = ObjectFilter {
             package: None,
             module: None,
@@ -1559,7 +1559,7 @@ impl PgManager {
                 ))
             })?;
 
-            let stake_object = Stake::try_from(&move_object).map_err(|_| {
+            let stake_object = StakedSui::try_from(&move_object).map_err(|_| {
                 Error::Internal(format!(
                     "Expected {} to be a staked sui, but it is not.",
                     object.address,
@@ -1581,7 +1581,7 @@ impl PgManager {
     /// object.  Used to implement fields that are implemented in JSON-RPC but not GraphQL (yet).
     pub(crate) async fn fetch_rpc_staked_sui(
         &self,
-        stake: StakedSui,
+        stake: NativeStakedSui,
     ) -> Result<RpcStakedSui, Error> {
         let governance_api = GovernanceReadApiV2::new(self.inner.clone());
 
