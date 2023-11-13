@@ -186,6 +186,7 @@ impl ProgrammableTransactionBuilder {
     /// Specifically:
     /// * the [`sui_move_build::CompiledPackage::get_package_bytes`] function, and
     /// * the [`sui_move_build::CompiledPackage::dependency_ids`] field
+    #[allow(rustdoc::broken_intra_doc_links)]
     pub fn publish_upgradeable(
         &mut self,
         modules: Vec<Vec<u8>>,
@@ -195,7 +196,7 @@ impl ProgrammableTransactionBuilder {
     }
 
     /// To see how to provide this function's arguments correctly, see the comment above for
-    /// [`ProgrammableTransactionBuilder::publish_upgradeable`].
+    /// [ProgrammableTransactionBuilder::publish_upgradeable].
     pub fn publish_immutable(&mut self, modules: Vec<Vec<u8>>, dep_ids: Vec<ObjectID>) {
         let cap = self.publish_upgradeable(modules, dep_ids);
         self.commands
@@ -209,7 +210,7 @@ impl ProgrammableTransactionBuilder {
     }
 
     /// To see how to provide this function's arguments correctly, see the comment above for
-    /// [`ProgrammableTransactionBuilder::publish_upgradeable`].
+    /// `publish_upgradeable`.
     pub fn upgrade(
         &mut self,
         current_package_object_id: ObjectID,

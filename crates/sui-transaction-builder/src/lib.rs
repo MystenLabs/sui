@@ -440,11 +440,11 @@ impl TransactionBuilder {
     ///
     /// In order to obtain the package's `compiled_modules: Vec<Vec<u8>>` and the `ObjectID`s
     /// of its dependencies, `dep_ids: Vec<ObjectID>`, use the public API for
-    /// [`sui_move_build::CompiledPackage`].
+    /// `sui_move_build::CompiledPackage`.
     ///
     /// Specifically:
-    /// * the [`sui_move_build::CompiledPackage::get_package_bytes`] function, and
-    /// * the [`sui_move_build::CompiledPackage::dependency_ids`] field
+    /// * the `sui_move_build::CompiledPackage::get_package_bytes` function, and
+    /// * the `sui_move_build::CompiledPackage::dependency_ids` field
     pub async fn publish(
         &self,
         sender: SuiAddress,
@@ -479,12 +479,12 @@ impl TransactionBuilder {
     /// * the `ObjectID`s of its dependencies, `dep_ids: Vec<ObjectID>`, and
     /// * and its `digest: Vec<u8>`
     ///
-    /// use the public API for [`sui_move_build::CompiledPackage`].
+    /// use the public API for `sui_move_build::CompiledPackage`.
     ///
     /// Specifically:
-    /// * the [`sui_move_build::CompiledPackage::get_package_bytes`] function, and
-    /// * the [`sui_move_build::CompiledPackage::dependency_ids`] field
-    /// * the [`sui_move_build::CompiledPackage::get_package_digest`] function
+    /// * the `sui_move_build::CompiledPackage::get_package_bytes` function, and
+    /// * the `sui_move_build::CompiledPackage::dependency_ids` field
+    /// * the `sui_move_build::CompiledPackage::get_package_digest` function
     pub async fn upgrade(
         &self,
         sender: SuiAddress,
