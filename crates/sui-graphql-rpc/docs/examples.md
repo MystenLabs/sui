@@ -861,8 +861,7 @@
 >  }
 >}
 >
->fragment DynamicFieldNameSelection on TypedDynamicFieldName {
->  kind
+>fragment DynamicFieldNameSelection on MoveValue {
 >  type {
 >    repr
 >  }
@@ -871,6 +870,7 @@
 >}
 >
 >fragment DynamicFieldSelect on DynamicField {
+>  kind,
 >  name {
 >    ...DynamicFieldNameSelection
 >  }
@@ -897,11 +897,8 @@
 
 ### <a id=720886></a>
 ### Dynamic Field Connection
-####  defines a fragment for selecting fields from value matching either MoveValue or MoveObject
-####  a query that selects the name and value of the first dynamic field of the owner address
 
-><pre># defines a fragment for selecting fields from value matching either MoveValue or MoveObject
->fragment DynamicFieldValueSelection on DynamicFieldValue {
+><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
 >  ... on MoveValue {
 >    type {
 >      repr
@@ -919,12 +916,29 @@
 >  }
 >}
 >
-># a query that selects the name and value of the first dynamic field of the owner address
->query DynamicFieldValue {
->  owner(
+>fragment DynamicFieldNameSelection on MoveValue {
+>  type {
+>    repr
+>  }
+>  data
+>  bcs
+>}
+>
+>fragment DynamicFieldSelect on DynamicField {
+>  kind,
+>  name {
+>    ...DynamicFieldNameSelection
+>  }
+>  value {
+>    ...DynamicFieldValueSelection
+>  }
+>}
+>
+>query DynamicFieldConnection {
+>  object(
 >    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
 >  ) {
->    dynamicFieldConnection(first:1){
+>    dynamicFieldConnection {
 >      pageInfo {
 >        hasNextPage
 >        endCursor
@@ -932,15 +946,7 @@
 >      edges {
 >        cursor
 >        node {
->          name {
->            type {
->              repr
->            }
->            data
->          }
->          value {
->            ...DynamicFieldValueSelection
->          }
+>          ...DynamicFieldSelect
 >        }
 >      }
 >    }
