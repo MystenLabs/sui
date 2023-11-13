@@ -3,7 +3,8 @@
 use once_cell::sync::OnceCell;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use rocksdb::perf::set_perf_stats;
 use rocksdb::{PerfContext, PerfMetric, PerfStatsLevel};
@@ -254,6 +255,7 @@ pub struct OperationMetrics {
     pub rocksdb_deletes: IntCounterVec,
     pub rocksdb_batch_commit_latency_seconds: HistogramVec,
     pub rocksdb_batch_commit_bytes: HistogramVec,
+    pub rocksdb_num_active_db_handles: IntGauge,
 }
 
 impl OperationMetrics {
@@ -353,6 +355,12 @@ impl OperationMetrics {
                 "rocksdb_batch_commit_bytes",
                 "Rocksdb schema batch commit size in bytes",
                 &["db_name"],
+                registry,
+            )
+            .unwrap(),
+            rocksdb_num_active_db_handles: register_int_gauge_with_registry!(
+                "rocksdb_num_active_db_handles",
+                "Number of active db handles",
                 registry,
             )
             .unwrap(),
@@ -874,6 +882,12 @@ impl DBMetrics {
             // this happens many times during tests
             .tap_err(|_| warn!("DBMetrics registry overwritten"));
         ONCE.get().unwrap()
+    }
+    pub fn increment_num_active_dbs(&self) {
+        self.op_metrics.rocksdb_num_active_db_handles.inc();
+    }
+    pub fn decrement_num_active_dbs(&self) {
+        self.op_metrics.rocksdb_num_active_db_handles.dec();
     }
     pub fn get() -> &'static Arc<DBMetrics> {
         ONCE.get()

@@ -201,11 +201,53 @@ pub struct DBWithThreadModeWrapper {
     pub db_path: PathBuf,
 }
 
+impl DBWithThreadModeWrapper {
+    fn new(
+        underlying: rocksdb::DBWithThreadMode<MultiThreaded>,
+        metric_conf: MetricConf,
+        db_path: PathBuf,
+    ) -> Self {
+        DBMetrics::get().increment_num_active_dbs();
+        Self {
+            underlying,
+            metric_conf,
+            db_path,
+        }
+    }
+}
+
+impl Drop for DBWithThreadModeWrapper {
+    fn drop(&mut self) {
+        DBMetrics::get().decrement_num_active_dbs();
+    }
+}
+
 #[derive(Debug)]
 pub struct OptimisticTransactionDBWrapper {
     pub underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
     pub metric_conf: MetricConf,
     pub db_path: PathBuf,
+}
+
+impl OptimisticTransactionDBWrapper {
+    fn new(
+        underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
+        metric_conf: MetricConf,
+        db_path: PathBuf,
+    ) -> Self {
+        DBMetrics::get().increment_num_active_dbs();
+        Self {
+            underlying,
+            metric_conf,
+            db_path,
+        }
+    }
+}
+
+impl Drop for OptimisticTransactionDBWrapper {
+    fn drop(&mut self) {
+        DBMetrics::get().decrement_num_active_dbs();
+    }
 }
 
 /// Thin wrapper to unify interface across different db types
@@ -2462,11 +2504,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
             .map_err(typed_store_err_from_rocks_err)?
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
-            DBWithThreadModeWrapper {
-                underlying: rocksdb,
-                metric_conf,
-                db_path: PathBuf::from(path),
-            },
+            DBWithThreadModeWrapper::new(rocksdb, metric_conf, PathBuf::from(path)),
         )))
     })
 }
@@ -2492,11 +2530,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
         )
         .map_err(typed_store_err_from_rocks_err)?;
         Ok(Arc::new(RocksDB::OptimisticTransactionDB(
-            OptimisticTransactionDBWrapper {
-                underlying: rocksdb,
-                metric_conf,
-                db_path: PathBuf::from(path),
-            },
+            OptimisticTransactionDBWrapper::new(rocksdb, metric_conf, PathBuf::from(path)),
         )))
     })
 }
@@ -2558,11 +2592,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             db
         };
         Ok(Arc::new(RocksDB::DBWithThreadMode(
-            DBWithThreadModeWrapper {
-                underlying: rocksdb,
-                metric_conf,
-                db_path: secondary_path,
-            },
+            DBWithThreadModeWrapper::new(rocksdb, metric_conf, secondary_path),
         )))
     })
 }
