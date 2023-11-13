@@ -12060,6 +12060,7 @@ dependencies = [
  "bcs",
  "bimap",
  "clap",
+ "eyre",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
@@ -12073,7 +12074,9 @@ dependencies = [
  "msim",
  "once_cell",
  "rand 0.8.5",
+ "rocksdb",
  "simulacrum",
+ "sui-config",
  "sui-core",
  "sui-framework",
  "sui-framework-snapshot",
@@ -12086,6 +12089,8 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tokio",
+ "typed-store",
+ "typed-store-derive",
  "workspace-hack",
 ]
 

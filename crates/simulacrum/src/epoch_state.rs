@@ -20,7 +20,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, VerifiedTransaction},
 };
 
-use crate::store::InMemoryStore;
+use crate::SimulatorStore;
 
 pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
@@ -84,7 +84,7 @@ impl EpochState {
 
     pub fn execute_transaction(
         &self,
-        store: &InMemoryStore,
+        store: &dyn SimulatorStore,
         deny_config: &TransactionDenyConfig,
         transaction: &VerifiedTransaction,
     ) -> Result<(
@@ -103,7 +103,7 @@ impl EpochState {
             &input_object_kinds,
             &receiving_object_refs,
             deny_config,
-            store,
+            &store,
         )?;
 
         let (input_objects, receiving_objects) = store.read_objects_for_synchronous_execution(
@@ -126,7 +126,7 @@ impl EpochState {
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas) = transaction_data.execution_parts();
         Ok(self.executor.execute_transaction_to_effects(
-            store,
+            store.backing_store(),
             &self.protocol_config,
             self.limits_metrics.clone(),
             false,           // enable_expensive_checks

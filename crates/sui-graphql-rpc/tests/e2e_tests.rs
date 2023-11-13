@@ -78,13 +78,13 @@ mod tests {
         sim.create_checkpoint();
         sim.create_checkpoint();
 
-        let genesis_checkpoint_digest1 = sim
+        let genesis_checkpoint_digest1 = *sim
             .store()
             .get_checkpoint_by_sequence_number(0)
             .unwrap()
             .digest();
 
-        let chain_id_actual = format!("{}", ChainIdentifier::from(*genesis_checkpoint_digest1));
+        let chain_id_actual = format!("{}", ChainIdentifier::from(genesis_checkpoint_digest1));
         let exp = format!(
             "{{\"data\":{{\"chainIdentifier\":\"{}\"}}}}",
             chain_id_actual

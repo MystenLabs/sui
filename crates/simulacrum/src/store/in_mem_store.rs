@@ -8,23 +8,22 @@ use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
 use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObjectArc};
 use sui_types::{
-    base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::{SuiError, SuiResult, UserInputError},
+    error::SuiError,
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
-    transaction::{
-        InputObjectKind, InputObjects, ObjectReadResult, ReceivingObjectReadResult,
-        ReceivingObjects, VerifiedTransaction,
-    },
+    transaction::VerifiedTransaction,
 };
+
+use super::SimulatorStore;
 
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
@@ -51,30 +50,7 @@ pub struct InMemoryStore {
 impl InMemoryStore {
     pub fn new(genesis: &genesis::Genesis) -> Self {
         let mut store = Self::default();
-
-        store.insert_checkpoint(genesis.checkpoint());
-        store.insert_checkpoint_contents(genesis.checkpoint_contents().clone());
-        store.insert_committee(genesis.committee().unwrap());
-        store.insert_transaction(VerifiedTransaction::new_unchecked(
-            genesis.transaction().clone(),
-        ));
-        store.insert_transaction_effects(genesis.effects().clone());
-        store.insert_events(
-            genesis.effects().transaction_digest(),
-            genesis.events().clone(),
-        );
-
-        for object in genesis.objects() {
-            let object_id = object.id();
-            let version = object.version();
-            store.live_objects.insert(object_id, version);
-            store
-                .objects
-                .entry(object_id)
-                .or_default()
-                .insert(version, object.clone());
-        }
-
+        store.init_with_genesis(genesis);
         store
     }
 
@@ -110,7 +86,6 @@ impl InMemoryStore {
     pub fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
         self.epoch_to_committee.get(epoch as usize)
     }
-
     pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
         self.transactions.get(digest)
     }
@@ -127,15 +102,6 @@ impl InMemoryStore {
         digest: &TransactionEventsDigest,
     ) -> Option<&TransactionEvents> {
         self.events.get(digest)
-    }
-
-    pub fn get_transaction_events_by_tx_digest(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<&TransactionEvents> {
-        self.events_tx_digest_index
-            .get(tx_digest)
-            .and_then(|x| self.events.get(x))
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -272,7 +238,7 @@ impl ChildObjectResolver for InMemoryStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        let child_object = match self.get_object(child).cloned() {
+        let child_object = match crate::store::SimulatorStore::get_object(self, child) {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -303,7 +269,8 @@ impl ChildObjectResolver for InMemoryStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        let recv_object = match self.get_object(receiving_object_id).cloned() {
+        let recv_object = match crate::store::SimulatorStore::get_object(self, receiving_object_id)
+        {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -407,159 +374,65 @@ impl KeyStore {
     }
 }
 
-// TODO: After we abstract object storage into the ExecutionCache trait, we can replace this with
-// sui_core::TransactionInputLoad using an appropriate cache implementation.
-impl InMemoryStore {
-    pub fn read_objects_for_synchronous_execution(
-        &self,
-        _tx_digest: &TransactionDigest,
-        input_object_kinds: &[InputObjectKind],
-        receiving_object_refs: &[ObjectRef],
-    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        let mut input_objects = Vec::new();
-        for kind in input_object_kinds {
-            let obj = match kind {
-                InputObjectKind::MovePackage(id) => self.get_object(id).cloned(),
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
-                }
-
-                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id).cloned(),
-            };
-
-            input_objects.push(ObjectReadResult::new(
-                *kind,
-                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
-            ));
-        }
-
-        let mut receiving_objects = Vec::new();
-        for objref in receiving_object_refs {
-            // no need for marker table check in simulacrum
-            let Some(obj) = self.get_object(&objref.0).cloned() else {
-                return Err(UserInputError::ObjectNotFound {
-                    object_id: objref.0,
-                    version: Some(objref.1),
-                }
-                .into());
-            };
-            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj.into()));
-        }
-
-        Ok((input_objects.into(), receiving_objects.into()))
-    }
-}
-
-pub trait SimulatorStore:
-    sui_types::storage::BackingPackageStore + sui_types::storage::ObjectStore
-{
-    fn get_checkpoint_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<&VerifiedCheckpoint>;
-
-    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<&VerifiedCheckpoint>;
-
-    fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint>;
-    fn get_checkpoint_contents(
-        &self,
-        digest: &CheckpointContentsDigest,
-    ) -> Option<&CheckpointContents>;
-
-    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee>;
-
-    fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction>;
-
-    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<&TransactionEffects>;
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<&TransactionEvents>;
-
-    fn get_object(&self, id: &ObjectID) -> Option<&Object>;
-    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object>;
-
-    fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState;
-
-    fn get_clock(&self) -> sui_types::clock::Clock;
-
-    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_>;
-
-    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint);
-
-    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents);
-
-    fn insert_committee(&mut self, committee: Committee);
-
-    fn insert_executed_transaction(
-        &mut self,
-        transaction: VerifiedTransaction,
-        effects: TransactionEffects,
-        events: TransactionEvents,
-        written_objects: BTreeMap<ObjectID, Object>,
-    );
-
-    fn insert_transaction(&mut self, transaction: VerifiedTransaction);
-
-    fn insert_transaction_effects(&mut self, effects: TransactionEffects);
-
-    fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents);
-
-    fn update_objects(
-        &mut self,
-        written_objects: BTreeMap<ObjectID, Object>,
-        deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
-    );
-}
-
 impl SimulatorStore for InMemoryStore {
     fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<&VerifiedCheckpoint> {
+    ) -> Option<VerifiedCheckpoint> {
         self.get_checkpoint_by_sequence_number(sequence_number)
+            .cloned()
     }
 
-    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<&VerifiedCheckpoint> {
-        self.get_checkpoint_by_digest(digest)
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        self.get_checkpoint_by_digest(digest).cloned()
     }
 
-    fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint> {
-        self.get_highest_checkpint()
+    fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
+        self.get_highest_checkpint().cloned()
     }
 
     fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<&CheckpointContents> {
-        self.get_checkpoint_contents(digest)
+    ) -> Option<CheckpointContents> {
+        self.get_checkpoint_contents(digest).cloned()
     }
 
-    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
-        self.get_committee_by_epoch(epoch)
+    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<Committee> {
+        self.get_committee_by_epoch(epoch).cloned()
     }
 
-    fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
-        self.get_transaction(digest)
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
+        self.get_transaction(digest).cloned()
     }
 
-    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<&TransactionEffects> {
-        self.get_transaction_effects(digest)
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
+        self.get_transaction_effects(digest).cloned()
     }
 
     fn get_transaction_events(
         &self,
         digest: &TransactionEventsDigest,
-    ) -> Option<&TransactionEvents> {
-        self.get_transaction_events(digest)
+    ) -> Option<TransactionEvents> {
+        self.get_transaction_events(digest).cloned()
     }
 
-    fn get_object(&self, id: &ObjectID) -> Option<&Object> {
-        self.get_object(id)
+    fn get_transaction_events_by_tx_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEvents> {
+        self.events_tx_digest_index
+            .get(tx_digest)
+            .and_then(|x| self.events.get(x))
+            .cloned()
     }
 
-    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {
-        self.get_object_at_version(id, version)
+    fn get_object(&self, id: &ObjectID) -> Option<Object> {
+        self.get_object(id).cloned()
+    }
+
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        self.get_object_at_version(id, version).cloned()
     }
 
     fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
@@ -570,8 +443,8 @@ impl SimulatorStore for InMemoryStore {
         self.get_clock()
     }
 
-    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_> {
-        Box::new(self.owned_objects(owner))
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
+        Box::new(self.owned_objects(owner).cloned())
     }
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
@@ -614,5 +487,9 @@ impl SimulatorStore for InMemoryStore {
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
         self.update_objects(written_objects, deleted_objects)
+    }
+
+    fn backing_store(&self) -> &dyn sui_types::storage::BackingStore {
+        self
     }
 }

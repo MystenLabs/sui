@@ -5,40 +5,41 @@
 
 pub mod args;
 pub mod programmable_transaction_test_parser;
+mod simulator_persisted_store;
 pub mod test_adapter;
 
 use move_transactional_test_runner::framework::run_test_impl;
 use rand::rngs::StdRng;
 use simulacrum::Simulacrum;
+use simulacrum::SimulatorStore;
 use std::path::Path;
-use sui_rest_api::node_state_getter::NodeStateGetter;
-use sui_types::digests::TransactionDigest;
-use sui_types::digests::TransactionEventsDigest;
-use sui_types::effects::TransactionEvents;
-use sui_types::event::Event;
-use sui_types::messages_checkpoint::CheckpointContentsDigest;
-use sui_types::storage::ObjectKey;
-use sui_types::storage::ObjectStore;
-use test_adapter::{SuiTestAdapter, PRE_COMPILED};
-
 use std::sync::Arc;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::EventFilter;
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::VersionNumber;
+use sui_types::digests::TransactionDigest;
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEvents;
 use sui_types::error::ExecutionError;
 use sui_types::error::SuiError;
 use sui_types::error::SuiResult;
+use sui_types::event::Event;
+use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
+use sui_types::storage::ObjectKey;
+use sui_types::storage::ObjectStore;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
+use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
@@ -272,7 +273,7 @@ impl TransactionalAdapter for Simulacrum<StdRng> {
         Ok(self
             .store()
             .get_transaction_events_by_tx_digest(tx_digest)
-            .map(|x| x.data.clone())
+            .map(|x| x.data)
             .unwrap_or_default())
     }
 
