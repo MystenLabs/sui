@@ -8,7 +8,7 @@ CREATE TABLE move_calls (
     move_module                 TEXT    NOT NULL,
     move_function               TEXT    NOT NULL
 );
-CREATE INDEX move_calls_epoch ON move_calls (epoch);
+CREATE INDEX idx_move_calls_epoch_etc ON move_calls (epoch, move_package, move_module, move_function);
 
 CREATE TABLE move_call_metrics (
     -- Diesel only supports table with a primary key.

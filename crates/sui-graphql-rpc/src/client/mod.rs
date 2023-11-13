@@ -24,6 +24,22 @@ pub enum ClientError {
         usage_name: String,
         usage_value: Value,
     },
+    #[error("{item_type} at pos {idx} must not be empty")]
+    InvalidEmptyItem { item_type: String, idx: usize },
+    #[error(
+        "Conflicting type definitions for variable {var_name}: {var_type_prev} vs {var_type_curr}"
+    )]
+    VariableDefinitionConflict {
+        var_name: String,
+        var_type_prev: String,
+        var_type_curr: String,
+    },
+    #[error("Conflicting values for variable {var_name}: {var_val_prev} vs {var_val_curr}")]
+    VariableValueConflict {
+        var_name: String,
+        var_val_prev: serde_json::Value,
+        var_val_curr: serde_json::Value,
+    },
     #[error(transparent)]
     InnerClientError(#[from] reqwest::Error),
 }

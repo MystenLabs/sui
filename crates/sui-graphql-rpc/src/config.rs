@@ -14,8 +14,6 @@ const MAX_QUERY_DEPTH: u32 = 20;
 const MAX_QUERY_NODES: u32 = 200;
 const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
-const MAX_QUERY_VARIABLES: u32 = 50;
-const MAX_QUERY_FRAGMENTS: u32 = 50;
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
@@ -56,10 +54,6 @@ pub struct Limits {
     pub(crate) max_query_payload_size: u32,
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
-    #[serde(default)]
-    pub(crate) max_query_variables: u32,
-    #[serde(default)]
-    pub(crate) max_query_fragments: u32,
     #[serde(default)]
     pub(crate) request_timeout_ms: u64,
 }
@@ -160,16 +154,6 @@ impl ServiceConfig {
         BigInt::from(self.limits.max_db_query_cost)
     }
 
-    /// Maximum number of variables a query can define
-    async fn max_query_variables(&self) -> u32 {
-        self.limits.max_query_variables
-    }
-
-    /// Maximum number of fragments a query can define
-    async fn max_query_fragments(&self) -> u32 {
-        self.limits.max_query_fragments
-    }
-
     /// Maximum time in milliseconds that will be spent to serve one request.
     async fn request_timeout_ms(&self) -> BigInt {
         BigInt::from(self.limits.request_timeout_ms)
@@ -200,8 +184,6 @@ impl Default for Limits {
             max_query_nodes: MAX_QUERY_NODES,
             max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: MAX_DB_QUERY_COST,
-            max_query_variables: MAX_QUERY_VARIABLES,
-            max_query_fragments: MAX_QUERY_FRAGMENTS,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
         }
     }
@@ -296,8 +278,6 @@ mod tests {
                 max-query-nodes = 300
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
-                max-query-variables = 45
-                max-query-fragments = 32
                 request-timeout-ms = 27000
             "#,
         )
@@ -309,8 +289,6 @@ mod tests {
                 max_query_nodes: 300,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
-                max_query_variables: 45,
-                max_query_fragments: 32,
                 request_timeout_ms: 27_000,
             },
             ..Default::default()
@@ -367,8 +345,6 @@ mod tests {
                 max-query-nodes = 320
                 max-query-payload-size = 200
                 max-db-query-cost = 20
-                max-query-variables = 34
-                max-query-fragments = 31
                 request-timeout-ms = 30000
 
                 [experiments]
@@ -383,8 +359,6 @@ mod tests {
                 max_query_nodes: 320,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
-                max_query_variables: 34,
-                max_query_fragments: 31,
                 request_timeout_ms: 30_000,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),

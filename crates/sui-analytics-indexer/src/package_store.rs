@@ -6,9 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use move_core_types::account_address::AccountAddress;
-use sui_package_resolver::{
-    error::Error as PackageResolverError, make_package, Package, PackageStore, Result,
-};
+use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore, Result};
 use sui_rest_api::Client;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::Object;
@@ -118,11 +116,6 @@ impl PackageStore for LocalDBPackageStore {
 
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         let object = self.get(id).await?;
-        let package = Arc::new(make_package(
-            AccountAddress::from(object.id()),
-            object.version(),
-            &object,
-        )?);
-        Ok(package)
+        Ok(Arc::new(Package::read(&object)?))
     }
 }
