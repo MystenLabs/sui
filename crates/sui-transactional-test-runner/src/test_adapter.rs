@@ -1588,22 +1588,7 @@ fn create_accounts_objects(
     // Make a default account with a gas object
     let default_account = mk_account();
 
-    // For mappings where the address is specified, populate the named address mapping
-    let additional_mapping =
-        additional_mapping
-            .into_iter()
-            .chain(accounts.iter().map(|(n, test_account)| {
-                let addr =
-                    NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
-                (n.clone(), addr)
-            }));
-    // Extend the mappings of all named addresses with values
-    for (name, addr) in additional_mapping {
-        if named_address_mapping.contains_key(&name) || name == "sui" {
-            panic!("Invalid init. The named address '{}' is reserved", name)
-        }
-        named_address_mapping.insert(name, addr);
-    }
+    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
 
     AccountSetup {
         default_account,
@@ -1640,47 +1625,32 @@ fn init_sim_executor(
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
+    let mut account_kps = BTreeMap::new();
     let mut accounts = BTreeMap::new();
     let mut objects = vec![];
 
-    // Closure to create accounts with gas objects of value `GAS_FOR_TESTING`
-    let mut mk_account = || {
-        let (address, key_pair) = get_key_pair_from_rng(&mut rng);
-        let obj = Object::with_id_owner_gas_for_testing(
-            ObjectID::new(rng.gen()),
-            address,
-            GAS_FOR_TESTING,
-        );
-
-        TestAccount {
-            address,
-            key_pair,
-            gas: obj.id(),
-        }
-    };
-
-    // For each named Sui account without an address value, create an account with an adddress
-    // and a gas object
+    // For each named Sui account without an address value, create a key pair
     for n in account_names {
-        let test_account = mk_account();
-        accounts.insert(n, test_account);
+        let test_account = get_key_pair_from_rng(&mut rng);
+        account_kps.insert(n, test_account);
     }
 
-    // Make a default account with a gas object
-    let mut default_account = mk_account();
+    // Make a default account keypair
+    let default_account_kp = get_key_pair_from_rng(&mut rng);
 
-    let mut acc_cfgs = accounts
+    let mut acc_cfgs = account_kps
         .values()
         .map(|acc| AccountConfig {
-            address: Some(acc.address),
+            address: Some(acc.0),
             gas_amounts: vec![GAS_FOR_TESTING],
         })
         .collect::<Vec<_>>();
     acc_cfgs.push(AccountConfig {
-        address: Some(default_account.address),
+        address: Some(default_account_kp.0),
         gas_amounts: vec![GAS_FOR_TESTING],
     });
 
+    // Create the simulator with the specific account configs, which also crates objects
     let sim = Simulacrum::new_with_protocol_version_and_accounts(
         rng,
         DEFAULT_CHAIN_START_TIMESTAMP,
@@ -1689,20 +1659,51 @@ fn init_sim_executor(
     );
 
     // Get the actual object values from the simulator
-    for (name, acc) in accounts.iter_mut() {
-        let o = sim.store().owned_objects(acc.address).next().unwrap();
-        acc.gas = o.id();
+    for (name, (addr, kp)) in account_kps {
+        let o = sim.store().owned_objects(addr).next().unwrap();
         objects.push(o.clone());
         account_objects.insert(name.clone(), o.id());
+
+        accounts.insert(
+            name.to_owned(),
+            TestAccount {
+                address: addr,
+                key_pair: kp,
+                gas: o.id(),
+            },
+        );
     }
     let o = sim
         .store()
-        .owned_objects(default_account.address)
+        .owned_objects(default_account_kp.0)
         .next()
         .unwrap();
-    default_account.gas = o.id();
+    let default_account = TestAccount {
+        address: default_account_kp.0,
+        key_pair: default_account_kp.1,
+        gas: o.id(),
+    };
     objects.push(o.clone());
 
+    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+
+    (
+        Box::new(sim),
+        AccountSetup {
+            default_account,
+            named_address_mapping,
+            objects,
+            account_objects,
+            accounts,
+        },
+    )
+}
+
+fn update_named_address_mapping(
+    named_address_mapping: &mut BTreeMap<String, NumericalAddress>,
+    accounts: &BTreeMap<String, TestAccount>,
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+) {
     // For mappings where the address is specified, populate the named address mapping
     let additional_mapping =
         additional_mapping
@@ -1719,16 +1720,6 @@ fn init_sim_executor(
         }
         named_address_mapping.insert(name, addr);
     }
-    (
-        Box::new(sim),
-        AccountSetup {
-            default_account,
-            named_address_mapping,
-            objects,
-            account_objects,
-            accounts,
-        },
-    )
 }
 
 impl sui_rest_api::node_state_getter::NodeStateGetter for SuiTestAdapter<'_> {
