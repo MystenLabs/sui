@@ -41,7 +41,7 @@ module sui::token_config_tests {
 
     #[test, expected_failure(abort_code = token::ENotAuthorized)]
     /// Scenario: try to add config while not being authorized
-    fun test_add_config_fail_not_authorized() {
+    fun test_add_config_not_authorized_fail() {
         let ctx = &mut test::ctx(@0x0);
         let (policy, _cap) = test::get_policy(ctx);
         let (_policy, cap) = test::get_policy(ctx);
@@ -54,7 +54,7 @@ module sui::token_config_tests {
 
     #[test, expected_failure(abort_code = token::ENotAuthorized)]
     /// Scenario: try to add config while not being authorized
-    fun test_remove_config_fail_not_authorized() {
+    fun test_remove_config_not_authorized_fail() {
         let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let (_policy, wrong_cap) = test::get_policy(ctx);
@@ -68,7 +68,7 @@ module sui::token_config_tests {
 
     #[test, expected_failure(abort_code = token::ENotAuthorized)]
     /// Scenario: try to mutate config while not being authorized
-    fun test_mutate_config_fail_not_authorized() {
+    fun test_mutate_config_not_authorized_fail() {
         let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
         let (_policy, wrong_cap) = test::get_policy(ctx);
@@ -76,6 +76,39 @@ module sui::token_config_tests {
 
         token::add_rule_config(Rule1 {}, &mut policy, &cap, config, ctx);
         token::rule_config_mut<TEST, Rule1, Config1>(Rule1 {}, &mut policy, &wrong_cap);
+
+        abort 1337
+    }
+
+    #[test, expected_failure(abort_code = token::ENoConfig)]
+    /// Scenario: rule tries to access a missing config
+    fun test_rule_config_missing_config_fail() {
+        let ctx = &mut test::ctx(@0x0);
+        let (policy, cap) = test::get_policy(ctx);
+
+        token::rule_config<TEST, Rule1, Config1>(Rule1 {}, &policy);
+
+        abort 1337
+    }
+
+    #[test, expected_failure(abort_code = token::ENoConfig)]
+    /// Scenario: rule tries to access a missing config
+    fun test_rule_config_mut_missing_config_fail() {
+        let ctx = &mut test::ctx(@0x0);
+        let (policy, cap) = test::get_policy(ctx);
+
+        token::rule_config_mut<TEST, Rule1, Config1>(Rule1 {}, &mut policy, &cap);
+
+        abort 1337
+    }
+
+    #[test, expected_failure(abort_code = token::ENoConfig)]
+    /// Scenario: trying to remove a non existing config
+    fun test_remove_rule_config_missing_config_fail() {
+        let ctx = &mut test::ctx(@0x0);
+        let (policy, cap) = test::get_policy(ctx);
+
+        token::remove_rule_config<TEST, Rule1, Config1>(&mut policy, &cap, ctx);
 
         abort 1337
     }

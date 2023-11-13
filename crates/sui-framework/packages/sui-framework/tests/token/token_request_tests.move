@@ -40,19 +40,6 @@ module sui::token_request_tests {
         test::return_policy(policy, cap);
     }
 
-    #[test, expected_failure(abort_code = token::EUnknownAction)]
-    /// Scenario: Policy does not allow test action, create request, try confirm
-    fun test_request_confirm_unknown_action_fail() {
-        let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
-        let action = string::utf8(b"test");
-
-        let request = token::new_request(action, 100, none(), none(), ctx);
-
-        token::confirm_request(&policy, request, ctx);
-        test::return_policy(policy, cap)
-    }
-
     #[test]
     /// Scenario: Policy requires only Rule1 but request gets approval from
     /// Rule2 and Rule1
@@ -67,6 +54,19 @@ module sui::token_request_tests {
 
         token::add_approval(Rule1 {}, &mut request, ctx);
         token::add_approval(Rule2 {}, &mut request, ctx);
+
+        token::confirm_request(&policy, request, ctx);
+        test::return_policy(policy, cap)
+    }
+
+    #[test, expected_failure(abort_code = token::EUnknownAction)]
+    /// Scenario: Policy does not allow test action, create request, try confirm
+    fun test_request_confirm_unknown_action_fail() {
+        let ctx = &mut test::ctx(@0x0);
+        let (policy, cap) = test::get_policy(ctx);
+        let action = string::utf8(b"test");
+
+        let request = token::new_request(action, 100, none(), none(), ctx);
 
         token::confirm_request(&policy, request, ctx);
         test::return_policy(policy, cap)
@@ -98,6 +98,20 @@ module sui::token_request_tests {
         let request = token::spend(token, ctx);
 
         token::confirm_with_policy_cap(&cap, request, ctx);
+
+        abort 1337
+    }
+
+    #[test, expected_failure(abort_code = token::EUseImmutableConfirm)]
+    /// Scenario: issue a transfer request, try to confirm it with `_mut`
+    fun test_request_use_mutable_confirm_fail() {
+        let ctx = &mut test::ctx(@0x0);
+        let (policy, cap) = test::get_policy(ctx);
+        let token = test::mint(100, ctx);
+        let request = token::transfer(token, @0x2, ctx);
+
+        token::allow(&mut policy, &cap, token::transfer_action(), ctx);
+        token::confirm_request_mut(&mut policy, request, ctx);
 
         abort 1337
     }
