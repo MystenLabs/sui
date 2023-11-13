@@ -1617,11 +1617,9 @@ impl IndexerReader {
     ) -> Result<Option<StoredObject>, IndexerError> {
         let package_id = coin_struct.address.into();
         let coin_metadata_type =
-            // CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-            CoinMetadata::type_(coin_struct).to_string();
+            CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
         let coin_metadata_obj_id =
             get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type)?;
-        println!("coin_metadata_obj_id: {:?}", coin_metadata_obj_id);
         if let Some(id) = coin_metadata_obj_id {
             self.get_object_from_db(&id, None)
         } else {
@@ -1639,14 +1637,14 @@ impl IndexerReader {
 
     fn get_total_supply(&self, coin_struct: StructTag) -> Result<Supply, IndexerError> {
         let package_id = coin_struct.address.into();
-        let treasury_cap_type = TreasuryCap::type_(coin_struct).to_string();
+        let treasury_cap_type =
+            TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
         let treasury_cap_obj_id =
             get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())?
                 .ok_or(IndexerError::GenericError(format!(
                     "Cannot find treasury cap for type {}",
                     treasury_cap_type
                 )))?;
-        println!("treasury_cap_obj_id: {:?}", treasury_cap_obj_id);
         let treasury_cap_obj_object =
             self.get_object(&treasury_cap_obj_id, None)?
                 .ok_or(IndexerError::GenericError(format!(

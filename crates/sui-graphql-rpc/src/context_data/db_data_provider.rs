@@ -10,7 +10,8 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
-        coin::{Coin, CoinMetadata},
+        coin::Coin,
+        coin_metadata::CoinMetadata,
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
@@ -1357,8 +1358,8 @@ impl PgManager {
         &self,
         coin_type: String,
     ) -> Result<Option<CoinMetadata>, Error> {
-        let coin_struct = parse_to_struct_tag(&coin_type)
-            .map_err(|e| Error::Internal("client error".to_string()))?;
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
         let Some(coin_metadata) = self
             .inner
             .get_coin_metadata_raw_in_blocking_task(coin_struct.clone())
@@ -1368,7 +1369,22 @@ impl PgManager {
             return Ok(None);
         };
 
-        Ok(None)
+        let object = Object::try_from(coin_metadata)?;
+        let move_object = MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not an object.",
+                object.address,
+            ))
+        })?;
+
+        let coin_metadata_object = CoinMetadata::try_from(&move_object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not.",
+                object.address,
+            ))
+        })?;
+
+        Ok(Some(coin_metadata_object))
     }
 }
 
