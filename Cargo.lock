@@ -10939,7 +10939,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "typed-store",
+ "typed-store-error",
  "workspace-hack",
 ]
 
@@ -11498,7 +11498,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "typed-store",
  "workspace-hack",
 ]
 
