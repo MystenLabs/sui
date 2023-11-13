@@ -11,9 +11,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, OverloadThresholdConfig,
-    StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    AuthorityKeyPairWithPath, AuthorityStorePruningConfig, CheckpointExecutorConfig,
+    DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
+    OverloadThresholdConfig, StateArchiveConfig, StateSnapshotConfig,
+    DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol};
 use sui_config::p2p::{P2pConfig, SeedPeer};
@@ -34,6 +35,7 @@ pub struct ValidatorConfigBuilder {
     force_unpruned_checkpoints: bool,
     jwk_fetch_interval: Option<Duration>,
     overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl ValidatorConfigBuilder {
@@ -68,6 +70,11 @@ impl ValidatorConfigBuilder {
 
     pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
         self.overload_threshold_config = Some(config);
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
         self
     }
 
@@ -129,6 +136,10 @@ impl ValidatorConfigBuilder {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         }
         let pruning_config = pruning_config;
+        let checkpoint_executor_config = CheckpointExecutorConfig {
+            data_ingestion_dir: self.data_ingestion_dir,
+            ..Default::default()
+        };
 
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
@@ -152,7 +163,7 @@ impl ValidatorConfigBuilder {
             authority_store_pruning_config: pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
-            checkpoint_executor_config: Default::default(),
+            checkpoint_executor_config,
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: Default::default(),

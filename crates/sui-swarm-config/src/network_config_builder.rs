@@ -58,6 +58,7 @@ pub struct ConfigBuilder<R = OsRng> {
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
     overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl ConfigBuilder {
@@ -73,6 +74,7 @@ impl ConfigBuilder {
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
             overload_threshold_config: None,
+            data_ingestion_dir: None,
         }
     }
 
@@ -120,6 +122,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
         self.jwk_fetch_interval = Some(i);
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
         self
     }
 
@@ -194,6 +201,7 @@ impl<R> ConfigBuilder<R> {
             num_unpruned_validators: self.num_unpruned_validators,
             jwk_fetch_interval: self.jwk_fetch_interval,
             overload_threshold_config: self.overload_threshold_config,
+            data_ingestion_dir: self.data_ingestion_dir,
         }
     }
 
@@ -332,6 +340,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 if let Some(overload_threshold_config) = &self.overload_threshold_config {
                     builder =
                         builder.with_overload_threshold_config(overload_threshold_config.clone());
+                }
+
+                if let Some(path) = &self.data_ingestion_dir {
+                    builder = builder.with_data_ingestion_dir(path.clone());
                 }
 
                 if let Some(spvc) = &self.supported_protocol_versions_config {

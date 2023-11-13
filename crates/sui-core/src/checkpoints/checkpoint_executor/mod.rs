@@ -18,6 +18,7 @@
 //! CheckpointExecutor enforces the invariant that if `run` returns successfully, we have reached the
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
+use std::path::PathBuf;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -51,12 +52,14 @@ use typed_store::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
+use crate::checkpoints::checkpoint_executor::data_ingestion_handler::store_checkpoint_locally;
 use crate::state_accumulator::StateAccumulator;
 use crate::transaction_manager::TransactionManager;
 use crate::{authority::EffectsNotifyRead, checkpoints::CheckpointStore};
 
 use self::metrics::CheckpointExecutorMetrics;
 
+mod data_ingestion_handler;
 mod metrics;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -476,6 +479,7 @@ impl CheckpointExecutor {
             .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
 
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
+        let data_ingestion_dir = self.config.data_ingestion_dir.clone();
         let checkpoint_store = self.checkpoint_store.clone();
         let authority_store = self.authority_store.clone();
         let tx_manager = self.tx_manager.clone();
@@ -492,6 +496,7 @@ impl CheckpointExecutor {
                 tx_manager,
                 accumulator,
                 local_execution_timeout_sec,
+                data_ingestion_dir,
             )
             .await;
             let exec_elapsed = exec_start.elapsed();
@@ -550,6 +555,7 @@ impl CheckpointExecutor {
             self.tx_manager.clone(),
             self.accumulator.clone(),
             self.config.local_execution_timeout_sec,
+            self.config.data_ingestion_dir.clone(),
         )
         .await;
     }
@@ -615,11 +621,13 @@ impl CheckpointExecutor {
 
                     finalize_checkpoint(
                         self.authority_store.clone(),
+                        self.checkpoint_store.clone(),
                         &all_tx_digests,
                         epoch_store.clone(),
-                        *checkpoint.sequence_number(),
+                        checkpoint.clone(),
                         self.accumulator.clone(),
                         effects,
+                        self.config.data_ingestion_dir.clone(),
                     )
                     .expect("Finalizing checkpoint cannot fail");
 
@@ -652,6 +660,7 @@ async fn handle_execution_effects(
     transaction_manager: Arc<TransactionManager>,
     accumulator: Arc<StateAccumulator>,
     local_execution_timeout_sec: u64,
+    data_ingestion_dir: Option<PathBuf>,
 ) {
     // Once synced_txns have been awaited, all txns should have effects committed.
     let mut periods = 1;
@@ -753,11 +762,13 @@ async fn handle_execution_effects(
                 if checkpoint.end_of_epoch_data.is_none() {
                     finalize_checkpoint(
                         authority_store.clone(),
+                        checkpoint_store.clone(),
                         &all_tx_digests,
                         epoch_store.clone(),
-                        *checkpoint.sequence_number(),
+                        checkpoint.clone(),
                         accumulator.clone(),
                         effects,
+                        data_ingestion_dir,
                     )
                     .expect("Finalizing checkpoint cannot fail");
                 }
@@ -988,22 +999,33 @@ fn get_unexecuted_transactions(
 #[instrument(level = "debug", skip_all)]
 fn finalize_checkpoint(
     authority_store: Arc<AuthorityStore>,
+    checkpoint_store: Arc<CheckpointStore>,
     tx_digests: &[TransactionDigest],
     epoch_store: Arc<AuthorityPerEpochStore>,
-    checkpoint_sequence: u64,
+    checkpoint: VerifiedCheckpoint,
     accumulator: Arc<StateAccumulator>,
     effects: Vec<TransactionEffects>,
+    data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
     if epoch_store.per_epoch_finalized_txns_enabled() {
-        epoch_store.insert_finalized_transactions(tx_digests, checkpoint_sequence)?;
+        epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
     }
     // TODO remove once we no longer need to support this table for read RPC
     authority_store.deprecated_insert_finalized_transactions(
         tx_digests,
         epoch_store.epoch(),
-        checkpoint_sequence,
+        checkpoint.sequence_number,
     )?;
 
-    accumulator.accumulate_checkpoint(effects, checkpoint_sequence, epoch_store)?;
+    accumulator.accumulate_checkpoint(effects, checkpoint.sequence_number, epoch_store)?;
+    if let Some(path) = data_ingestion_dir {
+        store_checkpoint_locally(
+            path,
+            checkpoint,
+            authority_store,
+            checkpoint_store,
+            tx_digests.to_vec(),
+        )?;
+    }
     Ok(())
 }
