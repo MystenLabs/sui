@@ -12,11 +12,7 @@ use serde::{Deserialize, Serialize};
 use sui_package_resolver::Resolver;
 
 use crate::context_data::package_cache::PackageCache;
-use crate::{
-    error::{code, graphql_error},
-    types::json::Json,
-    types::move_type::unexpected_signer_error,
-};
+use crate::{error::Error, types::json::Json, types::move_type::unexpected_signer_error};
 
 use super::{base64::Base64, big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
 
@@ -80,15 +76,14 @@ pub(crate) struct MoveField {
 impl MoveValue {
     /// Structured contents of a Move value.
     async fn data(&self, ctx: &Context<'_>) -> Result<MoveData> {
-        let resolver: &Resolver<PackageCache> = ctx.data().map_err(|_| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                "Unable to fetch Package Cache.",
-            )
-        })?;
+        let resolver: &Resolver<PackageCache> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+            .extend()?;
 
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.data_impl(self.type_.layout_impl(resolver).await?)
+        self.data_impl(self.type_.layout_impl(resolver).await.extend()?)
+            .extend()
     }
 
     /// Representation of a Move value in JSON, where:
@@ -104,15 +99,14 @@ impl MoveValue {
     /// This form is offered as a less verbose convenience in cases where the layout of the type is
     /// known by the client.
     async fn json(&self, ctx: &Context<'_>) -> Result<Json> {
-        let resolver = ctx.data::<Resolver<PackageCache>>().map_err(|_| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                "Unable to fetch Package Cache.",
-            )
-        })?;
+        let resolver = ctx
+            .data::<Resolver<PackageCache>>()
+            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+            .extend()?;
 
         // Factor out into its own non-GraphQL, non-async function for better testability
-        self.json_impl(self.type_.layout_impl(resolver).await?)
+        self.json_impl(self.type_.layout_impl(resolver).await.extend()?)
+            .extend()
     }
 }
 
@@ -122,34 +116,32 @@ impl MoveValue {
         Self { type_, bcs }
     }
 
-    fn value_impl(&self, layout: A::MoveTypeLayout) -> Result<A::MoveValue> {
+    fn value_impl(&self, layout: A::MoveTypeLayout) -> Result<A::MoveValue, Error> {
         // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
         // deserializing via `value::MoveValue` (but this is significantly more code).
-        Ok(bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
+        bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
             let type_tag: Option<TypeTag> = (&layout).try_into().ok();
-            let message = if let Some(type_tag) = type_tag {
+            Error::Internal(if let Some(type_tag) = type_tag {
                 format!("Failed to deserialize Move value for type: {}", type_tag)
             } else {
                 "Failed to deserialize Move value for type: <unknown>".to_string()
-            };
-
-            graphql_error(code::INTERNAL_SERVER_ERROR, message)
-        })?)
+            })
+        })
     }
 
-    fn data_impl(&self, layout: A::MoveTypeLayout) -> Result<MoveData> {
+    fn data_impl(&self, layout: A::MoveTypeLayout) -> Result<MoveData, Error> {
         MoveData::try_from(self.value_impl(layout)?)
     }
 
-    fn json_impl(&self, layout: A::MoveTypeLayout) -> Result<Json> {
+    fn json_impl(&self, layout: A::MoveTypeLayout) -> Result<Json, Error> {
         Ok(try_to_json_value(self.value_impl(layout)?)?.into())
     }
 }
 
 impl TryFrom<A::MoveValue> for MoveData {
-    type Error = async_graphql::Error;
+    type Error = Error;
 
-    fn try_from(value: A::MoveValue) -> Result<Self> {
+    fn try_from(value: A::MoveValue) -> Result<Self, Error> {
         use A::MoveValue as V;
 
         Ok(match value {
@@ -166,7 +158,7 @@ impl TryFrom<A::MoveValue> for MoveData {
             V::Vector(v) => Self::Vector(
                 v.into_iter()
                     .map(MoveData::try_from)
-                    .collect::<Result<Vec<_>>>()?,
+                    .collect::<Result<Vec<_>, _>>()?,
             ),
 
             V::Struct(s) => {
@@ -187,7 +179,7 @@ impl TryFrom<A::MoveValue> for MoveData {
                     Self::Uid(extract_uid(&type_, fields)?.into())
                 } else {
                     // Arbitrary structs
-                    let fields: Result<Vec<_>> =
+                    let fields: Result<Vec<_>, _> =
                         fields.into_iter().map(MoveField::try_from).collect();
                     Self::Struct(fields?)
                 }
@@ -200,9 +192,9 @@ impl TryFrom<A::MoveValue> for MoveData {
 }
 
 impl TryFrom<(Identifier, A::MoveValue)> for MoveField {
-    type Error = async_graphql::Error;
+    type Error = Error;
 
-    fn try_from((ident, value): (Identifier, A::MoveValue)) -> Result<Self> {
+    fn try_from((ident, value): (Identifier, A::MoveValue)) -> Result<Self, Error> {
         Ok(MoveField {
             name: ident.to_string(),
             value: MoveData::try_from(value)?,
@@ -210,7 +202,7 @@ impl TryFrom<(Identifier, A::MoveValue)> for MoveField {
     }
 }
 
-fn try_to_json_value(value: A::MoveValue) -> Result<Value> {
+fn try_to_json_value(value: A::MoveValue) -> Result<Value, Error> {
     use A::MoveValue as V;
     Ok(match value {
         V::U8(n) => Value::Number(n.into()),
@@ -226,7 +218,7 @@ fn try_to_json_value(value: A::MoveValue) -> Result<Value> {
         V::Vector(xs) => Value::List(
             xs.into_iter()
                 .map(try_to_json_value)
-                .collect::<Result<_>>()?,
+                .collect::<Result<_, _>>()?,
         ),
 
         V::Struct(s) => {
@@ -255,7 +247,7 @@ fn try_to_json_value(value: A::MoveValue) -> Result<Value> {
                         .map(|(name, value)| {
                             Ok((Name::new(name.to_string()), try_to_json_value(value)?))
                         })
-                        .collect::<Result<_>>()?,
+                        .collect::<Result<_, Error>>()?,
                 )
             }
         }
@@ -281,27 +273,25 @@ macro_rules! extract_field {
         {
             value
         } else {
-            return Err(graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Couldn't find expected field '{_name}' of {_type}."),
-            )
-            .into());
+            return Err(Error::Internal(format!(
+                "Couldn't find expected field '{_name}' of {_type}."
+            )));
         }
     }};
 }
 
 /// Extracts a vector of bytes from `value`, assuming it's a `MoveValue::Vector` where all the
 /// values are `MoveValue::U8`s.
-fn extract_bytes(value: A::MoveValue) -> Result<Vec<u8>> {
+fn extract_bytes(value: A::MoveValue) -> Result<Vec<u8>, Error> {
     use A::MoveValue as V;
     let V::Vector(elements) = value else {
-        return Err(graphql_error(code::INTERNAL_SERVER_ERROR, "Expected a vector.").into());
+        return Err(Error::Internal("Expected a vector.".to_string()));
     };
 
     let mut bytes = Vec::with_capacity(elements.len());
     for element in elements {
         let V::U8(byte) = element else {
-            return Err(graphql_error(code::INTERNAL_SERVER_ERROR, "Expected a byte.").into());
+            return Err(Error::Internal("Expected a byte.".to_string()));
         };
         bytes.push(byte)
     }
@@ -317,7 +307,10 @@ fn extract_bytes(value: A::MoveValue) -> Result<Vec<u8>> {
 /// ```
 ///
 /// Which is conformed to by both `std::ascii::String` and `std::string::String`.
-fn extract_string(type_: &StructTag, fields: Vec<(Identifier, A::MoveValue)>) -> Result<String> {
+fn extract_string(
+    type_: &StructTag,
+    fields: Vec<(Identifier, A::MoveValue)>,
+) -> Result<String, Error> {
     let bytes = extract_bytes(extract_field!(type_, fields, bytes))?;
     String::from_utf8(bytes).map_err(|e| {
         const PREFIX: usize = 30;
@@ -330,7 +323,7 @@ fn extract_string(type_: &StructTag, fields: Vec<(Identifier, A::MoveValue)>) ->
             String::from_utf8_lossy(&bytes[..PREFIX - 3]) + "..."
         };
 
-        graphql_error(code::INTERNAL_SERVER_ERROR, format!("{e} in {sample:?}")).into()
+        Error::Internal(format!("{e} in {sample:?}"))
     })
 }
 
@@ -345,31 +338,25 @@ fn extract_string(type_: &StructTag, fields: Vec<(Identifier, A::MoveValue)>) ->
 fn extract_uid(
     type_: &StructTag,
     fields: Vec<(Identifier, A::MoveValue)>,
-) -> Result<AccountAddress> {
+) -> Result<AccountAddress, Error> {
     use A::MoveValue as V;
     let V::Struct(s) = extract_field!(type_, fields, id) else {
-        return Err(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Expected UID.id to be a struct",
-        )
-        .into());
+        return Err(Error::Internal(
+            "Expected UID.id to be a struct".to_string(),
+        ));
     };
 
     let A::MoveStruct { type_, fields } = s;
     if !is_type(&type_, &SUI, MOD_OBJECT, TYP_ID) {
-        return Err(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Expected UID.id to have to type ID.",
-        )
-        .into());
+        return Err(Error::Internal(
+            "Expected UID.id to to have type ID.".to_string(),
+        ));
     }
 
     let V::Address(addr) = extract_field!(type_, fields, bytes) else {
-        return Err(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Expected ID.bytes to have type address.",
-        )
-        .into());
+        return Err(Error::Internal(
+            "Expected ID.bytes to to have type address.".to_string(),
+        ));
     };
 
     Ok(addr)
@@ -386,21 +373,17 @@ fn extract_uid(
 fn extract_option(
     type_: &StructTag,
     fields: Vec<(Identifier, A::MoveValue)>,
-) -> Result<Option<A::MoveValue>> {
+) -> Result<Option<A::MoveValue>, Error> {
     let A::MoveValue::Vector(mut elements) = extract_field!(type_, fields, vec) else {
-        return Err(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Expected Option.vec to be a vector.",
-        )
-        .into());
+        return Err(Error::Internal(
+            "Expected Option.vec to be a vector.".to_string(),
+        ));
     };
 
     if elements.len() > 1 {
-        return Err(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Expected Option.vec to contain at most one element.",
-        )
-        .into());
+        return Err(Error::Internal(
+            "Expected Option.vec to contain at most one element.".to_string(),
+        ));
     };
 
     Ok(elements.pop())
@@ -440,7 +423,7 @@ mod tests {
         SuiAddress::from_str(a).unwrap()
     }
 
-    fn data<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<MoveData> {
+    fn data<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<MoveData, Error> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
 
         // The format for type from its `Display` impl does not technically match the format that
@@ -453,13 +436,13 @@ mod tests {
         tag: impl Into<String>,
         layout: A::MoveTypeLayout,
         data: T,
-    ) -> Result<MoveData> {
+    ) -> Result<MoveData, Error> {
         let type_ = MoveType::new(tag.into());
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.data_impl(layout)
     }
 
-    fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json> {
+    fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json, Error> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
         let type_ = MoveType::new(tag.to_canonical_string(/* with_prefix */ true));
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
@@ -628,10 +611,9 @@ mod tests {
         let v = data(l, bytes);
         let expect = expect![[r#"
             Err(
-                Error {
-                    message: "invalid utf-8 sequence of 1 bytes from index 5 in \"Lorem�ipsum dolor sit amet ...\"",
-                    extensions: None,
-                },
+                Internal(
+                    "invalid utf-8 sequence of 1 bytes from index 5 in \"Lorem�ipsum dolor sit amet ...\"",
+                ),
             )"#]];
         expect.assert_eq(&format!("{v:#?}"));
     }
@@ -887,10 +869,9 @@ mod tests {
         let v = data(L::Signer, address("0x42"));
         let expect = expect![[r#"
             Err(
-                Error {
-                    message: "Unexpected value of type: signer.",
-                    extensions: None,
-                },
+                Internal(
+                    "Unexpected value of type: signer.",
+                ),
             )"#]];
         expect.assert_eq(&format!("{v:#?}"));
     }
@@ -898,9 +879,7 @@ mod tests {
     #[test]
     fn signer_json() {
         let err = json(L::Signer, address("0x42")).unwrap_err();
-        let expect = expect![[
-            r#"Error { message: "Unexpected value of type: signer.", extensions: None }"#
-        ]];
+        let expect = expect![[r#"Internal("Unexpected value of type: signer.")"#]];
         expect.assert_eq(&format!("{err:?}"));
     }
 
@@ -912,10 +891,9 @@ mod tests {
         );
         let expect = expect![[r#"
             Err(
-                Error {
-                    message: "Unexpected value of type: signer.",
-                    extensions: None,
-                },
+                Internal(
+                    "Unexpected value of type: signer.",
+                ),
             )"#]];
         expect.assert_eq(&format!("{v:#?}"));
     }
@@ -928,9 +906,7 @@ mod tests {
         )
         .unwrap_err();
 
-        let expect = expect![[
-            r#"Error { message: "Unexpected value of type: signer.", extensions: None }"#
-        ]];
+        let expect = expect![[r#"Internal("Unexpected value of type: signer.")"#]];
         expect.assert_eq(&format!("{err:?}"));
     }
 }

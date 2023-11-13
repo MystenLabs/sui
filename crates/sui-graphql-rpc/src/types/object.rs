@@ -17,7 +17,7 @@ use super::{
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
-use crate::error::{code, graphql_error, Error};
+use crate::error::Error;
 use crate::types::base64::Base64;
 use sui_types::object::Object as NativeObject;
 
@@ -85,10 +85,10 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         let digest = self.native.previous_transaction.to_string();
-        Ok(ctx
-            .data_unchecked::<PgManager>()
+        ctx.data_unchecked::<PgManager>()
             .fetch_tx(digest.as_str())
-            .await?)
+            .await
+            .extend()
     }
 
     /// Objects can either be immutable, shared, owned by an address,
@@ -98,7 +98,8 @@ impl Object {
             .stored
             .owner_type
             .try_into()
-            .map_err(|e: IndexerError| graphql_error(code::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            .map_err(|e: IndexerError| Error::Internal(e.to_string()))
+            .extend()?;
 
         Ok(Some(match owner_type {
             OwnerType::Immutable => ObjectKind::Immutable,
@@ -115,7 +116,7 @@ impl Object {
             return Ok(None);
         };
 
-        let address = addr(owner_id)?;
+        let address = addr(owner_id).extend()?;
         Ok(Some(Owner { address }))
     }
 
@@ -145,10 +146,11 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>, Error> {
+    ) -> Result<Option<Connection<String, Object>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_owned_objs(first, after, last, before, filter, self.address)
             .await
+            .extend()
     }
 
     /// The balance of coin objects of a particular coin type owned by the object.
@@ -156,10 +158,11 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         type_: Option<String>,
-    ) -> Result<Option<Balance>, Error> {
+    ) -> Result<Option<Balance>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_balance(self.address, type_)
             .await
+            .extend()
     }
 
     /// The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
@@ -170,10 +173,11 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Balance>>, Error> {
+    ) -> Result<Option<Connection<String, Balance>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_balances(self.address, first, after, last, before)
             .await
+            .extend()
     }
 
     /// The coin objects for the given address.
@@ -187,10 +191,11 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Result<Option<Connection<String, Coin>>, Error> {
+    ) -> Result<Option<Connection<String, Coin>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_coins(self.address, type_, first, after, last, before)
             .await
+            .extend()
     }
 
     /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
@@ -201,20 +206,19 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, StakedSui>>, Error> {
+    ) -> Result<Option<Connection<String, StakedSui>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_staked_sui(self.address, first, after, last, before)
             .await
+            .extend()
     }
 
     /// The domain that a user address has explicitly configured as their default domain
-    pub async fn default_name_service_name(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<String>, Error> {
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         ctx.data_unchecked::<PgManager>()
             .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await
+            .extend()
     }
 
     // TODO disabled-for-rpc-1.5

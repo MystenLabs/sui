@@ -1863,17 +1863,14 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         let object_changes = tx.object_changes;
         let timestamp = DateTime::from_ms(tx.timestamp_ms);
         let effects = match SuiTransactionBlockEffects::try_from(effects) {
-            Ok(effects) => {
-                let transaction_effects = TransactionBlockEffects::from_stored_transaction(
-                    balance_changes,
-                    tx.checkpoint_sequence_number as u64,
-                    object_changes,
-                    &effects,
-                    digest,
-                    timestamp,
-                );
-                transaction_effects.map_err(|e| Error::Internal(e.message))
-            }
+            Ok(effects) => TransactionBlockEffects::from_stored_transaction(
+                balance_changes,
+                tx.checkpoint_sequence_number as u64,
+                object_changes,
+                &effects,
+                digest,
+                timestamp,
+            ),
             Err(e) => Err(Error::Internal(format!(
                 "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
             ))),

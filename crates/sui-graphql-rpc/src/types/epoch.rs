@@ -38,7 +38,8 @@ impl Epoch {
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
                 .fetch_protocol_configs(Some(self.protocol_version))
-                .await?,
+                .await
+                .extend()?,
         ))
     }
 
@@ -74,7 +75,8 @@ impl Epoch {
             .extend()?
             .ok_or(Error::Internal(
                 "Epoch should be able to find itself".to_string(),
-            ))?;
+            ))
+            .extend()?;
 
         let new_filter = TransactionBlockFilter {
             after_checkpoint: if stored_epoch.first_checkpoint_id > 0 {
