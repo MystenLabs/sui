@@ -76,7 +76,7 @@ impl MoveObject {
             Ok(metadata) => Ok(Some(metadata)),
             Err(CoinMetadataDowncastError::NotACoinMetadata) => Ok(None),
             Err(CoinMetadataDowncastError::Bcs(e)) => Err(Error::Internal(format!(
-                "Failed to deserialize staked sui: {e}"
+                "Failed to deserialize coin metadata: {e}"
             ))),
         }
     }
