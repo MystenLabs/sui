@@ -123,7 +123,6 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        // TODO: limit number of variables, fragments, etc
         // TODO: limit/ban directives for now
 
         let cfg = ctx
@@ -140,28 +139,8 @@ impl Extension for QueryLimitsChecker {
             ));
         }
 
-        if variables.len() > cfg.limits.max_query_variables as usize {
-            return Err(ServerError::new(
-                format!(
-                    "Query has too many variables. The maximum allowed is {}",
-                    cfg.limits.max_query_variables
-                ),
-                None,
-            ));
-        }
-
         // Document layout of the query
         let doc = next.run(ctx, query, variables).await?;
-
-        if doc.fragments.len() > cfg.limits.max_query_fragments as usize {
-            return Err(ServerError::new(
-                format!(
-                    "Query has too many fragments definitions. The maximum allowed is {}",
-                    cfg.limits.max_query_fragments
-                ),
-                None,
-            ));
-        }
 
         // TODO: Limit the complexity of fragments early on
 
