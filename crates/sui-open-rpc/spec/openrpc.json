@@ -8352,7 +8352,8 @@
           {
             "type": "string",
             "enum": [
-              "AuthenticatorStateCreate"
+              "AuthenticatorStateCreate",
+              "RandomnessStateCreate"
             ]
           },
           {
@@ -10172,6 +10173,42 @@
                 "items": {
                   "$ref": "#/components/schemas/SuiActiveJwk"
                 }
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
+            "description": "A transaction which updates global randomness state",
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind",
+              "random_bytes",
+              "randomness_round",
+              "round"
+            ],
+            "properties": {
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "RandomnessStateUpdate"
+                ]
+              },
+              "random_bytes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              },
+              "randomness_round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
               },
               "round": {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
