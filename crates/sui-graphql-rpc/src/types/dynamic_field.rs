@@ -23,17 +23,6 @@ pub(crate) struct DynamicField {
     pub df_kind: DynamicFieldType,
 }
 
-/// The string type, data, and serialized value of a DynamicField's 'name' field.
-#[derive(SimpleObject)]
-pub(crate) struct TypedDynamicFieldName {
-    /// A string flag of 'DynamicField' or 'DynamicObject'.
-    /// This is needed to disambiguate the child object,
-    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
-    pub kind: String,
-    #[graphql(flatten)]
-    name: MoveValue,
-}
-
 #[derive(Union)]
 pub(crate) enum DynamicFieldValue {
     MoveObject(MoveObject), // DynamicObject
@@ -55,6 +44,16 @@ pub(crate) struct DynamicFieldName {
 
 #[Object]
 impl DynamicField {
+    /// A string flag of 'DynamicField' or 'DynamicObject'.
+    /// This is needed to disambiguate the child object,
+    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
+    async fn kind(&self) -> &str {
+        match self.df_kind {
+            DynamicFieldType::DynamicField => "DynamicField",
+            DynamicFieldType::DynamicObject => "DynamicObject",
+        }
+    }
+
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
     /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
@@ -91,25 +90,6 @@ impl DynamicField {
         let bcs = bcs::to_bytes(&undecorated)
             .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))
             .extend()?;
-
-        let parent_object_id =
-            SuiAddress::from_bytes(self.stored_object.owner_id.clone().unwrap().as_slice())?;
-
-        let derived_id =
-            sui_types::dynamic_field::derive_dynamic_field_id(parent_object_id, &type_tag, &bcs)
-                .expect("oops");
-
-        let dynamic_object_field_struct =
-            sui_types::dynamic_field::DynamicFieldInfo::dynamic_object_field_wrapper(
-                type_tag.clone(),
-            );
-        let dynamic_object_field_type = TypeTag::Struct(Box::new(dynamic_object_field_struct));
-        let dynamic_object_field_id = sui_types::dynamic_field::derive_dynamic_field_id(
-            parent_object_id,
-            &dynamic_object_field_type,
-            &bcs,
-        )
-        .expect("deriving dynamic field id can't fail");
 
         Ok(Some(MoveValue::new(
             type_tag.to_canonical_string(true),
