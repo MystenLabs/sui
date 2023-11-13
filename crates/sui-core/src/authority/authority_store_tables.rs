@@ -136,14 +136,20 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_read_write(
             Self::path(parent_path),
-            MetricConf::with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            MetricConf::new("perpetual")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
             db_options,
             None,
         )
     }
 
     pub fn open_readonly(parent_path: &Path) -> AuthorityPerpetualTablesReadOnly {
-        Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
+        Self::get_read_only_handle(
+            Self::path(parent_path),
+            None,
+            None,
+            MetricConf::new("perpetual_readonly"),
+        )
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.
