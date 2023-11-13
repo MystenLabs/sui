@@ -166,6 +166,7 @@ const guides = [
 			'guides/operator/staking-rewards',
 			'guides/operator/node-tools',
 			'guides/operator/formal-snapshot',
+			'guides/operator/exchange-integration',
 		],
 	},
 ];
