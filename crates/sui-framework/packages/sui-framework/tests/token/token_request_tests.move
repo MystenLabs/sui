@@ -115,4 +115,17 @@ module sui::token_request_tests {
 
         abort 1337
     }
+
+    #[test, expected_failure(abort_code = token::EUnknownAction)]
+    /// Scenario: issue a transfer request with balance, action not allowed
+    fun test_request_use_mutable_action_not_allowed_fail() {
+        let ctx = &mut test::ctx(@0x0);
+        let (policy, cap) = test::get_policy(ctx);
+        let token = test::mint(100, ctx);
+        let request = token::spend(token, ctx);
+
+        token::confirm_request_mut(&mut policy, request, ctx);
+
+        abort 1337
+    }
 }
