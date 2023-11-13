@@ -75,14 +75,14 @@ use sui_json_rpc::name_service::NameServiceConfig;
         arg(name = "before", ty = "Option<String>"),
     )
 )]
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum ObjectOwner {
     Address(Address),
     Owner(Owner),
     Object(Object),
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
 }

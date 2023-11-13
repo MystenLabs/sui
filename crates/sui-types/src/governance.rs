@@ -86,6 +86,11 @@ impl StakedSui {
         self.stake_activation_epoch
     }
 
+    pub fn request_epoch(&self) -> EpochId {
+        // TODO: this might change when we implement warm up period.
+        self.stake_activation_epoch.saturating_sub(1)
+    }
+
     pub fn principal(&self) -> u64 {
         self.principal.value()
     }

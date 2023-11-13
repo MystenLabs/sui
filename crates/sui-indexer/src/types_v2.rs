@@ -209,6 +209,24 @@ pub enum OwnerType {
     Shared = 3,
 }
 
+impl TryFrom<i16> for OwnerType {
+    type Error = IndexerError;
+
+    fn try_from(value: i16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0 => OwnerType::Immutable,
+            1 => OwnerType::Address,
+            2 => OwnerType::Object,
+            3 => OwnerType::Shared,
+            value => {
+                return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "{value} as OwnerType"
+                )))
+            }
+        })
+    }
+}
+
 // Returns owner_type, owner_address
 pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<SuiAddress>) {
     match owner {

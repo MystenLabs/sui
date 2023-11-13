@@ -187,7 +187,7 @@ type Coin {
 	"""
 	Convert the coin object into a Move object
 	"""
-	asMoveObject: MoveObject
+	asMoveObject: MoveObject!
 }
 
 type CoinConnection {
@@ -535,8 +535,9 @@ type MoveModuleId {
 
 type MoveObject {
 	"""
-	Displays the contents of the MoveObject in a json string and through graphql types
-	Also provides the flat representation of the type signature, and the bcs of the corresponding data
+	Displays the contents of the MoveObject in a JSON string and through graphql types.  Also
+	provides the flat representation of the type signature, and the bcs of the corresponding
+	data
 	"""
 	contents: MoveValue
 	"""
@@ -547,13 +548,13 @@ type MoveObject {
 	Attempts to convert the Move object into an Object
 	This provides additional information such as version and digest on the top-level
 	"""
-	asObject: Object
+	asObject: Object!
 	"""
-	Attempts to convert the Move object into a Coin
+	Attempts to convert the Move object into a `0x2::coin::Coin`.
 	"""
 	asCoin: Coin
 	"""
-	Attempts to convert the Move object into a Stake
+	Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
 	"""
 	asStake: Stake
 }
@@ -581,7 +582,7 @@ type MovePackage {
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
 	bcs: Base64
-	asObject: Object
+	asObject: Object!
 }
 
 """
@@ -682,7 +683,8 @@ type Object implements ObjectOwner {
 	"""
 	kind: ObjectKind
 	"""
-	The Address or Object that owns this Object.  Immutable and Shared Objects do not have owners.
+	The Address or Object that owns this Object.  Immutable and Shared Objects do not have
+	owners.
 	"""
 	owner: Owner
 	"""
@@ -967,18 +969,9 @@ type ServiceConfig {
 
 type Stake {
 	"""
-	The estimated reward for this stake object, computed as the
-	value of multiplying the principal value with the ratio between the initial stake rate and the current rate
+	A stake can be pending, active, or unstaked
 	"""
-	estimatedReward: BigInt
-	"""
-	The amount of SUI that is used to stake
-	"""
-	principal: BigInt
-	"""
-	The status of this stake object: Active, Pending, Unstaked
-	"""
-	status: StakeStatus
+	status: StakeStatus!
 	"""
 	The epoch at which this stake became active
 	"""
@@ -988,9 +981,26 @@ type Stake {
 	"""
 	requestEpoch: Epoch
 	"""
-	The corresponding StakedSui Move object
+	The SUI that was initially staked.
 	"""
-	asMoveObject: MoveObject
+	principal: BigInt
+	"""
+	The estimated reward for this stake object, calculated as:
+	
+	principal * (initial_stake_rate / current_stake_rate - 1.0)
+	
+	Or 0, if this value is negative, where:
+	
+	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
+	- `current_stake_rate` is the stake rate in the current epoch.
+	
+	This value is only available if the stake is active.
+	"""
+	estimatedReward: BigInt
+	"""
+	The corresponding `0x3::staking_pool::StakedSui` Move object.
+	"""
+	asMoveObject: MoveObject!
 }
 
 type StakeConnection {
