@@ -580,14 +580,14 @@ impl IndexerReader {
             if let Some(filter) = filter {
                 match filter {
                     SuiObjectDataFilter::StructType (struct_tag ) => {
-                        let object_type = struct_tag.to_string();
+                        let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
                         query = query.filter(objects::dsl::object_type.like(format!("{}%",object_type)));
                     },
                     SuiObjectDataFilter::MatchAny(filters) => {
                         let mut condition = "(".to_string();
                         for (i, filter) in filters.iter().enumerate() {
                             if let SuiObjectDataFilter::StructType (struct_tag) = filter {
-                                let object_type = struct_tag.to_string();
+                                let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
                                 if i == 0 {
                                     condition += format!("objects.object_type LIKE '{}%'",object_type).as_str();
                                 } else {
@@ -605,7 +605,7 @@ impl IndexerReader {
                     SuiObjectDataFilter::MatchNone(filters) => {
                         for filter in filters {
                             if let SuiObjectDataFilter::StructType (struct_tag) = filter {
-                                let object_type = struct_tag.to_string();
+                                let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
                                 query = query.filter(objects::dsl::object_type.ne(object_type));
                             } else {
                                 return Err(IndexerError::InvalidArgumentError(
