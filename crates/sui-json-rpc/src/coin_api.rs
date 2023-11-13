@@ -423,7 +423,7 @@ mod tests {
     use sui_types::object::Object;
     use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
-    use typed_store::TypedStoreError;
+    use typed_store_error::TypedStoreError;
 
     mock! {
         pub KeyValueStore {}
