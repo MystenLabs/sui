@@ -16,6 +16,8 @@ pub const LAST_UPDATE_S: &str = "last_update_s";
 
 #[derive(Clone)]
 pub struct Metrics {
+    /// Indicates that the server is up.
+    pub up: IntCounter,
     /// End-to-end latency of a workload in seconds.
     pub latency_s: HistogramVec,
     /// Benchmark start time (time since UNIX epoch in seconds).
@@ -28,6 +30,12 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            up: register_int_counter_with_registry!(
+                "up",
+                "Indicates that the server is up",
+                registry
+            )
+            .unwrap(),
             latency_s: register_histogram_vec_with_registry!(
                 LATENCY_S,
                 "Buckets measuring the end-to-end latency of a workload in seconds",

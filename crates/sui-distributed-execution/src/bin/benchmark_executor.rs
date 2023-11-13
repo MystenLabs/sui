@@ -41,6 +41,9 @@ impl ExecutorShard {
             panic!("Unexpected agent kind: {kind}");
         };
 
+        // Signal that the server is up.
+        metrics.up.inc();
+
         Self {
             metrics,
             main_handle,

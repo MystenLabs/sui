@@ -372,7 +372,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
             &format!("git fetch origin {commit}"),
             &format!("(git checkout -b {commit} {commit} || git checkout origin/{commit})"),
             "source $HOME/.cargo/env",
-            &format!("cargo run --release --bin {} -- --help", P::BIN_NAME),
+            &format!("cargo build --release"),
         ]
         .join(" && ");
 
