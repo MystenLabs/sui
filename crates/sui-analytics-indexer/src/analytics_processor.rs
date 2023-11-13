@@ -230,7 +230,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
         info!("Syncing file to remote: {:?}", path);
-        copy_file(path.clone(), path.clone(), from, to).await?;
+        copy_file(&path, &path, &from, &to).await?;
         fs::remove_file(path_to_filesystem(dir, &path)?)?;
         Ok(())
     }

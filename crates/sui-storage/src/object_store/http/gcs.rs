@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_store::downloader::{get, Downloader, DEFAULT_USER_AGENT};
+use crate::object_store::http::{get, DEFAULT_USER_AGENT};
+use crate::object_store::ObjectStoreGetExt;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -10,6 +11,7 @@ use object_store::GetResult;
 use percent_encoding::{percent_encode, utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::Client;
 use reqwest::ClientBuilder;
+use std::fmt;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -60,9 +62,15 @@ impl GoogleCloudStorage {
     }
 }
 
+impl fmt::Display for GoogleCloudStorage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "gcs:{}", self.client.bucket_name_encoded)
+    }
+}
+
 #[async_trait]
-impl Downloader for GoogleCloudStorage {
-    async fn get(&self, location: &Path) -> Result<Bytes> {
+impl ObjectStoreGetExt for GoogleCloudStorage {
+    async fn get_bytes(&self, location: &Path) -> Result<Bytes> {
         let result = self.client.get(location).await?;
         let bytes = result.bytes().await?;
         Ok(bytes)
