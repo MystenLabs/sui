@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Base64, Encoding};
+use fastcrypto::encoding::{Base58, Base64};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use serde_with::{serde_as, DisplayFromStr};
 use std::fmt;
 use std::fmt::Display;
@@ -133,10 +133,9 @@ impl Display for SuiEvent {
         let mut table = json_to_table(parsed_json);
         let style = TableStyle::modern();
         table.collapse().with(style);
-        let bcs_base58 = Base58::encode(&self.bcs);
         write!(f,
-            " ┌──\n │ EventID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n │ BCS (Base58):{}\n",
-            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_, bcs_base58)?;
+            " ┌──\n │ EventID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n",
+            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_)?;
         if let Some(ts) = self.timestamp_ms {
             writeln!(f, " │ Timestamp: {}\n └──", ts)?;
         }
@@ -151,18 +150,13 @@ impl Display for SuiEvent {
     }
 }
 
-// Transform in-place a JSON array of bytes into a Base64 string
+/// Convert a json array of bytes to Base64
 fn bytes_array_to_base64(v: &mut Value) {
     match v {
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => (),
-        Value::Array(ref mut vals) => {
-            if vals.iter().all(check_is_number) {
-                let new_vals = vals
-                    .iter()
-                    .map(|num| num.as_u64().unwrap() as u8)
-                    .collect::<Vec<_>>();
-                let new_val = serde_json::json!(Base64::from_bytes(&new_vals).encoded());
-                *v = new_val;
+        Value::Array(vals) => {
+            if let Some(vals) = vals.iter().map(try_into_byte).collect::<Option<Vec<_>>>() {
+                *v = json!(Base64::from_bytes(&vals).encoded())
             } else {
                 for val in vals {
                     bytes_array_to_base64(val)
@@ -177,12 +171,10 @@ fn bytes_array_to_base64(v: &mut Value) {
     }
 }
 
-fn check_is_number(v: &Value) -> bool {
-    if let Some(num) = v.as_u64() {
-        num <= 255u64
-    } else {
-        false
-    }
+/// Try to convert a json Value object into an u8.
+fn try_into_byte(v: &Value) -> Option<u8> {
+    let num = v.as_u64()?;
+    (num <= 255).then_some(num as u8)
 }
 
 #[serde_as]

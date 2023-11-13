@@ -831,9 +831,9 @@ impl SuiTransactionBlockEvents {
 impl Display for SuiTransactionBlockEvents {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.data.is_empty() {
-            writeln!(f, "╭───────────────────────────────────────────────────────────────────────────────────────────────────╮")?;
-            writeln!(f, "│ No transaction block events                                                                       │")?;
-            writeln!(f, "╰───────────────────────────────────────────────────────────────────────────────────────────────────╯")
+            writeln!(f, "╭─────────────────────────────╮")?;
+            writeln!(f, "│ No transaction block events │")?;
+            writeln!(f, "╰─────────────────────────────╯")
         } else {
             let mut builder = TableBuilder::default();
 
