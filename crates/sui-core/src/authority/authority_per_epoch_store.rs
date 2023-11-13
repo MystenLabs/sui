@@ -359,7 +359,7 @@ impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_transactional(
             Self::path(epoch, parent_path),
-            MetricConf::with_db_name("epoch"),
+            MetricConf::new("epoch"),
             db_options,
             None,
         )
@@ -370,7 +370,7 @@ impl AuthorityEpochTables {
             Self::path(epoch, parent_path),
             None,
             None,
-            MetricConf::with_db_name("epoch"),
+            MetricConf::new("epoch"),
         )
     }
 
