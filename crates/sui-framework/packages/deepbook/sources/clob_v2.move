@@ -633,7 +633,6 @@ module deepbook::clob_v2 {
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
-                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
                         order_id: maker_order.order_id,
@@ -821,7 +820,6 @@ module deepbook::clob_v2 {
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
-                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
                         order_id: maker_order.order_id,
@@ -1580,7 +1578,6 @@ module deepbook::clob_v2 {
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
-            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
             let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                 client_order_id: order.client_order_id,
                 order_id: order.order_id,
