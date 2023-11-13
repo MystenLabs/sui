@@ -842,7 +842,6 @@
 ## Owner
 ### <a id=720885></a>
 ### Dynamic Field
-####  Selects a dynamic field child of the parent object
 
 ><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
 >  ... on MoveValue {
@@ -862,7 +861,8 @@
 >  }
 >}
 >
->fragment DynamicFieldNameSelection on MoveValue {
+>fragment DynamicFieldNameSelection on TypedDynamicFieldName {
+>  kind
 >  type {
 >    repr
 >  }
@@ -879,15 +879,17 @@
 >  }
 >}
 >
-># Selects a dynamic field child of the parent object
 >query DynamicField {
 >  object(
 >    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
 >  ) {
->    dynamicField(dynamicFieldName: {
->      type: "0x2::kiosk::Listing",
->      bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA"
->    }){
+>    dynamicField(
+>      dynamicFieldName: {
+>        type: "0x2::kiosk::Item",
+>        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=",
+>        kind:"DynamicObject"
+>      }
+>    ) {
 >      ...DynamicFieldSelect
 >    }
 >  }

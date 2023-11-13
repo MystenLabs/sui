@@ -242,7 +242,7 @@ type DynamicField {
 	The string type, data, and serialized value of the DynamicField's 'name' field.
 	This field is used to uniquely identify a child of the parent object.
 	"""
-	name: MoveValue
+	name: TypedDynamicFieldName
 	"""
 	The actual data stored in the dynamic field.
 	"""
@@ -280,12 +280,18 @@ type DynamicFieldEdge {
 
 input DynamicFieldName {
 	"""
+	A string flag of 'DynamicField' or 'DynamicObject'.
+	This is needed to disambiguate the child object,
+	as it is possible for a dynamic field and a dynamic object field to share the same name.
+	"""
+	kind: String!
+	"""
 	The string type of the DynamicField's 'name' field.
 	A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
 	"""
 	type: String!
 	"""
-	The base64 encoded bcs serialization of the DynamicField's 'name' field.
+	The Base64 encoded bcs serialization of the DynamicField's 'name' field.
 	"""
 	bcs: Base64!
 }
@@ -1356,6 +1362,39 @@ type TypeOrigin {
 	The storage ID of the package that first defined this type.
 	"""
 	definingId: SuiAddress!
+}
+
+"""
+The string type, data, and serialized value of a DynamicField's 'name' field.
+"""
+type TypedDynamicFieldName {
+	"""
+	A string flag of 'DynamicField' or 'DynamicObject'.
+	This is needed to disambiguate the child object,
+	as it is possible for a dynamic field and a dynamic object field to share the same name.
+	"""
+	kind: String!
+	type: MoveType!
+	bcs: Base64!
+	"""
+	Structured contents of a Move value.
+	"""
+	data: MoveData!
+	"""
+	Representation of a Move value in JSON, where:
+	
+	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Empty optional values are represented by `null`.
+	
+	This form is offered as a less verbose convenience in cases where the layout of the type is
+	known by the client.
+	"""
+	json: JSON!
 }
 
 type Validator {
