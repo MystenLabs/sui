@@ -9,7 +9,6 @@ use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::big_int::BigInt;
-use super::digest::Digest;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;

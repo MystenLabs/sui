@@ -23,6 +23,17 @@ pub(crate) struct DynamicField {
     pub df_kind: DynamicFieldType,
 }
 
+/// The string type, data, and serialized value of a DynamicField's 'name' field.
+#[derive(SimpleObject)]
+pub(crate) struct TypedDynamicFieldName {
+    /// A string flag of 'DynamicField' or 'DynamicObject'.
+    /// This is needed to disambiguate the child object,
+    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
+    pub kind: String,
+    #[graphql(flatten)]
+    name: MoveValue,
+}
+
 #[derive(Union)]
 pub(crate) enum DynamicFieldValue {
     MoveObject(MoveObject), // DynamicObject
@@ -31,10 +42,14 @@ pub(crate) enum DynamicFieldValue {
 
 #[derive(InputObject)] // used as input object
 pub(crate) struct DynamicFieldName {
+    /// A string flag of 'DynamicField' or 'DynamicObject'.
+    /// This is needed to disambiguate the child object,
+    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
+    pub kind: String,
     /// The string type of the DynamicField's 'name' field.
     /// A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
     pub type_: String,
-    /// The base64 encoded bcs serialization of the DynamicField's 'name' field.
+    /// The Base64 encoded bcs serialization of the DynamicField's 'name' field.
     pub bcs: Base64,
 }
 
