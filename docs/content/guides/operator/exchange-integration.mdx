@@ -18,80 +18,18 @@ For best results, run Sui Full nodes on Linux. Sui supports the Ubuntu and Debia
 
 ## Configure a Sui Full node
 
-You can set up and configure a Sui Full node using Docker or directly from source code in the Sui GitHub repository.
+You can set up and configure a [Sui Full node](/sui-full-node.mdx) using Docker or directly from source code in the Sui GitHub repository.
 
-### Install a Sui Full node using Docker
-
-Run the command in this section using the same branch of the repository for each. Replace `branch-name` with the branch you use. For example, use `devnet` to use the Sui Devnet network, or use `testnet` to use the Sui Testnet network. You must download all files to, and run all commands from, the same folder location.
-
- 1. Install [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/). Docker Desktop version installs Docker Compose.
- 1. Install dependencies for Linux:
-    ```bash
-    apt update \
-    && apt install -y --no-install-recommends \
-    tzdata \
-    ca-certificates \
-    build-essential \
-    pkg-config \
-    cmake
-    ```
- 1. Download the docker-compose.yaml file:
-    ```bash
-    wget https://github.com/MystenLabs/sui/blob/branch-name/docker/fullnode/docker-compose.yaml
-    ```
- 1. Download the fullnode-template.yaml file:
-    ```bash
-    wget https://github.com/MystenLabs/sui/raw/branch-name/crates/sui-config/data/fullnode-template.yaml
-    ```
- 1. Download the genesis.blob file:
-    ```bash
-    wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
-    ```
- 1. Start the Full node. The -d switch starts it in the background (detached mode).
-    ```bash
-    docker-compose up -d
-    ```
-
-## Install a Sui Full node from source
-
-Use the steps in this section to install and configure a Sui Full node directly from the Sui GitHub repository. These steps use [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager.
-
- 1. Install prerequisites for Sui.
- 1. Clone the Sui repository:
-    ```bash
-    git clone https://github.com/MystenLabs/sui.git -b branch-name
-    ```
-    Replace `branch-name` with the branch to use. You should use the same branch for all commands.
- 1. Change directories to /sui:
-    ```bash
-    cd sui
-    ```
- 1. Copy the fullnode.yaml template:
-    ```bash
-    cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
-    ```
- 1. Download the genesis.blob file:
-    ```bash
-    wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
-    ```
-    Change branch-name to the same branch you used for previous commands.
- 1. Optionally, if you installed Sui to a path other than the default, modify the fullnode.yaml file to use the path you used. Update the path to the folder where you installed sui-fullnode for the `db-path` and `genesis-file-location` as appropriate:
-    `db-path: "/db-files/sui-fullnode-folder"`
-    `genesis-file-location: "/sui-fullnode-folder/genesis.blob"`
- 1. Start you Sui Full node:
-    ```bash
-    cargo run --release --bin sui-node -- --config-path fullnode.yaml
-    ```
 ## Set up Sui addresses
 
 Sui addresses do not require on-chain initialization, you can spend from an address if it corresponds to your private key. You can derive a 32-byte Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. 
 
-Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1, Secp256r1 and Multisig. The corresponding flag bytes are 0x00, 0x01, 0x02, 0x03 respectively. 
+Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1, Secp256r1 and multisig. The corresponding flag bytes are 0x00, 0x01, 0x02, 0x03 respectively. 
 
 The following code sample demonstrates how to derive a Sui address in Rust:
 
 ```rust
-let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = MultiSig
+let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = multiSig
 // Hash the [flag, public key] bytearray using Blake2b
 let mut hasher = DefaultHash::default();
 hasher.update([flag]);
@@ -102,13 +40,13 @@ let sui_address_string = hex::encode(arr);
 
 ## Displaying addresses
 
-Sui supports both addresses with and without a 0x prefix. Sui recommends that you always include the 0x prefix in API calls and when you display user addresses.
+Sui supports both addresses with and without a `0x` prefix. Sui recommends that you always include the `0x` prefix in API calls and when you display user addresses.
 
 ## Track balance changes for an address
 
 You can track balance changes by calling `sui_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `sui_getBalance` requests.
 
-The following bash example demonstrates how to use `sui_getBalance` for address 0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
+The following bash example demonstrates how to use `sui_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate Full node.
 
 ```bash
 rpc="https://fullnode.devnet.sui.io:443"
@@ -117,7 +55,7 @@ data="{\"jsonrpc\": \"2.0\", \"method\": \"sui_getBalance\", \"id\": 1, \"params
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
-The response is a JSON object that includes the totalBalance for the address:
+The response is a JSON object that includes the `totalBalance` for the address:
 ```json
 {
   "jsonrpc":"2.0",
@@ -133,7 +71,7 @@ The response is a JSON object that includes the totalBalance for the address:
 }
 ```
 
-The following example demonstrates using sui_getBalance in Rust:
+The following example demonstrates using `sui_getBalance` in Rust:
 ```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
@@ -176,7 +114,7 @@ The `id` field of any transaction looks like:
        }
 ```
 
-With this data, create a nextCursor as follows:
+With this data, create a `nextCursor` as follows:
 ```bash
 nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventSeq": 6019}
 ```
@@ -232,7 +170,7 @@ Sui supports the following API operations related to transferring SUI between ad
 
 ## Signing transactions
 
-Please refer to [Sui Signatures](/concepts/cryptography/transaction-auth/signatures.mdx) for more details on signature validity requirements.
+Refer to [Sui Signatures](/concepts/cryptography/transaction-auth/signatures.mdx) for more details on signature validity requirements.
 
 ## SUI Staking
 
@@ -266,7 +204,7 @@ public entry fun request_add_stake(
 }
 ```
 
- * `request_add_stake_mul_coin`
+ - `request_add_stake_mul_coin`
  Add user stake to a validator's staking pool using multiple coins.
 
 ```rust
@@ -282,7 +220,7 @@ public entry fun request_add_stake_mul_coin(
 }
 ```
 
- * `request_add_stake_with_locked_coin`
+ - `request_add_stake_with_locked_coin`
  Add user stake to a validator's staking pool using a locked SUI coin.
 
 ```rust
@@ -297,7 +235,7 @@ public entry fun request_add_stake_with_locked_coin(
 }
 ```
 
- * `request_withdraw_stake`
+ - `request_withdraw_stake`
  Withdraw some portion of a user stake from a validator's staking pool.
 
 ```rust
