@@ -24,6 +24,7 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
+        move_value::MoveValue,
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -405,18 +406,17 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
-            .map(|cursor| self.parse_tx_cursor(&cursor))
+            .map(|cursor| self.parse_event_cursor(&cursor))
             .transpose()?;
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
-        let query = move || {
-            QueryBuilder::multi_get_events(cursor, descending_order, limit, Some(filter.clone()))
-        };
+        let query =
+            move || QueryBuilder::multi_get_events(cursor, descending_order, limit, filter.clone());
 
         let result: Option<Vec<StoredEvent>> = self
             .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
@@ -539,8 +539,34 @@ impl PgManager {
         Ok(sequence_number)
     }
 
-    pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
-        EventID::try_from(cursor).map_err(|_| Error::InvalidCursor("event".to_string()))
+    pub(crate) fn parse_event_cursor(&self, cursor: &str) -> Result<(i64, i64), Error> {
+        let mut parts = cursor.split(':');
+        let tx_sequence_number = parts
+            .next()
+            .ok_or_else(|| {
+                Error::InvalidCursor(
+                    "Failed to parse tx_sequence_number from event cursor".to_string(),
+                )
+            })?
+            .parse::<i64>()
+            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
+        let event_sequence_number = parts
+            .next()
+            .ok_or_else(|| {
+                Error::InvalidCursor(
+                    "Failed to parse event_sequence_number from event cursor".to_string(),
+                )
+            })?
+            .parse::<i64>()
+            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
+        Ok((tx_sequence_number, event_sequence_number))
+    }
+
+    pub(crate) fn build_event_cursor(&self, event: &StoredEvent) -> String {
+        format!(
+            "{}:{}",
+            event.tx_sequence_number, event.event_sequence_number
+        )
     }
 
     pub(crate) fn validate_package_dependencies(
@@ -1340,19 +1366,12 @@ impl PgManager {
         if let Some((stored_events, has_next_page)) = events {
             let mut connection = Connection::new(false, has_next_page);
             connection.edges.extend(stored_events.into_iter().map(|e| {
-                let cursor = format!("{}", e.event_sequence_number);
+                let cursor = self.build_event_cursor(&e);
+                let contents = MoveValue::new(e.event_type.clone(), Base64::from(e.bcs.clone()));
                 let event = Event {
-                    sending_module_id: Some(MoveModuleId {
-                        package: SuiAddress::try_from(e.package).unwrap(), // cleanup
-                        name: e.module,
-                    }),
-                    event_type: Some(MoveType::new(e.event_type)),
-                    senders: None,
-                    timestamp: DateTime::from_ms(e.timestamp_ms),
-                    json: None,
-                    bcs: Some(Base64::from(e.bcs)),
+                    stored: e,
+                    contents,
                 };
-
                 Edge::new(cursor, event)
             }));
             Ok(Some(connection))

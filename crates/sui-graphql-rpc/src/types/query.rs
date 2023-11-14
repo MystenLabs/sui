@@ -175,25 +175,10 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_events(first, after, last, before, filter)
-            .await
-            .extend()
-    }
-
-    async fn event_connection_v2(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: EventFilter,
-    ) -> Result<Option<Connection<String, Event>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_events_v2(first, after, last, before, filter)
             .await
             .extend()
     }

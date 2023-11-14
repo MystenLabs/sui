@@ -13,7 +13,7 @@
           }
         }
       }
-      eventType {
+      type {
         repr
       }
       senders {
