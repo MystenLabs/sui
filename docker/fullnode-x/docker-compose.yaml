@@ -3,20 +3,20 @@ version: "3.9"
 services:
 
   fullnode:
-    build:
-      context: ../..
-      dockerfile: ./docker/sui-node/Dockerfile
-      args:
-        # update with git sha of whichever branch you're building on.
-        GIT_REVISION: db24658bc9
-        BUILD_DATE: today
+    # build:
+    #   context: ../..
+    #   dockerfile: ./docker/sui-node/Dockerfile
+    #   args:
+    #     # update with git sha of whichever branch you're building on.
+    #     GIT_REVISION: db24658bc9
+    #     BUILD_DATE: today
 
     environment:
       - LD_PRELOAD
       - RUST_JSON_LOG="true"
       - RUST_LOG="info"
       # don't use debug, it generates volumes of data.
-    image: sui-node:latest
+    image: mysten/sui-node:testnet
     command: /opt/sui/entry.sh
     restart: unless-stopped
     # populate your local ./fullnode/config/ directory with fullnode.yaml and genesis.blob for the network you want to use.
@@ -30,10 +30,10 @@ services:
         protocol: udp
 
   indexer:
-    build:
-      context: ../..
-      dockerfile: ./docker/sui-indexer/Dockerfile
-    image: sui-indexer:latest
+    # build:
+    #   context: ../..
+    #   dockerfile: ./docker/sui-indexer/Dockerfile
+    image: mysten/sui-indexer:testnet
     command: /opt/sui/indexer.sh
     restart: unless-stopped
     volumes:
