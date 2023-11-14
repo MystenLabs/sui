@@ -208,18 +208,18 @@ module sui::package {
 
     /// Restrict upgrades through this upgrade `cap` to just add code, or
     /// change dependencies.
-    public fun only_additive_upgrades(cap: &mut UpgradeCap) {
+    public entry fun only_additive_upgrades(cap: &mut UpgradeCap) {
         restrict(cap, ADDITIVE)
     }
 
     /// Restrict upgrades through this upgrade `cap` to just change
     /// dependencies.
-    public fun only_dep_upgrades(cap: &mut UpgradeCap) {
+    public entry fun only_dep_upgrades(cap: &mut UpgradeCap) {
         restrict(cap, DEP_ONLY)
     }
 
     /// Discard the `UpgradeCap` to make a package immutable.
-    public fun make_immutable(cap: UpgradeCap) {
+    public entry fun make_immutable(cap: UpgradeCap) {
         let UpgradeCap { id, package: _, version: _, policy: _ } = cap;
         object::delete(id);
     }
