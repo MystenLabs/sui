@@ -14,6 +14,7 @@ import {
 import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
+import { toZkLoginPublicIdentifier } from '../keypairs/zklogin/publickey.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
@@ -21,9 +22,14 @@ import { publicKeyFromRawBytes } from '../verify/index.js';
 type CompressedSignature =
 	| { ED25519: number[] }
 	| { Secp256k1: number[] }
-	| { Secp256r1: number[] };
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
-type PublicKeyEnum = { ED25519: number[] } | { Secp256k1: number[] } | { Secp256r1: number[] };
+type PublicKeyEnum =
+	| { ED25519: number[] }
+	| { Secp256k1: number[] }
+	| { Secp256r1: number[] }
+	| { ZkLogin: number[] };
 
 type PubkeyEnumWeightPair = {
 	pubKey: PublicKeyEnum;
@@ -238,13 +244,18 @@ export class MultiSigPublicKey extends PublicKey {
 
 		for (let i = 0; i < signatures.length; i++) {
 			let parsed = parseSerializedSignature(signatures[i]);
-
 			if (parsed.signatureScheme === 'MultiSig') {
 				throw new Error('MultiSig is not supported inside MultiSig');
 			}
 
+			let publicKey;
 			if (parsed.signatureScheme === 'ZkLogin') {
-				throw new Error('ZkLogin is not supported inside MultiSig');
+				publicKey = toZkLoginPublicIdentifier(
+					parsed.zkLogin?.addressSeed,
+					parsed.zkLogin?.iss,
+				).toRawBytes();
+			} else {
+				publicKey = parsed.publicKey;
 			}
 
 			compressedSignatures[i] = {
@@ -253,7 +264,7 @@ export class MultiSigPublicKey extends PublicKey {
 
 			let publicKeyIndex;
 			for (let j = 0; j < this.publicKeys.length; j++) {
-				if (bytesEqual(parsed.publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
+				if (bytesEqual(publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
 					if (bitmap & (1 << j)) {
 						throw new Error('Received multiple signatures from the same public key');
 					}
@@ -275,8 +286,7 @@ export class MultiSigPublicKey extends PublicKey {
 			bitmap,
 			multisig_pk: this.multisigPublicKey,
 		};
-
-		const bytes = bcs.MultiSig.serialize(multisig).toBytes();
+		const bytes = bcs.MultiSig.serialize(multisig, { maxSize: 8192 }).toBytes();
 		let tmp = new Uint8Array(bytes.length + 1);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 		tmp.set(bytes, 1);

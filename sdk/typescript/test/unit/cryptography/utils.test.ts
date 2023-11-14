@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB64 } from '@mysten/bcs';
+import { fromB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { ExportedKeypair } from '../../../src/cryptography/keypair';
@@ -100,20 +100,6 @@ describe('Utils', () => {
 				weight: 2,
 			},
 		]);
-	});
-
-	it('`toParsedSIgnaturePubkeyPair()` should handle unsupported schemes', async () => {
-		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
-
-		const sig1 = await k1.signPersonalMessage(data);
-
-		let bytes = fromB64(sig1.signature);
-		bytes[0] = 0x05;
-		let invalidSignature = toB64(bytes);
-
-		expect(() => toParsedSignaturePubkeyPair(invalidSignature)).toThrowError(
-			new Error('ZkLogin signature not supported'),
-		);
 	});
 
 	it('`toSingleSignaturePubkeyPair()` should parse single signature publickey pair', async () => {
