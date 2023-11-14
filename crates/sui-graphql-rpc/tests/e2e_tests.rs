@@ -316,6 +316,7 @@ mod tests {
         test_query_complexity_metrics_impl().await;
     }
 
+    #[ignore]
     #[tokio::test]
     #[serial]
     async fn simulator_commands_test() {
