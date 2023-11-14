@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::bls12381 {
-
     /// @param signature: A 48-bytes signature that is a point on the G1 subgroup.
     /// @param public_key: A 96-bytes public key that is a point on the G2 subgroup.
     /// @param msg: The message that we test the signature against.

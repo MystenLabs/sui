@@ -9,7 +9,7 @@
 /// Each of the fields of the Display object should allow for pattern
 /// substitution and filling-in the pieces using the data from the object T.
 ///
-/// More entry functions might be added in the future depending on the use cases.
+/// More functions might be added in the future depending on the use cases.
 module sui::display {
     use sui::package::{from_package, Publisher};
     use sui::tx_context::{sender, TxContext};
@@ -104,12 +104,12 @@ module sui::display {
 
     #[lint_allow(self_transfer)]
     /// Create a new empty Display<T> object and keep it.
-    entry public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
+    public fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
         transfer::public_transfer(new<T>(pub, ctx), sender(ctx))
     }
 
     /// Manually bump the version and emit an event with the updated version's contents.
-    entry public fun update_version<T: key>(
+    public fun update_version<T: key>(
         display: &mut Display<T>
     ) {
         display.version = display.version + 1;
@@ -120,15 +120,15 @@ module sui::display {
         })
     }
 
-    // === Entry functions: Add/Modify fields ===
+    // === functions: Add/Modify fields ===
 
     /// Sets a custom `name` field with the `value`.
-    entry public fun add<T: key>(self: &mut Display<T>, name: String, value: String) {
+    public fun add<T: key>(self: &mut Display<T>, name: String, value: String) {
         add_internal(self, name, value)
     }
 
     /// Sets multiple `fields` with `values`.
-    entry public fun add_multiple<T: key>(
+    public fun add_multiple<T: key>(
         self: &mut Display<T>, fields: vector<String>, values: vector<String>
     ) {
         let len = vector::length(&fields);
@@ -142,14 +142,13 @@ module sui::display {
     }
 
     /// Change the value of the field.
-    /// TODO (long run): version changes;
-    entry public fun edit<T: key>(self: &mut Display<T>, name: String, value: String) {
+    public fun edit<T: key>(self: &mut Display<T>, name: String, value: String) {
         let (_, _) = vec_map::remove(&mut self.fields, &name);
         add_internal(self, name, value)
     }
 
     /// Remove the key from the Display.
-    entry public fun remove<T: key>(self: &mut Display<T>, name: String) {
+    public fun remove<T: key>(self: &mut Display<T>, name: String) {
         vec_map::remove(&mut self.fields, &name);
     }
 

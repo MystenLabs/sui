@@ -53,7 +53,11 @@ module sui::sui {
         total_sui
     }
 
-    public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
+    /// The `Coin` type has `store` constraint which makes it freely transferable
+    /// using the TransferObjects command in a Programmable Transaction Block.
+    ///
+    /// This function is not necessary and can be considered redundant.
+    public fun transfer(c: coin::Coin<SUI>, recipient: address) {
         transfer::public_transfer(c, recipient)
     }
 }

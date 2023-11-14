@@ -808,7 +808,7 @@ Restrict upgrades through this upgrade <code>cap</code> to just add code, or
 change dependencies.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
 </code></pre>
 
 
@@ -817,7 +817,7 @@ change dependencies.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_only_additive_upgrades">only_additive_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
     <a href="package.md#0x2_package_restrict">restrict</a>(cap, <a href="package.md#0x2_package_ADDITIVE">ADDITIVE</a>)
 }
 </code></pre>
@@ -834,7 +834,7 @@ Restrict upgrades through this upgrade <code>cap</code> to just change
 dependencies.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
 </code></pre>
 
 
@@ -843,7 +843,7 @@ dependencies.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_only_dep_upgrades">only_dep_upgrades</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
     <a href="package.md#0x2_package_restrict">restrict</a>(cap, <a href="package.md#0x2_package_DEP_ONLY">DEP_ONLY</a>)
 }
 </code></pre>
@@ -859,7 +859,7 @@ dependencies.
 Discard the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></code> to make a package immutable.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>)
 </code></pre>
 
 
@@ -868,7 +868,7 @@ Discard the <code><a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a></co
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_make_immutable">make_immutable</a>(cap: <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>) {
     <b>let</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a> { id, <a href="package.md#0x2_package">package</a>: _, version: _, policy: _ } = cap;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
 }

@@ -72,7 +72,7 @@ Split coin <code>self</code> to two coins, one with balance <code>split_amount</
 and the remaining balance is left is <code>self</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -81,7 +81,7 @@ and the remaining balance is left is <code>self</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split">split</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_split">split</a>&lt;T&gt;(
     self: &<b>mut</b> Coin&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext
 ) {
     <a href="pay.md#0x2_pay_keep">keep</a>(<a href="coin.md#0x2_coin_split">coin::split</a>(self, split_amount, ctx), ctx)
@@ -100,7 +100,7 @@ Split coin <code>self</code> into multiple coins, each with balance specified
 in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amounts: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amounts: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -109,7 +109,7 @@ in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(
     self: &<b>mut</b> Coin&lt;T&gt;, split_amounts: <a href="">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&split_amounts));
@@ -132,7 +132,7 @@ Send <code>amount</code> units of <code>c</code> to <code>recipient</code>
 Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal to <code>amount</code>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -141,7 +141,7 @@ Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal 
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
     c: &<b>mut</b> Coin&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
 ) {
     <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), recipient)
@@ -160,7 +160,7 @@ Divide coin <code>self</code> into <code>n - 1</code> coins with equal balances.
 not evenly divisible by <code>n</code>, the remainder is left in <code>self</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_divide_and_keep">divide_and_keep</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_divide_and_keep">divide_and_keep</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -169,7 +169,7 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_divide_and_keep">divide_and_keep</a>&lt;T&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_divide_and_keep">divide_and_keep</a>&lt;T&gt;(
     self: &<b>mut</b> Coin&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> vec: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt; = <a href="coin.md#0x2_coin_divide_into_n">coin::divide_into_n</a>(self, n, ctx);
@@ -193,7 +193,7 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
 Join <code><a href="coin.md#0x2_coin">coin</a></code> into <code>self</code>. Re-exports <code><a href="coin.md#0x2_coin_join">coin::join</a></code> function.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -202,7 +202,7 @@ Join <code><a href="coin.md#0x2_coin">coin</a></code> into <code>self</code>. Re
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> Coin&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;) {
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> Coin&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;) {
     <a href="coin.md#0x2_coin_join">coin::join</a>(self, <a href="coin.md#0x2_coin">coin</a>)
 }
 </code></pre>
@@ -218,7 +218,7 @@ Join <code><a href="coin.md#0x2_coin">coin</a></code> into <code>self</code>. Re
 Join everything in <code>coins</code> with <code>self</code>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, coins: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, coins: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;)
 </code></pre>
 
 
@@ -227,7 +227,7 @@ Join everything in <code>coins</code> with <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> Coin&lt;T&gt;, coins: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt;) {
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> Coin&lt;T&gt;, coins: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt;) {
     <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&coins));
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
@@ -250,7 +250,7 @@ Join everything in <code>coins</code> with <code>self</code>
 Join a vector of <code>Coin</code> into a single object and transfer it to <code>receiver</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_join_vec_and_transfer">join_vec_and_transfer</a>&lt;T&gt;(coins: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, receiver: <b>address</b>)
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_join_vec_and_transfer">join_vec_and_transfer</a>&lt;T&gt;(coins: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, receiver: <b>address</b>)
 </code></pre>
 
 
@@ -259,7 +259,7 @@ Join a vector of <code>Coin</code> into a single object and transfer it to <code
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_join_vec_and_transfer">join_vec_and_transfer</a>&lt;T&gt;(coins: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt;, receiver: <b>address</b>) {
+<pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_join_vec_and_transfer">join_vec_and_transfer</a>&lt;T&gt;(coins: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt;, receiver: <b>address</b>) {
     <b>assert</b>!(<a href="_length">vector::length</a>(&coins) &gt; 0, <a href="pay.md#0x2_pay_ENoCoins">ENoCoins</a>);
 
     <b>let</b> self = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);

@@ -20,7 +20,7 @@
 ///    struct ItemPurchased has copy, drop {
 ///      item_id: ID, buyer: address
 ///    }
-///    entry fun buy(/* .... */) {
+///    public fun buy(/* .... */) {
 ///       /* ... */
 ///       event::emit(ItemPurchased { item_id: ..., buyer: .... })
 ///    }
