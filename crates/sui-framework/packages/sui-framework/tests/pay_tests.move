@@ -14,6 +14,30 @@ module sui::pay_tests {
     const TEST_SENDER_ADDR: address = @0xA11CE;
 
     #[test]
+    fun test_split() {
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let coin = coin::mint_for_testing<SUI>(10, ctx);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        pay::split(&mut coin, 3, test_scenario::ctx(scenario));
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let coin1 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+        
+        assert!(coin::value(&coin1) == 3, 0);
+        assert!(coin::value(&coin) == 7, 0);
+        // Hence, total value is 10.
+
+        // Now, destroy all the objects
+        test_utils::destroy(coin);
+        test_utils::destroy(coin1);
+        
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     public entry fun test_coin_split_n() {
         let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
         let scenario = &mut scenario_val;
@@ -133,6 +157,72 @@ module sui::pay_tests {
 
         test_utils::destroy(coin);
         test_utils::destroy(coin_transfer_fail);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_join() {
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let coin1 = coin::mint_for_testing<SUI>(10, ctx);
+        let coin2 = coin::mint_for_testing<SUI>(20, ctx);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        pay::join(&mut coin1, coin2);
+
+        // destroy the object
+        test_utils::destroy(coin1);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_join_vec() {
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let coin1 = coin::mint_for_testing<SUI>(10, ctx);
+        let coin2 = coin::mint_for_testing<SUI>(20, ctx);
+        let coin3 = coin::mint_for_testing<SUI>(30, ctx);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let coins = vector[coin2, coin3];
+        pay::join_vec(&mut coin1, coins);
+
+        assert!(coin::value(&coin1) == 60, 0);
+
+        // destroy the object
+        test_utils::destroy(coin1);
+
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_join_vec_and_transfer_simple() {
+        let scenario_val = test_scenario::begin(TEST_SENDER_ADDR);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        // mint 3 coins for testing
+        let coin1 = coin::mint_for_testing<SUI>(10, ctx);
+        let coin2 = coin::mint_for_testing<SUI>(20, ctx);
+        let coin3 = coin::mint_for_testing<SUI>(30, ctx);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        // combine the coins into a vector
+        let coin_vector = vector[coin1, coin2, coin3];
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        // join the vector coins into a single coin & transfer to receiver
+        pay::join_vec_and_transfer(coin_vector, TEST_SENDER_ADDR);
+
+        test_scenario::next_tx(scenario, TEST_SENDER_ADDR);
+        let joined_coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+        assert!(coin::value(&joined_coin) == 60, 0);
+
+        // destroy the object
+        test_utils::destroy(joined_coin);
+
         test_scenario::end(scenario_val);
     }
 
