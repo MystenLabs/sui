@@ -76,7 +76,6 @@
 		"size-limit": "^8.2.6",
 		"tsx": "^3.12.7",
 		"typescript": "^5.1.6",
-		"vite-tsconfig-paths": "^4.2.0",
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {

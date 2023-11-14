@@ -9,6 +9,15 @@ import { createMockAccount } from '../mocks/mockAccount.js';
 import { suiFeatures } from '../mocks/mockFeatures.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
+function withResolvers<T = any>() {
+	let resolve, reject;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, reject: reject!, resolve: resolve! };
+}
+
 describe('useAutoConnectStatus', () => {
 	test('returns "disabled" when the auto-connect functionality is disabled', async () => {
 		const wrapper = createWalletProviderContextWrapper();
@@ -16,13 +25,13 @@ describe('useAutoConnectStatus', () => {
 		expect(result.current).toBe('disabled');
 	});
 
-	test(`returns "idle" when we haven't yet made an auto-connection attempt`, async () => {
+	test(`returns "attempted" immediately when there is no last connected wallet`, async () => {
 		const wrapper = createWalletProviderContextWrapper({ autoConnect: true });
 		const { result } = renderHook(() => useAutoConnectionStatus(), { wrapper });
-		expect(result.current).toBe('idle');
+		expect(result.current).toBe('attempted');
 	});
 
-	test('returns "settled" when we have made a successful auto-connection attempt', async () => {
+	test('returns "attempted" when we have made a successful auto-connection attempt', async () => {
 		const { unregister, mockWallet } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
 			accounts: [createMockAccount(), createMockAccount()],
@@ -45,10 +54,18 @@ describe('useAutoConnectStatus', () => {
 		// Now unmount our component tree to simulate someone leaving the page.
 		unmount();
 
+		const { promise, resolve } = withResolvers();
+		mockWallet.mocks.connect.mockImplementation(async () => {
+			console.log('Waiting to connect');
+			return promise;
+		});
+
 		// Render our component tree again and auto-connect to our previously connected wallet account.
 		const { result: updatedResult } = renderHook(() => useAutoConnectionStatus(), { wrapper });
+		expect(updatedResult.current).toBe('idle');
+		resolve({ accounts: mockWallet.accounts });
 
-		await waitFor(() => expect(updatedResult.current).toBe('settled'));
+		await waitFor(() => expect(updatedResult.current).toBe('attempted'));
 
 		act(() => unregister());
 	});

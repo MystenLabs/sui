@@ -4,6 +4,8 @@
 import { useMutationState } from '@tanstack/react-query';
 
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
+import { useWallets } from './useWallets.js';
 import { useWalletStore } from './useWalletStore.js';
 
 /**
@@ -11,9 +13,25 @@ import { useWalletStore } from './useWalletStore.js';
  */
 export function useAutoConnectionStatus(): 'disabled' | 'idle' | 'attempted' {
 	const autoConnectEnabled = useWalletStore((state) => state.autoConnectEnabled);
-	const hasLastConnectedWallet = useWalletStore((state) => !!state.lastConnectedWalletName);
+	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
+	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
+	const wallets = useWallets();
+	const { isDisconnected } = useCurrentWallet();
+
 	const [mutationState] = useMutationState({
-		filters: { mutationKey: walletMutationKeys.autoconnectWallet() },
+		filters: {
+			mutationKey: walletMutationKeys.autoconnectWallet(),
+			predicate: ({ state: { variables } }) => {
+				return (
+					variables &&
+					variables.autoConnectEnabled === autoConnectEnabled &&
+					variables.lastConnectedAccountAddress === lastConnectedAccountAddress &&
+					variables.lastConnectedWalletName === lastConnectedWalletName &&
+					variables.isDisconnected === isDisconnected &&
+					variables.wallets === wallets
+				);
+			},
+		},
 	});
 
 	if (!autoConnectEnabled) {
@@ -26,5 +44,5 @@ export function useAutoConnectionStatus(): 'disabled' | 'idle' | 'attempted' {
 			: 'idle';
 	}
 
-	return hasLastConnectedWallet ? 'idle' : 'attempted';
+	return lastConnectedWalletName ? 'idle' : 'attempted';
 }
