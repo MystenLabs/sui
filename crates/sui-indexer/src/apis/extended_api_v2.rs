@@ -72,7 +72,7 @@ impl ExtendedApiServer for ExtendedApiV2 {
             })
             .await?;
 
-        let epoch_metrics = epochs
+        let mut epoch_metrics = epochs
             .into_iter()
             .map(|e| EpochMetrics {
                 epoch: e.epoch,
@@ -84,6 +84,7 @@ impl ExtendedApiServer for ExtendedApiV2 {
             .collect::<Vec<_>>();
 
         let has_next_page = epoch_metrics.len() > limit;
+        epoch_metrics.truncate(limit);
         let next_cursor = epoch_metrics.last().map(|e| e.epoch);
         Ok(Page {
             data: epoch_metrics,
