@@ -53,7 +53,7 @@ module sui::sui {
         total_sui
     }
 
-    public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
+    public fun transfer(c: coin::Coin<SUI>, recipient: address) {
         transfer::public_transfer(c, recipient)
     }
 }

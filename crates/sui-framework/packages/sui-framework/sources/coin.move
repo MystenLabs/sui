@@ -147,7 +147,7 @@ module sui::coin {
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
+    public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
         object::delete(id);
         balance::join(&mut self.balance, balance);
@@ -302,7 +302,7 @@ module sui::coin {
 
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
-    public entry fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
+    public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
         object::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
@@ -326,7 +326,7 @@ module sui::coin {
     // === Entrypoints ===
 
     /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
-    public entry fun mint_and_transfer<T>(
+    public fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
         transfer::public_transfer(mint(c, amount, ctx), recipient)
@@ -335,28 +335,28 @@ module sui::coin {
     // === Update coin metadata ===
 
     /// Update name of the coin in `CoinMetadata`
-    public entry fun update_name<T>(
+    public fun update_name<T>(
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, name: string::String
     ) {
         metadata.name = name;
     }
 
     /// Update the symbol of the coin in `CoinMetadata`
-    public entry fun update_symbol<T>(
+    public fun update_symbol<T>(
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, symbol: ascii::String
     ) {
         metadata.symbol = symbol;
     }
 
     /// Update the description of the coin in `CoinMetadata`
-    public entry fun update_description<T>(
+    public fun update_description<T>(
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, description: string::String
     ) {
         metadata.description = description;
     }
 
     /// Update the url of the coin in `CoinMetadata`
-    public entry fun update_icon_url<T>(
+    public fun update_icon_url<T>(
         _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, url: ascii::String
     ) {
         metadata.icon_url = option::some(url::new_unsafe(url));
