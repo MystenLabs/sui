@@ -319,14 +319,18 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
             for (authority_index, authority_transactions) in consensus_output.transactions() {
-                let num_certs = self
+                // TODO: consider only messages within 1~3 rounds of the leader?
+                let num_messages = self
                     .last_consensus_stats
                     .stats
-                    .inc_narwhal_certificates(authority_index as usize);
+                    .inc_num_messages(authority_index as usize);
                 self.metrics
-                    .consensus_committed_certificates
-                    .with_label_values(&[&authority_index.to_string()])
-                    .set(num_certs as i64);
+                    .consensus_committed_messages
+                    .with_label_values(&[self
+                        .committee
+                        .authority_hostname_by_index(authority_index)
+                        .unwrap_or_default()])
+                    .set(num_messages as i64);
                 for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
                     self.metrics
@@ -340,7 +344,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                         let num_txns = self
                             .last_consensus_stats
                             .stats
-                            .inc_user_transactions(authority_index as usize);
+                            .inc_num_user_transactions(authority_index as usize);
                         self.metrics
                             .consensus_committed_user_transactions
                             .with_label_values(&[&authority_index.to_string()])
@@ -854,11 +858,11 @@ mod tests {
         assert_eq!(last_consensus_stats_1.index.last_committed_round, 5_u64);
         assert_ne!(last_consensus_stats_1.hash, 0);
         assert_eq!(
-            last_consensus_stats_1.stats.get_narwhal_certificates(0),
+            last_consensus_stats_1.stats.get_num_messages(0),
             num_certificates as u64
         );
         assert_eq!(
-            last_consensus_stats_1.stats.get_user_transactions(0),
+            last_consensus_stats_1.stats.get_num_user_transactions(0),
             num_transactions as u64
         );
 
