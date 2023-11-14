@@ -274,13 +274,13 @@ pub fn get_path(prefix: &str) -> Path {
 
 // Snapshot MANIFEST file is very simple. Just a newline delimited list of all paths in the snapshot directory
 // this simplicty enables easy parsing for scripts to download snapshots
-pub async fn write_snapshot_manifest(
+pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
     dir: &Path,
-    local_disk: Arc<DynObjectStore>,
+    local_disk: &S,
     epoch_prefix: String,
-) -> Result<(), object_store::Error> {
+) -> Result<()> {
     let mut file_names = vec![];
-    let mut paths = local_disk.list(Some(dir)).await?;
+    let mut paths = local_disk.list_objects(Some(dir)).await?;
     while let Some(res) = paths.next().await {
         if let Ok(object_metadata) = res {
             // trim the "epoch_XX/" dir prefix here
@@ -292,15 +292,15 @@ pub async fn write_snapshot_manifest(
                 warn!("{path_str}, should be coming from the files in the {epoch_prefix} dir",)
             }
         } else {
-            return Err(res.err().unwrap());
+            return Err(res.err().unwrap().into());
         }
     }
 
     let bytes = Bytes::from(file_names.join("\n"));
     put(
+        local_disk,
         &Path::from(format!("{}/{}", dir, MANIFEST_FILENAME)),
         bytes,
-        local_disk.clone(),
     )
     .await?;
 
@@ -396,7 +396,7 @@ mod tests {
 
         write_snapshot_manifest(
             &Path::from("epoch_0"),
-            input_store,
+            &input_store,
             String::from("epoch_0/"),
         )
         .await?;

@@ -275,7 +275,7 @@ impl DBCheckpointHandler {
                 // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
                 write_snapshot_manifest(
                     db_path,
-                    self.input_object_store.clone(),
+                    &self.input_object_store,
                     format!("epoch_{}/", epoch),
                 )
                 .await?;
