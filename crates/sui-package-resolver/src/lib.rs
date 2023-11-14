@@ -732,7 +732,7 @@ mod tests {
     use std::{path::PathBuf, str::FromStr, sync::RwLock};
 
     use expect_test::expect;
-    use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
+    use move_compiler::compiled_unit::NamedCompiledModule;
     use sui_move_build::{BuildConfig, CompiledPackage};
 
     use super::*;
@@ -1219,10 +1219,7 @@ mod tests {
 
         let mut modules = BTreeMap::new();
         for unit in &package.package.root_compiled_units {
-            let CompiledUnitEnum::Module(NamedCompiledModule { name, module, .. }) = &unit.unit
-            else {
-                panic!("Modules only -- no script allowed.");
-            };
+            let NamedCompiledModule { name, module, .. } = &unit.unit;
 
             let origins = origins
                 .iter()
