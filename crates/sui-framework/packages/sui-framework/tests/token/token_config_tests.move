@@ -84,7 +84,7 @@ module sui::token_config_tests {
     /// Scenario: rule tries to access a missing config
     fun test_rule_config_missing_config_fail() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (policy, _cap) = test::get_policy(ctx);
 
         token::rule_config<TEST, Rule1, Config1>(Rule1 {}, &policy);
 
