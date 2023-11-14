@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    editions::Flavor,
+    editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     hlir::detect_dead_code::program as detect_dead_code_analysis,
@@ -792,7 +792,13 @@ fn value(
         return result;
     } else if is_binop(&e) {
         let out_type = type_(context, e.ty.clone());
-        return process_binops(context, block, out_type, e);
+        let out_exp = process_binops(context, block, out_type, e);
+        return maybe_freeze(context, block, expected_type.cloned(), out_exp);
+    } else if is_exp_list(&e) {
+        let out_type = type_(context, e.ty.clone());
+        let eloc = e.exp.loc;
+        let out_vec = value_list(context, block, Some(&out_type), e);
+        return maybe_freeze(context, block, expected_type.cloned(), H::exp(out_type, sp(eloc, HE::Multiple(out_vec))));
     }
 
     let T::Exp {
@@ -957,9 +963,7 @@ fn value(
             };
             make_exp(HE::ModuleCall(Box::new(call)))
         }
-        E::Builtin(bt, args) => {
-            make_exp(builtin(context, block, eloc, *bt, args))
-        }
+        E::Builtin(bt, args) => make_exp(builtin(context, block, eloc, *bt, args)),
 
         // -----------------------------------------------------------------------------------------
         // nested expressions
@@ -1066,24 +1070,6 @@ fn value(
             make_exp(HE::Pack(struct_name, base_types, fields))
         }
 
-        E::ExpList(items) => {
-            let mut values = Vec::new();
-            for item in items {
-                match item {
-                    T::ExpListItem::Single(entry, ty) => {
-                        let exp_ty = single_type(context, *ty);
-                        let new_value =
-                            value(context, block, Some(&H::Type_::single(exp_ty)), entry);
-                        values.push(new_value);
-                    }
-                    T::ExpListItem::Splat(_, _, _) => {
-                        panic!("ICE splats should be lowered already")
-                    }
-                }
-            }
-            make_exp(HE::Multiple(values))
-        }
-
         E::Borrow(mut_, base_exp, field) => {
             let exp = value(context, block, None, *base_exp);
             if let Some(struct_name) = struct_name(&exp.ty) {
@@ -1160,6 +1146,7 @@ fn value(
         //  matches that handled earlier
         // -----------------------------------------------------------------------------------------
         E::BinopExp(_, _, _, _)
+        | E::ExpList(_)
         | E::Return(_)
         | E::Abort(_)
         | E::Give(_, _)
@@ -1208,6 +1195,93 @@ fn value_block(
 }
 
 fn value_list(
+    context: &mut Context,
+    result: &mut Block,
+    ty: Option<&H::Type>,
+    e: T::Exp,
+) -> Vec<H::Exp> {
+    use T::UnannotatedExp_ as TE;
+    // The main difference is that less-optimized version does conversion and binding, then
+    // freezing; the optimized will inline freezing when possible to avoid some bndings.
+    if context
+        .env
+        .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
+    {
+        value_list_opt(context, result, ty, e)
+    } else if let TE::ExpList(items) = e.exp.value { // clippy insisted on this if structure!
+        value_list_items_to_vec(context, result, ty, e.exp.loc, items)
+    } else if let TE::Unit { .. } = e.exp.value {
+        vec![]
+    } else {
+        vec![value(context, result, ty, e)]
+    }
+}
+
+fn value_list_items_to_vec(
+    context: &mut Context,
+    result: &mut Block,
+    ty: Option<&H::Type>,
+    loc: Loc,
+    items: Vec<T::ExpListItem>,
+) -> Vec<H::Exp> {
+    use H::{Type_ as HT, UnannotatedExp_ as HE};
+    assert!(!items.is_empty());
+    let mut tys = vec![];
+    let mut tes = vec![];
+
+    for item in items.into_iter() {
+        match item {
+            T::ExpListItem::Single(te, ts) => {
+                let t = single_type(context, *ts);
+                tys.push(t.clone());
+                tes.push((te, Some(sp(t.loc, HT::Single(t)))));
+            }
+            T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+        }
+    }
+
+    let es = value_evaluation_order(context, result, tes);
+    assert!(
+        es.len() == tys.len(),
+        "ICE exp_evaluation_order changed arity"
+    );
+
+    // Because we previously froze subpoints of ExpLists as its own binding expression for that
+    // ExpList, we need to process this possible vector the same way.
+
+    if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
+        // We have to check that the arity of the expected type matches because some ill-typed
+        // programs flow through this code. In those cases, the error has already been reported and
+        // we bail.
+        if etys.len() == tys.len() {
+            let current_ty = sp(*tloc, HT::Multiple(tys));
+            match needs_freeze(context, &current_ty, expected_ty) {
+                Freeze::NotNeeded => es,
+                Freeze::Point => unreachable!(),
+                Freeze::Sub(_) => {
+                    let current_exp = H::Exp {
+                        ty: current_ty,
+                        exp: sp(loc, HE::Multiple(es)),
+                    };
+                    let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
+                    result.append(&mut freeze_block);
+                    match frozen.exp.value {
+                        HE::Multiple(final_es) => final_es,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        } else {
+            es
+        }
+    } else {
+        es
+    }
+}
+
+// optimized version, which inlines freezes when possible
+
+fn value_list_opt(
     context: &mut Context,
     block: &mut Block,
     ty: Option<&H::Type>,
@@ -1533,6 +1607,12 @@ fn is_binop(e: &T::Exp) -> bool {
     use T::UnannotatedExp_ as E;
     matches!(e.exp.value, E::BinopExp(_, _, _, _))
 }
+
+fn is_exp_list(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::ExpList(_))
+}
+
 
 macro_rules! hcmd {
     ($cmd:pat) => {
