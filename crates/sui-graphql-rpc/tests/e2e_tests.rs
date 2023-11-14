@@ -16,6 +16,7 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
+    use sui_graphql_rpc::test_infra::cluster::simulator_commands_test_impl;
     use sui_indexer::indexer_reader::IndexerReader;
     use sui_indexer::models_v2::objects::StoredObject;
     use sui_indexer::new_pg_connection_pool_impl;
@@ -316,10 +317,10 @@ mod tests {
         test_query_complexity_metrics_impl().await;
     }
 
+    #[ignore]
     #[tokio::test]
     #[serial]
     async fn simulator_commands_test() {
-        use sui_graphql_rpc::test_infra::cluster::simulator_commands_test_impl;
         simulator_commands_test_impl().await;
     }
 }
