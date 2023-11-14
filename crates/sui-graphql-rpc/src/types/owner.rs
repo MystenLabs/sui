@@ -3,7 +3,7 @@
 
 use super::address::Address;
 use super::dynamic_field::DynamicField;
-use super::stake::Stake;
+use super::stake::StakedSui;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
 use crate::types::coin::*;
@@ -49,8 +49,8 @@ use sui_json_rpc::name_service::NameServiceConfig;
         arg(name = "type", ty = "Option<String>")
     ),
     field(
-        name = "stake_connection",
-        ty = "Option<Connection<String, Stake>>",
+        name = "staked_sui_connection",
+        ty = "Option<Connection<String, StakedSui>>",
         arg(name = "first", ty = "Option<u64>"),
         arg(name = "after", ty = "Option<String>"),
         arg(name = "last", ty = "Option<u64>"),
@@ -167,14 +167,14 @@ impl Owner {
     }
 
     /// The stake objects for the given address
-    pub async fn stake_connection(
+    pub async fn staked_sui_connection(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Stake>>> {
+    ) -> Result<Option<Connection<String, StakedSui>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_staked_sui(self.address, first, after, last, before)
             .await

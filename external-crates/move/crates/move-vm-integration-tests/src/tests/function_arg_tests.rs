@@ -8,8 +8,8 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
+    runtime_value::{MoveStruct, MoveValue},
     u256::U256,
-    value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
 };
 use move_vm_runtime::move_vm::MoveVM;

@@ -6,9 +6,10 @@ use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
     effects::Op,
     language_storage::StructTag,
-    value::{MoveStruct, MoveTypeLayout, MoveValue},
+    runtime_value as R,
     vm_status::StatusCode,
 };
 use move_vm_types::{
@@ -368,7 +369,7 @@ impl<'a> ObjectRuntime<'a> {
         child: ObjectID,
         child_version: SequenceNumber,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<Option<ObjectResult<Value>>> {
@@ -404,7 +405,7 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
@@ -683,22 +684,19 @@ fn get_all_uids_in_value(
             }
             _ => continue,
         };
-        match s {
-            MoveStruct::WithTypes { type_, fields } => {
-                if type_ == &UID::type_() {
-                    let inner = match &fields[0].1 {
-                        MoveValue::Struct(MoveStruct::WithTypes { fields, .. }) => fields,
-                        v => return Err(format!("Unexpected UID layout. {v:?}")),
-                    };
-                    match &inner[0].1 {
-                        MoveValue::Address(id) => acc.insert((*id).into()),
-                        v => return Err(format!("Unexpected ID layout. {v:?}")),
-                    };
-                } else {
-                    stack.extend(fields.iter().map(|(_, v)| v));
-                }
-            }
-            v => return Err(format!("Unexpected struct layout. {v:?}")),
+
+        let MoveStruct { type_, fields } = s;
+        if type_ == &UID::type_() {
+            let inner = match &fields[0].1 {
+                MoveValue::Struct(MoveStruct { fields, .. }) => fields,
+                v => return Err(format!("Unexpected UID layout. {v:?}")),
+            };
+            match &inner[0].1 {
+                MoveValue::Address(id) => acc.insert((*id).into()),
+                v => return Err(format!("Unexpected ID layout. {v:?}")),
+            };
+        } else {
+            stack.extend(fields.iter().map(|(_, v)| v));
         }
     }
     Ok(())

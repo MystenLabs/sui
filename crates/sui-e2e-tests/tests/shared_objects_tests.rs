@@ -17,7 +17,7 @@ use sui_test_transaction_builder::{
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::ObjectInfoRequest;
+use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
 use sui_types::transaction::{CallArg, ObjectArg};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
@@ -562,7 +562,8 @@ async fn shared_object_sync() {
             assert!(validator
                 .state()
                 .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id, None,
+                    counter_id,
+                    LayoutGenerationOption::None,
                 ))
                 .await
                 .is_ok());
@@ -575,7 +576,8 @@ async fn shared_object_sync() {
             assert!(validator
                 .state()
                 .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id, None,
+                    counter_id,
+                    LayoutGenerationOption::None,
                 ))
                 .await
                 .is_err());

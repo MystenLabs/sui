@@ -20,7 +20,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     language_storage::{self, CORE_CODE_ADDRESS},
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_model::{
     ast::{ConditionKind, TempIndex},

@@ -987,7 +987,7 @@
 >      }
 >      totalBalance
 >    }
->    stakeConnection {
+>    stakedSuiConnection {
 >      nodes {
 >        status
 >        principal

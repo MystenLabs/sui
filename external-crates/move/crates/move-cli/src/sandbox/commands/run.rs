@@ -17,8 +17,8 @@ use move_core_types::{
     errmap::ErrorMapping,
     identifier::IdentStr,
     language_storage::TypeTag,
+    runtime_value::MoveValue,
     transaction_argument::{convert_txn_args, TransactionArgument},
-    value::MoveValue,
 };
 use move_package::compilation::compiled_package::CompiledPackage;
 #[cfg(debug_assertions)]

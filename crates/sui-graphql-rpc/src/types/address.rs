@@ -11,7 +11,7 @@ use super::{
     coin::Coin,
     dynamic_field::DynamicField,
     object::{Object, ObjectFilter},
-    stake::Stake,
+    stake::StakedSui,
     sui_address::SuiAddress,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
@@ -125,14 +125,14 @@ impl Address {
     }
 
     /// The `0x3::staking_pool::StakedSui` objects owned by the given address.
-    pub async fn stake_connection(
+    pub async fn staked_sui_connection(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Stake>>> {
+    ) -> Result<Option<Connection<String, StakedSui>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_staked_sui(self.address, first, after, last, before)
             .await

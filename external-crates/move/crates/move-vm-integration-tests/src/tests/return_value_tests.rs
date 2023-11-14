@@ -8,7 +8,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
-    value::{MoveTypeLayout, MoveValue},
+    runtime_value::{MoveTypeLayout, MoveValue},
 };
 use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use move_vm_test_utils::InMemoryStorage;

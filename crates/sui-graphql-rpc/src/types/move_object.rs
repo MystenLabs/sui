@@ -6,7 +6,7 @@ use super::move_value::MoveValue;
 use super::stake::StakedSuiDowncastError;
 use super::{coin::Coin, object::Object};
 use crate::error::Error;
-use crate::types::stake::Stake;
+use crate::types::stake::StakedSui;
 use async_graphql::*;
 use move_core_types::language_storage::StructTag;
 use sui_types::object::{Data, MoveObject as NativeMoveObject};
@@ -59,8 +59,8 @@ impl MoveObject {
     }
 
     /// Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
-    async fn as_stake(&self) -> Result<Option<Stake>, Error> {
-        match Stake::try_from(self) {
+    async fn as_staked_sui(&self) -> Result<Option<StakedSui>, Error> {
+        match StakedSui::try_from(self) {
             Ok(coin) => Ok(Some(coin)),
             Err(StakedSuiDowncastError::NotAStakedSui) => Ok(None),
             Err(StakedSuiDowncastError::Bcs(e)) => Err(Error::Internal(format!(

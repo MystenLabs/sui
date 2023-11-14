@@ -20,8 +20,8 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    runtime_value::{serialize_values, MoveValue},
     u256::U256,
-    value::{serialize_values, MoveValue},
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_types::gas::UnmeteredGasMeter;

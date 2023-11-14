@@ -147,14 +147,14 @@ impl StateSnapshotUploader {
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
                 let success_marker = db_path.child(SUCCESS_MARKER);
-                put(&success_marker, bytes.clone(), self.snapshot_store.clone()).await?;
+                put(&self.snapshot_store, &success_marker, bytes.clone()).await?;
                 let bytes = Bytes::from_static(b"success");
                 let state_snapshot_completed_marker =
                     db_path.child(STATE_SNAPSHOT_COMPLETED_MARKER);
                 put(
+                    &self.db_checkpoint_store.clone(),
                     &state_snapshot_completed_marker,
                     bytes.clone(),
-                    self.db_checkpoint_store.clone(),
                 )
                 .await?;
                 info!("State snapshot completed for epoch: {epoch}");

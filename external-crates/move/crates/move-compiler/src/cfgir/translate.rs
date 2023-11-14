@@ -17,7 +17,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
-use move_core_types::{account_address::AccountAddress as MoveAddress, value::MoveValue};
+use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{

@@ -12,7 +12,7 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
-    value::MoveTypeLayout,
+    runtime_value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_types::{

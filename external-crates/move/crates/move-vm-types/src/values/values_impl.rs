@@ -14,8 +14,8 @@ use move_core_types::{
     account_address::AccountAddress,
     effects::Op,
     gas_algebra::AbstractMemorySize,
+    runtime_value::{MoveStructLayout, MoveTypeLayout},
     u256,
-    value::{MoveStructLayout, MoveTypeLayout},
     vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
 };
 use std::{
@@ -3647,7 +3647,7 @@ pub mod prop {
     }
 }
 
-use move_core_types::value::{MoveStruct, MoveValue};
+use move_core_types::runtime_value::{MoveStruct, MoveValue};
 
 impl ValueImpl {
     pub fn as_move_value(&self, layout: &MoveTypeLayout) -> MoveValue {

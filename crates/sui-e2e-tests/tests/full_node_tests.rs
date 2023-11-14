@@ -4,9 +4,9 @@
 use futures::future;
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::ident_str;
 use move_core_types::parser::parse_struct_tag;
-use move_core_types::value::MoveStructLayout;
 use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;

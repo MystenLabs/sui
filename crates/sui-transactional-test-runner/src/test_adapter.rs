@@ -21,9 +21,9 @@ use move_compiler::{
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    value::MoveStruct,
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
@@ -67,7 +67,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
-    object::{self, Object, ObjectFormatOptions},
+    object::{self, Object},
     transaction::{Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -535,11 +535,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
-                        let layout = move_obj
-                            .get_layout(ObjectFormatOptions::default(), &&*self)
-                            .unwrap();
+                        let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+
                         self.stabilize_str(format!(
                             "Owner: {}\nVersion: {}\nContents: {}",
                             &obj.owner,
@@ -1615,22 +1614,7 @@ fn create_accounts_objects(
     // Make a default account with a gas object
     let default_account = mk_account();
 
-    // For mappings where the address is specified, populate the named address mapping
-    let additional_mapping =
-        additional_mapping
-            .into_iter()
-            .chain(accounts.iter().map(|(n, test_account)| {
-                let addr =
-                    NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
-                (n.clone(), addr)
-            }));
-    // Extend the mappings of all named addresses with values
-    for (name, addr) in additional_mapping {
-        if named_address_mapping.contains_key(&name) || name == "sui" {
-            panic!("Invalid init. The named address '{}' is reserved", name)
-        }
-        named_address_mapping.insert(name, addr);
-    }
+    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
 
     AccountSetup {
         default_account,
@@ -1675,46 +1659,32 @@ async fn init_sim_executor(
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
+    let mut account_kps = BTreeMap::new();
     let mut accounts = BTreeMap::new();
     let mut objects = vec![];
 
-    // Closure to create accounts with gas objects of value `GAS_FOR_TESTING`
-    let mut mk_account = || {
-        let (address, key_pair) = get_key_pair_from_rng(&mut rng);
-        let obj = Object::with_id_owner_gas_for_testing(
-            ObjectID::new(rng.gen()),
-            address,
-            GAS_FOR_TESTING,
-        );
-
-        TestAccount {
-            address,
-            key_pair,
-            gas: obj.id(),
-        }
-    };
-
-    // For each named Sui account without an address value, create an account with an adddress
-    // and a gas object
+    // For each named Sui account without an address value, create a key pair
     for n in account_names {
-        let test_account = mk_account();
-        accounts.insert(n, test_account);
+        let test_account = get_key_pair_from_rng(&mut rng);
+        account_kps.insert(n, test_account);
     }
 
-    // Make a default account with a gas object
-    let mut default_account = mk_account();
+    // Make a default account keypair
+    let default_account_kp = get_key_pair_from_rng(&mut rng);
 
-    let mut acc_cfgs = accounts
+    let mut acc_cfgs = account_kps
         .values()
         .map(|acc| AccountConfig {
-            address: Some(acc.address),
+            address: Some(acc.0),
             gas_amounts: vec![GAS_FOR_TESTING],
         })
         .collect::<Vec<_>>();
     acc_cfgs.push(AccountConfig {
-        address: Some(default_account.address),
+        address: Some(default_account_kp.0),
         gas_amounts: vec![GAS_FOR_TESTING],
     });
+
+    // Create the simulator with the specific account configs, which also crates objects
 
     let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
         rng,
@@ -1732,20 +1702,52 @@ async fn init_sim_executor(
     .await;
 
     // Get the actual object values from the simulator
-    for (name, acc) in accounts.iter_mut() {
-        let o = sim.store().owned_objects(acc.address).next().unwrap();
-        acc.gas = o.id();
+    for (name, (addr, kp)) in account_kps {
+        let o = sim.store().owned_objects(addr).next().unwrap();
         objects.push(o.clone());
         account_objects.insert(name.clone(), o.id());
+
+        accounts.insert(
+            name.to_owned(),
+            TestAccount {
+                address: addr,
+                key_pair: kp,
+                gas: o.id(),
+            },
+        );
     }
     let o = sim
         .store()
-        .owned_objects(default_account.address)
+        .owned_objects(default_account_kp.0)
         .next()
         .unwrap();
-    default_account.gas = o.id();
+    let default_account = TestAccount {
+        address: default_account_kp.0,
+        key_pair: default_account_kp.1,
+        gas: o.id(),
+    };
     objects.push(o.clone());
 
+    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+
+    (
+        Box::new(sim),
+        AccountSetup {
+            default_account,
+            named_address_mapping,
+            objects,
+            account_objects,
+            accounts,
+        },
+        cluster,
+    )
+}
+
+fn update_named_address_mapping(
+    named_address_mapping: &mut BTreeMap<String, NumericalAddress>,
+    accounts: &BTreeMap<String, TestAccount>,
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+) {
     // For mappings where the address is specified, populate the named address mapping
     let additional_mapping =
         additional_mapping
@@ -1762,17 +1764,6 @@ async fn init_sim_executor(
         }
         named_address_mapping.insert(name, addr);
     }
-    (
-        Box::new(sim),
-        AccountSetup {
-            default_account,
-            named_address_mapping,
-            objects,
-            account_objects,
-            accounts,
-        },
-        Some(cluster),
-    )
 }
 
 impl NodeStateGetter for SuiTestAdapter<'_> {

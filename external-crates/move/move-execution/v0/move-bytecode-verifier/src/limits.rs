@@ -9,7 +9,7 @@ use move_binary_format::{
     },
     IndexKind,
 };
-use move_core_types::{value::MoveValue, vm_status::StatusCode};
+use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;
 
 pub struct LimitsVerifier<'a> {

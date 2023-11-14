@@ -15,7 +15,7 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_core_types::value::{MoveTypeLayout, MoveValue};
+use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
     sp,

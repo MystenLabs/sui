@@ -5,15 +5,13 @@ mod gcs;
 mod local;
 mod s3;
 
-use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::object_store::downloader::gcs::GoogleCloudStorage;
-use crate::object_store::downloader::local::LocalStorage;
-use crate::object_store::downloader::s3::AmazonS3;
-use crate::object_store::{ObjectStoreConfig, ObjectStoreType};
+use crate::object_store::http::gcs::GoogleCloudStorage;
+use crate::object_store::http::local::LocalStorage;
+use crate::object_store::http::s3::AmazonS3;
+use crate::object_store::{ObjectStoreConfig, ObjectStoreGetExt, ObjectStoreType};
 use anyhow::{anyhow, Context, Result};
-use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::{StreamExt, TryStreamExt};
 use object_store::path::Path;
@@ -33,29 +31,37 @@ pub(crate) const STRICT_ENCODE_SET: percent_encoding::AsciiSet = percent_encodin
 const STRICT_PATH_ENCODE_SET: percent_encoding::AsciiSet = STRICT_ENCODE_SET.remove(b'/');
 static DEFAULT_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
-#[async_trait]
-pub trait Downloader {
-    async fn get(&self, location: &Path) -> Result<Bytes>;
+pub trait HttpDownloaderBuilder {
+    fn make_http(&self) -> Result<Arc<dyn ObjectStoreGetExt>>;
 }
 
-pub trait DownloaderBuilder {
-    fn make_downloader(self, use_transfer_acceleration: bool) -> Result<Arc<dyn Downloader>>;
-}
-
-impl DownloaderBuilder for ObjectStoreConfig {
-    fn make_downloader(self, use_transfer_acceleration: bool) -> Result<Arc<dyn Downloader>> {
+impl HttpDownloaderBuilder for ObjectStoreConfig {
+    fn make_http(&self) -> Result<Arc<dyn ObjectStoreGetExt>> {
         match self.object_store {
             Some(ObjectStoreType::File) => {
-                Ok(LocalStorage::new(&self.directory.unwrap()).map(Arc::new)?)
+                Ok(LocalStorage::new(self.directory.as_ref().unwrap()).map(Arc::new)?)
             }
-            Some(ObjectStoreType::S3) => Ok(AmazonS3::new(
-                &self.bucket.unwrap(),
-                &self.aws_region.unwrap(),
-                use_transfer_acceleration,
-            )
-            .map(Arc::new)?),
+            Some(ObjectStoreType::S3) => {
+                let bucket_endpoint = if let Some(endpoint) = &self.aws_endpoint {
+                    if self.aws_virtual_hosted_style_request {
+                        endpoint.clone()
+                    } else {
+                        let bucket = self.bucket.as_ref().unwrap();
+                        format!("{endpoint}/{bucket}")
+                    }
+                } else {
+                    let bucket = self.bucket.as_ref().unwrap();
+                    let region = self.aws_region.as_ref().unwrap();
+                    if self.aws_virtual_hosted_style_request {
+                        format!("https://{bucket}.s3.{region}.amazonaws.com")
+                    } else {
+                        format!("https://s3.{region}.amazonaws.com/{bucket}")
+                    }
+                };
+                Ok(AmazonS3::new(&bucket_endpoint).map(Arc::new)?)
+            }
             Some(ObjectStoreType::GCS) => {
-                Ok(GoogleCloudStorage::new(&self.bucket.unwrap()).map(Arc::new)?)
+                Ok(GoogleCloudStorage::new(self.bucket.as_ref().unwrap()).map(Arc::new)?)
             }
             _ => Err(anyhow!("At least one storage backend should be provided")),
         }
@@ -115,7 +121,7 @@ fn header_meta(location: &Path, headers: &HeaderMap) -> Result<ObjectMeta> {
 
 #[cfg(test)]
 mod tests {
-    use crate::object_store::downloader::DownloaderBuilder;
+    use crate::object_store::http::HttpDownloaderBuilder;
     use crate::object_store::{ObjectStoreConfig, ObjectStoreType};
     use object_store::path::Path;
     use std::fs;
@@ -139,9 +145,9 @@ mod tests {
             directory: Some(input_path.to_path_buf()),
             ..Default::default()
         }
-        .make_downloader(true)?;
+        .make_http()?;
 
-        let downloaded = input_store.get(&Path::from("child/file1")).await?;
+        let downloaded = input_store.get_bytes(&Path::from("child/file1")).await?;
         assert_eq!(downloaded.to_vec(), b"Lorem ipsum");
         Ok(())
     }

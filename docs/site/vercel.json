@@ -1,5 +1,7 @@
 {
   "redirects": [
+      { "source": "/testnet/:path*", "destination": "/:path*", "permanent": false },
+      { "source": "/devnet/:path*", "destination": "/:path*", "permanent": false },
       { "source": "/learn/object-package-versions", "destination": "/concepts/dynamic-fields/versioning", "permanent": true },
       { "source": "/learn/objects", "destination": "/concepts/object-model", "permanent": true },
       { "source": "/learn/about-sui", "destination": "/concepts/components", "permanent": true },
@@ -73,10 +75,16 @@
       { "source": "/build/programming-with-objects/ch2-using-objects", "destination": "/concepts/object-ownership", "permanent": true },
       { "source": "/build/programming-with-objects/index", "destination": "/concepts/object-model", "permanent": true },
       { "source": "/build/programming-with-objects/ch3-immutable-objects", "destination": "/concepts/object-ownership/immutable", "permanent": true },
-      { "source": "/build/programming-with-objects/ch5-dynamic-fields", "destination": "/concepts/dynamic-fields", "permanent": true },     { "source": "/reference/sui-json", "destination": "/sui-api-ref", "permanent": true },
+      { "source": "/build/programming-with-objects/ch5-dynamic-fields", "destination": "/concepts/dynamic-fields", "permanent": true },     
+      { "source": "/reference/sui-json", "destination": "/sui-api-ref", "permanent": true },
       { "source": "/reference/index", "destination": "/references", "permanent": true },
       { "source": "/reference", "destination": "/references", "permanent": true },
       { "source": "/concepts/dynamic-fields/events", "destination": "/concepts/events", "permanent": true },
-      { "source": "/concepts/dynamic-fields/versioning", "destination": "/concepts/versioning", "permanent": true }
+      { "source": "/concepts/dynamic-fields/versioning", "destination": "/concepts/versioning", "permanent": true },
+      { "source": "/learn/exchange-integration-guide", "destination": "/guides/operator/exchange-integration", "permanent": true },
+      { "source": "/learn/exchange-integration-faq", "destination": "/guides/operator/exchange-integration", "permanent": true },
+      { "source": "/learn/how-sui-works", "destination": "/concepts/components", "permanent": true },
+      { "source": "/learn/sui-compared", "destination": "/concepts/components", "permanent": true },
+      { "source": "/learn/sui-bridging", "destination": "/concepts/tokenomics/sui-bridging", "permanent": true }
     ]
   }

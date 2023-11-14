@@ -191,10 +191,8 @@ pub fn make_all(
 mod testing {
     use move_binary_format::errors::{PartialVMError, PartialVMResult};
     use move_core_types::{
-        account_address::AccountAddress,
-        language_storage::TypeTag,
-        value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue},
-        vm_status::StatusCode,
+        account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
+        runtime_value as R, vm_status::StatusCode,
     };
     use move_vm_runtime::native_functions::NativeContext;
     use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
@@ -223,10 +221,10 @@ mod testing {
     fn get_annotated_struct_layout(
         context: &NativeContext,
         ty: &Type,
-    ) -> PartialVMResult<MoveStructLayout> {
+    ) -> PartialVMResult<A::MoveStructLayout> {
         let annotated_type_layout = context.type_to_fully_annotated_layout(ty)?.unwrap();
         match annotated_type_layout {
-            MoveTypeLayout::Struct(annotated_struct_layout) => Ok(annotated_struct_layout),
+            A::MoveTypeLayout::Struct(annotated_struct_layout) => Ok(annotated_struct_layout),
             _ => Err(
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(
                     "Could not convert Type to fully-annotated MoveTypeLayout via NativeContext"
@@ -251,10 +249,13 @@ mod testing {
     ///  - 'Hello' returns "Hello"
     ///  - '"Hello?" What are you saying?' returns "\"Hello?\" What are you saying?"
     ///  - '\ and " are escaped' returns "\\ and \" are escaped"
-    fn move_value_as_escaped_string(val: MoveValue) -> PartialVMResult<String> {
+    fn move_value_as_escaped_string(val: A::MoveValue) -> PartialVMResult<String> {
         match val {
-            MoveValue::Vector(bytes) => {
-                let buf = MoveValue::vec_to_vec_u8(bytes).map_err(to_vec_u8_type_err)?;
+            A::MoveValue::Vector(bytes) => {
+                let buf = R::MoveValue::vec_to_vec_u8(
+                    bytes.into_iter().map(A::MoveValue::undecorate).collect(),
+                )
+                .map_err(to_vec_u8_type_err)?;
 
                 let str = String::from_utf8(buf).map_err(|e| {
                     PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR).with_message(
@@ -280,16 +281,16 @@ mod testing {
         Ok(())
     }
 
-    fn is_non_empty_vector_u8(vec: &Vec<MoveValue>) -> bool {
+    fn is_non_empty_vector_u8(vec: &Vec<A::MoveValue>) -> bool {
         if vec.is_empty() {
             false
         } else {
-            matches!(vec.last().unwrap(), MoveValue::U8(_))
+            matches!(vec.last().unwrap(), A::MoveValue::U8(_))
         }
     }
 
-    fn is_vector_or_struct_move_value(mv: &MoveValue) -> bool {
-        matches!(mv, MoveValue::Vector(_) | MoveValue::Struct(_))
+    fn is_vector_or_struct_move_value(mv: &A::MoveValue) -> bool {
+        matches!(mv, A::MoveValue::Vector(_) | A::MoveValue::Struct(_))
     }
 
     /// Prints any `Value` in a user-friendly manner.
@@ -308,7 +309,7 @@ mod testing {
         let ty_layout = context.type_to_type_layout(&ty)?.unwrap();
 
         match &ty_layout {
-            MoveTypeLayout::Vector(_) => {
+            R::MoveTypeLayout::Vector(_) => {
                 // get the inner type T of a vector<T>
                 let inner_ty = get_vector_inner_type(&ty)?;
                 let inner_tyl = context.type_to_type_layout(inner_ty)?.unwrap();
@@ -320,7 +321,7 @@ mod testing {
                     // get down to either (1) a primitive type, which we can forward to
                     // `print_move_value`, or (2) a struct type, which we can decorate and forward
                     // to `print_move_value`.
-                    MoveTypeLayout::Vector(_) | MoveTypeLayout::Struct(_) => {
+                    R::MoveTypeLayout::Vector(_) | R::MoveTypeLayout::Struct(_) => {
                         // `val` is either a `Vec<Vec<Value>>`, a `Vec<Struct>`,  or a `Vec<signer>`, so we cast `val` as a `Vec<Value>` and call ourselves recursively
                         let vec = val.value_as::<Vec<Value>>()?;
 
@@ -360,7 +361,8 @@ mod testing {
                     // If the inner type T of this vector<T> is a primitive bool/unsigned integer/address type, we convert the
                     // vector<T> to a MoveValue and print it.
                     _ => {
-                        let mv = val.as_move_value(&ty_layout);
+                        let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
+                        let mv = val.as_move_value(&ty_layout).decorate(&ann_ty_layout);
                         print_move_value(
                             out,
                             mv,
@@ -374,9 +376,9 @@ mod testing {
                 };
             }
             // For a struct, we convert it to a MoveValue annotated with its field names and types and print it
-            MoveTypeLayout::Struct(_) => {
+            R::MoveTypeLayout::Struct(_) => {
                 let move_struct = match val.as_move_value(&ty_layout) {
-                    MoveValue::Struct(s) => s,
+                    R::MoveValue::Struct(s) => s,
                     _ => {
                         return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                             .with_message("Expected MoveValue::MoveStruct".to_string()))
@@ -388,7 +390,7 @@ mod testing {
 
                 print_move_value(
                     out,
-                    MoveValue::Struct(decorated_struct),
+                    A::MoveValue::Struct(decorated_struct),
                     move_std_addr,
                     depth,
                     canonicalize,
@@ -398,9 +400,10 @@ mod testing {
             }
             // For non-structs and non-vectors, convert them to a MoveValue and print them
             _ => {
+                let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                 print_move_value(
                     out,
-                    val.as_move_value(&ty_layout),
+                    val.as_move_value(&ty_layout).decorate(&ann_ty_layout),
                     move_std_addr,
                     depth,
                     canonicalize,
@@ -417,7 +420,7 @@ mod testing {
     /// true.
     fn print_move_value(
         out: &mut String,
-        mv: MoveValue,
+        mv: A::MoveValue,
         move_std_addr: &AccountAddress,
         depth: usize,
         canonicalize: bool,
@@ -425,50 +428,50 @@ mod testing {
         include_int_types: bool,
     ) -> PartialVMResult<()> {
         match mv {
-            MoveValue::U8(u8) => {
+            A::MoveValue::U8(u8) => {
                 write!(out, "{}", u8).map_err(fmt_error_to_partial_vm_error)?;
                 if include_int_types {
                     write!(out, "u8").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
-            MoveValue::U16(u16) => {
+            A::MoveValue::U16(u16) => {
                 write!(out, "{}", u16).map_err(fmt_error_to_partial_vm_error)?;
                 if include_int_types {
                     write!(out, "u16").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
-            MoveValue::U32(u32) => {
+            A::MoveValue::U32(u32) => {
                 write!(out, "{}", u32).map_err(fmt_error_to_partial_vm_error)?;
                 if include_int_types {
                     write!(out, "u32").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
-            MoveValue::U64(u64) => {
+            A::MoveValue::U64(u64) => {
                 write!(out, "{}", u64).map_err(fmt_error_to_partial_vm_error)?;
                 if include_int_types {
                     write!(out, "u64").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
-            MoveValue::U128(u128) => {
+            A::MoveValue::U128(u128) => {
                 write!(out, "{}", u128).map_err(fmt_error_to_partial_vm_error)?;
                 if include_int_types {
                     write!(out, "u128").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
-            MoveValue::U256(u256) => {
+            A::MoveValue::U256(u256) => {
                 write!(out, "{}", u256).map_err(fmt_error_to_partial_vm_error)?;
                 if include_int_types {
                     write!(out, "u256").map_err(fmt_error_to_partial_vm_error)?;
                 }
             }
-            MoveValue::Bool(b) => {
+            A::MoveValue::Bool(b) => {
                 // Note that when `include_int_types` is enabled, the boolean `true` and `false`
                 // values unambiguously encode their type, since they are different than any integer
                 // type value, address value, signer value, vector value and struct value.
                 write!(out, "{}", if b { "true" } else { "false" })
                     .map_err(fmt_error_to_partial_vm_error)?;
             }
-            MoveValue::Address(a) => {
+            A::MoveValue::Address(a) => {
                 let str = if canonicalize {
                     a.to_canonical_string(/* with_prefix */ false)
                 } else {
@@ -476,7 +479,7 @@ mod testing {
                 };
                 write!(out, "@{}", str).map_err(fmt_error_to_partial_vm_error)?;
             }
-            MoveValue::Signer(s) => {
+            A::MoveValue::Signer(s) => {
                 let str = if canonicalize {
                     s.to_canonical_string(/* with_prefix */ false)
                 } else {
@@ -484,10 +487,13 @@ mod testing {
                 };
                 write!(out, "signer({})", str).map_err(fmt_error_to_partial_vm_error)?;
             }
-            MoveValue::Vector(vec) => {
+            A::MoveValue::Vector(vec) => {
                 // If this is a vector<u8> we print it in hex (as most users would expect us to)
                 if is_non_empty_vector_u8(&vec) {
-                    let bytes = MoveValue::vec_to_vec_u8(vec).map_err(to_vec_u8_type_err)?;
+                    let bytes = R::MoveValue::vec_to_vec_u8(
+                        vec.into_iter().map(A::MoveValue::undecorate).collect(),
+                    )
+                    .map_err(to_vec_u8_type_err)?;
                     write!(out, "0x{}", hex::encode(bytes))
                         .map_err(fmt_error_to_partial_vm_error)?;
                 } else {
@@ -506,64 +512,85 @@ mod testing {
                     )?;
                 }
             }
-            MoveValue::Struct(move_struct) => match move_struct {
-                MoveStruct::WithTypes { type_, mut fields } => {
-                    let type_tag = TypeTag::from(type_.clone());
+            A::MoveValue::Struct(A::MoveStruct { type_, mut fields }) => {
+                let type_tag = TypeTag::from(type_.clone());
 
-                    // Check if struct is an std::string::String
-                    if !canonicalize && type_.is_std_string(move_std_addr) {
-                        if fields.len() != 1 {
-                            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                                .with_message(
-                                    "Expected std::string::String struct to have just one field"
-                                        .to_string(),
-                                ));
+                // Check if struct is an std::string::String
+                if !canonicalize && type_.is_std_string(move_std_addr) {
+                    if fields.len() != 1 {
+                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                            .with_message(
+                                "Expected std::string::String struct to have just one field"
+                                    .to_string(),
+                            ));
+                    }
+
+                    let (id, val) = fields.pop().unwrap();
+                    if id.into_string() != "bytes" {
+                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                            .with_message(
+                                "Expected std::string::String struct to have a `bytes` field"
+                                    .to_string(),
+                            ));
+                    }
+
+                    let str = move_value_as_escaped_string(val)?;
+                    write!(out, "\"{}\"", str).map_err(fmt_error_to_partial_vm_error)?
+                } else if !canonicalize && type_.is_ascii_string(move_std_addr) {
+                    if fields.len() != 1 {
+                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                            .with_message(
+                                "Expected std::ascii::String struct to have just one field"
+                                    .to_string(),
+                            ));
+                    }
+
+                    let (id, val) = fields.pop().unwrap();
+                    if id.into_string() != "bytes" {
+                        return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                            .with_message(
+                                "Expected std::ascii::String struct to have a `bytes` field"
+                                    .to_string(),
+                            ));
+                    }
+
+                    let str = move_value_as_escaped_string(val)?;
+                    write!(out, "\"{}\"", str).map_err(fmt_error_to_partial_vm_error)?
+                } else {
+                    write!(out, "{} ", type_tag).map_err(fmt_error_to_partial_vm_error)?;
+                    write!(out, "{}", STRUCT_BEGIN).map_err(fmt_error_to_partial_vm_error)?;
+
+                    // For each field, print its name and value (and type)
+                    let mut iter = fields.into_iter();
+                    if let Some((field_name, field_value)) = iter.next() {
+                        // Start an indented new line
+                        if !single_line {
+                            writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
+                            print_padding_at_depth(out, depth + 1)?;
                         }
 
-                        let (id, val) = fields.pop().unwrap();
-                        if id.into_string() != "bytes" {
-                            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                                .with_message(
-                                    "Expected std::string::String struct to have a `bytes` field"
-                                        .to_string(),
-                                ));
-                        }
+                        write!(out, "{}: ", field_name.into_string())
+                            .map_err(fmt_error_to_partial_vm_error)?;
+                        print_move_value(
+                            out,
+                            field_value,
+                            move_std_addr,
+                            depth + 1,
+                            canonicalize,
+                            single_line,
+                            include_int_types,
+                        )?;
 
-                        let str = move_value_as_escaped_string(val)?;
-                        write!(out, "\"{}\"", str).map_err(fmt_error_to_partial_vm_error)?
-                    } else if !canonicalize && type_.is_ascii_string(move_std_addr) {
-                        if fields.len() != 1 {
-                            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                                .with_message(
-                                    "Expected std::ascii::String struct to have just one field"
-                                        .to_string(),
-                                ));
-                        }
+                        for (field_name, field_value) in iter {
+                            write!(out, "{}", VECTOR_OR_STRUCT_SEP)
+                                .map_err(fmt_error_to_partial_vm_error)?;
 
-                        let (id, val) = fields.pop().unwrap();
-                        if id.into_string() != "bytes" {
-                            return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                                .with_message(
-                                    "Expected std::ascii::String struct to have a `bytes` field"
-                                        .to_string(),
-                                ));
-                        }
-
-                        let str = move_value_as_escaped_string(val)?;
-                        write!(out, "\"{}\"", str).map_err(fmt_error_to_partial_vm_error)?
-                    } else {
-                        write!(out, "{} ", type_tag).map_err(fmt_error_to_partial_vm_error)?;
-                        write!(out, "{}", STRUCT_BEGIN).map_err(fmt_error_to_partial_vm_error)?;
-
-                        // For each field, print its name and value (and type)
-                        let mut iter = fields.into_iter();
-                        if let Some((field_name, field_value)) = iter.next() {
-                            // Start an indented new line
                             if !single_line {
                                 writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
                                 print_padding_at_depth(out, depth + 1)?;
+                            } else {
+                                write!(out, " ").map_err(fmt_error_to_partial_vm_error)?;
                             }
-
                             write!(out, "{}: ", field_name.into_string())
                                 .map_err(fmt_error_to_partial_vm_error)?;
                             print_move_value(
@@ -575,44 +602,17 @@ mod testing {
                                 single_line,
                                 include_int_types,
                             )?;
-
-                            for (field_name, field_value) in iter {
-                                write!(out, "{}", VECTOR_OR_STRUCT_SEP)
-                                    .map_err(fmt_error_to_partial_vm_error)?;
-
-                                if !single_line {
-                                    writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
-                                    print_padding_at_depth(out, depth + 1)?;
-                                } else {
-                                    write!(out, " ").map_err(fmt_error_to_partial_vm_error)?;
-                                }
-                                write!(out, "{}: ", field_name.into_string())
-                                    .map_err(fmt_error_to_partial_vm_error)?;
-                                print_move_value(
-                                    out,
-                                    field_value,
-                                    move_std_addr,
-                                    depth + 1,
-                                    canonicalize,
-                                    single_line,
-                                    include_int_types,
-                                )?;
-                            }
                         }
-
-                        // Ends printing the struct with "}", which could be on its own line
-                        if !single_line {
-                            writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
-                            print_padding_at_depth(out, depth)?;
-                        }
-                        write!(out, "{}", STRUCT_END).map_err(fmt_error_to_partial_vm_error)?;
                     }
+
+                    // Ends printing the struct with "}", which could be on its own line
+                    if !single_line {
+                        writeln!(out).map_err(fmt_error_to_partial_vm_error)?;
+                        print_padding_at_depth(out, depth)?;
+                    }
+                    write!(out, "{}", STRUCT_END).map_err(fmt_error_to_partial_vm_error)?;
                 }
-                _ => {
-                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message("Expected MoveStruct::WithTypes".to_string()))
-                }
-            },
+            }
         }
 
         Ok(())

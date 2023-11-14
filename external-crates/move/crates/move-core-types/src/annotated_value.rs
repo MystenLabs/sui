@@ -4,19 +4,19 @@
 
 use crate::{
     account_address::AccountAddress,
+    fmt_list,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    u256,
+    runtime_value as R, u256,
 };
-use anyhow::{anyhow, bail, Result as AResult};
-use move_proc_macros::test_variant_order;
+use anyhow::Result as AResult;
 use serde::{
     de::Error as DeError,
-    ser::{SerializeMap, SerializeSeq, SerializeStruct, SerializeTuple},
+    ser::{SerializeMap, SerializeSeq, SerializeStruct},
     Deserialize, Serialize,
 };
 use std::{
-    convert::TryInto,
+    convert::From,
     fmt::{self, Debug},
 };
 
@@ -30,20 +30,12 @@ pub const MOVE_STRUCT_TYPE: &str = "type";
 pub const MOVE_STRUCT_FIELDS: &str = "fields";
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum MoveStruct {
-    /// The representation used by the MoveVM
-    Runtime(Vec<MoveValue>),
-    /// A decorated representation with human-readable field names
-    WithFields(Vec<(Identifier, MoveValue)>),
-    /// An even more decorated representation with both types and human-readable field names
-    WithTypes {
-        type_: StructTag,
-        fields: Vec<(Identifier, MoveValue)>,
-    },
+pub struct MoveStruct {
+    pub type_: StructTag,
+    pub fields: Vec<(Identifier, MoveValue)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[test_variant_order(src/unit_tests/staged_enum_variant_order/move_value.yaml)]
 pub enum MoveValue {
     U8(u8),
     U64(u64),
@@ -59,7 +51,6 @@ pub enum MoveValue {
     U256(u256::U256),
 }
 
-/// A layout associated with a named field
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveFieldLayout {
     pub name: Identifier,
@@ -73,20 +64,13 @@ impl MoveFieldLayout {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MoveStructLayout {
-    /// The representation used by the MoveVM
-    Runtime(Vec<MoveTypeLayout>),
-    /// A decorated representation with human-readable field names that can be used by clients
-    WithFields(Vec<MoveFieldLayout>),
-    /// An even more decorated representation with both types and human-readable field names
-    WithTypes {
-        type_: StructTag,
-        fields: Vec<MoveFieldLayout>,
-    },
+pub struct MoveStructLayout {
+    /// An decorated representation with both types and human-readable field names
+    pub type_: StructTag,
+    pub fields: Vec<MoveFieldLayout>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[test_variant_order(src/unit_tests/staged_enum_variant_order/move_type_layout.yaml)]
 pub enum MoveTypeLayout {
     #[serde(rename(serialize = "bool", deserialize = "bool"))]
     Bool,
@@ -123,52 +107,21 @@ impl MoveValue {
         bcs::to_bytes(self).ok()
     }
 
-    pub fn vector_u8(v: Vec<u8>) -> Self {
-        MoveValue::Vector(v.into_iter().map(MoveValue::U8).collect())
-    }
-
-    /// Converts the `Vec<MoveValue>` to a `Vec<u8>` if the inner `MoveValue` is a `MoveValue::U8`,
-    /// or returns an error otherwise.
-    pub fn vec_to_vec_u8(vec: Vec<MoveValue>) -> AResult<Vec<u8>> {
-        let mut vec_u8 = Vec::with_capacity(vec.len());
-
-        for byte in vec {
-            match byte {
-                MoveValue::U8(u8) => {
-                    vec_u8.push(u8);
-                }
-                _ => {
-                    return Err(anyhow!(
-                        "Expected inner MoveValue in Vec<MoveValue> to be a MoveValue::U8"
-                            .to_string(),
-                    ));
-                }
-            }
-        }
-        Ok(vec_u8)
-    }
-
-    pub fn vector_address(v: Vec<AccountAddress>) -> Self {
-        MoveValue::Vector(v.into_iter().map(MoveValue::Address).collect())
-    }
-
-    pub fn decorate(self, layout: &MoveTypeLayout) -> Self {
-        match (self, layout) {
-            (MoveValue::Struct(s), MoveTypeLayout::Struct(l)) => MoveValue::Struct(s.decorate(l)),
-            (MoveValue::Vector(vals), MoveTypeLayout::Vector(t)) => {
-                MoveValue::Vector(vals.into_iter().map(|v| v.decorate(t)).collect())
-            }
-            (v, _) => v,
-        }
-    }
-
-    pub fn undecorate(self) -> Self {
+    pub fn undecorate(self) -> R::MoveValue {
         match self {
-            Self::Struct(s) => MoveValue::Struct(s.undecorate()),
+            Self::Struct(s) => R::MoveValue::Struct(s.undecorate()),
             Self::Vector(vals) => {
-                MoveValue::Vector(vals.into_iter().map(MoveValue::undecorate).collect())
+                R::MoveValue::Vector(vals.into_iter().map(MoveValue::undecorate).collect())
             }
-            v => v,
+            MoveValue::U8(u) => R::MoveValue::U8(u),
+            MoveValue::U64(u) => R::MoveValue::U64(u),
+            MoveValue::U128(u) => R::MoveValue::U128(u),
+            MoveValue::Bool(b) => R::MoveValue::Bool(b),
+            MoveValue::Address(a) => R::MoveValue::Address(a),
+            MoveValue::Signer(s) => R::MoveValue::Signer(s),
+            MoveValue::U16(u) => R::MoveValue::U16(u),
+            MoveValue::U32(u) => R::MoveValue::U32(u),
+            MoveValue::U256(u) => R::MoveValue::U256(u),
         }
     }
 }
@@ -186,78 +139,20 @@ where
 }
 
 impl MoveStruct {
-    pub fn new(value: Vec<MoveValue>) -> Self {
-        Self::Runtime(value)
-    }
-
-    pub fn with_fields(values: Vec<(Identifier, MoveValue)>) -> Self {
-        Self::WithFields(values)
-    }
-
-    pub fn with_types(type_: StructTag, fields: Vec<(Identifier, MoveValue)>) -> Self {
-        Self::WithTypes { type_, fields }
+    pub fn new(type_: StructTag, fields: Vec<(Identifier, MoveValue)>) -> Self {
+        Self { type_, fields }
     }
 
     pub fn simple_deserialize(blob: &[u8], ty: &MoveStructLayout) -> AResult<Self> {
         Ok(bcs::from_bytes_seed(ty, blob)?)
     }
 
-    pub fn decorate(self, layout: &MoveStructLayout) -> Self {
-        match (self, layout) {
-            (MoveStruct::Runtime(vals), MoveStructLayout::WithFields(layouts)) => {
-                MoveStruct::WithFields(
-                    vals.into_iter()
-                        .zip(layouts)
-                        .map(|(v, l)| (l.name.clone(), v.decorate(&l.layout)))
-                        .collect(),
-                )
-            }
-            (MoveStruct::Runtime(vals), MoveStructLayout::WithTypes { type_, fields }) => {
-                MoveStruct::WithTypes {
-                    type_: type_.clone(),
-                    fields: vals
-                        .into_iter()
-                        .zip(fields)
-                        .map(|(v, l)| (l.name.clone(), v.decorate(&l.layout)))
-                        .collect(),
-                }
-            }
-            (MoveStruct::WithFields(vals), MoveStructLayout::WithTypes { type_, fields }) => {
-                MoveStruct::WithTypes {
-                    type_: type_.clone(),
-                    fields: vals
-                        .into_iter()
-                        .zip(fields)
-                        .map(|((fld, v), l)| (fld, v.decorate(&l.layout)))
-                        .collect(),
-                }
-            }
-            (v, _) => v, // already decorated
-        }
-    }
-
-    pub fn fields(&self) -> &[MoveValue] {
-        match self {
-            Self::Runtime(vals) => vals,
-            Self::WithFields(_) | Self::WithTypes { .. } => {
-                // It's not possible to implement this without changing the return type, and thus
-                // panicking is the best move
-                panic!("Getting fields for decorated representation")
-            }
-        }
-    }
-
     pub fn into_fields(self) -> Vec<MoveValue> {
-        match self {
-            Self::Runtime(vals) => vals,
-            Self::WithFields(fields) | Self::WithTypes { fields, .. } => {
-                fields.into_iter().map(|(_, f)| f).collect()
-            }
-        }
+        self.fields.into_iter().map(|(_, f)| f).collect()
     }
 
-    pub fn undecorate(self) -> Self {
-        Self::Runtime(
+    pub fn undecorate(self) -> R::MoveStruct {
+        R::MoveStruct(
             self.into_fields()
                 .into_iter()
                 .map(MoveValue::undecorate)
@@ -267,37 +162,12 @@ impl MoveStruct {
 }
 
 impl MoveStructLayout {
-    pub fn new(types: Vec<MoveTypeLayout>) -> Self {
-        Self::Runtime(types)
-    }
-
-    pub fn with_fields(types: Vec<MoveFieldLayout>) -> Self {
-        Self::WithFields(types)
-    }
-
-    pub fn with_types(type_: StructTag, fields: Vec<MoveFieldLayout>) -> Self {
-        Self::WithTypes { type_, fields }
-    }
-
-    pub fn fields(&self) -> &[MoveTypeLayout] {
-        match self {
-            Self::Runtime(vals) => vals,
-            Self::WithFields(_) | Self::WithTypes { .. } => {
-                // It's not possible to implement this without changing the return type, and some
-                // performance-critical VM serialization code uses the Runtime case of this.
-                // panicking is the best move
-                panic!("Getting fields for decorated representation")
-            }
-        }
+    pub fn new(type_: StructTag, fields: Vec<MoveFieldLayout>) -> Self {
+        Self { type_, fields }
     }
 
     pub fn into_fields(self) -> Vec<MoveTypeLayout> {
-        match self {
-            Self::Runtime(vals) => vals,
-            Self::WithFields(fields) | Self::WithTypes { fields, .. } => {
-                fields.into_iter().map(|f| f.layout).collect()
-            }
-        }
+        self.fields.into_iter().map(|f| f.layout).collect()
     }
 }
 
@@ -374,30 +244,6 @@ impl<'d, 'a> serde::de::Visitor<'d> for DecoratedStructFieldVisitor<'a> {
     }
 }
 
-struct StructFieldVisitor<'a>(&'a [MoveTypeLayout]);
-
-impl<'d, 'a> serde::de::Visitor<'d> for StructFieldVisitor<'a> {
-    type Value = Vec<MoveValue>;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Struct")
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: serde::de::SeqAccess<'d>,
-    {
-        let mut val = Vec::new();
-        for (i, field_type) in self.0.iter().enumerate() {
-            match seq.next_element_seed(field_type)? {
-                Some(elem) => val.push(elem),
-                None => return Err(A::Error::invalid_length(i, &self)),
-            }
-        }
-        Ok(val)
-    }
-}
-
 impl<'d> serde::de::DeserializeSeed<'d> for &MoveFieldLayout {
     type Value = (Identifier, MoveValue);
 
@@ -416,29 +262,12 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveStructLayout {
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        match self {
-            MoveStructLayout::Runtime(layout) => {
-                let fields =
-                    deserializer.deserialize_tuple(layout.len(), StructFieldVisitor(layout))?;
-                Ok(MoveStruct::Runtime(fields))
-            }
-            MoveStructLayout::WithFields(layout) => {
-                let fields = deserializer
-                    .deserialize_tuple(layout.len(), DecoratedStructFieldVisitor(layout))?;
-                Ok(MoveStruct::WithFields(fields))
-            }
-            MoveStructLayout::WithTypes {
-                type_,
-                fields: layout,
-            } => {
-                let fields = deserializer
-                    .deserialize_tuple(layout.len(), DecoratedStructFieldVisitor(layout))?;
-                Ok(MoveStruct::WithTypes {
-                    type_: type_.clone(),
-                    fields,
-                })
-            }
-        }
+        let fields = deserializer
+            .deserialize_tuple(self.fields.len(), DecoratedStructFieldVisitor(&self.fields))?;
+        Ok(MoveStruct {
+            type_: self.type_.clone(),
+            fields,
+        })
     }
 }
 
@@ -480,28 +309,16 @@ impl<'a> serde::Serialize for MoveFields<'a> {
 
 impl serde::Serialize for MoveStruct {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Self::Runtime(s) => {
-                let mut t = serializer.serialize_tuple(s.len())?;
-                for v in s.iter() {
-                    t.serialize_element(v)?;
-                }
-                t.end()
-            }
-            Self::WithFields(fields) => MoveFields(fields).serialize(serializer),
-            Self::WithTypes { type_, fields } => {
-                // Serialize a Move struct as Serde struct type named `struct `with two fields named `type` and `fields`.
-                // `fields` will get serialized as a Serde map.
-                // Unfortunately, we can't serialize this in the logical way: as a Serde struct named `type` with a field for
-                // each of `fields` because serde insists that struct and field names be `'static &str`'s
-                let mut t = serializer.serialize_struct(MOVE_STRUCT_NAME, 2)?;
-                // serialize type as string (e.g., 0x0::ModuleName::StructName<TypeArg1,TypeArg2>) instead of (e.g.
-                // { address: 0x0...0, module: ModuleName, name: StructName, type_args: [TypeArg1, TypeArg2]})
-                t.serialize_field(MOVE_STRUCT_TYPE, &type_.to_string())?;
-                t.serialize_field(MOVE_STRUCT_FIELDS, &MoveFields(fields))?;
-                t.end()
-            }
-        }
+        // Serialize a Move struct as Serde struct type named `struct `with two fields named `type` and `fields`.
+        // `fields` will get serialized as a Serde map.
+        // Unfortunately, we can't serialize this in the logical way: as a Serde struct named `type` with a field for
+        // each of `fields` because serde insists that struct and field names be `'static &str`'s
+        let mut t = serializer.serialize_struct(MOVE_STRUCT_NAME, 2)?;
+        // serialize type as string (e.g., 0x0::ModuleName::StructName<TypeArg1,TypeArg2>) instead of (e.g.
+        // { address: 0x0...0, module: ModuleName, name: StructName, type_args: [TypeArg1, TypeArg2]})
+        t.serialize_field(MOVE_STRUCT_TYPE, &self.type_.to_string())?;
+        t.serialize_field(MOVE_STRUCT_FIELDS, &MoveFields(&self.fields))?;
+        t.end()
     }
 }
 
@@ -543,45 +360,19 @@ impl<'a, T: fmt::Display> fmt::Debug for DebugAsDisplay<'a, T> {
 impl fmt::Display for MoveStructLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         use DebugAsDisplay as DD;
-
         write!(f, "struct ")?;
-        match self {
-            Self::Runtime(layouts) => {
-                let mut map = f.debug_map();
-                for (i, l) in layouts.iter().enumerate() {
-                    map.entry(&i, &DD(&l));
-                }
-
-                map.finish()
-            }
-
-            Self::WithFields(fields) => {
-                let mut map = f.debug_map();
-                for field in fields {
-                    map.entry(&DD(&field.name), &DD(&field.layout));
-                }
-
-                map.finish()
-            }
-
-            Self::WithTypes { type_, fields } => {
-                write!(f, "{type_} ")?;
-                let mut map = f.debug_map();
-                for field in fields {
-                    map.entry(&DD(&field.name), &DD(&field.layout));
-                }
-
-                map.finish()
-            }
+        write!(f, "{} ", self.type_)?;
+        let mut map = f.debug_map();
+        for field in &self.fields {
+            map.entry(&DD(&field.name), &DD(&field.layout));
         }
+        map.finish()
     }
 }
 
-impl TryInto<TypeTag> for &MoveTypeLayout {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<TypeTag, Self::Error> {
-        Ok(match self {
+impl From<&MoveTypeLayout> for TypeTag {
+    fn from(val: &MoveTypeLayout) -> TypeTag {
+        match val {
             MoveTypeLayout::Address => TypeTag::Address,
             MoveTypeLayout::Bool => TypeTag::Bool,
             MoveTypeLayout::U8 => TypeTag::U8,
@@ -593,24 +384,16 @@ impl TryInto<TypeTag> for &MoveTypeLayout {
             MoveTypeLayout::Signer => TypeTag::Signer,
             MoveTypeLayout::Vector(v) => {
                 let inner_type = &**v;
-                TypeTag::Vector(Box::new(inner_type.try_into()?))
+                TypeTag::Vector(Box::new(inner_type.into()))
             }
-            MoveTypeLayout::Struct(v) => TypeTag::Struct(Box::new(v.try_into()?)),
-        })
+            MoveTypeLayout::Struct(v) => TypeTag::Struct(Box::new(v.into())),
+        }
     }
 }
 
-impl TryInto<StructTag> for &MoveStructLayout {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<StructTag, Self::Error> {
-        use MoveStructLayout::*;
-        match self {
-            Runtime(..) | WithFields(..) => bail!(
-                "Invalid MoveTypeLayout -> StructTag conversion--needed MoveLayoutType::WithTypes"
-            ),
-            WithTypes { type_, .. } => Ok(type_.clone()),
-        }
+impl From<&MoveStructLayout> for StructTag {
+    fn from(val: &MoveStructLayout) -> StructTag {
+        val.type_.clone()
     }
 }
 
@@ -635,16 +418,8 @@ impl fmt::Display for MoveValue {
 
 impl fmt::Display for MoveStruct {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MoveStruct::Runtime(v) => fmt_list(f, "struct[", v, "]"),
-            MoveStruct::WithFields(fields) => {
-                fmt_list(f, "{", fields.iter().map(DisplayFieldBinding), "}")
-            }
-            MoveStruct::WithTypes { type_, fields } => {
-                fmt::Display::fmt(type_, f)?;
-                fmt_list(f, " {", fields.iter().map(DisplayFieldBinding), "}")
-            }
-        }
+        fmt::Display::fmt(&self.type_, f)?;
+        fmt_list(f, " {", self.fields.iter().map(DisplayFieldBinding), "}")
     }
 }
 
@@ -655,22 +430,4 @@ impl fmt::Display for DisplayFieldBinding<'_> {
         let DisplayFieldBinding((field, value)) = self;
         write!(f, "{}: {}", field, value)
     }
-}
-
-fn fmt_list<T: fmt::Display>(
-    f: &mut fmt::Formatter<'_>,
-    begin: &str,
-    items: impl IntoIterator<Item = T>,
-    end: &str,
-) -> fmt::Result {
-    write!(f, "{}", begin)?;
-    let mut items = items.into_iter();
-    if let Some(x) = items.next() {
-        write!(f, "{}", x)?;
-        for x in items {
-            write!(f, ", {}", x)?;
-        }
-    }
-    write!(f, "{}", end)?;
-    Ok(())
 }

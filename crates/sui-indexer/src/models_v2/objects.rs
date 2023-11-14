@@ -11,7 +11,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::digests::ObjectDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
-use sui_types::object::{ObjectFormatOptions, ObjectRead};
+use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::schema_v2::objects;
@@ -112,7 +112,7 @@ impl StoredObject {
     ) -> Result<ObjectRead, IndexerError> {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
-        let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
+        let layout = object.get_layout(module_cache)?;
         Ok(ObjectRead::Exists(oref, object, layout))
     }
 

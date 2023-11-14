@@ -8,7 +8,7 @@ use crate::{
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;

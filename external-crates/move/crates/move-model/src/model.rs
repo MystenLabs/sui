@@ -58,7 +58,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage,
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
