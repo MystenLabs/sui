@@ -85,7 +85,6 @@ impl PrimaryNodeInner {
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
         // spawn primary if not already running
-        // TODO-DNS find a way to disable random beacon if randomness state obj hasnt been created?
         let handles = Self::spawn_primary(
             keypair,
             network_keypair,

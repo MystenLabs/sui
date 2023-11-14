@@ -53,7 +53,6 @@ pub enum ConsensusTransactionKey {
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
     // the same id by malfunctioning providers.
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
-    // TODO-DNS is it ok for key to be unique only within epoch? If not need to add something besides randomness round
     RandomnessStateUpdate(u64),
 }
 

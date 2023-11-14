@@ -1990,7 +1990,7 @@ impl AuthorityPerEpochStore {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
                 ..
-            }) => {} // TODO-DNS anything to verify?
+            }) => {}
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))
