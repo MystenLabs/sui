@@ -195,7 +195,7 @@ pub async fn start_test_indexer(
 }
 
 impl ExecutorCluster {
-    pub async fn wait_for_checkpint_catchup(&self, checkpoint: u64, timeout: Duration) {
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, timeout: Duration) {
         async fn inner(s: &ExecutorCluster, checkpoint: u64) {
             let mut highest_checkpoint = s
                 .indexer_store

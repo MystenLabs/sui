@@ -492,7 +492,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
                 cluster
-                    .wait_for_checkpint_catchup(highest_checkpoint, Duration::from_secs(10))
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
                     .await;
 
                 let resp = cluster

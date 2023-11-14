@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 31;
+const MAX_PROTOCOL_VERSION: u64 = 32;
 
 // Record history of protocol version allocations here:
 //
@@ -92,6 +92,7 @@ const MAX_PROTOCOL_VERSION: u64 = 31;
 //             Add support for getting object ID referenced by receiving object in sui framework.
 //             Create new execution layer version, and preserve previous behavior in v1.
 //             Update semantics of `sui::transfer::receive` and add `sui::transfer::public_receive`.
+// Version 32: Add delete functions for VerifiedID and VerifiedIssuer.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1646,6 +1647,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
                 }
+                32 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

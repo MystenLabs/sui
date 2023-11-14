@@ -9,13 +9,11 @@ use diesel::{
 use regex::Regex;
 use sui_indexer::{indexer_reader::IndexerReader, schema_v2::query_cost};
 
-use crate::context_data::DEFAULT_PAGE_SIZE;
+use crate::{context_data::DEFAULT_PAGE_SIZE, error::Error};
 
 /// Extracts the raw sql query string from a diesel query
 /// and replaces all the parameters with '0'
-pub fn raw_sql_string_values_set(
-    query: &dyn QueryFragment<Pg>,
-) -> Result<String, crate::error::Error> {
+pub fn raw_sql_string_values_set(query: &dyn QueryFragment<Pg>) -> Result<String, Error> {
     // This lets us get the underlying sql query param types & values
     // Currently unused because we set all vals to '0' but want to keep for future reference
 
@@ -38,7 +36,7 @@ pub fn raw_sql_string_values_set(
 
     let mut query_builder = <diesel::pg::Pg as diesel::backend::Backend>::QueryBuilder::default();
     QueryFragment::<Pg>::to_sql(&query, &mut query_builder, &Pg).map_err(|e| {
-        crate::error::Error::Internal(format!(
+        Error::Internal(format!(
             "Failed to extract raw sql string from query: {}",
             e
         ))
@@ -47,7 +45,7 @@ pub fn raw_sql_string_values_set(
 
     // handle limits, as '0' is invalid - set to DEFAULT_PAGE_SIZE instead
     let re = Regex::new(r"(LIMIT\s+)\$(\d+)")
-        .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("Failed create valid regex: {}", e)))?;
     let replacement_string = format!("LIMIT {}", DEFAULT_PAGE_SIZE);
     let output = re
         .replace_all(&sql, replacement_string.as_str())
@@ -55,7 +53,7 @@ pub fn raw_sql_string_values_set(
 
     // handle matching column against ANY value in input array
     let re = Regex::new(r"ANY\(\$(\d+)\)")
-        .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("Failed create valid regex: {}", e)))?;
     let nums: Vec<String> = (1..=50).map(|n| n.to_string()).collect();
     let nums_str = nums.join(", ");
     let replacement_string = format!("ANY ('{{{}}}')", nums_str);
@@ -64,7 +62,7 @@ pub fn raw_sql_string_values_set(
         .to_string();
 
     let re = Regex::new(r"\$(\d+)")
-        .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("Failed create valid regex: {}", e)))?;
 
     Ok(re.replace_all(&output, "'0'").to_string())
 }
@@ -72,13 +70,13 @@ pub fn raw_sql_string_values_set(
 pub fn extract_cost(
     query: &dyn QueryFragment<Pg>,
     pg_reader: &IndexerReader,
-) -> Result<f64, crate::error::Error> {
+) -> Result<f64, Error> {
     let raw_sql_string = raw_sql_string_values_set(query)?;
     // Use IndexerReader.run_query so we get alerted when blocking calls are made in an async thread
     pg_reader
         .run_query(|conn| diesel::select(query_cost(&raw_sql_string)).get_result::<f64>(conn))
         .map_err(|e| {
-            crate::error::Error::Internal(format!(
+            Error::Internal(format!(
                 "Unable to run query_cost function to determine query cost for {}: {}",
                 raw_sql_string, e
             ))

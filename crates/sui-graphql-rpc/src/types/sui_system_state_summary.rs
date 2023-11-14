@@ -72,7 +72,8 @@ impl SuiSystemStateSummary {
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
                 .fetch_protocol_configs(Some(self.protocol_version))
-                .await?,
+                .await
+                .extend()?,
         ))
     }
 }

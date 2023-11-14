@@ -6,6 +6,7 @@ import Loading from '_components/loading';
 import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
 import { useFileExtensionType, useGetNFTMeta } from '_hooks';
 import { isKioskOwnerToken, useGetObject } from '@mysten/core';
+import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
 import { formatAddress } from '@mysten/sui.js/utils';
 import { cva } from 'class-variance-authority';
 import type { VariantProps } from 'class-variance-authority';
@@ -60,7 +61,8 @@ export function NFTDisplayCard({
 	const nftImageUrl = nftMeta?.imageUrl || '';
 	const video = useResolveVideo(objectData);
 	const fileExtensionType = useFileExtensionType(nftImageUrl);
-	const isOwnerToken = isKioskOwnerToken(objectData);
+	const kioskClient = useKioskClient();
+	const isOwnerToken = isKioskOwnerToken(kioskClient.network, objectData);
 	const shouldShowLabel = !wideView && orientation !== 'horizontal';
 
 	return (

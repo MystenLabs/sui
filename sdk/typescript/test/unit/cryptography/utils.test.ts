@@ -5,7 +5,6 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { ExportedKeypair } from '../../../src/cryptography/keypair';
-import { combinePartialSigs, PubkeyWeightPair } from '../../../src/cryptography/multisig';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { parseSerializedSignature } from '../../../src/cryptography/signature';
 import {
@@ -17,6 +16,7 @@ import {
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
+import { MultiSigPublicKey } from '../../../src/multisig';
 
 describe('Utils', () => {
 	let k1: Ed25519Keypair,
@@ -51,20 +51,23 @@ describe('Utils', () => {
 	});
 
 	it('`toParsedSignaturePubkeyPair()` should parse signature correctly', async () => {
-		const pubkeyWeightPairs: PubkeyWeightPair[] = [
-			{
-				pubKey: pk1,
-				weight: 1,
-			},
-			{
-				pubKey: pk2,
-				weight: 2,
-			},
-			{
-				pubKey: pk3,
-				weight: 3,
-			},
-		];
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			publicKeys: [
+				{
+					publicKey: pk1,
+					weight: 1,
+				},
+				{
+					publicKey: pk2,
+					weight: 2,
+				},
+				{
+					publicKey: pk3,
+					weight: 3,
+				},
+			],
+			threshold: 3,
+		});
 
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
@@ -77,7 +80,7 @@ describe('Utils', () => {
 		expect(parsed[0].pubKey).toEqual(pk1);
 		expect(parsed[0].signature).toEqual(parseSerializedSignature(sig1.signature).signature);
 
-		const multisig = combinePartialSigs([sig1.signature, sig2.signature], pubkeyWeightPairs, 3);
+		const multisig = publicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const parsedMultisig = toParsedSignaturePubkeyPair(multisig);
 
@@ -126,20 +129,23 @@ describe('Utils', () => {
 	});
 
 	it('`toSingleSignaturePubkeyPair()` should handle multisig', async () => {
-		const pubkeyWeightPairs: PubkeyWeightPair[] = [
-			{
-				pubKey: pk1,
-				weight: 1,
-			},
-			{
-				pubKey: pk2,
-				weight: 2,
-			},
-			{
-				pubKey: pk3,
-				weight: 3,
-			},
-		];
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			publicKeys: [
+				{
+					publicKey: pk1,
+					weight: 1,
+				},
+				{
+					publicKey: pk2,
+					weight: 2,
+				},
+				{
+					publicKey: pk3,
+					weight: 3,
+				},
+			],
+			threshold: 3,
+		});
 
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
@@ -152,7 +158,7 @@ describe('Utils', () => {
 		expect(parsed.pubKey).toEqual(pk1);
 		expect(parsed.signature).toEqual(parseSerializedSignature(sig1.signature).signature);
 
-		const multisig = combinePartialSigs([sig1.signature, sig2.signature], pubkeyWeightPairs, 3);
+		const multisig = publicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		expect(() => toSingleSignaturePubkeyPair(multisig)).toThrowError(
 			new Error('Expected a single signature'),
