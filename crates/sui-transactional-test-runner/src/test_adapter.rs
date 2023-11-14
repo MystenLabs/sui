@@ -1739,7 +1739,7 @@ async fn init_sim_executor(
             account_objects,
             accounts,
         },
-        cluster,
+        Some(cluster),
     )
 }
 

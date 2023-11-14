@@ -52,7 +52,7 @@ impl GraphqlResponse {
     }
 
     pub fn response_body_json(&self) -> serde_json::Value {
-         json!(self.full_response)
+        json!(self.full_response)
     }
 
     pub fn response_body_json_pretty(&self) -> String {
