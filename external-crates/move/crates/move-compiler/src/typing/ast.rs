@@ -144,7 +144,7 @@ pub enum UnannotatedExp_ {
     Move { from_user: bool, var: Var },
     Copy { from_user: bool, var: Var },
     Use(Var),
-    Constant(Option<ModuleIdent>, ConstantName),
+    Constant(ModuleIdent, ConstantName),
 
     ModuleCall(Box<ModuleCall>),
     Builtin(Box<BuiltinFunction>, Box<Exp>),
@@ -450,8 +450,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("use@");
                 v.ast_debug(w)
             }
-            E::Constant(None, c) => w.write(&format!("{}", c)),
-            E::Constant(Some(m), c) => w.write(&format!("{}::{}", m, c)),
+            E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }

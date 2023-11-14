@@ -370,7 +370,7 @@ impl<'env> Context<'env> {
     fn resolve_constant(
         &mut self,
         sp!(loc, ma_): E::ModuleAccess,
-    ) -> Option<(Option<ModuleIdent>, ConstantName)> {
+    ) -> Option<(ModuleIdent, ConstantName)> {
         use E::ModuleAccess_ as EA;
         match ma_ {
             EA::Name(n) => {
@@ -385,7 +385,7 @@ impl<'env> Context<'env> {
                     assert!(self.env.has_errors());
                     None
                 }
-                Some(cname) => Some((Some(m), cname)),
+                Some(cname) => Some((m, cname)),
             },
         }
     }

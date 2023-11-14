@@ -16,7 +16,7 @@ use move_binary_format::{
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-/// Pass to order handles in compiled modules and scripts stably and canonically.  Performs the
+/// Pass to order handles in compiled modules stably and canonically.  Performs the
 /// following canonicalizations:
 ///
 /// - Identifiers are sorted in lexicographic order.

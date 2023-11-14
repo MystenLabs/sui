@@ -70,7 +70,7 @@ pub trait TypingVisitorContext {
             }
 
             for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
-                self.visit_function(Some(mident), function_name, fdef)
+                self.visit_function(mident, function_name, fdef)
             }
 
             self.pop_warning_filter_scope();
@@ -79,7 +79,7 @@ pub trait TypingVisitorContext {
 
     fn visit_function_custom(
         &mut self,
-        _module: Option<ModuleIdent>,
+        _module: ModuleIdent,
         _function_name: FunctionName,
         _fdef: &mut T::Function,
     ) -> bool {
@@ -87,7 +87,7 @@ pub trait TypingVisitorContext {
     }
     fn visit_function(
         &mut self,
-        module: Option<ModuleIdent>,
+        module: ModuleIdent,
         function_name: FunctionName,
         fdef: &mut T::Function,
     ) {

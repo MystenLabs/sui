@@ -163,8 +163,8 @@ fn module(
     } = mdef;
     let mut context = Context::new(compilation_env, package_name, Some(&ident));
     let structs = struct_defs(&mut context, &ident, gstructs);
-    let constants = constants(&mut context, Some(&ident), gconstants);
-    let (collected_function_infos, functions) = functions(&mut context, Some(&ident), gfunctions);
+    let constants = constants(&mut context, &ident, gconstants);
+    let (collected_function_infos, functions) = functions(&mut context, &ident, gfunctions);
 
     let friends = gfriends
         .into_iter()
@@ -422,7 +422,7 @@ fn struct_fields(
 
 fn constants(
     context: &mut Context,
-    m: Option<&ModuleIdent>,
+    m: &ModuleIdent,
     constants: UniqueMap<ConstantName, G::Constant>,
 ) -> Vec<IR::Constant> {
     let mut constants = constants.into_iter().collect::<Vec<_>>();
@@ -435,7 +435,7 @@ fn constants(
 
 fn constant(
     context: &mut Context,
-    m: Option<&ModuleIdent>,
+    m: &ModuleIdent,
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
@@ -455,7 +455,7 @@ fn constant(
 
 fn functions(
     context: &mut Context,
-    m: Option<&ModuleIdent>,
+    m: &ModuleIdent,
     functions: UniqueMap<FunctionName, G::Function>,
 ) -> (CollectedInfos, Vec<(IR::FunctionName, IR::Function)>) {
     let mut functions = functions.into_iter().collect::<Vec<_>>();
@@ -482,7 +482,7 @@ fn functions(
 
 fn function(
     context: &mut Context,
-    m: Option<&ModuleIdent>,
+    m: &ModuleIdent,
     f: FunctionName,
     fdef: G::Function,
 ) -> ((IR::FunctionName, IR::Function), CollectedInfo) {

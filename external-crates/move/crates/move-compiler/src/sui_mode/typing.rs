@@ -158,11 +158,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
 
     fn visit_function_custom(
         &mut self,
-        module: Option<ModuleIdent>,
+        module: ModuleIdent,
         name: FunctionName,
         fdef: &mut T::Function,
     ) -> bool {
-        debug_assert!(self.current_module == module);
+        debug_assert!(self.current_module.as_ref() == Some(&module));
         function(self, name, fdef);
         // skip since we have already visited the body
         true

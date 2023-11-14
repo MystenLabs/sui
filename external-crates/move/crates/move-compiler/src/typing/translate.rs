@@ -114,7 +114,6 @@ fn module(
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
-    assert!(context.current_script_constants.is_none());
     assert!(context.current_package.is_none());
 
     let N::ModuleDefinition {
@@ -1213,13 +1212,11 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::Constant(m, c) => {
             let ty = core::make_constant_type(context, eloc, &m, &c);
-            if let Some(mident) = m {
-                context
-                    .used_module_members
-                    .entry(mident.value)
-                    .or_default()
-                    .insert(c.value());
-            }
+            context
+                .used_module_members
+                .entry(m.value)
+                .or_default()
+                .insert(c.value());
             (ty, TE::Constant(m, c))
         }
 

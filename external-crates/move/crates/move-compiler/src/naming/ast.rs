@@ -280,7 +280,7 @@ pub enum Exp_ {
     Move(Var),
     Copy(Var),
     Use(Var),
-    Constant(Option<ModuleIdent>, ConstantName),
+    Constant(ModuleIdent, ConstantName),
 
     ModuleCall(
         ModuleIdent,
@@ -1155,8 +1155,7 @@ impl AstDebug for Exp_ {
                 v.ast_debug(w)
             }
             E::Use(v) => v.ast_debug(w),
-            E::Constant(None, c) => w.write(&format!("{}", c)),
-            E::Constant(Some(m), c) => w.write(&format!("{}::{}", m, c)),
+            E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
                 if let Some(ss) = tys_opt {

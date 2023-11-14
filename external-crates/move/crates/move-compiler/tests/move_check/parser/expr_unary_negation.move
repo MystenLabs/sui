@@ -1,4 +1,4 @@
-script {
+module 0x42::m {
 
 fun main() {
     // Unary negation is not supported.

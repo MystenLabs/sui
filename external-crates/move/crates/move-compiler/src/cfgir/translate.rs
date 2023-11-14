@@ -197,8 +197,8 @@ fn module(
     } = mdef;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, Some(module_ident), hconstants);
-    let functions = hfunctions.map(|name, f| function(context, Some(module_ident), name, f));
+    let constants = constants(context, module_ident, hconstants);
+    let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.env.pop_warning_filter_scope();
     (
         module_ident,
@@ -222,7 +222,7 @@ fn module(
 
 fn constants(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     mut consts: UniqueMap<ConstantName, H::Constant>,
 ) -> UniqueMap<ConstantName, G::Constant> {
     // Traverse the constants and compute the dependency graph between constants: if one mentions
@@ -397,7 +397,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
 fn constant(
     context: &mut Context,
     constant_values: &mut UniqueMap<ConstantName, Value>,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: ConstantName,
     c: H::Constant,
 ) -> G::Constant {
@@ -451,7 +451,7 @@ const CANNOT_FOLD: &str =
 fn constant_(
     context: &mut Context,
     constant_values: &UniqueMap<ConstantName, Value>,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: ConstantName,
     full_loc: Loc,
     signature: H::BaseType,
@@ -561,7 +561,7 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
 
 fn function(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     f: H::Function,
 ) -> G::Function {
@@ -590,7 +590,7 @@ fn function(
 
 fn function_body(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     visibility: H::Visibility,
     signature: &H::FunctionSignature,
@@ -869,7 +869,7 @@ fn visit_module(
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
     for (name, fdef) in mdef.functions.key_cloned_iter() {
-        visit_function(context, prog, Some(mident), name, fdef)
+        visit_function(context, prog, mident, name, fdef)
     }
     context.env.pop_warning_filter_scope();
 }
@@ -877,7 +877,7 @@ fn visit_module(
 fn visit_function(
     context: &mut Context,
     prog: &G::Program,
-    mident: Option<ModuleIdent>,
+    mident: ModuleIdent,
     name: FunctionName,
     fdef: &G::Function,
 ) {

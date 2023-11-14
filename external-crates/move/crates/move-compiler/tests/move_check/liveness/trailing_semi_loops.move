@@ -1,16 +1,16 @@
-script {
+module 1::m {
     fun main() {
         loop ();
     }
 }
 
-script {
+module 2::m {
     fun main() {
         { (loop (): ()) };
     }
 }
 
-script {
+module 3::m {
     fun main() {
         loop {
             let x = 0;
@@ -19,7 +19,7 @@ script {
     }
 }
 
-script {
+module 4::m {
     fun main() {
         loop {
             // TODO can probably improve this message,
@@ -29,7 +29,7 @@ script {
     }
 }
 
-script {
+module 5::m {
     fun main() {
         loop {
             break;
@@ -37,7 +37,7 @@ script {
     }
 }
 
-script {
+module 6::m {
     fun main(cond: bool) {
         loop {
             if (cond) {
@@ -49,7 +49,7 @@ script {
     }
 }
 
-script {
+module 7::m {
     fun main(cond: bool) {
         loop {
             if (cond) continue else break;
@@ -57,7 +57,7 @@ script {
     }
 }
 
-script {
+module 8::m {
     fun main(cond: bool) {
         loop {
             if (cond) abort 0 else return;
@@ -65,7 +65,7 @@ script {
     }
 }
 
-script {
+module 9::m {
     fun main(cond: bool) {
         let x;
         loop {
@@ -81,7 +81,7 @@ script {
     }
 }
 
-script {
+module 10::m {
     fun main(cond: bool) {
         loop {
             if (cond) {
@@ -93,7 +93,7 @@ script {
     }
 }
 
-script {
+module 11::m {
     fun main(cond: bool) {
         loop {
             if (cond) {
