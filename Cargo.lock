@@ -5456,7 +5456,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=2f63be20ec9be33bdd9e3b43f22db2813720f1df#2f63be20ec9be33bdd9e3b43f22db2813720f1df"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=6f03e08bfe3eadfaca8217dded5bc53ac3836de2#6f03e08bfe3eadfaca8217dded5bc53ac3836de2"
 dependencies = [
  "memmap2 0.7.1",
  "serde",
@@ -6417,7 +6417,7 @@ dependencies = [
 [[package]]
 name = "mysticeti-core"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=2f63be20ec9be33bdd9e3b43f22db2813720f1df#2f63be20ec9be33bdd9e3b43f22db2813720f1df"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=6f03e08bfe3eadfaca8217dded5bc53ac3836de2#6f03e08bfe3eadfaca8217dded5bc53ac3836de2"
 dependencies = [
  "async-trait",
  "axum",
@@ -6433,6 +6433,7 @@ dependencies = [
  "hex",
  "hyper",
  "libc",
+ "lru 0.10.0",
  "memmap2 0.7.1",
  "minibytes",
  "parking_lot 0.12.1",
