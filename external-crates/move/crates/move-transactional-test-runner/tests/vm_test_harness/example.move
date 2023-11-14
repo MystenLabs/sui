@@ -2,7 +2,7 @@
 
 //# run
 
-script {
+module 0x1::m {
     fun main() {}
 }
 
@@ -30,19 +30,24 @@ module A::N {
 
 //# run --args 0
 
-script {
-    fun main(v: u64) {
+module 0x2::m {
+    entry fun main(v: u64) {
+        helper(v)
+    }
+    fun helper(v: u64) {
         A::N::take(A::N::make(v));
     }
 }
 
 //# run --args 42 --syntax=mvir
 
+module 0x3.m {
 import 0x42.N;
-main(v: u64) {
+entry foo(v: u64) {
 label b0:
     _ = N.take(N.make(move(v)));
     return;
+}
 }
 
 //# run 0x42::N::make --args 42

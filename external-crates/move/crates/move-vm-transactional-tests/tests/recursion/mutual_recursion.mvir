@@ -25,9 +25,10 @@ module 0x42.Math {
 }
 
 //# run
+module 0x42.m {
 import 0x42.Math;
 
-main() {
+entry foo() {
     let zero_even: bool;
     let zero_odd: bool;
     let ten_even: bool;
@@ -46,4 +47,5 @@ label b0:
     assert(!move(ten_odd), 53);
 
     return;
+}
 }

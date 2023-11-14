@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let b: bool;
 label b0:
     b = false;
@@ -15,4 +17,6 @@ label loop_b3:
     jump loop_cont;
 label loop_cont:
     return;
+}
+
 }

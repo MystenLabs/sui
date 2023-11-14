@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     const AND_TT: bool = true && true;
     const AND_TF: bool = true && false;
     const AND_FT: bool = false && true;

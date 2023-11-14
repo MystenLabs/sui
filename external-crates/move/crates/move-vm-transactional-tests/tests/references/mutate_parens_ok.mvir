@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: u64;
     let ref_v: &mut u64;
 label b0:
@@ -11,4 +13,6 @@ label b0:
     assert(*move(ref_v) == 42, 42);
     assert(copy(v) == 42, 42);
     return;
+}
+
 }

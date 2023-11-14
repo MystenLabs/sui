@@ -1,5 +1,5 @@
 //# run
-script {
+module 1::m {
 fun main() {
     assert!(0u8 == 0u8, 1000);
     assert!(0u64 == 0u64, 1001);
@@ -26,7 +26,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 fun main() {
     assert!(0u8 != 1u8, 2000);
     assert!(0u64 != 1u64, 2001);
@@ -55,7 +55,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 fun main() {
     assert!(0u8 < 1u8, 3000);
     assert!(0u64 < 1u64, 3001);
@@ -84,7 +84,7 @@ fun main() {
 }
 
 //# run
-script {
+module 4::m {
 fun main() {
     assert!(1u8 > 0u8, 4000);
     assert!(1u64 > 0u64, 4001);
@@ -113,7 +113,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 fun main() {
     assert!(0u8 <= 1u8, 5000);
     assert!(0u64 <= 1u64, 5001);
@@ -142,7 +142,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     assert!(1u8 >= 0u8, 6000);
     assert!(1u64 >= 0u64, 6001);

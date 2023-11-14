@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let a: u64;
     let b: u64;
 label b0:
@@ -8,4 +10,6 @@ label b0:
     b = copy(a) - 1;
     assert(copy(b) == 4, 42);
     return;
+}
+
 }

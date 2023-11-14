@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u64>;
     let e_imm1: &u64;
     let e_mut2: &mut u64;
@@ -14,8 +16,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u64>;
     let e_mut1: &mut u64;
     let e_imm2: &u64;
@@ -30,8 +35,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u64>;
     let e_mut1: &mut u64;
     let e_mut2: &mut u64;
@@ -44,4 +52,6 @@ label b0:
     e_mut2 = vec_mut_borrow<u64>(&mut v, 1);
 
     return;
+}
+
 }

@@ -1,11 +1,11 @@
 processed 1 task
 
-task 0 'print-bytecode'. lines 1-8:
+task 0 'print-bytecode'. lines 1-10:
 // Move bytecode v6
-script {
+module 1.m {
 
 
-main() {
+entry foo() {
 L0:	loc0: u64
 B0:
 	0: LdU64(3)

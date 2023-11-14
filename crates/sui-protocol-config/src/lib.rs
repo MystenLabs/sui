@@ -93,6 +93,7 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Create new execution layer version, and preserve previous behavior in v1.
 //             Update semantics of `sui::transfer::receive` and add `sui::transfer::public_receive`.
 // Version 32: Add delete functions for VerifiedID and VerifiedIssuer.
+//             Add sui::token module to sui framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);

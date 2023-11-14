@@ -38,7 +38,7 @@ module 0x42::M {
 }
 
 //# run
-script {
+module 1::m {
 use 0x42::M;
 fun main() {
   // arithmetic error
@@ -47,7 +47,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 use 0x42::M;
 fun main() {
   // arithmetic error
@@ -56,7 +56,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 use 0x42::M;
 fun main() {
   // arithmetic error
@@ -65,7 +65,7 @@ fun main() {
 }
 
 //# run
-script {
+module 4::m {
 use 0x42::M;
 fun main() {
   // arithmetic error
@@ -74,7 +74,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 use 0x42::M;
 fun main() {
   // arithmetic error

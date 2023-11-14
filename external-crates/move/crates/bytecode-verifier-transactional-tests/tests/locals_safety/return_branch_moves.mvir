@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
     let y: u64;
 label b0:
@@ -12,4 +14,6 @@ label b1:
 label b2:
     y = move(x);
     return;
+}
+
 }

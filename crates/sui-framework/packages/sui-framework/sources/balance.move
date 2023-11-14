@@ -154,6 +154,12 @@ module sui::balance {
         let Balance { value } = self;
         value
     }
+
+    #[test_only]
+    /// Create a `Supply` of any coin for testing purposes.
+    public fun create_supply_for_testing<T>(): Supply<T> {
+        Supply { value: 0 }
+    }
 }
 
 #[test_only]

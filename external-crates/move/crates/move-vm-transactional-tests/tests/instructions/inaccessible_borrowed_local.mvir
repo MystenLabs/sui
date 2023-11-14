@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
     let x: vector<u64>;
     let r: &vector<u64>;
     label start:
@@ -12,8 +14,11 @@ main() {
         return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
     let x: vector<u64>;
     let r: &vector<u64>;
     label start:
@@ -24,4 +29,6 @@ main() {
     label end:
         _ = move(x);
         return;
+}
+
 }
