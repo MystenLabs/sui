@@ -5,7 +5,7 @@ import {
 	ConnectButton,
 	SuiClientProvider,
 	useAccounts,
-	useAutoConnectionStatus,
+	useAutoConnectWallet,
 	useConnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
@@ -102,7 +102,7 @@ export const UseCurrentAccountExample = withProviders(() => {
 
 export const UseAutoConnectionStatusExample = withProviders(
 	() => {
-		const autoConnectionStatus = useAutoConnectionStatus();
+		const autoConnectionStatus = useAutoConnectWallet();
 
 		return (
 			<div style={{ padding: 20 }}>

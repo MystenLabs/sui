@@ -3,7 +3,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { useAutoConnectionStatus } from '../../src/hooks/wallet/useAutoConnectionStatus.js';
+import { useAutoConnectWallet } from '../../src/hooks/wallet/useAutoConnectWallet.js';
 import { useConnectWallet } from '../../src/index.js';
 import { createMockAccount } from '../mocks/mockAccount.js';
 import { suiFeatures } from '../mocks/mockFeatures.js';
@@ -18,16 +18,16 @@ function withResolvers<T = any>() {
 	return { promise, reject: reject!, resolve: resolve! };
 }
 
-describe('useAutoConnectStatus', () => {
+describe('useAutoConnectWallet', () => {
 	test('returns "disabled" when the auto-connect functionality is disabled', async () => {
 		const wrapper = createWalletProviderContextWrapper();
-		const { result } = renderHook(() => useAutoConnectionStatus(), { wrapper });
+		const { result } = renderHook(() => useAutoConnectWallet(), { wrapper });
 		expect(result.current).toBe('disabled');
 	});
 
 	test(`returns "attempted" immediately when there is no last connected wallet`, async () => {
 		const wrapper = createWalletProviderContextWrapper({ autoConnect: true });
-		const { result } = renderHook(() => useAutoConnectionStatus(), { wrapper });
+		const { result } = renderHook(() => useAutoConnectWallet(), { wrapper });
 		expect(result.current).toBe('attempted');
 	});
 
@@ -61,7 +61,7 @@ describe('useAutoConnectStatus', () => {
 		});
 
 		// Render our component tree again and auto-connect to our previously connected wallet account.
-		const { result: updatedResult } = renderHook(() => useAutoConnectionStatus(), { wrapper });
+		const { result: updatedResult } = renderHook(() => useAutoConnectWallet(), { wrapper });
 		expect(updatedResult.current).toBe('idle');
 		resolve({ accounts: mockWallet.accounts });
 

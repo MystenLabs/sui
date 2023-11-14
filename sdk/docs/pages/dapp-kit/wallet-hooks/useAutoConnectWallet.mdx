@@ -1,15 +1,14 @@
 import { UseAutoConnectionStatusExample } from '../../../examples/wallet-hooks';
 
-# `useAutoConnectionStatus`
+# `useAutoConnectWallet`
 
-The `useAutoConnectionStatus` hook retrieves the status for the initial wallet auto-connection
-process.
+The `useAutoConnectWallet` hook retrieves the status for the initial wallet auto-connection process.
 
 ```ts
-import { ConnectButton, useAutoConnectionStatus } from '@mysten/dapp-kit';
+import { ConnectButton, useAutoConnectWallet } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const autoConnectionStatus = useAutoConnectionStatus();
+	const autoConnectionStatus = useAutoConnectWallet();
 
 	return (
 		<div>

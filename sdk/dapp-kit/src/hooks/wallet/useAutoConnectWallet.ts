@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { useMutation } from '@tanstack/react-query';
-import { useLayoutEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
-import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { useConnectWallet } from './useConnectWallet.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWallets } from './useWallets.js';
 import { useWalletStore } from './useWalletStore.js';
 
-export function useAutoConnectWallet() {
+export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 	const { mutateAsync: connectWallet } = useConnectWallet();
 	const autoConnectEnabled = useWalletStore((state) => state.autoConnectEnabled);
 	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
@@ -19,26 +16,25 @@ export function useAutoConnectWallet() {
 	const wallets = useWallets();
 	const { isDisconnected } = useCurrentWallet();
 
-	const { mutate } = useMutation({
-		mutationKey: walletMutationKeys.autoconnectWallet(),
-		mutationFn: async ({
-			autoConnectEnabled,
-			lastConnectedWalletName,
-			lastConnectedAccountAddress,
-		}: {
-			wallets: WalletWithRequiredFeatures[];
-			autoConnectEnabled: boolean;
-			lastConnectedWalletName: string | null;
-			lastConnectedAccountAddress: string | null;
-			isDisconnected: boolean;
-		}) => {
-			if (
-				!autoConnectEnabled ||
-				!lastConnectedWalletName ||
-				!lastConnectedAccountAddress ||
-				!isDisconnected
-			) {
-				return 'not-attempted';
+	const { data, isError } = useQuery({
+		queryKey: [
+			'@mysten/dapp-kit',
+			'autoconnect',
+			{
+				isDisconnected,
+				autoConnectEnabled,
+				lastConnectedWalletName,
+				lastConnectedAccountAddress,
+				walletCount: wallets.length,
+			},
+		],
+		queryFn: async () => {
+			if (!autoConnectEnabled) {
+				return 'disabled';
+			}
+
+			if (!lastConnectedWalletName || !lastConnectedAccountAddress || !isDisconnected) {
+				return 'attempted';
 			}
 
 			const wallet = wallets.find((wallet) => wallet.name === lastConnectedWalletName);
@@ -48,29 +44,30 @@ export function useAutoConnectWallet() {
 					accountAddress: lastConnectedAccountAddress,
 					silent: true,
 				});
-				return 'connected';
 			}
 
-			return 'wallet-not-found';
+			return 'attempted';
 		},
+		enabled: autoConnectEnabled,
+		persister: undefined,
+		gcTime: 0,
+		staleTime: 0,
+		retry: false,
+		retryOnMount: false,
+		refetchInterval: false,
+		refetchIntervalInBackground: false,
+		refetchOnMount: false,
+		refetchOnReconnect: false,
+		refetchOnWindowFocus: false,
 	});
 
-	useLayoutEffect(() => {
-		if (autoConnectEnabled) {
-			mutate({
-				autoConnectEnabled,
-				isDisconnected,
-				wallets,
-				lastConnectedAccountAddress,
-				lastConnectedWalletName,
-			});
-		}
-	}, [
-		mutate,
-		autoConnectEnabled,
-		isDisconnected,
-		wallets,
-		lastConnectedAccountAddress,
-		lastConnectedWalletName,
-	]);
+	if (!autoConnectEnabled) {
+		return 'disabled';
+	}
+
+	if (!lastConnectedWalletName) {
+		return 'attempted';
+	}
+
+	return isError ? 'attempted' : data ?? 'idle';
 }
