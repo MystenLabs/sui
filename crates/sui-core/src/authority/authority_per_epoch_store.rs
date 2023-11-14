@@ -134,11 +134,11 @@ pub struct ExecutionIndicesWithHash {
 pub trait ConsensusStatsAPI {
     fn is_initialized(&self) -> bool;
 
-    fn get_narwhal_certificates(&self, authority: usize) -> u64;
-    fn inc_narwhal_certificates(&mut self, authority: usize) -> u64;
+    fn get_num_messages(&self, authority: usize) -> u64;
+    fn inc_num_messages(&mut self, authority: usize) -> u64;
 
-    fn get_user_transactions(&self, authority: usize) -> u64;
-    fn inc_user_transactions(&mut self, authority: usize) -> u64;
+    fn get_num_user_transactions(&self, authority: usize) -> u64;
+    fn inc_num_user_transactions(&mut self, authority: usize) -> u64;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -150,8 +150,8 @@ pub enum ConsensusStats {
 impl ConsensusStats {
     pub fn new(size: usize) -> Self {
         Self::V1(ConsensusStatsV1 {
-            narwhal_certificates: vec![0; size],
-            user_transactions: vec![0; size],
+            num_messages: vec![0; size],
+            num_user_transactions: vec![0; size],
         })
     }
 }
@@ -164,31 +164,31 @@ impl Default for ConsensusStats {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ConsensusStatsV1 {
-    pub narwhal_certificates: Vec<u64>,
-    pub user_transactions: Vec<u64>,
+    pub num_messages: Vec<u64>,
+    pub num_user_transactions: Vec<u64>,
 }
 
 impl ConsensusStatsAPI for ConsensusStatsV1 {
     fn is_initialized(&self) -> bool {
-        !self.narwhal_certificates.is_empty()
+        !self.num_messages.is_empty()
     }
 
-    fn get_narwhal_certificates(&self, authority: usize) -> u64 {
-        self.narwhal_certificates[authority]
+    fn get_num_messages(&self, authority: usize) -> u64 {
+        self.num_messages[authority]
     }
 
-    fn inc_narwhal_certificates(&mut self, authority: usize) -> u64 {
-        self.narwhal_certificates[authority] += 1;
-        self.narwhal_certificates[authority]
+    fn inc_num_messages(&mut self, authority: usize) -> u64 {
+        self.num_messages[authority] += 1;
+        self.num_messages[authority]
     }
 
-    fn get_user_transactions(&self, authority: usize) -> u64 {
-        self.user_transactions[authority]
+    fn get_num_user_transactions(&self, authority: usize) -> u64 {
+        self.num_user_transactions[authority]
     }
 
-    fn inc_user_transactions(&mut self, authority: usize) -> u64 {
-        self.user_transactions[authority] += 1;
-        self.user_transactions[authority]
+    fn inc_num_user_transactions(&mut self, authority: usize) -> u64 {
+        self.num_user_transactions[authority] += 1;
+        self.num_user_transactions[authority]
     }
 }
 
