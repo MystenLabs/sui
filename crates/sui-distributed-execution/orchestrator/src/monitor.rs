@@ -25,7 +25,7 @@ impl NodeMonitorHandle {
 
 pub struct Monitor {
     instance: Instance,
-    clients: Vec<Instance>,
+    _clients: Vec<Instance>,
     nodes: Vec<Instance>,
     ssh_manager: SshConnectionManager,
     dedicated_clients: bool,
@@ -42,7 +42,7 @@ impl Monitor {
     ) -> Self {
         Self {
             instance,
-            clients,
+            _clients: clients,
             nodes,
             ssh_manager,
             dedicated_clients,
