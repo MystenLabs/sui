@@ -1,27 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useIsFetching, useQueryClient } from '@tanstack/react-query';
+import { useMutationState } from '@tanstack/react-query';
 
+import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { useWalletStore } from './useWalletStore.js';
 
 /**
  * Retrieves the status for the initial wallet auto-connection process.
  */
-export function useAutoConnectionStatus(): 'idle' | 'attempted' {
-	const queryClient = useQueryClient();
-	const queryCache = queryClient.getQueryCache();
+export function useAutoConnectionStatus(): 'disabled' | 'idle' | 'attempted' {
+	const autoConnectEnabled = useWalletStore((state) => state.autoConnectEnabled);
 	const hasLastConnectedWallet = useWalletStore((state) => !!state.lastConnectedWalletName);
-
-	// Subscribe to isFetching to trigger a re-render when the query state changes:
-	useIsFetching({
-		queryKey: ['@mysten/dapp-kit', 'autoconnect'],
+	const [mutationState] = useMutationState({
+		filters: { mutationKey: walletMutationKeys.autoconnectWallet() },
 	});
 
-	const [queryState] = queryCache.findAll({ queryKey: ['@mysten/dapp-kit', 'autoconnect'] });
+	if (!autoConnectEnabled) {
+		return 'disabled';
+	}
 
-	if (queryState) {
-		return queryState.state.status === 'error' || queryState.state.status === 'success'
+	if (mutationState) {
+		return mutationState.status === 'error' || mutationState.status === 'success'
 			? 'attempted'
 			: 'idle';
 	}

@@ -28,6 +28,7 @@ export type WalletActions = {
 export type WalletStore = ReturnType<typeof createWalletStore>;
 
 export type StoreState = {
+	autoConnectEnabled: boolean;
 	wallets: WalletWithRequiredFeatures[];
 	accounts: readonly WalletAccount[];
 	currentWallet: WalletWithRequiredFeatures | null;
@@ -38,15 +39,22 @@ export type StoreState = {
 } & WalletActions;
 
 type WalletConfiguration = {
+	autoConnectEnabled: boolean;
 	wallets: WalletWithRequiredFeatures[];
 	storage: StateStorage;
 	storageKey: string;
 };
 
-export function createWalletStore({ wallets, storage, storageKey }: WalletConfiguration) {
+export function createWalletStore({
+	wallets,
+	storage,
+	storageKey,
+	autoConnectEnabled,
+}: WalletConfiguration) {
 	return createStore<StoreState>()(
 		persist(
 			(set, get) => ({
+				autoConnectEnabled,
 				wallets,
 				accounts: [],
 				currentWallet: null,
