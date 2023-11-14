@@ -504,13 +504,13 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         parameters: &BenchmarkParameters<T>,
     ) -> TestbedResult<MeasurementsCollection<T>> {
         // Select the instances to run.
-        let (clients, nodes, _) = self.select_instances(parameters)?;
+        let (_clients, nodes, _) = self.select_instances(parameters)?;
         let mut killed_nodes: Vec<Instance> = Vec::new();
 
         // Regularly scrape the client metrics.
         let metrics_commands = self
             .protocol_commands
-            .nodes_metrics_command(clients, parameters);
+            .nodes_metrics_command(nodes.clone(), parameters);
         for (instance, address) in &metrics_commands {
             display::config(&format!("Metrics address ({})", instance.main_ip), address);
         }

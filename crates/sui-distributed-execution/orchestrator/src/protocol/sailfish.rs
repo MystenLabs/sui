@@ -213,11 +213,12 @@ impl SailfishProtocol {
 }
 
 impl ProtocolMetrics<SailfishBenchmarkType> for SailfishProtocol {
-    const BENCHMARK_DURATION: &'static str = "benchmark_duration";
+    const BENCHMARK_DURATION: &'static str = sui_distributed_execution::metrics::BENCHMARK_DURATION;
     const TOTAL_TRANSACTIONS: &'static str = "latency_s_count";
     const LATENCY_BUCKETS: &'static str = sui_distributed_execution::metrics::LATENCY_S;
     const LATENCY_SUM: &'static str = "latency_s_sum";
-    const LATENCY_SQUARED_SUM: &'static str = "latency_squared_s";
+    const LATENCY_SQUARED_SUM: &'static str =
+        sui_distributed_execution::metrics::LATENCY_SQUARED_SUM;
 
     fn nodes_metrics_path<I>(
         &self,

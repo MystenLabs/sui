@@ -65,11 +65,12 @@ impl Monitor {
     ) -> MonitorResult<()> {
         // Select the instances to monitor.
         let instances: Vec<_> = if self.dedicated_clients {
-            self.clients
-                .iter()
-                .cloned()
-                .chain(self.nodes.iter().cloned())
-                .collect()
+            // self.clients
+            //     .iter()
+            //     .cloned()
+            //     .chain(self.nodes.iter().cloned())
+            //     .collect()
+            self.nodes.clone()
         } else {
             self.nodes.clone()
         };

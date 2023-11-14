@@ -13,6 +13,8 @@ pub const LATENCY_S: &str = "latency_s";
 const LATENCY_SEC_BUCKETS: &[f64] = &[0.01, 0.015, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1., 2.0];
 pub const START_TIME_S: &str = "start_time_s";
 pub const LAST_UPDATE_S: &str = "last_update_s";
+pub const BENCHMARK_DURATION: &str = "benchmark_duration";
+pub const LATENCY_SQUARED_SUM: &str = "latency_squared_s";
 
 #[derive(Clone)]
 pub struct Metrics {
@@ -25,6 +27,10 @@ pub struct Metrics {
     /// Time since last update (time since UNIX epoch in seconds). Technically, this is not needed
     /// as every sample update contains a timestamp.
     pub last_update_s: IntCounter,
+    /// Benchmark duration (in seconds).
+    pub benchmark_duration: IntCounter,
+    /// Sum of squared latencies (in seconds).
+    pub latency_squared_sum: IntCounter,
 }
 
 impl Metrics {
@@ -56,6 +62,18 @@ impl Metrics {
                 registry
             )
             .unwrap(),
+            benchmark_duration: register_int_counter_with_registry!(
+                BENCHMARK_DURATION,
+                "Benchmark duration (in seconds)",
+                registry
+            )
+            .unwrap(),
+            latency_squared_sum: register_int_counter_with_registry!(
+                LATENCY_SQUARED_SUM,
+                "Sum of squared latencies",
+                registry
+            )
+            .unwrap(),
         }
     }
 
@@ -78,14 +96,16 @@ impl Metrics {
     pub fn register_transaction(&self, tx_submission_timestamp: f64, workload: &str) {
         let now = Self::now();
 
-        // Record last metrics update.
+        // Record last metrics updates.
         self.register_last_update(now);
+        self.update_benchmark_duration(now);
 
         // Update latency metrics.
         let elapsed = now.as_secs_f64() - tx_submission_timestamp;
         self.latency_s
             .with_label_values(&[workload])
             .observe(elapsed);
+        self.latency_squared_sum.inc_by((elapsed * elapsed) as u64);
     }
 
     /// Register the time since the last update. Must be called periodically. The parameter `now`
@@ -94,6 +114,16 @@ impl Metrics {
         let last_update = self.last_update_s.get();
         if let Some(delta) = now.as_secs().checked_sub(last_update) {
             self.last_update_s.inc_by(delta);
+        }
+    }
+
+    /// Update the benchmark duration. Must be called periodically. The parameter `now` is the time
+    /// since the UNIX epoch in seconds.
+    fn update_benchmark_duration(&self, now: Duration) {
+        let start_time = self.start_time_s.get();
+        let benchmark_duration = now.as_secs().checked_sub(start_time).unwrap_or_default();
+        if let Some(delta) = benchmark_duration.checked_sub(self.benchmark_duration.get()) {
+            self.benchmark_duration.inc_by(delta);
         }
     }
 }
