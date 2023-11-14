@@ -3,13 +3,13 @@
 
 use diesel::backend::Backend;
 use sui_indexer::{
-    schema_v2::{checkpoints, epochs, objects, transactions},
+    schema_v2::{checkpoints, epochs, events, objects, transactions},
     types_v2::OwnerType,
 };
 
 use crate::{
     error::Error,
-    types::{object::ObjectFilter, transaction_block::TransactionBlockFilter},
+    types::{event::EventFilter, object::ObjectFilter, transaction_block::TransactionBlockFilter},
 };
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
@@ -72,6 +72,12 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
+    fn multi_get_events(
+        cursor: Option<(i64, i64)>,
+        descending_order: bool,
+        limit: i64,
+        filter: Option<EventFilter>,
+    ) -> Result<events::BoxedQuery<'static, DB>, Error>;
 }
 
 /// The struct returned for query.explain()

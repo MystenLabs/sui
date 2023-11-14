@@ -52,10 +52,6 @@ impl ScalarType for SuiAddress {
 }
 
 impl SuiAddress {
-    pub fn into_array(self) -> [u8; SUI_ADDRESS_LENGTH] {
-        self.0
-    }
-
     pub fn from_array(arr: [u8; SUI_ADDRESS_LENGTH]) -> Self {
         SuiAddress(arr)
     }
@@ -155,12 +151,6 @@ mod tests {
     fn test_to_value() {
         let value = ScalarType::to_value(&SUI_ADDRESS);
         assert_eq!(value, Value::String(STR_ADDRESS.to_string()));
-    }
-
-    #[test]
-    fn test_into_array() {
-        let arr = SUI_ADDRESS.into_array();
-        assert_eq!(arr, ARR_ADDRESS);
     }
 
     #[test]
