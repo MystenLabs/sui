@@ -24,7 +24,7 @@ use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::gas_coin::GAS;
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_SUI};
 use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
@@ -219,7 +219,9 @@ impl CoinReadApiServer for CoinReadApi {
         with_tracing!(async move {
             let coin_struct = parse_to_struct_tag(&coin_type)?;
             Ok(if GAS::is_gas(&coin_struct) {
-                Supply { value: 0 }
+                Supply {
+                    value: TOTAL_SUPPLY_SUI,
+                }
             } else {
                 let treasury_cap_object = self
                     .internal
@@ -423,7 +425,7 @@ mod tests {
     use sui_types::object::Object;
     use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
-    use typed_store_error::TypedStoreError;
+    use typed_store::TypedStoreError;
 
     mock! {
         pub KeyValueStore {}
