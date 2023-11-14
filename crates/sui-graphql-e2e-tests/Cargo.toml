@@ -11,7 +11,6 @@ edition = "2021"
 datatest-stable.workspace = true
 sui-graphql-rpc.workspace = true
 sui-transactional-test-runner.workspace = true
-tokio.workspace = true
 
 [[test]]
 name = "tests"
