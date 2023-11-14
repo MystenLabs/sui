@@ -14,7 +14,7 @@ use crate::{
 use anyhow::{ensure, Result};
 use colored::Colorize;
 use move_abigen::{Abigen, AbigenOptions};
-use move_binary_format::file_format::{CompiledModule, CompiledScript};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_bytecode_utils::Modules;
 use move_command_line_common::{
@@ -25,9 +25,7 @@ use move_command_line_common::{
     },
 };
 use move_compiler::{
-    compiled_unit::{
-        self, AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule, NamedCompiledScript,
-    },
+    compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     diagnostics::FilesSourceText,
     shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
     Compiler,
@@ -232,44 +230,24 @@ impl OnDiskCompiledPackage {
             bytecode_path_str,
             package_name
         );
-        match CompiledScript::deserialize(&bytecode_bytes) {
-            Ok(script) => {
-                let name = FileName::from(
-                    bytecode_path
-                        .file_stem()
-                        .unwrap()
-                        .to_string_lossy()
-                        .to_string(),
-                );
-                let unit = CompiledUnit::Script(NamedCompiledScript {
-                    package_name: package_name_opt,
-                    name,
-                    script,
-                    source_map,
-                });
-                Ok(CompiledUnitWithSource { unit, source_path })
-            }
-            Err(_) => {
-                let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
-                let (address_bytes, module_name) = {
-                    let id = module.self_id();
-                    let parsed_addr = NumericalAddress::new(
-                        id.address().into_bytes(),
-                        move_compiler::shared::NumberFormat::Hex,
-                    );
-                    let module_name = FileName::from(id.name().as_str());
-                    (parsed_addr, module_name)
-                };
-                let unit = CompiledUnit::Module(NamedCompiledModule {
-                    package_name: package_name_opt,
-                    address: address_bytes,
-                    name: module_name,
-                    module,
-                    source_map,
-                });
-                Ok(CompiledUnitWithSource { unit, source_path })
-            }
-        }
+        let module = CompiledModule::deserialize_with_defaults(&bytecode_bytes)?;
+        let (address_bytes, module_name) = {
+            let id = module.self_id();
+            let parsed_addr = NumericalAddress::new(
+                id.address().into_bytes(),
+                move_compiler::shared::NumberFormat::Hex,
+            );
+            let module_name = FileName::from(id.name().as_str());
+            (parsed_addr, module_name)
+        };
+        let unit = NamedCompiledModule {
+            package_name: package_name_opt,
+            address: address_bytes,
+            name: module_name,
+            module,
+            source_map,
+        };
+        Ok(CompiledUnitWithSource { unit, source_path })
     }
 
     /// Save `bytes` under `path_under` relative to the package on disk
@@ -307,10 +285,6 @@ impl OnDiskCompiledPackage {
         if try_exists(&module_path)? {
             compiled_unit_paths.push(module_path);
         }
-        let script_path = package_dir.join(CompiledPackageLayout::CompiledScripts.path());
-        if try_exists(&script_path)? {
-            compiled_unit_paths.push(script_path);
-        }
         find_filenames(&compiled_unit_paths, |path| {
             extension_equals(path, MOVE_COMPILED_EXTENSION)
         })
@@ -323,10 +297,7 @@ impl OnDiskCompiledPackage {
     ) -> Result<()> {
         let root_package = self.package.compiled_package_info.package_name;
         assert!(self.root_path.ends_with(root_package.as_str()));
-        let category_dir = match &compiled_unit.unit {
-            CompiledUnit::Script(_) => CompiledPackageLayout::CompiledScripts.path(),
-            CompiledUnit::Module(_) => CompiledPackageLayout::CompiledModules.path(),
-        };
+        let category_dir = CompiledPackageLayout::CompiledModules.path();
         let file_path = if root_package == package_name {
             PathBuf::new()
         } else {
@@ -334,10 +305,7 @@ impl OnDiskCompiledPackage {
                 .path()
                 .join(package_name.as_str())
         }
-        .join(match &compiled_unit.unit {
-            CompiledUnit::Script(named) => named.name.as_str(),
-            CompiledUnit::Module(named) => named.name.as_str(),
-        });
+        .join(compiled_unit.unit.name.as_str());
 
         self.save_under(
             category_dir
@@ -382,38 +350,25 @@ impl CompiledPackage {
 
     /// Returns compiled modules for this package and its transitive dependencies
     pub fn all_modules_map(&self) -> Modules {
-        Modules::new(
-            self.all_compiled_units()
-                .filter_map(|unit| match unit {
-                    CompiledUnit::Module(NamedCompiledModule { module, .. }) => Some(module),
-                    CompiledUnit::Script(_) => None,
-                })
-                .collect::<Vec<_>>(),
-        )
+        Modules::new(self.all_compiled_units().map(|unit| &unit.module))
     }
 
     pub fn root_modules_map(&self) -> Modules {
         Modules::new(
             self.root_compiled_units
                 .iter()
-                .filter_map(|unit| match &unit.unit {
-                    CompiledUnit::Module(NamedCompiledModule { module, .. }) => Some(module),
-                    CompiledUnit::Script(_) => None,
-                }),
+                .map(|unit| &unit.unit.module),
         )
     }
 
     /// `all_compiled_units_with_source` filtered over `CompiledUnit::Module`
     pub fn all_modules(&self) -> impl Iterator<Item = &CompiledUnitWithSource> {
         self.all_compiled_units_with_source()
-            .filter(|unit| matches!(unit.unit, CompiledUnit::Module(_)))
     }
 
     /// `root_compiled_units` filtered over `CompiledUnit::Module`
     pub fn root_modules(&self) -> impl Iterator<Item = &CompiledUnitWithSource> {
-        self.root_compiled_units
-            .iter()
-            .filter(|unit| matches!(unit.unit, CompiledUnit::Module(_)))
+        self.root_compiled_units.iter()
     }
 
     pub fn get_module_by_name(
@@ -427,40 +382,13 @@ impl CompiledPackage {
 
         self.deps_compiled_units
             .iter()
-            .filter(|(dep_package, unit)| {
-                dep_package.as_str() == package_name && matches!(unit.unit, CompiledUnit::Module(_))
-            })
+            .filter(|(dep_package, _)| dep_package.as_str() == package_name)
             .map(|(_, unit)| unit)
             .find(|unit| unit.unit.name().as_str() == module_name)
             .ok_or_else(|| {
                 anyhow::format_err!(
                     "Unable to find module with name '{}' in package {}",
                     module_name,
-                    self.compiled_package_info.package_name
-                )
-            })
-    }
-
-    pub fn get_script_by_name(
-        &self,
-        package_name: &str,
-        script_name: &str,
-    ) -> Result<&CompiledUnitWithSource> {
-        if self.compiled_package_info.package_name.as_str() == package_name {
-            return self.get_script_by_name_from_root(script_name);
-        }
-
-        self.deps_compiled_units
-            .iter()
-            .filter(|(dep_package, unit)| {
-                dep_package.as_str() == package_name && matches!(unit.unit, CompiledUnit::Script(_))
-            })
-            .map(|(_, unit)| unit)
-            .find(|unit| unit.unit.name().as_str() == script_name)
-            .ok_or_else(|| {
-                anyhow::format_err!(
-                    "Unable to find script with name '{}' in package {}",
-                    script_name,
                     self.compiled_package_info.package_name
                 )
             })
@@ -479,27 +407,6 @@ impl CompiledPackage {
                     self.compiled_package_info.package_name
                 )
             })
-    }
-
-    pub fn get_script_by_name_from_root(
-        &self,
-        script_name: &str,
-    ) -> Result<&CompiledUnitWithSource> {
-        self.scripts()
-            .find(|unit| unit.unit.name().as_str() == script_name)
-            .ok_or_else(|| {
-                anyhow::format_err!(
-                    "Unable to find script with name '{}' in package {}",
-                    script_name,
-                    self.compiled_package_info.package_name
-                )
-            })
-    }
-
-    pub fn scripts(&self) -> impl Iterator<Item = &CompiledUnitWithSource> {
-        self.root_compiled_units
-            .iter()
-            .filter(|unit| matches!(unit.unit, CompiledUnit::Script(_)))
     }
 
     #[allow(unused)]
@@ -583,10 +490,7 @@ impl CompiledPackage {
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
             let source_path = PathBuf::from(file_map[&annot_unit.loc().file_hash()].0.as_str());
-            let package_name = match &annot_unit {
-                compiled_unit::CompiledUnitEnum::Module(m) => m.named_module.package_name.unwrap(),
-                compiled_unit::CompiledUnitEnum::Script(s) => s.named_script.package_name.unwrap(),
-            };
+            let package_name = annot_unit.named_module.package_name.unwrap();
             let unit = CompiledUnitWithSource {
                 unit: annot_unit.into_compiled_unit(),
                 source_path,
@@ -653,17 +557,12 @@ impl CompiledPackage {
         // A mapping of (lowercase_name => [info_for_each_occurence]
         let mut insensitive_mapping = BTreeMap::new();
         for compiled_unit in &self.root_compiled_units {
-            let is_module = matches!(&compiled_unit.unit, CompiledUnit::Module(_));
-            let name = match &compiled_unit.unit {
-                CompiledUnit::Script(named) => named.name.as_str(),
-                CompiledUnit::Module(named) => named.name.as_str(),
-            };
+            let name = compiled_unit.unit.name.as_str();
             let entry = insensitive_mapping
                 .entry(name.to_lowercase())
                 .or_insert_with(Vec::new);
             entry.push((
                 name,
-                is_module,
                 compiled_unit.source_path.to_string_lossy().to_string(),
             ));
         }
@@ -673,10 +572,9 @@ impl CompiledPackage {
                 if occurence_infos.len() > 1 {
                     let name_conflict_error_msg = occurence_infos
                         .into_iter()
-                        .map(|(name, is_module, fpath)| {
+                        .map(|(name,  fpath)| {
                                 format!(
-                                    "\t{} '{}' at path '{}'",
-                                    if is_module { "Module" } else { "Script" },
+                                    "\tModule '{}' at path '{}'",
                                     name,
                                     fpath
                                 )
@@ -774,15 +672,11 @@ impl CompiledPackage {
     ) -> Vec<(String, Vec<u8>)> {
         let bytecode_map: BTreeMap<_, _> = compiled_units
             .iter()
-            .map(|unit| match &unit.unit {
-                CompiledUnit::Script(script) => (
-                    script.name.to_string(),
+            .map(|unit| {
+                (
+                    unit.unit.name.to_string(),
                     unit.unit.serialize(bytecode_version),
-                ),
-                CompiledUnit::Module(module) => (
-                    module.name.to_string(),
-                    unit.unit.serialize(bytecode_version),
-                ),
+                )
             })
             .collect();
         let abi_options = AbigenOptions {

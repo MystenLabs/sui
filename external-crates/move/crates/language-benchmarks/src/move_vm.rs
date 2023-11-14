@@ -4,7 +4,7 @@
 
 use criterion::{measurement::Measurement, Criterion};
 use move_binary_format::CompiledModule;
-use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler};
+use move_compiler::Compiler;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -46,12 +46,7 @@ fn compile_modules() -> Vec<CompiledModule> {
     .expect("Error compiling...");
     compiled_units
         .into_iter()
-        .map(|unit| match unit {
-            AnnotatedCompiledUnit::Module(annot_unit) => annot_unit.named_module.module,
-            AnnotatedCompiledUnit::Script(_) => {
-                panic!("Expected a module but received a script")
-            }
-        })
+        .map(|annot_unit| annot_unit.named_module.module)
         .collect()
 }
 

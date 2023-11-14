@@ -95,7 +95,7 @@ impl<'a> Context<'a> {
             return;
         }
 
-        let current = self.current_node.clone().unwrap();
+        let current = self.current_node.unwrap();
         if mident == current {
             // do not add the module itself as a neighbor
             return;
@@ -105,8 +105,8 @@ impl<'a> Context<'a> {
             DepType::Use => Neighbor_::Dependency,
             DepType::Friend => Neighbor_::Friend,
         };
-        let current_neighbors = self.neighbors_by_node.entry(current.clone()).or_default();
-        let current_used_addresses = self.addresses_by_node.entry(current.clone()).or_default();
+        let current_neighbors = self.neighbors_by_node.entry(current).or_default();
+        let current_used_addresses = self.addresses_by_node.entry(current).or_default();
         current_neighbors.remove(&mident);
         current_neighbors.add(mident, sp(loc, neighbor_)).unwrap();
         current_used_addresses.insert(mident.value.address);
@@ -137,7 +137,7 @@ impl<'a> Context<'a> {
 
     fn add_address_usage(&mut self, address: Address) {
         self.addresses_by_node
-            .entry(self.current_node.clone().unwrap())
+            .entry(self.current_node.unwrap())
             .or_default()
             .insert(address);
     }
