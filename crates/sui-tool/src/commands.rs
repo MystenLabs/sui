@@ -512,7 +512,13 @@ impl ToolCommand {
                         }
                     });
 
-                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or(ObjectStoreType::S3);
+                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or({
+                    if formal {
+                        ObjectStoreType::GCS
+                    } else {
+                        ObjectStoreType::S3
+                    }
+                });
 
                 // index staging is not yet supported for formal snapshots
                 let skip_indexes = skip_indexes || formal;
