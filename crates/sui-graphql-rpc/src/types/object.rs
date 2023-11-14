@@ -13,7 +13,7 @@ use super::dynamic_field::DynamicField;
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::{
-    balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
+    balance::Balance, coin::Coin, owner::Owner, stake::StakedSui, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
@@ -194,14 +194,14 @@ impl Object {
     }
 
     /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
-    pub async fn stake_connection(
+    pub async fn staked_sui_connection(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, Stake>>, Error> {
+    ) -> Result<Option<Connection<String, StakedSui>>, Error> {
         ctx.data_unchecked::<PgManager>()
             .fetch_staked_sui(self.address, first, after, last, before)
             .await

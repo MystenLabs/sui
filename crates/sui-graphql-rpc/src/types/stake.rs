@@ -25,7 +25,7 @@ pub(crate) enum StakedSuiDowncastError {
 }
 
 #[derive(Clone)]
-pub(crate) struct Stake {
+pub(crate) struct StakedSui {
     /// Representation of this StakedSui as a generic Move Object.
     pub super_: MoveObject,
 
@@ -35,7 +35,7 @@ pub(crate) struct Stake {
 }
 
 #[Object]
-impl Stake {
+impl StakedSui {
     /// A stake can be pending, active, or unstaked
     async fn status(&self, ctx: &Context<'_>) -> Result<StakeStatus, Error> {
         Ok(match self.rpc_stake(ctx).await?.status {
@@ -92,7 +92,7 @@ impl Stake {
     }
 }
 
-impl Stake {
+impl StakedSui {
     /// The JSON-RPC representation of a StakedSui so that we can "cheat" to implement fields that
     /// are not yet implemented directly for GraphQL.
     ///
@@ -104,7 +104,7 @@ impl Stake {
     }
 }
 
-impl TryFrom<&MoveObject> for Stake {
+impl TryFrom<&MoveObject> for StakedSui {
     type Error = StakedSuiDowncastError;
 
     fn try_from(move_object: &MoveObject) -> Result<Self, Self::Error> {

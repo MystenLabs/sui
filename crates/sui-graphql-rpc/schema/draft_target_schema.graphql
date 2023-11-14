@@ -407,7 +407,7 @@ interface IOwner {
     type: String,
   ): CoinConnection
 
-  stakeConnection(
+  stakedSuiConnection(
     first: Int,
     after: String,
     last: Int,
@@ -1292,8 +1292,8 @@ type AddressMetricEdge {
 }
 
 # StakeConnection
-type StakeConnection {
-  edges: [StakeEdge!]!
+type StakedSuiConnection {
+  edges: [StakedSuiEdge!]!
   pageInfo: PageInfo!
 }
 

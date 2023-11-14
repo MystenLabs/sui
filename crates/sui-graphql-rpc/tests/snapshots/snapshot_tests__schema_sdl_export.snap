@@ -21,7 +21,7 @@ type Address implements ObjectOwner {
 	"""
 	The `0x3::staking_pool::StakedSui` objects owned by the given address.
 	"""
-	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
@@ -560,7 +560,7 @@ type MoveObject {
 	"""
 	Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
 	"""
-	asStake: Stake
+	asStakedSui: StakedSui
 }
 
 type MovePackage {
@@ -724,7 +724,7 @@ type Object implements ObjectOwner {
 	"""
 	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
-	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	"""
 	The domain that a user address has explicitly configured as their default domain
 	"""
@@ -795,7 +795,7 @@ interface ObjectOwner {
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
-	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
@@ -816,7 +816,7 @@ type Owner implements ObjectOwner {
 	"""
 	The stake objects for the given address
 	"""
-	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
@@ -971,71 +971,6 @@ type ServiceConfig {
 	maxQueryPayloadSize: Int!
 }
 
-type Stake {
-	"""
-	A stake can be pending, active, or unstaked
-	"""
-	status: StakeStatus!
-	"""
-	The epoch at which this stake became active
-	"""
-	activeEpoch: Epoch
-	"""
-	The epoch at which this object was requested to join a stake pool
-	"""
-	requestEpoch: Epoch
-	"""
-	The SUI that was initially staked.
-	"""
-	principal: BigInt
-	"""
-	The estimated reward for this stake object, calculated as:
-	
-	principal * (initial_stake_rate / current_stake_rate - 1.0)
-	
-	Or 0, if this value is negative, where:
-	
-	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
-	- `current_stake_rate` is the stake rate in the current epoch.
-	
-	This value is only available if the stake is active.
-	"""
-	estimatedReward: BigInt
-	"""
-	The corresponding `0x3::staking_pool::StakedSui` Move object.
-	"""
-	asMoveObject: MoveObject!
-}
-
-type StakeConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [StakeEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [Stake!]!
-}
-
-"""
-An edge in a connection.
-"""
-type StakeEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: Stake!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
-}
-
 enum StakeStatus {
 	"""
 	The stake object is active in a staking pool and it is generating rewards
@@ -1079,6 +1014,71 @@ type StakeSubsidy {
 	period, expressed in basis points.
 	"""
 	decreaseRate: Int
+}
+
+type StakedSui {
+	"""
+	A stake can be pending, active, or unstaked
+	"""
+	status: StakeStatus!
+	"""
+	The epoch at which this stake became active
+	"""
+	activeEpoch: Epoch
+	"""
+	The epoch at which this object was requested to join a stake pool
+	"""
+	requestEpoch: Epoch
+	"""
+	The SUI that was initially staked.
+	"""
+	principal: BigInt
+	"""
+	The estimated reward for this stake object, calculated as:
+	
+	principal * (initial_stake_rate / current_stake_rate - 1.0)
+	
+	Or 0, if this value is negative, where:
+	
+	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
+	- `current_stake_rate` is the stake rate in the current epoch.
+	
+	This value is only available if the stake is active.
+	"""
+	estimatedReward: BigInt
+	"""
+	The corresponding `0x3::staking_pool::StakedSui` Move object.
+	"""
+	asMoveObject: MoveObject!
+}
+
+type StakedSuiConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [StakedSuiEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [StakedSui!]!
+}
+
+"""
+An edge in a connection.
+"""
+type StakedSuiEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: StakedSui!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
