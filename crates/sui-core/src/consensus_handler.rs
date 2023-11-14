@@ -26,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use sui_macros::fail_point_if;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::digests::ConsensusCommitDigest;
@@ -450,6 +451,8 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                 all_transactions.push(sequenced_transaction);
             }
         }
+
+        fail_point_if!("cp_execution_nondeterminism", || { all_transactions.pop() });
 
         let transactions_to_schedule = self
             .epoch_store

@@ -4,7 +4,6 @@
 use std::collections::BTreeSet;
 use std::io::Read;
 use std::os::unix::prelude::FileExt;
-use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
