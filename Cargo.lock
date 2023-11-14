@@ -10766,6 +10766,7 @@ dependencies = [
  "datatest-stable",
  "sui-graphql-rpc",
  "sui-transactional-test-runner",
+ "tokio",
  "workspace-hack",
 ]
 
