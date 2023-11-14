@@ -58,6 +58,10 @@ export function getClient(): SuiClient {
 export async function setup() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
+	return setupWithFundedAddress(keypair, address);
+}
+
+export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: string) {
 	const client = getClient();
 	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
