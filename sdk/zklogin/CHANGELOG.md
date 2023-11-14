@@ -1,5 +1,17 @@
 # @mysten/zklogin
 
+## 0.3.5
+
+### Patch Changes
+
+- 28c2c3330: Use the same issuer string in address derivation for the two google's iss values
+- Updated dependencies [28c2c3330]
+- Updated dependencies [43444c58f]
+- Updated dependencies [8d1e74e52]
+- Updated dependencies [093554a0d]
+- Updated dependencies [3718a230b]
+  - @mysten/sui.js@0.46.0
+
 ## 0.3.4
 
 ### Patch Changes

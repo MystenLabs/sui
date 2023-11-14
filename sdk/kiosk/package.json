@@ -2,7 +2,7 @@
 	"name": "@mysten/kiosk",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Kiosk library",
-	"version": "0.7.8",
+	"version": "0.7.9",
 	"license": "Apache-2.0",
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
