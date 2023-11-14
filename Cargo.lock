@@ -10764,8 +10764,10 @@ name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "datatest-stable",
+ "msim",
  "sui-graphql-rpc",
  "sui-transactional-test-runner",
+ "tokio",
  "workspace-hack",
 ]
 

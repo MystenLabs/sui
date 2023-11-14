@@ -11,6 +11,7 @@ edition = "2021"
 datatest-stable.workspace = true
 sui-graphql-rpc.workspace = true
 sui-transactional-test-runner.workspace = true
+tokio.workspace = true
 
 [[test]]
 name = "tests"
@@ -21,3 +22,6 @@ workspace-hack.workspace = true
 
 [features]
 pg_integration = []
+
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true

@@ -12,7 +12,9 @@ pub const TEST_DIR: &str = "tests";
 
 datatest_stable::harness!(run_test, TEST_DIR, r".*\.(mvir|move)$");
 
-pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+#[cfg_attr(not(msim), tokio::main)]
+#[cfg_attr(msim, msim::main)]
+async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if cfg!(feature = "pg_integration") {
         run_test_impl::<SuiTestAdapter>(path, Some(&*PRE_COMPILED)).await?;
     }
