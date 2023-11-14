@@ -159,6 +159,10 @@ mod zk_login {
     use crate::zk_login_util::get_zklogin_inputs;
 
     use super::*;
+    pub static DEFAULT_ADDRESS_SEED: &str =
+        "20794788559620669596206457022966176986688727876128223628113916380927502737911";
+    pub static SHORT_ADDRESS_SEED: &str =
+        "380704556853533152350240698167704405529973457670972223618755249929828551006";
 
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {
@@ -183,7 +187,7 @@ mod zk_login {
 
     fn get_inputs_with_bad_address_seed() -> ZkLoginInputs {
         thread_local! {
-        static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"17276311605393076686048412951904952585208929623427027497902331765285829154985\",\"2195957390349729412627479867125563520760023859523358729791332629632025124364\",\"1\"],\"b\":[[\"10285059021604767951039627893758482248204478992077021270802057708215366770814\",\"20086937595807139308592304218494658586282197458549968652049579308384943311509\"],[\"7481123765095657256931104563876569626157448050870256177668773471703520958615\",\"11912752790863530118410797223176516777328266521602785233083571774104055633375\"],[\"1\",\"0\"]],\"c\":[\"15742763887654796666500488588763616323599882100448686869458326409877111249163\",\"6112916537574993759490787691149241262893771114597679488354854987586060572876\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "380704556853533152350240698167704405529973457670972223618755249929828551006").unwrap(); }
+        static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"17276311605393076686048412951904952585208929623427027497902331765285829154985\",\"2195957390349729412627479867125563520760023859523358729791332629632025124364\",\"1\"],\"b\":[[\"10285059021604767951039627893758482248204478992077021270802057708215366770814\",\"20086937595807139308592304218494658586282197458549968652049579308384943311509\"],[\"7481123765095657256931104563876569626157448050870256177668773471703520958615\",\"11912752790863530118410797223176516777328266521602785233083571774104055633375\"],[\"1\",\"0\"]],\"c\":[\"15742763887654796666500488588763616323599882100448686869458326409877111249163\",\"6112916537574993759490787691149241262893771114597679488354854987586060572876\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", SHORT_ADDRESS_SEED).unwrap(); }
         ZKLOGIN_INPUTS.with(|a| a.clone())
     }
 
@@ -209,15 +213,6 @@ mod zk_login {
         USER_ADDRESS.with(|a| *a)
     }
 
-    pub fn make_zklogin_tx(legacy: bool) -> (SuiAddress, Transaction, GenericSignature) {
-        let data = if legacy {
-            make_transaction_data(get_legacy_zklogin_user_address())
-        } else {
-            make_transaction_data(get_zklogin_user_address())
-        };
-        sign_zklogin_tx(data, legacy)
-    }
-
     pub fn sign_zklogin_personal_msg(data: PersonalMessage) -> (SuiAddress, GenericSignature) {
         let inputs = get_zklogin_inputs();
         let msg = IntentMessage::new(Intent::personal_message(), data);
@@ -232,9 +227,8 @@ mod zk_login {
         data: TransactionData,
         legacy: bool,
     ) -> (SuiAddress, Transaction, GenericSignature) {
-        // Sign the user transaction with the user's ephemeral key.
         let tx = Transaction::from_data_and_signer(
-            data,
+            data.clone(),
             Intent::sui_transaction(),
             vec![&get_zklogin_user_key()],
         );
@@ -261,49 +255,51 @@ mod zk_login {
             Intent::sui_transaction(),
             vec![authenticator.clone()],
         ));
-        let addr = if legacy {
-            get_legacy_zklogin_user_address()
-        } else {
-            get_zklogin_user_address()
-        };
-        (addr, tx, authenticator)
+        (data.execution_parts().1, tx, authenticator)
+    }
+
+    pub fn make_zklogin_tx(
+        address: SuiAddress,
+        legacy: bool,
+    ) -> (SuiAddress, Transaction, GenericSignature) {
+        let data = make_transaction_data(address);
+        sign_zklogin_tx(data, legacy)
+    }
+
+    pub fn keys() -> Vec<SuiKeyPair> {
+        let mut seed = StdRng::from_seed([0; 32]);
+        let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1);
+        let kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut seed).1);
+        let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut seed).1);
+        vec![kp1, kp2, kp3]
+    }
+
+    pub fn make_upgraded_multisig_tx() -> Transaction {
+        let keys = keys();
+        let pk1 = &keys[0].public();
+        let pk2 = &keys[1].public();
+        let pk3 = &keys[2].public();
+
+        let multisig_pk = MultiSigPublicKey::new(
+            vec![pk1.clone(), pk2.clone(), pk3.clone()],
+            vec![1, 1, 1],
+            2,
+        )
+        .unwrap();
+        let addr = SuiAddress::from(&multisig_pk);
+        let tx = make_transaction(addr, &keys[0], Intent::sui_transaction());
+
+        let msg = IntentMessage::new(Intent::sui_transaction(), tx.transaction_data().clone());
+        let sig1 = Signature::new_secure(&msg, &keys[0]).into();
+        let sig2 = Signature::new_secure(&msg, &keys[1]).into();
+
+        // Any 2 of 3 signatures verifies ok.
+        let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
+        Transaction::new(SenderSignedData::new(
+            tx.transaction_data().clone(),
+            Intent::sui_transaction(),
+            vec![GenericSignature::MultiSig(multi_sig1)],
+        ))
     }
 }
-
-pub fn keys() -> Vec<SuiKeyPair> {
-    let mut seed = StdRng::from_seed([0; 32]);
-    let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut seed).1);
-    let kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut seed).1);
-    let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut seed).1);
-    vec![kp1, kp2, kp3]
-}
-
-pub fn make_upgraded_multisig_tx() -> Transaction {
-    let keys = keys();
-    let pk1 = &keys[0].public();
-    let pk2 = &keys[1].public();
-    let pk3 = &keys[2].public();
-
-    let multisig_pk = MultiSigPublicKey::new(
-        vec![pk1.clone(), pk2.clone(), pk3.clone()],
-        vec![1, 1, 1],
-        2,
-    )
-    .unwrap();
-    let addr = SuiAddress::from(&multisig_pk);
-    let tx = make_transaction(addr, &keys[0], Intent::sui_transaction());
-
-    let msg = IntentMessage::new(Intent::sui_transaction(), tx.transaction_data().clone());
-    let sig1 = Signature::new_secure(&msg, &keys[0]);
-    let sig2 = Signature::new_secure(&msg, &keys[1]);
-
-    // Any 2 of 3 signatures verifies ok.
-    let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
-    Transaction::new(SenderSignedData::new(
-        tx.transaction_data().clone(),
-        Intent::sui_transaction(),
-        vec![GenericSignature::MultiSig(multi_sig1)],
-    ))
-}
-
 pub use zk_login::*;

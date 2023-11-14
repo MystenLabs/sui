@@ -226,6 +226,10 @@ CompressedSignature:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 64
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: GenericSignature
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -735,6 +739,10 @@ PublicKey:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 33
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: ZkLoginPublicIdentifier
 SenderSignedData:
   NEWTYPESTRUCT:
     SEQ:
@@ -1019,4 +1027,7 @@ UpgradeInfo:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+ZkLoginPublicIdentifier:
+  NEWTYPESTRUCT:
+    SEQ: U8
 
