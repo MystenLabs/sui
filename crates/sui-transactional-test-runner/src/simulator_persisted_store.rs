@@ -95,7 +95,6 @@ impl PersistedStore {
             read_only,
         };
         res.init_with_genesis(genesis);
-        res.sync_read_only();
 
         res
     }
@@ -111,51 +110,6 @@ impl PersistedStore {
                 MetricConf::with_sampling(samp),
             ),
         }
-    }
-
-    // TODO: remove
-    pub fn sync_read_only(&self) {
-        // Todo: add macro utility for this in typed store derive
-        self.read_only
-            .checkpoint_digest_to_sequence_number
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .checkpoints
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .effects
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .epoch_to_committee
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .events
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .events_tx_digest_index
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .live_objects
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .objects
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .transactions
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.read_only
-            .checkpoint_contents
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
     }
 
     pub fn new_sim_replica_with_protocol_version_and_accounts<R>(
