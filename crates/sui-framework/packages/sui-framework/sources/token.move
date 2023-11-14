@@ -19,7 +19,7 @@
 /// The Token system allows for fine-grained control over the actions performed
 /// on the token. And hence it is highly suitable for applications that require
 /// control over the currency which a simple open-loop system can't provide.
-module regulated_token::token {
+module sui::token {
     use std::vector;
     use std::string::{Self, String};
     use std::option::{Self, Option};
@@ -46,9 +46,11 @@ module regulated_token::token {
     /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
     const ECantConsumeBalance: u64 = 5;
     /// Trying to perform an owner-gated action without being the owner.
-    const ENotOwner: u64 = 6;
     /// Rule is trying to access a missing config (with type).
     const ENoConfig: u64 = 7;
+    /// Using `confirm_request_mut` without `spent_balance`. Immutable version
+    /// of the function must be used instead.
+    const EUseImmutableConfirm: u64 = 8;
 
     // === Protected Actions ===
 
@@ -67,12 +69,6 @@ module regulated_token::token {
         id: UID,
         /// The Balance of the `Token`.
         balance: Balance<T>,
-        /// The owner of the `Token`.
-        /// Defaults to `tx_context::sender`, however, in the `transfer` action
-        /// it is changed to the "recipient". This field is future-proofing for
-        /// the "Transfer To Object" (TTO) feature, making it impossible to send
-        /// a `Token` to an object and do arbitrary transfers through it.
-        owner: address,
     }
 
     /// A Capability that manages a single `TokenPolicy` specified in the `for`
@@ -81,7 +77,7 @@ module regulated_token::token {
 
     /// `TokenPolicy` represents a set of rules that define what actions can be
     /// performed on a `Token` and which `Rules` must be satisfied for the
-    /// action for the transaction to succeeed.
+    /// action to succeed.
     ///
     /// - For the sake of availability, `TokenPolicy` is a `key`-only object.
     /// - Each `TokenPolicy` is managed by a matching `TokenPolicyCap`.
@@ -104,7 +100,7 @@ module regulated_token::token {
     }
 
     /// A request to perform an "Action" on a token. Stores the information
-    /// about the performed action and must be consumed by the `confirm_request`
+    /// about the action to be performed and must be consumed by the `confirm_request`
     /// or `confirm_request_mut` functions when the Rules are satisfied.
     struct ActionRequest<phantom T> {
         /// Name of the Action to look up in the Policy. Name can be one of the
@@ -127,7 +123,7 @@ module regulated_token::token {
     }
 
     /// Dynamic field key for the `TokenPolicy` to store the `Config` for a
-    /// specific `Rule` for an action. There can be only one configuration per
+    /// specific action `Rule`. There can be only one configuration per
     /// `Rule` per `TokenPolicy`.
     struct RuleKey<phantom T> has store, copy, drop { is_protected: bool }
 
@@ -153,6 +149,7 @@ module regulated_token::token {
         (policy, cap)
     }
 
+    #[lint_allow(share_owned)]
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {
@@ -164,18 +161,14 @@ module regulated_token::token {
     /// Transfer a `Token` to a `recipient`. Creates an `ActionRequest` for the
     /// "transfer" action. The `ActionRequest` contains the `recipient` field
     /// to be used in verification.
-    ///
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun transfer<T>(
         t: Token<T>, recipient: address, ctx: &mut TxContext
     ): ActionRequest<T> {
-        assert!(t.owner == tx_context::sender(ctx), ENotOwner);
         let amount = balance::value(&t.balance);
-        t.owner = recipient;
         transfer::transfer(t, recipient);
 
         new_request(
-            string::utf8(TRANSFER),
+            transfer_action(),
             amount,
             option::some(recipient),
             option::none(),
@@ -189,15 +182,12 @@ module regulated_token::token {
     ///
     /// Spend action requires `confirm_request_mut` to be called to confirm the
     /// request and join the spent balance with the `TokenPolicy.spent_balance`.
-    ///
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
-        let Token { id, balance, owner } = t;
-        assert!(owner == tx_context::sender(ctx), ENotOwner);
+        let Token { id, balance } = t;
         object::delete(id);
 
         new_request(
-            string::utf8(SPEND),
+            spend_action(),
             balance::value(&balance),
             option::none(),
             option::some(balance),
@@ -207,20 +197,17 @@ module regulated_token::token {
 
     /// Convert `Token` into an open `Coin`. Creates an `ActionRequest` for the
     /// "to_coin" action.
-    ///
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun to_coin<T>(
         t: Token<T>, ctx: &mut TxContext
     ): (Coin<T>, ActionRequest<T>) {
-        let Token { id, balance, owner } = t;
+        let Token { id, balance } = t;
         let amount = balance::value(&balance);
-        assert!(owner == tx_context::sender(ctx), ENotOwner);
         object::delete(id);
 
         (
             coin::from_balance(balance, ctx),
             new_request(
-                string::utf8(TO_COIN),
+                to_coin_action(),
                 amount,
                 option::none(),
                 option::none(),
@@ -230,21 +217,20 @@ module regulated_token::token {
     }
 
     /// Convert an open `Coin` into a `Token`. Creates an `ActionRequest` for
-    /// the "from_coin" action. The owner of the `Token` is set to the sender.
+    /// the "from_coin" action.
     public fun from_coin<T>(
         coin: Coin<T>, ctx: &mut TxContext
     ): (Token<T>, ActionRequest<T>) {
         let amount = coin::value(&coin);
         let token = Token {
             id: object::new(ctx),
-            owner: tx_context::sender(ctx),
             balance: coin::into_balance(coin)
         };
 
         (
             token,
             new_request(
-                string::utf8(FROM_COIN),
+                from_coin_action(),
                 amount,
                 option::none(),
                 option::none(),
@@ -256,15 +242,13 @@ module regulated_token::token {
     // === Public Actions ===
 
     /// Join two `Token`s into one, always available.
-    /// Aborts if the `Token.owner` fields don't match.
     public fun join<T>(token: &mut Token<T>, another: Token<T>) {
-        let Token { id, balance, owner } = another;
-        assert!(token.owner == owner, ENotOwner);
+        let Token { id, balance } = another;
         balance::join(&mut token.balance, balance);
         object::delete(id);
     }
 
-    /// Split a `Token` with `amount`. The `Token.owner` is preserved.
+    /// Split a `Token` with `amount`.
     /// Aborts if the `Token.balance` is lower than `amount`.
     public fun split<T>(
         token: &mut Token<T>, amount: u64, ctx: &mut TxContext
@@ -273,7 +257,6 @@ module regulated_token::token {
         Token {
             id: object::new(ctx),
             balance: balance::split(&mut token.balance, amount),
-            owner: token.owner
         }
     }
 
@@ -282,23 +265,21 @@ module regulated_token::token {
         Token {
             id: object::new(ctx),
             balance: balance::zero(),
-            owner: tx_context::sender(ctx)
         }
     }
 
     /// Destroy an empty `Token`, fails if the balance is non-zero.
-    /// Aborts if the `Token.balance` is not zero. Ignores the `Token.owner`.
+    /// Aborts if the `Token.balance` is not zero.
     public fun destroy_zero<T>(token: Token<T>) {
-        let Token { id, balance, owner: _ } = token;
+        let Token { id, balance } = token;
         assert!(balance::value(&balance) == 0, ENotZero);
         balance::destroy_zero(balance);
         object::delete(id);
     }
 
+    #[lint_allow(self_transfer)]
     /// Transfer the `Token` to the transaction sender.
-    /// Aborts if the `Token.owner` is not the transaction sender.
     public fun keep<T>(token: Token<T>, ctx: &mut TxContext) {
-        assert!(token.owner == tx_context::sender(ctx), ENotOwner);
         transfer::transfer(token, tx_context::sender(ctx))
     }
 
@@ -338,8 +319,8 @@ module regulated_token::token {
         request: ActionRequest<T>,
         _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
-        assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
         assert!(option::is_none(&request.spent_balance), ECantConsumeBalance);
+        assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
 
         let ActionRequest {
             name, approvals,
@@ -376,12 +357,12 @@ module regulated_token::token {
         ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
-        if (option::is_some(&request.spent_balance)) {
-            balance::join(
-                &mut policy.spent_balance,
-                option::extract(&mut request.spent_balance)
-            );
-        };
+        assert!(option::is_some(&request.spent_balance), EUseImmutableConfirm);
+
+        balance::join(
+            &mut policy.spent_balance,
+            option::extract(&mut request.spent_balance)
+        );
 
         confirm_request(policy, request, ctx)
     }
@@ -496,8 +477,8 @@ module regulated_token::token {
         assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
         assert!(object::id(self) == cap.for, ENotAuthorized);
         df::borrow_mut(&mut self.id, key<Rule>())
-
     }
+
     /// Remove a `Config` for a `Rule` in the `TokenPolicy`.
     /// Unlike the `add_rule_config`, this function does not require a `Rule`
     /// witness, hence can be performed by the `TokenPolicy` owner on their own.
@@ -566,7 +547,6 @@ module regulated_token::token {
     ///
     /// Aborts if the `TokenPolicyCap` is not matching the `TokenPolicy`.
     public fun add_rule_for_action<T, Rule: drop>(
-        // _rule: Rule, // TODO: keep or remove
         self: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
         action: String,
@@ -603,20 +583,17 @@ module regulated_token::token {
 
     // === Protected: Treasury Management ===
 
-    /// Mint a `Token` with a given `amount` using the `TreasuryCap`. The
-    /// `owner` field is set to the transaction sender; if a `Token` is minted
-    /// for some other account it will require `transfer` to be performed anyway
+    /// Mint a `Token` with a given `amount` using the `TreasuryCap`.
     public fun mint<T>(
         cap: &mut TreasuryCap<T>, amount: u64, ctx: &mut TxContext
     ): Token<T> {
         let balance = balance::increase_supply(coin::supply_mut(cap), amount);
-        Token { id: object::new(ctx), balance, owner: tx_context::sender(ctx) }
+        Token { id: object::new(ctx), balance }
     }
 
-    /// Burn a `Token` using the `TreasuryCap`. Avoids the `owner` check due to
-    /// the action only being available to the `TreasuryCap` owner.
+    /// Burn a `Token` using the `TreasuryCap`.
     public fun burn<T>(cap: &mut TreasuryCap<T>, token: Token<T>) {
-        let Token { id, balance, owner: _ } = token;
+        let Token { id, balance } = token;
         balance::decrease_supply(coin::supply_mut(cap), balance);
         object::delete(id);
     }
@@ -673,8 +650,8 @@ module regulated_token::token {
 
     // === Action Request Fields ==
 
-    /// Name of the `ActionRequest`.
-    public fun name<T>(self: &ActionRequest<T>): String { self.name }
+    /// The Action in the `ActionRequest`.
+    public fun action<T>(self: &ActionRequest<T>): String { self.name }
 
     /// Amount of the `ActionRequest`.
     public fun amount<T>(self: &ActionRequest<T>): u64 { self.amount }
@@ -688,8 +665,8 @@ module regulated_token::token {
     }
 
     /// Approvals of the `ActionRequest`.
-    public fun approvals<T>(self: &ActionRequest<T>): &VecSet<TypeName> {
-        &self.approvals
+    public fun approvals<T>(self: &ActionRequest<T>): VecSet<TypeName> {
+        self.approvals
     }
 
     /// Burned balance of the `ActionRequest`.
@@ -706,6 +683,9 @@ module regulated_token::token {
     /// Create a new `RuleKey` for a `Rule`. The `is_protected` field is kept
     /// for potential future use, if Rules were to have a freely modifiable
     /// storage as addition / replacement for the `Config` system.
+    ///
+    /// The goal of `is_protected` is to potentially allow Rules store a mutable
+    /// version of their configuration and mutate state on user action.
     fun key<Rule>(): RuleKey<Rule> { RuleKey { is_protected: true } }
 
     // === Testing ===
@@ -742,12 +722,12 @@ module regulated_token::token {
     #[test_only]
     public fun mint_for_testing<T>(amount: u64, ctx: &mut TxContext): Token<T> {
         let balance = balance::create_for_testing(amount);
-        Token { id: object::new(ctx), balance, owner: tx_context::sender(ctx) }
+        Token { id: object::new(ctx), balance }
     }
 
     #[test_only]
     public fun burn_for_testing<T>(token: Token<T>) {
-        let Token { id, balance, owner: _ } = token;
+        let Token { id, balance } = token;
         balance::destroy_for_testing(balance);
         object::delete(id);
     }

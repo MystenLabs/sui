@@ -6,14 +6,8 @@ module regulated_token::reg {
     use sui::tx_context::{sender, TxContext};
     use sui::transfer;
     use sui::coin::{Self, TreasuryCap};
+    use sui::token::{Self, Token, TokenPolicy};
 
-    // TODO: uncomment this when `token` is landed on one of the environments.
-    //       ...or when tooling is set up for local network development.
-    // use sui::token::{Self, Token, TokenPolicy};
-
-    // WARNING: we're using local dependency only for demonstration purposes
-    //          until `token` is landed on one of the environments.
-    use regulated_token::token::{Self, Token, TokenPolicy};
     use regulated_token::denylist_rule::{Self as denylist, Denylist};
 
     /// The OTW and the type for the Token
