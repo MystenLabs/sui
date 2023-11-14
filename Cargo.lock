@@ -10760,6 +10760,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-graphql-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "datatest-stable",
+ "sui-graphql-rpc",
+ "sui-transactional-test-runner",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-graphql-rpc"
 version = "0.1.0"
 dependencies = [
@@ -10807,7 +10817,6 @@ dependencies = [
  "sui-rest-api",
  "sui-sdk",
  "sui-swarm-config",
- "sui-transactional-test-runner",
  "sui-types",
  "telemetry-subscribers",
  "test-cluster",
@@ -12080,6 +12089,7 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-framework-snapshot",
+ "sui-graphql-rpc",
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-protocol-config",

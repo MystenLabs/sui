@@ -3,6 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
+use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
@@ -32,7 +33,6 @@ use move_transactional_test_runner::{
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use simulacrum::Simulacrum;
 use std::fmt::{self, Write};
 use std::time::Duration;
 use std::{
@@ -43,9 +43,13 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::test_infra::cluster::serve_executor;
+use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -116,6 +120,7 @@ pub struct SuiTestAdapter<'a> {
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
     is_simulator: bool,
+    pub(crate) cluster: Option<ExecutorCluster>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
 }
 
@@ -225,8 +230,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 objects,
                 account_objects,
             },
+            cluster,
         ) = if is_simulator {
-            init_sim_executor(rng, account_names, additional_mapping, &protocol_config)
+            init_sim_executor(rng, account_names, additional_mapping, &protocol_config).await
         } else {
             init_val_fullnode_executor(rng, account_names, additional_mapping, &protocol_config)
                 .await
@@ -236,6 +242,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let mut test_adapter = Self {
             is_simulator,
+            cluster,
             executor,
             compiled_state: CompiledState::new(
                 named_address_mapping,
@@ -478,6 +485,25 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::RunGraphql => {
+                let file = data.ok_or_else(|| {
+                    anyhow::anyhow!("Missing commands for programmable transaction")
+                })?;
+                let contents = std::fs::read_to_string(file.path())?;
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+                cluster
+                    .wait_for_checkpint_catchup(highest_checkpoint, Duration::from_secs(10))
+                    .await;
+
+                let resp = cluster
+                    .graphql_client
+                    .execute_to_graphql(contents.trim().to_owned(), true, vec![], vec![])
+                    .await
+                    .unwrap();
+
+                Ok(Some(resp.response_body_json_pretty()))
+            }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
@@ -1623,21 +1649,29 @@ async fn init_val_fullnode_executor(
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
-) -> (Box<dyn TransactionalAdapter>, AccountSetup) {
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
     let acc_setup = create_accounts_objects(&mut rng, account_names, additional_mapping);
     let executor = create_val_fullnode_executor(protocol_config, &acc_setup.objects).await;
-    (Box::new(executor), acc_setup)
+    (Box::new(executor), acc_setup, None)
 }
 
 /// Create an executor using a simulator
 /// This means we can control the checkpoint, epoch creation process and
 /// manually advance clock as needed
-fn init_sim_executor(
+async fn init_sim_executor(
     mut rng: StdRng,
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
-) -> (Box<dyn TransactionalAdapter>, AccountSetup) {
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
@@ -1682,12 +1716,20 @@ fn init_sim_executor(
         gas_amounts: vec![GAS_FOR_TESTING],
     });
 
-    let sim = Simulacrum::new_with_protocol_version_and_accounts(
+    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
         rng,
         DEFAULT_CHAIN_START_TIMESTAMP,
         protocol_config.version,
-        acc_cfgs.clone(),
+        acc_cfgs,
+        None,
     );
+
+    let cluster = serve_executor(
+        ConnectionConfig::ci_integration_test_cfg(),
+        3000,
+        Arc::new(read_replica),
+    )
+    .await;
 
     // Get the actual object values from the simulator
     for (name, acc) in accounts.iter_mut() {
@@ -1729,10 +1771,11 @@ fn init_sim_executor(
             account_objects,
             accounts,
         },
+        Some(cluster),
     )
 }
 
-impl sui_rest_api::node_state_getter::NodeStateGetter for SuiTestAdapter<'_> {
+impl NodeStateGetter for SuiTestAdapter<'_> {
     fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
