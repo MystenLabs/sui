@@ -56,16 +56,16 @@ pub(crate) struct MovePackageDowncastError;
 impl MovePackage {
     /// A representation of the module called `name` in this package, including the
     /// structs and functions it defines.
-    async fn module(&self, name: String) -> Result<Option<MoveModule>, Error> {
+    async fn module(&self, name: String) -> Result<Option<MoveModule>> {
         use PackageCacheError as E;
-        match self.parsed_package()?.module(&name) {
+        match self.parsed_package().extend()?.module(&name) {
             Ok(module) => Ok(Some(MoveModule {
                 parsed: module.clone(),
             })),
             Err(E::ModuleNotFound(_, _)) => Ok(None),
-            Err(e) => Err(Error::Internal(format!(
-                "Unexpected error fetching module: {e}"
-            ))),
+            Err(e) => {
+                Err(Error::Internal(format!("Unexpected error fetching module: {e}")).extend())
+            }
         }
     }
 
@@ -81,7 +81,7 @@ impl MovePackage {
 
         // TODO: make cursor opaque.
         // for now it same as module name
-        validate_cursor_pagination(&first, &after, &last, &before)?;
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
 
         let parsed = self.parsed_package()?;
         let module_range = parsed.modules().range((
@@ -165,9 +165,11 @@ impl MovePackage {
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
     async fn bcs(&self) -> Result<Option<Base64>> {
-        let bcs = bcs::to_bytes(self.native.serialized_module_map()).map_err(|_| {
-            Error::Internal(format!("Failed to serialize package {}", self.native.id()))
-        })?;
+        let bcs = bcs::to_bytes(self.native.serialized_module_map())
+            .map_err(|_| {
+                Error::Internal(format!("Failed to serialize package {}", self.native.id()))
+            })
+            .extend()?;
 
         Ok(Some(bcs.into()))
     }

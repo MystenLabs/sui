@@ -16,11 +16,7 @@ use super::{
     sui_system_state_summary::SuiSystemStateSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
-use crate::{
-    config::ServiceConfig,
-    context_data::db_data_provider::PgManager,
-    error::{code, graphql_error, Error},
-};
+use crate::{config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -38,15 +34,10 @@ impl Query {
 
     /// Configuration for this RPC service
     async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig> {
-        Ok(ctx
-            .data()
-            .map_err(|_| {
-                graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    "Unable to fetch service configuration",
-                )
-            })
-            .cloned()?)
+        ctx.data()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .cloned()
+            .extend()
     }
 
     // availableRange - pending impl. on IndexerV2
@@ -80,13 +71,12 @@ impl Query {
                 .await
                 .extend()
         } else {
-            Some(
+            Ok(Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_epoch()
                     .await
-                    .extend(),
-            )
-            .transpose()
+                    .extend()?,
+            ))
         }
     }
 
@@ -105,13 +95,12 @@ impl Query {
                     .extend(),
             }
         } else {
-            Some(
+            Ok(Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_checkpoint()
                     .await
-                    .extend(),
-            )
-            .transpose()
+                    .extend()?,
+            ))
         }
     }
 

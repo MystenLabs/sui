@@ -163,7 +163,7 @@ impl Address {
         _after: Option<String>,
         _last: Option<u64>,
         _before: Option<String>,
-    ) -> Result<Option<Connection<String, DynamicField>>, Error> {
-        Err(crate::error::Error::DynamicFieldOnAddress)
+    ) -> Result<Option<Connection<String, DynamicField>>> {
+        Err(Error::DynamicFieldOnAddress.extend())
     }
 }

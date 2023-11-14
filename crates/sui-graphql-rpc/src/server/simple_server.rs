@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::ServerConfig;
+use crate::error::Error;
 use crate::server::builder::Server;
 
-pub async fn start_example_server(server_config: &ServerConfig) -> Result<(), crate::error::Error> {
+pub async fn start_example_server(server_config: &ServerConfig) -> Result<(), Error> {
     println!("Starting server with config: {:?}", server_config);
 
     let server = Server::from_config(server_config).await?;

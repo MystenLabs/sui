@@ -43,7 +43,7 @@ impl Server {
             .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
     }
 
-    pub async fn from_yaml_config(path: &str) -> Result<Self, crate::error::Error> {
+    pub async fn from_yaml_config(path: &str) -> Result<Self, Error> {
         let config = ServerConfig::from_yaml(path)?;
         Self::from_config(&config).await
     }
@@ -184,7 +184,7 @@ async fn get_schema() -> impl axum::response::IntoResponse {
     let schema = format!(
         r#"
     <span style="white-space: pre;">{}
-    </span>  
+    </span>
     "#,
         schema
     );
