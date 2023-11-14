@@ -1,7 +1,7 @@
 {
   "redirects": [
-      { "source": "/testnet/:path", "destination": "/:path", "permanent": false },
-      { "source": "/devnet/:path", "destination": "/:path", "permanent": false },
+      { "source": "/testnet/:path(.*)", "destination": "/:path*", "permanent": false },
+      { "source": "/devnet/:path(.*)", "destination": "/:path*", "permanent": false },
       { "source": "/learn/object-package-versions", "destination": "/concepts/dynamic-fields/versioning", "permanent": true },
       { "source": "/learn/objects", "destination": "/concepts/object-model", "permanent": true },
       { "source": "/learn/about-sui", "destination": "/concepts/components", "permanent": true },
