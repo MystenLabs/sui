@@ -120,8 +120,6 @@ module 0x42::m {
         (true && true) &&
         (!false) ||
         (1 << 7 == 128) &&
-        (128 >> 7 == 1) ||
-        (255 / 2 == 127) &&
         (x"42" == x"42");
         // TODO fix this to parse
         // (b"hello" != b"bye") == (

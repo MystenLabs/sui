@@ -243,7 +243,7 @@ pub struct Var_ {
 }
 pub type Var = Spanned<Var_>;
 
-#[derive(Debug, Eq, Copy, Clone, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
 pub struct BlockLabel(pub Var);
 
 #[derive(Debug, PartialEq, Clone)]
@@ -362,12 +362,6 @@ impl TName for Var {
     fn borrow(&self) -> (&Self::Loc, &Self::Key) {
         let sp!(loc, value) = self;
         (loc, value)
-    }
-}
-
-impl PartialEq for BlockLabel {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.value == other.0.value
     }
 }
 
@@ -674,6 +668,11 @@ impl Type_ {
             Type_::Var(_) => None,
         }
     }
+}
+
+impl Exp_ {
+    // base symbol to used when making names forunnamed loops
+    pub const LOOP_NAME_SYMBOL: Symbol = symbol!("loop");
 }
 
 impl Value_ {

@@ -2176,11 +2176,11 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             EE::IfElse(eb, et, ef)
         }
         PE::While(pb, ploop) => {
-            let (name, body) = promote_named_loop(context, loc, *ploop);
+            let (name, body) = maybe_named_loop(context, loc, *ploop);
             EE::While(exp(context, *pb), name, body)
         }
         PE::Loop(ploop) => {
-            let (name, body) = promote_named_loop(context, loc, *ploop);
+            let (name, body) = maybe_named_loop(context, loc, *ploop);
             EE::Loop(name, body)
         }
         PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
@@ -2337,7 +2337,9 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
     sp(loc, e_)
 }
 
-fn promote_named_loop(
+// If the expression is a named block, hand back the name and a normal block. Otherwise, just
+// process the expression. This is used to lift names for loop and while to the appropriate form.
+fn maybe_named_loop(
     context: &mut Context,
     loc: Loc,
     body: P::Exp,

@@ -1,62 +1,82 @@
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
   ┌─ tests/move_check/naming/named_blocks_invalid.move:4:31
   │
 4 │             if (cond) { break 'name 10 };
-  │                               ^^^^^ Invalid usage of 'break' with named block label
+  │                               ^^^^^ Invalid usage of 'break' with a named block label
+  │
+  = Loop labels may only be used with 'break' and 'continue', not 'return'
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
   ┌─ tests/move_check/naming/named_blocks_invalid.move:5:34
   │
 5 │             if (cond) { continue 'name };
-  │                                  ^^^^^ Invalid usage of 'continue' with named block label
+  │                                  ^^^^^ Invalid usage of 'continue' with a named block label
+  │
+  = Loop labels may only be used with 'break' and 'continue', not 'return'
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:12:32
    │
 12 │             if (cond) { return 'name 10 };
-   │                                ^^^^^ Invalid usage of 'return' with loop block label
+   │                                ^^^^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:19:36
    │
 19 │                 if (cond) { return 'outer 10 };
-   │                                    ^^^^^^ Invalid usage of 'return' with loop block label
+   │                                    ^^^^^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:20:36
    │
 20 │                 if (cond) { return 'inner 20 };
-   │                                    ^^^^^^ Invalid usage of 'return' with loop block label
+   │                                    ^^^^^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:28:36
    │
 28 │                 if (cond) { return 'outer };
-   │                                    ^^^^^^ Invalid usage of 'return' with loop block label
+   │                                    ^^^^^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:29:36
    │
 29 │                 if (cond) { return 'inner };
-   │                                    ^^^^^^ Invalid usage of 'return' with loop block label
+   │                                    ^^^^^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:37:36
    │
 37 │                 if (cond) { return 'outer };
-   │                                    ^^^^^^ Invalid usage of 'return' with loop block label
+   │                                    ^^^^^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:38:35
    │
 38 │                 if (cond) { break 'inner 10 };
-   │                                   ^^^^^^ Invalid usage of 'break' with named block label
+   │                                   ^^^^^^ Invalid usage of 'break' with a named block label
+   │
+   = Loop labels may only be used with 'break' and 'continue', not 'return'
 
-error[E03009]: unbound variable
+error[E03014]: invalid use of label
    ┌─ tests/move_check/naming/named_blocks_invalid.move:47:24
    │
 47 │                 return 'l
-   │                        ^^ Invalid usage of 'return' with loop block label
+   │                        ^^ Invalid usage of 'return' with a loop block label
+   │
+   = Named block labels may only be used with 'return', not 'break' or 'continue'.
 
 error[E03009]: unbound variable
    ┌─ tests/move_check/naming/named_blocks_invalid.move:54:32

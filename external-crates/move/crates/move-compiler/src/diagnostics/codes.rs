@@ -223,6 +223,7 @@ codes!(
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
         PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
+        InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

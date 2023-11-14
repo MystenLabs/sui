@@ -484,9 +484,15 @@ fn find_token(
             } else {
                 (false, 1)
             };
-            if !is_valid {
+            if matches!(text[len..].chars().next(), Some('\'')) {
+                let loc = make_loc(file_hash, start_offset, start_offset + len + 1);
+                let msg = "Single-quote (') may only prefix control flow labels";
+                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                diag.add_note("Character literals are not supported, and string literals use double-quote (\").");
+                return Err(Box::new(diag));
+            } else if !is_valid {
                 let loc = make_loc(file_hash, start_offset, start_offset + len);
-                let msg = "Found an unterminated tick (')";
+                let msg = "Invalid control flow label";
                 return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
             } else {
                 (Tok::BlockLabel, len)

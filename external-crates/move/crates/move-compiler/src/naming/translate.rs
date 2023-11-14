@@ -461,7 +461,7 @@ impl<'env> Context<'env> {
             name.value()
         } else {
             // all named blocks have names, so a non-named block must be a loop
-            symbol!("loop")
+            N::Exp_::LOOP_NAME_SYMBOL
         };
         let id = self.nominal_block_id;
         self.nominal_block_id += 1;
@@ -510,11 +510,19 @@ impl<'env> Context<'env> {
                 Some(BlockLabel(sp(loc, nvar_)))
             } else {
                 let msg = format!(
-                    "Invalid usage of '{}' with {} block label",
+                    "Invalid usage of '{}' with a {} block label",
                     verb, block_type
                 );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundVariable, (loc, msg)));
+                let mut diag = diag!(NameResolution::InvalidLabel, (loc, msg));
+                match expected_block_type {
+                    NominalBlockType::Loop => {
+                        diag.add_note("Loop labels may only be used with 'break' and 'continue', not 'return'");
+                    }
+                    NominalBlockType::Block => {
+                        diag.add_note("Named block labels may only be used with 'return', not 'break' or 'continue'.");
+                    }
+                }
+                self.env.add_diag(diag);
                 None
             }
         } else {
@@ -1375,6 +1383,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
 
         EE::Dereference(e) => NE::Dereference(exp(context, *e)),
         EE::UnaryExp(uop, e) => NE::UnaryExp(uop, exp(context, *e)),
+        // FIXME Handling this recursively causes stack overflows for large programs
         EE::BinopExp(e1, bop, e2) => NE::BinopExp(exp(context, *e1), bop, exp(context, *e2)),
 
         EE::Pack(tn, etys_opt, efields) => {
