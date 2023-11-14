@@ -10,8 +10,9 @@ use sui_json_rpc::api::{
 };
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    AddressMetrics, CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics,
-    Page, QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
+    AddressMetrics, CheckpointedObjectID, EpochInfo, EpochMetricsPage, EpochPage, MoveCallMetrics,
+    NetworkMetrics, Page, QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse,
+    SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
 use sui_types::sui_serde::BigInt;
@@ -107,6 +108,15 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
             next_cursor: next_cursor.map(|id| id.into()),
             has_next_page,
         })
+    }
+
+    async fn get_epoch_metrics(
+        &self,
+        _cursor: Option<BigInt<u64>>,
+        _limit: Option<usize>,
+        _descending_order: Option<bool>,
+    ) -> RpcResult<EpochMetricsPage> {
+        unimplemented!();
     }
 
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo> {
