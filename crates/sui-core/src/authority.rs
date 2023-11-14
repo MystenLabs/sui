@@ -235,7 +235,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
-    pub consensus_committed_certificates: IntGaugeVec,
+    pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_calculated_throughput: IntGauge,
     pub consensus_calculated_throughput_profile: IntGauge,
@@ -548,9 +548,9 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            consensus_committed_certificates: register_int_gauge_vec_with_registry!(
-                "consensus_committed_certificates",
-                "Number of committed certificates, sliced by author",
+            consensus_committed_messages: register_int_gauge_vec_with_registry!(
+                "consensus_committed_messages",
+                "Total number of committed consensus messages, sliced by author",
                 &["authority"],
                 registry,
             ).unwrap(),
