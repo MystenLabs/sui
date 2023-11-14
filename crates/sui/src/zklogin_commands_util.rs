@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::jwt_utils::parse_and_validate_jwt;
-use fastcrypto::traits::EncodeDecodeBase64;
-use fastcrypto_zkp::bn254::utils::{gen_address_seed, get_zk_login_address};
-use fastcrypto_zkp::bn254::utils::{get_proof, get_salt};
+use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
+use fastcrypto_zkp::bn254::utils::get_proof;
+use fastcrypto_zkp::bn254::utils::{gen_address_seed, get_salt, get_zk_login_address};
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use regex::Regex;
 use reqwest::Client;
 use serde_json::json;
@@ -21,6 +24,8 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
+use sui_types::crypto::{PublicKey, SuiKeyPair, ZkLoginPublicIdentifier};
+use sui_types::multisig::{MultiSig, MultiSigPublicKey};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
@@ -69,6 +74,8 @@ pub async fn perform_zk_login_test_tx(
     ephemeral_key_identifier: SuiAddress,
     keystore: &mut Keystore,
     network: &str,
+    test_multisig: bool, // if true, put zklogin in a multisig address with another traditional pubkey.
+    sign_with_sk: bool, // if true, submit tx with the traditional sig, otherwise submit with zklogin sig.
 ) -> Result<String, anyhow::Error> {
     let (gas_url, fullnode_url) = get_config(network);
     let user_salt = get_salt(parsed_token, "https://salt.api.mystenlabs.com/get_salt")
@@ -84,26 +91,50 @@ pub async fn perform_zk_login_test_tx(
         "https://prover-dev.mystenlabs.com/v1",
     )
     .await
-    .map_err(|_| anyhow!("Failed to get proof"))?;
+    .map_err(|e| anyhow!("Failed to get proof {e}"))?;
     println!("ZkLogin inputs:");
     println!("{:?}", serde_json::to_string(&reader).unwrap());
+
     let (sub, aud) = parse_and_validate_jwt(parsed_token)?;
     let address_seed = gen_address_seed(&user_salt, "sub", &sub, &aud)?;
     let zk_login_inputs = ZkLoginInputs::from_reader(reader, &address_seed)?;
-    let zklogin_address = SuiAddress::from_bytes(get_zk_login_address(
-        zk_login_inputs.get_address_seed(),
-        zk_login_inputs.get_iss(),
-    )?)?;
-    println!("ZkLogin Address: {:?}", zklogin_address);
+
+    let skp1 = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32])));
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![
+            PublicKey::ZkLogin(
+                ZkLoginPublicIdentifier::new(
+                    zk_login_inputs.get_iss(),
+                    zk_login_inputs.get_address_seed(),
+                )
+                .unwrap(),
+            ),
+            skp1.public(),
+        ],
+        vec![1, 1],
+        1,
+    )?;
+
+    let sender = if test_multisig {
+        keystore.add_key(skp1)?;
+        println!("Use multisig address as sender");
+        SuiAddress::from(&multisig_pk)
+    } else {
+        SuiAddress::from_bytes(get_zk_login_address(
+            zk_login_inputs.get_address_seed(),
+            zk_login_inputs.get_iss(),
+        )?)?
+    };
+    println!("Sender: {:?}", sender);
 
     // Request some coin from faucet and build a test transaction.
     let sui = SuiClientBuilder::default().build(fullnode_url).await?;
-    request_tokens_from_faucet(zklogin_address, gas_url).await?;
+    request_tokens_from_faucet(sender, gas_url).await?;
     sleep(Duration::from_secs(10));
 
     let Some(coin) = sui
         .coin_read_api()
-        .get_coins(zklogin_address, None, None, None)
+        .get_coins(sender, None, None, None)
         .await?
         .next_cursor
     else {
@@ -112,7 +143,7 @@ pub async fn perform_zk_login_test_tx(
     let txb_res = sui
         .transaction_builder()
         .transfer_object(
-            zklogin_address,
+            sender,
             coin,
             None,
             5000000,
@@ -124,27 +155,35 @@ pub async fn perform_zk_login_test_tx(
         Base64::encode(bcs::to_bytes(&txb_res).unwrap())
     );
 
-    // Sign transaction with the ephemeral key
-    let signature = keystore.sign_secure(
-        &ephemeral_key_identifier,
-        &txb_res,
-        Intent::sui_transaction(),
-    )?;
+    let sig = if sign_with_sk {
+        // Create a generic sig from the traditional keypair
+        GenericSignature::Signature(keystore.sign_secure(
+            &ephemeral_key_identifier,
+            &txb_res,
+            Intent::sui_transaction(),
+        )?)
+    } else {
+        // Sign transaction with the ephemeral key
+        let signature = keystore.sign_secure(
+            &ephemeral_key_identifier,
+            &txb_res,
+            Intent::sui_transaction(),
+        )?;
 
-    let sig = GenericSignature::from(ZkLoginAuthenticator::new(
-        zk_login_inputs,
-        max_epoch,
-        signature,
-    ));
-    println!(
-        "ZkLogin Authenticator Signature Serialized: {:?}",
-        sig.encode_base64()
-    );
+        GenericSignature::from(ZkLoginAuthenticator::new(
+            zk_login_inputs,
+            max_epoch,
+            signature,
+        ))
+    };
+
+    let multisig = GenericSignature::MultiSig(MultiSig::combine(vec![sig], multisig_pk)?);
+    println!("Signature Serialized: {:?}", multisig.encode_base64());
 
     let transaction_response = sui
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_generic_sig_data(txb_res, Intent::sui_transaction(), vec![sig]),
+            Transaction::from_generic_sig_data(txb_res, Intent::sui_transaction(), vec![multisig]),
             SuiTransactionBlockResponseOptions::full_content(),
             None,
         )

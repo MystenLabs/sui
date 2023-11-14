@@ -340,6 +340,10 @@ struct FeatureFlags {
     // If true, recompute has_public_transfer from the type instead of what is stored in the object
     #[serde(skip_serializing_if = "is_false")]
     recompute_has_public_transfer_in_execution: bool,
+
+    // If true, multisig containing zkLogin sig is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_zklogin_in_multisig: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1034,6 +1038,10 @@ impl ProtocolConfig {
         self.feature_flags.verify_legacy_zklogin_address
     }
 
+    pub fn accept_zklogin_in_multisig(&self) -> bool {
+        self.feature_flags.accept_zklogin_in_multisig
+    }
+
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
@@ -1648,7 +1656,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
                 }
-                32 => {}
+                32 => cfg.feature_flags.accept_zklogin_in_multisig = true,
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
