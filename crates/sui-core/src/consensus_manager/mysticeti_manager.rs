@@ -249,7 +249,7 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
     //TODO: for now fallback to default parameters - will read from properties
     Parameters {
         identifiers,
-        enable_pipelining: false,
+        enable_pipelining: true,
         ..Default::default()
     }
 }
