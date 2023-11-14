@@ -30,6 +30,8 @@ const EPOCH_DURATION_MS: u64 = 15000;
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
 
+pub const DEFAULT_INTERNAL_DATA_SOURCE_PORT: u16 = 3000;
+
 pub struct ExecutorCluster {
     pub executor_server_handle: JoinHandle<()>,
     pub indexer_store: PgIndexerStoreV2,

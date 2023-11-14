@@ -256,7 +256,7 @@ pub mod tests {
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::Timeout,
         metrics::RequestMetrics,
-        test_infra::cluster::{serve_executor, ExecutorCluster},
+        test_infra::cluster::{serve_executor, ExecutorCluster, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -279,7 +279,12 @@ pub mod tests {
 
         (
             connection_config.clone(),
-            serve_executor(connection_config, 3000, Arc::new(sim)).await,
+            serve_executor(
+                connection_config,
+                DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+                Arc::new(sim),
+            )
+            .await,
         )
     }
 

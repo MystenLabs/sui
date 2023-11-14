@@ -45,7 +45,6 @@ use super::SimulatorStore;
 pub struct PersistedStore {
     pub path: PathBuf,
     pub read_write: PersistedStoreInner,
-    pub read_only: PersistedStoreInnerReadOnly,
 }
 
 pub struct PersistedStoreInnerReadOnlyWrapper {
@@ -83,17 +82,8 @@ impl PersistedStore {
             None,
             None,
         );
-        let read_only = PersistedStoreInner::get_read_only_handle(
-            path.clone(),
-            None,
-            None,
-            MetricConf::with_sampling(samp),
-        );
-        let mut res = Self {
-            path,
-            read_write,
-            read_only,
-        };
+
+        let mut res = Self { path, read_write };
         res.init_with_genesis(genesis);
 
         res
