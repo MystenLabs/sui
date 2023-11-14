@@ -280,7 +280,7 @@ impl<'a> Context<'a> {
     pub fn new(
         decl_location: Loc,
         dependencies: CompiledDependencies<'a>,
-        current_module_opt: Option<ModuleIdent>,
+        current_module: ModuleIdent,
     ) -> Result<Self> {
         let context = Self {
             dependencies,
@@ -304,7 +304,7 @@ impl<'a> Context<'a> {
             address_identifiers: HashMap::new(),
             constant_pool: HashMap::new(),
             current_function_index: FunctionDefinitionIndex::new(0),
-            source_map: SourceMap::new(decl_location, current_module_opt),
+            source_map: SourceMap::new(decl_location, current_module),
         };
 
         Ok(context)

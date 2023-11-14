@@ -121,10 +121,7 @@ pub fn program(
     let mut units = vec![];
 
     let (orderings, sdecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
-    let G::Program {
-        modules: gmodules,
-        scripts: gscripts,
-    } = prog;
+    let G::Program { modules: gmodules } = prog;
 
     let mut source_modules = gmodules
         .into_iter()
@@ -133,30 +130,6 @@ pub fn program(
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
         if let Some(unit) = module(compilation_env, m, mdef, &orderings, &sdecls, &fdecls) {
-            units.push(unit)
-        }
-    }
-    for (key, s) in gscripts {
-        let G::Script {
-            warning_filter: _warning_filter,
-            package_name,
-            attributes: _attributes,
-            loc: _loc,
-            constants,
-            function_name,
-            function,
-        } = s;
-        if let Some(unit) = script(
-            compilation_env,
-            package_name,
-            key,
-            constants,
-            function_name,
-            function,
-            &orderings,
-            &sdecls,
-            &fdecls,
-        ) {
             units.push(unit)
         }
     }
@@ -254,76 +227,13 @@ fn module(
         module,
         source_map,
     };
-    Some(AnnotatedCompiledUnit::Module(AnnotatedCompiledModule {
+    Some(AnnotatedCompiledModule {
         loc: ident_loc,
         address_name: addr_name,
         module_name_loc: module_name.loc(),
         named_module: module,
         function_infos,
-    }))
-}
-
-fn script(
-    compilation_env: &mut CompilationEnv,
-    package_name: Option<Symbol>,
-    key: Symbol,
-    gconstants: UniqueMap<ConstantName, G::Constant>,
-    name: FunctionName,
-    fdef: G::Function,
-    dependency_orderings: &HashMap<ModuleIdent, usize>,
-    struct_declarations: &HashMap<
-        (ModuleIdent, StructName),
-        (BTreeSet<IR::Ability>, Vec<IR::StructTypeParameter>),
-    >,
-    function_declarations: &HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, StructName)>, IR::FunctionSignature),
-    >,
-) -> Option<AnnotatedCompiledUnit> {
-    let loc = name.loc();
-    let mut context = Context::new(compilation_env, package_name, None);
-
-    let constants = constants(&mut context, None, gconstants);
-
-    let ((_, main), info) = function(&mut context, None, name, fdef);
-
-    let (imports, explicit_dependency_declarations) = context.materialize(
-        dependency_orderings,
-        struct_declarations,
-        function_declarations,
-    );
-    let ir_script = IR::Script {
-        loc,
-        imports,
-        explicit_dependency_declarations,
-        constants,
-        main,
-    };
-    let deps: Vec<&F::CompiledModule> = vec![];
-    let (mut script, source_map) =
-        match move_ir_to_bytecode::compiler::compile_script(ir_script, deps) {
-            Ok(res) => res,
-            Err(e) => {
-                compilation_env.add_diag(diag!(
-                    Bug::BytecodeGeneration,
-                    (loc, format!("IR ERROR: {}", e))
-                ));
-                return None;
-            }
-        };
-    canonicalize_handles::in_script(&mut script, &address_names(dependency_orderings.keys()));
-    let function_info = script_function_info(&source_map, info);
-    let script = NamedCompiledScript {
-        package_name,
-        name: key,
-        script,
-        source_map,
-    };
-    Some(AnnotatedCompiledUnit::Script(AnnotatedCompiledScript {
-        loc,
-        named_script: script,
-        function_info,
-    }))
+    })
 }
 
 /// Generate a mapping from numerical address and module name to named address, for modules whose
@@ -404,40 +314,6 @@ fn function_info_map(
     let name_loc = *collected_function_infos.get_loc_(&name).unwrap();
     let function_name = FunctionName(sp(name_loc, name));
     (function_name, function_info)
-}
-
-fn script_function_info(
-    source_map: &SourceMap,
-    (params, specs, attributes): CollectedInfo,
-) -> FunctionInfo {
-    let idx = F::FunctionDefinitionIndex(0);
-    let function_source_map = source_map.get_function_source_map(idx).unwrap();
-    let local_map = function_source_map
-        .make_local_name_to_index_map()
-        .into_iter()
-        .map(|(n, v)| (Symbol::from(n.as_str()), v))
-        .collect();
-    let parameters = params
-        .into_iter()
-        .map(|(v, ty)| var_info(&local_map, v, ty))
-        .collect();
-    let spec_info = specs
-        .into_iter()
-        .map(|(id, (label, used_local_types))| {
-            let offset = *function_source_map.nops.get(&label).unwrap();
-            let used_locals = used_local_info(&local_map, &used_local_types);
-            let info = SpecInfo {
-                offset,
-                used_locals,
-            };
-            (id, info)
-        })
-        .collect();
-    FunctionInfo {
-        spec_info,
-        parameters,
-        attributes,
-    }
 }
 
 fn used_local_info(

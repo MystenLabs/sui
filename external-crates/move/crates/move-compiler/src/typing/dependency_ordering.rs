@@ -10,7 +10,6 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use petgraph::{algo::toposort as petgraph_toposort, graphmap::DiGraphMap};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,12 +20,10 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn program(
     compilation_env: &mut CompilationEnv,
     modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
-    scripts: &mut BTreeMap<Symbol, T::Script>,
 ) {
     let imm_modules = &modules;
     let mut context = Context::new(imm_modules);
     module_defs(&mut context, modules);
-    script_defs(&mut context, scripts);
 
     let Context {
         module_neighbors,
@@ -48,28 +45,12 @@ pub fn program(
         }
     }
     for (node, neighbors) in neighbors_by_node {
-        match node {
-            NodeIdent::Module(mident) => {
-                let module = modules.get_mut(&mident).unwrap();
-                module.immediate_neighbors = neighbors;
-            }
-            NodeIdent::Script(sname) => {
-                let script = scripts.get_mut(&sname).unwrap();
-                script.immediate_neighbors = neighbors;
-            }
-        }
+        let module = modules.get_mut(&node).unwrap();
+        module.immediate_neighbors = neighbors;
     }
     for (node, used_addresses) in addresses_by_node {
-        match node {
-            NodeIdent::Module(mident) => {
-                let module = modules.get_mut(&mident).unwrap();
-                module.used_addresses = used_addresses;
-            }
-            NodeIdent::Script(sname) => {
-                let script = scripts.get_mut(&sname).unwrap();
-                script.used_addresses = used_addresses;
-            }
-        }
+        let module = modules.get_mut(&node).unwrap();
+        module.used_addresses = used_addresses;
     }
 }
 
@@ -77,13 +58,6 @@ pub fn program(
 enum DepType {
     Use,
     Friend,
-}
-
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[allow(clippy::large_enum_variant)]
-enum NodeIdent {
-    Module(ModuleIdent),
-    Script(Symbol),
 }
 
 struct Context<'a> {
@@ -95,11 +69,11 @@ struct Context<'a> {
     // and a script cannot declare friends. Hence, is no way to form a cyclic dependency via scripts
     module_neighbors: BTreeMap<ModuleIdent, BTreeMap<ModuleIdent, BTreeMap<DepType, Loc>>>,
     // A summary of neighbors keyed by module or script
-    neighbors_by_node: BTreeMap<NodeIdent, UniqueMap<ModuleIdent, Neighbor>>,
+    neighbors_by_node: BTreeMap<ModuleIdent, UniqueMap<ModuleIdent, Neighbor>>,
     // All addresses used by a node
-    addresses_by_node: BTreeMap<NodeIdent, BTreeSet<Address>>,
+    addresses_by_node: BTreeMap<ModuleIdent, BTreeSet<Address>>,
     // The module or script we are currently exploring
-    current_node: Option<NodeIdent>,
+    current_node: Option<ModuleIdent>,
 }
 
 impl<'a> Context<'a> {
@@ -122,7 +96,7 @@ impl<'a> Context<'a> {
         }
 
         let current = self.current_node.clone().unwrap();
-        if matches!(&current, NodeIdent::Module(current_mident) if &mident == current_mident) {
+        if mident == current {
             // do not add the module itself as a neighbor
             return;
         }
@@ -137,25 +111,20 @@ impl<'a> Context<'a> {
         current_neighbors.add(mident, sp(loc, neighbor_)).unwrap();
         current_used_addresses.insert(mident.value.address);
 
-        match current {
-            NodeIdent::Module(current_mident) => {
-                let (node, new_neighbor) = match dep_type {
-                    DepType::Use => (current_mident, mident),
-                    DepType::Friend => (mident, current_mident),
-                };
-                let m = self
-                    .module_neighbors
-                    .entry(node)
-                    .or_default()
-                    .entry(new_neighbor)
-                    .or_default();
-                if m.contains_key(&dep_type) {
-                    return;
-                }
-                m.insert(dep_type, loc);
-            }
-            NodeIdent::Script(_) => (),
+        let (node, new_neighbor) = match dep_type {
+            DepType::Use => (current, mident),
+            DepType::Friend => (mident, current),
+        };
+        let m = self
+            .module_neighbors
+            .entry(node)
+            .or_default()
+            .entry(new_neighbor)
+            .or_default();
+        if m.contains_key(&dep_type) {
+            return;
         }
+        m.insert(dep_type, loc);
     }
 
     fn add_usage(&mut self, mident: ModuleIdent, loc: Loc) {
@@ -267,7 +236,7 @@ fn module_defs(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::Module
 }
 
 fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition) {
-    context.current_node = Some(NodeIdent::Module(mident));
+    context.current_node = Some(mident);
     mdef.friends
         .key_cloned_iter()
         .for_each(|(mident, friend)| context.add_friend(mident, friend.loc));
@@ -278,31 +247,6 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
     for (mident, sp!(loc, neighbor_)) in &mdef.spec_dependencies {
-        let dep = match neighbor_ {
-            Neighbor_::Dependency => DepType::Use,
-            Neighbor_::Friend => DepType::Friend,
-        };
-        context.add_neighbor(*mident, dep, *loc);
-    }
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-// Scripts cannot affect the dependency graph because 1) a script cannot friend anything and 2)
-// nothing can depends on a script. Therefore, we iterate over the scripts just to collect their
-// immediate dependencies.
-fn script_defs(context: &mut Context, scripts: &BTreeMap<Symbol, T::Script>) {
-    scripts
-        .iter()
-        .for_each(|(sname, sdef)| script(context, *sname, sdef))
-}
-
-fn script(context: &mut Context, sname: Symbol, sdef: &T::Script) {
-    context.current_node = Some(NodeIdent::Script(sname));
-    function(context, &sdef.function);
-    for (mident, sp!(loc, neighbor_)) in &sdef.spec_dependencies {
         let dep = match neighbor_ {
             Neighbor_::Dependency => DepType::Use,
             Neighbor_::Friend => DepType::Friend,

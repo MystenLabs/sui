@@ -93,7 +93,6 @@ fn extract_spec_modules(
                             .collect::<Vec<_>>();
                         Definition::Address(a)
                     }
-                    Definition::Script(s) => Definition::Script(s),
                 };
                 Some(PackageDefinition {
                     package,
@@ -134,7 +133,6 @@ fn merge_spec_modules(
                     merge_spec_module(spec_modules, addr_, m)
                 }
             }
-            Script(_) => {}
         }
     }
 }

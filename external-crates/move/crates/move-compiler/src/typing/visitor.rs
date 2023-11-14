@@ -7,7 +7,6 @@ use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::FunctionName;
 use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
 use crate::typing::ast as T;
-use move_symbol_pool::Symbol;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
@@ -58,9 +57,6 @@ pub trait TypingVisitorContext {
     ) -> bool {
         false
     }
-    fn visit_script_custom(&mut self, _name: Symbol, _script: &mut T::Script) -> bool {
-        false
-    }
 
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
@@ -77,16 +73,6 @@ pub trait TypingVisitorContext {
                 self.visit_function(Some(mident), function_name, fdef)
             }
 
-            self.pop_warning_filter_scope();
-        }
-        for (name, script) in &mut program.scripts {
-            self.add_warning_filter_scope(script.warning_filter.clone());
-            if self.visit_script_custom(*name, script) {
-                self.pop_warning_filter_scope();
-                continue;
-            }
-
-            self.visit_function(None, script.function_name, &mut script.function);
             self.pop_warning_filter_scope();
         }
     }

@@ -2886,86 +2886,6 @@ fn parse_module(
 }
 
 //**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-// Parse a script:
-//      Script =
-//          "script" "{"
-//              (<Attributes> <UseDecl>)*
-//              (<Attributes> <ConstantDecl>)*
-//              <Attributes> <DocComments> <ModuleMemberModifiers> <FunctionDecl>
-//              (<Attributes> <SpecBlock>)*
-//          "}"
-fn parse_script(
-    script_attributes: Vec<Attributes>,
-    context: &mut Context,
-) -> Result<Script, Box<Diagnostic>> {
-    let start_loc = context.tokens.start_loc();
-
-    consume_token(context.tokens, Tok::Script)?;
-    consume_token(context.tokens, Tok::LBrace)?;
-
-    // TODO better errors for modifiers
-    let mut uses = vec![];
-    let mut next_item_attributes = parse_attributes(context)?;
-    while context.tokens.peek() == Tok::Use {
-        let start_loc = context.tokens.start_loc();
-        uses.push(parse_use_decl(
-            next_item_attributes,
-            start_loc,
-            Modifiers::empty(),
-            context,
-        )?);
-        next_item_attributes = parse_attributes(context)?;
-    }
-    let mut constants = vec![];
-    while context.tokens.peek() == Tok::Const {
-        let start_loc = context.tokens.start_loc();
-        constants.push(parse_constant_decl(
-            next_item_attributes,
-            start_loc,
-            Modifiers::empty(),
-            context,
-        )?);
-        next_item_attributes = parse_attributes(context)?;
-    }
-
-    context.tokens.match_doc_comments(); // match doc comments to script function
-    let function_start_loc = context.tokens.start_loc();
-    let modifiers = parse_module_member_modifiers(context)?;
-    // don't need to check native modifier, it is checked later
-    let function =
-        parse_function_decl(next_item_attributes, function_start_loc, modifiers, context)?;
-
-    let mut specs = vec![];
-    while context.tokens.peek() == Tok::NumSign || context.tokens.peek() == Tok::Spec {
-        let attributes = parse_attributes(context)?;
-        specs.push(parse_spec_block(attributes, context)?);
-    }
-
-    if context.tokens.peek() != Tok::RBrace {
-        let loc = current_token_loc(context.tokens);
-        let msg = "Unexpected characters after end of 'script' function";
-        return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
-    }
-    consume_token(context.tokens, Tok::RBrace)?;
-
-    let loc = make_loc(
-        context.tokens.file_hash(),
-        start_loc,
-        context.tokens.previous_end_loc(),
-    );
-    Ok(Script {
-        attributes: script_attributes,
-        loc,
-        uses,
-        constants,
-        function,
-        specs,
-    })
-}
-//**************************************************************************************************
 // Specification Blocks
 //**************************************************************************************************
 
@@ -3671,7 +3591,6 @@ fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>>
         let attributes = parse_attributes(context)?;
         defs.push(match context.tokens.peek() {
             Tok::Spec | Tok::Module => Definition::Module(parse_module(attributes, context)?),
-            Tok::Script => Definition::Script(parse_script(attributes, context)?),
             _ => Definition::Address(parse_address_block(attributes, context)?),
         })
     }
