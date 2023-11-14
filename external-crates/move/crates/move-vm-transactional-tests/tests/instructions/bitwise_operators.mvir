@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
 label b0:
     assert(0u8 & 0u8 == 0u8, 1000);
     assert(0u64 & 0u64 == 0u64, 1001);
@@ -48,9 +50,12 @@ label b0:
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x22.m {
+
+entry foo() {
 label b0:
     assert(0u8 | 0u8 == 0u8, 2000);
     assert(0u64 | 0u64 == 0u64, 2001);
@@ -98,9 +103,12 @@ label b0:
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x3.m {
+
+entry foo() {
 label b0:
     assert(0u8 ^ 0u8 == 0u8, 3000);
     assert(0u64 ^ 0u64 == 0u64, 3001);
@@ -153,4 +161,6 @@ label b0:
     assert(13u32 ^ 1u32 == 12u32, 3401);
     assert(13u256 ^ 1u256 == 12u256, 3402);
     return;
+}
+
 }

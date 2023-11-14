@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     const C1: u64 = {
         0 == 0;
         0 == 0;

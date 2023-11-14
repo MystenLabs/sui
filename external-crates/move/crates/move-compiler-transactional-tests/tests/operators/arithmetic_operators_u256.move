@@ -1,5 +1,5 @@
 //# run
-script {
+module 1::m {
 fun main() {
     assert!(0u256 + 0u256 == 0u256, 1000);
     assert!(0u256 + 1u256 == 1u256, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 fun main() {
     // should fail
     1u256 + 115792089237316195423570985008687907853269984665640564039457584007913129639935u256;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 fun main() {
     // should fail
     105792089237316195423570985008687907853269984665640564039457584007913129639935u256 + 105792089237316195423570985008687907853269984665640564039457584007913129639935;
@@ -31,7 +31,7 @@ fun main() {
 }
 
 //# run
-script {
+module 4::m {
 fun main() {
     assert!(0u256 - 0u256 == 0u256, 2000);
     assert!(1u256 - 0u256 == 1u256, 2001);
@@ -46,7 +46,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 fun main() {
     // should fail
     0u256 - 1u256;
@@ -54,7 +54,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     // should fail
     54u256 - 100u256;
@@ -63,7 +63,7 @@ fun main() {
 
 
 //# run
-script {
+module 7::m {
 fun main() {
     assert!(0u256 * 0u256 == 0u256, 3000);
     assert!(1u256 * 0u256 == 0u256, 3001);
@@ -77,7 +77,7 @@ fun main() {
 }
 
 //# run
-script {
+module 8::m {
 fun main() {
     // should fail
     578960446186580977117853953926634992332820282019728792003956564819967u256 * 57896044618343953926634992332820282019728792003956564819967u256;
@@ -85,7 +85,7 @@ fun main() {
 }
 
 //# run
-script {
+module 9::m {
 fun main() {
     // should fail
     37896044618658097711785492504343953926634992332820282019728792003956564819967u256 * 2u256;
@@ -95,7 +95,7 @@ fun main() {
 
 
 //# run
-script {
+module 10::m {
 fun main() {
     assert!(0u256 / 1u256 == 0u256, 4000);
     assert!(1u256 / 1u256 == 1u256, 4001);
@@ -110,7 +110,7 @@ fun main() {
 }
 
 //# run
-script {
+module 11::m {
 fun main() {
     // should fail
     0u256 / 0u256;
@@ -119,14 +119,14 @@ fun main() {
 // check: ARITHMETIC_ERROR
 
 //# run
-script {
+module 12::m {
 fun main() {
     1u256 / 0u256;
 }
 }
 
 //# run
-script {
+module 13::m {
 fun main() {
     // should fail
     115792089237316195423570985008687907853269984665640564039457584007913129639935u256 / 0u256;
@@ -135,7 +135,7 @@ fun main() {
 
 
 //# run
-script {
+module 14::m {
 fun main() {
     assert!(0u256 % 1u256 == 0u256, 5000);
     assert!(1u256 % 1u256 == 0u256, 5001);
@@ -150,7 +150,7 @@ fun main() {
 }
 
 //# run
-script {
+module 15::m {
 fun main() {
     // should fail
     0u256 % 0u256;
@@ -158,7 +158,7 @@ fun main() {
 }
 
 //# run
-script {
+module 16::m {
 fun main() {
     // should fail
     1u256 % 0u256;
@@ -166,7 +166,7 @@ fun main() {
 }
 
 //# run
-script {
+module 17::m {
 fun main() {
     // should fail
     4294967294u256 % 0u256;

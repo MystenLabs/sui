@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
     fun main() {
         assert!(@0 == @0x0, 42);
         assert!(@0xF == @15, 42);

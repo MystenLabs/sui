@@ -40,10 +40,11 @@ module 0x42.A {
 }
 
 //# run
+module 0x42.m {
 import 0x42.A;
 import 0x42.B;
 
-main() {
+entry foo() {
     let b: B.T;
     let x: A.T;
     let x_ref: &mut A.T;
@@ -53,4 +54,5 @@ label b0:
     x_ref = &mut x;
     A.t(move(x_ref));
     return;
+}
 }

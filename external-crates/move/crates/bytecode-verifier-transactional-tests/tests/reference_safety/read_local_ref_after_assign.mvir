@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: u64;
     let read_ref: &mut u64;
     let assign_ref: &mut u64;
@@ -13,4 +15,6 @@ label b0:
     no = *move(read_ref); // valid to read reference after assiging a copy!
     _ = move(assign_ref);
     return;
+}
+
 }

@@ -1,6 +1,6 @@
 //# run
 // Number of bits shifted >= total number of bits in the number.
-script {
+module 1::m {
 fun main() {
     // should fail
     0u8 << 8u8;
@@ -8,7 +8,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 fun main() {
     // should fail
     0u64 << 64u8;
@@ -16,7 +16,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 fun main() {
     // should fail
     0u128 << 128u8;
@@ -24,7 +24,7 @@ fun main() {
 }
 
 //# run
-script {
+module 4::m {
 fun main() {
     // should fail
     0u8 >> 8u8;
@@ -32,7 +32,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 fun main() {
     // should fail
     0u64 >> 64u8;
@@ -40,7 +40,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     // should fail
     0u128 >> 128u8;
@@ -48,7 +48,7 @@ fun main() {
 }
 
 //# run
-script {
+module 7::m {
 fun main() {
     // should fail
     0u16 << 16u8;
@@ -56,7 +56,7 @@ fun main() {
 }
 
 //# run
-script {
+module 8::m {
 fun main() {
     // should fail
     0u32 << 32u8;
@@ -64,7 +64,7 @@ fun main() {
 }
 
 //# run
-script {
+module 9::m {
 fun main() {
     // should fail
     0u16 >> 16u8;
@@ -72,7 +72,7 @@ fun main() {
 }
 
 //# run
-script {
+module 10::m {
 fun main() {
     // should fail
     0u32 >> 32u8;
@@ -82,7 +82,7 @@ fun main() {
 
 // Shifting 0 results in 0.
 //# run
-script {
+module 11::m {
 fun main() {
     assert!(0u8 << 4u8 == 0u8, 1000);
     assert!(0u64 << 1u8 == 0u64, 1001);
@@ -103,7 +103,7 @@ fun main() {
 
 // Shifting by 0 bits results in the same number.
 //# run
-script {
+module 12::m {
 fun main() {
     assert!(100u8 << 0u8 == 100u8, 2000);
     assert!(43u64 << 0u8 == 43u64, 2001);
@@ -124,7 +124,7 @@ fun main() {
 
 // shl/shr by 1 equivalent to mul/div by 2.
 //# run
-script {
+module 0x42::m {
 fun main() {
     assert!(1u8 << 1u8 == 2u8, 3000);
     assert!(7u64 << 1u8 == 14u64, 3001);
@@ -146,7 +146,7 @@ fun main() {
 
 // Underflowing results in 0.
 //# run
-script {
+module 13::m {
 fun main() {
     assert!(1234u64 >> 63u8 == 0u64, 4000);
     assert!(3u8 >> 5u8 == 0u8, 4001);
@@ -161,7 +161,7 @@ fun main() {
 
 // Overflowing results are truncated.
 //# run
-script {
+module 14::m {
 fun main() {
     assert!(7u8 << 7u8 == 128u8, 5000);
     assert!(7u64 << 62u8 == 13835058055282163712u64, 5001);
@@ -176,7 +176,7 @@ fun main() {
 
 // Some random tests.
 //# run
-script {
+module 15::m {
 fun main() {
     assert!(54u8 << 3u8 == 176u8, 6000);
     assert!(5u8 << 2u8 == 20u8, 6001);

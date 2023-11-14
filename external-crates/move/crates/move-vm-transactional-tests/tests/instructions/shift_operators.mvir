@@ -1,78 +1,109 @@
 //# run
+module 0x1.m {
 // Number of bits shifted >= total number of bits in the number.
-main() {
+entry foo() {
 label b0:
     _ = 0u8 << 8u8;
     return;
 }
+}
 
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
 label b0:
     _ = 0u64 << 64u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x3.m {
+
+entry foo() {
 label b0:
     _ = 0u128 << 128u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x4.m {
+
+entry foo() {
 label b0:
     _ = 0u16 << 16u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x5.m {
+
+entry foo() {
 label b0:
     _ = 0u32 << 32u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x6.m {
+
+entry foo() {
 label b0:
     _ = 0u8 >> 8u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x7.m {
+
+entry foo() {
 label b0:
     _ = 0u64 >> 64u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x8.m {
+
+entry foo() {
 label b0:
     _ = 0u128 >> 128u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x9.m {
+
+entry foo() {
 label b0:
     _ = 0u16 >> 16u8;
     return;
 }
 
+}
 //# run
-main() {
+module 0x10.m {
+
+entry foo() {
 label b0:
     _ = 0u32 >> 32u8;
     return;
 }
 
+}
 
 // Shifting 0 results in 0.
 //# run
-main() {
+module 0x11.m {
+
+entry foo() {
 label b0:
     assert(0u8 << 4u8 == 0u8, 1000);
     assert(0u64 << 1u8 == 0u64, 1001);
@@ -90,11 +121,14 @@ label b0:
     return;
 }
 
+}
 
 
 // Shifting by 0 bits results in the same number.
 //# run
-main() {
+module 0x12.m {
+
+entry foo() {
 label b0:
     assert(100u8 << 0u8 == 100u8, 2000);
     assert(43u64 << 0u8 == 43u64, 2001);
@@ -112,11 +146,14 @@ label b0:
     return;
 }
 
+}
 
 
 // shl/shr by 1 equivalent to mul/div by 2.
 //# run
-main() {
+module 0x13.m {
+
+entry foo() {
 label b0:
     assert(1u8 << 1u8 == 2u8, 3000);
     assert(7u64 << 1u8 == 14u64, 3001);
@@ -134,11 +171,14 @@ label b0:
     return;
 }
 
+}
 
 
 // Underflowing results in 0.
 //# run
-main() {
+module 0x14.m {
+
+entry foo() {
 label b0:
     assert(1234u64 >> 63u8 == 0u64, 4000);
     assert(3u8 >> 5u8 == 0u8, 4001);
@@ -149,11 +189,14 @@ label b0:
     return;
 }
 
+}
 
 
 // Overflowing results are truncated.
 //# run
-main() {
+module 0x15.m {
+
+entry foo() {
 label b0:
     assert(7u8 << 7u8 == 128u8, 5000);
     assert(7u64 << 62u8 == 13835058055282163712u64, 5001);
@@ -164,11 +207,14 @@ label b0:
     return;
 }
 
+}
 
 
 // Some random tests.
 //# run
-main() {
+module 0x16.m {
+
+entry foo() {
 label b0:
     assert(54u8 << 3u8 == 176u8, 6000);
     assert(5u8 << 2u8 == 20u8, 6001);
@@ -197,4 +243,6 @@ label b0:
     assert(1234536789093546757803u256 << 168u8 == 461895049882996264654333091841553462264195467433049741837793730775482368u256, 6503);
     assert(1234536789093546757803786604381691994985672142341299639418u256 << 202u8 == 33658913632735705985908889087832028406806276615240336691180752852867975479296u256, 6504);
     return;
+}
+
 }

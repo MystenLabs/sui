@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
     let x_ref: &mut u64;
     let imm_ref: &u64;
@@ -11,4 +13,6 @@ label b0:
     _ = move(imm_ref);
 
     return;
+}
+
 }

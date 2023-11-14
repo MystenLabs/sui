@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{
-    framework::{run_test_impl, CompiledState, MoveTestAdapter},
+    framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
 use anyhow::{anyhow, Result};
@@ -13,7 +13,6 @@ use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
     errors::{Location, VMError, VMResult},
-    file_format::CompiledScript,
     CompiledModule,
 };
 use move_command_line_common::{
@@ -142,20 +141,20 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
 
     async fn publish_modules(
         &mut self,
-        modules: Vec<(Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraPublishArgs,
-    ) -> Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+    ) -> Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         let all_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes)?;
+                m.module.serialize(&mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<Result<_>>()?;
 
-        let id = modules.first().unwrap().1.self_id();
+        let id = modules.first().unwrap().module.self_id();
         let sender = *id.address();
         match self.perform_session_action(
             gas_budget,
@@ -169,55 +168,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
                 format_vm_error(&e)
             )),
         }
-    }
-
-    async fn execute_script(
-        &mut self,
-        script: CompiledScript,
-        type_arg_tags: Vec<TypeTag>,
-        signers: Vec<ParsedAddress>,
-        txn_args: Vec<MoveValue>,
-        gas_budget: Option<u64>,
-        _extra_args: Self::ExtraRunArgs,
-    ) -> Result<(Option<String>, SerializedReturnValues)> {
-        let signers: Vec<_> = signers
-            .into_iter()
-            .map(|addr| self.compiled_state().resolve_address(&addr))
-            .collect();
-
-        let mut script_bytes = vec![];
-        script.serialize(&mut script_bytes)?;
-
-        let args = txn_args
-            .iter()
-            .map(|arg| arg.simple_serialize().unwrap())
-            .collect::<Vec<_>>();
-        // TODO rethink testing signer args
-        let args = signers
-            .iter()
-            .map(|a| MoveValue::Signer(*a).simple_serialize().unwrap())
-            .chain(args)
-            .collect();
-        let serialized_return_values = self
-            .perform_session_action(
-                gas_budget,
-                |session, gas_status| {
-                    let type_args: Vec<_> = type_arg_tags
-                        .into_iter()
-                        .map(|tag| session.load_type(&tag))
-                        .collect::<VMResult<_>>()?;
-
-                    session.execute_script(script_bytes, type_args, args, gas_status)
-                },
-                test_vm_config(),
-            )
-            .map_err(|e| {
-                anyhow!(
-                    "Script execution failed with VMError: {}",
-                    format_vm_error(&e)
-                )
-            })?;
-        Ok((None, serialized_return_values))
     }
 
     async fn call_function(

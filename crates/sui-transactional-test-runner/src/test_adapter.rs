@@ -8,7 +8,7 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
-use move_binary_format::{file_format::CompiledScript, CompiledModule};
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
@@ -25,6 +25,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 use move_symbol_pool::Symbol;
+use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
@@ -122,7 +123,7 @@ pub struct SuiTestAdapter<'a> {
 pub(crate) struct StagedPackage {
     file: NamedTempFile,
     syntax: SyntaxChoice,
-    modules: Vec<(Option<Symbol>, CompiledModule)>,
+    modules: Vec<MaybeNamedCompiledModule>,
     pub(crate) digest: Vec<u8>,
 }
 
@@ -283,23 +284,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
     async fn publish_modules(
         &mut self,
-        modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+    ) -> anyhow::Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         self.next_task();
         let SuiPublishArgs {
             sender,
             upgradeable,
             dependencies,
         } = extra;
-        let named_addr_opt = modules.first().unwrap().0;
-        let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
+        let named_addr_opt = modules.first().unwrap().named_address;
+        let first_module_name = modules.first().unwrap().module.self_id().name().to_string();
         let modules_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes).unwrap();
+                m.module.serialize(&mut module_bytes).unwrap();
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<_>>()?;
@@ -373,11 +374,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .unwrap()
             .serialized_module_map()
             .iter()
-            .map(|(_, published_module_bytes)| {
-                (
-                    named_addr_opt,
-                    CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
-                )
+            .map(|(_, published_module_bytes)| MaybeNamedCompiledModule {
+                named_address: named_addr_opt,
+                module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
+                source_map: None,
             })
             .collect();
         Ok((output, published_modules))
@@ -428,18 +428,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             return_values: vec![],
         };
         Ok((output, empty))
-    }
-
-    async fn execute_script(
-        &mut self,
-        _script: CompiledScript,
-        _type_args: Vec<TypeTag>,
-        _signers: Vec<ParsedAddress>,
-        _args: Vec<SuiValue>,
-        _gas_budget: Option<u64>,
-        _extra: Self::ExtraRunArgs,
-    ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
-        bail!("Scripts are not supported")
     }
 
     async fn handle_subcommand(
@@ -605,9 +593,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                     .get(&Symbol::from(p))?
                                     .modules
                                     .iter()
-                                    .map(|(_n, m)| {
+                                    .map(|m| {
                                         let mut buf = vec![];
-                                        m.serialize(&mut buf).unwrap();
+                                        m.module.serialize(&mut buf).unwrap();
                                         buf
                                     })
                                     .collect();
@@ -717,7 +705,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                 .unwrap_or_else(|| panic!("Internal error: expected dependency {name} in map when restoring address."));
                         }
 
-                        let upgraded_name = modules.first().unwrap().0.unwrap();
+                        let upgraded_name = modules.first().unwrap().named_address.unwrap();
                         let package = &Symbol::from(package.as_str());
                         let original_name = adapter
                             .package_upgrade_mapping
@@ -776,11 +764,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .await?;
                 assert!(!modules.is_empty());
-                let Some(package_name) = modules.first().unwrap().0 else {
+                let Some(package_name) = modules.first().unwrap().named_address else {
                     bail!("Staged modules must have a named address")
                 };
-                for (named_addr, _) in &modules {
-                    let Some(named_addr) = named_addr else {
+                for m in &modules {
+                    let Some(named_addr) = &m.named_address else {
                         bail!("Staged modules must have a named address")
                     };
                     if named_addr != &package_name {
@@ -794,9 +782,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     self.get_dependency_ids(dependencies, /* include_std */ true)?;
                 let module_bytes = modules
                     .iter()
-                    .map(|(_, m)| {
+                    .map(|m| {
                         let mut buf = vec![];
-                        m.serialize(&mut buf).unwrap();
+                        m.module.serialize(&mut buf).unwrap();
                         buf
                     })
                     .collect::<Vec<_>>();
@@ -838,7 +826,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                         published_module_bytes,
                                     )
                                     .unwrap();
-                                    (Some(*address_sym), module)
+                                    MaybeNamedCompiledModule {
+                                        named_address: Some(*address_sym),
+                                        module,
+                                        source_map: None,
+                                    }
                                 })
                                 .collect()
                         });
@@ -903,7 +895,7 @@ impl<'a> SuiTestAdapter<'a> {
     async fn upgrade_package(
         &mut self,
         before_upgrade: NumericalAddress,
-        modules: &[(Option<Symbol>, CompiledModule)],
+        modules: &[MaybeNamedCompiledModule],
         upgrade_capability: FakeID,
         dependencies: Vec<String>,
         sender: String,
@@ -912,9 +904,9 @@ impl<'a> SuiTestAdapter<'a> {
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes)?;
+                m.module.serialize(&mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -974,7 +966,7 @@ impl<'a> SuiTestAdapter<'a> {
             })
             .unwrap();
         let package_addr = NumericalAddress::new(created_package.into_bytes(), NumberFormat::Hex);
-        if let Some(new_package_name) = modules[0].0 {
+        if let Some(new_package_name) = modules[0].named_address {
             let prev_package = self
                 .compiled_state
                 .named_address_mapping

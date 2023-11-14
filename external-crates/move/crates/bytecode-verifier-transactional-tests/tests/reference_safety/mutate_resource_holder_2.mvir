@@ -35,9 +35,10 @@ module 0x42.A {
 }
 
 //# run
+module 0x42.m {
 import 0x42.A;
 
-main() {
+entry foo() {
     let zero_resource: A.Coin;
     let s: A.A;
 label b0:
@@ -46,4 +47,5 @@ label b0:
     A.mutate(&mut s);
     A.destroy_a(move(s));
     return;
+}
 }

@@ -7,9 +7,10 @@ module 0x42.M {
 }
 
 //# run
+module 0x42.m {
 import 0x42.M;
 
-main() {
+entry foo() {
     let a: u64;
     let b: bool;
     let c: address;
@@ -23,4 +24,5 @@ label b0:
     assert(move(b) == false, 43);
     assert(move(c) == 0x0, 44);
     return;
+}
 }
