@@ -46,6 +46,7 @@ use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
+use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
@@ -486,9 +487,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
         match command {
             SuiSubcommand::RunGraphql => {
-                let file = data.ok_or_else(|| {
-                    anyhow::anyhow!("Missing commands for programmable transaction")
-                })?;
+                let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
                 let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
@@ -499,8 +498,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let resp = cluster
                     .graphql_client
                     .execute_to_graphql(contents.trim().to_owned(), true, vec![], vec![])
-                    .await
-                    .unwrap();
+                    .await?;
 
                 Ok(Some(resp.response_body_json_pretty()))
             }
@@ -1696,7 +1694,7 @@ async fn init_sim_executor(
 
     let cluster = serve_executor(
         ConnectionConfig::ci_integration_test_cfg(),
-        3000,
+        DEFAULT_INTERNAL_DATA_SOURCE_PORT,
         Arc::new(read_replica),
     )
     .await;
