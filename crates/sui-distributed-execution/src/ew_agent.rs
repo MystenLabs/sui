@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
 
 use super::agents::*;
 use crate::{
@@ -56,7 +60,9 @@ impl Agent<SailfishMessage> for EWAgent {
 
         // extract my attrs from the global config
         let my_attrs = &self.attrs.get(&self.id).unwrap().attrs;
-        let metrics_address = my_attrs.get("metrics-address").unwrap().parse().unwrap();
+        let mut metrics_address: SocketAddr =
+            my_attrs.get("metrics-address").unwrap().parse().unwrap();
+        metrics_address.set_ip(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let registry_service = { metrics::start_prometheus_server(metrics_address) };
         let prometheus_registry = registry_service.default_registry();
         let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));

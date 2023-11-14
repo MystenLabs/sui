@@ -1,5 +1,8 @@
-use std::cmp;
-use std::sync::Arc;
+use std::{
+    cmp,
+    net::{Ipv4Addr, SocketAddr},
+};
+use std::{net::IpAddr, sync::Arc};
 
 use prometheus::Registry;
 use std::collections::HashMap;
@@ -57,7 +60,9 @@ impl SequenceWorkerState {
         let config = NodeConfig::load(config_path).unwrap();
 
         let genesis = config.genesis().expect("Could not load genesis");
-        let metrics_address = attrs.get("metrics-address").unwrap().parse().unwrap();
+        let mut metrics_address: SocketAddr =
+            attrs.get("metrics-address").unwrap().parse().unwrap();
+        metrics_address.set_ip(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         let registry_service = { metrics::start_prometheus_server(metrics_address) };
         let prometheus_registry = registry_service.default_registry();
         let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));

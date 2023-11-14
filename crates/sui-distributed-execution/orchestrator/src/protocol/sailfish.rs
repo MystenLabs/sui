@@ -232,7 +232,7 @@ impl ProtocolMetrics<SailfishBenchmarkType> for SailfishProtocol {
             .map(|x| (IpAddr::V4(x.main_ip), x))
             .unzip();
         let sequence_workers = parameters.benchmark_type.sequence_workers;
-        let metrics_paths = GlobalConfig::new_for_benchmark(ips, sequence_workers)
+        let metrics_paths = GlobalConfig::new_for_benchmark_ew_only(ips, sequence_workers) // create conf from node ips and so skips the first EW (thinking its a SW)
             .execution_workers_metric_addresses()
             .into_iter()
             .map(|x| {
@@ -255,6 +255,6 @@ impl ProtocolMetrics<SailfishBenchmarkType> for SailfishProtocol {
     {
         // TODO: hack until we have benchmark clients.
         // self.nodes_metrics_path(instances, parameters)
-        todo!()
+        vec![]
     }
 }
