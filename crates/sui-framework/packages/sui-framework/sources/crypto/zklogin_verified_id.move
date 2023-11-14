@@ -57,8 +57,14 @@ module sui::zklogin_verified_id {
         &verified_id.audience
     }
 
-    /// Verify that the caller's address was created using zklogin and the given parametersand returns a `VerifiedID`
-    /// with the caller's id (claim name and value, issuer and wallet id).
+    /// Delete a VerifiedID
+    public fun delete(verified_id: VerifiedID) {
+        let VerifiedID { id, owner: _, key_claim_name: _, key_claim_value: _, issuer: _, audience: _ } = verified_id;
+        object::delete(id);
+    }
+
+    /// Verify that the caller's address was created using zklogin and the given parameters and if so, transfer
+    /// a `VerifiedID` object with the caller's id (claim name and value, issuer and wallet id) to the caller.
     ///
     /// Aborts with `EInvalidInput` if any of the inputs are longer than the allowed upper bounds: `kc_name` must be at
     /// most 32 characters, `kc_value` must be at most 115 characters and `aud` must be at most 145 characters.
