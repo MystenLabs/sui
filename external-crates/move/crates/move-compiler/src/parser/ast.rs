@@ -252,7 +252,6 @@ pub struct FunctionSignature {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Visibility {
     Public(Loc),
-    Script(Loc),
     Friend(Loc),
     Package(Loc),
     Internal,
@@ -910,14 +909,12 @@ impl Visibility {
     pub const PACKAGE: &'static str = "public(package)";
     pub const PACKAGE_IDENT: &'static str = "package";
     pub const PUBLIC: &'static str = "public";
-    pub const SCRIPT: &'static str = "public(script)";
 
     pub fn loc(&self) -> Option<Loc> {
         match self {
-            Visibility::Friend(loc)
-            | Visibility::Package(loc)
-            | Visibility::Public(loc)
-            | Visibility::Script(loc) => Some(*loc),
+            Visibility::Friend(loc) | Visibility::Package(loc) | Visibility::Public(loc) => {
+                Some(*loc)
+            }
             Visibility::Internal => None,
         }
     }
@@ -974,7 +971,6 @@ impl fmt::Display for Visibility {
                 Visibility::Internal => Visibility::INTERNAL,
                 Visibility::Package(_) => Visibility::PACKAGE,
                 Visibility::Public(_) => Visibility::PUBLIC,
-                Visibility::Script(_) => Visibility::SCRIPT,
             }
         )
     }

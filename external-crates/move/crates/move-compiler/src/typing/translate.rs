@@ -139,7 +139,7 @@ fn module(
         .for_each(|(_, _, s)| struct_def(context, s));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
-    let functions = nfunctions.map(|name, f| function(context, name, f, false));
+    let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
     context.pop_use_funs_scope();
@@ -168,13 +168,7 @@ fn module(
 // Functions
 //**************************************************************************************************
 
-fn function(
-    context: &mut Context,
-    name: FunctionName,
-    f: N::Function,
-    is_script: bool,
-) -> T::Function {
-    let loc = name.loc();
+fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
         warning_filter,
         index,
@@ -195,23 +189,6 @@ fn function(
             None => visibility,
         };
     function_signature(context, &signature);
-    if is_script {
-        let mk_msg = || {
-            let tu = core::error_format_(&Type_::Unit, &Subst::empty());
-            format!(
-                "Invalid 'script' function return type. The function entry point to a \
-                 'script' must have the return type {}",
-                tu
-            )
-        };
-        subtype(
-            context,
-            loc,
-            mk_msg,
-            signature.return_type.clone(),
-            sp(loc, Type_::Unit),
-        );
-    }
     expand::function_signature(context, &mut signature);
 
     let body = function_body(context, n_body);

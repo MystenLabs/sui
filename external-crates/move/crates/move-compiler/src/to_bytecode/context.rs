@@ -17,7 +17,7 @@ use std::{
 };
 use IR::Ability;
 
-/// Compilation context for a single compilation unit (module or script).
+/// Compilation context for a single compilation unit (module).
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
     pub env: &'a mut CompilationEnv,

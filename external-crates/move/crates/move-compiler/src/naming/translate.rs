@@ -502,7 +502,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, &mut spec_dependencies, Some(ident), name, f)
+        function(context, &mut spec_dependencies, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -724,7 +724,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 fn function(
     context: &mut Context,
     spec_dependencies: &mut BTreeSet<(ModuleIdent, Neighbor)>,
-    module_opt: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
 ) -> N::Function {
@@ -773,7 +773,7 @@ fn function(
         signature,
         body,
     };
-    fake_natives::function(context.env, module_opt, name, &f);
+    fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
     context.local_scopes = vec![];

@@ -1072,9 +1072,7 @@ fn use_(
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
-                P::Visibility::Script(vis_loc)
-                | P::Visibility::Friend(vis_loc)
-                | P::Visibility::Package(vis_loc) => {
+                P::Visibility::Friend(vis_loc) | P::Visibility::Package(vis_loc) => {
                     let msg = "Invalid visibility for 'use fun' declaration";
                     let vis_msg = format!(
                         "Module level 'use fun' declarations can be '{}' for the module's types, \
@@ -1533,7 +1531,6 @@ fn visibility(pvisibility: P::Visibility) -> E::Visibility {
         P::Visibility::Internal => E::Visibility::Internal,
         P::Visibility::Package(loc) => E::Visibility::Package(loc),
         P::Visibility::Public(loc) => E::Visibility::Public(loc),
-        P::Visibility::Script(loc) => E::Visibility::Public(loc),
     }
 }
 

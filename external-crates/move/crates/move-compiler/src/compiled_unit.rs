@@ -55,28 +55,12 @@ pub struct NamedCompiledModule {
 }
 
 #[derive(Debug, Clone)]
-pub struct NamedCompiledScript {
-    // package name metadata from compiler arguments
-    pub package_name: Option<Symbol>,
-    pub name: Symbol,
-    pub script: F::CompiledScript,
-    pub source_map: SourceMap,
-}
-
-#[derive(Debug, Clone)]
 pub struct AnnotatedCompiledModule {
     pub loc: Loc,
     pub module_name_loc: Loc,
     pub address_name: Option<Name>,
     pub named_module: NamedCompiledModule,
     pub function_infos: UniqueMap<FunctionName, FunctionInfo>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AnnotatedCompiledScript {
-    pub loc: Loc,
-    pub named_script: NamedCompiledScript,
-    pub function_info: FunctionInfo,
 }
 
 pub trait TargetModule {}

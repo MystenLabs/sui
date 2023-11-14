@@ -65,14 +65,12 @@ struct Context<'a> {
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
     // - if A friends B, add edge B -> A
-    // NOTE: neighbors of scripts are not tracked by this field, as nothing can depend on a script
-    // and a script cannot declare friends. Hence, is no way to form a cyclic dependency via scripts
     module_neighbors: BTreeMap<ModuleIdent, BTreeMap<ModuleIdent, BTreeMap<DepType, Loc>>>,
-    // A summary of neighbors keyed by module or script
+    // A summary of neighbors keyed by module
     neighbors_by_node: BTreeMap<ModuleIdent, UniqueMap<ModuleIdent, Neighbor>>,
     // All addresses used by a node
     addresses_by_node: BTreeMap<ModuleIdent, BTreeSet<Address>>,
-    // The module or script we are currently exploring
+    // The module we are currently exploring
     current_node: Option<ModuleIdent>,
 }
 
