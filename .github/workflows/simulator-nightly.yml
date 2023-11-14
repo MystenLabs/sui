@@ -100,6 +100,7 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
+      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       with:
         channel-id: 'simtest-nightly'
         payload: |
