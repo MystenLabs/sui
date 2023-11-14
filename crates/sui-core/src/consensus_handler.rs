@@ -249,14 +249,14 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
 
             assert_eq!(cert.header().payload().len(), batches.len());
             let author = cert.header().author();
-            let num_certs = self
+            let num_messages = self
                 .last_consensus_stats
                 .stats
-                .inc_narwhal_certificates(author.0 as usize);
+                .inc_num_messages(author.0 as usize);
             self.metrics
-                .consensus_committed_certificates
+                .consensus_committed_messages
                 .with_label_values(&[&author.to_string()])
-                .set(num_certs as i64);
+                .set(num_messages as i64);
             let output_cert = Arc::new(cert.clone());
             for batch in batches {
                 let span = trace_span!("process_consensus_batch");
@@ -290,7 +290,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                         let num_txns = self
                             .last_consensus_stats
                             .stats
-                            .inc_user_transactions(author.0 as usize);
+                            .inc_num_user_transactions(author.0 as usize);
                         self.metrics
                             .consensus_committed_user_transactions
                             .with_label_values(&[&author.to_string()])
@@ -731,11 +731,11 @@ mod tests {
         assert_eq!(last_consensus_stats_1.index.last_committed_round, 5_u64);
         assert_ne!(last_consensus_stats_1.hash, 0);
         assert_eq!(
-            last_consensus_stats_1.stats.get_narwhal_certificates(0),
+            last_consensus_stats_1.stats.get_num_messages(0),
             num_certificates as u64
         );
         assert_eq!(
-            last_consensus_stats_1.stats.get_user_transactions(0),
+            last_consensus_stats_1.stats.get_num_user_transactions(0),
             num_transactions as u64
         );
 
