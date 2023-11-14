@@ -14,10 +14,10 @@ import {
 import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
-import { toZkLoginPublicIdentifier } from '../keypairs/zklogin/publickey.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
+import { toZkLoginPublicIdentifier } from '../zklogin/publickey.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }

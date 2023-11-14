@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 
 import { TransactionBlock } from '../../src/builder';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
-import { toZkLoginPublicIdentifier } from '../../src/keypairs/zklogin/publickey';
 import { MultiSigPublicKey } from '../../src/multisig/publickey';
 import { getZkLoginSignature } from '../../src/zklogin';
+import { toZkLoginPublicIdentifier } from '../../src/zklogin/publickey';
 import { DEFAULT_RECIPIENT, setupWithFundedAddress } from './utils/setup';
 
 describe('MultiSig with zklogin signature', () => {
