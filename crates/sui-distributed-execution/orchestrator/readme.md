@@ -2,7 +2,7 @@
 
 The Orchestrator crate provides facilities for quickly deploying and benchmarking this codebase in a geo-distributed environment. Please note that it is not intended for production deployments or as an indicator of production engineering best practices. Its purpose is to facilitate research projects by allowing benchmarking of (variants of) the codebase and analyzing performance.
 
-This guide provides a step-by-step explanation of how to run geo-distributed benchmarks on either [Vultr](http://vultr.com) or [Amazon Web Services (AWS)](http://aws.amazon.com).
+This guide provides a step-by-step explanation of how to run geo-distributed benchmarks on [Amazon Web Services (AWS)](http://aws.amazon.com).
 
 ## Step 1. Set up cloud provider credentials
 
@@ -84,7 +84,7 @@ Running benchmarks involves installing the specified version of the codebase on 
 cargo run --bin orchestrator -- benchmark --committee 10 fixed-load --loads 200 --duration 180
 ```
 
-In a network of 10 validators, each with a corresponding load generator, each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
+Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
 
 ## Step 5. Monitoring
 
