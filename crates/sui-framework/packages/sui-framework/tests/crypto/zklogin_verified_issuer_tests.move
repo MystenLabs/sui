@@ -3,7 +3,7 @@
 
 #[test_only]
 module sui::zklogin_verified_issuer_tests {
-    use sui::zklogin_verified_issuer::{check_zklogin_issuer, verify_zklogin_issuer, VerifiedIssuer};
+    use sui::zklogin_verified_issuer::{check_zklogin_issuer, delete, verify_zklogin_issuer, VerifiedIssuer};
     use std::string::utf8;
     use sui::test_scenario;
 
@@ -39,7 +39,9 @@ module sui::zklogin_verified_issuer_tests {
         };
         test_scenario::next_tx(scenario, address);
         {
-            assert!(test_scenario::has_most_recent_for_sender<VerifiedIssuer>(scenario), 1);
+            assert!(test_scenario::has_most_recent_for_sender<VerifiedIssuer>(scenario), 0);
+            delete(test_scenario::take_from_sender<VerifiedIssuer>(scenario));
+            assert!(!test_scenario::has_most_recent_for_sender<VerifiedIssuer>(scenario), 1);
         };
         test_scenario::end(scenario_val);
     }
