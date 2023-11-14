@@ -17,9 +17,8 @@ pub trait ObjectStore {
     ) -> Result<Option<Arc<Object>>, SuiError>;
 }
 
-/*
-impl ObjectStore for &[Object] {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+impl ObjectStore for &[Arc<Object>] {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.iter().find(|o| o.id() == *object_id).cloned())
     }
 
@@ -27,14 +26,13 @@ impl ObjectStore for &[Object] {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self
             .iter()
             .find(|o| o.id() == *object_id && o.version() == version)
             .cloned())
     }
 }
-*/
 
 impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Arc<Object>, WriteKind)> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {

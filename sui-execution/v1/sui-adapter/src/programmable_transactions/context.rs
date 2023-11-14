@@ -735,12 +735,12 @@ mod checked {
 
             loaded_runtime_objects.extend(loaded_child_objects);
 
-            let mut written_objects = BTreeMap::new();
+            let mut written_objects: BTreeMap<_, Arc<_>> = BTreeMap::new();
             for package in new_packages {
                 let package_obj = Object::new_from_package(package, tx_digest);
                 let id = package_obj.id();
                 created_object_ids.insert(id, ());
-                written_objects.insert(id, package_obj);
+                written_objects.insert(id, package_obj.into());
             }
             for (id, additional_write) in additional_writes {
                 let AdditionalWrite {
@@ -763,7 +763,7 @@ mod checked {
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
-                written_objects.insert(id, object);
+                written_objects.insert(id, object.into());
                 if let Some(loaded) = loaded_runtime_objects.get_mut(&id) {
                     loaded.is_modified = true;
                 }
@@ -796,7 +796,7 @@ mod checked {
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
-                written_objects.insert(id, object);
+                written_objects.insert(id, object.into());
             }
 
             let user_events = user_events

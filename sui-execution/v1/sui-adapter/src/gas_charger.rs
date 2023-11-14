@@ -9,7 +9,7 @@ pub mod checked {
 
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
-    use std::ops::Deref;
+    use std::sync::Arc;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
     use sui_types::gas_model::gas_predicates::{
@@ -172,14 +172,13 @@ pub mod checked {
                         self.tx_digest
                     )
                 })
-                .deref()
                 .clone();
             // delete all gas objects except the primary_gas_object
             for (id, _version, _digest) in &self.gas_coins[1..] {
                 debug_assert_ne!(*id, primary_gas_object.id());
                 temporary_store.delete_input_object(id);
             }
-            primary_gas_object
+            Arc::make_mut(&mut primary_gas_object)
                 .data
                 .try_as_move_mut()
                 // unwrap should be safe because we checked that the primary gas object was a coin object above.
@@ -295,7 +294,7 @@ pub mod checked {
                 let gas_used = cost_summary.net_gas_usage();
 
                 let mut gas_object = temporary_store.read_object(&gas_object_id).unwrap().clone();
-                deduct_gas(&mut gas_object, gas_used);
+                deduct_gas(Arc::make_mut(&mut gas_object), gas_used);
                 #[skip_checked_arithmetic]
                 trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 

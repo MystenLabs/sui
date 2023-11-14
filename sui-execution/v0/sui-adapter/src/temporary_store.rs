@@ -7,7 +7,6 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
-use std::ops::Deref;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
@@ -106,6 +105,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
 
         for (id, (obj, kind)) in self.written.iter_mut() {
+            let obj = Arc::make_mut(obj);
             // Update the version for the written object.
             match &mut obj.data {
                 Data::Move(obj) => {
@@ -176,7 +176,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.write_object(object.deref().clone(), WriteKind::Mutate);
+            self.write_object(object, WriteKind::Mutate);
         }
     }
 
@@ -347,7 +347,7 @@ impl<'backing> TemporaryStore<'backing> {
     // is that an entry is not both added and deleted by the
     // caller.
 
-    pub fn write_object(&mut self, mut object: Object, kind: WriteKind) {
+    pub fn write_object(&mut self, mut object: Arc<Object>, kind: WriteKind) {
         // there should be no write after delete
         debug_assert!(self.deleted.get(&object.id()).is_none());
         // Check it is not read-only
@@ -373,8 +373,8 @@ impl<'backing> TemporaryStore<'backing> {
 
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
-        object.previous_transaction = self.tx_digest;
-        self.written.insert(object.id(), (object.into(), kind));
+        Arc::make_mut(&mut object).previous_transaction = self.tx_digest;
+        self.written.insert(object.id(), (object, kind));
     }
 
     pub fn delete_object(&mut self, id: &ObjectID, kind: DeleteKindWithOldVersion) {
@@ -482,12 +482,11 @@ impl<'backing> TemporaryStore<'backing> {
         let mut system_state_wrapper = self
             .read_object(&SUI_SYSTEM_STATE_OBJECT_ID)
             .expect("0x5 object must be muated in system tx with unmetered storage rebate")
-            .deref()
             .clone();
         // In unmetered execution, storage_rebate field of mutated object must be 0.
         // If not, we would be dropping SUI on the floor by overriding it.
         assert_eq!(system_state_wrapper.storage_rebate, 0);
-        system_state_wrapper.storage_rebate = unmetered_storage_rebate;
+        Arc::make_mut(&mut system_state_wrapper).storage_rebate = unmetered_storage_rebate;
         self.write_object(system_state_wrapper, WriteKind::Mutate);
     }
 }
@@ -709,7 +708,7 @@ impl<'backing> TemporaryStore<'backing> {
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate =
                 gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
-            object.storage_rebate = new_storage_rebate;
+            Arc::make_mut(object).storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
             }
@@ -720,7 +719,6 @@ impl<'backing> TemporaryStore<'backing> {
         // Write all objects at the end only if all previous gas charges succeeded.
         // This avoids polluting the temporary store state if this function failed.
         for (object, write_kind) in objects_to_update {
-            let object = (*object).clone();
             self.write_object(object, write_kind);
         }
     }
@@ -815,9 +813,13 @@ impl<'backing> TemporaryStore<'backing> {
                     // When an object is mutated, its version remains the old version until the end.
                     let version = object.version();
                     let storage_rebate = self.get_input_storage_rebate(id, version);
-                    (*id, Some((object.version(), storage_rebate)), Some(object))
+                    (
+                        *id,
+                        Some((object.version(), storage_rebate)),
+                        Some(object.as_ref()),
+                    )
                 }
-                WriteKind::Create | WriteKind::Unwrap => (*id, None, Some(object)),
+                WriteKind::Create | WriteKind::Unwrap => (*id, None, Some(object.as_ref())),
             })
             .chain(self.deleted.iter().filter_map(|(id, kind)| match kind {
                 DeleteKindWithOldVersion::Normal(version)

@@ -11,6 +11,7 @@
 //! [`Simulacrum`]: crate::Simulacrum
 
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use fastcrypto::traits::Signer;
@@ -362,7 +363,7 @@ impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
 }
 
 impl<T> ObjectStore for Simulacrum<T> {
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         Ok(self.store.get_object(object_id).cloned())
     }
 
@@ -370,7 +371,7 @@ impl<T> ObjectStore for Simulacrum<T> {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         self.store.get_object_by_key(object_id, version)
     }
 }

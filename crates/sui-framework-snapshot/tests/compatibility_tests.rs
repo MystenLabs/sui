@@ -3,6 +3,7 @@
 
 mod compatibility_tests {
     use std::collections::BTreeMap;
+    use std::sync::Arc;
     use sui_framework::{compare_system_package, BuiltInFramework};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -19,7 +20,7 @@ mod compatibility_tests {
             let framework = load_bytecode_snapshot(version).unwrap();
             let old_framework_store: BTreeMap<_, _> = framework
                 .into_iter()
-                .map(|package| (*package.id(), package.genesis_object()))
+                .map(|package| (*package.id(), Arc::new(package.genesis_object())))
                 .collect();
             for cur_package in BuiltInFramework::iter_system_packages() {
                 if compare_system_package(

@@ -78,7 +78,7 @@ mod checked {
         /// Additional transfers not from the Move runtime
         additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
         /// Newly published packages
-        new_packages: Vec<Object>,
+        new_packages: Vec<Arc<Object>>,
         /// User events are claimed after each Move call
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
         // runtime data
@@ -542,7 +542,7 @@ mod checked {
         }
 
         /// Add a newly created package to write as an effect of the transaction
-        pub fn write_package(&mut self, package: Object) -> Result<(), ExecutionError> {
+        pub fn write_package(&mut self, package: Arc<Object>) -> Result<(), ExecutionError> {
             assert_invariant!(package.is_package(), "Must be a package");
             self.new_packages.push(package);
             Ok(())
@@ -757,7 +757,7 @@ mod checked {
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
-                let change = ObjectChange::Write(object, write_kind);
+                let change = ObjectChange::Write(object.into(), write_kind);
                 object_changes.insert(id, change);
             }
 
@@ -788,7 +788,7 @@ mod checked {
                     )?
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
-                let change = ObjectChange::Write(object, write_kind);
+                let change = ObjectChange::Write(object.into(), write_kind);
                 object_changes.insert(id, change);
             }
             for (id, delete_kind) in deletions {

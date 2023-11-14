@@ -7,7 +7,6 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::ops::Deref;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
@@ -136,7 +135,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.mutate_input_object(object.deref().clone());
+            self.mutate_input_object(object);
         }
     }
 
@@ -404,12 +403,10 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     /// Mutate a mutable input object. This is used to mutate input objects outside of PT execution.
-    pub fn mutate_input_object(&mut self, object: Object) {
+    pub fn mutate_input_object(&mut self, object: Arc<Object>) {
         let id = object.id();
         self.execution_results.modified_objects.insert(id);
-        self.execution_results
-            .written_objects
-            .insert(id, object.into());
+        self.execution_results.written_objects.insert(id, object);
     }
 
     /// Mutate a child object outside of PT. This should be used extremely rarely.
@@ -563,12 +560,11 @@ impl<'backing> TemporaryStore<'backing> {
         let mut system_state_wrapper = self
             .read_object(&SUI_SYSTEM_STATE_OBJECT_ID)
             .expect("0x5 object must be muated in system tx with unmetered storage rebate")
-            .deref()
             .clone();
         // In unmetered execution, storage_rebate field of mutated object must be 0.
         // If not, we would be dropping SUI on the floor by overriding it.
         assert_eq!(system_state_wrapper.storage_rebate, 0);
-        system_state_wrapper.storage_rebate = unmetered_storage_rebate;
+        Arc::make_mut(&mut system_state_wrapper).storage_rebate = unmetered_storage_rebate;
         self.mutate_input_object(system_state_wrapper);
     }
 
@@ -758,7 +754,7 @@ impl<'backing> TemporaryStore<'backing> {
             // track changes and compute the new object `storage_rebate`
             let new_storage_rebate =
                 gas_charger.track_storage_mutation(new_object_size, old_storage_rebate);
-            object.storage_rebate = new_storage_rebate;
+            Arc::make_mut(object).storage_rebate = new_storage_rebate;
         }
 
         self.collect_rebate(gas_charger);
@@ -879,7 +875,11 @@ impl<'backing> TemporaryStore<'backing> {
             .iter()
             .map(|id| {
                 let metadata = self.get_object_modified_at(id);
-                let output = self.execution_results.written_objects.get(id);
+                let output = self
+                    .execution_results
+                    .written_objects
+                    .get(id)
+                    .map(|o| o.as_ref());
                 (*id, metadata, output)
             })
             .chain(
@@ -890,7 +890,7 @@ impl<'backing> TemporaryStore<'backing> {
                         if self.execution_results.modified_objects.contains(id) {
                             None
                         } else {
-                            Some((*id, None, Some(object)))
+                            Some((*id, None, Some(object.as_ref())))
                         }
                     }),
             )

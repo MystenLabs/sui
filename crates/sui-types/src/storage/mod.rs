@@ -143,7 +143,7 @@ impl DeleteKindWithOldVersion {
 
 #[derive(Debug)]
 pub enum ObjectChange {
-    Write(Object, WriteKind),
+    Write(Arc<Object>, WriteKind),
     // DeleteKind together with the old sequence number prior to the deletion, if available.
     Delete(DeleteKindWithOldVersion),
 }

@@ -508,7 +508,7 @@ mod checked {
             package
         };
 
-        context.write_package(package_obj)?;
+        context.write_package(package_obj.into())?;
         let values = if Mode::packages_are_predefined() {
             // no upgrade cap for genesis modules
             vec![]
@@ -661,7 +661,7 @@ mod checked {
             upgrade_ticket.policy,
         )?;
 
-        context.write_package(package_obj)?;
+        context.write_package(package_obj.into())?;
         Ok(vec![Value::Raw(
             RawValueType::Loaded {
                 ty: upgrade_receipt_type,

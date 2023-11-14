@@ -5,6 +5,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use sui_config::genesis;
 use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObjectArc};
 use sui_types::{
@@ -45,7 +46,7 @@ pub struct InMemoryStore {
 
     // Object data
     live_objects: HashMap<ObjectID, SequenceNumber>,
-    objects: HashMap<ObjectID, BTreeMap<SequenceNumber, Object>>,
+    objects: HashMap<ObjectID, BTreeMap<SequenceNumber, Arc<Object>>>,
 }
 
 impl InMemoryStore {
@@ -138,15 +139,20 @@ impl InMemoryStore {
             .and_then(|x| self.events.get(x))
     }
 
-    pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
+    pub fn get_object(&self, id: &ObjectID) -> Option<Arc<Object>> {
         let version = self.live_objects.get(id)?;
         self.get_object_at_version(id, *version)
     }
 
-    pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {
+    pub fn get_object_at_version(
+        &self,
+        id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Option<Arc<Object>> {
         self.objects
             .get(id)
             .and_then(|versions| versions.get(&version))
+            .cloned()
     }
 
     pub fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
@@ -160,7 +166,7 @@ impl InMemoryStore {
             .expect("clock object should deserialize")
     }
 
-    pub fn owned_objects(&self, owner: SuiAddress) -> impl Iterator<Item = &Object> {
+    pub fn owned_objects(&self, owner: SuiAddress) -> impl Iterator<Item = Arc<Object>> + '_ {
         self.live_objects
             .iter()
             .flat_map(|(id, version)| self.get_object_at_version(id, *version))
@@ -212,7 +218,7 @@ impl InMemoryStore {
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
         events: TransactionEvents,
-        written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Arc<Object>>,
     ) {
         let deleted_objects = effects.deleted();
         let tx_digest = *effects.transaction_digest();
@@ -238,7 +244,7 @@ impl InMemoryStore {
 
     pub fn update_objects(
         &mut self,
-        written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Arc<Object>>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
         for (object_id, _, _) in deleted_objects {
@@ -271,8 +277,8 @@ impl ChildObjectResolver for InMemoryStore {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> sui_types::error::SuiResult<Option<Object>> {
-        let child_object = match self.get_object(child).cloned() {
+    ) -> sui_types::error::SuiResult<Option<Arc<Object>>> {
+        let child_object = match self.get_object(child) {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -302,8 +308,8 @@ impl ChildObjectResolver for InMemoryStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-    ) -> sui_types::error::SuiResult<Option<Object>> {
-        let recv_object = match self.get_object(receiving_object_id).cloned() {
+    ) -> sui_types::error::SuiResult<Option<Arc<Object>>> {
+        let recv_object = match self.get_object(receiving_object_id) {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -341,16 +347,16 @@ impl ObjectStore for InMemoryStore {
     fn get_object(
         &self,
         object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
-        Ok(self.get_object(object_id).cloned())
+    ) -> Result<Option<Arc<Object>>, sui_types::error::SuiError> {
+        Ok(self.get_object(object_id))
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
-        Ok(self.get_object_at_version(object_id, version).cloned())
+    ) -> Result<Option<Arc<Object>>, sui_types::error::SuiError> {
+        Ok(self.get_object_at_version(object_id, version))
     }
 }
 
@@ -419,12 +425,12 @@ impl InMemoryStore {
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) => self.get_object(id).cloned(),
+                InputObjectKind::MovePackage(id) => self.get_object(id),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }
 
-                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id).cloned(),
+                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id),
             };
 
             input_objects.push(ObjectReadResult::new(
@@ -436,14 +442,14 @@ impl InMemoryStore {
         let mut receiving_objects = Vec::new();
         for objref in receiving_object_refs {
             // no need for marker table check in simulacrum
-            let Some(obj) = self.get_object(&objref.0).cloned() else {
+            let Some(obj) = self.get_object(&objref.0) else {
                 return Err(UserInputError::ObjectNotFound {
                     object_id: objref.0,
                     version: Some(objref.1),
                 }
                 .into());
             };
-            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj.into()));
+            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj));
         }
 
         Ok((input_objects.into(), receiving_objects.into()))
@@ -476,8 +482,8 @@ pub trait SimulatorStore:
         digest: &TransactionEventsDigest,
     ) -> Option<&TransactionEvents>;
 
-    fn get_object(&self, id: &ObjectID) -> Option<&Object>;
-    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object>;
+    fn get_object(&self, id: &ObjectID) -> Option<Arc<Object>>;
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Arc<Object>>;
 
     fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState;
 
@@ -496,7 +502,7 @@ pub trait SimulatorStore:
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
         events: TransactionEvents,
-        written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Arc<Object>>,
     );
 
     fn insert_transaction(&mut self, transaction: VerifiedTransaction);
@@ -507,7 +513,7 @@ pub trait SimulatorStore:
 
     fn update_objects(
         &mut self,
-        written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Arc<Object>>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     );
 }
@@ -554,11 +560,11 @@ impl SimulatorStore for InMemoryStore {
         self.get_transaction_events(digest)
     }
 
-    fn get_object(&self, id: &ObjectID) -> Option<&Object> {
+    fn get_object(&self, id: &ObjectID) -> Option<Arc<Object>> {
         self.get_object(id)
     }
 
-    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Arc<Object>> {
         self.get_object_at_version(id, version)
     }
 
@@ -591,7 +597,7 @@ impl SimulatorStore for InMemoryStore {
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
         events: TransactionEvents,
-        written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Arc<Object>>,
     ) {
         self.insert_executed_transaction(transaction, effects, events, written_objects)
     }
@@ -610,7 +616,7 @@ impl SimulatorStore for InMemoryStore {
 
     fn update_objects(
         &mut self,
-        written_objects: BTreeMap<ObjectID, Object>,
+        written_objects: BTreeMap<ObjectID, Arc<Object>>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
         self.update_objects(written_objects, deleted_objects)

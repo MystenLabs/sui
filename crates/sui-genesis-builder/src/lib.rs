@@ -197,7 +197,7 @@ impl Builder {
         self.built_genesis.clone().unwrap()
     }
 
-    fn committee(objects: &[Object]) -> Committee {
+    fn committee(objects: &[Arc<Object>]) -> Committee {
         let sui_system_object =
             get_sui_system_state(&objects).expect("Sui System State object must always exist");
         sui_system_object.get_current_epoch_committee().committee
@@ -440,11 +440,13 @@ impl Builder {
         let mut gas_objects: BTreeMap<ObjectID, (&Object, GasCoin)> = unsigned_genesis
             .objects()
             .iter()
+            .map(|o| o.as_ref())
             .filter_map(|o| GasCoin::try_from(o).ok().map(|g| (o.id(), (o, g))))
             .collect();
         let mut staked_sui_objects: BTreeMap<ObjectID, (&Object, StakedSui)> = unsigned_genesis
             .objects()
             .iter()
+            .map(|o| o.as_ref())
             .filter_map(|o| StakedSui::try_from(o).ok().map(|s| (o.id(), (o, s))))
             .collect();
 
@@ -765,7 +767,7 @@ fn build_unsigned_genesis_data(
         transaction: genesis_transaction,
         effects: genesis_effects,
         events: genesis_events,
-        objects,
+        objects: objects.into_iter().map(|o| o.into()).collect(),
     }
 }
 
@@ -797,7 +799,7 @@ fn create_genesis_checkpoint(
 }
 
 fn create_genesis_transaction(
-    objects: Vec<Object>,
+    objects: Vec<Arc<Object>>,
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
     epoch_data: &EpochData,
@@ -805,12 +807,13 @@ fn create_genesis_transaction(
     Transaction,
     TransactionEffects,
     TransactionEvents,
-    Vec<Object>,
+    Vec<Arc<Object>>,
 ) {
     let genesis_transaction = {
         let genesis_objects = objects
             .into_iter()
-            .map(|mut object| {
+            .map(|object| {
+                let mut object = (*object).clone();
                 if let Some(o) = object.data.try_as_move_mut() {
                     o.decrement_version_to(SequenceNumber::MIN);
                 }
@@ -885,7 +888,7 @@ fn create_genesis_objects(
     token_distribution_schedule: &TokenDistributionSchedule,
     system_packages: Vec<SystemPackage>,
     metrics: Arc<LimitsMetrics>,
-) -> Vec<Object> {
+) -> Vec<Arc<Object>> {
     let mut store = InMemoryStorage::new(Vec::new());
     // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
     // However since we know there are no chain specific protool config options in genesis,
@@ -916,7 +919,7 @@ fn create_genesis_objects(
 
     {
         for object in input_objects {
-            store.insert_object(object.to_owned());
+            store.insert_object(object.clone().into());
         }
     }
 
@@ -1096,7 +1099,7 @@ pub fn generate_genesis_system_object(
     // update the value of the clock to match the chain start time
     {
         let object = written.get_mut(&sui_types::SUI_CLOCK_OBJECT_ID).unwrap();
-        object
+        Arc::make_mut(object)
             .data
             .try_as_move_mut()
             .unwrap()

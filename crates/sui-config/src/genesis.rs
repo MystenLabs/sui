@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::Arc;
 use std::{fs, path::Path};
 use sui_types::authenticator_state::{
     get_authenticator_state, get_authenticator_state_obj_initial_shared_version,
@@ -38,7 +39,7 @@ pub struct Genesis {
     transaction: Transaction,
     effects: TransactionEffects,
     events: TransactionEvents,
-    objects: Vec<Object>,
+    objects: Vec<Arc<Object>>,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
@@ -48,7 +49,7 @@ pub struct UnsignedGenesis {
     pub transaction: Transaction,
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
-    pub objects: Vec<Object>,
+    pub objects: Vec<Arc<Object>>,
 }
 
 // Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
@@ -79,7 +80,7 @@ impl Genesis {
         transaction: Transaction,
         effects: TransactionEffects,
         events: TransactionEvents,
-        objects: Vec<Object>,
+        objects: Vec<Arc<Object>>,
     ) -> Self {
         Self {
             checkpoint,
@@ -91,11 +92,11 @@ impl Genesis {
         }
     }
 
-    pub fn objects(&self) -> &[Object] {
+    pub fn objects(&self) -> &[Arc<Object>] {
         &self.objects
     }
 
-    pub fn object(&self, id: ObjectID) -> Option<Object> {
+    pub fn object(&self, id: ObjectID) -> Option<Arc<Object>> {
         self.objects.iter().find(|o| o.id() == id).cloned()
     }
 
@@ -218,7 +219,7 @@ impl Serialize for Genesis {
             transaction: &'a Transaction,
             effects: &'a TransactionEffects,
             events: &'a TransactionEvents,
-            objects: &'a [Object],
+            objects: Vec<Object>,
         }
 
         let raw_genesis = RawGenesis {
@@ -227,7 +228,7 @@ impl Serialize for Genesis {
             transaction: &self.transaction,
             effects: &self.effects,
             events: &self.events,
-            objects: &self.objects,
+            objects: self.objects.iter().map(|o| (**o).clone()).collect(),
         };
 
         let bytes = bcs::to_bytes(&raw_genesis).map_err(|e| Error::custom(e.to_string()))?;
@@ -281,17 +282,17 @@ impl<'de> Deserialize<'de> for Genesis {
             transaction,
             effects,
             events,
-            objects,
+            objects: objects.into_iter().map(|o| o.into()).collect(),
         })
     }
 }
 
 impl UnsignedGenesis {
-    pub fn objects(&self) -> &[Object] {
+    pub fn objects(&self) -> &[Arc<Object>] {
         &self.objects
     }
 
-    pub fn object(&self, id: ObjectID) -> Option<Object> {
+    pub fn object(&self, id: ObjectID) -> Option<Arc<Object>> {
         self.objects.iter().find(|o| o.id() == id).cloned()
     }
 
