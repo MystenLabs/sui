@@ -55,7 +55,8 @@ jobs:
       # Checkout out the latest sui repo
       - name: Checkout sui repo
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout ${{ inputs.sui_commit }}"
+          SUI_COMMIT=${{ inputs.sui_commit }}
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout $SUI_COMMIT"
 
       # Setting up cargo and simtest
       - name: Install simtest
