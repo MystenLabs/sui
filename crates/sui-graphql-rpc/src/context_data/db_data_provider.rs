@@ -54,8 +54,8 @@ use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
-        transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, events::StoredEvent,
+        objects::StoredObject, transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -76,6 +76,7 @@ use sui_types::{
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
+    effects::TransactionEffects,
     event::EventID,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
@@ -124,7 +125,6 @@ pub enum DbValidationError {
     #[error("Page size exceeded - requested: {0}, limit: {1}")]
     PageSizeExceeded(u64, u64),
 }
-
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
@@ -395,6 +395,41 @@ impl PgManager {
                 }
 
                 Ok((stored_txs, has_next_page))
+            })
+            .transpose()
+    }
+
+    async fn multi_get_events(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: EventFilter,
+    ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
+        let descending_order = last.is_some();
+        let cursor = after
+            .or(before)
+            .map(|cursor| self.parse_tx_cursor(&cursor))
+            .transpose()?;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+
+        let query = move || {
+            QueryBuilder::multi_get_events(cursor, descending_order, limit, Some(filter.clone()))
+        };
+
+        let result: Option<Vec<StoredEvent>> = self
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
+            .await?;
+
+        result
+            .map(|mut stored_events| {
+                let has_next_page = stored_events.len() as i64 > limit;
+                if has_next_page {
+                    stored_events.pop();
+                }
+
+                Ok((stored_events, has_next_page))
             })
             .transpose()
     }
@@ -1279,6 +1314,42 @@ impl PgManager {
                     }]),
                     timestamp: e.timestamp_ms.and_then(|t| DateTime::from_ms(t as i64)),
                     json: Some(e.parsed_json.to_string()),
+                    bcs: Some(Base64::from(e.bcs)),
+                };
+
+                Edge::new(cursor, event)
+            }));
+            Ok(Some(connection))
+        } else {
+            Err(Error::InvalidFilter)
+        }
+    }
+
+    pub(crate) async fn fetch_events_v2(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: EventFilter,
+    ) -> Result<Option<Connection<String, Event>>, Error> {
+        let events = self
+            .multi_get_events(first, after, last, before, filter)
+            .await?;
+
+        if let Some((stored_events, has_next_page)) = events {
+            let mut connection = Connection::new(false, has_next_page);
+            connection.edges.extend(stored_events.into_iter().map(|e| {
+                let cursor = format!("{}", e.event_sequence_number);
+                let event = Event {
+                    sending_module_id: Some(MoveModuleId {
+                        package: SuiAddress::try_from(e.package).unwrap(), // cleanup
+                        name: e.module,
+                    }),
+                    event_type: Some(MoveType::new(e.event_type)),
+                    senders: None,
+                    timestamp: DateTime::from_ms(e.timestamp_ms),
+                    json: None,
                     bcs: Some(Base64::from(e.bcs)),
                 };
 

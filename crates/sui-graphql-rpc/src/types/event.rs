@@ -30,7 +30,7 @@ pub(crate) struct Event {
     pub bcs: Option<Base64>,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Clone)]
 pub(crate) struct EventFilter {
     pub sender: Option<SuiAddress>,
     pub transaction_digest: Option<String>,
