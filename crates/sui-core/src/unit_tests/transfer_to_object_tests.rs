@@ -1528,6 +1528,100 @@ async fn test_tto_dependencies_receive_and_abort() {
 }
 
 #[tokio::test]
+async fn test_tto_dependencies_receive_and_type_mismatch() {
+    transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
+        let effects = runner
+            .run({
+                let mut builder = ProgrammableTransactionBuilder::new();
+                move_call! {
+                    builder,
+                    (runner.package.0)::M4::start1()
+                };
+                builder.finish()
+            })
+            .await;
+        let parent = effects.created()[0];
+
+        let effects = runner
+            .run({
+                let mut builder = ProgrammableTransactionBuilder::new();
+                move_call! {
+                    builder,
+                    (runner.package.0)::M4::start2()
+                };
+                builder.finish()
+            })
+            .await;
+        let old_child = effects.created()[0];
+
+        // Use a different gas coin than for all the other transactions. This:
+        // 1. Makes sure that we are registering the dependency on the transaction that transferred the
+        //    object solely because of the fact that we received it in this transaction.
+        // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
+        //    properly compute and update the lamport version that we should use for the transaction.
+        let effects = runner
+            .run_with_gas_object(
+                {
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    builder
+                        .transfer_object(SuiAddress::from(parent.0 .0), old_child.0)
+                        .unwrap();
+                    builder.finish()
+                },
+                1,
+            )
+            .await;
+
+        let child = *effects
+            .mutated()
+            .iter()
+            .find(|(o, _)| o.0 == old_child.0 .0)
+            .unwrap();
+        let transfer_digest = effects.transaction_digest();
+
+        assert!(parent.0 .1.value() < child.0 .1.value());
+
+        let effects = runner
+            .run_with_gas_object(
+                {
+                    let mut builder = ProgrammableTransactionBuilder::new();
+                    let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
+                    let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
+                    move_call! {
+                        builder,
+                        (runner.package.0)::M4::receive_type_mismatch(parent, child)
+                    };
+                    builder.finish()
+                },
+                2,
+            )
+            .await;
+
+        assert!(effects.status().is_err());
+        assert!(effects.created().is_empty());
+        assert!(effects.unwrapped().is_empty());
+        assert!(effects.deleted().is_empty());
+        assert!(effects.unwrapped_then_deleted().is_empty());
+        assert!(effects.wrapped().is_empty());
+        // Received but there was a type mismatch -- dependency is still added.
+        assert!(effects.dependencies().contains(transfer_digest));
+
+        for (obj_ref, owner) in effects.mutated().iter() {
+            assert_ne!(obj_ref.0, child.0 .0);
+            if obj_ref.0 == parent.0 .0 {
+                // owner of the parent stays the same
+                assert_eq!(owner, &parent.1);
+                // parent version is also bumped
+                assert!(obj_ref.1 > parent.0 .1);
+                // Child version is the largest in this transaction even though it's not received
+                assert_eq!(obj_ref.1.value(), child.0 .1.value() + 1);
+            }
+        }
+    }
+    }
+}
+
+#[tokio::test]
 async fn receive_and_dof_interleave() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
         // step 1 & 2
