@@ -732,7 +732,67 @@
 >          }
 >        }
 >      }
->      eventType {
+>      type {
+>        repr
+>      }
+>      senders {
+>        location
+>      }
+>      timestamp
+>      json
+>      bcs
+>    }
+>  }
+>}</pre>
+
+### <a id=458746></a>
+### Filter By Emitting Package Module And Event Type
+
+><pre>query byEmittingPackageModuleAndEventType {
+>  eventConnection(
+>    first: 1
+>    after: "85173:0"
+>    filter: {emittingPackage: "0x3", emittingModule: "sui_system", eventPackage: "0x3", eventModule: "validator", eventType: "StakingRequestEvent"}
+>  ) {
+>    pageInfo {
+>      hasNextPage
+>      endCursor
+>    }
+>    nodes {
+>      sendingModuleId {
+>        name
+>      }
+>      type {
+>        repr
+>      }
+>      senders {
+>        location
+>      }
+>      timestamp
+>      json
+>      bcs
+>    }
+>  }
+>}</pre>
+
+### <a id=458747></a>
+### Filter By Sender
+
+><pre>query byTxSender {
+>  eventConnection(first:1
+>    filter: {
+>      sender:"0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb",
+>    }
+>  ) {
+>    pageInfo {
+>      hasNextPage
+>      endCursor
+>    }
+>    nodes {
+>      sendingModuleId {
+>        name
+>      }
+>      type {
 >        repr
 >      }
 >      senders {
@@ -1608,4 +1668,3 @@
 >    }
 >  }
 >}</pre>
-

@@ -418,27 +418,39 @@ type Epoch {
 }
 
 type Event {
+	type: MoveType!
+	bcs: Base64!
 	"""
-	Package, module, and type of the event
+	Structured contents of a Move value.
 	"""
-	eventType: MoveType
+	data: MoveData!
+	"""
+	Representation of a Move value in JSON, where:
+
+	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Empty optional values are represented by `null`.
+
+	This form is offered as a less verbose convenience in cases where the layout of the type is
+	known by the client.
+	"""
+	json: JSON!
+	"""
+	Package id and module name of the Move module that the event was emitted in
+	"""
+	sendingModuleId: MoveModuleId
+	"""
+	Addresses of the senders of the event
+	"""
 	senders: [Address!]
 	"""
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
 	timestamp: DateTime
-	"""
-	JSON string representation of the event
-	"""
-	json: String
-	"""
-	Base64 encoded bcs bytes of the Move event
-	"""
-	bcs: Base64
-	"""
-	The Move module that the event was emitted in.
-	"""
-	sendingModule: MoveModule
 }
 
 type EventConnection {
@@ -957,7 +969,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -965,7 +977,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -981,12 +993,12 @@ enum MoveVisibility {
 type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
-	
+
 	`txBytes` is a `TransactionData` struct that has been BCS-encoded
 	and then Base64-encoded.
 	`signatures` are a list of `flag || signature || pubkey` bytes,
 	Base64-encoded.
-	
+
 	Waits until the transaction has been finalized on chain to return
 	its transaction digest.  If the transaction could not be
 	finalized, returns the errors that prevented it, instead.
@@ -1049,7 +1061,7 @@ type Object implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address.
-	
+
 	The type field is a string of the inner type of the coin by which to filter
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -1214,7 +1226,7 @@ type Owner implements ObjectOwner {
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
 	The coin objects for the given address or object.
-	
+
 	The type field is a string of the inner type of the coin by which to filter
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
@@ -1338,14 +1350,14 @@ type Query {
 	transactionBlock(digest: String!): TransactionBlock
 	"""
 	The coin objects that exist in the network.
-	
+
 	The type field is a string of the inner type of the coin by which to filter
 	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
-	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
+	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
@@ -1480,14 +1492,14 @@ type StakedSui {
 	principal: BigInt
 	"""
 	The estimated reward for this stake object, calculated as:
-	
+
 	principal * (initial_stake_rate / current_stake_rate - 1.0)
-	
+
 	Or 0, if this value is negative, where:
-	
+
 	- `initial_stake_rate` is the stake rate at the epoch this stake was activated at.
 	- `current_stake_rate` is the stake rate in the current epoch.
-	
+
 	This value is only available if the stake is active.
 	"""
 	estimatedReward: BigInt
@@ -1536,7 +1548,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-	
+
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.

@@ -1,0 +1,26 @@
+query byEmittingPackageModuleAndEventType {
+  eventConnection(
+    first: 1
+    after: "85173:0"
+    filter: {emittingPackage: "0x3", emittingModule: "sui_system", eventPackage: "0x3", eventModule: "validator", eventType: "StakingRequestEvent"}
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      sendingModuleId {
+        name
+      }
+      type {
+        repr
+      }
+      senders {
+        location
+      }
+      timestamp
+      json
+      bcs
+    }
+  }
+}
