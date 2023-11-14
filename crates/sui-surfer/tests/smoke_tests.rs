@@ -12,7 +12,7 @@ async fn smoke_test() {
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "move_building_blocks"]);
-    let results = sui_surfer::run::<DefaultSurfStrategy>(Duration::from_secs(30), vec![path]).await;
+    let results = sui_surfer::run::<DefaultSurfStrategy>(Duration::from_secs(5), vec![path]).await;
     assert!(results.num_successful_transactions > 0);
     assert!(!results.unique_move_functions_called.is_empty());
 }

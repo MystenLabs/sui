@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::BuildConfig;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
@@ -261,7 +261,8 @@ impl SurferState {
     async fn discover_entry_functions(&self, package: Object) {
         let package_id = package.id();
         let move_package = package.data.try_into_package().unwrap();
-        let config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let proto_version = self.cluster.highest_protocol_version();
+        let config = ProtocolConfig::get_for_version(proto_version, Chain::Unknown);
         let entry_functions: Vec<_> = move_package
             .normalize(
                 config.move_binary_format_version(),
