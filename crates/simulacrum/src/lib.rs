@@ -364,7 +364,7 @@ impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
 
 impl<T> ObjectStore for Simulacrum<T> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
-        Ok(self.store.get_object(object_id).cloned())
+        Ok(self.store.get_object(object_id))
     }
 
     fn get_object_by_key(
@@ -470,7 +470,7 @@ mod tests {
             .owned_objects(sender)
             .find(|object| object.is_gas_coin())
             .unwrap();
-        let gas_coin = GasCoin::try_from(object).unwrap();
+        let gas_coin = GasCoin::try_from(object.as_ref()).unwrap();
         let gas_id = object.id();
         let transfer_amount = gas_coin.value() / 2;
 
@@ -499,7 +499,7 @@ mod tests {
             (transfer_amount as i64 - gas_paid) as u64,
             sim.store()
                 .get_object(&gas_id)
-                .and_then(|object| GasCoin::try_from(object).ok())
+                .and_then(|object| GasCoin::try_from(object.as_ref()).ok())
                 .unwrap()
                 .value()
         );
@@ -509,7 +509,7 @@ mod tests {
             sim.store()
                 .owned_objects(recipient)
                 .next()
-                .and_then(|object| GasCoin::try_from(object).ok())
+                .and_then(|object| GasCoin::try_from(object.as_ref()).ok())
                 .unwrap()
                 .value()
         );

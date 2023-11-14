@@ -449,7 +449,7 @@ impl InMemoryStore {
                 }
                 .into());
             };
-            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj));
+            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj.into()));
         }
 
         Ok((input_objects.into(), receiving_objects.into()))
@@ -576,7 +576,7 @@ impl SimulatorStore for InMemoryStore {
         self.get_clock()
     }
 
-    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_> {
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Arc<Object>> + '_> {
         Box::new(self.owned_objects(owner))
     }
 

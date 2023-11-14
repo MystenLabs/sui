@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use std::sync::Arc;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::{ObjectDigest, SequenceNumber, TransactionDigest};
 use sui_types::coin::Coin;
@@ -242,7 +243,7 @@ pub(crate) fn try_construct_object(
     object_key: &ObjectKey,
     store_object: StoreObjectValue,
     indirect_object: Option<StoreMoveObject>,
-) -> Result<Object, SuiError> {
+) -> Result<Arc<Object>, SuiError> {
     let data = match (store_object.data, indirect_object) {
         (StoreData::Move(object), None) => Data::Move(object),
         (StoreData::Package(package), None) => Data::Package(package),
@@ -272,10 +273,10 @@ pub(crate) fn try_construct_object(
         }
     };
 
-    Ok(Object {
+    Ok(Arc::new(Object {
         data,
         owner: store_object.owner,
         previous_transaction: store_object.previous_transaction,
         storage_rebate: store_object.storage_rebate,
-    })
+    }))
 }

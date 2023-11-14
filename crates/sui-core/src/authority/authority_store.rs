@@ -846,13 +846,14 @@ impl AuthorityStore {
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
     pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.bulk_insert_genesis_objects(objects).await?;
+        let objects: Vec<_> = objects.iter().map(|o| o.clone().into()).collect();
+        self.bulk_insert_genesis_objects(&objects).await?;
         self.force_reload_system_packages_into_cache();
         Ok(())
     }
 
     /// This function should only be used for initializing genesis and should remain private.
-    async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
+    async fn bulk_insert_genesis_objects(&self, objects: &[Arc<Object>]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
@@ -865,7 +866,7 @@ impl AuthorityStore {
                 ref_and_objects.iter().map(|(oref, o)| {
                     (
                         ObjectKey::from(oref),
-                        get_store_object_pair((**o).clone(), self.indirect_objects_threshold).0,
+                        get_store_object_pair((***o).clone(), self.indirect_objects_threshold).0,
                     )
                 }),
             )?
@@ -873,7 +874,7 @@ impl AuthorityStore {
                 &self.perpetual_tables.indirect_move_objects,
                 ref_and_objects.iter().filter_map(|(_, o)| {
                     let StoreObjectPair(_, indirect_object) =
-                        get_store_object_pair((**o).clone(), self.indirect_objects_threshold);
+                        get_store_object_pair((***o).clone(), self.indirect_objects_threshold);
                     indirect_object.map(|obj| (obj.inner().digest(), obj))
                 }),
             )?;
@@ -1068,7 +1069,7 @@ impl AuthorityStore {
             .values()
             .filter_map(|object| {
                 let StoreObjectPair(_, indirect_object) =
-                    get_store_object_pair(object.clone(), self.indirect_objects_threshold);
+                    get_store_object_pair((**object).clone(), self.indirect_objects_threshold);
                 indirect_object.map(|obj| obj.inner().digest())
             })
             .collect();
@@ -2008,7 +2009,7 @@ impl BackingPackageStore for AuthorityStore {
 
 impl ObjectStore for AuthorityStore {
     /// Read an object and return it, or Ok(None) if the object was not found.
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Arc<Object>>, SuiError> {
         self.perpetual_tables.as_ref().get_object(object_id)
     }
 
@@ -2016,7 +2017,7 @@ impl ObjectStore for AuthorityStore {
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
+    ) -> Result<Option<Arc<Object>>, SuiError> {
         self.perpetual_tables.get_object_by_key(object_id, version)
     }
 }
@@ -2027,7 +2028,7 @@ impl ChildObjectResolver for AuthorityStore {
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         let Some(child_object) =
             self.find_object_lt_or_eq_version(*child, child_version_upper_bound)
         else {
@@ -2051,7 +2052,7 @@ impl ChildObjectResolver for AuthorityStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<Object>> {
+    ) -> SuiResult<Option<Arc<Object>>> {
         let Some(recv_object) =
             self.get_object_by_key(receiving_object_id, receive_object_at_version)?
         else {

@@ -1390,7 +1390,7 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(
         DryRunTransactionBlockResponse,
-        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        BTreeMap<ObjectID, (ObjectRef, Arc<Object>, WriteKind)>,
         TransactionEffects,
         Option<ObjectID>,
     )> {
@@ -2071,7 +2071,7 @@ impl AuthorityState {
         };
 
         Ok(ObjectInfoResponse {
-            object,
+            object: (*object).clone(),
             layout,
             lock_for_debugging: lock,
         })
@@ -2136,7 +2136,7 @@ impl AuthorityState {
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
         pruning_config: AuthorityStorePruningConfig,
-        genesis_objects: &[Object],
+        genesis_objects: &[Arc<Object>],
         db_checkpoint_config: &DBCheckpointConfig,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         transaction_deny_config: TransactionDenyConfig,
@@ -2263,7 +2263,7 @@ impl AuthorityState {
 
     fn create_owner_index_if_empty(
         &self,
-        genesis_objects: &[Object],
+        genesis_objects: &[Arc<Object>],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let Some(index_store) = &self.indexes else {
@@ -2641,7 +2641,7 @@ impl AuthorityState {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
+    pub async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
         self.database.get_object(object_id)
     }
 
