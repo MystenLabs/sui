@@ -177,7 +177,7 @@ impl Display for ObjectChange {
                 digest,
                 modules,
             } => {
-                writeln!(
+                write!(
                     f,
                     " ┌──\n │ PackageID: {} \n │ Version: {} \n │ Digest: {}\n | Modules: {}\n └──",
                     package_id,
@@ -194,7 +194,7 @@ impl Display for ObjectChange {
                 version,
                 digest,
             } => {
-                writeln!(
+                write!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ Recipient: {}\n │ ObjectType: {} \n │ Version: {}\n │ Digest: {}\n └──",
                     object_id, sender, recipient, object_type, u64::from(*version), digest
@@ -209,7 +209,7 @@ impl Display for ObjectChange {
                 previous_version: _,
                 digest,
             } => {
-                writeln!(
+                write!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ Owner: {}\n │ ObjectType: {} \n │ Version: {}\n │ Digest: {}\n └──",
                     object_id, sender, owner, object_type, u64::from(*version), digest
@@ -221,7 +221,7 @@ impl Display for ObjectChange {
                 object_id,
                 version,
             } => {
-                writeln!(
+                write!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ ObjectType: {} \n │ Version: {}\n └──",
                     object_id, sender, object_type, u64::from(*version)
@@ -233,7 +233,7 @@ impl Display for ObjectChange {
                 object_id,
                 version,
             } => {
-                writeln!(
+                write!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ ObjectType: {} \n │ Version: {}\n └──",
                     object_id, sender, object_type, u64::from(*version)
@@ -247,7 +247,7 @@ impl Display for ObjectChange {
                 version,
                 digest,
             } => {
-                writeln!(
+                write!(
                     f,
                     " ┌──\n │ ObjectID: {}\n │ Sender: {} \n │ Owner: {}\n │ ObjectType: {} \n │ Version: {}\n │ Digest: {}\n └──",
                     object_id, sender, owner, object_type, u64::from(*version), digest
