@@ -3,7 +3,7 @@ an indexer.
 
 ## Guide
 
-Refer to [sui-local-network.md](../../doc/src/build/sui-local-network.md)
+Refer to [sui-local-network.md](../../docs/content/guides/developer/getting-started/local-network.mdx)
 
 ## Experimental Feature - Running with Indexer
 
