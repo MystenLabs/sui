@@ -1240,9 +1240,7 @@ impl Display for SuiTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut builder = TableBuilder::default();
         let width = get_terminal_width();
-        let term_size_settings = TableSettings::default()
-            .with(TableWidth::wrap(width))
-            .with(TableWidth::increase(width));
+        let term_size_settings = TableSettings::default().with(TableWidth::wrap(width));
 
         builder.push_record(vec![format!("{}", self.data)]);
         builder.push_record(vec![format!("Signatures:")]);
@@ -2014,7 +2012,7 @@ impl Display for SuiObjectArg {
                 digest,
             } => write!(
                 f,
-                " ┌── ImmOrOwnedObject\n │ ObjectID: {} \n │ Version: {} \n │ Digest: {}\n └──",
+                " ┌── ImmOrOwnedObject\n │ ID: {} \n │ Version: {} \n │ Digest: {}\n └──",
                 object_id,
                 version.value(),
                 digest
@@ -2026,7 +2024,7 @@ impl Display for SuiObjectArg {
             } => {
                 write!(
                     f,
-                    " ┌── SharedObject\n │ ObjectID: {} \n │ Initial Shared Version: {} \n │ Mutable: {}\n └──",
+                    " ┌── SharedObject\n │ ID: {} \n │ Initial Shared Version: {} \n │ Mutable: {}\n └──",
                     object_id,
                     initial_shared_version.value(),
                     mutable
@@ -2038,7 +2036,7 @@ impl Display for SuiObjectArg {
                 digest,
             } => write!(
                 f,
-                " ┌── ReceivingObject\n │ ObjectID: {} \n │ Version: {} \n │ Digest: {}\n └──",
+                " ┌── ReceivingObject\n │ ID: {} \n │ Version: {} \n │ Digest: {}\n └──",
                 object_id,
                 version.value(),
                 digest
