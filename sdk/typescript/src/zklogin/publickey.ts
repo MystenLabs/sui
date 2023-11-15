@@ -3,11 +3,11 @@
 
 import { fromB64 } from '@mysten/bcs';
 
-import { PublicKey } from '../../cryptography/publickey.js';
-import type { PublicKeyInitData } from '../../cryptography/publickey.js';
-import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature-scheme.js';
-import type { SerializedSignature } from '../../cryptography/signature.js';
-import { toPaddedBigEndianBytes } from '../../zklogin/utils.js';
+import { PublicKey } from '../cryptography/publickey.js';
+import type { PublicKeyInitData } from '../cryptography/publickey.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
+import type { SerializedSignature } from '../cryptography/signature.js';
+import { toPaddedBigEndianBytes } from './utils.js';
 
 /**
  * A zkLogin public identifier
