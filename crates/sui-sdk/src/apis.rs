@@ -573,9 +573,9 @@ impl ReadApi {
         )
     }
 
-    /// Subscribe to a stream of transactions. 
+    /// Subscribe to a stream of transactions.
     ///
-    /// This is only available through WebSockets. 
+    /// This is only available through WebSockets.
     pub async fn subscribe_transaction(
         &self,
         filter: TransactionFilter,
