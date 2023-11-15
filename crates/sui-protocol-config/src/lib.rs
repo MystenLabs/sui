@@ -1719,6 +1719,13 @@ impl ProtocolConfig {
 
                     // enable nw cert v2 on mainnet
                     cfg.feature_flags.narwhal_certificate_v2 = true;
+
+                    cfg.feature_flags.enable_effects_v2 = true;
+
+                    // Add costs for poseidon::poseidon_bn254
+                    cfg.poseidon_bn254_cost_base = Some(260);
+                    cfg.poseidon_bn254_cost_per_block = Some(10);
+
                 }
                 33 => {
                     cfg.feature_flags.hardened_otw_check = true;
