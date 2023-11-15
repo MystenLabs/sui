@@ -42,6 +42,14 @@ struct Args {
     #[clap(long, default_value = "9123")]
     faucet_port: u16,
 
+    /// Host to start the GraphQl server on
+    #[clap(long, default_value = "127.0.0.1")]
+    graphql_host: String,
+
+    /// Port to start the GraphQl server on
+    #[clap(long, default_value = "8000")]
+    graphql_port: u16,
+
     /// Port to start the Indexer RPC server on
     #[clap(long, default_value = "9124")]
     indexer_rpc_port: u16,
@@ -54,6 +62,10 @@ struct Args {
     /// Hostname for the Indexer Postgres DB
     #[clap(long, default_value = "localhost")]
     pg_host: String,
+
+    /// DB name for the Indexer Postgres DB
+    #[clap(long, default_value = "sui_indexer")]
+    pg_db_name: String,
 
     /// The duration for epochs (defaults to one minute)
     #[clap(long, default_value = "60000")]
@@ -78,9 +90,12 @@ async fn main() -> Result<()> {
     let Args {
         config_dir,
         fullnode_rpc_port,
+        graphql_host,
+        graphql_port,
         indexer_rpc_port,
         pg_port,
         pg_host,
+        pg_db_name,
         epoch_duration_ms,
         faucet_port,
         with_indexer,
@@ -99,12 +114,13 @@ async fn main() -> Result<()> {
         fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
         indexer_address: with_indexer.then_some(format!("127.0.0.1:{}", indexer_rpc_port)),
         pg_address: with_indexer.then_some(format!(
-            "postgres://postgres@{pg_host}:{pg_port}/sui_indexer"
+            "postgres://postgres@{pg_host}:{pg_port}/{pg_db_name}"
         )),
         faucet_address: None,
         epoch_duration_ms,
         use_indexer_experimental_methods,
         config_dir,
+        graphql_address: Some(format!("{}:{}", graphql_host, graphql_port)),
     })
     .await?;
 

@@ -7,8 +7,8 @@ use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
-use sui_indexer::test_utils::start_test_indexer;
-use sui_indexer::IndexerConfig;
+use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::test_infra::cluster::{start_graphql_server, start_test_indexer_v2};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -218,22 +218,37 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
-        let migrated_methods = if options.use_indexer_experimental_methods {
-            IndexerConfig::all_implemented_methods()
-        } else {
-            vec![]
-        };
         if options.pg_address.is_some() && indexer_address.is_some() {
-            let config = IndexerConfig {
-                db_url: Some(options.pg_address.clone().unwrap()),
-                rpc_client_url: fullnode_url.clone(),
-                rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
-                rpc_server_port: indexer_address.as_ref().unwrap().port(),
-                migrated_methods,
-                reset_db: true,
-                ..Default::default()
-            };
-            start_test_indexer(config).await.unwrap();
+            // Start in writer mode
+            start_test_indexer_v2(
+                Some(options.pg_address.clone().unwrap()),
+                fullnode_url.clone(),
+                None,
+                options.use_indexer_experimental_methods,
+            )
+            .await;
+
+            // Start in reader mode
+            start_test_indexer_v2(
+                Some(options.pg_address.clone().unwrap()),
+                fullnode_url.clone(),
+                indexer_address.map(|x| x.to_string()),
+                options.use_indexer_experimental_methods,
+            )
+            .await;
+        }
+
+        if let Some(graphql_address) = &options.graphql_address {
+            let graphql_address = graphql_address.parse::<SocketAddr>().unwrap();
+            let graphql_connection_config = ConnectionConfig::new(
+                Some(graphql_address.port()),
+                Some(graphql_address.ip().to_string()),
+                options.pg_address.clone(),
+                None,
+                None,
+            );
+
+            start_graphql_server(graphql_connection_config.clone()).await;
         }
 
         // Let nodes connect to one another
@@ -345,4 +360,52 @@ pub async fn new_wallet_context_from_cluster(
                 wallet_config_path
             )
         })
+}
+
+#[cfg(feature = "pg_integration")]
+#[tokio::test]
+async fn test_cluster() {
+    use reqwest::StatusCode;
+    use sui_graphql_rpc::client::simple_client::SimpleClient;
+    use tokio::time::sleep;
+    let fullnode_rpc_port: u16 = 9020;
+    let indexer_rpc_port: u16 = 9124;
+    let pg_address = "postgres://postgres@0.0.0.0:5432/sui_indexer_v2".to_string();
+    let graphql_address = format!("127.0.0.1:{}", 8000);
+
+    let opts = ClusterTestOpt {
+        env: Env::NewLocal,
+        faucet_address: None,
+        fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
+        epoch_duration_ms: Some(60000),
+        indexer_address: Some(format!("127.0.0.1:{}", indexer_rpc_port)),
+        pg_address: Some(pg_address),
+        use_indexer_experimental_methods: false,
+        config_dir: None,
+        graphql_address: Some(graphql_address),
+    };
+
+    let _cluster = LocalNewCluster::start(&opts).await.unwrap();
+
+    let grphql_url: String = format!("http://127.0.0.1:{}", 8000);
+
+    sleep(std::time::Duration::from_secs(20)).await;
+
+    // Try JSON RPC URL
+    let query = r#"
+        {
+            checkpoint {
+                sequenceNumber
+            }
+        }
+    "#;
+    let resp = SimpleClient::new(grphql_url)
+        .execute_to_graphql(query.to_string(), true, vec![], vec![])
+        .await
+        .unwrap();
+
+    assert!(resp.errors().is_empty());
+    assert!(resp.http_status() == StatusCode::OK);
+    let resp_body = resp.response_body().data.clone().into_json().unwrap();
+    assert!(resp_body.get("checkpoint").is_some());
 }

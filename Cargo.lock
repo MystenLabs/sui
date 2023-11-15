@@ -10375,6 +10375,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-faucet",
+ "sui-graphql-rpc",
  "sui-indexer",
  "sui-json",
  "sui-json-rpc-types",
