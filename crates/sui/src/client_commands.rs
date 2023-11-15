@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::fmt;
 use std::{
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
@@ -35,7 +34,7 @@ use sui_json_rpc_types::{
     SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus, SuiObjectDataOptions};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
