@@ -140,7 +140,7 @@ impl ReadApi {
             .await?)
     }
 
-    /// Return the dynamic field object information for a specified object
+    /// Return the dynamic field object information for a specified object.
     pub async fn get_dynamic_field_object(
         &self,
         parent_object_id: ObjectID,
@@ -573,7 +573,9 @@ impl ReadApi {
         )
     }
 
-    /// Subscribe to a stream of Sui transaction effects
+    /// Subscribe to a stream of transactions. 
+    ///
+    /// This is only available through WebSockets. 
     pub async fn subscribe_transaction(
         &self,
         filter: TransactionFilter,
