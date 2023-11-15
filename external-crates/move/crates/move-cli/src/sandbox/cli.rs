@@ -53,7 +53,7 @@ pub enum SandboxCommand {
     #[clap(name = "run")]
     Run {
         /// Path to .mv file containing either module bytecodes.
-        #[clap(name = "script")]
+        #[clap(name = "module")]
         module_file: PathBuf,
         /// Name of the function inside the module specified in `module_file` to call.
         #[clap(name = "name")]
