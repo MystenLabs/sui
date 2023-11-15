@@ -60,7 +60,7 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
     // more utility, so return early.
     if (context instanceof Error) {
         void vscode.window.showErrorMessage(
-            `Could not activate move-analyzer: ${context.message}.`,
+            `Could not activate Move: ${context.message}.`,
         );
         return;
     }

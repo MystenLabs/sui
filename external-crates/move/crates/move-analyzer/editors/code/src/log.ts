@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
  * server, which appear in a separate output channel.
  **/
 export const log = new class {
-    private readonly output = vscode.window.createOutputChannel('Move Analyzer Client');
+    private readonly output = vscode.window.createOutputChannel('Move Client');
 
     /** Log an informational message (as opposed to an error or a warning). */
     info(message: string): void {
