@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
+use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
@@ -615,7 +616,7 @@ impl Display for Owner {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct Object {
+pub struct ObjectInner {
     /// The meat of the object
     pub data: Data,
     /// The owner that unlocks this object
@@ -628,48 +629,46 @@ pub struct Object {
     pub storage_rebate: u64,
 }
 
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub struct Object(Arc<ObjectInner>);
+
+impl From<ObjectInner> for Object {
+    fn from(inner: ObjectInner) -> Self {
+        Self(Arc::new(inner))
+    }
+}
+
 impl Object {
+    pub fn into_inner(self) -> ObjectInner {
+        match Arc::try_unwrap(self.0) {
+            Ok(inner) => inner,
+            Err(inner_arc) => (*inner_arc).clone(),
+        }
+    }
+
+    pub fn as_inner(&self) -> &ObjectInner {
+        &self.0
+    }
+
     /// Create a new Move object
     pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
-        Object {
+        ObjectInner {
             data: Data::Move(o),
             owner,
             previous_transaction,
             storage_rebate: 0,
         }
-    }
-
-    /// Returns true if the object is a system package.
-    pub fn is_system_package(&self) -> bool {
-        self.is_package() && is_system_package(self.id())
-    }
-
-    /// Create a system package which is not subject to size limits. Panics if the object ID is not
-    /// a known system package.
-    pub fn new_system_package(
-        modules: &[CompiledModule],
-        version: SequenceNumber,
-        dependencies: Vec<ObjectID>,
-        previous_transaction: TransactionDigest,
-    ) -> Self {
-        let ret = Self::new_package_from_data(
-            Data::Package(MovePackage::new_system(version, modules, dependencies)),
-            previous_transaction,
-        );
-
-        #[cfg(not(msim))]
-        assert!(ret.is_system_package());
-
-        ret
+        .into()
     }
 
     pub fn new_package_from_data(data: Data, previous_transaction: TransactionDigest) -> Self {
-        Object {
+        ObjectInner {
             data,
             owner: Owner::Immutable,
             previous_transaction,
             storage_rebate: 0,
         }
+        .into()
     }
 
     // Note: this will panic if `modules` is empty
@@ -726,6 +725,45 @@ impl Object {
         )
     }
 
+    /// Create a system package which is not subject to size limits. Panics if the object ID is not
+    /// a known system package.
+    pub fn new_system_package(
+        modules: &[CompiledModule],
+        version: SequenceNumber,
+        dependencies: Vec<ObjectID>,
+        previous_transaction: TransactionDigest,
+    ) -> Self {
+        let ret = Self::new_package_from_data(
+            Data::Package(MovePackage::new_system(version, modules, dependencies)),
+            previous_transaction,
+        );
+
+        #[cfg(not(msim))]
+        assert!(ret.is_system_package());
+
+        ret
+    }
+}
+
+impl std::ops::Deref for Object {
+    type Target = ObjectInner;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Object {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
+impl ObjectInner {
+    /// Returns true if the object is a system package.
+    pub fn is_system_package(&self) -> bool {
+        self.is_package() && is_system_package(self.id())
+    }
+
     pub fn is_immutable(&self) -> bool {
         self.owner.is_immutable()
     }
@@ -761,6 +799,10 @@ impl Object {
         (self.id(), self.version(), self.digest())
     }
 
+    pub fn digest(&self) -> ObjectDigest {
+        ObjectDigest::new(default_hash(self))
+    }
+
     pub fn id(&self) -> ObjectID {
         use Data::*;
 
@@ -785,10 +827,6 @@ impl Object {
 
     pub fn struct_tag(&self) -> Option<StructTag> {
         self.data.struct_tag()
-    }
-
-    pub fn digest(&self) -> ObjectDigest {
-        ObjectDigest::new(default_hash(self))
     }
 
     pub fn is_coin(&self) -> bool {
@@ -906,12 +944,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::Immutable,
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn immutable_for_testing() -> Self {
@@ -943,12 +982,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn treasury_cap_for_testing(struct_tag: StructTag, treasury_cap: TreasuryCap) -> Self {
@@ -958,12 +998,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: bcs::to_bytes(&treasury_cap).expect("Failed to serialize"),
         });
-        Self {
+        ObjectInner {
             owner: Owner::Immutable,
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn coin_metadata_for_testing(struct_tag: StructTag, metadata: CoinMetadata) -> Self {
@@ -973,12 +1014,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: bcs::to_bytes(&metadata).expect("Failed to serialize"),
         });
-        Self {
+        ObjectInner {
             owner: Owner::Immutable,
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
@@ -988,12 +1030,13 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::ObjectOwner(owner.into()),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
@@ -1012,12 +1055,13 @@ impl Object {
             version,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        ObjectInner {
             owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
         }
+        .into()
     }
 
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
