@@ -26,5 +26,6 @@ const standards = [
 		label: 'Wallet Kit',
 		href: 'https://sui-typescript-docs.vercel.app/wallet-kit',
 	},
+	'standards/token'
 ];
 module.exports = standards;
