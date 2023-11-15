@@ -8,10 +8,11 @@ pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;
 
-use move_transactional_test_runner::framework::run_test_impl;
+pub use move_transactional_test_runner::framework::run_test_impl;
 use rand::rngs::StdRng;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
+use simulator_persisted_store::PersistedStore;
 use std::path::Path;
 use std::sync::Arc;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
@@ -248,7 +249,7 @@ impl ObjectStore for ValidatorWithFullnode {
 }
 
 #[async_trait::async_trait]
-impl TransactionalAdapter for Simulacrum<StdRng> {
+impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
     async fn execute_txn(
         &mut self,
         transaction: Transaction,

@@ -1,5 +1,5 @@
 //# run
-script {
+module 1::m {
 fun main() {
     assert!(0u8 + 0u8 == 0u8, 1000);
     assert!(0u8 + 1u8 == 1u8, 1001);
@@ -15,7 +15,7 @@ fun main() {
 }
 
 //# run
-script {
+module 2::m {
 fun main() {
     // should fail
     1u8 + 255u8;
@@ -23,7 +23,7 @@ fun main() {
 }
 
 //# run
-script {
+module 3::m {
 fun main() {
     // should fail
     215u8 + 156u8;
@@ -31,7 +31,7 @@ fun main() {
 }
 
 //# run
-script {
+module 4::m {
 fun main() {
     assert!(0u8 - 0u8 == 0u8, 2000);
     assert!(1u8 - 0u8 == 1u8, 2001);
@@ -46,7 +46,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 fun main() {
     // should fail
     0u8 - 1u8;
@@ -54,7 +54,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     // should fail
     54u8 - 100u8;
@@ -63,7 +63,7 @@ fun main() {
 
 
 //# run
-script {
+module 7::m {
 fun main() {
     assert!(0u8 * 0u8 == 0u8, 3000);
     assert!(1u8 * 0u8 == 0u8, 3001);
@@ -77,7 +77,7 @@ fun main() {
 }
 
 //# run
-script {
+module 8::m {
 fun main() {
     // should fail
     16u8 * 16u8;
@@ -85,7 +85,7 @@ fun main() {
 }
 
 //# run
-script {
+module 9::m {
 fun main() {
     // should fail
     128u8 * 2u8;
@@ -94,7 +94,7 @@ fun main() {
 
 
 //# run
-script {
+module 10::m {
 fun main() {
     assert!(0u8 / 1u8 == 0u8, 4000);
     assert!(1u8 / 1u8 == 1u8, 4001);
@@ -109,7 +109,7 @@ fun main() {
 }
 
 //# run
-script {
+module 11::m {
 fun main() {
     // should fail
     0u8 / 0u8;
@@ -117,7 +117,7 @@ fun main() {
 }
 
 //# run
-script {
+module 12::m {
 fun main() {
     // should fail
     1u8 / 0u8;
@@ -125,7 +125,7 @@ fun main() {
 }
 
 //# run
-script {
+module 13::m {
 fun main() {
     // should fail
     255u8 / 0u8;
@@ -135,7 +135,7 @@ fun main() {
 
 
 //# run
-script {
+module 14::m {
 fun main() {
     assert!(0u8 % 1u8 == 0u8, 5000);
     assert!(1u8 % 1u8 == 0u8, 5001);
@@ -150,7 +150,7 @@ fun main() {
 }
 
 //# run
-script {
+module 15::m {
 fun main() {
     // should fail
     0u8 % 0u8;
@@ -158,7 +158,7 @@ fun main() {
 }
 
 //# run
-script {
+module 16::m {
 fun main() {
     // should fail
     1u8 % 0u8;
@@ -166,7 +166,7 @@ fun main() {
 }
 
 //# run
-script {
+module 17::m {
 fun main() {
     // should fail
     255u8 % 0u8;

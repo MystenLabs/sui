@@ -366,9 +366,9 @@ impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
     }
 }
 
-impl<T> ObjectStore for Simulacrum<T> {
+impl<T, V: store::SimulatorStore> ObjectStore for Simulacrum<T, V> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Ok(self.store.get_object(object_id).cloned())
+        Ok(store::SimulatorStore::get_object(&self.store, object_id))
     }
 
     fn get_object_by_key(

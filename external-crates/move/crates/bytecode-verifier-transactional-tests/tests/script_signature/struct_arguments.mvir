@@ -13,10 +13,12 @@ module 0x42.M {
 }
 
 //# run --args 0 0 0
+module 0x42.m {
 import 0x42.M;
-main(s: M.S, i: &M.S, m: &mut M.S) {
+entry foo(s: M.S, i: &M.S, m: &mut M.S) {
     label l0:
     abort 0;
+}
 }
 
 //# run 0x42::M::foo --args 0 0 0

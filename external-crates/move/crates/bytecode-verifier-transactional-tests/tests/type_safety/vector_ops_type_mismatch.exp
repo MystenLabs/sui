@@ -1,73 +1,73 @@
 processed 8 tasks
 
-task 0 'run'. lines 1-7:
-Error: Script execution failed with VMError: {
+task 0 'run'. lines 1-11:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_TYPE_MISMATCH_ERROR,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 1 'run'. lines 9-18:
-Error: Script execution failed with VMError: {
+task 1 'run'. lines 12-25:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_TYPE_MISMATCH_ERROR,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
 }
 
-task 2 'run'. lines 20-31:
-Error: Script execution failed with VMError: {
+task 2 'run'. lines 26-41:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_TYPE_MISMATCH_ERROR,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 6)],
 }
 
-task 3 'run'. lines 33-45:
-Error: Script execution failed with VMError: {
+task 3 'run'. lines 42-58:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: TYPE_MISMATCH,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 8)],
 }
 
-task 4 'run'. lines 47-59:
-Error: Script execution failed with VMError: {
+task 4 'run'. lines 59-75:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: TYPE_MISMATCH,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 6)],
 }
 
-task 5 'run'. lines 61-77:
-Error: Script execution failed with VMError: {
+task 5 'run'. lines 76-95:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: STLOC_TYPE_MISMATCH_ERROR,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 6 'run'. lines 78-86:
-Error: Script execution failed with VMError: {
+task 6 'run'. lines 96-107:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: TYPE_MISMATCH,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
 }
 
-task 7 'run'. lines 87-96:
-Error: Script execution failed with VMError: {
+task 7 'run'. lines 108-121:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: TYPE_MISMATCH,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }

@@ -10,21 +10,22 @@ use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
 use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::SuiError,
+    error::{SuiError, SuiResult, UserInputError},
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
     storage::{
-        load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
+        load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver, ObjectKey,
         ObjectStore, PackageObjectArc, ParentSync,
     },
     transaction::VerifiedTransaction,
@@ -41,8 +42,18 @@ use typed_store_derive::DBMapUtils;
 
 use super::SimulatorStore;
 
-#[derive(Debug, DBMapUtils)]
 pub struct PersistedStore {
+    pub path: PathBuf,
+    pub read_write: PersistedStoreInner,
+}
+
+pub struct PersistedStoreInnerReadOnlyWrapper {
+    pub path: PathBuf,
+    pub inner: PersistedStoreInnerReadOnly,
+}
+
+#[derive(Debug, DBMapUtils)]
+pub struct PersistedStoreInner {
     // Checkpoint data
     checkpoints: DBMap<CheckpointSequenceNumber, sui_types::messages_checkpoint::TrustedCheckpoint>,
     checkpoint_digest_to_sequence_number: DBMap<CheckpointDigest, CheckpointSequenceNumber>,
@@ -63,30 +74,46 @@ pub struct PersistedStore {
 }
 
 impl PersistedStore {
-    pub fn _new(genesis: &genesis::Genesis, path: Option<PathBuf>) -> Self {
-        let path = path.unwrap_or(tempdir().unwrap().into_path());
-
-        let mut store = Self::open_tables_read_write(
-            path,
-            MetricConf::with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+    pub fn new(genesis: &genesis::Genesis, path: PathBuf) -> Self {
+        let samp: SamplingInterval = SamplingInterval::new(Duration::from_secs(60), 0);
+        let read_write = PersistedStoreInner::open_tables_read_write(
+            path.clone(),
+            MetricConf::with_sampling(samp.clone()),
             None,
             None,
         );
 
-        store.init_with_genesis(genesis);
-        store
+        let mut res = Self { path, read_write };
+        res.init_with_genesis(genesis);
+
+        res
     }
 
-    pub fn _new_sim_with_protocol_version_and_accounts<R>(
+    pub fn read_replica(&self) -> PersistedStoreInnerReadOnlyWrapper {
+        let samp: SamplingInterval = SamplingInterval::new(Duration::from_secs(60), 0);
+        PersistedStoreInnerReadOnlyWrapper {
+            path: self.path.clone(),
+            inner: PersistedStoreInner::get_read_only_handle(
+                self.path.clone(),
+                None,
+                None,
+                MetricConf::with_sampling(samp),
+            ),
+        }
+    }
+
+    pub fn new_sim_replica_with_protocol_version_and_accounts<R>(
         mut rng: R,
         chain_start_timestamp_ms: u64,
         protocol_version: ProtocolVersion,
         account_configs: Vec<AccountConfig>,
         path: Option<PathBuf>,
-    ) -> Simulacrum<R, PersistedStore>
+    ) -> (Simulacrum<R, Self>, PersistedStoreInnerReadOnlyWrapper)
     where
         R: rand::RngCore + rand::CryptoRng,
     {
+        let path: PathBuf = path.unwrap_or(tempdir().unwrap().into_path());
+
         let config = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
             .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
@@ -95,9 +122,33 @@ impl PersistedStore {
             .with_accounts(account_configs)
             .build();
         let genesis = &config.genesis;
-        let store = PersistedStore::_new(genesis, path);
 
-        Simulacrum::new_with_network_config_store(&config, rng, store)
+        let store = PersistedStore::new(genesis, path);
+        let read_only_wrapper = store.read_replica();
+        (
+            Simulacrum::new_with_network_config_store(&config, rng, store),
+            read_only_wrapper,
+        )
+    }
+
+    pub fn new_sim_with_protocol_version_and_accounts<R>(
+        rng: R,
+        chain_start_timestamp_ms: u64,
+        protocol_version: ProtocolVersion,
+        account_configs: Vec<AccountConfig>,
+        path: Option<PathBuf>,
+    ) -> Simulacrum<R, Self>
+    where
+        R: rand::RngCore + rand::CryptoRng,
+    {
+        Self::new_sim_replica_with_protocol_version_and_accounts(
+            rng,
+            chain_start_timestamp_ms,
+            protocol_version,
+            account_configs,
+            path,
+        )
+        .0
     }
 }
 
@@ -106,21 +157,24 @@ impl SimulatorStore for PersistedStore {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        self.checkpoints
+        self.read_write
+            .checkpoints
             .get(&sequence_number)
             .expect("Fatal: DB read failed")
             .map(|checkpoint| checkpoint.into())
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        self.checkpoint_digest_to_sequence_number
+        self.read_write
+            .checkpoint_digest_to_sequence_number
             .get(digest)
             .expect("Fatal: DB read failed")
             .and_then(|sequence_number| self.get_checkpoint_by_sequence_number(sequence_number))
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        self.checkpoints
+        self.read_write
+            .checkpoints
             .unbounded_iter()
             .skip_to_last()
             .next()
@@ -131,53 +185,73 @@ impl SimulatorStore for PersistedStore {
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        self.checkpoint_contents
+        self.read_write
+            .checkpoint_contents
             .get(digest)
             .expect("Fatal: DB read failed")
     }
 
     fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<Committee> {
-        self.epoch_to_committee
+        self.read_write
+            .epoch_to_committee
             .get(&())
             .expect("Fatal: DB read failed")
             .and_then(|committees| committees.get(epoch as usize).cloned())
     }
 
     fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        self.transactions
+        self.read_write
+            .transactions
             .get(digest)
             .expect("Fatal: DB read failed")
             .map(|transaction| transaction.into())
     }
 
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
-        self.effects.get(digest).expect("Fatal: DB read failed")
+        self.read_write
+            .effects
+            .get(digest)
+            .expect("Fatal: DB read failed")
     }
 
     fn get_transaction_events(
         &self,
         digest: &TransactionEventsDigest,
     ) -> Option<TransactionEvents> {
-        self.events.get(digest).expect("Fatal: DB read failed")
+        self.read_write
+            .events
+            .get(digest)
+            .expect("Fatal: DB read failed")
     }
 
     fn get_transaction_events_by_tx_digest(
         &self,
         tx_digest: &TransactionDigest,
     ) -> Option<TransactionEvents> {
-        self.events_tx_digest_index
+        self.read_write
+            .events_tx_digest_index
             .get(tx_digest)
             .expect("Fatal: DB read failed")
-            .and_then(|x| self.events.get(&x).expect("Fatal: DB read failed"))
+            .and_then(|x| {
+                self.read_write
+                    .events
+                    .get(&x)
+                    .expect("Fatal: DB read failed")
+            })
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
-        let version = self.live_objects.get(id).expect("Fatal: DB read failed")?;
+        let version = self
+            .read_write
+            .live_objects
+            .get(id)
+            .expect("Fatal: DB read failed")?;
         self.get_object_at_version(id, version)
     }
 
     fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
-        self.objects
+        self.read_write
+            .objects
             .get(id)
             .expect("Fatal: DB read failed")
             .and_then(|versions| versions.get(&version).cloned())
@@ -195,7 +269,7 @@ impl SimulatorStore for PersistedStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        Box::new(self.live_objects
+        Box::new(self.read_write.live_objects
             .unbounded_iter()
             .flat_map(|(id, version)| self.get_object_at_version(&id, version))
             .filter(
@@ -204,16 +278,19 @@ impl SimulatorStore for PersistedStore {
     }
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        self.checkpoint_digest_to_sequence_number
+        self.read_write
+            .checkpoint_digest_to_sequence_number
             .insert(checkpoint.digest(), checkpoint.sequence_number())
             .expect("Fatal: DB write failed");
-        self.checkpoints
+        self.read_write
+            .checkpoints
             .insert(checkpoint.sequence_number(), checkpoint.serializable_ref())
             .expect("Fatal: DB write failed");
     }
 
     fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
-        self.checkpoint_contents
+        self.read_write
+            .checkpoint_contents
             .insert(contents.digest(), &contents)
             .expect("Fatal: DB write failed");
     }
@@ -222,6 +299,7 @@ impl SimulatorStore for PersistedStore {
         let epoch = committee.epoch as usize;
 
         let mut committees = if let Some(c) = self
+            .read_write
             .epoch_to_committee
             .get(&())
             .expect("Fatal: DB read failed")
@@ -240,7 +318,8 @@ impl SimulatorStore for PersistedStore {
         } else {
             panic!("committee was inserted into EpochCommitteeMap out of order");
         }
-        self.epoch_to_committee
+        self.read_write
+            .epoch_to_committee
             .insert(&(), &committees)
             .expect("Fatal: DB write failed");
     }
@@ -261,22 +340,26 @@ impl SimulatorStore for PersistedStore {
     }
 
     fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
-        self.transactions
+        self.read_write
+            .transactions
             .insert(transaction.digest(), transaction.serializable_ref())
             .expect("Fatal: DB write failed");
     }
 
     fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
-        self.effects
+        self.read_write
+            .effects
             .insert(effects.transaction_digest(), &effects)
             .expect("Fatal: DB write failed");
     }
 
     fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
-        self.events_tx_digest_index
+        self.read_write
+            .events_tx_digest_index
             .insert(tx_digest, &events.digest())
             .expect("Fatal: DB write failed");
-        self.events
+        self.read_write
+            .events
             .insert(&events.digest(), &events)
             .expect("Fatal: DB write failed");
     }
@@ -287,24 +370,31 @@ impl SimulatorStore for PersistedStore {
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
         for (object_id, _, _) in deleted_objects {
-            self.live_objects
+            self.read_write
+                .live_objects
                 .remove(&object_id)
                 .expect("Fatal: DB write failed");
         }
 
         for (object_id, object) in written_objects {
             let version = object.version();
-            self.live_objects
+            self.read_write
+                .live_objects
                 .insert(&object_id, &version)
                 .expect("Fatal: DB write failed");
-            let mut q =
-                if let Some(x) = self.objects.get(&object_id).expect("Fatal: DB read failed") {
-                    x
-                } else {
-                    BTreeMap::new()
-                };
+            let mut q = if let Some(x) = self
+                .read_write
+                .objects
+                .get(&object_id)
+                .expect("Fatal: DB read failed")
+            {
+                x
+            } else {
+                BTreeMap::new()
+            };
             q.insert(version, object);
-            self.objects
+            self.read_write
+                .objects
                 .insert(&object_id, &q)
                 .expect("Fatal: DB write failed");
         }
@@ -430,6 +520,204 @@ impl ParentSync for PersistedStore {
     }
 }
 
+impl NodeStateGetter for PersistedStoreInnerReadOnlyWrapper {
+    fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> SuiResult<VerifiedCheckpoint> {
+        self.sync();
+        self.inner
+            .checkpoints
+            .get(&sequence_number)
+            .expect("Fatal: DB read failed")
+            .map(|checkpoint| checkpoint.into())
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
+            })
+    }
+
+    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.sync();
+        self.inner
+            .checkpoints
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+            .map(|(checkpoint, _)| checkpoint)
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::LatestCheckpointSequenceNumberNotFound,
+            })
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        content_digest: CheckpointContentsDigest,
+    ) -> SuiResult<CheckpointContents> {
+        self.sync();
+
+        self.inner
+            .checkpoint_contents
+            .get(&content_digest)
+            .expect("Fatal: DB read failed")
+            .ok_or(SuiError::UserInputError {
+                error: UserInputError::CheckpointContentsNotFound(content_digest),
+            })
+    }
+
+    fn multi_get_transaction_blocks(
+        &self,
+        tx_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .transactions
+            .multi_get(tx_digests)
+            .expect("Fatal: DB read failed")
+            .into_iter()
+            .map(|transaction| transaction.map(|x| x.into()))
+            .collect())
+    }
+
+    fn multi_get_executed_effects(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .effects
+            .multi_get(digests)
+            .expect("Fatal: DB read failed")
+            .into_iter()
+            .collect())
+    }
+
+    fn multi_get_events(
+        &self,
+        event_digests: &[TransactionEventsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .events
+            .multi_get(event_digests)
+            .expect("Fatal: DB read failed")
+            .into_iter()
+            .collect())
+    }
+
+    fn multi_get_object_by_key(
+        &self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .objects
+            // Get the seq maps for each object
+            .multi_get(object_keys.iter().map(|w| w.0))
+            .expect("Fatal: DB read failed")
+            .into_iter()
+            .enumerate()
+            // Get the object at the required seq
+            .map(|(idx, mp)| mp.and_then(|sm| sm.get(&object_keys[idx].1).cloned()))
+            .collect())
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        self.sync();
+
+        Ok(self
+            .inner
+            .objects
+            .get(object_id)
+            .expect("Fatal: DB read failed")
+            .and_then(|x| x.get(&version).cloned()))
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        self.sync();
+
+        self.inner
+            .live_objects
+            .get(object_id)
+            .expect("Fatal: DB read failed")
+            .map(|version| self.get_object_by_key(object_id, version))
+            .transpose()
+            .map(|f| f.flatten())
+    }
+}
+
+impl PersistedStoreInnerReadOnlyWrapper {
+    pub fn sync(&self) {
+        // Todo: add macro utility for this in typed store derive
+        self.inner
+            .checkpoint_digest_to_sequence_number
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .checkpoints
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .effects
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .epoch_to_committee
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .events
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .events_tx_digest_index
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .live_objects
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .objects
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .transactions
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+        self.inner
+            .checkpoint_contents
+            .try_catch_up_with_primary()
+            .expect("Fatal: DB sync failed");
+    }
+}
+
+impl Clone for PersistedStoreInnerReadOnlyWrapper {
+    fn clone(&self) -> Self {
+        let samp: SamplingInterval = SamplingInterval::new(Duration::from_secs(60), 0);
+        PersistedStoreInnerReadOnlyWrapper {
+            path: self.path.clone(),
+            inner: PersistedStoreInner::get_read_only_handle(
+                self.path.clone(),
+                None,
+                None,
+                MetricConf::with_sampling(samp),
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,7 +726,7 @@ mod tests {
     #[tokio::test]
     async fn deterministic_genesis() {
         let rng = StdRng::from_seed([9; 32]);
-        let chain1 = PersistedStore::_new_sim_with_protocol_version_and_accounts(
+        let chain1 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
             0,
             ProtocolVersion::MAX,
@@ -452,7 +740,7 @@ mod tests {
             .digest();
 
         let rng = StdRng::from_seed([9; 32]);
-        let chain2 = PersistedStore::_new_sim_with_protocol_version_and_accounts(
+        let chain2 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
             0,
             ProtocolVersion::MAX,
@@ -469,7 +757,7 @@ mod tests {
 
         // Ensure the committees are different when using different seeds
         let rng = StdRng::from_seed([0; 32]);
-        let chain3 = PersistedStore::_new_sim_with_protocol_version_and_accounts(
+        let chain3 = PersistedStore::new_sim_with_protocol_version_and_accounts(
             rng,
             0,
             ProtocolVersion::MAX,

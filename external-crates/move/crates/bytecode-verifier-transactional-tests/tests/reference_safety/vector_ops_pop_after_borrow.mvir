@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u64>;
     let e_imm: &u64;
 label b0:
@@ -11,8 +13,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u64>;
     let e_mut: &mut u64;
 label b0:
@@ -22,4 +27,6 @@ label b0:
 
     _ = vec_pop_back<u64>(&mut v);
     return;
+}
+
 }

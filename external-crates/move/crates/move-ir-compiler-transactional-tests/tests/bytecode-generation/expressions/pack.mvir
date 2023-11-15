@@ -1,4 +1,4 @@
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x2d20.M {
     struct T { u: u64 }
 
@@ -8,7 +8,7 @@ module 0x2d20.M {
     }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x3d20.M {
     struct T { u: u64, v: u128 }
 
@@ -19,7 +19,7 @@ module 0x3d20.M {
     }
 }
 
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x4d20.M {
     struct T { x: u64, y: u64 }
 

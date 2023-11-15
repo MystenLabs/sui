@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
     let v1: vector<u64>;
     let v2: vector<u64>;
     let e: u64;
@@ -12,8 +14,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
     let v1: vector<u64>;
     let v2: vector<u64>;
     let e1: u64;
@@ -26,4 +31,6 @@ label b0:
     assert(*vec_imm_borrow<u64>(&v2, 1) == 43, 43);
 
     return;
+}
+
 }

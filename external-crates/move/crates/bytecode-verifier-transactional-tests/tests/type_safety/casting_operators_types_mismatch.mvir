@@ -1,89 +1,124 @@
 //# run
+module 0x42.m {
 // tests bad casts/integer conversions
-main() {
+entry foo() {
 label b0:
     _ = to_u8(true);
     return;
 }
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(true);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u128(true);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(true);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(true);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u256(true);
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u8(0x0);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u64(0x0);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u128(0x0);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u16(0x0);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u32(0x0);
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = to_u256(0x0);
     return;
 }
 
+}
 
 //# publish
 module 0x42.M {

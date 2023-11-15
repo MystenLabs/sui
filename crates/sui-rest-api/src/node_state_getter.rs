@@ -120,7 +120,9 @@ impl NodeStateGetter for AuthorityState {
     }
 }
 
-impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
+impl<T: Sync + Send, W: simulacrum::SimulatorStore + Sync + Send> NodeStateGetter
+    for simulacrum::Simulacrum<T, W>
+{
     fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,

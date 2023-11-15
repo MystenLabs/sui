@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
 label b0:
     assert(0u8 == 0u8, 1000);
     assert(0u64 == 0u64, 1001);
@@ -15,8 +17,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
 label b0:
     assert(0u8 != 1u8, 2000);
     assert(0u64 != 1u64, 2001);
@@ -32,8 +37,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x3.m {
+
+entry foo() {
 label b0:
     assert(0u8 < 1u8, 3000);
     assert(0u64 < 1u64, 3001);
@@ -49,8 +57,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x4.m {
+
+entry foo() {
 label b0:
     assert(1u8 > 0u8, 4000);
     assert(1u64 > 0u64, 4001);
@@ -66,8 +77,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x5.m {
+
+entry foo() {
 label b0:
     assert(0u8 <= 1u8, 5000);
     assert(0u64 <= 1u64, 5001);
@@ -83,8 +97,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x6.m {
+
+entry foo() {
 label b0:
     assert(1u8 >= 0u8, 6000);
     assert(1u64 >= 0u64, 6001);
@@ -98,4 +115,6 @@ label b0:
     assert(0u64 >= 0u64, 6201);
     assert(0u128 >= 0u128, 6202);
     return;
+}
+
 }

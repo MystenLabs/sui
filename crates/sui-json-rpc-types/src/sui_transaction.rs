@@ -828,6 +828,30 @@ impl SuiTransactionBlockEvents {
     }
 }
 
+impl Display for SuiTransactionBlockEvents {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.data.is_empty() {
+            writeln!(f, "╭─────────────────────────────╮")?;
+            writeln!(f, "│ No transaction block events │")?;
+            writeln!(f, "╰─────────────────────────────╯")
+        } else {
+            let mut builder = TableBuilder::default();
+
+            for event in &self.data {
+                builder.push_record(vec![format!("{}", event)]);
+            }
+
+            let mut table = builder.build();
+            table.with(TablePanel::header("Transaction Block Events"));
+            table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+                1,
+                TableStyle::modern().get_horizontal(),
+            )]));
+            write!(f, "{}", table)
+        }
+    }
+}
+
 /// The response from processing a dev inspect transaction
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "DevInspectResults", rename_all = "camelCase")]

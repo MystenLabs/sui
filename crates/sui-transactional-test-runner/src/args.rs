@@ -30,7 +30,7 @@ pub struct SuiRunArgs {
     pub summarize: bool,
 }
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, clap::Parser, Default)]
 pub struct SuiPublishArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
@@ -160,6 +160,8 @@ pub enum SuiSubcommand {
     AdvanceClock(AdvanceClockCommand),
     #[clap(name = "view-checkpoint")]
     ViewCheckpoint,
+    #[clap(name = "run-graphql")]
+    RunGraphql,
 }
 
 #[derive(Clone, Debug)]

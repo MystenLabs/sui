@@ -3,12 +3,13 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
+use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
-use move_binary_format::{file_format::CompiledScript, CompiledModule};
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
@@ -25,6 +26,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 use move_symbol_pool::Symbol;
+use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
@@ -32,7 +34,6 @@ use move_transactional_test_runner::{
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use simulacrum::Simulacrum;
 use std::fmt::{self, Write};
 use std::time::Duration;
 use std::{
@@ -43,9 +44,14 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::test_infra::cluster::serve_executor;
+use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
+use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -116,13 +122,14 @@ pub struct SuiTestAdapter<'a> {
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
     is_simulator: bool,
+    pub(crate) cluster: Option<ExecutorCluster>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
 }
 
 pub(crate) struct StagedPackage {
     file: NamedTempFile,
     syntax: SyntaxChoice,
-    modules: Vec<(Option<Symbol>, CompiledModule)>,
+    modules: Vec<MaybeNamedCompiledModule>,
     pub(crate) digest: Vec<u8>,
 }
 
@@ -225,8 +232,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 objects,
                 account_objects,
             },
+            cluster,
         ) = if is_simulator {
-            init_sim_executor(rng, account_names, additional_mapping, &protocol_config)
+            init_sim_executor(rng, account_names, additional_mapping, &protocol_config).await
         } else {
             init_val_fullnode_executor(rng, account_names, additional_mapping, &protocol_config)
                 .await
@@ -236,6 +244,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let mut test_adapter = Self {
             is_simulator,
+            cluster,
             executor,
             compiled_state: CompiledState::new(
                 named_address_mapping,
@@ -283,23 +292,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
     async fn publish_modules(
         &mut self,
-        modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+    ) -> anyhow::Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         self.next_task();
         let SuiPublishArgs {
             sender,
             upgradeable,
             dependencies,
         } = extra;
-        let named_addr_opt = modules.first().unwrap().0;
-        let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
+        let named_addr_opt = modules.first().unwrap().named_address;
+        let first_module_name = modules.first().unwrap().module.self_id().name().to_string();
         let modules_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes).unwrap();
+                m.module.serialize(&mut module_bytes).unwrap();
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<_>>()?;
@@ -373,11 +382,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .unwrap()
             .serialized_module_map()
             .iter()
-            .map(|(_, published_module_bytes)| {
-                (
-                    named_addr_opt,
-                    CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
-                )
+            .map(|(_, published_module_bytes)| MaybeNamedCompiledModule {
+                named_address: named_addr_opt,
+                module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
+                source_map: None,
             })
             .collect();
         Ok((output, published_modules))
@@ -430,18 +438,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         Ok((output, empty))
     }
 
-    async fn execute_script(
-        &mut self,
-        _script: CompiledScript,
-        _type_args: Vec<TypeTag>,
-        _signers: Vec<ParsedAddress>,
-        _args: Vec<SuiValue>,
-        _gas_budget: Option<u64>,
-        _extra: Self::ExtraRunArgs,
-    ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
-        bail!("Scripts are not supported")
-    }
-
     async fn handle_subcommand(
         &mut self,
         task: TaskInput<Self::Subcommand>,
@@ -478,6 +474,22 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::RunGraphql => {
+                let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
+                let contents = std::fs::read_to_string(file.path())?;
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+                cluster
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
+                    .await;
+
+                let resp = cluster
+                    .graphql_client
+                    .execute_to_graphql(contents.trim().to_owned(), true, vec![], vec![])
+                    .await?;
+
+                Ok(Some(resp.response_body_json_pretty()))
+            }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
@@ -605,9 +617,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                     .get(&Symbol::from(p))?
                                     .modules
                                     .iter()
-                                    .map(|(_n, m)| {
+                                    .map(|m| {
                                         let mut buf = vec![];
-                                        m.serialize(&mut buf).unwrap();
+                                        m.module.serialize(&mut buf).unwrap();
                                         buf
                                     })
                                     .collect();
@@ -717,7 +729,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                 .unwrap_or_else(|| panic!("Internal error: expected dependency {name} in map when restoring address."));
                         }
 
-                        let upgraded_name = modules.first().unwrap().0.unwrap();
+                        let upgraded_name = modules.first().unwrap().named_address.unwrap();
                         let package = &Symbol::from(package.as_str());
                         let original_name = adapter
                             .package_upgrade_mapping
@@ -776,11 +788,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .await?;
                 assert!(!modules.is_empty());
-                let Some(package_name) = modules.first().unwrap().0 else {
+                let Some(package_name) = modules.first().unwrap().named_address else {
                     bail!("Staged modules must have a named address")
                 };
-                for (named_addr, _) in &modules {
-                    let Some(named_addr) = named_addr else {
+                for m in &modules {
+                    let Some(named_addr) = &m.named_address else {
                         bail!("Staged modules must have a named address")
                     };
                     if named_addr != &package_name {
@@ -794,9 +806,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     self.get_dependency_ids(dependencies, /* include_std */ true)?;
                 let module_bytes = modules
                     .iter()
-                    .map(|(_, m)| {
+                    .map(|m| {
                         let mut buf = vec![];
-                        m.serialize(&mut buf).unwrap();
+                        m.module.serialize(&mut buf).unwrap();
                         buf
                     })
                     .collect::<Vec<_>>();
@@ -838,7 +850,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                         published_module_bytes,
                                     )
                                     .unwrap();
-                                    (Some(*address_sym), module)
+                                    MaybeNamedCompiledModule {
+                                        named_address: Some(*address_sym),
+                                        module,
+                                        source_map: None,
+                                    }
                                 })
                                 .collect()
                         });
@@ -903,7 +919,7 @@ impl<'a> SuiTestAdapter<'a> {
     async fn upgrade_package(
         &mut self,
         before_upgrade: NumericalAddress,
-        modules: &[(Option<Symbol>, CompiledModule)],
+        modules: &[MaybeNamedCompiledModule],
         upgrade_capability: FakeID,
         dependencies: Vec<String>,
         sender: String,
@@ -912,9 +928,9 @@ impl<'a> SuiTestAdapter<'a> {
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes)?;
+                m.module.serialize(&mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -974,7 +990,7 @@ impl<'a> SuiTestAdapter<'a> {
             })
             .unwrap();
         let package_addr = NumericalAddress::new(created_package.into_bytes(), NumberFormat::Hex);
-        if let Some(new_package_name) = modules[0].0 {
+        if let Some(new_package_name) = modules[0].named_address {
             let prev_package = self
                 .compiled_state
                 .named_address_mapping
@@ -1607,21 +1623,29 @@ async fn init_val_fullnode_executor(
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
-) -> (Box<dyn TransactionalAdapter>, AccountSetup) {
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
     let acc_setup = create_accounts_objects(&mut rng, account_names, additional_mapping);
     let executor = create_val_fullnode_executor(protocol_config, &acc_setup.objects).await;
-    (Box::new(executor), acc_setup)
+    (Box::new(executor), acc_setup, None)
 }
 
 /// Create an executor using a simulator
 /// This means we can control the checkpoint, epoch creation process and
 /// manually advance clock as needed
-fn init_sim_executor(
+async fn init_sim_executor(
     mut rng: StdRng,
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
     protocol_config: &ProtocolConfig,
-) -> (Box<dyn TransactionalAdapter>, AccountSetup) {
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
@@ -1651,12 +1675,21 @@ fn init_sim_executor(
     });
 
     // Create the simulator with the specific account configs, which also crates objects
-    let sim = Simulacrum::new_with_protocol_version_and_accounts(
+
+    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
         rng,
         DEFAULT_CHAIN_START_TIMESTAMP,
         protocol_config.version,
-        acc_cfgs.clone(),
+        acc_cfgs,
+        None,
     );
+
+    let cluster = serve_executor(
+        ConnectionConfig::ci_integration_test_cfg(),
+        DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+        Arc::new(read_replica),
+    )
+    .await;
 
     // Get the actual object values from the simulator
     for (name, (addr, kp)) in account_kps {
@@ -1696,6 +1729,7 @@ fn init_sim_executor(
             account_objects,
             accounts,
         },
+        Some(cluster),
     )
 }
 
@@ -1722,7 +1756,7 @@ fn update_named_address_mapping(
     }
 }
 
-impl sui_rest_api::node_state_getter::NodeStateGetter for SuiTestAdapter<'_> {
+impl NodeStateGetter for SuiTestAdapter<'_> {
     fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,

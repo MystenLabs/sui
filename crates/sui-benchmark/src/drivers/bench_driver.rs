@@ -1002,14 +1002,23 @@ async fn run_bench_worker(
 /// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
 /// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
 fn create_progress_bar(duration: Interval) -> ProgressBar {
+    fn new_progress_bar(len: u64) -> ProgressBar {
+        if cfg!(msim) {
+            // don't print any progress when running in the simulator
+            ProgressBar::hidden()
+        } else {
+            ProgressBar::new(len)
+        }
+    }
+
     match duration {
-        Interval::Count(count) => ProgressBar::new(count)
+        Interval::Count(count) => new_progress_bar(count)
             .with_prefix("Running benchmark(count):")
             .with_style(
                 ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}").unwrap(),
             ),
         Interval::Time(Duration::MAX) => ProgressBar::hidden(),
-        Interval::Time(duration) => ProgressBar::new(duration.as_secs())
+        Interval::Time(duration) => new_progress_bar(duration.as_secs())
             .with_prefix("Running benchmark(duration):")
             .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
     }

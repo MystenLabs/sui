@@ -9,10 +9,12 @@ use mysten_metrics::init_metrics;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::new_pg_connection_pool_impl;
+use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::utils::reset_database;
 use sui_indexer::IndexerConfig;
@@ -27,6 +29,8 @@ const EPOCH_DURATION_MS: u64 = 15000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
+
+pub const DEFAULT_INTERNAL_DATA_SOURCE_PORT: u16 = 3000;
 
 pub struct ExecutorCluster {
     pub executor_server_handle: JoinHandle<()>,
@@ -190,99 +194,27 @@ pub async fn start_test_indexer(
     (store, handle)
 }
 
-pub async fn simulator_commands_test_impl() {
-    let test_file_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("test_infra")
-        .join("data")
-        .join("example.move");
-
-    let output_file_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src")
-        .join("test_infra")
-        .join("data")
-        .join("example.exp");
-
-    // Read the file into a string
-    let file_contents = std::fs::read_to_string(&test_file_path).unwrap();
-
-    let (output, adapter) = move_transactional_test_runner::framework::handle_actual_output::<
-        sui_transactional_test_runner::test_adapter::SuiTestAdapter,
-    >(
-        &test_file_path,
-        Some(&*sui_transactional_test_runner::test_adapter::PRE_COMPILED),
-    )
-    .await
-    .unwrap();
-
-    // Read the file into a string
-    let output_file_contents = match std::fs::read_to_string(&output_file_path) {
-        Ok(contents) => contents,
-        Err(_) => {
-            // If the file doesn't exist, create it
-            std::fs::write(&output_file_path, output.clone()).unwrap();
-            output.clone()
+impl ExecutorCluster {
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, timeout: Duration) {
+        async fn inner(s: &ExecutorCluster, checkpoint: u64) {
+            let mut highest_checkpoint = s
+                .indexer_store
+                .get_latest_tx_checkpoint_sequence_number()
+                .await
+                .unwrap()
+                .unwrap();
+            while highest_checkpoint < checkpoint {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                highest_checkpoint = s
+                    .indexer_store
+                    .get_latest_tx_checkpoint_sequence_number()
+                    .await
+                    .unwrap()
+                    .unwrap();
+            }
         }
-    };
-
-    // Check that the output matches the expected output
-    assert_eq!(output_file_contents, output);
-
-    let checkpoint = adapter.get_latest_checkpoint_sequence_number().unwrap();
-    let checkpoint_info = adapter
-        .get_verified_checkpoint_by_sequence_number(checkpoint)
-        .unwrap();
-
-    let num_actual_checkpoint_commands = file_contents.match_indices("create-checkpoint").count();
-    let num_actual_epoch_commands = file_contents.match_indices("advance-epoch").count();
-
-    // Each epoch creation also creates a checkpoint
-    assert_eq!(
-        checkpoint as usize,
-        num_actual_checkpoint_commands + num_actual_epoch_commands
-    );
-
-    // Since we start at epoch 0, we need to subtract 1
-    assert_eq!(
-        checkpoint_info.epoch() as usize,
-        num_actual_epoch_commands - 1
-    );
-
-    // Serve the data, start an indexer, and graphql server
-    let cluster = serve_executor(
-        ConnectionConfig::ci_integration_test_cfg(),
-        3000,
-        Arc::new(adapter),
-    )
-    .await;
-
-    let query = r#"{
-      checkpointConnection (last: 1) {
-        nodes {
-          sequenceNumber
-        }
-      }
-    }"#
-    .to_string();
-
-    // Get the latest checkpoint via graphql
-    let resp = cluster.graphql_client.execute(query, vec![]).await.unwrap();
-
-    // Result should be something like {"data":{"checkpointConnection":{"nodes":[{"sequenceNumber":XYZ}]}}}
-    // Where XYZ is the seq number of the latest checkpoint
-    let fetched_chk = resp
-        .get("data")
-        .unwrap()
-        .get("checkpointConnection")
-        .unwrap()
-        .get("nodes")
-        .unwrap()
-        .as_array()
-        .unwrap()[0]
-        .get("sequenceNumber")
-        .unwrap()
-        .as_i64()
-        .unwrap();
-
-    assert_eq!(fetched_chk as u64, checkpoint);
+        tokio::time::timeout(timeout, inner(self, checkpoint))
+            .await
+            .expect("Timeout waiting for indexer to catchup to checkpoint");
+    }
 }
