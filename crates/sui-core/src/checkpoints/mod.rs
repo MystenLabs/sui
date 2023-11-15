@@ -923,8 +923,6 @@ impl CheckpointBuilder {
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
                         | TransactionKind::AuthenticatorStateUpdate(_)
-                    // TODO-DNS should RandomnessStateUpdate be included here?
-                    // In general - how to handle checkpointing for randomness updates?
                         | TransactionKind::RandomnessStateUpdate(_)
                 ) {
                     transaction_keys.push(SequencedConsensusTransactionKey::External(
