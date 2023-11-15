@@ -1,6 +1,6 @@
 address 0x42 {
 module M {
-    public fun test(x: u8) {
+    public entry fun test(x: u8) {
         if (x == 0) {
             return ()
         } else {

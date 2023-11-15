@@ -207,7 +207,6 @@ pub fn program(
 
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
-    let mut scripts = vec![];
     let P::Program {
         named_address_maps,
         source_definitions,
@@ -223,13 +222,7 @@ pub fn program(
     {
         context.current_package = package;
         context.named_address_mapping = Some(named_address_maps.get(named_address_map));
-        definition(
-            &mut context,
-            &mut source_module_map,
-            &mut scripts,
-            package,
-            def,
-        )
+        definition(&mut context, &mut source_module_map, package, def)
     }
 
     context.is_source_definition = false;
@@ -241,13 +234,7 @@ pub fn program(
     {
         context.current_package = package;
         context.named_address_mapping = Some(named_address_maps.get(named_address_map));
-        definition(
-            &mut context,
-            &mut lib_module_map,
-            &mut scripts,
-            package,
-            def,
-        )
+        definition(&mut context, &mut lib_module_map, package, def)
     }
     context.current_package = None;
 
@@ -260,47 +247,15 @@ pub fn program(
     }
     let module_map = source_module_map;
 
-    let scripts = {
-        let mut collected: BTreeMap<Symbol, Vec<E::Script>> = BTreeMap::new();
-        for s in scripts {
-            collected
-                .entry(s.function_name.value())
-                .or_default()
-                .push(s)
-        }
-        let mut keyed: BTreeMap<Symbol, E::Script> = BTreeMap::new();
-        for (n, mut ss) in collected {
-            match ss.len() {
-                0 => unreachable!(),
-                1 => assert!(
-                    keyed.insert(n, ss.pop().unwrap()).is_none(),
-                    "ICE duplicate script key"
-                ),
-                _ => {
-                    for (i, s) in ss.into_iter().enumerate() {
-                        let k = format!("{}_{}", n, i);
-                        assert!(
-                            keyed.insert(k.into(), s).is_none(),
-                            "ICE duplicate script key"
-                        )
-                    }
-                }
-            }
-        }
-        keyed
-    };
-
     super::primitive_definers::modules(context.env, pre_compiled_lib, &module_map);
     E::Program {
         modules: module_map,
-        scripts,
     }
 }
 
 fn definition(
     context: &mut Context,
     module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    scripts: &mut Vec<E::Script>,
     package_name: Option<Symbol>,
     def: P::Definition,
 ) {
@@ -318,9 +273,6 @@ fn definition(
                 module(context, module_map, package_name, Some(module_addr), m)
             }
         }
-
-        P::Definition::Script(_) if !context.is_source_definition => (),
-        P::Definition::Script(s) => script(context, scripts, package_name, s),
     }
 }
 
@@ -653,92 +605,6 @@ fn check_visibility_modifiers(
     }
 }
 
-fn script(
-    context: &mut Context,
-    scripts: &mut Vec<E::Script>,
-    package_name: Option<Symbol>,
-    pscript: P::Script,
-) {
-    scripts.push(script_(context, package_name, pscript))
-}
-
-fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Script) -> E::Script {
-    assert!(context.address.is_none());
-    assert!(context.is_source_definition);
-    let P::Script {
-        attributes,
-        loc,
-        uses: puses,
-        constants: pconstants,
-        function: pfunction,
-        specs: pspecs,
-    } = pscript;
-
-    let attributes = flatten_attributes(context, AttributePosition::Script, attributes);
-    let mut warning_filter = warning_filter(context, &attributes);
-    let config = context.env.package_config(package_name);
-    warning_filter.union(&config.warning_filter);
-
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let (new_scope, use_funs_builder) = uses(context, puses);
-    let old_aliases = context.aliases.add_and_shadow_all(new_scope);
-    assert!(
-        old_aliases.is_empty(),
-        "ICE there should be no aliases entering a script"
-    );
-    let mut use_funs = use_funs(context, use_funs_builder);
-
-    let mut constants = UniqueMap::new();
-    for c in pconstants {
-        // TODO remove after Self rework
-        check_valid_module_member_name(context, ModuleMemberKind::Constant, c.name.0);
-        constant(context, &mut constants, c);
-    }
-
-    // TODO remove after Self rework
-    check_valid_module_member_name(context, ModuleMemberKind::Function, pfunction.name.0);
-    let (function_name, function) = function_(context, None, 0, pfunction);
-    match &function.visibility {
-        E::Visibility::Friend(loc) | E::Visibility::Package(loc) | E::Visibility::Public(loc) => {
-            let msg = format!(
-                "Invalid '{}' visibility modifier. \
-                Script functions are not callable from other Move functions.",
-                function.visibility,
-            );
-            context
-                .env
-                .add_diag(diag!(Declarations::UnnecessaryItem, (*loc, msg)));
-        }
-        E::Visibility::Internal => (),
-    }
-    match &function.body {
-        sp!(_, E::FunctionBody_::Defined(_)) => (),
-        sp!(loc, E::FunctionBody_::Native) => {
-            context.env.add_diag(diag!(
-                Declarations::InvalidScript,
-                (
-                    *loc,
-                    "Invalid 'native' function. 'script' functions must have a defined body"
-                )
-            ));
-        }
-    }
-    let specs = specs(context, pspecs);
-    context.set_to_outer_scope(Some(&mut use_funs), old_aliases);
-    context.env.pop_warning_filter_scope();
-    E::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs,
-        constants,
-        function_name,
-        function,
-        specs,
-    }
-}
-
 fn flatten_attributes(
     context: &mut Context,
     attr_position: AttributePosition,
@@ -1030,7 +896,6 @@ fn all_module_members<'a>(
                     module_members(members, always_add, addr, m)
                 }
             }
-            P::Definition::Script(_) => (),
         }
     }
 }
@@ -1207,9 +1072,7 @@ fn use_(
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
-                P::Visibility::Script(vis_loc)
-                | P::Visibility::Friend(vis_loc)
-                | P::Visibility::Package(vis_loc) => {
+                P::Visibility::Friend(vis_loc) | P::Visibility::Package(vis_loc) => {
                     let msg = "Invalid visibility for 'use fun' declaration";
                     let vis_msg = format!(
                         "Module level 'use fun' declarations can be '{}' for the module's types, \
@@ -1668,7 +1531,6 @@ fn visibility(pvisibility: P::Visibility) -> E::Visibility {
         P::Visibility::Internal => E::Visibility::Internal,
         P::Visibility::Package(loc) => E::Visibility::Package(loc),
         P::Visibility::Public(loc) => E::Visibility::Public(loc),
-        P::Visibility::Script(loc) => E::Visibility::Public(loc),
     }
 }
 
@@ -1714,10 +1576,6 @@ fn function_body(context: &mut Context, sp!(loc, pbody_): P::FunctionBody) -> E:
 //**************************************************************************************************
 // Specification Blocks
 //**************************************************************************************************
-
-fn specs(context: &mut Context, pspecs: Vec<P::SpecBlock>) -> Vec<E::SpecBlock> {
-    pspecs.into_iter().map(|s| spec(context, s)).collect()
-}
 
 fn spec(context: &mut Context, sp!(loc, pspec): P::SpecBlock) -> E::SpecBlock {
     let P::SpecBlock_ {

@@ -41,18 +41,6 @@ pub trait FilterContext {
         }
     }
 
-    fn filter_map_script(
-        &mut self,
-        script_def: P::Script,
-        is_source_def: bool,
-    ) -> Option<P::Script> {
-        if self.should_remove_by_attributes(&script_def.attributes, is_source_def) {
-            None
-        } else {
-            Some(script_def)
-        }
-    }
-
     fn filter_map_function(
         &mut self,
         function_def: P::Function,
@@ -183,9 +171,6 @@ fn filter_definition<T: FilterContext>(
         P::Definition::Address(a) => {
             filter_address(context, a, is_source_def).map(P::Definition::Address)
         }
-        P::Definition::Script(s) => {
-            filter_script(context, s, is_source_def).map(P::Definition::Script)
-        }
     }
 }
 
@@ -213,53 +198,6 @@ fn filter_address<T: FilterContext>(
         loc,
         addr,
         modules,
-    })
-}
-
-fn filter_script<T: FilterContext>(
-    context: &mut T,
-    script_def: P::Script,
-    is_source_def: bool,
-) -> Option<P::Script> {
-    let script_def = context.filter_map_script(script_def, is_source_def)?;
-
-    let P::Script {
-        attributes,
-        uses,
-        constants,
-        function,
-        specs,
-        loc,
-    } = script_def;
-
-    // This is a bit weird, if the only function in the script is filtered, we consider
-    // the whole script is filtered as well
-    let new_function = context.filter_map_function(function, is_source_def)?;
-
-    let new_uses = uses
-        .into_iter()
-        .filter_map(|use_decl| context.filter_map_use(use_decl, is_source_def))
-        .collect();
-    let new_constants = constants
-        .into_iter()
-        .filter_map(|constant| context.filter_map_constant(constant, is_source_def))
-        .collect();
-    let new_specs = specs
-        .into_iter()
-        .filter_map(|sp!(spec_loc, spec)| {
-            context
-                .filter_map_spec(spec, is_source_def)
-                .map(|new_spec| sp(spec_loc, new_spec))
-        })
-        .collect();
-
-    Some(P::Script {
-        attributes,
-        function: new_function,
-        uses: new_uses,
-        constants: new_constants,
-        specs: new_specs,
-        loc,
     })
 }
 

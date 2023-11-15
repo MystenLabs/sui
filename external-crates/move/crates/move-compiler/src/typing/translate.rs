@@ -31,7 +31,6 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
@@ -45,22 +44,18 @@ pub fn program(
 ) -> T::Program {
     let N::Program {
         info,
-        inner: N::Program_ {
-            modules: nmodules,
-            scripts: nscripts,
-        },
+        inner: N::Program_ { modules: nmodules },
     } = prog;
     let mut context = Context::new(compilation_env, pre_compiled_lib, info);
 
     // we extract module use funs into the module info context
     let mut modules = modules(&mut context, nmodules);
-    let mut scripts = scripts(&mut context, nscripts);
 
     assert!(context.constraints.is_empty());
-    dependency_ordering::program(context.env, &mut modules, &mut scripts);
+    dependency_ordering::program(context.env, &mut modules);
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    let mut prog = T::Program_ { modules, scripts };
+    let mut prog = T::Program_ { modules };
     let module_use_funs = context
         .modules
         .modules
@@ -119,7 +114,6 @@ fn module(
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
-    assert!(context.current_script_constants.is_none());
     assert!(context.current_package.is_none());
 
     let N::ModuleDefinition {
@@ -144,7 +138,7 @@ fn module(
         .for_each(|(_, _, s)| struct_def(context, s));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
-    let functions = nfunctions.map(|name, f| function(context, name, f, false));
+    let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
     context.pop_use_funs_scope();
@@ -169,66 +163,11 @@ fn module(
     (typed_module, new_friends)
 }
 
-fn scripts(
-    context: &mut Context,
-    nscripts: BTreeMap<Symbol, N::Script>,
-) -> BTreeMap<Symbol, T::Script> {
-    nscripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, nscript: N::Script) -> T::Script {
-    assert!(context.current_script_constants.is_none());
-    assert!(context.current_package.is_none());
-    context.current_module = None;
-    let N::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs,
-        constants: nconstants,
-        function_name,
-        function: nfunction,
-        spec_dependencies,
-    } = nscript;
-    context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    context.add_use_funs_scope(use_funs);
-    context.bind_script_constants(&nconstants);
-    let constants = nconstants.map(|name, c| constant(context, name, c));
-    let function = function(context, function_name, nfunction, true);
-    context.current_script_constants = None;
-    context.current_package = None;
-    context.pop_use_funs_scope();
-    context.env.pop_warning_filter_scope();
-    T::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        immediate_neighbors: UniqueMap::new(),
-        used_addresses: BTreeSet::new(),
-        constants,
-        function_name,
-        function,
-        spec_dependencies,
-    }
-}
-
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
 
-fn function(
-    context: &mut Context,
-    name: FunctionName,
-    f: N::Function,
-    is_script: bool,
-) -> T::Function {
-    let loc = name.loc();
+fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
         warning_filter,
         index,
@@ -249,23 +188,6 @@ fn function(
             None => visibility,
         };
     function_signature(context, &signature);
-    if is_script {
-        let mk_msg = || {
-            let tu = core::error_format_(&Type_::Unit, &Subst::empty());
-            format!(
-                "Invalid 'script' function return type. The function entry point to a \
-                 'script' must have the return type {}",
-                tu
-            )
-        };
-        subtype(
-            context,
-            loc,
-            mk_msg,
-            signature.return_type.clone(),
-            sp(loc, Type_::Unit),
-        );
-    }
     expand::function_signature(context, &mut signature);
 
     let body = function_body(context, n_body);
@@ -1290,13 +1212,11 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::Constant(m, c) => {
             let ty = core::make_constant_type(context, eloc, &m, &c);
-            if let Some(mident) = m {
-                context
-                    .used_module_members
-                    .entry(mident.value)
-                    .or_default()
-                    .insert(c.value());
-            }
+            context
+                .used_module_members
+                .entry(m.value)
+                .or_default()
+                .insert(c.value());
             (ty, TE::Constant(m, c))
         }
 

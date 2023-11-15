@@ -29,27 +29,6 @@ pub struct Program {
 #[derive(Debug, Clone)]
 pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-    pub scripts: BTreeMap<Symbol, Script>,
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
-    pub package_name: Option<Symbol>,
-    pub attributes: Attributes,
-    pub loc: Loc,
-    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
-    pub used_addresses: BTreeSet<Address>,
-    pub constants: UniqueMap<ConstantName, Constant>,
-    pub function_name: FunctionName,
-    pub function: Function,
-    // module dependencies referenced in specs
-    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -165,7 +144,7 @@ pub enum UnannotatedExp_ {
     Move { from_user: bool, var: Var },
     Copy { from_user: bool, var: Var },
     Use(Var),
-    Constant(Option<ModuleIdent>, ConstantName),
+    Constant(ModuleIdent, ConstantName),
 
     ModuleCall(Box<ModuleCall>),
     Builtin(Box<BuiltinFunction>, Box<Exp>),
@@ -276,60 +255,13 @@ impl AstDebug for Program {
 
 impl AstDebug for Program_ {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program_ { modules, scripts } = self;
+        let Program_ { modules } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
         }
-
-        for (n, s) in scripts {
-            w.write(&format!("script {}", n));
-            w.block(|w| s.ast_debug(w));
-            w.new_line()
-        }
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            warning_filter,
-            package_name,
-            attributes,
-            loc: _loc,
-            immediate_neighbors,
-            used_addresses,
-            constants,
-            function_name,
-            function,
-            spec_dependencies,
-        } = self;
-        warning_filter.ast_debug(w);
-        if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
-        }
-        attributes.ast_debug(w);
-        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{mident} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
-        for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
-            w.new_line()
-        }
-        for (m, neighbor) in spec_dependencies {
-            w.write(&format!("spec_dep {m} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
-        for cdef in constants.key_cloned_iter() {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        (*function_name, function).ast_debug(w);
     }
 }
 
@@ -518,8 +450,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("use@");
                 v.ast_debug(w)
             }
-            E::Constant(None, c) => w.write(&format!("{}", c)),
-            E::Constant(Some(m), c) => w.write(&format!("{}::{}", m, c)),
+            E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }

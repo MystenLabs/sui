@@ -13,9 +13,7 @@ pub enum CompiledPackageLayout {
     SourceMaps,
     LockFiles,
     CompiledModules,
-    CompiledScripts,
     CompiledDocs,
-    CompiledABIs,
 }
 
 impl CompiledPackageLayout {
@@ -28,9 +26,7 @@ impl CompiledPackageLayout {
             Self::SourceMaps => "source_maps",
             Self::LockFiles => "locks",
             Self::CompiledModules => "bytecode_modules",
-            Self::CompiledScripts => "bytecode_scripts",
             Self::CompiledDocs => "docs",
-            Self::CompiledABIs => "abis",
         };
         Path::new(path)
     }

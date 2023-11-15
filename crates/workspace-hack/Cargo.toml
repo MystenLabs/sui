@@ -318,7 +318,6 @@ hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features
 hdrhistogram = { version = "7" }
 headers = { version = "0.3", default-features = false }
 headers-core = { version = "0.2", default-features = false }
-heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4" }
 hex-literal-9fbad63c4bcf4a8f = { package = "hex-literal", version = "0.4", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
@@ -408,7 +407,6 @@ miniz_oxide = { version = "0.6", default-features = false, features = ["with-all
 mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext"] }
 mockall = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { path = "../../external-crates/move/crates/move-abigen", default-features = false }
 move-abstract-stack = { path = "../../external-crates/move/crates/move-abstract-stack", default-features = false }
 move-binary-format = { path = "../../external-crates/move/crates/move-binary-format" }
 move-borrow-graph = { path = "../../external-crates/move/crates/move-borrow-graph", default-features = false }
@@ -1125,8 +1123,7 @@ hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features
 hdrhistogram = { version = "7" }
 headers = { version = "0.3", default-features = false }
 headers-core = { version = "0.2", default-features = false }
-heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
-heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4" }
+heck = { version = "0.4" }
 hex = { version = "0.4" }
 hex-literal-468e82937335b1c9 = { package = "hex-literal", version = "0.3", default-features = false }
 hex-literal-9fbad63c4bcf4a8f = { package = "hex-literal", version = "0.4", default-features = false }
@@ -1228,7 +1225,6 @@ mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "o
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
 more-asserts = { version = "0.3", default-features = false }
-move-abigen = { path = "../../external-crates/move/crates/move-abigen", default-features = false }
 move-abstract-stack = { path = "../../external-crates/move/crates/move-abstract-stack", default-features = false }
 move-binary-format = { path = "../../external-crates/move/crates/move-binary-format" }
 move-borrow-graph = { path = "../../external-crates/move/crates/move-borrow-graph", default-features = false }

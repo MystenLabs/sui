@@ -11,6 +11,3 @@ module M {
     }
 }
 }
-script {
-    fun main<T: key + key>() {}
-}

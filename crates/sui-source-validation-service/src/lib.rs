@@ -30,7 +30,6 @@ use tower::ServiceBuilder;
 use tracing::{debug, error, info};
 use url::Url;
 
-use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
@@ -186,10 +185,7 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         let path = v.source_path.to_path_buf();
         let source = Some(fs::read_to_string(path.as_path())?);
-        let name = match v.unit {
-            CompiledUnitEnum::Module(ref m) => m.name,
-            CompiledUnitEnum::Script(ref m) => m.name,
-        };
+        let name = v.unit.name;
         if let Some(existing) = address_map.get_mut(&address) {
             existing.insert(name, SourceInfo { path, source });
         } else {

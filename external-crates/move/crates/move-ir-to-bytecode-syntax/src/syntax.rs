@@ -1864,46 +1864,6 @@ fn parse_field_decl(tokens: &mut Lexer) -> Result<(Field, Type), ParseError<Loc,
     Ok((f, t))
 }
 
-// pub Script : Script = {
-//     <imports: (ImportDecl)*>
-//     "main" "(" <args: Comma<ArgDecl>> ")" <locals_body: FunctionBlock> => { ... }
-// }
-
-fn parse_script(tokens: &mut Lexer) -> Result<Script, ParseError<Loc, anyhow::Error>> {
-    let script_start = tokens.start_loc();
-    let mut imports: Vec<ImportDefinition> = vec![];
-    while tokens.peek() == Tok::Import {
-        imports.push(parse_import_decl(tokens)?);
-    }
-    let fun_start = tokens.start_loc();
-    consume_token(tokens, Tok::Main)?;
-    let type_formals = if tokens.peek() == Tok::Less {
-        consume_token(tokens, Tok::Less)?;
-        let list = parse_comma_list(tokens, &[Tok::Greater], parse_type_parameter, true)?;
-        consume_token(tokens, Tok::Greater)?;
-        list
-    } else {
-        vec![]
-    };
-    consume_token(tokens, Tok::LParen)?;
-    let args = parse_comma_list(tokens, &[Tok::RParen], parse_arg_decl, true)?;
-    consume_token(tokens, Tok::RParen)?;
-    let (locals, code) = parse_function_block_(tokens)?;
-    let end_loc = tokens.previous_end_loc();
-    let main = Function_::new(
-        FunctionVisibility::Public,
-        /* is_entry */ true,
-        args,
-        vec![],
-        type_formals,
-        vec![],
-        FunctionBody::Move { locals, code },
-    );
-    let main = spanned(tokens.file_hash(), fun_start, end_loc, main);
-    let loc = make_loc(tokens.file_hash(), script_start, end_loc);
-    Ok(Script::new(loc, imports, vec![], vec![], main))
-}
-
 // StructDecl: StructDefinition_ = {
 //     "struct" <name_and_type_parameters:
 //     NameAndTypeFormals> ("has" <Ability> ("," <Ability)*)? "{" <data: Comma<FieldDecl>> "}"
@@ -2098,16 +2058,6 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
 //     <m: Module> => ScriptOrModule::Module(m),
 // }
 
-fn parse_script_or_module(
-    tokens: &mut Lexer,
-) -> Result<ScriptOrModule, ParseError<Loc, anyhow::Error>> {
-    if tokens.peek() == Tok::Module {
-        Ok(ScriptOrModule::Module(parse_module(tokens)?))
-    } else {
-        Ok(ScriptOrModule::Script(parse_script(tokens)?))
-    }
-}
-
 pub fn parse_module_string(
     input: &str,
 ) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
@@ -2115,26 +2065,6 @@ pub fn parse_module_string(
     let mut tokens = Lexer::new(file_hash, input);
     tokens.advance()?;
     let unit = parse_module(&mut tokens)?;
-    consume_token(&mut tokens, Tok::EOF)?;
-    Ok(unit)
-}
-
-pub fn parse_script_string(input: &str) -> Result<Script, ParseError<Loc, anyhow::Error>> {
-    let file_hash = FileHash::new(input);
-    let mut tokens = Lexer::new(file_hash, input);
-    tokens.advance()?;
-    let unit = parse_script(&mut tokens)?;
-    consume_token(&mut tokens, Tok::EOF)?;
-    Ok(unit)
-}
-
-pub fn parse_script_or_module_string(
-    input: &str,
-) -> Result<ScriptOrModule, ParseError<Loc, anyhow::Error>> {
-    let file_hash = FileHash::new(input);
-    let mut tokens = Lexer::new(file_hash, input);
-    tokens.advance()?;
-    let unit = parse_script_or_module(&mut tokens)?;
     consume_token(&mut tokens, Tok::EOF)?;
     Ok(unit)
 }

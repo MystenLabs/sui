@@ -14,10 +14,7 @@ use move_binary_format::{
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
-use move_compiler::{
-    compiled_unit::{CompiledUnit, NamedCompiledModule},
-    diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics, FileName},
-};
+use move_compiler::diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics, FileName};
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
@@ -56,13 +53,6 @@ pub fn get_gas_status(cost_table: &CostTable, gas_budget: Option<u64>) -> Result
         GasStatus::new_unmetered()
     };
     Ok(gas_status)
-}
-
-pub(crate) fn module(unit: &CompiledUnit) -> Result<&CompiledModule> {
-    match unit {
-        CompiledUnit::Module(NamedCompiledModule { module, .. }) => Ok(module),
-        _ => bail!("Found script in modules -- this shouldn't happen"),
-    }
 }
 
 pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
@@ -158,7 +148,7 @@ pub(crate) fn explain_publish_error(
         ),
     );
 
-    let module = module(&unit.unit)?;
+    let module = &unit.unit.module;
     let module_id = module.self_id();
     let error_clone = error.clone();
     match error.into_vm_status() {

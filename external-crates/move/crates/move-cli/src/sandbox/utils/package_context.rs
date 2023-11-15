@@ -43,10 +43,7 @@ impl PackageContext {
         let new_modules = package
             .deps_compiled_units
             .iter()
-            .map(|(_, unit)| match &unit.unit {
-                move_compiler::compiled_unit::CompiledUnitEnum::Module(m) => &m.module,
-                _ => unreachable!(),
-            })
+            .map(|(_, unit)| &unit.unit.module)
             .filter(|m| !state.has_module(&m.self_id()));
 
         let mut serialized_modules = vec![];

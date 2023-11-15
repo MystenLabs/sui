@@ -19,7 +19,6 @@ use crate::{
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
@@ -159,17 +158,13 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: H::Program,
 ) -> G::Program {
-    let H::Program {
-        modules: hmodules,
-        scripts: hscripts,
-    } = prog;
+    let H::Program { modules: hmodules } = prog;
 
     let mut context = Context::new(compilation_env, pre_compiled_lib, &hmodules);
 
     let modules = modules(&mut context, hmodules);
-    let scripts = scripts(&mut context, hscripts);
 
-    let program = G::Program { modules, scripts };
+    let program = G::Program { modules };
     visit_program(&mut context, &program);
     program
 }
@@ -202,8 +197,8 @@ fn module(
     } = mdef;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, Some(module_ident), hconstants);
-    let functions = hfunctions.map(|name, f| function(context, Some(module_ident), name, f));
+    let constants = constants(context, module_ident, hconstants);
+    let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.env.pop_warning_filter_scope();
     (
         module_ident,
@@ -221,48 +216,13 @@ fn module(
     )
 }
 
-fn scripts(
-    context: &mut Context,
-    hscripts: BTreeMap<Symbol, H::Script>,
-) -> BTreeMap<Symbol, G::Script> {
-    hscripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, hscript: H::Script) -> G::Script {
-    let H::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        constants: hconstants,
-        function_name,
-        function: hfunction,
-    } = hscript;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, None, hconstants);
-    let function = function(context, None, function_name, hfunction);
-    context.env.pop_warning_filter_scope();
-    G::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        constants,
-        function_name,
-        function,
-    }
-}
-
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
 
 fn constants(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     mut consts: UniqueMap<ConstantName, H::Constant>,
 ) -> UniqueMap<ConstantName, G::Constant> {
     // Traverse the constants and compute the dependency graph between constants: if one mentions
@@ -437,7 +397,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
 fn constant(
     context: &mut Context,
     constant_values: &mut UniqueMap<ConstantName, Value>,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: ConstantName,
     c: H::Constant,
 ) -> G::Constant {
@@ -491,7 +451,7 @@ const CANNOT_FOLD: &str =
 fn constant_(
     context: &mut Context,
     constant_values: &UniqueMap<ConstantName, Value>,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: ConstantName,
     full_loc: Loc,
     signature: H::BaseType,
@@ -601,7 +561,7 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
 
 fn function(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     f: H::Function,
 ) -> G::Function {
@@ -630,7 +590,7 @@ fn function(
 
 fn function_body(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     visibility: H::Visibility,
     signature: &H::FunctionSignature,
@@ -897,10 +857,6 @@ fn visit_program(context: &mut Context, prog: &G::Program) {
     for (mident, mdef) in prog.modules.key_cloned_iter() {
         visit_module(context, prog, mident, mdef)
     }
-
-    for script in prog.scripts.values() {
-        visit_script(context, prog, script)
-    }
 }
 
 fn visit_module(
@@ -913,23 +869,15 @@ fn visit_module(
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
     for (name, fdef) in mdef.functions.key_cloned_iter() {
-        visit_function(context, prog, Some(mident), name, fdef)
+        visit_function(context, prog, mident, name, fdef)
     }
-    context.env.pop_warning_filter_scope();
-}
-
-fn visit_script(context: &mut Context, prog: &G::Program, script: &G::Script) {
-    context
-        .env
-        .add_warning_filter_scope(script.warning_filter.clone());
-    visit_function(context, prog, None, script.function_name, &script.function);
     context.env.pop_warning_filter_scope();
 }
 
 fn visit_function(
     context: &mut Context,
     prog: &G::Program,
-    mident: Option<ModuleIdent>,
+    mident: ModuleIdent,
     name: FunctionName,
     fdef: &G::Function,
 ) {

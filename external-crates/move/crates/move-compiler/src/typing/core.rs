@@ -73,7 +73,6 @@ pub struct Context<'env> {
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
-    pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Local>,
 
@@ -143,7 +142,6 @@ impl<'env> Context<'env> {
             current_package: None,
             current_module: None,
             current_function: None,
-            current_script_constants: None,
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
@@ -238,15 +236,6 @@ impl<'env> Context<'env> {
         self.subst = Subst::empty();
         self.constraints = Constraints::new();
         self.current_function = None;
-    }
-
-    pub fn bind_script_constants(&mut self, constants: &UniqueMap<ConstantName, N::Constant>) {
-        assert!(self.current_script_constants.is_none());
-        self.current_script_constants = Some(constants.ref_map(|cname, cdef| ConstantInfo {
-            attributes: cdef.attributes.clone(),
-            defined_loc: cname.loc(),
-            signature: cdef.signature.clone(),
-        }));
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -417,11 +406,8 @@ impl<'env> Context<'env> {
         self.modules.function_info(m, n)
     }
 
-    fn constant_info(&mut self, m_opt: &Option<ModuleIdent>, n: &ConstantName) -> &ConstantInfo {
-        let constants = match m_opt {
-            None => self.current_script_constants.as_ref().unwrap(),
-            Some(m) => &self.module_info(m).constants,
-        };
+    fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+        let constants = &self.module_info(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
 
@@ -814,10 +800,10 @@ pub fn make_field_type(
 pub fn make_constant_type(
     context: &mut Context,
     loc: Loc,
-    m: &Option<ModuleIdent>,
+    m: &ModuleIdent,
     c: &ConstantName,
 ) -> Type {
-    let in_current_module = m == &context.current_module;
+    let in_current_module = Some(m) == context.current_module.as_ref();
     let (defined_loc, signature) = {
         let ConstantInfo {
             attributes: _,
@@ -827,10 +813,7 @@ pub fn make_constant_type(
         (*defined_loc, signature.clone())
     };
     if !in_current_module {
-        let msg = match m {
-            None => format!("Invalid access of '{}'", c),
-            Some(mident) => format!("Invalid access of '{}::{}'", mident, c),
-        };
+        let msg = format!("Invalid access of '{}::{}'", m, c);
         let internal_msg = "Constants are internal to their module, and cannot can be accessed \
                             outside of their module";
         context.env.add_diag(diag!(

@@ -52,14 +52,12 @@ pub enum SandboxCommand {
     /// The script must be defined in the package.
     #[clap(name = "run")]
     Run {
-        /// Path to .mv file containing either script or module bytecodes. If the file is a module, the
-        /// `script_name` parameter must be set.
-        #[clap(name = "script")]
-        script_file: PathBuf,
-        /// Name of the script function inside `script_file` to call. Should only be set if `script_file`
-        /// points to a module.
+        /// Path to .mv file containing either module bytecodes.
+        #[clap(name = "module")]
+        module_file: PathBuf,
+        /// Name of the function inside the module specified in `module_file` to call.
         #[clap(name = "name")]
-        script_name: Option<String>,
+        function_name: String,
         /// Possibly-empty list of signers for the current transaction (e.g., `account` in
         /// `main(&account: signer)`). Must match the number of signers expected by `script_file`.
         #[clap(
@@ -217,8 +215,8 @@ impl SandboxCommand {
                 )
             }
             SandboxCommand::Run {
-                script_file,
-                script_name,
+                module_file,
+                function_name,
                 signers,
                 args,
                 type_args,
@@ -234,8 +232,8 @@ impl SandboxCommand {
                     error_descriptions,
                     &state,
                     context.package(),
-                    script_file,
-                    script_name,
+                    module_file,
+                    function_name,
                     signers,
                     args,
                     type_args.to_vec(),

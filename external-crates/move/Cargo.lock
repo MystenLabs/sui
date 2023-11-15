@@ -1723,27 +1723,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-abigen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "codespan-reporting",
- "datatest-stable",
- "heck 0.3.3",
- "log",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "move-prover",
- "move-prover-test-utils",
- "serde",
- "tempfile",
-]
-
-[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -2138,7 +2117,6 @@ dependencies = [
  "clap 4.4.1",
  "colored",
  "datatest-stable",
- "move-abigen",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -2181,7 +2159,6 @@ dependencies = [
  "datatest-stable",
  "itertools",
  "log",
- "move-abigen",
  "move-command-line-common",
  "move-compiler",
  "move-docgen",

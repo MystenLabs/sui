@@ -52,10 +52,6 @@ pub struct BuildConfig {
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
 
-    /// Generate ABIs for packages
-    #[clap(name = "generate-abis", long = "abi", global = true)]
-    pub generate_abis: bool,
-
     /// Installation directory for compiled artifacts. Defaults to current directory.
     #[clap(long = "install-dir", global = true)]
     pub install_dir: Option<PathBuf>,

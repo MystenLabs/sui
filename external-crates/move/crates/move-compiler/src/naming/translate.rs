@@ -71,7 +71,6 @@ struct Context<'env> {
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
-    unscoped_constants: BTreeMap<Symbol, Loc>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
@@ -157,7 +156,6 @@ impl<'env> Context<'env> {
             scoped_functions,
             scoped_constants,
             unscoped_types,
-            unscoped_constants: BTreeMap::new(),
             local_scopes: vec![],
             local_count: BTreeMap::new(),
             used_locals: BTreeSet::new(),
@@ -372,25 +370,22 @@ impl<'env> Context<'env> {
     fn resolve_constant(
         &mut self,
         sp!(loc, ma_): E::ModuleAccess,
-    ) -> Option<(Option<ModuleIdent>, ConstantName)> {
+    ) -> Option<(ModuleIdent, ConstantName)> {
         use E::ModuleAccess_ as EA;
         match ma_ {
-            EA::Name(n) => match self.unscoped_constants.get(&n.value) {
-                None => {
-                    self.env.add_diag(diag!(
-                        NameResolution::UnboundUnscopedName,
-                        (loc, format!("Unbound constant '{}'", n)),
-                    ));
-                    None
-                }
-                Some(_) => Some((None, ConstantName(n))),
-            },
+            EA::Name(n) => {
+                self.env.add_diag(diag!(
+                    NameResolution::UnboundUnscopedName,
+                    (loc, format!("Unbound constant '{}'", n)),
+                ));
+                None
+            }
             EA::ModuleAccess(m, n) => match self.resolve_module_constant(loc, &m, n) {
                 None => {
                     assert!(self.env.has_errors());
                     None
                 }
-                Some(cname) => Some((Some(m), cname)),
+                Some(cname) => Some((m, cname)),
             },
         }
     }
@@ -399,20 +394,12 @@ impl<'env> Context<'env> {
         self.unscoped_types.insert(s, rt);
     }
 
-    fn bind_constant(&mut self, s: Symbol, loc: Loc) {
-        self.unscoped_constants.insert(s, loc);
+    fn save_unscoped(&self) -> BTreeMap<Symbol, ResolvedType> {
+        self.unscoped_types.clone()
     }
 
-    fn save_unscoped(&self) -> (BTreeMap<Symbol, ResolvedType>, BTreeMap<Symbol, Loc>) {
-        (self.unscoped_types.clone(), self.unscoped_constants.clone())
-    }
-
-    fn restore_unscoped(
-        &mut self,
-        (types, constants): (BTreeMap<Symbol, ResolvedType>, BTreeMap<Symbol, Loc>),
-    ) {
+    fn restore_unscoped(&mut self, types: BTreeMap<Symbol, ResolvedType>) {
         self.unscoped_types = types;
-        self.unscoped_constants = constants;
     }
 
     fn new_local_scope(&mut self) {
@@ -468,13 +455,9 @@ pub fn program(
     prog: E::Program,
 ) -> N::Program {
     let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
-    let E::Program {
-        modules: emodules,
-        scripts: escripts,
-    } = prog;
+    let E::Program { modules: emodules } = prog;
     let modules = modules(&mut context, emodules);
-    let scripts = scripts(&mut context, escripts);
-    let mut inner = N::Program_ { modules, scripts };
+    let mut inner = N::Program_ { modules };
     let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
     N::Program { info, inner }
@@ -519,7 +502,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, &mut spec_dependencies, Some(ident), name, f)
+        function(context, &mut spec_dependencies, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -539,66 +522,6 @@ fn module(
         structs,
         constants,
         functions,
-        spec_dependencies,
-    }
-}
-
-fn scripts(
-    context: &mut Context,
-    escripts: BTreeMap<Symbol, E::Script>,
-) -> BTreeMap<Symbol, N::Script> {
-    escripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, escript: E::Script) -> N::Script {
-    let E::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs: euse_funs,
-        constants: econstants,
-        function_name,
-        function: efunction,
-        specs,
-    } = escript;
-    context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let outer_unscoped = context.save_unscoped();
-    let mut spec_dependencies = BTreeSet::new();
-    spec_blocks(&mut spec_dependencies, &specs);
-    let use_funs = use_funs(context, euse_funs);
-    for (loc, s, _) in &econstants {
-        context.bind_constant(*s, loc)
-    }
-    let inner_unscoped = context.save_unscoped();
-    let constants = econstants.map(|name, c| {
-        context.restore_unscoped(inner_unscoped.clone());
-        constant(context, name, c)
-    });
-    context.restore_unscoped(inner_unscoped);
-    let function = function(
-        context,
-        &mut spec_dependencies,
-        None,
-        function_name,
-        efunction,
-    );
-    context.restore_unscoped(outer_unscoped);
-    context.env.pop_warning_filter_scope();
-    context.current_package = None;
-    N::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs,
-        constants,
-        function_name,
-        function,
         spec_dependencies,
     }
 }
@@ -801,7 +724,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 fn function(
     context: &mut Context,
     spec_dependencies: &mut BTreeSet<(ModuleIdent, Neighbor)>,
-    module_opt: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
 ) -> N::Function {
@@ -850,7 +773,7 @@ fn function(
         signature,
         body,
     };
-    fake_natives::function(context.env, module_opt, name, &f);
+    fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
     context.local_scopes = vec![];

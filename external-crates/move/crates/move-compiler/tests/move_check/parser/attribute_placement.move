@@ -29,7 +29,7 @@ module 0x42::N {
 }
 
 #[attr]
-script {
+module 0x42::m {
     #[attr]
     use 0x42::M;
 

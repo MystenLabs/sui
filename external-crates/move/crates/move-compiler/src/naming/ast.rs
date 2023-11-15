@@ -35,7 +35,6 @@ pub struct Program {
 #[derive(Debug, Clone)]
 pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-    pub scripts: BTreeMap<Symbol, Script>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -72,25 +71,6 @@ pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 pub struct UseFuns {
     pub resolved: ResolvedUseFuns,
     pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
-    pub package_name: Option<Symbol>,
-    pub attributes: Attributes,
-    pub loc: Loc,
-    pub use_funs: UseFuns,
-    pub constants: UniqueMap<ConstantName, Constant>,
-    pub function_name: FunctionName,
-    pub function: Function,
-    // module dependencies referenced in specs
-    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -300,7 +280,7 @@ pub enum Exp_ {
     Move(Var),
     Copy(Var),
     Use(Var),
-    Constant(Option<ModuleIdent>, ConstantName),
+    Constant(ModuleIdent, ConstantName),
 
     ModuleCall(
         ModuleIdent,
@@ -753,17 +733,11 @@ impl AstDebug for Program {
 
 impl AstDebug for Program_ {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Self { modules, scripts } = self;
+        let Self { modules } = self;
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
-        }
-
-        for (n, s) in scripts {
-            w.write(&format!("script {}", n));
-            w.block(|w| s.ast_debug(w));
-            w.new_line()
         }
     }
 }
@@ -834,38 +808,6 @@ impl AstDebug for UseFuns {
                 implicit.ast_debug(w)
             }
         })
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            warning_filter,
-            package_name,
-            attributes,
-            loc: _loc,
-            use_funs,
-            constants,
-            function_name,
-            function,
-            spec_dependencies,
-        } = self;
-        warning_filter.ast_debug(w);
-        if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
-        }
-        attributes.ast_debug(w);
-        use_funs.ast_debug(w);
-        for (m, neighbor) in spec_dependencies {
-            w.write(&format!("spec_dep {m} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
-        for cdef in constants.key_cloned_iter() {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        (*function_name, function).ast_debug(w);
     }
 }
 
@@ -1213,8 +1155,7 @@ impl AstDebug for Exp_ {
                 v.ast_debug(w)
             }
             E::Use(v) => v.ast_debug(w),
-            E::Constant(None, c) => w.write(&format!("{}", c)),
-            E::Constant(Some(m), c) => w.write(&format!("{}::{}", m, c)),
+            E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
                 if let Some(ss) = tys_opt {

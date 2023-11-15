@@ -79,7 +79,6 @@ pub struct PackageDefinition {
 pub enum Definition {
     Module(ModuleDefinition),
     Address(AddressDefinition),
-    Script(Script),
 }
 
 #[derive(Debug, Clone)]
@@ -88,16 +87,6 @@ pub struct AddressDefinition {
     pub loc: Loc,
     pub addr: LeadingNameAccess,
     pub modules: Vec<ModuleDefinition>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub attributes: Vec<Attributes>,
-    pub loc: Loc,
-    pub uses: Vec<UseDecl>,
-    pub constants: Vec<Constant>,
-    pub function: Function,
-    pub specs: Vec<SpecBlock>,
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -263,7 +252,6 @@ pub struct FunctionSignature {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Visibility {
     Public(Loc),
-    Script(Loc),
     Friend(Loc),
     Package(Loc),
     Internal,
@@ -766,7 +754,6 @@ impl Definition {
         match self {
             Definition::Module(m) => m.loc.file_hash(),
             Definition::Address(a) => a.loc.file_hash(),
-            Definition::Script(s) => s.loc.file_hash(),
         }
     }
 }
@@ -922,14 +909,12 @@ impl Visibility {
     pub const PACKAGE: &'static str = "public(package)";
     pub const PACKAGE_IDENT: &'static str = "package";
     pub const PUBLIC: &'static str = "public";
-    pub const SCRIPT: &'static str = "public(script)";
 
     pub fn loc(&self) -> Option<Loc> {
         match self {
-            Visibility::Friend(loc)
-            | Visibility::Package(loc)
-            | Visibility::Public(loc)
-            | Visibility::Script(loc) => Some(*loc),
+            Visibility::Friend(loc) | Visibility::Package(loc) | Visibility::Public(loc) => {
+                Some(*loc)
+            }
             Visibility::Internal => None,
         }
     }
@@ -986,7 +971,6 @@ impl fmt::Display for Visibility {
                 Visibility::Internal => Visibility::INTERNAL,
                 Visibility::Package(_) => Visibility::PACKAGE,
                 Visibility::Public(_) => Visibility::PUBLIC,
-                Visibility::Script(_) => Visibility::SCRIPT,
             }
         )
     }
@@ -1062,7 +1046,6 @@ impl AstDebug for Definition {
         match self {
             Definition::Address(a) => a.ast_debug(w),
             Definition::Module(m) => m.ast_debug(w),
-            Definition::Script(m) => m.ast_debug(w),
         }
     }
 }
@@ -1133,35 +1116,6 @@ impl AstDebug for Vec<Attributes> {
             attrs.ast_debug(w);
             true
         });
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            attributes,
-            loc: _loc,
-            uses,
-            constants,
-            function,
-            specs,
-        } = self;
-        attributes.ast_debug(w);
-        for u in uses {
-            u.ast_debug(w);
-            w.new_line();
-        }
-        w.new_line();
-        for cdef in constants {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        w.new_line();
-        function.ast_debug(w);
-        for spec in specs {
-            spec.ast_debug(w);
-            w.new_line();
-        }
     }
 }
 

@@ -27,42 +27,6 @@ use std::{
 pub struct Program {
     /// The modules to publish
     pub modules: Vec<ModuleDefinition>,
-    /// The transaction script to execute
-    pub script: Script,
-}
-
-//**************************************************************************************************
-// ScriptOrModule
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-/// A script or a module, used to represent the two types of transactions.
-pub enum ScriptOrModule {
-    /// The script to execute.
-    Script(Script),
-    /// The module to publish.
-    Module(ModuleDefinition),
-}
-
-//**************************************************************************************************
-// Script
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-/// The Move transaction script to be executed
-pub struct Script {
-    /// The source location for this script
-    pub loc: Loc,
-    /// The dependencies of `main`, i.e. of the transaction script
-    pub imports: Vec<ImportDefinition>,
-    /// Explicit declaration of dependencies. If not provided, will be inferred based on given
-    /// dependencies to the IR compiler
-    pub explicit_dependency_declarations: Vec<ModuleDependency>,
-    /// the constants that the module defines. Only a utility, the identifiers are not carried into
-    /// the Move bytecode
-    pub constants: Vec<Constant>,
-    /// The transaction script's `main` procedure
-    pub main: Function,
 }
 
 //**************************************************************************************************
@@ -722,41 +686,8 @@ fn get_external_deps(imports: &[ImportDefinition]) -> Vec<ModuleId> {
 
 impl Program {
     /// Create a new `Program` from modules and transaction script
-    pub fn new(modules: Vec<ModuleDefinition>, script: Script) -> Self {
-        Program { modules, script }
-    }
-}
-
-impl Script {
-    /// Create a new `Script` from the imports and the main function
-    pub fn new(
-        loc: Loc,
-        imports: Vec<ImportDefinition>,
-        explicit_dependency_declarations: Vec<ModuleDependency>,
-        constants: Vec<Constant>,
-        main: Function,
-    ) -> Self {
-        Script {
-            loc,
-            imports,
-            explicit_dependency_declarations,
-            constants,
-            main,
-        }
-    }
-
-    /// Accessor for the body of the 'main' procedure
-    pub fn body(&self) -> &[Block] {
-        match self.main.value.body {
-            FunctionBody::Move { ref code, .. } => code,
-            FunctionBody::Bytecode { .. } => panic!("Invalid body access on bytecode main()"),
-            FunctionBody::Native => panic!("main() cannot be native"),
-        }
-    }
-
-    /// Return a vector of `ModuleId` for the external dependencies.
-    pub fn get_external_deps(&self) -> Vec<ModuleId> {
-        get_external_deps(self.imports.as_slice())
+    pub fn new(modules: Vec<ModuleDefinition>) -> Self {
+        Program { modules }
     }
 }
 
@@ -1089,12 +1020,6 @@ impl Exp_ {
 // Trait impls
 //**************************************************************************************************
 
-impl PartialEq for Script {
-    fn eq(&self, other: &Script) -> bool {
-        self.imports == other.imports && self.main.value.body == other.main.value.body
-    }
-}
-
 impl Iterator for Block_ {
     type Item = Statement;
 
@@ -1133,43 +1058,6 @@ fn format_constraints(set: &BTreeSet<Ability>) -> String {
         .map(|a| format!("{}", a))
         .collect::<Vec<_>>()
         .join(" + ")
-}
-
-impl fmt::Display for ScriptOrModule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ScriptOrModule::*;
-        match self {
-            Module(module_def) => write!(f, "{}", module_def),
-            Script(script) => write!(f, "{}", script),
-        }
-    }
-}
-
-impl fmt::Display for Script {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Script(")?;
-
-        write!(f, "Imports(")?;
-        write!(f, "{}", intersperse(&self.imports, ", "))?;
-        writeln!(f, ")")?;
-
-        writeln!(f, "Dependency(")?;
-        for dependency in &self.explicit_dependency_declarations {
-            writeln!(f, "{},", dependency)?;
-        }
-        writeln!(f, ")")?;
-
-        writeln!(f, "Constants(")?;
-        for constant in &self.constants {
-            writeln!(f, "{};", constant)?;
-        }
-        writeln!(f, ")")?;
-
-        write!(f, "Main(")?;
-        write!(f, "{}", self.main)?;
-        write!(f, ")")?;
-        write!(f, ")")
-    }
 }
 
 impl fmt::Display for ModuleName {

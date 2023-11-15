@@ -16,15 +16,19 @@ use move_ir_types::location::*;
 struct Context<'env, 'info> {
     env: &'env mut CompilationEnv,
     info: &'info NamingProgramInfo,
-    current_module: Option<ModuleIdent>,
+    current_module: ModuleIdent,
 }
 
 impl<'env, 'info> Context<'env, 'info> {
-    fn new(env: &'env mut CompilationEnv, info: &'info NamingProgramInfo) -> Self {
+    fn new(
+        env: &'env mut CompilationEnv,
+        info: &'info NamingProgramInfo,
+        current_module: ModuleIdent,
+    ) -> Self {
         Self {
             env,
             info,
-            current_module: None,
+            current_module,
         }
     }
 }
@@ -34,13 +38,9 @@ impl<'env, 'info> Context<'env, 'info> {
 //**************************************************************************************************
 
 pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
-    let mut context = Context::new(env, info);
-    let N::Program_ { modules, scripts } = inner;
+    let N::Program_ { modules } = inner;
     for (mident, mdef) in modules.key_cloned_iter_mut() {
-        module(&mut context, mident, mdef);
-    }
-    for s in scripts.values_mut() {
-        script(&mut context, s);
+        module(env, info, mident, mdef);
     }
     let module_use_funs = modules
         .key_cloned_iter()
@@ -56,8 +56,13 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
     info.set_use_funs(module_use_funs);
 }
 
-fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefinition) {
-    context.current_module = Some(mident);
+fn module(
+    env: &mut CompilationEnv,
+    info: &mut NamingProgramInfo,
+    mident: ModuleIdent,
+    mdef: &mut N::ModuleDefinition,
+) {
+    let context = &mut Context::new(env, info, mident);
     context
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
@@ -68,19 +73,6 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefini
     for (_, _, f) in &mut mdef.functions {
         function(context, f);
     }
-    context.env.pop_warning_filter_scope();
-}
-
-fn script(context: &mut Context, s: &mut N::Script) {
-    context.current_module = None;
-    context
-        .env
-        .add_warning_filter_scope(s.warning_filter.clone());
-    use_funs(context, &mut s.use_funs);
-    for (_, _, c) in &mut s.constants {
-        constant(context, c);
-    }
-    function(context, &mut s.function);
     context.env.pop_warning_filter_scope();
 }
 
@@ -136,7 +128,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                         N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
                         N::TypeName_::ModuleType(m, _) => Some(m),
                     };
-                    if context.current_module.as_ref() != defining_module {
+                    if Some(&context.current_module) != defining_module {
                         let msg = "Invalid visibility for 'use fun' declaration";
                         let vis_msg = format!(
                             "Module level 'use fun' declarations can be '{}' for the \
