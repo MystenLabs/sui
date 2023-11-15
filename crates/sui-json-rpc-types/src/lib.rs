@@ -33,6 +33,7 @@ mod sui_move;
 mod sui_object;
 mod sui_protocol;
 mod sui_transaction;
+mod utils;
 
 pub type DynamicFieldPage = Page<DynamicFieldInfo, ObjectID>;
 /// `next_cursor` points to the last item in the page;

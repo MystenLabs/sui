@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Base58, Base64};
+use fastcrypto::encoding::Base58;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use serde_with::{serde_as, DisplayFromStr};
 use std::fmt;
 use std::fmt::Display;
@@ -20,6 +20,7 @@ use sui_types::sui_serde::BigInt;
 use json_to_table::json_to_table;
 use tabled::settings::Style as TableStyle;
 
+use crate::utils::bytes_array_to_base64;
 use crate::{type_and_fields_from_move_struct, Page};
 use sui_types::sui_serde::SuiStructTag;
 pub type EventPage = Page<SuiEvent, EventID>;
@@ -148,33 +149,6 @@ impl Display for SuiEvent {
 
         write!(f, "\n └──")
     }
-}
-
-/// Convert a json array of bytes to Base64
-pub(crate) fn bytes_array_to_base64(v: &mut Value) {
-    match v {
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => (),
-        Value::Array(vals) => {
-            if let Some(vals) = vals.iter().map(try_into_byte).collect::<Option<Vec<_>>>() {
-                *v = json!(Base64::from_bytes(&vals).encoded())
-            } else {
-                for val in vals {
-                    bytes_array_to_base64(val)
-                }
-            }
-        }
-        Value::Object(map) => {
-            for val in map.values_mut() {
-                bytes_array_to_base64(val)
-            }
-        }
-    }
-}
-
-/// Try to convert a json Value object into an u8.
-pub(crate) fn try_into_byte(v: &Value) -> Option<u8> {
-    let num = v.as_u64()?;
-    (num <= 255).then_some(num as u8)
 }
 
 #[serde_as]

@@ -4,7 +4,8 @@
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::sui_transaction::GenericSignature::Signature;
-use crate::{bytes_array_to_base64, Filter, Page, SuiEvent, SuiObjectRef};
+use crate::utils::bytes_array_to_base64;
+use crate::{Filter, Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
