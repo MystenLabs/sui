@@ -81,19 +81,6 @@ fn run_docs_examples_move_unit_tests() -> io::Result<()> {
     Ok(())
 }
 
-#[test]
-#[cfg_attr(msim, ignore)]
-fn run_book_examples_move_unit_tests() {
-    let path = {
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "..", "doc", "book", "examples"]);
-        buf
-    };
-
-    check_package_builds(path.clone());
-    check_move_unit_tests(path);
-}
-
 /// Ensure packages build outside of test mode.
 fn check_package_builds(path: PathBuf) {
     let mut config = BuildConfig::new_for_testing();
