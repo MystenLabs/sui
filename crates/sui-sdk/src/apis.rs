@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::future;
-use std::sync::Arc;
-use std::time::Instant;
-
 use fastcrypto::encoding::Base64;
 use futures::stream;
 use futures::StreamExt;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
+use std::collections::BTreeMap;
+use std::future;
+use std::sync::Arc;
+use std::time::Instant;
 
 use crate::error::{Error, SuiRpcResult};
 use crate::RpcClient;
