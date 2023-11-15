@@ -221,7 +221,11 @@ fn mysticeti_committee(committee: &narwhal_config::Committee) -> Arc<Committee> 
         .map(|authority| {
             // TODO: using the  Ed25519 network key which is compatible with Mysticeti which also uses Ed25519. Should
             // switch to using the authority's protocol key (BLS) instead.
-            Authority::new(authority.stake(), PublicKey(authority.network_key().0))
+            Authority::new(
+                authority.stake(),
+                PublicKey(authority.network_key().0),
+                authority.hostname().to_string(),
+            )
         })
         .collect_vec();
     Committee::new(authorities.clone(), committee.epoch())
@@ -249,7 +253,7 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
     //TODO: for now fallback to default parameters - will read from properties
     Parameters {
         identifiers,
-        enable_pipelining: true,
+        enable_pipelining: false,
         ..Default::default()
     }
 }
