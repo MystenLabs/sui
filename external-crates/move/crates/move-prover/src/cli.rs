@@ -24,7 +24,6 @@ use simplelog::{
 };
 
 use codespan_reporting::diagnostic::Severity;
-use move_abigen::AbigenOptions;
 use move_docgen::DocgenOptions;
 use move_errmapgen::ErrmapOptions;
 use move_model::{
@@ -54,8 +53,6 @@ pub struct Options {
     pub verbosity_level: LevelFilter,
     /// Whether to run the documentation generator instead of the prover.
     pub run_docgen: bool,
-    /// Whether to run the ABI generator instead of the prover.
-    pub run_abigen: bool,
     /// Whether to run the error map generator instead of the prover.
     pub run_errmapgen: bool,
     /// Whether to run the read write set analysis instead of the prover
@@ -83,8 +80,6 @@ pub struct Options {
     pub prover: ProverOptions,
     /// Options for the prover backend.
     pub backend: BoogieOptions,
-    /// Options for the ABI generator.
-    pub abigen: AbigenOptions,
     /// Options for the error map generator.
     /// TODO: this currently create errors during deserialization, so skip them for this.
     #[serde(skip_serializing)]
@@ -96,7 +91,6 @@ impl Default for Options {
         Self {
             output_path: "output.bpl".to_string(),
             run_docgen: false,
-            run_abigen: false,
             run_errmapgen: false,
             run_read_write_set: false,
             run_escape: false,
@@ -108,7 +102,6 @@ impl Default for Options {
             prover: ProverOptions::default(),
             backend: BoogieOptions::default(),
             docgen: DocgenOptions::default(),
-            abigen: AbigenOptions::default(),
             errmapgen: ErrmapOptions::default(),
             experimental_pipeline: false,
             script_reach: false,
@@ -708,9 +701,6 @@ impl Options {
                 .get_one::<String>("docgen-template")
                 .map(|s| s.to_string())
                 .unwrap()]
-        }
-        if matches.get_flag("abigen") {
-            options.run_abigen = true;
         }
         if matches.get_flag("errmapgen") {
             options.run_errmapgen = true;

@@ -13,7 +13,6 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use colored::Colorize;
-use move_abigen::{Abigen, AbigenOptions};
 use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_bytecode_utils::Modules;
@@ -84,9 +83,6 @@ pub struct CompiledPackage {
     //
     /// filename -> doctext
     pub compiled_docs: Option<Vec<(String, String)>>,
-    /// filename -> json bytes for ScriptABI. Can then be used to generate transaction builders in
-    /// various languages.
-    pub compiled_abis: Option<Vec<(String, Vec<u8>)>>,
 }
 
 /// Represents a compiled package that has been saved to disk. This holds only the minimal metadata
@@ -172,32 +168,11 @@ impl OnDiskCompiledPackage {
             None
         };
 
-        let abi_path = self
-            .root_path
-            .join(self.package.compiled_package_info.package_name.as_str())
-            .join(CompiledPackageLayout::CompiledABIs.path());
-        let compiled_abis = if abi_path.is_dir() {
-            Some(
-                find_filenames(&[abi_path.to_string_lossy().to_string()], |path| {
-                    extension_equals(path, "abi")
-                })?
-                .into_iter()
-                .map(|path| {
-                    let contents = std::fs::read(&path).unwrap();
-                    (path, contents)
-                })
-                .collect(),
-            )
-        } else {
-            None
-        };
-
         Ok(CompiledPackage {
             compiled_package_info: self.package.compiled_package_info.clone(),
             root_compiled_units,
             deps_compiled_units,
             compiled_docs,
-            compiled_abis,
         })
     }
 
@@ -503,10 +478,7 @@ impl CompiledPackage {
         }
 
         let mut compiled_docs = None;
-        let mut compiled_abis = None;
-        if resolution_graph.build_options.generate_docs
-            || resolution_graph.build_options.generate_abis
-        {
+        if resolution_graph.build_options.generate_docs {
             let model = run_model_builder_with_options(
                 vec![sources_package_paths],
                 deps_package_paths,
@@ -523,14 +495,6 @@ impl CompiledPackage {
                     &resolution_graph.build_options.install_dir,
                 ));
             }
-
-            if resolution_graph.build_options.generate_abis {
-                compiled_abis = Some(Self::build_abis(
-                    get_bytecode_version_from_env(),
-                    &model,
-                    &root_compiled_units,
-                ));
-            }
         };
 
         let compiled_package = CompiledPackage {
@@ -543,7 +507,6 @@ impl CompiledPackage {
             root_compiled_units,
             deps_compiled_units,
             compiled_docs,
-            compiled_abis,
         };
 
         compiled_package.save_to_disk(project_root.join(CompiledPackageLayout::Root.path()))?;
@@ -645,48 +608,12 @@ impl CompiledPackage {
             }
         }
 
-        if let Some(abis) = &self.compiled_abis {
-            for (filename, abi_bytes) in abis {
-                on_disk_package.save_under(
-                    CompiledPackageLayout::CompiledABIs
-                        .path()
-                        .join(filename)
-                        .with_extension("abi"),
-                    abi_bytes,
-                )?;
-            }
-        }
-
         on_disk_package.save_under(
             CompiledPackageLayout::BuildInfo.path(),
             serde_yaml::to_string(&on_disk_package.package)?.as_bytes(),
         )?;
 
         Ok(on_disk_package)
-    }
-
-    fn build_abis(
-        bytecode_version: Option<u32>,
-        model: &GlobalEnv,
-        compiled_units: &[CompiledUnitWithSource],
-    ) -> Vec<(String, Vec<u8>)> {
-        let bytecode_map: BTreeMap<_, _> = compiled_units
-            .iter()
-            .map(|unit| {
-                (
-                    unit.unit.name.to_string(),
-                    unit.unit.serialize(bytecode_version),
-                )
-            })
-            .collect();
-        let abi_options = AbigenOptions {
-            in_memory_bytes: Some(bytecode_map),
-            output_directory: "".to_string(),
-            ..AbigenOptions::default()
-        };
-        let mut abigen = Abigen::new(model, &abi_options);
-        abigen.gen();
-        abigen.into_result()
     }
 
     fn build_docs(

@@ -5545,22 +5545,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 
 [[package]]
-name = "move-abigen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "heck 0.3.3",
- "log",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "serde",
-]
-
-[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -5908,7 +5892,6 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
- "move-abigen",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -5950,7 +5933,6 @@ dependencies = [
  "codespan-reporting",
  "itertools",
  "log",
- "move-abigen",
  "move-command-line-common",
  "move-compiler",
  "move-docgen",
@@ -14477,7 +14459,6 @@ dependencies = [
  "mockall",
  "mockall_derive",
  "more-asserts",
- "move-abigen",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",

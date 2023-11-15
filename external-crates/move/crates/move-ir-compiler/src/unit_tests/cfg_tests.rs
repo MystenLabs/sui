@@ -11,10 +11,10 @@ use move_binary_format::{
 #[test]
 fn cfg_compile_script_ret() {
     let text = "
-        module 0x42.m { entry foo()() {
+        module 0x42.m { entry foo() {
         label b0:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -36,7 +36,7 @@ fn cfg_compile_script_let() {
             y = 5;
             z = move(x) + copy(y) * 5 - copy(y);
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -60,7 +60,7 @@ fn cfg_compile_if() {
             jump b3;
         label b3:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -87,7 +87,7 @@ fn cfg_compile_if_else() {
             jump b3;
         label b3:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -110,7 +110,7 @@ fn cfg_compile_if_else_with_else_return() {
             jump b3;
         label b3:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -141,7 +141,7 @@ fn cfg_compile_nested_if() {
             jump if_0_cont;
         label if_0_cont:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -164,7 +164,7 @@ fn cfg_compile_if_else_with_if_return() {
             return;
         label b3:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -187,7 +187,7 @@ fn cfg_compile_if_else_with_two_returns() {
             return;
         label b3:
             return;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -213,7 +213,7 @@ fn cfg_compile_if_else_with_else_abort() {
             jump b3;
         label b3:
             abort 0;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -237,7 +237,7 @@ fn cfg_compile_if_else_with_if_abort() {
             abort 0;
         label b3:
             abort 0;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);
@@ -261,7 +261,7 @@ fn cfg_compile_if_else_with_two_aborts() {
             abort 0;
         label b3:
             abort 0;
-        }
+        } }
         ";
     let code = compile_module_with_single_function(&text);
     let cfg: VMControlFlowGraph = VMControlFlowGraph::new(&code);

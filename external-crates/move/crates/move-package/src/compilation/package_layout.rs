@@ -14,7 +14,6 @@ pub enum CompiledPackageLayout {
     LockFiles,
     CompiledModules,
     CompiledDocs,
-    CompiledABIs,
 }
 
 impl CompiledPackageLayout {
@@ -28,7 +27,6 @@ impl CompiledPackageLayout {
             Self::LockFiles => "locks",
             Self::CompiledModules => "bytecode_modules",
             Self::CompiledDocs => "docs",
-            Self::CompiledABIs => "abis",
         };
         Path::new(path)
     }

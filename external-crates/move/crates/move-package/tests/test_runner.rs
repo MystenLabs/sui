@@ -123,7 +123,6 @@ impl Test<'_> {
             dev_mode: true,
             test_mode: false,
             generate_docs: false,
-            generate_abis: false,
             install_dir: Some(out_path),
             force_recompilation: false,
             lock_file: ["locked", "notlocked"]
