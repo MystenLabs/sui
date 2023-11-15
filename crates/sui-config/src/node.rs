@@ -560,9 +560,16 @@ pub struct AuthorityStorePruningConfig {
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
-    /// enables pruner to prune no longer needed object tombstones. We don't serialize it if it is the default value, false.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    /// enables pruner to prune no longer needed object tombstones. We don't serialize it if it is the default value, true.
+    #[serde(
+        default = "default_enable_pruning_tombstones",
+        skip_serializing_if = "Clone::clone"
+    )]
     pub enable_pruning_tombstones: bool,
+}
+
+fn default_enable_pruning_tombstones() -> bool {
+    true
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -579,7 +586,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
-            enable_pruning_tombstones: false,
+            enable_pruning_tombstones: true,
         }
     }
 }
@@ -599,7 +606,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
-            enable_pruning_tombstones: false,
+            enable_pruning_tombstones: true,
         }
     }
     pub fn fullnode_config() -> Self {
