@@ -251,7 +251,7 @@ impl Inner {
     // Checks if there is any transaction waiting on `input_key`. Returns all the pending
     // transactions that are ready to be executed.
     // Must ensure input_key is available in storage before calling this function.
-    fn check_pending_transaction_waiting_for_object(
+    fn find_ready_transactions(
         &mut self,
         input_key: InputKey,
         update_cache: bool,
@@ -675,11 +675,8 @@ impl TransactionManager {
 
         for input_key in input_keys {
             trace!(?input_key, "object available");
-            for ready_cert in inner.check_pending_transaction_waiting_for_object(
-                input_key,
-                update_cache,
-                &self.metrics,
-            ) {
+            for ready_cert in inner.find_ready_transactions(input_key, update_cache, &self.metrics)
+            {
                 self.certificate_ready(inner, ready_cert);
             }
         }

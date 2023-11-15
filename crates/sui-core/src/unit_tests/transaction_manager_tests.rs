@@ -249,7 +249,7 @@ async fn transaction_manager_object_dependency() {
         )
         .unwrap();
 
-    // Enqueue one transaction with two readable shared objects, one is above shared object.
+    // Enqueue one transaction with two readonly shared object inputs, `shared_object` and `shared_object_2`.
     let shared_version_2 = 2000.into();
     let shared_object_arg_read_2 = ObjectArg::SharedObject {
         id: shared_object_2.id(),
@@ -258,7 +258,10 @@ async fn transaction_manager_object_dependency() {
     };
     let transaction_read_2 = make_transaction(
         gas_objects[3].clone(),
-        vec![CallArg::Object(shared_object_arg_read_2)],
+        vec![
+            CallArg::Object(shared_object_arg_default),
+            CallArg::Object(shared_object_arg_read_2),
+        ],
     );
     state
         .epoch_store_for_testing()
@@ -323,6 +326,8 @@ async fn transaction_manager_object_dependency() {
     transaction_manager.notify_commit(tx_0.digest(), vec![], &state.epoch_store_for_testing());
     transaction_manager.notify_commit(tx_1.digest(), vec![], &state.epoch_store_for_testing());
     transaction_manager.notify_commit(tx_2.digest(), vec![], &state.epoch_store_for_testing());
+
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
 
     // Make shared_object_2 available.
     transaction_manager.objects_available(

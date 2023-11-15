@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-<<<<<<< HEAD
-=======
 use std::collections::BTreeSet;
-use std::hash::Hash;
->>>>>>> 4b60c0e9dd (Remove input object locking in transaction manager)
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
