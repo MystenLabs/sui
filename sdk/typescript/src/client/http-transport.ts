@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WebsocketClientOptions } from '../rpc/websocket-client.js';
-import { WebsocketClient } from '../rpc/websocket-client.js';
 import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
+import { JsonRpcError, SuiHTTPStatusError } from './errors.js';
+import type { WebsocketClientOptions } from './rpc-websocket-client.js';
+import { WebsocketClient } from './rpc-websocket-client.js';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -11,6 +12,8 @@ import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
 export type HttpHeaders = { [header: string]: string };
 
 interface SuiHTTPTransportOptions {
+	fetch?: typeof fetch;
+	WebSocketConstructor?: typeof WebSocket;
 	url: string;
 	rpc?: {
 		headers?: HttpHeaders;
@@ -49,11 +52,33 @@ export class SuiHTTPTransport implements SuiTransport {
 		this.#options = options;
 	}
 
+	fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+		const fetch = this.#options.fetch ?? globalThis.fetch;
+
+		if (!this.fetch) {
+			throw new Error(
+				'The current environment does not support fetch, you can provide a fetch implementation in the options for SuiHTTPTransport.',
+			);
+		}
+
+		return fetch(input, init);
+	}
+
 	#getWebsocketClient(): WebsocketClient {
 		if (!this.#websocketClient) {
+			const WebSocketConstructor = this.#options.WebSocketConstructor ?? globalThis.WebSocket;
+			if (!WebSocketConstructor) {
+				throw new Error(
+					'The current environment does not support WebSocket, you can provide a WebSocketConstructor in the options for SuiHTTPTransport.',
+				);
+			}
+
 			this.#websocketClient = new WebsocketClient(
 				this.#options.websocket?.url ?? this.#options.url,
-				this.#options.websocket,
+				{
+					WebSocketConstructor: this.#options.WebSocketConstructor,
+					...this.#options.websocket,
+				},
 			);
 		}
 
@@ -63,7 +88,8 @@ export class SuiHTTPTransport implements SuiTransport {
 	async request<T>(input: SuiTransportRequestOptions): Promise<T> {
 		this.#requestId += 1;
 
-		const res = await fetch(this.#options.rpc?.url ?? this.#options.url, {
+		const res = await this.fetch(this.#options.rpc?.url ?? this.#options.url, {
+			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 				'Client-Sdk-Type': 'typescript',
@@ -80,16 +106,24 @@ export class SuiHTTPTransport implements SuiTransport {
 		});
 
 		if (!res.ok) {
-			throw new Error('TODO: Real error:');
+			throw new SuiHTTPStatusError(
+				`Unexpected status code: ${res.status}`,
+				res.status,
+				res.statusText,
+			);
 		}
 
 		const data = await res.json();
+
+		if ('error' in data && data.error != null) {
+			throw new JsonRpcError(data.error.message, data.error.code);
+		}
 
 		return data.result;
 	}
 
 	async subscribe<T>(input: SuiTransportSubscribeOptions<T>): Promise<() => Promise<boolean>> {
-		const unsubscribe = await this.#getWebsocketClient().request(input);
+		const unsubscribe = await this.#getWebsocketClient().subscribe(input);
 
 		return async () => !!(await unsubscribe());
 	}

@@ -11,13 +11,15 @@ test('subscribeTransaction', async () => {
 
 	expect(
 		// eslint-disable-next-line no-async-promise-executor
-		new Promise(async (resolve) => {
-			await toolbox.client.subscribeTransaction({
-				filter: { FromAddress: toolbox.address() },
-				onMessage() {
-					resolve(true);
-				},
-			});
+		new Promise(async (resolve, reject) => {
+			await toolbox.client
+				.subscribeTransaction({
+					filter: { FromAddress: toolbox.address() },
+					onMessage() {
+						resolve(true);
+					},
+				})
+				.catch((error) => reject(error));
 
 			const tx = new TransactionBlock();
 			const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);

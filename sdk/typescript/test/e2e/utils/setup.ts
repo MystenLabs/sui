@@ -5,9 +5,15 @@ import { execSync } from 'child_process';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
+import { w3cwebsocket } from 'websocket';
 
 import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
-import { getFullnodeUrl, SuiClient, SuiObjectChangePublished } from '../../../src/client';
+import {
+	getFullnodeUrl,
+	SuiClient,
+	SuiHTTPTransport,
+	SuiObjectChangePublished,
+} from '../../../src/client';
 import { Keypair } from '../../../src/cryptography';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
@@ -51,7 +57,10 @@ export class TestToolbox {
 
 export function getClient(): SuiClient {
 	return new SuiClient({
-		url: DEFAULT_FULLNODE_URL,
+		transport: new SuiHTTPTransport({
+			url: DEFAULT_FULLNODE_URL,
+			WebSocketConstructor: w3cwebsocket as never,
+		}),
 	});
 }
 
