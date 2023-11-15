@@ -60,7 +60,7 @@ mod checked {
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
         transaction::{Argument, CallArg, ObjectArg},
         type_resolver::TypeTagResolver,
@@ -1154,10 +1154,10 @@ mod checked {
         new_packages: &[MovePackage],
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object {
+        let ObjectInner {
             data: Data::Move(object),
             ..
-        } = object
+        } = object.as_inner()
         else {
             invariant_violation!("Expected a Move object");
         };

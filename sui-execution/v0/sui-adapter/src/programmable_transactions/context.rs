@@ -48,7 +48,7 @@ mod checked {
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::{
             BackingPackageStore, ChildObjectResolver, DeleteKind, DeleteKindWithOldVersion,
             ObjectChange, WriteKind,
@@ -1150,10 +1150,10 @@ mod checked {
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object {
+        let ObjectInner {
             data: Data::Move(object),
             ..
-        } = object
+        } = object.as_inner()
         else {
             invariant_violation!("Expected a Move object");
         };

@@ -51,7 +51,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
-        object::Object,
+        object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
@@ -517,13 +517,13 @@ mod checked {
                 for genesis_object in objects {
                     match genesis_object {
                         sui_types::transaction::GenesisObject::RawObject { data, owner } => {
-                            let object = Object {
+                            let object = ObjectInner {
                                 data,
                                 owner,
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.create_object(object);
+                            temporary_store.create_object(object.into());
                         }
                     }
                 }

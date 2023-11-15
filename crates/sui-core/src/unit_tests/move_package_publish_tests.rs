@@ -59,7 +59,7 @@ async fn test_publishing_with_unpublished_deps() {
     };
 
     assert_eq!(package, read_ref);
-    let Data::Package(move_package) = package_obj.data else {
+    let Data::Package(move_package) = package_obj.into_inner().data else {
         panic!("Not a package")
     };
 
