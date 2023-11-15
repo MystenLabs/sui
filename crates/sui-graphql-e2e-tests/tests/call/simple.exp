@@ -19,13 +19,13 @@ task 4 'create-checkpoint'. lines 34-34:
 Checkpoint created: 1
 
 task 5 'view-checkpoint'. lines 36-36:
-CheckpointSummary { epoch: 0, seq: 1, content_digest: AiZ7hcMMvy9YvspfQxneAufu2vf7z1mqtLwQZ1Cn3GUJ,
+CheckpointSummary { epoch: 0, seq: 1, content_digest: DbyT5HkNgJeXfHgzmnaVG2u2mD4NZrBJAkJkggkTvmDz,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 6 'run-graphql'. lines 38-42:
 {
   "data": {
-    "chainIdentifier": "a9b6c606"
+    "chainIdentifier": "3b47f3b5"
   },
   "extensions": {
     "usage": {
@@ -42,7 +42,7 @@ task 7 'advance-epoch'. lines 44-44:
 Epoch advanced: 0
 
 task 8 'view-checkpoint'. lines 46-46:
-CheckpointSummary { epoch: 0, seq: 2, content_digest: 4TC7trFx62DBzBKR3uayL3ZMHtnoQoKRtxhtkUF6krG5,
+CheckpointSummary { epoch: 0, seq: 2, content_digest: 2WybuZaQJTU2ko6cPfHKHZfwSCxjGf8ynS6SNXE4ioTT,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 9 'run-graphql'. lines 48-55:
@@ -50,7 +50,7 @@ task 9 'run-graphql'. lines 48-55:
   "data": {
     "checkpoint": {
       "sequenceNumber": 2,
-      "digest": "BprFK9gVUjCgufx7FPhcHsKWb2bs4UdXCwr1QG8gFMej"
+      "digest": "H24dwHJWvrCXCvqRY6vBQBXC4HUeWosW2Nt3HquXPfqe"
     }
   },
   "extensions": {
@@ -76,7 +76,7 @@ task 12 'run-graphql'. lines 60-67:
   "data": {
     "checkpoint": {
       "sequenceNumber": 3,
-      "digest": "GgEKG2yaYXbiRe3zzSiJJ9GX4fnFaCaMQinWegGWHogU"
+      "digest": "CioaWnWVE2BKHFRfBZLhzscSPpbUmkXAdLozihCcqj14"
     }
   },
   "extensions": {
