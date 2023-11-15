@@ -46,13 +46,14 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use tabled::settings::peaker::PriorityNone;
-use tabled::settings::{peaker::PriorityMax, Height, Settings, Width};
 use tabled::{
     builder::Builder as TableBuilder,
-    settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
+    settings::{
+        style::HorizontalLine, Panel as TablePanel, Settings as TableSettings, Style as TableStyle,
+        Width as TableWidth,
+    },
 };
-use terminal_size::{terminal_size, Height as TerminalHeight, Width as TerminalWidth};
+use terminal_size::{terminal_size, Width as TerminalWidth};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -1230,20 +1231,18 @@ impl SuiTransactionBlock {
     }
 }
 
-fn get_terminal_size() -> (usize, usize) {
-    let (TerminalWidth(width), TerminalHeight(height)) =
-        terminal_size().expect("failed to obtain a terminal size");
-
-    (width as usize, height as usize)
+fn get_terminal_width() -> usize {
+    let (TerminalWidth(width), _) = terminal_size().expect("failed to obtain a terminal size");
+    width as usize
 }
 
 impl Display for SuiTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut builder = TableBuilder::default();
-        let (width, height) = get_terminal_size();
-        let term_size_settings = Settings::default()
-            .with(Width::wrap(width))
-            .with(Width::increase(width));
+        let width = get_terminal_width();
+        let term_size_settings = TableSettings::default()
+            .with(TableWidth::wrap(width))
+            .with(TableWidth::increase(width));
 
         builder.push_record(vec![format!("{}", self.data)]);
         builder.push_record(vec![format!("Signatures:")]);
@@ -1947,9 +1946,14 @@ impl Display for SuiPureValue {
         if let Some(t) = self.value_type() {
             writeln!(f, " │ Type: {t}")?;
         };
+        // try to convert a bcs array into a Base64 string
         let mut json_value = self.value.to_json_value();
         bytes_array_to_base64(&mut json_value);
-        let (width, _) = get_terminal_size();
+
+        // if we have a Base64 string, that's likely going to be very long
+        // thus we need to split it by the terminal's width
+        // minus some small number of characters (left + right padding)
+        let width = get_terminal_width();
         let mut value = json_value.to_string();
         if value.len() > width - 15 {
             value = value
@@ -1961,7 +1965,7 @@ impl Display for SuiPureValue {
                 .join("\n │ ");
             writeln!(f, " │ Value (Base64):\n │ {}", value)?;
         } else {
-            writeln!(f, " │ Value: {}", value)?;
+            writeln!(f, " │ Value: {}", self.value.to_json_value())?;
         }
         write!(f, " └──")
     }
