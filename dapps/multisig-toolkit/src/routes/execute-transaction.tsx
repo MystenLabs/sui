@@ -2,24 +2,49 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SuiClient } from '@mysten/sui.js/client';
-import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui.js/cryptography';
+import { parseSerializedSignature } from '@mysten/sui.js/cryptography';
 import { AlertCircle } from 'lucide-react';
-import { useState } from 'react';
-
+import { useMutation } from '@tanstack/react-query';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { set } from 'react-hook-form';
 
 export default function BroadcastTransaction() {
-	const [signature, setSignature] = useState('');
+	const [tab, setTab] = useState<'transaction' | 'signature' | 'digest'>('transaction');
 	const [transaction, setTransaction] = useState('');
-	const [error, setError] = useState<Error | null>(null);
-	const [digest, setDigest] = useState('');
+	const [signature, setSignature] = useState('');
+
 	const client = new SuiClient({
 		url: 'https://fullnode.mainnet.sui.io:443',
 	});
+
+	const { mutate, data: digest, error, isPending } = useMutation({
+		mutationKey: ['broadcast'],
+		mutationFn: async () => {
+			const parsedSignature = parseSerializedSignature(signature);
+			const response = await client.executeTransactionBlock({
+				transactionBlock: transaction,
+				signature: parsedSignature.serializedSignature,
+			});
+			return response.digest;
+		},
+		onSuccess() {
+			setTab('digest')
+		}
+	});
+
+	const handleSubmit = (e) => {
+		e.preventDefault();
+		const signature = e.target.signature.value;
+		const transaction = e.target.transaction.value;
+		setTransaction(transaction);
+		setSignature(signature);
+		mutate();
+	};
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -35,45 +60,17 @@ export default function BroadcastTransaction() {
 				</Alert>
 			)}
 
-			<form
-				className="flex flex-col gap-4"
-				onSubmit={async (e) => {
-					e.preventDefault();
-					setError(null);
-
-					try {
-						const parsedSignature = parseSerializedSignature(signature);
-						const parsedTransaction = transaction;
-						const response = await client.executeTransactionBlock({
-							transactionBlock: parsedTransaction,
-							signature: parsedSignature.serializedSignature,
-						});
-						setDigest(response.digest);
-					} catch (e) {
-						setError(e as Error);
-					}
-				}}
-			>
+			<form className="flex flex-col gap-4" onSubmit={handleSubmit}>
 				<div className="grid w-full gap-1.5">
-					<Label htmlFor="bytes">Transaction Bytes (base64 encoded)</Label>
-					<Textarea
-						id="bytes"
-						rows={4}
-						value={transaction}
-						onChange={(e) => setTransaction(e.target.value)}
-					/>
+					<Label htmlFor="transaction">Transaction Bytes (base64 encoded)</Label>
+					<Textarea id="transaction" name="transaction" rows={4} />
 				</div>
 				<div className="grid w-full gap-1.5">
-					<Label htmlFor="bytes">Signature Bytes (base64 encoded)</Label>
-					<Textarea
-						id="bytes"
-						rows={4}
-						value={signature}
-						onChange={(e) => setSignature(e.target.value)}
-					/>
+					<Label htmlFor="signature">Signature Bytes (base64 encoded)</Label>
+					<Textarea id="signature" name="signature" rows={4} />
 				</div>
 				<div>
-					<Button type="submit">Broadcast Transaction</Button>
+					<Button type="submit" disabled={isPending}>Broadcast Transaction</Button>
 				</div>
 			</form>
 
