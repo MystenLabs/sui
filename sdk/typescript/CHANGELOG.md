@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.46.1
+
+### Patch Changes
+
+- 652bcdd92: Remove some multisig methods that had previously been deprecated and are no longer exported
+
 ## 0.46.0
 
 ### Minor Changes
