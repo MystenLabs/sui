@@ -183,9 +183,8 @@ function ConnectedAccount() {
 
 function OwnedObjects({ address }: { address: string }) {
     const { data } = useSuiClientQuery('getOwnedObjects', {
-        owner: account?.address as string,
+        owner: address, 
     });
-
     if (!data) {
         return null;
     }
