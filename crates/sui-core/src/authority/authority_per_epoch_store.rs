@@ -1987,7 +1987,7 @@ impl AuthorityPerEpochStore {
 
         for tx in transactions {
             let key = tx.0.transaction.key();
-            self.record_consensus_message_processed(batch, key.clone())?;
+            let mut ignored = false;
             match self
                 .process_consensus_transaction(
                     batch,
@@ -1998,11 +1998,16 @@ impl AuthorityPerEpochStore {
                 .await?
             {
                 ConsensusCertificateResult::SuiTransaction(cert) => {
-                    notifications.push(key);
+                    notifications.push(key.clone());
                     verified_certificates.push(cert);
                 }
-                ConsensusCertificateResult::ConsensusMessage => notifications.push(key),
-                ConsensusCertificateResult::Ignored => (),
+                ConsensusCertificateResult::ConsensusMessage => notifications.push(key.clone()),
+                // Note: ignored transactions must not be recorded as processed. Otherwise
+                // they may not get reverted after restart during epoch change.
+                ConsensusCertificateResult::Ignored => ignored = true,
+            }
+            if !ignored {
+                self.record_consensus_message_processed(batch, key)?;
             }
         }
 
