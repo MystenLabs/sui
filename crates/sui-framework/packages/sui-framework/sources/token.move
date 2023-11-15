@@ -45,12 +45,11 @@ module sui::token {
     const ENotZero: u64 = 4;
     /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
     const ECantConsumeBalance: u64 = 5;
-    /// Trying to perform an owner-gated action without being the owner.
     /// Rule is trying to access a missing config (with type).
-    const ENoConfig: u64 = 7;
+    const ENoConfig: u64 = 6;
     /// Using `confirm_request_mut` without `spent_balance`. Immutable version
     /// of the function must be used instead.
-    const EUseImmutableConfirm: u64 = 8;
+    const EUseImmutableConfirm: u64 = 7;
 
     // === Protected Actions ===
 
