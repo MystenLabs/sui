@@ -151,7 +151,7 @@ impl Display for SuiEvent {
 }
 
 /// Convert a json array of bytes to Base64
-fn bytes_array_to_base64(v: &mut Value) {
+pub(crate) fn bytes_array_to_base64(v: &mut Value) {
     match v {
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => (),
         Value::Array(vals) => {
@@ -172,7 +172,7 @@ fn bytes_array_to_base64(v: &mut Value) {
 }
 
 /// Try to convert a json Value object into an u8.
-fn try_into_byte(v: &Value) -> Option<u8> {
+pub(crate) fn try_into_byte(v: &Value) -> Option<u8> {
     let num = v.as_u64()?;
     (num <= 255).then_some(num as u8)
 }

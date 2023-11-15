@@ -23,6 +23,7 @@ sui-enum-compat-util.workspace = true
 enum_dispatch.workspace = true
 json_to_table.workspace = true
 tabled.workspace = true
+terminal_size.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true

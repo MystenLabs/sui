@@ -4,7 +4,7 @@
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::sui_transaction::GenericSignature::Signature;
-use crate::{Filter, Page, SuiEvent, SuiObjectRef};
+use crate::{bytes_array_to_base64, Filter, Page, SuiEvent, SuiObjectRef};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
 use move_binary_format::access::ModuleAccess;
@@ -46,10 +46,13 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
+use tabled::settings::peaker::PriorityNone;
+use tabled::settings::{peaker::PriorityMax, Height, Settings, Width};
 use tabled::{
     builder::Builder as TableBuilder,
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
+use terminal_size::{terminal_size, Height as TerminalHeight, Width as TerminalWidth};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -388,18 +391,18 @@ impl Display for SuiTransactionBlockKind {
         let mut writer = String::new();
         match &self {
             Self::ChangeEpoch(e) => {
-                writeln!(writer, "Transaction Kind : Epoch Change")?;
-                writeln!(writer, "New epoch ID : {}", e.epoch)?;
-                writeln!(writer, "Storage gas reward : {}", e.storage_charge)?;
-                writeln!(writer, "Computation gas reward : {}", e.computation_charge)?;
-                writeln!(writer, "Storage rebate : {}", e.storage_rebate)?;
-                writeln!(writer, "Timestamp : {}", e.epoch_start_timestamp_ms)?;
+                writeln!(writer, "Transaction Kind: Epoch Change")?;
+                writeln!(writer, "New epoch ID: {}", e.epoch)?;
+                writeln!(writer, "Storage gas reward: {}", e.storage_charge)?;
+                writeln!(writer, "Computation gas reward: {}", e.computation_charge)?;
+                writeln!(writer, "Storage rebate: {}", e.storage_rebate)?;
+                writeln!(writer, "Timestamp: {}", e.epoch_start_timestamp_ms)?;
             }
             Self::Genesis(_) => {
-                writeln!(writer, "Transaction Kind : Genesis Transaction")?;
+                writeln!(writer, "Transaction Kind: Genesis Transaction")?;
             }
             Self::ConsensusCommitPrologue(p) => {
-                writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue")?;
                 writeln!(
                     writer,
                     "Epoch: {}, Round: {}, Timestamp : {}",
@@ -407,14 +410,14 @@ impl Display for SuiTransactionBlockKind {
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
-                writeln!(writer, "Transaction Kind : Programmable")?;
+                writeln!(writer, "Transaction Kind: Programmable")?;
                 write!(writer, "{p}")?;
             }
             Self::AuthenticatorStateUpdate(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+                writeln!(writer, "Transaction Kind: Authenticator State Update")?;
             }
             Self::EndOfEpochTransaction(_) => {
-                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+                writeln!(writer, "Transaction Kind: End of Epoch Transaction")?;
             }
         }
         write!(f, "{}", writer)
@@ -1099,7 +1102,7 @@ impl Display for SuiGasData {
         for payment in &self.payment {
             write!(f, "{} ", objref_string(payment))?;
         }
-        writeln!(f)
+        Ok(())
     }
 }
 
@@ -1227,9 +1230,20 @@ impl SuiTransactionBlock {
     }
 }
 
+fn get_terminal_size() -> (usize, usize) {
+    let (TerminalWidth(width), TerminalHeight(height)) =
+        terminal_size().expect("failed to obtain a terminal size");
+
+    (width as usize, height as usize)
+}
+
 impl Display for SuiTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut builder = TableBuilder::default();
+        let (width, height) = get_terminal_size();
+        let term_size_settings = Settings::default()
+            .with(Width::wrap(width))
+            .with(Width::increase(width));
 
         builder.push_record(vec![format!("{}", self.data)]);
         builder.push_record(vec![format!("Signatures:")]);
@@ -1249,6 +1263,7 @@ impl Display for SuiTransactionBlock {
             1,
             TableStyle::modern().get_horizontal(),
         )]));
+        table.with(term_size_settings);
         write!(f, "{}", table)
     }
 }
@@ -1386,12 +1401,26 @@ pub struct SuiProgrammableTransactionBlock {
 impl Display for SuiProgrammableTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Self { inputs, commands } = self;
-        writeln!(f, "Inputs: {inputs:?}")?;
-        writeln!(f, "Commands: [")?;
-        for c in commands {
-            writeln!(f, "  {c},")?;
+
+        if !inputs.is_empty() {
+            writeln!(f, "Inputs:")?;
+
+            for input in inputs {
+                write!(f, "{input}")?;
+            }
+        } else {
+            writeln!(f, "No inputs")?;
         }
-        writeln!(f, "]")
+        if !commands.is_empty() {
+            writeln!(f, "Transactions:\n ┌──")?;
+            for c in commands {
+                writeln!(f, " │ {c}")?;
+            }
+            write!(f, " └──")?;
+        } else {
+            writeln!(f, "No transactions")?;
+        }
+        Ok(())
     }
 }
 
@@ -1879,6 +1908,19 @@ impl SuiCallArg {
     }
 }
 
+impl Display for SuiCallArg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Object(obj_arg) => {
+                writeln!(f, "{obj_arg}")
+            }
+            Self::Pure(pure) => {
+                writeln!(f, "{pure}")
+            }
+        }
+    }
+}
+
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1896,6 +1938,32 @@ impl SuiPureValue {
 
     pub fn value_type(&self) -> Option<TypeTag> {
         self.value_type.clone()
+    }
+}
+
+impl Display for SuiPureValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, " ┌── PureValue")?;
+        if let Some(t) = self.value_type() {
+            writeln!(f, " │ Type: {t}")?;
+        };
+        let mut json_value = self.value.to_json_value();
+        bytes_array_to_base64(&mut json_value);
+        let (width, _) = get_terminal_size();
+        let mut value = json_value.to_string();
+        if value.len() > width - 15 {
+            value = value
+                .as_bytes()
+                .chunks(width - 15)
+                .map(std::str::from_utf8)
+                .flat_map(|x| x.ok())
+                .collect::<Vec<_>>()
+                .join("\n │ ");
+            writeln!(f, " │ Value (Base64):\n │ {}", value)?;
+        } else {
+            writeln!(f, " │ Value: {}", value)?;
+        }
+        write!(f, " └──")
     }
 }
 
@@ -1931,6 +1999,48 @@ pub enum SuiObjectArg {
         version: SequenceNumber,
         digest: ObjectDigest,
     },
+}
+
+impl Display for SuiObjectArg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            SuiObjectArg::ImmOrOwnedObject {
+                object_id,
+                version,
+                digest,
+            } => write!(
+                f,
+                " ┌── ImmOrOwnedObject\n │ ObjectID: {} \n │ Version: {} \n │ Digest: {}\n └──",
+                object_id,
+                version.value(),
+                digest
+            ),
+            SuiObjectArg::SharedObject {
+                object_id,
+                initial_shared_version,
+                mutable,
+            } => {
+                write!(
+                    f,
+                    " ┌── SharedObject\n │ ObjectID: {} \n │ Initial Shared Version: {} \n │ Mutable: {}\n └──",
+                    object_id,
+                    initial_shared_version.value(),
+                    mutable
+                )
+            }
+            SuiObjectArg::Receiving {
+                object_id,
+                version,
+                digest,
+            } => write!(
+                f,
+                " ┌── ReceivingObject\n │ ObjectID: {} \n │ Version: {} \n │ Digest: {}\n └──",
+                object_id,
+                version.value(),
+                digest
+            ),
+        }
+    }
 }
 
 #[serde_as]
