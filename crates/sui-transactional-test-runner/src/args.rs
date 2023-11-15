@@ -160,6 +160,8 @@ pub enum SuiSubcommand {
     AdvanceClock(AdvanceClockCommand),
     #[clap(name = "view-checkpoint")]
     ViewCheckpoint,
+    #[clap(name = "run-graphql")]
+    RunGraphql,
 }
 
 #[derive(Clone, Debug)]

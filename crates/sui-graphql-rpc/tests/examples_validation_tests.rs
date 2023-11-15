@@ -12,6 +12,7 @@ mod tests {
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::examples::{load_examples, ExampleQuery, ExampleQueryGroup};
     use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
+    use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
 
     fn bad_examples() -> ExampleQueryGroup {
         ExampleQueryGroup {
@@ -78,7 +79,7 @@ mod tests {
 
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
             connection_config,
-            3000,
+            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
         )
         .await;
@@ -105,7 +106,7 @@ mod tests {
 
         let cluster = sui_graphql_rpc::test_infra::cluster::serve_executor(
             connection_config,
-            3000,
+            DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
         )
         .await;

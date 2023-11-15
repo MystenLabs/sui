@@ -4,6 +4,7 @@
 use async_graphql::{Response, ServerError, Value};
 use hyper::HeaderMap;
 use reqwest::Response as ReqwestResponse;
+use serde_json::json;
 use std::{collections::BTreeMap, net::SocketAddr};
 
 use crate::server::version::VERSION_HEADER;
@@ -48,6 +49,14 @@ impl GraphqlResponse {
 
     pub fn response_body(&self) -> &Response {
         &self.full_response
+    }
+
+    pub fn response_body_json(&self) -> serde_json::Value {
+        json!(self.full_response)
+    }
+
+    pub fn response_body_json_pretty(&self) -> String {
+        serde_json::to_string_pretty(&self.full_response).unwrap()
     }
 
     pub fn http_status(&self) -> hyper::StatusCode {
