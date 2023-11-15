@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
         Some(epoch_duration_ms)
     };
 
-    let cluster = LocalNewCluster::start(&ClusterTestOpt {
+    let cluster_config = ClusterTestOpt {
         env: Env::NewLocal,
         fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
         indexer_address: with_indexer.then_some(format!("127.0.0.1:{}", indexer_rpc_port)),
@@ -127,8 +127,10 @@ async fn main() -> Result<()> {
         config_dir,
         graphql_address: Some(format!("{}:{}", graphql_host, graphql_port)),
         use_indexer_v2,
-    })
-    .await?;
+    };
+
+    println!("Starting Sui validator with config: {:#?}", cluster_config);
+    let cluster = LocalNewCluster::start(&cluster_config).await?;
 
     println!("Fullnode RPC URL: {}", cluster.fullnode_url());
 
