@@ -29,6 +29,9 @@ pub struct ClusterTestOpt {
     /// URL for the indexer RPC server
     #[clap(long)]
     pub indexer_address: Option<String>,
+    /// Use new version of indexer or not
+    #[clap(long)]
+    pub use_indexer_v2: bool,
     /// URL for the Indexer Postgres DB
     #[clap(long)]
     pub pg_address: Option<String>,
@@ -54,6 +57,7 @@ impl ClusterTestOpt {
             use_indexer_experimental_methods: false,
             config_dir: None,
             graphql_address: None,
+            use_indexer_v2: false,
         }
     }
 }

@@ -78,6 +78,10 @@ struct Args {
     /// TODO(gegao): remove this after indexer migration is complete.
     #[clap(long)]
     pub use_indexer_experimental_methods: bool,
+
+    /// If we should use the new version of the indexer
+    #[clap(long)]
+    pub use_indexer_v2: bool,
 }
 
 #[tokio::main]
@@ -100,6 +104,7 @@ async fn main() -> Result<()> {
         faucet_port,
         with_indexer,
         use_indexer_experimental_methods,
+        use_indexer_v2,
     } = args;
 
     // We don't pass epoch duration if we have a genesis config.
@@ -121,6 +126,7 @@ async fn main() -> Result<()> {
         use_indexer_experimental_methods,
         config_dir,
         graphql_address: Some(format!("{}:{}", graphql_host, graphql_port)),
+        use_indexer_v2,
     })
     .await?;
 

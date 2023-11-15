@@ -9,6 +9,8 @@ use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::{start_graphql_server, start_test_indexer_v2};
+use sui_indexer::test_utils::start_test_indexer;
+use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -219,23 +221,41 @@ impl Cluster for LocalNewCluster {
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
         if options.pg_address.is_some() && indexer_address.is_some() {
-            // Start in writer mode
-            start_test_indexer_v2(
-                Some(options.pg_address.clone().unwrap()),
-                fullnode_url.clone(),
-                None,
-                options.use_indexer_experimental_methods,
-            )
-            .await;
+            if options.use_indexer_v2 {
+                // Start in writer mode
+                start_test_indexer_v2(
+                    Some(options.pg_address.clone().unwrap()),
+                    fullnode_url.clone(),
+                    None,
+                    options.use_indexer_experimental_methods,
+                )
+                .await;
 
-            // Start in reader mode
-            start_test_indexer_v2(
-                Some(options.pg_address.clone().unwrap()),
-                fullnode_url.clone(),
-                indexer_address.map(|x| x.to_string()),
-                options.use_indexer_experimental_methods,
-            )
-            .await;
+                // Start in reader mode
+                start_test_indexer_v2(
+                    Some(options.pg_address.clone().unwrap()),
+                    fullnode_url.clone(),
+                    indexer_address.map(|x| x.to_string()),
+                    options.use_indexer_experimental_methods,
+                )
+                .await;
+            } else {
+                let migrated_methods = if options.use_indexer_experimental_methods {
+                    IndexerConfig::all_implemented_methods()
+                } else {
+                    vec![]
+                };
+                let config = IndexerConfig {
+                    db_url: Some(options.pg_address.clone().unwrap()),
+                    rpc_client_url: fullnode_url.clone(),
+                    rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
+                    rpc_server_port: indexer_address.as_ref().unwrap().port(),
+                    migrated_methods,
+                    reset_db: true,
+                    ..Default::default()
+                };
+                start_test_indexer(config).await.unwrap();
+            }
         }
 
         if let Some(graphql_address) = &options.graphql_address {
@@ -364,7 +384,7 @@ pub async fn new_wallet_context_from_cluster(
 
 #[cfg(feature = "pg_integration")]
 #[tokio::test]
-async fn test_cluster() {
+async fn test_sui_cluster() {
     use reqwest::StatusCode;
     use sui_graphql_rpc::client::simple_client::SimpleClient;
     use tokio::time::sleep;
@@ -383,6 +403,7 @@ async fn test_cluster() {
         use_indexer_experimental_methods: false,
         config_dir: None,
         graphql_address: Some(graphql_address),
+        use_indexer_v2: true,
     };
 
     let _cluster = LocalNewCluster::start(&opts).await.unwrap();
