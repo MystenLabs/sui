@@ -93,6 +93,7 @@ members = [
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-cost",
+    "crates/sui-data-ingestion",
     "crates/sui-e2e-tests",
     "crates/sui-enum-compat-util",
     "crates/sui-faucet",
@@ -361,6 +362,7 @@ msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "1a5
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
+notify = "6.1.1"
 ntest = "0.9.0"
 num-bigint = "0.4.3"
 num_cpus = "1.15.0"
@@ -563,6 +565,7 @@ sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
+sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
