@@ -11,10 +11,11 @@ If you haven't already, you need to [install Sui](./sui-install.mdx) on your sys
 To start the local network, run the following command from your `sui` root folder.
 
 ```bash
-RUST_LOG="consensus=off" cargo run --bin sui-test-validator
+RUST_LOG="off,sui_node=info" cargo run --bin sui-test-validator
 ```
 
-The command starts the `sui-test-validator`. The `RUST_LOG`=`consensus=off` turns off consensus for the local network.
+The command starts the `sui-test-validator`. The `RUST_LOG`=`off,sui_node=info` turns off logging for all components except
+sui-node. If you want to see more detailed logs, you can remove `RUST_LOG` from the command.
 
 **Important:** Each time you start the `sui-test-validator`, the network starts as a new network with no previous data. The local network is not persistent.
 
