@@ -1,0 +1,114 @@
+---
+title: Closed Loop Token
+draft: true
+---
+
+Closed Loop Token allows its creator to limit applications where the token is used, set up custom policies for transfers, spending and conversions. It is defined in the `sui::token` module and is a part of the Sui Framework.
+
+## Background & Use Cases
+
+The standard Coin implementation on Sui is an example of an open-loop system - Coins are free-flowing, "wrappable", and the best real world analogy would be "cash" - hardly regulated and can be used for any purpose.
+
+However, some applications require constraining the scope of the token to a specific purpose. For example, a token that can only be used for a specific service, or it can be used only by authorized accounts, or it can be used freely while an account is not blocked.
+
+Specific domains that can benefit from a closed-loop token include:
+
+- **Loyalty Points** - A token that can only be used for a specific service, e.g. a token that can only be used for a specific airline and granted to customers for their actions.
+- **Regulatory-Compliant Tokens** - some jurisdictions require certain checks or restrictions on tokens. For example, a token that can only be used by a verified user, or a single operation with a token can have a limit.
+- **In-Game Currency** - similar to "gems" and "diamonds" in mobile games: a token that can only be used in a game and granted to players for their actions or purchased. Tokens of this kind are often not transferrable and minted in predefined amounts to maintain scarcity and game balance.
+
+## Difference with Coin
+
+Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or transferred publicly (unless there's a custom policy for that).
+
+```move
+// defined in `sui::coin`
+struct Coin<phantom T> has key, store { id: UID, balance: Balance<T> }
+
+// defined in `sui::token`
+struct Token<phantom T> has key { id: UID, balance: Balance<T> }
+```
+
+Due to this restriction, Token can only be owned by an account and can't be can't be stored in an application (however, it can be "spent" - see "spending" section).
+
+## Create / Mint & Burn
+
+Token reuses the `TreasuryCap` defined in the `sui::coin` module and therefore has the same initialization process.
+
+```move
+module example::my_coin {
+    use sui::tx_context::{Self, TxContext};
+    use sui::transfer;
+    use sui::coin;
+
+    /// The One Time Witness and the type of the Coin / Token
+    struct MY_COIN has drop {}
+
+    // Create the `TreasuryCap` just like you would for a Coin
+    fun init(otw: MY_COIN, ctx: &mut TxContext) {
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            otw, b"MYC", b"My Coin", "My Custom Coin", std::option::none(),ctx
+        );
+
+        transfer::public_freeze_object(coin_metadata);
+        transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
+    }
+}
+```
+
+Minting and burning methods are provided by the `sui::token` module; just like with `Coin` they require the `TreasuryCap` to be passed as an argument.
+
+```move
+// module: sui::token
+
+public fun mint<T>(cap: &mut TreasuryCap<T>, amount: u64, ctx: &mut TxContext): Token<T>;
+
+public fun burn<T>(cap: &mut TreasuryCap<T>, token: Token<T>);
+```
+
+## Public and Protected Actions
+
+Token has a set of public and protected actions that can be used to manage the token. Public actions are available to everyone and don't require any authorization. Protected actions issue an "ActionRequest" - a special struct (Hot Potato) which must be resolved in the "TokenPolicy" or using the "TreasuryCap" (and "TokenPolicyCap" - except for "spend").
+
+> See Appendix A for a list of public APIs for Token.
+
+## Action Request
+
+Protected actions are functions that issue an `ActionRequest` - an instance of a hot-potato struct which must be resolved for the transaction to succeed. ActionRequest is defined in the `sui::token` module and contains the following fields:
+
+- `name` - name of the performed action, standard ones are "transfer", "spend", "to_coin" and "from_coin"; and it is possible to create custom ones.
+- `amount` - the amount of the token that is being transferred, spent, converted, etc.
+- `sender` - the account that initiated the action
+- `recipient` - the account that receives the token in "transfer" action; can be used for custom purposes in other actions
+- `spent_balance` - the balance of a spent Token in the "spend" action; can be used for custom purposes in custom actions
+
+These fields can be used by so-called "Rules" to determine whether the action should be allowed or not. Rules are custom modules which implement restriction logic.
+
+An example of a function creating an `ActionRequest`:
+```move
+// module: sui::token
+
+public fun transfer<T>(t: Token<T>, recipient: address, ctx: &mut TxContext): ActionRequest<T>;
+```
+
+
+
+
+
+
+
+## Appendix A: Coin / Token API comparison
+
+| Function                    | Coin | Token       | Note                                                                             |
+|-----------------------------|------|-------------|----------------------------------------------------------------------------------|
+| mint                        | +    | +           | Requires TreasuryCap                                                             |
+| burn                        | +    | +           | Requires TreasuryCap                                                             |
+| join                        | +    | +           | Public                                                                           |
+| split                       | +    | +           | Public                                                                           |
+| zero                        | +    | +           | Public                                                                           |
+| destroy_zero                | +    | +           | Public                                                                           |
+| keep                        | -    | +           | Send Token to sender, not required for Coin due to lack of transfer restrictions |
+| transfer                    | +    | \[protected] | Coin is transferable by default, Token requires authorization                    |
+| to_balance / to_coin        | +    | \[protected] | Token can be converted "to_coin", requires authorization                         |
+| from_balance / from_balance | +    | \[protected] | Token can be created "from_coin", requires authorization                         |
+| spend                       | -    | \[protected] | Token can be "spent", requires authorization (see "spending")                    |
