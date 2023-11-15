@@ -1401,12 +1401,9 @@ impl Display for SuiProgrammableTransactionBlock {
 
         if !inputs.is_empty() {
             writeln!(f, "Inputs:")?;
-
             for input in inputs {
                 write!(f, "{input}")?;
             }
-        } else {
-            writeln!(f, "No inputs")?;
         }
         if !commands.is_empty() {
             writeln!(f, "Transactions:\n ┌──")?;
@@ -1414,8 +1411,6 @@ impl Display for SuiProgrammableTransactionBlock {
                 writeln!(f, " │ {c}")?;
             }
             write!(f, " └──")?;
-        } else {
-            writeln!(f, "No transactions")?;
         }
         Ok(())
     }
