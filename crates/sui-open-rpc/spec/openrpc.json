@@ -1350,6 +1350,7 @@
               "maxSupportedProtocolVersion": "32",
               "protocolVersion": "6",
               "featureFlags": {
+                "accept_zklogin_in_multisig": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "ban_entry_init": false,
@@ -5502,6 +5503,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLogin"
+            ],
+            "properties": {
+              "ZkLogin": {
+                "$ref": "#/components/schemas/GenericSignature"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -7785,6 +7798,18 @@
             "properties": {
               "Secp256r1": {
                 "$ref": "#/components/schemas/Base64"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ZkLogin"
+            ],
+            "properties": {
+              "ZkLogin": {
+                "$ref": "#/components/schemas/ZkLoginPublicIdentifier"
               }
             },
             "additionalProperties": false
@@ -10704,6 +10729,14 @@
             }
           }
         }
+      },
+      "ZkLoginPublicIdentifier": {
+        "description": "A wrapper struct to retrofit in [enum PublicKey] for zkLogin. Useful to construct [struct MultiSigPublicKey].",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
       }
     }
   }

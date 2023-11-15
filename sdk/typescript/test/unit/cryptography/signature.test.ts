@@ -4,7 +4,7 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { decodeMultiSig } from '../../../src/cryptography/multisig';
+import { bcs } from '../../../src/bcs';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import {
 	parseSerializedSignature,
@@ -14,7 +14,7 @@ import {
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
-import { MultiSigPublicKey } from '../../../src/multisig';
+import { MultiSigPublicKey, parsePartialSignatures } from '../../../src/multisig';
 
 describe('Signature', () => {
 	let k1: Ed25519Keypair,
@@ -79,22 +79,23 @@ describe('Signature', () => {
 			sig3.signature,
 		]);
 
-		const decoded = decodeMultiSig(multisig);
+		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromB64(multisig).slice(1)));
+
 		const SerializeSignatureInput: SerializeSignatureInput[] = [
 			{
 				signatureScheme: decoded[0].signatureScheme,
 				signature: decoded[0].signature,
-				publicKey: decoded[0].pubKey,
+				publicKey: decoded[0].publicKey,
 			},
 			{
 				signatureScheme: decoded[1].signatureScheme,
 				signature: decoded[1].signature,
-				publicKey: decoded[1].pubKey,
+				publicKey: decoded[1].publicKey,
 			},
 			{
 				signatureScheme: decoded[2].signatureScheme,
 				signature: decoded[2].signature,
-				publicKey: decoded[2].pubKey,
+				publicKey: decoded[2].publicKey,
 			},
 		];
 
@@ -124,7 +125,7 @@ describe('Signature', () => {
 
 		const multisig = publicKey.combinePartialSignatures([sig1.signature]);
 
-		const decoded = decodeMultiSig(multisig);
+		const decoded = parsePartialSignatures(bcs.MultiSig.parse(fromB64(multisig).slice(1)));
 
 		const SerializeSignatureInput: SerializeSignatureInput[] = [
 			{

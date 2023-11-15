@@ -62,50 +62,51 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 	const signatureScheme =
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
-	if (signatureScheme === 'MultiSig') {
-		const multisig: MultiSigStruct = bcs.MultiSig.parse(bytes.slice(1));
-		return {
-			serializedSignature,
-			signatureScheme,
-			multisig,
-			bytes,
-		};
+	switch (signatureScheme) {
+		case 'MultiSig':
+			const multisig: MultiSigStruct = bcs.MultiSig.parse(bytes.slice(1));
+			return {
+				serializedSignature,
+				signatureScheme,
+				multisig,
+				bytes,
+			};
+		case 'ZkLogin':
+			const signatureBytes = bytes.slice(1);
+			const { inputs, maxEpoch, userSignature } = parseZkLoginSignature(signatureBytes);
+			const { issBase64Details, addressSeed } = inputs;
+			const iss = extractClaimValue<string>(issBase64Details, 'iss');
+			const address = computeZkLoginAddressFromSeed(BigInt(addressSeed), iss);
+
+			return {
+				serializedSignature,
+				signatureScheme,
+				zkLogin: {
+					inputs,
+					maxEpoch,
+					userSignature,
+					iss,
+					address,
+					addressSeed: BigInt(addressSeed),
+				},
+				signature: bytes,
+			};
+		case 'ED25519':
+		case 'Secp256k1':
+		case 'Secp256r1':
+			const size =
+				SIGNATURE_SCHEME_TO_SIZE[signatureScheme as keyof typeof SIGNATURE_SCHEME_TO_SIZE];
+			const signature = bytes.slice(1, bytes.length - size);
+			const publicKey = bytes.slice(1 + signature.length);
+
+			return {
+				serializedSignature,
+				signatureScheme,
+				signature,
+				publicKey,
+				bytes,
+			};
+		default:
+			throw new Error('Unsupported signature scheme');
 	}
-
-	if (signatureScheme === 'ZkLogin') {
-		const signatureBytes = bytes.slice(1);
-		const { inputs, maxEpoch, userSignature } = parseZkLoginSignature(signatureBytes);
-		const { issBase64Details, addressSeed } = inputs;
-		const iss = extractClaimValue<string>(issBase64Details, 'iss');
-		const address = computeZkLoginAddressFromSeed(BigInt(addressSeed), iss);
-		return {
-			serializedSignature,
-			signatureScheme,
-			zkLogin: {
-				inputs,
-				maxEpoch,
-				userSignature,
-				iss,
-				address,
-			},
-			bytes,
-		};
-	}
-
-	if (!(signatureScheme in SIGNATURE_SCHEME_TO_SIZE)) {
-		throw new Error('Unsupported signature scheme');
-	}
-
-	const size = SIGNATURE_SCHEME_TO_SIZE[signatureScheme as keyof typeof SIGNATURE_SCHEME_TO_SIZE];
-
-	const signature = bytes.slice(1, bytes.length - size);
-	const publicKey = bytes.slice(1 + signature.length);
-
-	return {
-		serializedSignature,
-		signatureScheme,
-		signature,
-		publicKey,
-		bytes,
-	};
 }
