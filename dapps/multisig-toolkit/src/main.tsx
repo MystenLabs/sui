@@ -5,7 +5,8 @@ import './index.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/red-hat-mono';
 
-import { WalletKitProvider } from '@mysten/wallet-kit';
+import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import { getFullnodeUrl } from '@mysten/sui.js/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -17,9 +18,18 @@ import { router } from './routes';
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<WalletKitProvider disableAutoConnect>
-				<RouterProvider router={router} />
-			</WalletKitProvider>
+			<SuiClientProvider
+				defaultNetwork="sui:mainnet"
+				networks={{
+					'sui:testnet': { url: getFullnodeUrl('testnet') },
+					'sui:mainnet': { url: getFullnodeUrl('mainnet') },
+					'sui:devnet': { url: getFullnodeUrl('devnet') },
+				}}
+			>
+				<WalletProvider>
+					<RouterProvider router={router} />
+				</WalletProvider>
+			</SuiClientProvider>
 		</QueryClientProvider>
 	</React.StrictMode>,
 );

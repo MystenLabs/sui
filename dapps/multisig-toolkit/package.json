@@ -26,6 +26,8 @@
 		"@radix-ui/react-slot": "^1.0.2",
 		"@radix-ui/react-tabs": "^1.0.4",
 		"@tanstack/react-query": "^5.0.0",
+		"@vanilla-extract/css": "^1.13.0",
+		"@vanilla-extract/vite-plugin": "^3.9.0",
 		"class-variance-authority": "^0.7.0",
 		"clsx": "^2.0.0",
 		"cmdk": "^0.2.0",
@@ -38,8 +40,8 @@
 		"zod": "^3.21.4"
 	},
 	"devDependencies": {
+		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-kit": "workspace:*",
 		"@tailwindcss/forms": "^0.5.4",
 		"@types/react": "^18.2.15",
 		"@types/react-dom": "^18.2.7",

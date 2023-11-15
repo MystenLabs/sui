@@ -14,9 +14,5 @@
 	"bcs": {
 		"title": "BCS",
 		"type": "page"
-	},
-	"wallet-kit": {
-		"title": "Wallet Kit",
-		"type": "page"
 	}
 }

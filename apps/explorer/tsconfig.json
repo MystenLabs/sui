@@ -23,7 +23,6 @@
 	"include": ["src", "tests"],
 	"references": [
 		{ "path": "../../sdk/typescript/" },
-		{ "path": "../../sdk/kiosk/" },
-		{ "path": "../../sdk/wallet-kit/react/" }
+		{ "path": "../../sdk/kiosk/" }
 	]
 }
