@@ -1351,8 +1351,8 @@ impl Symbolicator {
                 use_defs,
                 exp.ty.clone(),
             ),
-            E::Constant(mod_ident_opt, name) => self.add_const_use_def(
-                mod_ident_opt,
+            E::Constant(mod_ident, name) => self.add_const_use_def(
+                mod_ident,
                 &name.value(),
                 &name.loc(),
                 references,
@@ -1652,17 +1652,14 @@ impl Symbolicator {
     /// Add use of a const identifier
     fn add_const_use_def(
         &self,
-        module_ident_opt: &Option<ModuleIdent>,
+        module_ident: &ModuleIdent,
         use_name: &Symbol,
         use_pos: &Loc,
         references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
         use_defs: &mut UseDefMap,
         use_type: Type,
     ) {
-        let module_ident = match module_ident_opt {
-            Some(v) => v.value,
-            None => self.current_mod.unwrap().value,
-        };
+        let module_ident = module_ident.value;
 
         self.add_outer_use_def(
             &module_ident,
