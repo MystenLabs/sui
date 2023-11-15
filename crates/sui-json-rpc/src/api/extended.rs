@@ -5,8 +5,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 
 use sui_json_rpc_types::{
-    AddressMetrics, CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics,
-    QueryObjectsPage, SuiObjectResponseQuery,
+    AddressMetrics, CheckpointedObjectID, EpochInfo, EpochMetricsPage, EpochPage, MoveCallMetrics,
+    NetworkMetrics, QueryObjectsPage, SuiObjectResponseQuery,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::BigInt;
@@ -25,6 +25,18 @@ pub trait ExtendedApi {
         /// flag to return results in descending order
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage>;
+
+    /// Return a list of epoch metrics, which is a subset of epoch info
+    #[method(name = "getEpochMetrics")]
+    async fn get_epoch_metrics(
+        &self,
+        /// optional paging cursor
+        cursor: Option<BigInt<u64>>,
+        /// maximum number of items per page
+        limit: Option<usize>,
+        /// flag to return results in descending order
+        descending_order: Option<bool>,
+    ) -> RpcResult<EpochMetricsPage>;
 
     /// Return current epoch info
     #[method(name = "getCurrentEpoch")]
