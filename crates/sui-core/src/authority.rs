@@ -3139,6 +3139,13 @@ impl AuthorityState {
             })
     }
 
+    #[cfg(msim)]
+    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.database
+            .perpetual_tables
+            .get_highest_pruned_checkpoint()
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_summary_by_sequence_number(
         &self,
@@ -4290,6 +4297,7 @@ impl AuthorityState {
     pub async fn prune_objects_and_compact_for_testing(&self) {
         let pruning_config = AuthorityStorePruningConfig {
             num_epochs_to_retain: 0,
+            enable_pruning_tombstones: true,
             ..Default::default()
         };
         let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(

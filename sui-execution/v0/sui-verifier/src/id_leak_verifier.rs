@@ -84,7 +84,7 @@ const SUI_CLOCK_CREATE: FunctionIdent = (
 );
 
 // Note: the authenticator/randomness objects should never exist when v0 execution is being used.
-// However, unwrapped_then_deleted_tests.rs forcibly sets the execution version to 0, so we need
+// However, object_deletion_tests.rs forcibly sets the execution version to 0, so we need
 // to handle this case. Since that test only runs in the simulator we can special case it with
 // cfg(msim) so that we don't risk breaking release builds.
 #[cfg(msim)]

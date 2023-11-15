@@ -616,7 +616,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
-            enable_pruning_tombstones: false,
+            enable_pruning_tombstones: true,
         }
     }
 

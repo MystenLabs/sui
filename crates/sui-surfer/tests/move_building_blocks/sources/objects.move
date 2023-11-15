@@ -115,6 +115,17 @@ module move_building_blocks::objects {
             delete_child(child);
         }
     }
+    
+    public fun delete(object: Object) {
+        let Object { id, wrapped, table } = object;
+        object::delete(id);
+        if (option::is_some(&wrapped)) {
+            let child = option::extract(&mut wrapped);
+            delete_child(child);
+        };
+        option::destroy_none(wrapped);
+        table::destroy_empty(table);
+    }
 
     fun new_object(ctx: &mut TxContext): Object {
         Object {
