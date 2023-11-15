@@ -1,5 +1,17 @@
 # @mysten/dapp-kit
 
+## 0.9.0
+
+### Minor Changes
+
+- c5d4db238: Have useSignPersonalMessage fall back to use sui:signMessage
+
+### Patch Changes
+
+- Updated dependencies [652bcdd92]
+  - @mysten/sui.js@0.46.1
+  - @mysten/wallet-standard@0.8.9
+
 ## 0.8.0
 
 ### Minor Changes
