@@ -16,7 +16,7 @@ module sui::random {
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
 
-    const CurrentVersion: u64 = 1;
+    const CURRENT_VERSION: u64 = 1;
 
     /// Singleton shared object which stores the global randomness state.
     /// The actual state is stored in a dynamic field of type RandomnessStateInner to support
@@ -41,7 +41,7 @@ module sui::random {
     fun create(ctx: &TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
-        let version = CurrentVersion;
+        let version = CURRENT_VERSION;
 
         let inner = RandomInner {
             version,
@@ -70,7 +70,7 @@ module sui::random {
         let version = self.version;
 
         // replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CurrentVersion, EWrongInnerVersion);
+        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
 
         let inner: &mut RandomInner = dynamic_field::borrow_mut(&mut self.id, self.version);
 
@@ -85,7 +85,7 @@ module sui::random {
         let version = self.version;
 
         // replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CurrentVersion, EWrongInnerVersion);
+        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
 let inner: &RandomInner = dynamic_field::borrow(&self.id, self.version);
         assert!(inner.version == version, EWrongInnerVersion);
         inner
