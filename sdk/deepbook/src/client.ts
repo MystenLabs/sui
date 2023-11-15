@@ -8,10 +8,10 @@ import {
 	PaginationArguments,
 	SuiClient,
 } from '@mysten/sui.js/client';
-import { TransactionObjectInput } from '@mysten/sui.js/src/builder';
 import {
 	TransactionArgument,
 	TransactionBlock,
+	TransactionObjectInput,
 	TransactionResult,
 } from '@mysten/sui.js/transactions';
 import {

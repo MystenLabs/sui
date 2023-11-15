@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
+import type { WalletWithFeatures, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 import type { StateStorage } from 'zustand/middleware';
@@ -49,6 +49,8 @@ const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 const DEFAULT_REQUIRED_FEATURES: (keyof WalletWithRequiredFeatures['features'])[] = [
 	'sui:signTransactionBlock',
 ];
+
+export type { WalletWithFeatures };
 
 export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],

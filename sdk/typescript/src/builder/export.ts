@@ -14,6 +14,7 @@ export {
 export {
 	TransactionBlock,
 	isTransactionBlock,
+	type TransactionObjectInput,
 	type TransactionObjectArgument,
 	type TransactionResult,
 } from './TransactionBlock.js';

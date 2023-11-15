@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
-import { useWalletKit } from '@mysten/wallet-kit';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -17,7 +17,7 @@ import { KioskNotFound } from './KioskNotFound';
 export function KioskItems({ kioskId }: { kioskId?: string }) {
 	const location = useLocation();
 	const isKioskPage = location.pathname.startsWith('/kiosk/');
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	const { data: walletKiosk } = useOwnedKiosk(currentAccount?.address);
 

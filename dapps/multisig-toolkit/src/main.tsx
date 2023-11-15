@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import '@mysten/dapp-kit/dist/index.css';
 import './index.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/red-hat-mono';

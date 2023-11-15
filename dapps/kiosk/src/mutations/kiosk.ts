@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { Kiosk, KioskTransaction } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { useWalletKit } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
-// import { useRpc } from '../context/RpcClientContext';
 import { toast } from 'react-hot-toast';
 
 import { OwnedObjectType } from '../components/Inventory/OwnedObjects';
@@ -28,7 +27,7 @@ const defaultOnError = (e: Error) => {
  * Create a new kiosk.
  */
 export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 	const { signAndExecute } = useTransactionExecution();
 	const kioskClient = useKioskClient();
 

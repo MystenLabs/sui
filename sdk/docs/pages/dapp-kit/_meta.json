@@ -6,6 +6,5 @@
 	"wallet-provider": "WalletProvider",
 	"wallet-components": "Wallet Components",
 	"wallet-hooks": "Wallet Hooks",
-	"themes": "Themes",
-	"wallet-standard": "Wallet Standard"
+	"themes": "Themes"
 }

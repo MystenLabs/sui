@@ -2,13 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useQuery } from '@tanstack/react-query';
-<<<<<<< HEAD
 import { useLayoutEffect, useState } from 'react';
 
 import { getWalletUniqueIdentifier } from '../../utils/walletUtils.js';
-=======
-
->>>>>>> 22eef8c260 (Rework once more with query)
 import { useConnectWallet } from './useConnectWallet.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWallets } from './useWallets.js';
