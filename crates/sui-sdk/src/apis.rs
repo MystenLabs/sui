@@ -580,16 +580,14 @@ impl ReadApi {
         &self,
         filter: TransactionFilter,
     ) -> SuiRpcResult<impl Stream<Item = SuiRpcResult<SuiTransactionBlockEffects>>> {
-        match &self.api.ws {
-            Some(c) => {
-                let subscription: Subscription<SuiTransactionBlockEffects> =
-                    c.subscribe_transaction(filter).await?;
-                Ok(subscription.map(|item| Ok(item?)))
-            }
-            _ => Err(Error::Subscription(
+        let Some(c) = &self.api.ws else {
+            return Err(Error::Subscription(
                 "Subscription only supported by WebSocket client.".to_string(),
-            )),
-        }
+            ));
+        };
+        let subscription: Subscription<SuiTransactionBlockEffects> =
+            c.subscribe_transaction(filter).await?;
+        Ok(subscription.map(|item| Ok(item?)))
     }
 
     /// Return a map consisting of the move package name and the normalized module, or an error upon failure.
