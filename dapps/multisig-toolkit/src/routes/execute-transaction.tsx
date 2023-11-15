@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { parseSerializedSignature } from '@mysten/sui.js/cryptography';
 import { AlertCircle } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -11,16 +11,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { set } from 'react-hook-form';
 
-export default function BroadcastTransaction() {
+type NetworkType = 'mainnet' | 'testnet' | 'devnet';
+
+export default function ExecuteTransaction() {
+	const [network, setNetwork] = useState<NetworkType>('mainnet');
 	const [tab, setTab] = useState<'transaction' | 'signature' | 'digest'>('transaction');
 	const [transaction, setTransaction] = useState('');
 	const [signature, setSignature] = useState('');
 
+	const rpcUrl = getFullnodeUrl(network);
 	const client = new SuiClient({
-		url: 'https://fullnode.mainnet.sui.io:443',
+		url: rpcUrl,
 	});
+	//const client = useSuiClient();
 
 	const { mutate, data: digest, error, isPending } = useMutation({
 		mutationKey: ['broadcast'],
@@ -61,6 +65,14 @@ export default function BroadcastTransaction() {
 			)}
 
 			<form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="network">Select Network</Label>
+					<select style={{color: "black"}} id="network" value={network} onChange={(e) => setNetwork(e.target.value)}>
+						<option value="devnet">Devnet</option>
+						<option value="testnet">Testnet</option>
+						<option value="mainnet">Mainnet</option>
+					</select>
+				</div>
 				<div className="grid w-full gap-1.5">
 					<Label htmlFor="transaction">Transaction Bytes (base64 encoded)</Label>
 					<Textarea id="transaction" name="transaction" rows={4} />
