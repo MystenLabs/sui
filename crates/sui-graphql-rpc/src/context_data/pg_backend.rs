@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{BalanceQuery, GenericQueryBuilder},
+    db_backend::{BalanceQuery, Explained, GenericQueryBuilder},
     db_data_provider::DbValidationError,
 };
 use crate::{
@@ -11,8 +11,8 @@ use crate::{
 };
 use diesel::{
     pg::Pg,
-    query_builder::{BoxedSelectStatement, FromClause},
-    BoolExpressionMethods, ExpressionMethods, QueryDsl,
+    query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment},
+    BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -448,6 +448,21 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
         PgQueryBuilder::multi_get_checkpoints(cursor, descending_order, limit, epoch)
+    }
+}
+
+/// Allows methods like load(), get_result(), etc. on an Explained query
+impl<T> RunQueryDsl<PgConnection> for Explained<T> {}
+
+/// Implement logic for prefixing queries with "EXPLAIN"
+impl<T> QueryFragment<Pg> for Explained<T>
+where
+    T: QueryFragment<Pg>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
+        out.push_sql("EXPLAIN (FORMAT JSON) ");
+        self.query.walk_ast(out.reborrow())?;
+        Ok(())
     }
 }
 

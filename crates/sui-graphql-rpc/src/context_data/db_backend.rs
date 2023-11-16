@@ -12,10 +12,8 @@ use crate::{
     types::{object::ObjectFilter, transaction_block::TransactionBlockFilter},
 };
 use diesel::{
-    pg::Pg,
-    query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment, QueryId},
+    query_builder::{BoxedSelectStatement, FromClause, QueryId},
     sql_types::Text,
-    PgConnection, QueryResult, RunQueryDsl,
 };
 
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
@@ -75,7 +73,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
 /// Struct for custom diesel function
 #[derive(Debug, Clone, Copy)]
 pub struct Explained<T> {
-    query: T,
+    pub query: T,
 }
 
 /// Allows .explain() method on any Diesel query
@@ -100,18 +98,3 @@ impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained
 }
 
 // - The following is db-specific, and can be conditionally compiled
-
-/// Allows methods like load(), get_result(), etc. on an Explained query
-impl<T> RunQueryDsl<PgConnection> for Explained<T> {}
-
-/// Implement logic for prefixing queries with "EXPLAIN"
-impl<T> QueryFragment<Pg> for Explained<T>
-where
-    T: QueryFragment<Pg>,
-{
-    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
-        out.push_sql("EXPLAIN (FORMAT JSON) ");
-        self.query.walk_ast(out.reborrow())?;
-        Ok(())
-    }
-}
