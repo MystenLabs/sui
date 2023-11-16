@@ -53,6 +53,10 @@ jobs:
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
+      - name: Build explorer
+        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
+        run: pnpm turbo --filter=sui-explorer build
+
       - name: Run Explorer e2e tests
         # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
