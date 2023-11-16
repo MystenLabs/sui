@@ -61,6 +61,16 @@ pub struct Dependency {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct CompilerToolchain {
+    /// The Move compiler version used to compile this package.
+    #[serde(rename = "compiler-version")]
+    pub compiler_version: String,
+    /// The Move compiler flags used to compile this package.
+    #[serde(rename = "compiler-flags")]
+    pub compiler_flags: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Header {
     pub version: u64,
     /// A hash of the manifest file content this lock file was generated from computed using SHA-256
@@ -92,6 +102,38 @@ impl Packages {
             toml::de::from_str::<Schema<Packages>>(&contents).context("Deserializing packages")?;
 
         Ok((packages, read_header(&contents)?))
+    }
+}
+
+impl CompilerToolchain {
+    /// Read compiler toolchain options from the lock file.
+    pub fn read(lock: &mut impl Read) -> Result<CompilerToolchain> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+
+        let Schema {
+            move_: compiler_toolchain,
+        } = toml::de::from_str::<Schema<CompilerToolchain>>(&contents)
+            .context("Deserializing compiler toolchain options")?;
+        Ok(compiler_toolchain)
+    }
+
+    pub fn write<W: Write>(
+        writer: &mut W,
+        compiler_version: String,
+        compiler_flags: Vec<String>,
+    ) -> Result<()> {
+        let compiler_toolchain = toml::ser::to_string(&Schema {
+            move_: CompilerToolchain {
+                compiler_version,
+                compiler_flags,
+            },
+        })?;
+        write!(writer, "{}", compiler_toolchain)?;
+        Ok(())
     }
 }
 

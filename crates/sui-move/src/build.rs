@@ -41,14 +41,27 @@ impl Build {
     ) -> anyhow::Result<()> {
         let rerooted_path = base::reroot_path(path.clone())?;
         let build_config = resolve_lock_file_path(build_config, path)?;
-        Self::execute_internal(
+        /*
+            if let Some(lock_file) = build_config.clone().lock_file {
+                let lock_string = std::fs::read_to_string(lock_file)?;
+                let _compiler_toolchain = move_package::lock_file::schema::CompilerToolchain::read(
+                    &mut lock_string.as_bytes(),
+                )?;
+                // TODO: Check for Move.lock compiler toolchain. If it exists and we are not on the current
+                // version, run logic to download and execute the build for a previous version.
+        }
+        */
+
+        let result = Self::execute_internal(
             rerooted_path,
-            build_config,
+            build_config.clone(),
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
             !self.no_lint,
-        )
+        );
+        build_config.update_lock_with_compiler_toolchain()?;
+        result
     }
 
     pub fn execute_internal(

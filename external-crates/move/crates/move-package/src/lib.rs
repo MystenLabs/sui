@@ -12,6 +12,7 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
+use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
     Flags,
@@ -23,9 +24,11 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::Write,
+    io::{BufWriter, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
+use toml::value::Table;
+use toml_edit::Document;
 
 use crate::{
     compilation::{
@@ -68,10 +71,6 @@ pub struct BuildConfig {
     #[clap(skip)]
     pub lock_file: Option<PathBuf>,
 
-    /// Additional named address mapping. Useful for tools in rust
-    #[clap(skip)]
-    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
-
     /// Only fetch dependency repos to MOVE_HOME
     #[clap(long = "fetch-deps-only", global = true)]
     pub fetch_deps_only: bool,
@@ -100,6 +99,10 @@ pub struct BuildConfig {
     /// If set, warnings become errors
     #[clap(long = move_compiler::command_line::WARNINGS_ARE_ERRORS, global = true)]
     pub warnings_are_errors: bool,
+
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -218,5 +221,76 @@ impl BuildConfig {
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_silence_warnings(self.silence_warnings)
+    }
+
+    pub fn update_lock_with_compiler_toolchain(self) -> Result<()> {
+        println!("first entry");
+        let copy = self.clone();
+        let lock_file_path = self.lock_file.unwrap();
+        // let install_dir = self.install_dir.unwrap();
+        let install_dir = PathBuf::from(".");
+        let mut lock = LockFile::from(install_dir, lock_file_path.clone())?;
+        let mut toml_string = String::new();
+        lock.seek(SeekFrom::Start(0))?;
+        lock.read_to_string(&mut toml_string)?;
+        lock.seek(SeekFrom::Start(0))?;
+        println!("Current Move.lock: {}", toml_string);
+        let compiler_version: String = env!("CARGO_PKG_VERSION").into();
+
+        let toml_flags = toml::to_string(&copy).expect("issue with flags");
+        // let toml_flags_table: toml_edit::Table =
+        //    toml_edit::de::from_str(&toml_flags).expect("no deser");
+
+        // let toml_edit_flags = toml_flags.parse::<toml_edit::Document>()?;
+
+        //        println!("toml flags: {}", toml_flags);
+        let _toml_flags_value: toml::Value = toml_flags.parse()?;
+
+        let mut toml = toml_string.parse::<Document>()?;
+
+        if !toml.contains_key("move") {
+            toml["move"] = toml_edit::table();
+        }
+
+        let move_table = toml["move"].as_table_mut().unwrap(); // use if let Some(..) = doc.root.as_table_mut().get_mut("move") { ...}
+        move_table["compiler-version"] = toml_edit::value(compiler_version);
+        move_table["compiler-flags"] = toml_edit::value(convert_toml_value(&_toml_flags_value));
+        // move_table["compiler-flags"] = toml_edit::value(_toml_flags_value);
+        // move_table["compiler-flags"] = toml_edit_flags;
+        // move_table["compiler-flags"] = toml_edit::value(compiler_flags);
+        // move_table["compiler-flags"] = toml_edit::value(toml_flags);
+        // move_table["compiler-flags"] = toml_edit::value(_toml_flags_value);
+        // move_table["compiler-flags"] = _toml_flags_value;
+        let mut writer = BufWriter::new(&*lock);
+        println!("writing {}", toml.to_string());
+        write!(writer, "{}", toml.to_string())?;
+        writer.flush()?;
+        std::mem::drop(writer);
+        let _mutx = PackageLock::lock(); // hold mutex so we can commit
+        lock.commit(lock_file_path)
+    }
+}
+
+fn convert_toml_value(value: &toml::Value) -> toml_edit::Value {
+    match value {
+        toml::Value::String(v) => toml_edit::Value::from(v.clone()),
+        toml::Value::Integer(v) => toml_edit::Value::from(*v),
+        toml::Value::Float(v) => toml_edit::Value::from(*v),
+        toml::Value::Boolean(v) => toml_edit::Value::from(*v),
+        toml::Value::Datetime(v) => toml_edit::Value::from(v.to_string()),
+        toml::Value::Array(arr) => {
+            let mut toml_edit_arr = toml_edit::Array::new();
+            for x in arr {
+                toml_edit_arr.push(convert_toml_value(x));
+            }
+            toml_edit::Value::from(toml_edit_arr)
+        }
+        toml::Value::Table(table) => {
+            let mut toml_edit_table = toml_edit::Table::new();
+            for (k, v) in table {
+                toml_edit_table[k] = toml_edit::Item::Value(convert_toml_value(v));
+            }
+            toml_edit::Value::InlineTable(toml_edit_table.into_inline_table())
+        }
     }
 }

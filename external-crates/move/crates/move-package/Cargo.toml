@@ -9,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 toml.workspace = true
+toml_edit.workspace = true
 serde.workspace = true
 petgraph.workspace = true
 anyhow.workspace = true
