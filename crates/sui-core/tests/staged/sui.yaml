@@ -741,6 +741,7 @@ PublicKey:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 33
+    3:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginPublicIdentifier
@@ -753,7 +754,6 @@ RandomnessStateUpdate:
         SEQ: U8
     - randomness_obj_initial_shared_version:
         TYPENAME: SequenceNumber
-    3:
 SenderSignedData:
   NEWTYPESTRUCT:
     SEQ:
