@@ -474,7 +474,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
-            SuiSubcommand::RunGraphql => {
+            SuiSubcommand::RunGraphql(RunGraphqlCommand {
+                show_usage,
+                show_headers,
+                show_service_version,
+            }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
                 let cluster = self.cluster.as_ref().unwrap();
@@ -485,10 +489,19 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
                 let resp = cluster
                     .graphql_client
-                    .execute_to_graphql(contents.trim().to_owned(), true, vec![], vec![])
+                    .execute_to_graphql(contents.trim().to_owned(), show_usage, vec![], vec![])
                     .await?;
 
-                Ok(Some(resp.response_body_json_pretty()))
+                let mut output = vec![];
+                if show_headers {
+                    output.push(format!("Headers: {:#?}", resp.http_headers_without_date()));
+                }
+                if show_service_version {
+                    output.push(format!("Service version: {}", resp.graphql_version()?));
+                }
+                output.push(format!("Response: {}", resp.response_body_json_pretty()));
+
+                Ok(Some(output.join("\n")))
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;

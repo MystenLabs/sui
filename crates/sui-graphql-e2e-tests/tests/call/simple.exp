@@ -1,4 +1,4 @@
-processed 14 tasks
+processed 15 tasks
 
 task 1 'publish'. lines 6-28:
 created: object(1,0)
@@ -23,18 +23,9 @@ CheckpointSummary { epoch: 0, seq: 1, content_digest: 967T2ejWu25x5LEPDdbRte2bSD
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 6 'run-graphql'. lines 38-42:
-{
+Response: {
   "data": {
     "chainIdentifier": "f5c0cb17"
-  },
-  "extensions": {
-    "usage": {
-      "nodes": 1,
-      "depth": 1,
-      "variables": 0,
-      "fragments": 0,
-      "query_payload": 23
-    }
   }
 }
 
@@ -46,20 +37,11 @@ CheckpointSummary { epoch: 0, seq: 2, content_digest: 7ez6SVqHPjVu8c4yEFoMVPEc8j
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 9 'run-graphql'. lines 48-55:
-{
+Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 2,
       "digest": "9RA5HeWZ2umB2PtBq7AaYCug2JwjCszAtB7bVh5727u7"
-    }
-  },
-  "extensions": {
-    "usage": {
-      "nodes": 3,
-      "depth": 2,
-      "variables": 0,
-      "fragments": 0,
-      "query_payload": 52
     }
   }
 }
@@ -72,7 +54,23 @@ CheckpointSummary { epoch: 1, seq: 3, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 12 'run-graphql'. lines 60-67:
-{
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 3,
+      "digest": "FVyevuXSECGiGbQSXNY168L4wPxpwgSz7xveecrdzr7N"
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 69-76:
+Headers: {
+    "content-type": "application/json",
+    "content-length": "192",
+    "x-sui-rpc-version": "0.1.0",
+}
+Service version: 0.1.0
+Response: {
   "data": {
     "checkpoint": {
       "sequenceNumber": 3,
@@ -90,6 +88,6 @@ task 12 'run-graphql'. lines 60-67:
   }
 }
 
-task 13 'view-checkpoint'. lines 69-69:
+task 14 'view-checkpoint'. lines 78-78:
 CheckpointSummary { epoch: 1, seq: 3, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}

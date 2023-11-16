@@ -66,4 +66,13 @@ module Test::M1 {
   }
 }
 
+//# run-graphql --show-usage --show-headers --show-service-version
+
+{
+  checkpoint {
+    sequenceNumber
+    digest
+  }
+}
+
 //# view-checkpoint
