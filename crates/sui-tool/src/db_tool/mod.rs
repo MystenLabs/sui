@@ -305,7 +305,8 @@ pub fn print_transaction_summaries(
             contents
                 .enumerate_transactions_with_signatures(ckpt.inner())
                 .for_each(|(idx, digests, sigs)| {
-                    let is_system_tx = if sigs.len() > 0 {
+                    let num_sigs = sigs.len();
+                    let is_system_tx = if num_sigs > 0 {
                         false
                     } else {
                         let tx = perpetual_db
@@ -318,10 +319,10 @@ pub fn print_transaction_summaries(
                         "checkpoint={} idx={} {:?} is_system_tx={} num_sigs={:?}",
                         seq,
                         idx,
-                        digests,
+                        digests.transaction.inner(),
                         is_system_tx,
-                        sigs.len()
-                    )
+                        num_sigs,
+                    );
                 })
         });
     Ok(())
