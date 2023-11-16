@@ -61,19 +61,3 @@ jobs:
         run: pnpm turbo build
       - name: Test
         run: pnpm turbo test
-
-      # Pack wallet extension and upload it as an artifact for easy developer use:
-      - name: Wallet Extension Has Changes?
-        id: wallet-diff
-        continue-on-error: true
-        run: pnpm dlx turbo-ignore sui-wallet
-      - name: Wallet Extension Preview Package
-        if: ${{ steps.wallet-diff.outcome == 'failure' }}
-        run: pnpm wallet pack:zip
-      - uses: actions/upload-artifact@v3
-        if: ${{ steps.wallet-diff.outcome == 'failure' }}
-        with:
-          name: wallet-extension
-          path: apps/wallet/web-ext-artifacts/*
-          if-no-files-found: error
-          retention-days: 7
