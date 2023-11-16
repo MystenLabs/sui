@@ -679,8 +679,6 @@ impl AbilitySet {
     pub const PRIMITIVES: [Ability_; 3] = [Ability_::Copy, Ability_::Drop, Ability_::Store];
     /// Abilities for &_ and &mut _
     pub const REFERENCES: [Ability_; 2] = [Ability_::Copy, Ability_::Drop];
-    /// Abilities for signer
-    pub const SIGNER: [Ability_; 1] = [Ability_::Drop];
     /// Abilities for vector<_>, note they are predicated on the type argument
     pub const COLLECTION: [Ability_; 3] = [Ability_::Copy, Ability_::Drop, Ability_::Store];
 
@@ -757,10 +755,6 @@ impl AbilitySet {
 
     pub fn references(loc: Loc) -> Self {
         Self::from_abilities_(loc, Self::REFERENCES.to_vec()).unwrap()
-    }
-
-    pub fn signer(loc: Loc) -> Self {
-        Self::from_abilities_(loc, Self::SIGNER.to_vec()).unwrap()
     }
 
     pub fn collection(loc: Loc) -> Self {

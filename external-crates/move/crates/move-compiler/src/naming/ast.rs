@@ -174,8 +174,6 @@ pub struct Constant {
 pub enum BuiltinTypeName_ {
     // address
     Address,
-    // signer
-    Signer,
     // u8
     U8,
     // u16
@@ -368,7 +366,6 @@ impl TName for Var {
 static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
     [
         BuiltinTypeName_::ADDRESS,
-        BuiltinTypeName_::SIGNER,
         BuiltinTypeName_::U_8,
         BuiltinTypeName_::U_16,
         BuiltinTypeName_::U_32,
@@ -404,7 +401,6 @@ static BUILTIN_TYPE_ORDERED: Lazy<BTreeSet<BuiltinTypeName_>> =
 
 impl BuiltinTypeName_ {
     pub const ADDRESS: &'static str = "address";
-    pub const SIGNER: &'static str = "signer";
     pub const U_8: &'static str = "u8";
     pub const U_16: &'static str = "u16";
     pub const U_32: &'static str = "u32";
@@ -438,7 +434,6 @@ impl BuiltinTypeName_ {
         use BuiltinTypeName_ as BT;
         match name_str {
             BT::ADDRESS => Some(BT::Address),
-            BT::SIGNER => Some(BT::Signer),
             BT::U_8 => Some(BT::U8),
             BT::U_16 => Some(BT::U16),
             BT::U_32 => Some(BT::U32),
@@ -458,7 +453,6 @@ impl BuiltinTypeName_ {
             B::Address | B::U8 | B::U16 | B::U32 | B::U64 | B::U128 | B::U256 | B::Bool => {
                 AbilitySet::primitives(loc)
             }
-            B::Signer => AbilitySet::signer(loc),
             B::Vector => AbilitySet::collection(loc),
         }
     }
@@ -467,15 +461,7 @@ impl BuiltinTypeName_ {
         use BuiltinTypeName_ as B;
         // Match here to make sure this function is fixed when collections are added
         match self {
-            B::Address
-            | B::Signer
-            | B::U8
-            | B::U16
-            | B::U32
-            | B::U64
-            | B::U128
-            | B::U256
-            | B::Bool => vec![],
+            B::Address | B::U8 | B::U16 | B::U32 | B::U64 | B::U128 | B::U256 | B::Bool => vec![],
             B::Vector => vec![AbilitySet::empty()],
         }
     }
@@ -548,7 +534,6 @@ impl Type_ {
             B::Address | B::U8 | B::U16 | B::U32 | B::U64 | B::U128 | B::U256 | B::Bool => {
                 Some(AbilitySet::primitives(b.loc))
             }
-            B::Signer => Some(AbilitySet::signer(b.loc)),
             B::Vector => None,
         };
         let n = sp(b.loc, TypeName_::Builtin(b));
@@ -565,10 +550,6 @@ impl Type_ {
 
     pub fn address(loc: Loc) -> Type {
         Self::builtin(loc, sp(loc, BuiltinTypeName_::Address), vec![])
-    }
-
-    pub fn signer(loc: Loc) -> Type {
-        Self::builtin(loc, sp(loc, BuiltinTypeName_::Signer), vec![])
     }
 
     pub fn u8(loc: Loc) -> Type {
@@ -696,7 +677,6 @@ impl fmt::Display for BuiltinTypeName_ {
             "{}",
             match self {
                 BT::Address => BT::ADDRESS,
-                BT::Signer => BT::SIGNER,
                 BT::U8 => BT::U_8,
                 BT::U16 => BT::U_16,
                 BT::U32 => BT::U_32,

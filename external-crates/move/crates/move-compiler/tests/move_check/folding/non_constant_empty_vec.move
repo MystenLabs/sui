@@ -8,19 +8,11 @@ module 0x42::M {
         vector[]
     }
 
-    public fun empty_signer_vec(): vector<signer> {
-        vector[]
-    }
-
     public fun empty_generic_vec<T>(): vector<T> {
         vector[]
     }
 
     public fun empty_struct_vec_vec(): vector<vector<S>> {
-        vector[]
-    }
-
-    public fun empty_signer_vec_vec(): vector<vector<signer>> {
         vector[]
     }
 

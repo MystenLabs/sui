@@ -7,7 +7,6 @@ module N {
 module M {
     use 0x2::N::{
         foo as address,
-        foo as signer,
         foo as u8,
         foo as u64,
         foo as u128,

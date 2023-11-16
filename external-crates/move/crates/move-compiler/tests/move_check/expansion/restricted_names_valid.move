@@ -6,7 +6,6 @@ module N {
 module M {
     use 0x2::N::{
         Self as address,
-        Self as signer,
         Self as u8,
         Self as u64,
         Self as u128,
@@ -24,7 +23,6 @@ module M {
     fun t(): u64 {
 
         let address = 0;
-        let signer = 0;
         let u8 = 0;
         let u64 = 0;
         let u128 = 0;
@@ -39,7 +37,6 @@ module M {
         let assert = 0;
 
         address::t() +
-        signer::t() +
         u8::t() +
         u64::t() +
         u128::t() +
@@ -54,7 +51,6 @@ module M {
         assert::t();
 
         address +
-        signer +
         u8 +
         u64 +
         u128 +

@@ -16,6 +16,6 @@ module M {
     // failure: double annotation
     #[verify_only]
     #[verify_only]
-    public fun d(_a: signer, _b: signer) { }
+    public fun d(_a: address, _b: address) { }
 }
 }

@@ -12,7 +12,7 @@ module M {
     const FLAG: bool = false;
     const C: u64 = {
         let x = 0;
-        let s: signer = abort 0;
+        let s: address = abort 0;
         let b = B { f: 0 };
         spec { };
         &x;

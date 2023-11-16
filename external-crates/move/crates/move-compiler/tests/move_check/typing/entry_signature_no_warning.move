@@ -4,9 +4,9 @@ module 0x42::M {
 
     // entry functions no longer have any built in checks outside of visibility rules
 
-    public entry fun signer_ref(_: &signer) {}
+    public entry fun signer_ref(_: &address) {}
 
-    public entry fun late_signer(_u: u64, _s: signer) {}
+    public entry fun late_signer(_u: u64, _s: address) {}
 
     public entry fun struct_arg(_: CoolStruct) {}
 

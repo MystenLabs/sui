@@ -229,12 +229,6 @@ pub struct PublishCommand {
 #[derive(Debug, Parser)]
 pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     #[clap(
-        long = "signers",
-        value_parser = ParsedAddress::parse,
-        num_args(1..),
-    )]
-    pub signers: Vec<ParsedAddress>,
-    #[clap(
         long = "args",
         value_parser = ParsedValue::<ExtraValueArgs>::parse,
         num_args(1..),

@@ -33,20 +33,16 @@ module M {
     >() {
         // functions with prims
         c<u64>();
-        d<signer>();
         s<bool>();
         cds<address>();
         c<vector<u64>>();
-        d<vector<signer>>();
         s<vector<bool>>();
         cds<vector<address>>();
         // structs with prims
         let Sc {} = Sc<u64> {};
-        let Sd {} = Sd<signer> {};
         let Ss {} = Ss<bool> {};
         let Scds {} = Scds<address> {};
         let Sc {} = Sc<vector<u64>> {};
-        let Sd {} = Sd<vector<signer>> {};
         let Ss {} = Ss<vector<bool>> {};
         let Scds {} = Scds<vector<address>> {};
 

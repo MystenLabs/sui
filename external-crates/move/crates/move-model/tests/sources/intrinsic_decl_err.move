@@ -28,10 +28,6 @@ module 0x42::M {
 
         // expect failure
         pragma intrinsic = map,
-            map_len = 0x1::signer::address_of;
-
-        // expect failure
-        pragma intrinsic = map,
             map_len = no_such_move_fun;
 
         // expect failure

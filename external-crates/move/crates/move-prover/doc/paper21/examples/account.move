@@ -18,24 +18,24 @@ module 0x42::Account {
     *balance = *balance + amount;
   }
 
-  public(script) fun transfer(from: &signer, to: address, amount: u64) acquires Account {
-    assert!(signer::address_of(from) != to, errors::invalid_argument());
-    withdraw(signer::address_of(from), amount);
-    deposit(to, amount);
-  }
+  // public(script) fun transfer(from: &signer, to: address, amount: u64) acquires Account {
+  //   assert!(signer::address_of(from) != to, errors::invalid_argument());
+  //   withdraw(signer::address_of(from), amount);
+  //   deposit(to, amount);
+  // }
 
-  spec transfer {
-    let from_addr = signer::address_of(from);
-    aborts_if from_addr == to;
-    aborts_if bal(from_addr) < amount;
-    aborts_if bal(to) + amount > Limits::max_u64();
-    ensures bal(from_addr) == old(bal(from_addr)) - amount;
-    ensures bal(to) == old(bal(to)) + amount;
-    // aborts_if !exists<Account>(from_addr); // MISSING
-    // aborts_if !exists<Account>(to); // MISSING
-    // aborts_if amount > AccountLimits::max_decrease(); // MISSING
-    // aborts_if bal(from_addr) - amount < AccountLimits::min_balance(); // MISSING
-  }
+  // spec transfer {
+  //   let from_addr = signer::address_of(from);
+  //   aborts_if from_addr == to;
+  //   aborts_if bal(from_addr) < amount;
+  //   aborts_if bal(to) + amount > Limits::max_u64();
+  //   ensures bal(from_addr) == old(bal(from_addr)) - amount;
+  //   ensures bal(to) == old(bal(to)) + amount;
+  //   // aborts_if !exists<Account>(from_addr); // MISSING
+  //   // aborts_if !exists<Account>(to); // MISSING
+  //   // aborts_if amount > AccountLimits::max_decrease(); // MISSING
+  //   // aborts_if bal(from_addr) - amount < AccountLimits::min_balance(); // MISSING
+  // }
 
   spec fun bal(acc: address): u64 {
     global<Account>(acc).balance
@@ -50,7 +50,6 @@ module 0x42::Account {
   use 0x42::Errors;
   use 0x42::Limits;
   use 0x42::AccountLimits;
-  use std::signer;
 }
 
 module 0x42::Errors {

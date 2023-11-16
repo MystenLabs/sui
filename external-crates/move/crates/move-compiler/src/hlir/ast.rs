@@ -493,7 +493,6 @@ impl BaseType_ {
 
         let kind = match b_ {
             U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address => AbilitySet::primitives(loc),
-            Signer => AbilitySet::signer(loc),
             Vector => {
                 let declared_abilities = AbilitySet::collection(loc);
                 let ty_arg_abilities = {

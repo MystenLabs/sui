@@ -22,7 +22,6 @@ module 0xA::type_name_tests {
         assert!(into_string(get<u64>()) == string(b"u64"), 0);
         assert!(into_string(get<u128>()) == string(b"u128"), 0);
         assert!(into_string(get<address>()) == string(b"address"), 0);
-        assert!(into_string(get<signer>()) == string(b"signer"), 0);
         assert!(into_string(get<vector<u8>>()) == string(b"vector<u8>"), 0)
     }
 

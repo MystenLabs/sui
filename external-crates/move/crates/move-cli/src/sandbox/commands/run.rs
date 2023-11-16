@@ -13,11 +13,9 @@ use anyhow::{anyhow, bail, Result};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
 use move_core_types::{
-    account_address::AccountAddress,
     errmap::ErrorMapping,
     identifier::IdentStr,
     language_storage::TypeTag,
-    runtime_value::MoveValue,
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_package::compilation::compiled_package::CompiledPackage;
@@ -37,7 +35,6 @@ pub fn run(
     _package: &CompiledPackage,
     module_file: &Path,
     function_name: &str,
-    signers: &[String],
     txn_args: &[TransactionArgument],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
@@ -56,10 +53,6 @@ pub fn run(
     );
     let bytecode = fs::read(module_file)?;
 
-    let signer_addresses = signers
-        .iter()
-        .map(|s| AccountAddress::from_hex_literal(s))
-        .collect::<Result<Vec<AccountAddress>, _>>()?;
     // TODO: parse Value's directly instead of going through the indirection of TransactionArgument?
     let vm_args: Vec<Vec<u8>> = convert_txn_args(txn_args);
 
@@ -76,15 +69,6 @@ pub fn run(
         .collect::<Result<Vec<_>, _>>()?;
 
     // TODO rethink move-cli arguments for executing functions
-    let vm_args = signer_addresses
-        .iter()
-        .map(|a| {
-            MoveValue::Signer(*a)
-                .simple_serialize()
-                .expect("transaction arguments must serialize")
-        })
-        .chain(vm_args)
-        .collect();
     let res = {
         // script fun. parse module, extract script ID to pass to VM
         let module = CompiledModule::deserialize_with_defaults(&bytecode)
@@ -116,7 +100,6 @@ pub fn run(
             &script_type_parameters,
             &script_parameters,
             &vm_type_tags,
-            &signer_addresses,
             txn_args,
         )
     } else {

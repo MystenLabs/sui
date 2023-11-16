@@ -16,7 +16,6 @@ use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
 use move_compiler::diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics, FileName};
 use move_core_types::{
-    account_address::AccountAddress,
     effects::{ChangeSet, Op},
     errmap::ErrorMapping,
     language_storage::{ModuleId, TypeTag},
@@ -93,29 +92,10 @@ pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
 
 pub(crate) fn explain_type_error(
     script_params: &[SignatureToken],
-    signers: &[AccountAddress],
     txn_args: &[TransactionArgument],
 ) {
-    use SignatureToken::*;
-    let expected_num_signers = script_params
-        .iter()
-        .filter(|t| match t {
-            Reference(r) => r.is_signer(),
-            _ => false,
-        })
-        .count();
-    if expected_num_signers != signers.len() {
-        println!(
-            "Execution failed with incorrect number of signers: script expected {:?}, but found \
-             {:?}",
-            expected_num_signers,
-            signers.len()
-        );
-        return;
-    }
-
     // TODO: printing type(s) of missing arguments could be useful
-    let expected_num_args = script_params.len() - signers.len();
+    let expected_num_args = script_params.len();
     if expected_num_args != txn_args.len() {
         println!(
             "Execution failed with incorrect number of arguments: script expected {:?}, but found \
@@ -284,7 +264,6 @@ pub(crate) fn explain_execution_error(
     script_type_parameters: &[AbilitySet],
     script_parameters: &[SignatureToken],
     vm_type_args: &[TypeTag],
-    signers: &[AccountAddress],
     txn_args: &[TransactionArgument],
 ) -> Result<()> {
     use StatusCode::*;
@@ -356,7 +335,7 @@ pub(crate) fn explain_execution_error(
             script_type_parameters.len(),
             vm_type_args.len()
         ),
-        (_, TYPE_MISMATCH, _) => explain_type_error(script_parameters, signers, txn_args),
+        (_, TYPE_MISMATCH, _) => explain_type_error(script_parameters, txn_args),
         (_, LINKER_ERROR, _) => {
             // TODO: is this the only reason we can see LINKER_ERROR?
             // Can we also see it if someone manually deletes modules in storage?

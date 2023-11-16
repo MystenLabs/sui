@@ -757,7 +757,6 @@ fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
             panic!("ICE should not have reached compilation if there are errors")
         }
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Address))), _) => IRT::Address,
-        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Signer))), _) => IRT::Signer,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U8))), _) => IRT::U8,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U16))), _) => IRT::U16,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U32))), _) => IRT::U32,
@@ -1036,7 +1035,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 BT::U64 => B::CastU64,
                 BT::U128 => B::CastU128,
                 BT::U256 => B::CastU256,
-                BT::Address | BT::Signer | BT::Vector | BT::Bool => {
+                BT::Address | BT::Vector | BT::Bool => {
                     panic!("ICE type checking failed. unexpected cast")
                 }
             };

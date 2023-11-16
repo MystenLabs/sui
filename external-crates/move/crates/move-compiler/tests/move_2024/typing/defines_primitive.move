@@ -1,8 +1,6 @@
 module a::m {
     public struct S {}
-    public fun test(s: &signer) {
-        let _: &address = s.as_address();
-        let _: address = s.to_address();
+    public fun test() {
         let _: u64 = 0u64.max(1);
 
         let mut v = vector[];
@@ -13,17 +11,6 @@ module a::m {
         v.swap(0, 0);
         let S {} = v.pop_back();
         v.destroy_empty();
-    }
-}
-
-#[defines_primitive(signer)]
-module std::signer {
-    native public fun borrow_address(s: &signer): &address;
-    public fun as_address(s: &signer): &address {
-        borrow_address(s)
-    }
-    public fun to_address(s: &signer): address {
-        *borrow_address(s)
     }
 }
 

@@ -15,9 +15,7 @@ use move_binary_format::{
     errors::{Location, VMError, VMResult},
     CompiledModule,
 };
-use move_command_line_common::{
-    address::ParsedAddress, files::verify_and_create_named_address_mapping,
-};
+use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{editions::Edition, shared::PackagePaths, FullyCompiledProgram};
 use move_core_types::{
     account_address::AccountAddress,
@@ -172,26 +170,14 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         module: &ModuleId,
         function: &IdentStr,
         type_arg_tags: Vec<TypeTag>,
-        signers: Vec<ParsedAddress>,
         txn_args: Vec<MoveValue>,
         gas_budget: Option<u64>,
         _extra_args: Self::ExtraRunArgs,
     ) -> Result<(Option<String>, SerializedReturnValues)> {
-        let signers: Vec<_> = signers
-            .into_iter()
-            .map(|addr| self.compiled_state().resolve_address(&addr))
-            .collect();
-
         let args = txn_args
             .iter()
             .map(|arg| arg.simple_serialize().unwrap())
             .collect::<Vec<_>>();
-        // TODO rethink testing signer args
-        let args = signers
-            .iter()
-            .map(|a| MoveValue::Signer(*a).simple_serialize().unwrap())
-            .chain(args)
-            .collect();
         let serialized_return_values = self
             .perform_session_action(
                 gas_budget,

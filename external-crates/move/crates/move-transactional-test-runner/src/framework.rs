@@ -132,7 +132,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
         module: &ModuleId,
         function: &IdentStr,
         type_args: Vec<TypeTag>,
-        signers: Vec<ParsedAddress>,
         args: Vec<<<Self as MoveTestAdapter<'a>>::ExtraValueArgs as ParsableValue>::ConcreteValue>,
         gas_budget: Option<u64>,
         extra: Self::ExtraRunArgs,
@@ -223,7 +222,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             }
             TaskCommand::Run(
                 RunCommand {
-                    signers,
                     args,
                     type_args,
                     gas_budget,
@@ -261,7 +259,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                         &module_id,
                         name.as_ident_str(),
                         type_args,
-                        signers,
                         args,
                         gas_budget,
                         extra_args,
@@ -273,7 +270,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
             }
             TaskCommand::Run(
                 RunCommand {
-                    signers,
                     args,
                     type_args,
                     gas_budget,
@@ -295,7 +291,6 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                         &module_id,
                         name.as_ident_str(),
                         type_args,
-                        signers,
                         args,
                         gas_budget,
                         extra_args,

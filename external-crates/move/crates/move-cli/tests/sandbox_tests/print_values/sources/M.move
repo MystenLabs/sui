@@ -124,11 +124,6 @@ module M {
 
         let a = @0x1234c0ffee;
         print(&a);
-
-        // print a signer
-        let senders = create_signers_for_testing(1);
-        let sender = vector::pop_back(&mut senders);
-        print(&sender);
     }
 
     #[allow(unused_const)]
