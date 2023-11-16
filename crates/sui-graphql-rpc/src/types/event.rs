@@ -52,26 +52,24 @@ impl Event {
     }
 
     /// Addresses of the senders of the event
-    async fn senders(&self) -> Result<Option<Vec<Address>>> {
-        let result: Result<Option<Vec<Address>>, _> = self
+    async fn senders(&self) -> Option<Vec<Address>> {
+        let result: Option<Vec<Address>> = self
             .stored
             .senders
             .iter()
-            .map(|sender| {
-                sender
-                    .as_ref()
-                    .map(|sender| {
-                        SuiAddress::from_bytes(sender)
-                            .map(|sui_address| Address {
-                                address: sui_address,
-                            })
-                            .map_err(|e| Error::Internal(e.to_string()))
-                    })
-                    .transpose()
+            .filter_map(|sender| {
+                sender.as_ref().map(|sender| {
+                    SuiAddress::from_bytes(sender)
+                        .map(|sui_address| Address {
+                            address: sui_address,
+                        })
+                        .map_err(|e| eprintln!("Unexpected None value in senders array: {}", e))
+                        .ok()
+                })
             })
             .collect();
 
-        result.extend()
+        result
     }
 
 >>>>>>> a4603f803f (refactor rust-mirrored Event representation)
