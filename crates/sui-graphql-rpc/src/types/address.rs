@@ -160,8 +160,15 @@ impl Address {
     pub async fn dynamic_field(
         &self,
         _dynamic_field_name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, Error> {
-        Err(crate::error::Error::DynamicFieldOnAddress)
+    ) -> Result<Option<DynamicField>> {
+        Err(Error::DynamicFieldOnAddress.extend())
+    }
+
+    pub async fn dynamic_object_field(
+        &self,
+        _dynamic_field_name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        Err(Error::DynamicFieldOnAddress.extend())
     }
 
     pub async fn dynamic_field_connection(

@@ -39,7 +39,8 @@
 ### [Owner](#11)
 #### &emsp;&emsp;[Dynamic Field](#720885)
 #### &emsp;&emsp;[Dynamic Field Connection](#720886)
-#### &emsp;&emsp;[Owner](#720887)
+#### &emsp;&emsp;[Dynamic Object Field](#720887)
+#### &emsp;&emsp;[Owner](#720888)
 ### [Protocol Configs](#12)
 #### &emsp;&emsp;[Key Value](#786420)
 #### &emsp;&emsp;[Key Value Feature Flag](#786421)
@@ -849,6 +850,7 @@
 >      repr
 >    }
 >    data
+>    __typename
 >  }
 >  ... on MoveObject {
 >    hasPublicTransfer
@@ -858,6 +860,7 @@
 >      }
 >      data
 >    }
+>    __typename
 >  }
 >}
 >
@@ -870,7 +873,7 @@
 >}
 >
 >fragment DynamicFieldSelect on DynamicField {
->  kind,
+>  kind
 >  name {
 >    ...DynamicFieldNameSelection
 >  }
@@ -885,9 +888,8 @@
 >  ) {
 >    dynamicField(
 >      dynamicFieldName: {
->        type: "0x2::kiosk::Item",
->        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=",
->        kind:"DynamicObject"
+>        type: "0x2::kiosk::Listing",
+>        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
 >      }
 >    ) {
 >      ...DynamicFieldSelect
@@ -954,6 +956,59 @@
 >}</pre>
 
 ### <a id=720887></a>
+### Dynamic Object Field
+
+><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
+>  ... on MoveValue {
+>    type {
+>      repr
+>    }
+>    data
+>    __typename
+>  }
+>  ... on MoveObject {
+>    hasPublicTransfer
+>    contents {
+>      type {
+>        repr
+>      }
+>      data
+>    }
+>    __typename
+>  }
+>}
+>
+>fragment DynamicFieldNameSelection on MoveValue {
+>  type {
+>    repr
+>  }
+>  data
+>  bcs
+>}
+>
+>fragment DynamicFieldSelect on DynamicField {
+>  kind
+>  name {
+>    ...DynamicFieldNameSelection
+>  }
+>  value {
+>    ...DynamicFieldValueSelection
+>  }
+>}
+>
+>query DynamicObjectField {
+>  object(
+>    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+>  ) {
+>    dynamicObjectField(
+>      dynamicFieldName: {type: "0x2::kiosk::Item", bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw="}
+>    ) {
+>      ...DynamicFieldSelect
+>    }
+>  }
+>}</pre>
+
+### <a id=720888></a>
 ### Owner
 
 ><pre>{

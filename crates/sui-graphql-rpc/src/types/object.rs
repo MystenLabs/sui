@@ -7,6 +7,7 @@ use sui_indexer::errors::IndexerError;
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::dynamic_field::DynamicFieldType;
 
 use super::big_int::BigInt;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -233,13 +234,37 @@ impl Object {
     //     unimplemented!()
     // }
 
+    /// A field on an object that can be added or removed on-the-fly,
+    /// only affects gas when accessed, and can store heterogenous values.
     pub async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
         dynamic_field_name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field_object(self.address, dynamic_field_name)
+            .fetch_dynamic_field(
+                self.address,
+                dynamic_field_name,
+                DynamicFieldType::DynamicField,
+            )
+            .await
+            .extend()
+    }
+
+    /// An object stored as a dynamic field on the parent object.
+    /// This object is also accessible directly via its address.
+    /// A dynamic field is an object field if its returned type is MoveObject.
+    pub async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        dynamic_field_name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(
+                self.address,
+                dynamic_field_name,
+                DynamicFieldType::DynamicObject,
+            )
             .await
             .extend()
     }

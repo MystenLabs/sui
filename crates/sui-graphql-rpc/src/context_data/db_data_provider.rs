@@ -87,7 +87,7 @@ use sui_types::{
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
-    Identifier,
+    Identifier, TypeTag,
 };
 
 use super::db_backend::GenericQueryBuilder;
@@ -1308,22 +1308,17 @@ impl PgManager {
         Ok(Some(connection))
     }
 
-    pub(crate) async fn fetch_dynamic_field_object(
+    pub(crate) async fn fetch_dynamic_field(
         &self,
         address: SuiAddress,
         name: DynamicFieldName,
+        kind: DynamicFieldType,
     ) -> Result<Option<DynamicField>, Error> {
         let name_bcs_value = &name.bcs.0;
         let parent_object_id =
-            ObjectID::from_bytes(address.as_slice()).map_err(|e| Error::Internal(e.to_string()))?;
+            ObjectID::from_bytes(address.as_slice()).map_err(|e| Error::Client(e.to_string()))?;
         let mut type_tag =
-            TypeTag::from_str(&name.type_).map_err(|e| Error::Internal(e.to_string()))?;
-
-        let kind = match name.kind.as_str() {
-            "DynamicField" => DynamicFieldType::DynamicField,
-            "DynamicObject" => DynamicFieldType::DynamicObject,
-            _ => Err(Error::Internal("Unexpected df_kind value".to_string()))?,
-        };
+            TypeTag::from_str(&name.type_).map_err(|e| Error::Client(e.to_string()))?;
 
         if kind == DynamicFieldType::DynamicObject {
             let dynamic_object_field_struct =
@@ -1336,15 +1331,15 @@ impl PgManager {
             &type_tag,
             name_bcs_value,
         )
-        .expect("Deriving dynamic field id cannot fail");
+        .map_err(|e| Error::Internal(format!("Deriving dynamic field id cannot fail: {e}")))?;
 
         let stored_obj = self.get_obj(id.to_vec(), None).await?;
         if let Some(stored_object) = stored_obj {
             let df_object_id = stored_object.df_object_id.as_ref().ok_or_else(|| {
                 Error::Internal("Dynamic field does not have df_object_id".to_string())
             })?;
-            let df_object_id = SuiAddress::from_bytes(df_object_id)
-                .map_err(|e| Error::Internal(format!("{e}")))?;
+            let df_object_id =
+                SuiAddress::from_bytes(df_object_id).map_err(|e| Error::Internal(e.to_string()))?;
             return Ok(Some(DynamicField {
                 stored_object,
                 df_object_id,

@@ -14,6 +14,7 @@ use crate::types::sui_address::SuiAddress;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::dynamic_field::DynamicFieldType;
 
 #[derive(Interface)]
 #[graphql(
@@ -69,6 +70,11 @@ use sui_json_rpc::name_service::NameServiceConfig;
     // )
     field(
         name = "dynamic_field",
+        ty = "Option<DynamicField>",
+        arg(name = "dynamic_field_name", ty = "DynamicFieldName")
+    ),
+    field(
+        name = "dynamic_object_field",
         ty = "Option<DynamicField>",
         arg(name = "dynamic_field_name", ty = "DynamicFieldName")
     ),
@@ -206,13 +212,36 @@ impl Owner {
     //     unimplemented!()
     // }
 
+    /// A field on an object that can be added or removed on-the-fly,
+    /// only affects gas when accessed, and can store heterogenous values.
     pub async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
         dynamic_field_name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field_object(self.address, dynamic_field_name)
+            .fetch_dynamic_field(
+                self.address,
+                dynamic_field_name,
+                DynamicFieldType::DynamicField,
+            )
+            .await
+            .extend()
+    }
+
+    /// An object stored as a dynamic field on the parent object.
+    /// This object is also accessible directly via its address.
+    pub async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        dynamic_field_name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(
+                self.address,
+                dynamic_field_name,
+                DynamicFieldType::DynamicObject,
+            )
             .await
             .extend()
     }

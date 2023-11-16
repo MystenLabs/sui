@@ -24,6 +24,7 @@ type Address implements ObjectOwner {
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
+	dynamicObjectField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -246,7 +247,7 @@ type DynamicField {
 	kind: String!
 	"""
 	The string type, data, and serialized value of the DynamicField's 'name' field.
-	This field is used in conjunction with the 'kind' field to uniquely identify a child of the parent object.
+	This field is used to uniquely identify a child of the parent object.
 	"""
 	name: MoveValue
 	"""
@@ -285,12 +286,6 @@ type DynamicFieldEdge {
 }
 
 input DynamicFieldName {
-	"""
-	A string flag of 'DynamicField' or 'DynamicObject'.
-	This is needed to disambiguate the child object,
-	as it is possible for a dynamic field and a dynamic object field to share the same name.
-	"""
-	kind: String!
 	"""
 	The string type of the DynamicField's 'name' field.
 	A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
@@ -761,7 +756,17 @@ type Object implements ObjectOwner {
 	The domain that a user address has explicitly configured as their default domain
 	"""
 	defaultNameServiceName: String
+	"""
+	A field on an object that can be added or removed on-the-fly,
+	only affects gas when accessed, and can store heterogenous values.
+	"""
 	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
+	"""
+	An object stored as a dynamic field on the parent object.
+	This object is also accessible directly via its address.
+	A dynamic field is an object field if its returned type is MoveObject.
+	"""
+	dynamicObjectField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -831,6 +836,7 @@ interface ObjectOwner {
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
 	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
+	dynamicObjectField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -852,7 +858,16 @@ type Owner implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	A field on an object that can be added or removed on-the-fly,
+	only affects gas when accessed, and can store heterogenous values.
+	"""
 	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
+	"""
+	An object stored as a dynamic field on the parent object.
+	This object is also accessible directly via its address.
+	"""
+	dynamicObjectField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
