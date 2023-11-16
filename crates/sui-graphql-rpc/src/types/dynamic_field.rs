@@ -40,16 +40,6 @@ pub(crate) struct DynamicFieldName {
 
 #[Object]
 impl DynamicField {
-    /// A string flag of 'DynamicField' or 'DynamicObject'.
-    /// This is needed to disambiguate the child object,
-    /// as it is possible for a dynamic field and a dynamic object field to share the same name.
-    async fn kind(&self) -> &str {
-        match self.df_kind {
-            DynamicFieldType::DynamicField => "DynamicField",
-            DynamicFieldType::DynamicObject => "DynamicObject",
-        }
-    }
-
     /// The string type, data, and serialized value of the DynamicField's 'name' field.
     /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
