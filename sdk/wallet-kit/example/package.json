@@ -2,7 +2,7 @@
 	"name": "sui-wallet-adapter-demo",
 	"private": true,
 	"scripts": {
-		"dev": "vite",
+		"dev": "turbo build --filter sui-wallet-adapter-demo^... && vite",
 		"build": "vite build"
 	},
 	"dependencies": {

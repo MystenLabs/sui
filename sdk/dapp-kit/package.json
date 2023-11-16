@@ -31,7 +31,7 @@
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-dapp-kit",
 		"test": "pnpm test:typecheck && pnpm vitest",
-		"test:typecheck": "tsc -p ./test",
+		"test:typecheck": "tsc -b ./test",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",
