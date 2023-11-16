@@ -171,19 +171,6 @@ fn expected_Foo_got_Foo() {
 }
 
 #[test]
-fn expected_signer_ref_got_signer() {
-    expect_ok(&["&signer"], vec![MoveValue::Signer(TEST_ADDR)])
-}
-
-#[test]
-fn expected_u64_signer_ref_got_u64_signer() {
-    expect_ok(
-        &["u64", "&signer"],
-        vec![MoveValue::U64(0), MoveValue::Signer(TEST_ADDR)],
-    )
-}
-
-#[test]
 fn expected_u64_got_bool() {
     expect_err(
         &["u64"],

@@ -723,6 +723,7 @@ impl DependencyGraph {
     /// in the direct_and_indirect_dep test where A is a direct dependency of Root (as C would be
     /// missing from the combined graph's table):
     ///
+    /// ```text
     ///                 +----+
     ///           +---->| B  |----+
     ///           |     +----+    |
@@ -730,6 +731,7 @@ impl DependencyGraph {
     /// +----+    |               +-->+----+     +----+
     /// |Root|----+------------------>| A  |---->| C  |
     /// +----+                        +----+     +----+
+    /// ```
     ///
     fn pkg_table_for_deps_compare<'a>(
         &self,

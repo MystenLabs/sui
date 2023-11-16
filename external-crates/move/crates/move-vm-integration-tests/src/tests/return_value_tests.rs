@@ -118,13 +118,13 @@ fn return_u64_bool() {
 }
 
 #[test]
-fn return_signer_ref() {
+fn return_address_ref() {
     expect_success(
         &[],
-        "(s: &signer): &signer",
+        "(s: &address): &address",
         "s",
         vec![],
-        vec![MoveValue::Signer(TEST_ADDR)],
-        &[MoveTypeLayout::Signer],
+        vec![MoveValue::Address(TEST_ADDR)],
+        &[MoveTypeLayout::Address],
     )
 }

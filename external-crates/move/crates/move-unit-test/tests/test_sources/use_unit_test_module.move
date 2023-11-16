@@ -3,6 +3,6 @@ module 0x1::M {
 
     #[test]
     fun poison_call() {
-        unit_test::create_signers_for_testing(0);
+        unit_test::poison();
     }
 }

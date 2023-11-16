@@ -12,7 +12,7 @@ use move_binary_format::{
     },
     CompiledModule,
 };
-use move_compiler::Compiler;
+use move_compiler::{Compiler, Flags};
 use move_core_types::{
     account_address::AccountAddress,
     effects::ChangeSet,
@@ -399,6 +399,7 @@ fn get_relinker_tests_modules_with_deps<'s>(
         deps.into_iter().map(fixture_string_path).collect(),
         BTreeMap::<String, _>::new(),
     )
+    .set_flags(Flags::empty().set_silence_warnings(true))
     .build_and_report()?;
 
     Ok(expect_modules(units).collect())

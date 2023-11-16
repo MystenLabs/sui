@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use move_binary_format::file_format::CompiledModule;
-use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler as MoveCompiler};
+use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler as MoveCompiler, Flags};
 use std::{fs::File, io::Write, path::Path};
 use tempfile::tempdir;
 
@@ -22,6 +22,7 @@ pub fn compile_units(s: &str) -> Result<Vec<AnnotatedCompiledUnit>> {
         vec![],
         move_stdlib::move_stdlib_named_addresses(),
     )
+    .set_flags(Flags::empty().set_silence_warnings(true))
     .build_and_report()?;
 
     dir.close()?;
@@ -43,6 +44,7 @@ pub fn compile_modules_in_file(path: &Path) -> Result<Vec<CompiledModule>> {
         vec![],
         std::collections::BTreeMap::<String, _>::new(),
     )
+    .set_flags(Flags::empty().set_silence_warnings(true))
     .build_and_report()?;
 
     Ok(expect_modules(units).collect())
