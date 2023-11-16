@@ -123,7 +123,7 @@ export function getFaucetHost(network: 'testnet' | 'devnet' | 'localnet') {
 		case 'devnet':
 			return 'https://faucet.devnet.sui.io';
 		case 'localnet':
-			return 'http://127.0.0.1:9123';
+			return 'http://127.0.0.1:9124';
 		default:
 			throw new Error(`Unknown network: ${network}`);
 	}

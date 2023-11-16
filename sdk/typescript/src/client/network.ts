@@ -10,7 +10,7 @@ export function getFullnodeUrl(network: 'mainnet' | 'testnet' | 'devnet' | 'loca
 		case 'devnet':
 			return 'https://fullnode.devnet.sui.io:443';
 		case 'localnet':
-			return 'http://127.0.0.1:9000';
+			return 'http://127.0.0.1:9184';
 		default:
 			throw new Error(`Unknown network: ${network}`);
 	}

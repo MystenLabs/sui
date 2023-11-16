@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespw
+      POSTGRES_DB: sui_indexer_v2
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - '5435:5432'
