@@ -1,24 +1,18 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
-    "lint": {},
-    "test": {
-      "outputs": ["coverage/**"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": [
-        "build/**",
-        "dist/**",
-        "storybook-static/**",
-        ".next/**",
-        "!.next/cache/**"
-      ]
-    }
-  },
-  "globalEnv": ["VERCEL_ENV", "VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID", "VITE_SENTRY_SAMPLE_RATE"]
+	"$schema": "https://turbo.build/schema.json",
+	"pipeline": {
+		"lint": {},
+		"test": {
+			"outputs": ["coverage/**"]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": ["build/**", "dist/**", "storybook-static/**", ".next/**", "!.next/cache/**"]
+		}
+	},
+	"globalEnv": ["VERCEL_ENV", "VITE_NETWORK", "VITE_VERCEL_ANALYTICS_ID", "VITE_SENTRY_SAMPLE_RATE"]
 }

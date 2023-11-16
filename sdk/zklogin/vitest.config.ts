@@ -5,6 +5,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	resolve: {
-		conditions: ['source'],
+		alias: {
+			'@mysten/bcs': new URL('../bcs/src', import.meta.url).toString(),
+			'@mysten/sui.js': new URL('../typescript/src', import.meta.url).toString(),
+		},
 	},
 });
