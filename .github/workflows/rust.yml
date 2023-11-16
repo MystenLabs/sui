@@ -419,6 +419,7 @@ jobs:
          - 5432:5432
    steps:
      - uses: actions/checkout@v3
+     - uses: taiki-e/install-action@nextest
      - name: Setup db
        run: |
          PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;' -c 'ALTER SYSTEM SET max_connections = 500;'
@@ -427,9 +428,9 @@ jobs:
           POSTGRES_PASSWORD: postgrespw
      - name: tests-requiring-postgres
        run: |
-         cargo test --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --features pg_integration
-         cargo test --package sui-graphql-e2e-tests --features pg_integration
-         cargo test --package sui-cluster-test --test local_cluster_test --features pg_integration
+         cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --features pg_integration
+         cargo nextest run --test-threads 1 --package sui-graphql-e2e-tests --features pg_integration
+         cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration
 
        env:
          POSTGRES_HOST: localhost
