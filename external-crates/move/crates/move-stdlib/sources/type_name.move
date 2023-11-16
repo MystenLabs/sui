@@ -5,7 +5,7 @@ module std::type_name {
     struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
         /// using their source syntax:
-        /// "u8", "u64", "u128", "bool", "address", "vector", "signer" for ground types.
+        /// "u8", "u64", "u128", "bool", "address", "vector" for ground types.
         /// Struct types are represented as fully qualified type names; e.g.
         /// `00000000000000000000000000000001::string::String` or
         /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`

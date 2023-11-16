@@ -554,7 +554,6 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                 match &type_name.value {
                     Builtin(builtin_type_name) => match &builtin_type_name.value {
                         Address => Type::new_prim(PrimitiveType::Address),
-                        Signer => Type::new_prim(PrimitiveType::Signer),
                         U8 => Type::new_prim(PrimitiveType::U8),
                         U16 => Type::new_prim(PrimitiveType::U16),
                         U32 => Type::new_prim(PrimitiveType::U32),
@@ -639,9 +638,6 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                         }
                         "address" => {
                             return check_zero_args(self, Type::new_prim(PrimitiveType::Address));
-                        }
-                        "signer" => {
-                            return check_zero_args(self, Type::new_prim(PrimitiveType::Signer));
                         }
                         "vector" => {
                             if args.len() != 1 {

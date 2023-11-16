@@ -92,7 +92,7 @@ impl GasParameters {
             },
             #[cfg(feature = "testing")]
             unit_test: unit_test::GasParameters {
-                create_signers_for_testing: unit_test::CreateSignersForTestingGasParameters {
+                poison: unit_test::CreateSignersForTestingGasParameters {
                     base_cost: 0.into(),
                     unit_cost: 0.into(),
                 },

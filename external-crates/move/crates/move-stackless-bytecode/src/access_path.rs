@@ -474,10 +474,6 @@ impl Offset {
             }
             (Type::Vector(t), Offset::VectorIndex) => *t.clone(),
             (Type::Primitive(PrimitiveType::Address), Offset::Global(s)) => s.get_type(),
-            (Type::Primitive(PrimitiveType::Signer), Offset::Global(s)) => {
-                // we conflate address and signer, so this can happen
-                s.get_type()
-            }
             (Type::Error, _) => {
                 // couldn't infer the type of `base`. propagate the error
                 Type::Error

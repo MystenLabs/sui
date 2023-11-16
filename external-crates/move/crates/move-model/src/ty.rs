@@ -55,7 +55,6 @@ pub enum PrimitiveType {
     U128,
     U256,
     Address,
-    Signer,
     // Types only appearing in specifications
     Num,
     Range,
@@ -80,7 +79,7 @@ impl PrimitiveType {
     pub fn is_spec(&self) -> bool {
         use PrimitiveType::*;
         match self {
-            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => false,
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => false,
             Num | Range | EventStore => true,
         }
     }
@@ -97,7 +96,6 @@ impl PrimitiveType {
             U128 => MType::U128,
             U256 => MType::U256,
             Address => MType::Address,
-            Signer => MType::Signer,
             Num | Range | EventStore => return None,
         })
     }
@@ -187,22 +185,10 @@ impl Type {
         }
         false
     }
-    /// Returns true if this is an address or signer type.
-    pub fn is_signer_or_address(&self) -> bool {
-        matches!(
-            self,
-            Type::Primitive(PrimitiveType::Signer) | Type::Primitive(PrimitiveType::Address)
-        )
-    }
 
     /// Return true if this is an account address
     pub fn is_address(&self) -> bool {
         matches!(self, Type::Primitive(PrimitiveType::Address))
-    }
-
-    /// Return true if this is an account address
-    pub fn is_signer(&self) -> bool {
-        matches!(self, Type::Primitive(PrimitiveType::Signer))
     }
 
     /// Test whether this type can be used to substitute a type parameter
@@ -467,7 +453,7 @@ impl Type {
             TypeTag::U128 => Primitive(PrimitiveType::U128),
             TypeTag::U256 => Primitive(PrimitiveType::U8),
             TypeTag::Address => Primitive(PrimitiveType::Address),
-            TypeTag::Signer => Primitive(PrimitiveType::Signer),
+            TypeTag::Signer => panic!("signer is not supported"),
             TypeTag::Struct(s) => {
                 let qid = env.find_struct_by_tag(s).unwrap_or_else(|| {
                     panic!("Invariant violation: couldn't resolve struct {:?}", s)
@@ -1305,7 +1291,6 @@ impl fmt::Display for PrimitiveType {
             U128 => f.write_str("u128"),
             U256 => f.write_str("u256"),
             Address => f.write_str("address"),
-            Signer => f.write_str("signer"),
             Range => f.write_str("range"),
             Num => f.write_str("num"),
             EventStore => f.write_str("estore"),

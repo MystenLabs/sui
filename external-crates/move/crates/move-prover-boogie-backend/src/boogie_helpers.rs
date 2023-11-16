@@ -221,7 +221,6 @@ pub fn boogie_type(env: &GlobalEnv, ty: &Type) -> String {
     match ty {
         Primitive(p) => match p {
             U8 | U16 | U32 | U64 | U128 | U256 | Num | Address => "int".to_string(),
-            Signer => "$signer".to_string(),
             Bool => "bool".to_string(),
             Range | EventStore => panic!("unexpected type"),
         },
@@ -249,7 +248,6 @@ pub fn boogie_bv_type(env: &GlobalEnv, ty: &Type) -> String {
             U128 => "bv128".to_string(),
             U256 => "bv256".to_string(),
             Address => "int".to_string(),
-            Signer => "$signer".to_string(),
             Bool => "bool".to_string(),
             Range | EventStore => panic!("unexpected type"),
             Num => "<<num is not unsupported here>>".to_string(),
@@ -336,7 +334,6 @@ pub fn boogie_type_suffix_bv(env: &GlobalEnv, ty: &Type, bv_flag: bool) -> Strin
                 }
             }
             Address => "address".to_string(),
-            Signer => "signer".to_string(),
             Bool => "bool".to_string(),
             Range => "range".to_string(),
             EventStore => format!("<<unsupported {:?}>>", ty),
@@ -762,7 +759,6 @@ fn type_name_to_ident_tokens(
         Type::Primitive(PrimitiveType::U128) => TypeIdentToken::make("u128"),
         Type::Primitive(PrimitiveType::U256) => TypeIdentToken::make("u256"),
         Type::Primitive(PrimitiveType::Address) => TypeIdentToken::make("address"),
-        Type::Primitive(PrimitiveType::Signer) => TypeIdentToken::make("signer"),
         Type::Vector(element) => {
             let mut tokens = TypeIdentToken::make("vector<");
             tokens.extend(type_name_to_ident_tokens(env, element, formatter));
@@ -885,7 +881,6 @@ fn type_name_to_info_pack(env: &GlobalEnv, ty: &Type) -> Option<TypeInfoPack> {
         | Type::Primitive(PrimitiveType::U128)
         | Type::Primitive(PrimitiveType::U256)
         | Type::Primitive(PrimitiveType::Address)
-        | Type::Primitive(PrimitiveType::Signer)
         | Type::Vector(_) => None,
         // move types that are not allowed
         Type::Reference(..) | Type::Tuple(..) => {

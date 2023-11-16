@@ -1,8 +1,6 @@
 // This module contains just some arbitrary code to smoke test the basic functionality of translation from Move
 // to stackless bytecode. Coverage for byte code translation is achieved by many more tests in the prover.
 
-// dep: ../move-stdlib/sources/signer.move
-
 module 0x42::SmokeTest {
     // -----------------
     // Basic Ops

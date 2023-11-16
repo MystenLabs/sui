@@ -584,7 +584,7 @@ impl<'env> SpecTranslator<'env> {
             // Emit min constraint
             if info.kind == QuantKind::ChooseMin {
                 // Check whether we support min on the range type.
-                if !result_ty.is_number() && !result_ty.is_signer_or_address() {
+                if !result_ty.is_number() && !result_ty.is_address() {
                     env.error(
                         &env.get_node_loc(info.node_id),
                         "The min choice can only be applied to numbers, addresses, or signers",
@@ -1150,14 +1150,7 @@ impl<'env> SpecTranslator<'env> {
         let resource_name = boogie_modifies_memory_name(self.env, memory);
         emit!(self.writer, "{}[", resource_name);
 
-        let is_signer = self.env.get_node_type(args[0].node_id()).is_signer();
-        if is_signer {
-            emit!(self.writer, "$addr#$signer(");
-        }
         self.translate_exp(&args[0]);
-        if is_signer {
-            emit!(self.writer, ")");
-        }
         emit!(self.writer, "]");
     }
 
@@ -1736,26 +1729,6 @@ impl<'env> SpecTranslator<'env> {
                     emit!(self.writer, &check);
                 } else {
                     emit!(self.writer, "true");
-                }
-
-                if let Type::Primitive(PrimitiveType::Signer) = ty {
-                    let name = &format!("$t{}", idx);
-                    let target = if ty.is_reference() {
-                        format!("$Dereference({})", name)
-                    } else {
-                        name.to_owned()
-                    };
-                    emit!(
-                        self.writer,
-                        &format!(" && $1_signer_is_txn_signer({})", target)
-                    );
-                    emit!(
-                        self.writer,
-                        &format!(
-                            " && $1_signer_is_txn_signer_addr($addr#$signer({}))",
-                            target
-                        )
-                    );
                 }
             }
             ExpData::LocalVar(_, sym) => {

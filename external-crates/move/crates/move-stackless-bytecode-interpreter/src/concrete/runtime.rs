@@ -132,28 +132,9 @@ fn check_and_convert_type_args_and_args(
         let local_ty = fun_env.get_local_type(i);
         debug_assert_eq!(local_ty, param.1);
 
-        // NOTE: for historical reasons, we may receive `&signer` as arguments
-        // TODO (mengxu): clean this up when we no longer accept `&signer` as valid arguments
-        // for transaction scripts and `public(script)` functions.
-        match local_ty {
-            MT::Type::Reference(false, base_ty)
-                if matches!(*base_ty, MT::Type::Primitive(MT::PrimitiveType::Signer)) =>
-            {
-                match arg {
-                    MoveValue::Address(v) => {
-                        converted_args.push(TypedValue::mk_signer(*v));
-                    }
-                    _ => {
-                        return Err(PartialVMError::new(StatusCode::TYPE_MISMATCH));
-                    }
-                }
-            }
-            _ => {
-                let base_ty = convert_model_base_type(env, &local_ty, &converted_ty_args);
-                let converted = convert_move_value(arg, &base_ty)?;
-                converted_args.push(converted);
-            }
-        }
+        let base_ty = convert_model_base_type(env, &local_ty, &converted_ty_args);
+        let converted = convert_move_value(arg, &base_ty)?;
+        converted_args.push(converted);
     }
 
     Ok((converted_ty_args, converted_args))

@@ -9,6 +9,7 @@
 module test::m {
 
 struct S<phantom T: copy> {}
+struct No {}
 
 entry fun foo<T>() {}
 
@@ -22,4 +23,4 @@ entry fun foo<T>() {}
 
 //# run test::m::foo --type-args test::m::S<u64,u8>
 
-//# run test::m::foo --type-args test::m::S<signer>
+//# run test::m::foo --type-args test::m::S<test::m::No>

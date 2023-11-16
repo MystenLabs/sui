@@ -120,7 +120,7 @@ fn check_has_unit_test_module(compilation_env: &mut CompilationEnv, prog: &P::Pr
 }
 
 /// If a module is being compiled in test mode, create a dummy function that calls a native
-/// function `0x1::UnitTest::create_signers_for_testing` that only exists if the VM is being run
+/// function `std::unit_test::poison` that only exists if the VM is being run
 /// with the "unit_test" feature flag set. This will then cause the module to fail to link if
 /// an attempt is made to publish a module that has been compiled in test mode on a VM that is not
 /// running in test mode.
@@ -138,11 +138,8 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
 
     let mod_name = sp(mloc, UNIT_TEST_MODULE_NAME);
     let mod_addr_name = sp(mloc, (leading_name_access, mod_name));
-    let fn_name = sp(mloc, "create_signers_for_testing".into());
-    let args_ = vec![sp(
-        mloc,
-        P::Exp_::Value(sp(mloc, P::Value_::Num("0".into()))),
-    )];
+    let fn_name = sp(mloc, symbol!("poison"));
+    let args_ = vec![];
     let nop_call = P::Exp_::Call(
         sp(mloc, P::NameAccessChain_::Three(mod_addr_name, fn_name)),
         false,
@@ -150,14 +147,15 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         sp(mloc, args_),
     );
 
-    // fun unit_test_poison() { 0x1::UnitTest::create_signers_for_testing(0); () }
+    // TODO avoid name collisions
+    // fun poison__do__not__publish() { std::unit_test::poison(); () }
     P::ModuleMember::Function(P::Function {
         attributes: vec![],
         loc: mloc,
         visibility: P::Visibility::Internal,
         entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
         signature,
-        name: P::FunctionName(sp(mloc, "unit_test_poison".into())),
+        name: P::FunctionName(sp(mloc, "poison__do__not__publish".into())),
         body: sp(
             mloc,
             P::FunctionBody_::Defined((

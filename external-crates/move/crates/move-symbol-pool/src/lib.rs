@@ -82,6 +82,7 @@ static_symbols!(
     "emit",
     "Receiving",
     "receive",
+    "poison",
     "loop",
 );
 

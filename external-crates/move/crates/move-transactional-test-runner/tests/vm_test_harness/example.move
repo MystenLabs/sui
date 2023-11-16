@@ -21,12 +21,12 @@ module A::N {
         v
     }
 
-    public entry fun ex(_s: signer, _u: u64) {
+    public entry fun ex(_s: address, _u: u64) {
         abort 0
     }
 }
 
-//# run --signers 0x1 --args 0 -- 0x42::N::ex
+//# run --args @1 0 -- 0x42::N::ex
 
 //# run --args 0
 

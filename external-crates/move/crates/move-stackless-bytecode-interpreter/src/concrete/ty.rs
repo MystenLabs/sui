@@ -810,7 +810,6 @@ pub fn convert_model_base_type(env: &GlobalEnv, ty: &MT::Type, subst: &[BaseType
         MT::Type::Primitive(MT::PrimitiveType::U128) => BaseType::mk_u128(),
         MT::Type::Primitive(MT::PrimitiveType::Num) => BaseType::mk_num(),
         MT::Type::Primitive(MT::PrimitiveType::Address) => BaseType::mk_address(),
-        MT::Type::Primitive(MT::PrimitiveType::Signer) => BaseType::mk_signer(),
         MT::Type::Vector(elem) => BaseType::mk_vector(convert_model_base_type(env, elem, subst)),
         MT::Type::Struct(module_id, struct_id, ty_insts) => BaseType::mk_struct(
             convert_model_struct_type(env, *module_id, *struct_id, ty_insts, subst),
