@@ -1,5 +1,12 @@
 # sui-graphql-rpc
 
+## Dev setup
+Note that we use compilation flags to determine the backend for Diesel. If you're using VS Code, make sure to update settings.json with the appropriate features - there should at least be a "pg_backend" (or other backend.)
+```
+"rust-analyzer.cargo.features": ["pg_backend"]
+```
+
+
 ## Spinning up locally
 
 ### Setting up local db
