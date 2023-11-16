@@ -12179,6 +12179,7 @@ dependencies = [
  "sui-storage",
  "sui-swarm-config",
  "sui-types",
+ "telemetry-subscribers",
  "tempfile",
  "tokio",
  "typed-store",
