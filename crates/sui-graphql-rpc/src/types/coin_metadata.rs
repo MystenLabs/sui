@@ -26,7 +26,7 @@ impl CoinMetadata {
         Some(self.native.decimals)
     }
 
-    /// Full, official name of the token
+    /// Full, official name of the token.
     async fn name(&self) -> Option<&str> {
         Some(&self.native.name)
     }
@@ -61,7 +61,7 @@ impl CoinMetadata {
         Ok(supply.map(BigInt::from))
     }
 
-    /// Convert the coin metadata object into a Move object
+    /// Convert the coin metadata object into a Move object.
     async fn as_move_object(&self) -> &MoveObject {
         &self.super_
     }
