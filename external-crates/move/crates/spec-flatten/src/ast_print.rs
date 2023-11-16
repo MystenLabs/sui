@@ -67,7 +67,6 @@ impl SpecPrinter<'_> {
             Type::Primitive(PrimitiveType::U128) => Self::doc("u128"),
             Type::Primitive(PrimitiveType::U256) => Self::doc("u256"),
             Type::Primitive(PrimitiveType::Address) => Self::doc("address"),
-            Type::Primitive(PrimitiveType::Signer) => Self::doc("signer"),
             Type::Primitive(PrimitiveType::Num) => Self::doc("num"),
             Type::Tuple(tys) => Self::mk_tuple(tys, |t| self.print_type(t, ty_params)),
             Type::Vector(ty) => Self::mk_inst(Self::doc("vector"), [ty.as_ref()], |t| {
