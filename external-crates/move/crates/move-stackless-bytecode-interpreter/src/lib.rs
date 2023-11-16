@@ -17,10 +17,7 @@ use move_core_types::{
     transaction_argument::TransactionArgument,
     vm_status::StatusCode,
 };
-use move_model::{
-    model::{FunctionEnv, GlobalEnv},
-    ty::{PrimitiveType as ModelPrimitiveType, Type as ModelType},
-};
+use move_model::model::{FunctionEnv, GlobalEnv};
 use move_stackless_bytecode::{
     function_target_pipeline::{
         FunctionTargetProcessor, FunctionTargetsHolder, ProcessorResultDisplay,
@@ -270,7 +267,6 @@ impl<'env> StacklessBytecodeInterpreter<'env> {
         func_name: &IdentStr,
         ty_args: &[TypeTag],
         bcs_args: &[Vec<u8>],
-        senders_opt: Option<&[AccountAddress]>,
         global_state: &GlobalState,
     ) -> (VMResult<Vec<Vec<u8>>>, ChangeSet, GlobalState) {
         // find the entrypoint
@@ -286,11 +282,7 @@ impl<'env> StacklessBytecodeInterpreter<'env> {
         };
 
         // convert the args
-        let args = match convert_bcs_arguments_to_move_value_arguments(
-            &entrypoint_env,
-            bcs_args,
-            senders_opt,
-        ) {
+        let args = match convert_bcs_arguments_to_move_value_arguments(&entrypoint_env, bcs_args) {
             Ok(args) => args,
             Err(err) => {
                 return (
@@ -379,7 +371,6 @@ fn convert_typed_value_to_move_value(ty: &BaseType, val: BaseValue) -> MoveValue
         BaseType::Primitive(PrimitiveType::Int(IntType::U256)) => MoveValue::U256(val.into_u256()),
         BaseType::Primitive(PrimitiveType::Int(IntType::Num)) => unreachable!(),
         BaseType::Primitive(PrimitiveType::Address) => MoveValue::Address(val.into_address()),
-        BaseType::Primitive(PrimitiveType::Signer) => MoveValue::Signer(val.into_signer()),
         BaseType::Vector(elem) => MoveValue::Vector(
             val.into_vector()
                 .into_iter()
@@ -401,45 +392,18 @@ fn convert_typed_value_to_move_value(ty: &BaseType, val: BaseValue) -> MoveValue
 fn convert_bcs_arguments_to_move_value_arguments(
     func_env: &FunctionEnv,
     bcs_args: &[Vec<u8>],
-    senders_opt: Option<&[AccountAddress]>,
 ) -> PartialVMResult<Vec<MoveValue>> {
     let env = func_env.module_env.env;
     let mut move_vals = vec![];
 
     let params = func_env.get_parameters();
-    let num_signer_args = match senders_opt {
-        None => 0,
-        Some(senders) => {
-            for (i, param) in params.iter().enumerate() {
-                match &param.1 {
-                    ModelType::Primitive(ModelPrimitiveType::Signer) => {
-                        if i >= senders.len() {
-                            return Err(PartialVMError::new(
-                                StatusCode::NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH,
-                            ));
-                        }
-                        move_vals.push(MoveValue::Signer(senders[i]))
-                    }
-                    _ => {
-                        if i != 0 && i != senders.len() {
-                            return Err(PartialVMError::new(
-                                StatusCode::NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH,
-                            ));
-                        }
-                        break;
-                    }
-                }
-            }
-            move_vals.len()
-        }
-    };
 
-    if (num_signer_args + bcs_args.len()) != params.len() {
+    if bcs_args.len() != params.len() {
         return Err(PartialVMError::new(
             StatusCode::NUMBER_OF_ARGUMENTS_MISMATCH,
         ));
     }
-    for (arg_bcs, param) in bcs_args.iter().zip(&params[num_signer_args..]) {
+    for (arg_bcs, param) in bcs_args.iter().zip(&params) {
         match param.1.clone().into_type_tag(env) {
             None => {
                 return Err(PartialVMError::new(StatusCode::TYPE_MISMATCH));

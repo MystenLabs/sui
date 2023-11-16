@@ -190,7 +190,6 @@ impl TypedValue {
                 (BaseType::Primitive(PrimitiveType::Bool), BaseValue::Bool(_)) => true,
                 (BaseType::Primitive(PrimitiveType::Int(_)), BaseValue::Int(_)) => true,
                 (BaseType::Primitive(PrimitiveType::Address), BaseValue::Address(_)) => true,
-                (BaseType::Primitive(PrimitiveType::Signer), BaseValue::Signer(_)) => true,
                 (BaseType::Vector(elem_ty), BaseValue::Vector(elem_vals)) => elem_vals
                     .iter()
                     .all(|elem_val| type_match(elem_ty, elem_val)),
@@ -278,13 +277,6 @@ impl TypedValue {
             ptr: Pointer::None,
         }
     }
-    pub fn mk_signer(v: AccountAddress) -> Self {
-        Self {
-            ty: Type::mk_signer(),
-            val: BaseValue::mk_signer(v),
-            ptr: Pointer::None,
-        }
-    }
     pub fn mk_vector(elem: BaseType, v: Vec<TypedValue>) -> Self {
         if cfg!(debug_assertions) {
             for e in &v {
@@ -357,13 +349,6 @@ impl TypedValue {
         Self {
             ty: Type::mk_ref_address(is_mut),
             val: BaseValue::mk_address(v),
-            ptr,
-        }
-    }
-    pub fn mk_ref_signer(v: AccountAddress, is_mut: bool, ptr: Pointer) -> Self {
-        Self {
-            ty: Type::mk_ref_signer(is_mut),
-            val: BaseValue::mk_signer(v),
             ptr,
         }
     }
@@ -444,12 +429,6 @@ impl TypedValue {
         }
         self.val.into_address()
     }
-    pub fn into_signer(self) -> AccountAddress {
-        if cfg!(debug_assertions) {
-            assert!(self.ty.is_signer());
-        }
-        self.val.into_signer()
-    }
     pub fn into_vector(self) -> Vec<BaseValue> {
         if cfg!(debug_assertions) {
             assert!(self.ty.is_vector());
@@ -516,12 +495,6 @@ impl TypedValue {
             assert!(self.ty.is_ref_address(None));
         }
         (self.val.into_address(), self.ty.into_ref_type().0, self.ptr)
-    }
-    pub fn into_ref_signer(self) -> (AccountAddress, bool, Pointer) {
-        if cfg!(debug_assertions) {
-            assert!(self.ty.is_ref_signer(None));
-        }
-        (self.val.into_signer(), self.ty.into_ref_type().0, self.ptr)
     }
     pub fn into_ref_vector(self) -> (Vec<BaseValue>, bool, Pointer) {
         if cfg!(debug_assertions) {

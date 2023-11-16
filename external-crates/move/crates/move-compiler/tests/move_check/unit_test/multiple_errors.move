@@ -13,33 +13,33 @@ module M {
     public fun go() { }
 
     #[test(_a=@0x1)]
-    public fun a(_a: signer) { }
+    public fun a(_a: address) { }
 
     // failure: invalid value in test parameter assignment
     #[test(_a=Foo)]
-    public fun b(_a: signer) { }
+    public fun b(_a: address) { }
 
     #[test(_a=@0x1, _b=@0x2)]
-    public fun c(_a: signer, _b: signer) { }
+    public fun c(_a: address, _b: address) { }
 
     // failure: double annotation
     #[test(_a=@0x1)]
     #[test(_b=@0x2)]
-    public fun d(_a: signer, _b: signer) { }
+    public fun d(_a: address, _b: address) { }
 
     // failure: annotated as both test and test_only
     #[test(_a=@0x1)]
     #[test_only]
-    public fun e(_a: signer, _b: signer) { }
+    public fun e(_a: address, _b: address) { }
 
-    // failure: invalid number of signer arguments
+    // failure: invalid number of address arguments
     #[test(_a=@0x1)]
-    public fun f(_a: signer, _b: signer) { }
+    public fun f(_a: address, _b: address) { }
 
     // failure: double annotation
     #[test(_a=@0x1)]
     #[expected_failure]
     #[expected_failure]
-    public fun g(_a: signer, _b: signer) { }
+    public fun g(_a: address, _b: address) { }
 }
 }

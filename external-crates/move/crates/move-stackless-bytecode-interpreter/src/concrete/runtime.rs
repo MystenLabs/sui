@@ -13,10 +13,7 @@ use move_core_types::{
     runtime_value::MoveValue,
     vm_status::StatusCode,
 };
-use move_model::{
-    model::{AbilitySet, FunctionEnv, GlobalEnv, TypeParameter},
-    ty as MT,
-};
+use move_model::model::{AbilitySet, FunctionEnv, GlobalEnv, TypeParameter};
 use move_stackless_bytecode::{
     function_target::FunctionTarget, function_target_pipeline::FunctionTargetsHolder,
 };
@@ -150,7 +147,7 @@ pub fn convert_move_type_tag(env: &GlobalEnv, tag: &TypeTag) -> PartialVMResult<
         TypeTag::U128 => BaseType::mk_u128(),
         TypeTag::U256 => BaseType::mk_u256(),
         TypeTag::Address => BaseType::mk_address(),
-        TypeTag::Signer => BaseType::mk_signer(),
+        TypeTag::Signer => panic!("signer is not supported"),
         TypeTag::Vector(elem_tag) => BaseType::mk_vector(convert_move_type_tag(env, elem_tag)?),
         TypeTag::Struct(struct_tag) => {
             BaseType::mk_struct(convert_move_struct_tag(env, struct_tag)?)
@@ -222,9 +219,6 @@ pub fn convert_move_value(val: &MoveValue, ty: &BaseType) -> PartialVMResult<Typ
         (MoveValue::Address(v), BaseType::Primitive(PrimitiveType::Address)) => {
             TypedValue::mk_address(*v)
         }
-        (MoveValue::Signer(v), BaseType::Primitive(PrimitiveType::Signer)) => {
-            TypedValue::mk_signer(*v)
-        }
         (MoveValue::Vector(v), BaseType::Vector(elem)) => {
             let converted = v
                 .iter()
@@ -279,7 +273,7 @@ fn get_abilities(env: &GlobalEnv, ty: &TypeTag) -> PartialVMResult<AbilitySet> {
         | TypeTag::U128
         | TypeTag::U256
         | TypeTag::Address => Ok(AbilitySet::PRIMITIVES),
-        TypeTag::Signer => Ok(AbilitySet::SIGNER),
+        TypeTag::Signer => panic!("signer is not supported"),
         TypeTag::Vector(elem_ty) => AbilitySet::polymorphic_abilities(
             AbilitySet::VECTOR,
             vec![false],

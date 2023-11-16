@@ -50,7 +50,6 @@ pub enum PrimitiveType {
     Bool,
     Int(IntType),
     Address,
-    Signer,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -125,7 +124,6 @@ impl fmt::Display for PrimitiveType {
             Self::Bool => write!(f, "bool"),
             Self::Int(sub) => sub.fmt(f),
             Self::Address => write!(f, "address"),
-            Self::Signer => write!(f, "signer"),
         }
     }
 }
@@ -263,10 +261,6 @@ impl BaseType {
         BaseType::Primitive(PrimitiveType::Address)
     }
 
-    pub fn mk_signer() -> Self {
-        BaseType::Primitive(PrimitiveType::Signer)
-    }
-
     pub fn mk_vector(elem: BaseType) -> Self {
         BaseType::Vector(Box::new(elem))
     }
@@ -321,10 +315,6 @@ impl BaseType {
 
     pub fn is_address(&self) -> bool {
         matches!(self, BaseType::Primitive(PrimitiveType::Address))
-    }
-
-    pub fn is_signer(&self) -> bool {
-        matches!(self, BaseType::Primitive(PrimitiveType::Signer))
     }
 
     pub fn is_vector(&self) -> bool {
@@ -460,7 +450,6 @@ impl BaseType {
             BaseType::Primitive(PrimitiveType::Int(IntType::U256)) => TypeTag::U256,
             BaseType::Primitive(PrimitiveType::Int(IntType::Num)) => unreachable!(),
             BaseType::Primitive(PrimitiveType::Address) => TypeTag::Address,
-            BaseType::Primitive(PrimitiveType::Signer) => TypeTag::Signer,
             BaseType::Vector(elem) => TypeTag::Vector(Box::new(elem.to_move_type_tag())),
             BaseType::Struct(inst) => TypeTag::Struct(Box::new(inst.to_move_struct_tag())),
         }
@@ -477,7 +466,6 @@ impl BaseType {
             BaseType::Primitive(PrimitiveType::Int(IntType::U256)) => MoveTypeLayout::U256,
             BaseType::Primitive(PrimitiveType::Int(IntType::Num)) => unreachable!(),
             BaseType::Primitive(PrimitiveType::Address) => MoveTypeLayout::Address,
-            BaseType::Primitive(PrimitiveType::Signer) => MoveTypeLayout::Signer,
             BaseType::Vector(elem) => MoveTypeLayout::Vector(Box::new(elem.to_move_type_layout())),
             BaseType::Struct(inst) => MoveTypeLayout::Struct(inst.to_move_struct_layout()),
         }
@@ -581,7 +569,6 @@ impl Type {
     gen!(mk_u256, mk_ref_u256, is_u256, is_ref_u256);
     gen!(mk_num, mk_ref_num, is_num, is_ref_num);
     gen!(mk_address, mk_ref_address, is_address, is_ref_address);
-    gen!(mk_signer, mk_ref_signer, is_signer, is_ref_signer);
     gen!(
         mk_vector,
         mk_ref_vector,
@@ -768,10 +755,6 @@ impl PartialBaseType {
         Self::Primitive(PrimitiveType::Address)
     }
 
-    pub fn mk_signer() -> Self {
-        Self::Primitive(PrimitiveType::Signer)
-    }
-
     pub fn mk_parameter(idx: TypeParameterIndex) -> Self {
         Self::Parameter(idx)
     }
@@ -871,7 +854,6 @@ pub fn convert_model_partial_base_type(env: &GlobalEnv, ty: &MT::Type) -> Partia
         MT::Type::Primitive(MT::PrimitiveType::U128) => PartialBaseType::mk_u128(),
         MT::Type::Primitive(MT::PrimitiveType::Num) => PartialBaseType::mk_num(),
         MT::Type::Primitive(MT::PrimitiveType::Address) => PartialBaseType::mk_address(),
-        MT::Type::Primitive(MT::PrimitiveType::Signer) => PartialBaseType::mk_signer(),
         MT::Type::Vector(elem) => {
             PartialBaseType::mk_vector(convert_model_partial_base_type(env, elem))
         }

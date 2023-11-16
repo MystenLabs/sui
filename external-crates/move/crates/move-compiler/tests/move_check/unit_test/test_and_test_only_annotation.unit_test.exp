@@ -5,6 +5,6 @@ error[E10004]: invalid usage of known attribute
   │       ---------------------- Previously annotated here
 5 │     #[test_only]
   │       ^^^^^^^^^ Function annotated as both #[test(...)] and #[test_only]. You need to declare it as either one or the other
-6 │     public fun boo(_a: signer, _b: signer) { }
+6 │     public fun boo(_a: address, _b: address) { }
   │                --- Error found in this test
 

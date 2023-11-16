@@ -267,13 +267,6 @@ impl<'env> FunctionContext<'env> {
                     Err(e) => Err(e),
                 }
             }
-            (CORE_CODE_ADDRESS, "signer", "borrow_address") => {
-                if cfg!(debug_assertions) {
-                    assert_eq!(srcs.len(), 1);
-                }
-                let res = self.native_signer_borrow_address(dummy_state.del_value(0));
-                Ok(vec![res])
-            }
             (CORE_CODE_ADDRESS, "hash", "sha2_256") => {
                 if cfg!(debug_assertions) {
                     assert_eq!(srcs.len(), 1);
@@ -1125,7 +1118,7 @@ impl<'env> FunctionContext<'env> {
     ) -> Result<(), AbortInfo> {
         let env = self.target.global_env();
         let inst = convert_model_struct_type(env, module_id, struct_id, ty_args, &self.ty_args);
-        let addr = op_signer.into_signer();
+        let addr = op_signer.into_address();
         if global_state.has_resource(&addr, &inst) {
             return Err(self.sys_abort(StatusCode::RESOURCE_ALREADY_EXISTS));
         }
@@ -2188,16 +2181,6 @@ impl<'env> FunctionContext<'env> {
         vec_val
             .update_ref_vector_swap(lhs.into_u64() as usize, rhs.into_u64() as usize)
             .ok_or_else(|| self.usr_abort(INDEX_OUT_OF_BOUNDS))
-    }
-
-    fn native_signer_borrow_address(&self, signer_val: TypedValue) -> TypedValue {
-        if cfg!(debug_assertions) {
-            assert_eq!(self.ty_args.len(), 0);
-        }
-        // NOTE: this function accepts a value instead of a reference!
-        // This is different from the Move native implementation.
-        let addr = signer_val.into_signer();
-        TypedValue::mk_address(addr)
     }
 
     fn native_hash_sha2_256(&self, bytes_val: TypedValue) -> TypedValue {
