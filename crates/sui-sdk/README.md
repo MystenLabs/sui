@@ -1,5 +1,3 @@
-# Sui Rust SDK
-
 This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. 
 
 ## Getting started
