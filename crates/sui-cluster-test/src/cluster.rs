@@ -220,11 +220,13 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
-        if options.pg_address.is_some() && indexer_address.is_some() {
+        if let (Some(pg_address), Some(indexer_address)) =
+            (options.pg_address.clone(), indexer_address)
+        {
             if options.use_indexer_v2 {
                 // Start in writer mode
                 start_test_indexer_v2(
-                    Some(options.pg_address.clone().unwrap()),
+                    Some(pg_address.clone()),
                     fullnode_url.clone(),
                     None,
                     options.use_indexer_experimental_methods,
@@ -233,9 +235,9 @@ impl Cluster for LocalNewCluster {
 
                 // Start in reader mode
                 start_test_indexer_v2(
-                    Some(options.pg_address.clone().unwrap()),
+                    Some(pg_address),
                     fullnode_url.clone(),
-                    indexer_address.map(|x| x.to_string()),
+                    Some(indexer_address.to_string()),
                     options.use_indexer_experimental_methods,
                 )
                 .await;
@@ -246,20 +248,20 @@ impl Cluster for LocalNewCluster {
                     vec![]
                 };
                 let config = IndexerConfig {
-                    db_url: Some(options.pg_address.clone().unwrap()),
+                    db_url: Some(pg_address),
                     rpc_client_url: fullnode_url.clone(),
-                    rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
-                    rpc_server_port: indexer_address.as_ref().unwrap().port(),
+                    rpc_server_url: indexer_address.ip().to_string(),
+                    rpc_server_port: indexer_address.port(),
                     migrated_methods,
                     reset_db: true,
                     ..Default::default()
                 };
-                start_test_indexer(config).await.unwrap();
+                start_test_indexer(config).await?;
             }
         }
 
         if let Some(graphql_address) = &options.graphql_address {
-            let graphql_address = graphql_address.parse::<SocketAddr>().unwrap();
+            let graphql_address = graphql_address.parse::<SocketAddr>()?;
             let graphql_connection_config = ConnectionConfig::new(
                 Some(graphql_address.port()),
                 Some(graphql_address.ip().to_string()),
