@@ -188,7 +188,7 @@ pub async fn start_test_indexer_v2(
         ..Default::default()
     };
 
-    if let Some(reader_mode_rpc_url) = reader_mode_rpc_url {
+    if let Some(reader_mode_rpc_url) = &reader_mode_rpc_url {
         let reader_mode_rpc_url = reader_mode_rpc_url
             .parse::<SocketAddr>()
             .expect("Unable to parse fullnode address");
@@ -200,7 +200,7 @@ pub async fn start_test_indexer_v2(
 
     let parsed_url = config.get_db_url().unwrap();
     let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
-    if config.reset_db {
+    if config.reset_db && reader_mode_rpc_url.is_none() {
         reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
     }
 
@@ -212,9 +212,14 @@ pub async fn start_test_indexer_v2(
 
     let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
     let store_clone = store.clone();
-    let handle = tokio::spawn(async move {
-        IndexerV2::start_writer(&config, store_clone, indexer_metrics).await
-    });
+    let handle = if reader_mode_rpc_url.is_some() {
+        tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
+    } else {
+        tokio::spawn(
+            async move { IndexerV2::start_writer(&config, store_clone, indexer_metrics).await },
+        )
+    };
+
     (store, handle)
 }
 
