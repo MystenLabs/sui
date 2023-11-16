@@ -68,7 +68,6 @@ Headers: {
     "content-type": "application/json",
     "content-length": "192",
     "x-sui-rpc-version": "0.1.0",
-    "date": "Thu, 16 Nov 2023 04:44:15 GMT",
 }
 Service version: 0.1.0
 Response: {

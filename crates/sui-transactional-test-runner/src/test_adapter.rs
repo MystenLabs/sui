@@ -494,7 +494,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
                 let mut output = vec![];
                 if show_headers {
-                    output.push(format!("Headers: {:#?}", resp.http_headers()));
+                    output.push(format!("Headers: {:#?}", resp.http_headers_without_date()));
                 }
                 if show_service_version {
                     output.push(format!("Service version: {}", resp.graphql_version()?));
