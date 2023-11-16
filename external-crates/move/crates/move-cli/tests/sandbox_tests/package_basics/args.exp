@@ -74,19 +74,12 @@ Constants [
 	0 => u64: 0000000000000000
 ]
 }
-Command `disassemble --package MoveStdlib --name signer`:
+Command `disassemble --package MoveStdlib --name bcs`:
 // Move bytecode v6
-module 1.signer {
+module 1.bcs {
 
 
-native public borrow_address(s#0#0: &signer): &address
-public address_of(s#0#0: &signer): address {
-B0:
-	0: MoveLoc[0](s#0#0: &signer)
-	1: Call borrow_address(&signer): &address
-	2: ReadRef
-	3: Ret
-}
+native public to_bytes<MoveValue>(v#0#0: &MoveValue): vector<u8>
 }
 Command `errmap`:
 Command `info`:

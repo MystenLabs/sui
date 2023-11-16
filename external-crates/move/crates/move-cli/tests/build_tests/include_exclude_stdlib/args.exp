@@ -1,25 +1,38 @@
 Command `build -v`:
 BUILDING build_include_exclude_stdlib
 error[E03002]: unbound module
-  ┌─ ./sources/UseSigner.move:2:7
+  ┌─ ./sources/UseVector.move:2:7
   │
-2 │   use std::signer;
-  │       ^^^^^^^^^^^ Invalid 'use'. Unbound module: 'std::signer'
+2 │   use std::vector;
+  │       ^^^^^^^^^^^ Invalid 'use'. Unbound module: 'std::vector'
 
 warning[W09002]: unused variable
-  ┌─ ./sources/UseSigner.move:4:16
+  ┌─ ./sources/UseVector.move:4:16
   │
-4 │   public fun f(account: &signer): address {
-  │                ^^^^^^^ Unused parameter 'account'. Consider removing or prefixing with an underscore: '_account'
+4 │   public fun f(addrs: &vector<address>): address {
+  │                ^^^^^ Unused parameter 'addrs'. Consider removing or prefixing with an underscore: '_addrs'
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 error[E03002]: unbound module
-  ┌─ ./sources/UseSigner.move:5:5
+  ┌─ ./sources/UseVector.move:5:5
   │
-5 │     signer::address_of(account)
-  │     ^^^^^^ Unbound module alias 'signer'
+5 │     vector::borrow(addrs, 0)
+  │     ^^^^^^ Unbound module alias 'vector'
 
 Command `-d -v build`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING build_include_exclude_stdlib
+error[E04007]: incompatible types
+   ┌─ ./sources/UseVector.move:5:5
+   │
+ 4 │   public fun f(addrs: &vector<address>): address {
+   │                                          ------- Expected: 'address'
+ 5 │     vector::borrow(addrs, 0)
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid return expression
+   │
+   ┌─ ./../../../../move-stdlib/sources/vector.move:27:69
+   │
+27 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                                     -------- Given: '&address'
+

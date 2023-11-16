@@ -1,6 +1,5 @@
 //# publish
 module 0x1.Tester {
-    import 0x1.signer;
 
     struct Initializer has key { x: u64, y: u64 }
     struct Point { x: u64, y: u64 }

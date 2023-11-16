@@ -3,7 +3,7 @@ test --coverage --threads 1
 coverage summary --summarize-functions
 coverage source --module AModule
 coverage bytecode --module AModule
-disassemble --package MoveStdlib --name signer
+disassemble --package MoveStdlib --name bcs
 errmap
 info
 test double_two

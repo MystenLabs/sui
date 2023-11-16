@@ -1,6 +1,5 @@
 //# publish
 module 0x42.Token {
-    import 0x1.signer;
 
     struct T has key {balance: u64}
 
@@ -28,25 +27,23 @@ module 0x42.Token {
         return;
     }
 
-    public publish(account: &signer, t: Self.T) {
+    public publish(account: address, t: Self.T) {
     label b0:
         abort(0);
     }
 
     fake(addr: address): &mut Self.T { label b0: abort(0); }
 
-    public test(account: &signer) {
+    public test(addr1: address) {
         let z: Self.T;
-        let addr1: address;
         let struct1: &mut Self.T;
         let imm_struct1: &Self.T;
         let struct1_original_balance: u64;
         let struct1_new_balance: u64;
     label b0:
         z = Self.new(0);
-        Self.publish(copy(account), move(z));
+        Self.publish(copy(addr1), move(z));
 
-        addr1 = signer.address_of(move(account));
         // returns mut reference, test its usage
         struct1 = Self.fake(copy(addr1));
 
