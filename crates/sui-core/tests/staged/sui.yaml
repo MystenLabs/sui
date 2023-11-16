@@ -1,12 +1,4 @@
 ---
-AbortLocation:
-  ENUM:
-    0:
-      Module:
-        NEWTYPE:
-          TYPENAME: ModuleId
-    1:
-      Script: UNIT
 AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
