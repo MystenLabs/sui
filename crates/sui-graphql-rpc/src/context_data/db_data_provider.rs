@@ -45,7 +45,7 @@ use crate::{
     },
 };
 use async_graphql::connection::{Connection, Edge};
-use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
@@ -138,62 +138,6 @@ impl PgManager {
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
-
-    pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, Error>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        self.inner
-            .run_query_async(query)
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))
-    }
-
-    // / Takes a query_builder_fn that returns Result<QueryFragment> and a lambda to execute the query
-    // / Spawns a blocking task that determines the cost of the query fragment
-    // / And if within limits, then executes the query
-    // async fn run_query_async_with_cost<T, Q, QResult, EF, E, F>(
-    //     &self,
-    //     mut query_builder_fn: Q,
-    //     execute_fn: EF,
-    // ) -> Result<T, Error>
-    // where
-    //     Q: FnMut() -> Result<QResult, Error> + Send + 'static,
-    //     QResult: diesel::query_builder::QueryFragment<diesel::pg::Pg>
-    //         + diesel::query_builder::Query
-    //         + diesel::query_builder::QueryId
-    //         + Send
-    //         + 'static,
-    //     EF: FnOnce(QResult) -> F + Send + 'static,
-    //     F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-    //     E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-    //     T: Send + 'static,
-    // {
-    //     let max_db_query_cost = self.limits.max_db_query_cost;
-    //     self.inner
-    //         .spawn_blocking(move |this| {
-    //             let query = query_builder_fn()?;
-    //             let explain_result: String = this
-    //                 .run_query(|conn| query.explain().get_result(conn))
-    //                 .map_err(|e| Error::Internal(e.to_string()))?;
-    //             let cost = extract_cost(&explain_result)?;
-    //             if cost > max_db_query_cost as f64 {
-    //                 return Err(DbValidationError::QueryCostExceeded(
-    //                     cost as u64,
-    //                     max_db_query_cost,
-    //                 )
-    //                 .into());
-    //             }
-
-    //             let query = query_builder_fn()?;
-    //             let execute_closure = execute_fn(query);
-    //             this.run_query(execute_closure)
-    //                 .map_err(|e| Error::Internal(e.to_string()))
-    //         })
-    //         .await
-    // }
 }
 
 /// Implement methods to query db and return StoredData

@@ -469,6 +469,12 @@ where
 
 #[async_trait]
 pub trait PgQueryExecutor {
+    async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, Error>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
+        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
+        T: Send + 'static;
+
     async fn run_query_async_with_cost<T, Q, QResult, EF, E, F>(
         &self,
         mut query_builder_fn: Q,
@@ -489,6 +495,18 @@ pub trait PgQueryExecutor {
 
 #[async_trait]
 impl PgQueryExecutor for PgManager {
+    async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, Error>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
+        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
+        T: Send + 'static,
+    {
+        self.inner
+            .run_query_async(query)
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))
+    }
+
     /// Takes a query_builder_fn that returns Result<QueryFragment> and a lambda to execute the query
     /// Spawns a blocking task that determines the cost of the query fragment
     /// And if within limits, then executes the query
