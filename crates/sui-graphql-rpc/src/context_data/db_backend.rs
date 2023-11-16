@@ -96,5 +96,3 @@ impl<T: QueryId> QueryId for Explained<T> {
 impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained<T> {
     type SqlType = Text;
 }
-
-// - The following is db-specific, and can be conditionally compiled
