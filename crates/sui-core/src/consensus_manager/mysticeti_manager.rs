@@ -23,6 +23,7 @@ use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_config::NodeConfig;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::EpochId;
@@ -254,6 +255,7 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
     Parameters {
         identifiers,
         enable_pipelining: true,
+        leader_timeout: Duration::from_millis(500),
         ..Default::default()
     }
 }
