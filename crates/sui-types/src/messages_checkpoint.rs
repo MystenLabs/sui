@@ -396,6 +396,20 @@ impl CheckpointContents {
         self.as_v1().transactions.iter()
     }
 
+    pub fn iter_with_signatures(
+        &self,
+    ) -> impl Iterator<Item = (&ExecutionDigests, &[GenericSignature])> {
+        let CheckpointContentsV1 {
+            transactions,
+            user_signatures,
+            ..
+        } = self.as_v1();
+
+        transactions
+            .into_iter()
+            .zip(user_signatures.iter().map(|v| v.as_slice()))
+    }
+
     pub fn into_iter_with_signatures(
         self,
     ) -> impl Iterator<Item = (ExecutionDigests, Vec<GenericSignature>)> {
@@ -421,6 +435,21 @@ impl CheckpointContents {
         (0u64..)
             .zip(self.iter())
             .map(move |(i, digests)| (i + start, digests))
+    }
+
+    /// Return an iterator that enumerates the transactions in the contents.
+    /// The iterator item is a tuple of (sequence_number, &ExecutionDigests),
+    /// where the sequence_number indicates the index of the transaction in the
+    /// global ordering of executed transactions since genesis.
+    pub fn enumerate_transactions_with_signatures(
+        &self,
+        ckpt: &CheckpointSummary,
+    ) -> impl Iterator<Item = (u64, &ExecutionDigests, &[GenericSignature])> {
+        let start = ckpt.network_total_transactions - self.size() as u64;
+
+        (0u64..)
+            .zip(self.iter_with_signatures())
+            .map(move |(i, (digests, sigs))| (i + start, digests, sigs))
     }
 
     pub fn into_inner(self) -> Vec<ExecutionDigests> {

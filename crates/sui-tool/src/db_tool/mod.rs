@@ -18,6 +18,7 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::storage::ObjectKey;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use typed_store::rocks::MetricConf;
+use typed_store::Map;
 pub mod db_dump;
 mod index_search;
 
@@ -36,6 +37,7 @@ pub enum DbToolCommand {
     PrintTransaction(PrintTransactionOptions),
     PrintCheckpoint(PrintCheckpointOptions),
     PrintCheckpointContent(PrintCheckpointContentOptions),
+    PrintTransactionSummaries(PrintTransactionSummariesOptions),
     RemoveObjectLock(RemoveObjectLockOptions),
     RemoveTransaction(RemoveTransactionOptions),
     ResetDB,
@@ -103,6 +105,13 @@ pub struct PrintConsensusCommitOptions {
 pub struct PrintTransactionOptions {
     #[arg(long, help = "The transaction digest to print")]
     digest: TransactionDigest,
+}
+
+#[derive(Parser)]
+#[command(rename_all = "kebab-case")]
+pub struct PrintTransactionSummariesOptions {
+    #[arg(long, help = "print full transaction contents")]
+    full: bool,
 }
 
 #[derive(Parser)]
@@ -183,6 +192,7 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
         DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
         DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
         DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
+        DbToolCommand::PrintTransactionSummaries(d) => print_transaction_summaries(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
         DbToolCommand::RemoveObjectLock(d) => remove_object_lock(&db_path, d),
         DbToolCommand::RemoveTransaction(d) => remove_transaction(&db_path, d),
@@ -275,6 +285,45 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
             effects.dependencies(),
         );
     };
+    Ok(())
+}
+
+pub fn print_transaction_summaries(
+    path: &Path,
+    _opt: PrintTransactionSummariesOptions,
+) -> anyhow::Result<()> {
+    let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+    checkpoint_store
+        .certified_checkpoints
+        .unbounded_iter()
+        .for_each(|(seq, ckpt)| {
+            let contents = checkpoint_store
+                .get_checkpoint_contents(&ckpt.inner().content_digest)
+                .unwrap()
+                .unwrap();
+            contents
+                .enumerate_transactions_with_signatures(ckpt.inner())
+                .for_each(|(idx, digests, sigs)| {
+                    let is_system_tx = if sigs.len() > 0 {
+                        false
+                    } else {
+                        let tx = perpetual_db
+                            .get_transaction(&digests.transaction)
+                            .unwrap()
+                            .unwrap();
+                        tx.inner().is_system_tx()
+                    };
+                    println!(
+                        "checkpoint={} idx={} {:?} is_system_tx={} num_sigs={:?}",
+                        seq,
+                        idx,
+                        digests,
+                        is_system_tx,
+                        sigs.len()
+                    )
+                })
+        });
     Ok(())
 }
 
