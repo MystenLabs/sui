@@ -42,6 +42,13 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@67fbcbb121271f7775d2e7715933280b06314838 # pin@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
       - name: Clean up tag name ${{ env.TAG_NAME }}
         shell: bash
         run: | 
@@ -101,6 +108,7 @@ jobs:
           mv ./target/release/sui-indexer ./target/release/sui-indexer-${os_type}
           mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
+          aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
@@ -117,6 +125,7 @@ jobs:
           mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
           mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
+          aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/
 
       - name: Upload release artifacts for ${{ matrix.os }} platform
         if: ${{ env.sui_tag != 'main' }}
