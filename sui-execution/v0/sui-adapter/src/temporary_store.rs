@@ -7,15 +7,13 @@ use move_core_types::language_storage::StructTag;
 use move_core_types::resolver::ResourceResolver;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
-use std::ops::Deref;
-use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, SharedInput};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObjectArc};
+use sui_types::storage::{BackingStore, DeleteKindWithOldVersion, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
@@ -44,7 +42,7 @@ pub struct TemporaryStore<'backing> {
     // objects
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
-    input_objects: BTreeMap<ObjectID, Arc<Object>>,
+    input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -63,7 +61,7 @@ pub struct TemporaryStore<'backing> {
 
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
-    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObjectArc>>,
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, PackageObject>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -95,7 +93,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     // Helpers to access private fields
-    pub fn objects(&self) -> &BTreeMap<ObjectID, Arc<Object>> {
+    pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
     }
 
@@ -176,7 +174,7 @@ impl<'backing> TemporaryStore<'backing> {
         }
         for object in to_be_updated {
             // The object must be mutated as it was present in the input objects
-            self.write_object(object.deref().clone(), WriteKind::Mutate);
+            self.write_object(object.clone(), WriteKind::Mutate);
         }
     }
 
@@ -416,7 +414,7 @@ impl<'backing> TemporaryStore<'backing> {
         self.written
             .get(id)
             .map(|(obj, _kind)| obj)
-            .or_else(|| self.input_objects.get(id).map(|o| o.deref()))
+            .or_else(|| self.input_objects.get(id))
     }
 
     pub fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
@@ -996,9 +994,9 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 }
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(PackageObjectArc::new(obj.clone())))
+            Ok(Some(PackageObject::new(obj.clone())))
         } else {
             self.store.get_package_object(package_id).map(|obj| {
                 // Track object but leave unchanged

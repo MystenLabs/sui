@@ -47,7 +47,7 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
-    use sui_types::storage::PackageObjectArc;
+    use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -1000,7 +1000,7 @@ mod checked {
     fn package_for_linkage(
         linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<PackageObjectArc> {
+    ) -> VMResult<PackageObject> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 

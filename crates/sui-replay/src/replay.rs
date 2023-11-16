@@ -42,7 +42,7 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::storage::{get_module, PackageObjectArc};
+use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     authenticator_state::get_authenticator_state_obj_initial_shared_version,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -1722,7 +1722,7 @@ impl LocalExec {
 impl BackingPackageStore for LocalExec {
     /// In this case we might need to download a dependency package which was not present in the
     /// modified at versions list because packages are immutable
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         fn inner(self_: &LocalExec, package_id: &ObjectID) -> SuiResult<Option<Object>> {
             // If package not present fetch it from the network
             self_
@@ -1738,7 +1738,7 @@ impl BackingPackageStore for LocalExec {
                 package_id: *package_id,
                 result: res.clone(),
             });
-        res.map(|o| o.map(PackageObjectArc::new))
+        res.map(|o| o.map(PackageObject::new))
     }
 }
 

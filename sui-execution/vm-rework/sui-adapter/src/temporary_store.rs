@@ -44,7 +44,7 @@ pub struct TemporaryStore<'backing> {
     // objects
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
-    input_objects: BTreeMap<ObjectID, Arc<Object>>,
+    input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -91,7 +91,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     // Helpers to access private fields
-    pub fn objects(&self) -> &BTreeMap<ObjectID, Arc<Object>> {
+    pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
     }
 

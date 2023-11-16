@@ -25,7 +25,7 @@ use sui_types::{
     object::{Object, Owner},
     storage::{
         load_package_object_from_object_store, BackingPackageStore, ChildObjectResolver,
-        ObjectStore, PackageObjectArc, ParentSync,
+        ObjectStore, PackageObject, ParentSync,
     },
     transaction::VerifiedTransaction,
 };
@@ -319,7 +319,7 @@ impl BackingPackageStore for PersistedStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<PackageObjectArc>> {
+    ) -> sui_types::error::SuiResult<Option<PackageObject>> {
         load_package_object_from_object_store(self, package_id)
     }
 }
