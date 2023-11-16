@@ -94,6 +94,7 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Update semantics of `sui::transfer::receive` and add `sui::transfer::public_receive`.
 // Version 32: Add delete functions for VerifiedID and VerifiedIssuer.
 //             Add sui::token module to sui framework.
+//             Enable transfer to object in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1656,7 +1657,14 @@ impl ProtocolConfig {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
                 }
-                32 => cfg.feature_flags.accept_zklogin_in_multisig = true,
+                32 => {
+                    cfg.feature_flags.accept_zklogin_in_multisig = true;
+                    // enable receiving objects in devnet and testnet
+                    if chain != Chain::Mainnet {
+                        cfg.transfer_receive_object_cost_base = Some(52);
+                        cfg.feature_flags.receive_objects = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

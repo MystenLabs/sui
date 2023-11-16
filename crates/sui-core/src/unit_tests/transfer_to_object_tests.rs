@@ -1598,6 +1598,13 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
             .await;
 
         assert!(effects.status().is_err());
+
+        // Type mismatch is an abort code of 2 from `receive_impl`
+        let is_type_mismatch_error = matches!(
+            effects.status().clone().unwrap_err().0,
+            ExecutionFailureStatus::MoveAbort(x, 2) if x.function_name == Some("receive_impl".to_string())
+        );
+        assert!(is_type_mismatch_error);
         assert!(effects.created().is_empty());
         assert!(effects.unwrapped().is_empty());
         assert!(effects.deleted().is_empty());

@@ -48,7 +48,7 @@ module tto::M4 {
     }
 
     public entry fun receive_type_mismatch(parent: &mut A, x: Receiving<A>) { 
-        let _b = transfer::receive(&mut parent.id, x);
+        let _b: A = transfer::receive(&mut parent.id, x);
         abort 0
     }
 }
