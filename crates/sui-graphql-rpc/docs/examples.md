@@ -483,9 +483,17 @@
 ### <a id=393210></a>
 ### Coin Metadata
 
-><pre>{
+><pre>query CoinMetadata {
 >  coinMetadata(coinType: "0x2::sui::SUI") {
->    decimals, name, symbol, description, iconUrl, supply
+>    decimals
+>    name
+>    symbol
+>    description
+>    iconUrl
+>    supply
+>    asMoveObject {
+>      hasPublicTransfer
+>    }
 >  }
 >}</pre>
 

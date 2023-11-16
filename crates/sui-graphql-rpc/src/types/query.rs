@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::{connection::Connection, *};
+use sui_json_rpc::name_service::NameServiceConfig;
+
 use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},

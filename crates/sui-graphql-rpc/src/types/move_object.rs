@@ -74,7 +74,7 @@ impl MoveObject {
     async fn as_coin_metadata(&self) -> Result<Option<CoinMetadata>, Error> {
         match CoinMetadata::try_from(self) {
             Ok(metadata) => Ok(Some(metadata)),
-            Err(CoinMetadataDowncastError::NotACoinMetadata) => Ok(None),
+            Err(CoinMetadataDowncastError::NotCoinMetadata) => Ok(None),
             Err(CoinMetadataDowncastError::Bcs(e)) => Err(Error::Internal(format!(
                 "Failed to deserialize coin metadata: {e}"
             ))),

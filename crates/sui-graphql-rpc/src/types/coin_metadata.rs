@@ -1,73 +1,70 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{context_data::db_data_provider::PgManager, error::Error};
+use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
 use async_graphql::*;
 
-use sui_json_rpc::coin_api::parse_to_struct_tag;
-use sui_types::balance::Supply;
-use sui_types::coin::CoinMetadata as SuiCoinMetadata;
-use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_SUI};
+use sui_types::coin::CoinMetadata as NativeCoinMetadata;
 
 pub(crate) struct CoinMetadata {
     pub super_: MoveObject,
-    pub native: SuiCoinMetadata,
+    pub native: NativeCoinMetadata,
+}
+
+pub(crate) enum CoinMetadataDowncastError {
+    NotCoinMetadata,
+    Bcs(bcs::Error),
 }
 
 #[Object]
 impl CoinMetadata {
-    /// Convert the coin metadata object into a Move object
-    async fn as_move_object(&self) -> &MoveObject {
-        &self.super_
-    }
-
+    /// The number of decimal places used to represent the token.
     async fn decimals(&self) -> Option<u8> {
         Some(self.native.decimals)
     }
 
-    async fn name(&self) -> Option<&String> {
+    /// Full, official name of the token
+    async fn name(&self) -> Option<&str> {
         Some(&self.native.name)
     }
 
-    async fn symbol(&self) -> Option<&String> {
+    /// The token's identifying abbreviation.
+    async fn symbol(&self) -> Option<&str> {
         Some(&self.native.symbol)
     }
 
-    async fn description(&self) -> Option<&String> {
+    /// Optional description of the token, provided by the creator of the token.
+    async fn description(&self) -> Option<&str> {
         Some(&self.native.description)
     }
 
-    async fn icon_url(&self) -> Option<&String> {
-        self.native.icon_url.as_ref()
+    async fn icon_url(&self) -> Option<&str> {
+        self.native.icon_url.as_deref()
     }
 
+    /// The overall quantity of tokens that will be issued.
     async fn supply(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
-        let coin_type = &self.super_.native.type_().type_params()[0];
-        let coin_struct = parse_to_struct_tag(&coin_type.to_canonical_string(true))?;
-
-        let total_supply = if GAS::is_gas(&coin_struct) {
-            Supply {
-                value: TOTAL_SUPPLY_SUI,
-            }
-        } else {
-            ctx.data_unchecked::<PgManager>()
-                .inner
-                .get_total_supply_in_blocking_task(coin_struct)
-                .await
-                .map_err(|e| Error::Internal(e.to_string()))
-                .extend()?
+        let type_params = self.super_.native.type_().type_params();
+        let Some(coin_type) = type_params.first() else {
+            return Ok(None);
         };
 
-        Ok(Some(BigInt::from(total_supply.value)))
-    }
-}
+        let supply = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_treasury_cap(coin_type.to_canonical_string(/* with_prefix */ true))
+            .await
+            .extend()?;
 
-pub(crate) enum CoinMetadataDowncastError {
-    NotACoinMetadata,
-    Bcs(bcs::Error),
+        Ok(supply.map(BigInt::from))
+    }
+
+    /// Convert the coin metadata object into a Move object
+    async fn as_move_object(&self) -> &MoveObject {
+        &self.super_
+    }
 }
 
 impl TryFrom<&MoveObject> for CoinMetadata {
@@ -75,7 +72,7 @@ impl TryFrom<&MoveObject> for CoinMetadata {
 
     fn try_from(move_object: &MoveObject) -> Result<Self, Self::Error> {
         if !move_object.native.type_().is_coin_metadata() {
-            return Err(CoinMetadataDowncastError::NotACoinMetadata);
+            return Err(CoinMetadataDowncastError::NotCoinMetadata);
         }
 
         Ok(Self {
