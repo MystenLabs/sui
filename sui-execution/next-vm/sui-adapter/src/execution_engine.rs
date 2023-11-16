@@ -536,7 +536,20 @@ mod checked {
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
-                    prologue,
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -892,7 +905,7 @@ mod checked {
     /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
     ///   consensus.
     fn setup_consensus_commit(
-        prologue: ConsensusCommitPrologue,
+        consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
@@ -909,7 +922,7 @@ mod checked {
                 vec![],
                 vec![
                     CallArg::CLOCK_MUT,
-                    CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&consensus_commit_timestamp_ms).unwrap()),
                 ],
             );
             assert_invariant!(

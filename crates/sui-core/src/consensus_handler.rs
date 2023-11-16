@@ -28,6 +28,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
@@ -267,7 +268,16 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             self.epoch_store.epoch(),
         );
 
-        let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
+        let consensus_digest = match self
+            .epoch_store
+            .protocol_config()
+            .include_consensus_digest_in_prologue()
+        {
+            true => Some(consensus_output.consensus_digest()),
+            false => None,
+        };
+        let prologue_transaction =
+            self.consensus_commit_prologue_transaction(round, timestamp, consensus_digest);
         let empty_bytes = vec![];
         transactions.push((
             empty_bytes.as_slice(),
@@ -533,11 +543,13 @@ impl<T, C> ConsensusHandler<T, C> {
         &self,
         round: u64,
         commit_timestamp_ms: u64,
+        consensus_digest: Option<ConsensusCommitDigest>,
     ) -> VerifiedExecutableTransaction {
         let transaction = VerifiedTransaction::new_consensus_commit_prologue(
             self.epoch(),
             round,
             commit_timestamp_ms,
+            consensus_digest,
         );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
