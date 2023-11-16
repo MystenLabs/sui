@@ -25,7 +25,6 @@ fragment DynamicFieldNameSelection on MoveValue {
 }
 
 fragment DynamicFieldSelect on DynamicField {
-  kind,
   name {
     ...DynamicFieldNameSelection
   }

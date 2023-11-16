@@ -873,7 +873,6 @@
 >}
 >
 >fragment DynamicFieldSelect on DynamicField {
->  kind
 >  name {
 >    ...DynamicFieldNameSelection
 >  }
@@ -927,7 +926,6 @@
 >}
 >
 >fragment DynamicFieldSelect on DynamicField {
->  kind,
 >  name {
 >    ...DynamicFieldNameSelection
 >  }
@@ -987,7 +985,6 @@
 >}
 >
 >fragment DynamicFieldSelect on DynamicField {
->  kind
 >  name {
 >    ...DynamicFieldNameSelection
 >  }
