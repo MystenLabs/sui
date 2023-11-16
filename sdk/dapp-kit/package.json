@@ -18,7 +18,6 @@
 	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
