@@ -137,6 +137,16 @@ pub struct AdvanceClockCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct RunGraphqlCommand {
+    #[clap(long = "show-usage")]
+    pub show_usage: bool,
+    #[clap(long = "show-headers")]
+    pub show_headers: bool,
+    #[clap(long = "show-service-version")]
+    pub show_service_version: bool,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -161,7 +171,7 @@ pub enum SuiSubcommand {
     #[clap(name = "view-checkpoint")]
     ViewCheckpoint,
     #[clap(name = "run-graphql")]
-    RunGraphql,
+    RunGraphql(RunGraphqlCommand),
 }
 
 #[derive(Clone, Debug)]
