@@ -457,6 +457,10 @@ impl<'env> Context<'env> {
     }
 
     fn enter_nominal_block(&mut self, name: Option<P::BlockLabel>, name_type: NominalBlockType) {
+        debug_assert!(
+            self.nominal_blocks.len() < 100,
+            "Nominal block list exceeded 100."
+        );
         let sym = if let Some(name) = name {
             name.value()
         } else {
