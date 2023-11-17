@@ -314,23 +314,14 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
+        let stats = &mut self.last_consensus_stats.stats;
         let mut bytes = 0usize;
         {
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
             for (authority_index, authority_transactions) in consensus_output.transactions() {
                 // TODO: consider only messages within 1~3 rounds of the leader?
-                let num_messages = self
-                    .last_consensus_stats
-                    .stats
-                    .inc_num_messages(authority_index as usize);
-                self.metrics
-                    .consensus_committed_messages
-                    .with_label_values(&[self
-                        .committee
-                        .authority_hostname_by_index(authority_index)
-                        .unwrap_or_default()])
-                    .set(num_messages as i64);
+                stats.inc_num_messages(authority_index as usize);
                 for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
                     self.metrics
@@ -341,19 +332,27 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                         &transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
                     ) {
-                        let num_txns = self
-                            .last_consensus_stats
-                            .stats
-                            .inc_num_user_transactions(authority_index as usize);
-                        self.metrics
-                            .consensus_committed_user_transactions
-                            .with_label_values(&[&authority_index.to_string()])
-                            .set(num_txns as i64);
+                        stats.inc_num_user_transactions(authority_index as usize);
                     }
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
                     transactions.push((serialized_transaction, transaction, authority_index));
                 }
             }
+        }
+
+        for i in 0..self.committee.size() {
+            let hostname = self
+                .committee
+                .authority_hostname_by_index(i as u16)
+                .unwrap_or_default();
+            self.metrics
+                .consensus_committed_messages
+                .with_label_values(&[hostname])
+                .set(stats.get_num_messages(i) as i64);
+            self.metrics
+                .consensus_committed_user_transactions
+                .with_label_values(&[hostname])
+                .set(stats.get_num_user_transactions(i) as i64);
         }
         self.metrics
             .consensus_handler_processed_bytes
