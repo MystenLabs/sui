@@ -744,11 +744,17 @@ impl PgManager {
         filter: Option<ObjectFilter>,
         owner: SuiAddress,
     ) -> Result<Option<Connection<String, Object>>, Error> {
-        let filter = filter.map(|mut x| {
-            x.owner = Some(owner);
-            x
-        });
-        self.fetch_objs(first, after, last, before, filter).await
+        let filter = filter
+            .map(|mut f| {
+                f.owner = Some(owner);
+                f
+            })
+            .unwrap_or_else(|| ObjectFilter {
+                owner: Some(owner),
+                ..Default::default()
+            });
+        self.fetch_objs(first, after, last, before, Some(filter))
+            .await
     }
 
     pub(crate) async fn fetch_objs(
