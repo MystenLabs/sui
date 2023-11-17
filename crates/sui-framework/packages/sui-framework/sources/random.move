@@ -7,7 +7,6 @@
 // Randomness is currently write-only, until user-facing API is implemented.
 module sui::random {
     use std::vector;
-    use sui::dynamic_field;
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
