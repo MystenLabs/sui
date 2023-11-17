@@ -10,7 +10,7 @@ use eyre::{Context, Result};
 use faults::FaultsType;
 use measurement::MeasurementsCollection;
 use orchestrator::Orchestrator;
-use protocol::sui::{SuiBenchmarkType, SuiProtocol};
+use protocol::narwhal::{NarwhalBenchmarkType, NarwhalProtocol};
 use settings::{CloudProvider, Settings};
 use ssh::SshConnectionManager;
 use testbed::Testbed;
@@ -30,8 +30,8 @@ pub mod ssh;
 pub mod testbed;
 
 /// NOTE: Link these types to the correct protocol.
-type Protocol = SuiProtocol;
-type BenchmarkType = SuiBenchmarkType;
+type Protocol = NarwhalProtocol;
+type BenchmarkType = NarwhalBenchmarkType;
 
 #[derive(Parser)]
 #[command(author, version, about = "Testbed orchestrator", long_about = None)]
@@ -280,7 +280,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .wrap_err("Failed to load testbed setup commands")?;
 
             let protocol_commands = Protocol::new(&settings);
-            let sui_benchmark_type = BenchmarkType::from_str(&benchmark_type)?;
+            let benchmark_type = BenchmarkType::from_str(&benchmark_type)?;
 
             let load = match load_type {
                 Load::FixedLoad { loads } => {
@@ -306,7 +306,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             };
 
             let generator = BenchmarkParametersGenerator::new(committee, load)
-                .with_benchmark_type(sui_benchmark_type)
+                .with_benchmark_type(benchmark_type)
                 .with_custom_duration(duration)
                 .with_faults(fault_type);
 

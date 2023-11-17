@@ -148,6 +148,8 @@ impl Display for AuthorityIdentifier {
 }
 
 impl Committee {
+    pub const DEFAULT_FILENAME: &'static str = "committee.json";
+
     /// Any committee should be created via the CommitteeBuilder - this is intentionally be marked as
     /// private method.
     fn new(authorities: BTreeMap<PublicKey, Authority>, epoch: Epoch) -> Self {
