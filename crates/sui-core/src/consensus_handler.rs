@@ -314,14 +314,15 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
-        let stats = &mut self.last_consensus_stats.stats;
         let mut bytes = 0usize;
         {
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
             for (authority_index, authority_transactions) in consensus_output.transactions() {
                 // TODO: consider only messages within 1~3 rounds of the leader?
-                stats.inc_num_messages(authority_index as usize);
+                self.last_consensus_stats
+                    .stats
+                    .inc_num_messages(authority_index as usize);
                 for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
                     self.metrics
@@ -332,7 +333,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                         &transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
                     ) {
-                        stats.inc_num_user_transactions(authority_index as usize);
+                        self.last_consensus_stats
+                            .stats
+                            .inc_num_user_transactions(authority_index as usize);
                     }
                     if let ConsensusTransactionKind::RandomnessStateUpdate(
                         randomness_round,
@@ -374,11 +377,11 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             self.metrics
                 .consensus_committed_messages
                 .with_label_values(&[hostname])
-                .set(stats.get_num_messages(i) as i64);
+                .set(self.last_consensus_stats.stats.get_num_messages(i) as i64);
             self.metrics
                 .consensus_committed_user_transactions
                 .with_label_values(&[hostname])
-                .set(stats.get_num_user_transactions(i) as i64);
+                .set(self.last_consensus_stats.stats.get_num_user_transactions(i) as i64);
         }
         self.metrics
             .consensus_handler_processed_bytes
