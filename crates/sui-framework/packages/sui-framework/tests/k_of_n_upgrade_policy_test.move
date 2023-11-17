@@ -30,15 +30,6 @@ module sui::k_of_n_upgrade_policy_test {
 
     #[test]
     #[expected_failure(abort_code = sui::k_of_n_upgrade_policy::EAllowedVotersError)]
-    fun k_of_n_too_many_voters_1() {
-        let test = test::begin(@0x1);
-        let k_of_n_cap = get_k_of_n_cap(100, 70, &mut test);
-        k_of_n_upgrade_policy::make_immutable(k_of_n_cap);
-        test::end(test);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::k_of_n_upgrade_policy::EAllowedVotersError)]
     fun k_of_n_too_few_voters() {
         let test = test::begin(@0x1);
         let k_of_n_cap = get_k_of_n_cap(1, 1, &mut test);
@@ -79,19 +70,6 @@ module sui::k_of_n_upgrade_policy_test {
                 == package::dep_only_policy(), 
             2,
         );
-        k_of_n_upgrade_policy::make_immutable(k_of_n_cap);
-        test::end(test);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::k_of_n_upgrade_policy::EInvalidProposer)]
-    fun k_of_n_propose_upgrade_bad_signer() {
-        let test = test::begin(@0x1);
-        let digest: vector<u8> = x"0123456789";
-        let k_of_n_cap = get_k_of_n_cap(5, 3, &mut test);
-
-        test::next_tx(&mut test, @0x2);
-        k_of_n_upgrade_policy::propose_upgrade(&k_of_n_cap, digest, ctx(&mut test));
         k_of_n_upgrade_policy::make_immutable(k_of_n_cap);
         test::end(test);
     }

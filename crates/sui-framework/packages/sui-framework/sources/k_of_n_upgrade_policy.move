@@ -49,14 +49,14 @@ module sui::k_of_n_upgrade_policy {
     /// The capability controlling the upgrade. 
     /// Initialized with `new` is returned to the caller to be stored as desired.
     struct KofNUpgradeCap has key, store {
-	    id: UID,
+        id: UID,
         /// Upgrade cap of the package controlled by this policy.
-	    cap: UpgradeCap,
+        cap: UpgradeCap,
         /// Number of votes required for the upgrade to be allowed.
-	    required_votes: u64,
+        required_votes: u64,
         /// Allowed voters. They will receive a ballot. They can be addresses or objects.
         /// The creator of the policy will be added to the voters if not there already.
-	    voters: VecSet<address>,
+        voters: VecSet<address>,
     }
 
     /// A proposed upgrade that is going through voting.
@@ -190,18 +190,16 @@ module sui::k_of_n_upgrade_policy {
     const EAllowedVotersError: u64 = 0;
     /// Required votes must be less than allowed voters.
     const ERequiredVotesError: u64 = 1;
-    /// The signer of the proposed upgrade is not one of the allowed voters.
-    const EInvalidProposer: u64 = 2;
     /// The `Ballot` used to vote is not for the correct proposal (`ProposedUpgrade`)
-    const EInvalidBallot: u64 = 3;
+    const EInvalidBallot: u64 = 2;
     /// Not enough votes to perform the upgrade.
-    const ENotEnoughVotes: u64 = 4;
+    const ENotEnoughVotes: u64 = 3;
     /// An upgrade was issued already, and the operation requested failed.
-    const EAlreadyIssued: u64 = 5;
+    const EAlreadyIssued: u64 = 4;
     /// The operation required the signer to be the same as the upgrade proposer.
-    const ESignerMismatch: u64 = 6;
+    const ESignerMismatch: u64 = 5;
     /// Proposal (`KofNUpgradeCap`) and upgrade (`ProposedUpgrade`) do not match.
-    const EInvalidProposalForUpgrade: u64 = 7;
+    const EInvalidProposalForUpgrade: u64 = 6;
 
     /// Create a `KofNUpgradeCap` given an `UpgradeCap`.
     /// The returned instance is the only and exclusive controller of upgrades. 
@@ -217,13 +215,8 @@ module sui::k_of_n_upgrade_policy {
         ctx: &mut TxContext,
     ): KofNUpgradeCap {
         assert!(vec_set::size(&voters) > 1, EAllowedVotersError);
-        // add the signer to the list of voters if that was not there
-        let signer = tx_context::sender(ctx);
-        if (!vec_set::contains(&voters, &signer)) {
-            vec_set::insert(&mut voters, signer);
-        };
         assert!(vec_set::size(&voters) <= 100, EAllowedVotersError);
-        assert!(required_votes < vec_set::size(&voters), ERequiredVotesError);
+        assert!(required_votes <= vec_set::size(&voters), ERequiredVotesError);
         KofNUpgradeCap {
             id: object::new(ctx),
             cap,
@@ -265,9 +258,6 @@ module sui::k_of_n_upgrade_policy {
         digest: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        let signer = tx_context::sender(ctx);
-        assert!(vec_set::contains(&cap.voters, &signer), EInvalidProposer);
-
         let cap_id = object::id(cap);
         let proposal_uid = object::new(ctx);
         let proposal_id = object::uid_to_inner(&proposal_uid);
@@ -279,23 +269,22 @@ module sui::k_of_n_upgrade_policy {
         while (ballot_count > 0) {
             ballot_count = ballot_count - 1;
             let address = *vector::borrow(addresses, ballot_count);
-            if (address != signer) {
-                let ballot_uid = object::new(ctx);
-                let ballot_id = object::uid_to_inner(&ballot_uid);
-                transfer::transfer(
-                    Ballot {
-                        id: ballot_uid,
-                        owner: signer,
-                        transfers_count: 0,
-                        digest,
-                        proposed_upgrade: proposal_id,
-                    },
-                    address,
-                );
-                vec_set::insert(&mut allowed_voters, ballot_id);
-            }
+            let ballot_uid = object::new(ctx);
+            let ballot_id = object::uid_to_inner(&ballot_uid);
+            transfer::transfer(
+                Ballot {
+                    id: ballot_uid,
+                    owner: address,
+                    transfers_count: 0,
+                    digest,
+                    proposed_upgrade: proposal_id,
+                },
+                address,
+            );
+            vec_set::insert(&mut allowed_voters, ballot_id);
         };
 
+        let signer = tx_context::sender(ctx);
         event::emit(UpgradeProposed {
             upgrade_cap: cap_id,
             proposal: proposal_id,
