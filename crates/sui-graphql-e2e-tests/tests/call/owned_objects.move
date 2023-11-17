@@ -2,6 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Tests objectConnection on address, object, and owner
+// The initial query for objectConnection under address should yield no objects
+// After object creation, the same query for address.objectConnection should now have one object
+// The address of the parent field takes precedence when querying an address's objects with a filter
+// So if a different owner address is provided, it is overwritten
+// The same query on the address as an owner should return the same result
+// The same query on the address as an object should return a null result, since the address is not an object
+
 
 //# init --addresses Test=0x0 A=0x42 --simulator
 
@@ -29,7 +36,6 @@ module Test::M1 {
     }
 }
 
-// Initial query - address should have no objects
 //# run-graphql
 {
   address(address: "0x42") {
@@ -53,7 +59,6 @@ module Test::M1 {
 
 //# view-checkpoint
 
-// Address should now have one object
 //# run-graphql
 {
   address(address: "0x42") {
@@ -69,7 +74,6 @@ module Test::M1 {
   }
 }
 
-// Address takes precedence when querying an address's objects
 //# run-graphql
 {
   address(address: "0x42") {
@@ -85,11 +89,40 @@ module Test::M1 {
   }
 }
 
-// Address takes precedence when querying an address's objects
 //# run-graphql
 {
   address(address: "0x42") {
     objectConnection(filter: {owner: "0x888"}) {
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  owner(address: "0x42") {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  object(address: "0x42") {
+    objectConnection{
       edges {
         node {
           location
