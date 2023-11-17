@@ -4,6 +4,9 @@
 
 use crate::{
     compilation::package_layout::CompiledPackageLayout,
+    lock_file::schema::update_compiler_toolchain,
+    lock_file::LockFile,
+    package_lock::PackageLock,
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
@@ -38,7 +41,7 @@ use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::Write,
+    io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 
@@ -701,6 +704,34 @@ impl CompiledPackage {
         }
         Ok(())
     }
+
+    /*
+        pub(crate) fn update_lock_file_toolchain_version(&self) -> Result<()> {
+            let lock_file = self.compiled_package_info.build_flags.lock_file.as_ref();
+            if lock_file.is_none() {
+                return Ok(());
+            };
+            let lock_file = lock_file.unwrap();
+            let install_dir = self
+                .compiled_package_info
+                .build_flags
+                .install_dir
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("."));
+            let mut lock = LockFile::from(install_dir, lock_file)?;
+            lock.seek(SeekFrom::Start(0))?;
+            let compiler_version: String = env!("CARGO_PKG_VERSION").into(); // FIXME this is wrong
+            let build_config = self.compiled_package_info.build_flags.clone();
+            let result = update_compiler_toolchain(&mut lock, compiler_version, &build_config);
+            match result {
+                Ok(()) => (),
+                Err(e) => panic!("{:#?}", e),
+            }
+            let _mutx = PackageLock::lock();
+            lock.commit(lock_file)?;
+            Ok(())
+    }
+        */
 
     pub(crate) fn save_to_disk(&self, under_path: PathBuf) -> Result<OnDiskCompiledPackage> {
         self.check_filepaths_ok()?;
