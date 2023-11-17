@@ -23,6 +23,7 @@ use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -163,6 +164,11 @@ pub async fn start_test_indexer_v2(
     reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
+    // Reduce the connection pool size to 20 for testing
+    // to prevent maxing out
+    info!("Setting DB_POOL_SIZE to 20");
+    std::env::set_var("DB_POOL_SIZE", "20");
+
     let db_url = db_url.unwrap_or_else(|| {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
