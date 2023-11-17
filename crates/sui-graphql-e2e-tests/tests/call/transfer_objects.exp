@@ -1,0 +1,91 @@
+processed 10 tasks
+
+task 1 'publish'. lines 8-30:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run-graphql'. lines 32-45:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": []
+      }
+    }
+  }
+}
+
+task 3 'run'. lines 47-47:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'view-object'. lines 49-49:
+Owner: Account Address ( A )
+Version: 3
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+
+task 5 'create-checkpoint'. lines 51-51:
+Checkpoint created: 1
+
+task 6 'view-checkpoint'. lines 53-53:
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 967T2ejWu25x5LEPDdbRte2bSD2i2jfsDE3XNUtfuqBy,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
+
+task 7 'run-graphql'. lines 55-68:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x37a05461f42db2e6382b941624dc41c0e508e1cffebea1f6601b1b36a05199a3",
+              "digest": "4mYGsy7zZGzyaYS1kBPWEpsLbAPKB5VvLuSNZo9u6Aox",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 70-83:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x37a05461f42db2e6382b941624dc41c0e508e1cffebea1f6601b1b36a05199a3",
+              "digest": "4mYGsy7zZGzyaYS1kBPWEpsLbAPKB5VvLuSNZo9u6Aox",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 85-98:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x37a05461f42db2e6382b941624dc41c0e508e1cffebea1f6601b1b36a05199a3",
+              "digest": "4mYGsy7zZGzyaYS1kBPWEpsLbAPKB5VvLuSNZo9u6Aox",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
