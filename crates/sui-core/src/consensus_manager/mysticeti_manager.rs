@@ -14,7 +14,7 @@ use itertools::Itertools;
 use mysten_metrics::{RegistryID, RegistryService};
 use mysticeti_core::commit_observer::SimpleCommitObserver;
 use mysticeti_core::committee::{Authority, Committee};
-use mysticeti_core::config::{Identifier, Parameters, PrivateConfig};
+use mysticeti_core::config::{Identifier, Parameters, PrivateConfig, SynchronizerParameters};
 use mysticeti_core::types::AuthorityIndex;
 use mysticeti_core::validator::Validator;
 use mysticeti_core::{CommitConsumer, PublicKey, Signer, SimpleBlockHandler};
@@ -255,7 +255,12 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
     Parameters {
         identifiers,
         enable_pipelining: true,
-        leader_timeout: Duration::from_millis(500),
+        leader_timeout: Duration::from_millis(400),
+        enable_cleanup: false,
+        synchronizer_parameters: SynchronizerParameters {
+            sample_precision: Duration::from_millis(200),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
