@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 32
+version: 33
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -24,16 +24,12 @@ feature_flags:
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
-  shared_object_deletion: true
   narwhal_new_leader_election_schedule: true
   loaded_child_object_format: true
   enable_jwk_consensus_updates: true
   end_of_epoch_transaction_supported: true
   simple_conservation_checks: true
   loaded_child_object_format_type: true
-  receive_objects: true
-  enable_effects_v2: true
-  narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
   accept_zklogin_in_multisig: true
@@ -138,7 +134,6 @@ object_record_new_uid_cost_base: 52
 transfer_transfer_internal_cost_base: 52
 transfer_freeze_object_cost_base: 52
 transfer_share_object_cost_base: 52
-transfer_receive_object_cost_base: 52
 tx_context_derive_id_cost_base: 52
 types_is_one_time_witness_cost_base: 52
 types_is_one_time_witness_type_tag_cost_per_byte: 2
