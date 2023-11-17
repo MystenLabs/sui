@@ -68,6 +68,14 @@ struct Args {
     #[clap(long, default_value = "sui_indexer")]
     pg_db_name: String,
 
+    /// DB username for the Indexer Postgres DB
+    #[clap(long, default_value = "postgres")]
+    pg_user: String,
+
+    /// DB password for the Indexer Postgres DB
+    #[clap(long, default_value = "postgrespw")]
+    pg_password: String,
+
     /// The duration for epochs (defaults to one minute)
     #[clap(long, default_value = "60000")]
     epoch_duration_ms: u64,
@@ -101,6 +109,8 @@ async fn main() -> Result<()> {
         pg_port,
         pg_host,
         pg_db_name,
+        pg_user,
+        pg_password,
         epoch_duration_ms,
         faucet_port,
         with_indexer,
@@ -129,7 +139,7 @@ async fn main() -> Result<()> {
         fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
         indexer_address: with_indexer.then_some(format!("127.0.0.1:{}", indexer_rpc_port)),
         pg_address: Some(format!(
-            "postgres://postgres@{pg_host}:{pg_port}/{pg_db_name}"
+            "postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}"
         )),
         faucet_address: Some(format!("127.0.0.1:{}", faucet_port)),
         epoch_duration_ms,
