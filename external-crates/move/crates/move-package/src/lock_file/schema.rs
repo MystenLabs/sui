@@ -5,12 +5,16 @@
 //! [move] table).  This module does not support serialization because of limitations in the `toml`
 //! crate related to serializing types as inline tables.
 
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
+
+use crate::BuildConfig;
+
+use super::LockFile;
 
 /// Lock file version written by this version of the compiler.  Backwards compatibility is
 /// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
@@ -58,6 +62,16 @@ pub struct Dependency {
 
     /// Expected hash for the source and manifest of the package being depended upon.
     pub digest: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CompilerToolchain {
+    /// The Move compiler version used to compile this package.
+    #[serde(rename = "compiler-version")]
+    pub compiler_version: String,
+    /// The Move compiler flags used to compile this package.
+    #[serde(rename = "compiler-flags")]
+    pub compiler_flags: BuildConfig,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -135,4 +149,47 @@ pub(crate) fn write_prologue(
     write!(file, "{}", prologue)?;
 
     Ok(())
+}
+
+pub fn update_compiler_toolchain(
+    file: &mut LockFile,
+    compiler_version: String,
+    build_config: &BuildConfig,
+) -> Result<()> {
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    file.seek(SeekFrom::Start(0))?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
+    move_table["compiler-version"] = toml_edit::value(compiler_version);
+    let compiler_flags = toml::to_string(build_config)?.parse()?;
+    let compiler_flags = to_toml_edit_value(&compiler_flags);
+    move_table["compiler-flags"] = toml_edit::value(compiler_flags);
+    write!(file, "{}", toml)?;
+    file.flush()?;
+    Ok(())
+}
+
+fn to_toml_edit_value(value: &toml::Value) -> toml_edit::Value {
+    match value {
+        toml::Value::String(v) => toml_edit::Value::from(v.clone()),
+        toml::Value::Integer(v) => toml_edit::Value::from(*v),
+        toml::Value::Float(v) => toml_edit::Value::from(*v),
+        toml::Value::Boolean(v) => toml_edit::Value::from(*v),
+        toml::Value::Datetime(v) => toml_edit::Value::from(v.to_string()),
+        toml::Value::Array(arr) => {
+            let mut toml_edit_arr = toml_edit::Array::new();
+            for x in arr {
+                toml_edit_arr.push(to_toml_edit_value(x));
+            }
+            toml_edit::Value::from(toml_edit_arr)
+        }
+        toml::Value::Table(table) => {
+            let mut toml_edit_table = toml_edit::Table::new();
+            for (k, v) in table {
+                toml_edit_table[k] = toml_edit::Item::Value(to_toml_edit_value(v));
+            }
+            toml_edit::Value::InlineTable(toml_edit_table.into_inline_table())
+        }
+    }
 }
