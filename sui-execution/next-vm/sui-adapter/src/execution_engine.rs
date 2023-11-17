@@ -8,8 +8,6 @@ mod checked {
 
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
-    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
-    use sui_types::randomness_state::{RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME, RANDOMNESS_STATE_UPDATE_FUNCTION_NAME};
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -20,6 +18,11 @@ mod checked {
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::randomness_state::{
+        RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME,
+        RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
+    };
+    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
     use tracing::{info, instrument, trace, warn};
 
     use crate::programmable_transactions;
@@ -45,12 +48,12 @@ mod checked {
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
-    use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
         TransactionKind,
     };
+    use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::Object,
