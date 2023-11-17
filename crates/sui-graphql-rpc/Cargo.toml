@@ -69,4 +69,6 @@ sui-move-build.workspace = true
 tower.workspace = true
 
 [features]
+default = ["pg_backend"]
 pg_integration = []
+pg_backend = []
