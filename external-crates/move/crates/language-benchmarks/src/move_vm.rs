@@ -89,14 +89,7 @@ fn execute<M: Measurement + 'static>(
                     Vec::<Vec<u8>>::new(),
                     &mut UnmeteredGasMeter,
                 )
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "{:?}::{} failed with {:?}",
-                        &module_id,
-                        fun,
-                        err.into_vm_status()
-                    )
-                })
+                .unwrap_or_else(|err| panic!("{:?}::{} failed with {:?}", &module_id, fun, err))
         })
     });
 }

@@ -962,12 +962,12 @@ impl Interpreter {
             .iter()
             .rev()
             .take(count)
-            .map(|frame| {
-                (
-                    frame.function.module_id().cloned(),
+            .filter_map(|frame| {
+                Some((
+                    frame.function.module_id()?.clone(),
                     frame.function.index(),
                     frame.pc,
-                )
+                ))
             })
             .collect();
         ExecutionState::new(stack_trace)

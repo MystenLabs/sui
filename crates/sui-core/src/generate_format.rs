@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
-use move_core_types::{
-    language_storage::{StructTag, TypeTag},
-    vm_status::AbortLocation,
-};
+use move_core_types::language_storage::{StructTag, TypeTag};
 use pretty_assertions::assert_str_eq;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -150,7 +147,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Owner>(&samples)?;
     tracer.trace_type::<ExecutionStatus>(&samples)?;
     tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
-    tracer.trace_type::<AbortLocation>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<ObjectArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;

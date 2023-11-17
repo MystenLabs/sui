@@ -204,19 +204,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
-    /// Load a script and all of its types into cache
-    pub fn load_script(
-        &self,
-        script: impl Borrow<[u8]>,
-        ty_args: &[Type],
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let (_, instantiation) =
-            self.runtime
-                .loader()
-                .load_script(script.borrow(), ty_args, &self.data_cache)?;
-        Ok(instantiation)
-    }
-
     /// Load a module, a function, and all of its types into cache
     pub fn load_function(
         &self,
