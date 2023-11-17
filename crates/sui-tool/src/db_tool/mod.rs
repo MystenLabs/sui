@@ -315,14 +315,13 @@ pub fn print_transaction_summaries(
                             .unwrap();
                         tx.inner().is_system_tx()
                     };
-                    println!(
-                        "checkpoint={} idx={} {:?} is_system_tx={} num_sigs={:?}",
-                        seq,
-                        idx,
-                        digests.transaction.inner(),
-                        is_system_tx,
-                        num_sigs,
-                    );
+                    if (!is_system_tx && num_sigs == 0) || ckpt.inner().end_of_epoch_data.is_some()
+                    {
+                        println!(
+                            "checkpoint={} idx={} {:?} is_system_tx={} num_sigs={:?}",
+                            seq, idx, digests.transaction, is_system_tx, num_sigs,
+                        );
+                    }
                 })
         });
     Ok(())
