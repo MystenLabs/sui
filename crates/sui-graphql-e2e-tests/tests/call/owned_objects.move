@@ -29,6 +29,7 @@ module Test::M1 {
     }
 }
 
+// Initial query - address should have no objects
 //# run-graphql
 {
   address(address: "0x42") {
@@ -52,6 +53,7 @@ module Test::M1 {
 
 //# view-checkpoint
 
+// Address should now have one object
 //# run-graphql
 {
   address(address: "0x42") {
@@ -67,6 +69,7 @@ module Test::M1 {
   }
 }
 
+// Address takes precedence when querying an address's objects
 //# run-graphql
 {
   address(address: "0x42") {
@@ -82,6 +85,7 @@ module Test::M1 {
   }
 }
 
+// Address takes precedence when querying an address's objects
 //# run-graphql
 {
   address(address: "0x42") {
