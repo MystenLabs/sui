@@ -30,62 +30,50 @@
 	"type": "commonjs",
 	"exports": {
 		"./bcs": {
-			"source": "./src/bcs/index.ts",
 			"import": "./dist/esm/bcs/index.js",
 			"require": "./dist/cjs/bcs/index.js"
 		},
 		"./client": {
-			"source": "./src/client/index.ts",
 			"import": "./dist/esm/client/index.js",
 			"require": "./dist/cjs/client/index.js"
 		},
 		"./cryptography": {
-			"source": "./src/cryptography/index.ts",
 			"import": "./dist/esm/cryptography/index.js",
 			"require": "./dist/cjs/cryptography/index.js"
 		},
 		"./faucet": {
-			"source": "./src/faucet/index.ts",
 			"import": "./dist/esm/faucet/index.js",
 			"require": "./dist/cjs/faucet/index.js"
 		},
 		"./keypairs/ed25519": {
-			"source": "./src/keypairs/ed25519/index.ts",
 			"import": "./dist/esm/keypairs/ed25519/index.js",
 			"require": "./dist/cjs/keypairs/ed25519/index.js"
 		},
 		"./keypairs/secp256k1": {
-			"source": "./src/keypairs/secp256k1/index.ts",
 			"import": "./dist/esm/keypairs/secp256k1/index.js",
 			"require": "./dist/cjs/keypairs/secp256k1/index.js"
 		},
 		"./keypairs/secp256r1": {
-			"source": "./src/keypairs/secp256r1/index.ts",
 			"import": "./dist/esm/keypairs/secp256r1/index.js",
 			"require": "./dist/cjs/keypairs/secp256r1/index.js"
 		},
 		"./multisig": {
-			"source": "./src/multisig/index.ts",
 			"import": "./dist/esm/multisig/index.js",
 			"require": "./dist/cjs/multisig/index.js"
 		},
 		"./transactions": {
-			"source": "./src/builder/export.ts",
 			"import": "./dist/esm/builder/export.js",
 			"require": "./dist/cjs/builder/export.js"
 		},
 		"./utils": {
-			"source": "./src/utils/index.ts",
 			"import": "./dist/esm/utils/index.js",
 			"require": "./dist/cjs/utils/index.js"
 		},
 		"./verify": {
-			"source": "./src/verify/index.ts",
 			"import": "./dist/esm/verify/index.js",
 			"require": "./dist/cjs/verify/index.js"
 		},
 		"./zklogin": {
-			"source": "./src/zklogin/index.ts",
 			"import": "./dist/esm/zklogin/index.js",
 			"require": "./dist/cjs/zklogin/index.js"
 		}
