@@ -3,4 +3,35 @@ title: Staking and Rewards
 draft: true
 ---
 
-Content coming soon
+## Overview
+
+Sui is a Delegated-Proof-of-Stake (DPoS) system, where the voting power of validators is granted by stakes delegated to them from SUI token holders. When rewards are distributed at the end of each epoch, validators receive their share of the rewards based on their performance and their commission rate. The rewards auto-compound as new stakes delegated to the validators’ staking pools.
+
+## Differences
+
+Sui’s staking mechanism has a few features that might be different from staking on other blockchains:
+
+- Staking is self-custodial on Sui: stakers keep their staked SUI tokens in an owned object.
+- Staking rewards auto-compound on Sui due to its liquidity-pool-inspired design.
+- When a user requests to stake with a validator, their stake starts counting towards the validator’s voting power the epoch after the current epoch. Similarly when a user withdraws their stake, their stake stops counting the epoch after the current epoch.
+
+## Staking Requirements
+
+There are some minimum staking requirements a validator must satisfy to become active and to stay in the active validator set.
+
+More precisely:
+
+- A validator candidate must accrue at least 30M SUI of stake before they can request to join the validator set.
+- If an active validator’s stake falls below 20M SUI, they will have 7 epochs of grace period to gain back the stake before they are removed from the validator set.
+- If an active validator’s stake falls below 15M SUI, they will be removed from the validator set at the end of the current epoch.
+
+## Rewards Distribution
+
+At the end of each epoch, gas fees collected, together with stake subsidies, are distributed among validators and stakers as staking rewards. The amount of rewards a validator gets depends on the following factors:
+
+- Performance. If a validator does not operate performantly, other validators may choose to report them via the tallying rule. The entire staking rewards of the reported validator will be slashed for the epoch. [Link to docs for node tooling for reporting other validators here if they exist]
+- Commission rate. Commission rate determines the cut of staking rewards a validator is taking from their stakers. For example, if a validator has commission rate at 10%, then 10% of all staking reward of stakers staking with this validator will be given to the validator each epoch as new stake objects owned by the validator. A validator can change their commission rate to be effective next epoch by calling this command [Link to docs for node tooling for setting commission rate here if they exist].
+
+## Rewards Withdrawal
+
+Since validator rewards are distributed to them as regular stake objects, staking rewards withdrawal works exactly the same for validators as for stakers. More precisely, a validator should call [`0x3::sui_system::request_withdraw_stake`](https://github.com/MystenLabs/sui/blob/6234ae2cc8137f3a2a34cd0aa1ac4fd5f31260e2/crates/sui-framework/packages/sui-system/sources/sui_system.move#L272) function to withdraw their stake and receive their rewards.
