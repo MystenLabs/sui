@@ -25,6 +25,7 @@ use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
 use sui_types::accumulator::Accumulator;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::ObjectID;
+use sui_types::bridge::get_bridge_obj_initial_shared_version;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
@@ -227,6 +228,7 @@ pub async fn setup_db_state(
         get_authenticator_state_obj_initial_shared_version(&perpetual_db)?;
     let randomness_state_obj_initial_shared_version =
         get_randomness_state_obj_initial_shared_version(&perpetual_db)?;
+    let bridge_obj_initial_shared_version = get_bridge_obj_initial_shared_version(&perpetual_db)?;
     let new_epoch_start_state = system_state_object.into_epoch_start_state();
     let next_epoch_committee = new_epoch_start_state.get_sui_committee();
     let last_checkpoint = checkpoint_store
@@ -238,6 +240,7 @@ pub async fn setup_db_state(
         *last_checkpoint.digest(),
         authenticator_state_obj_initial_shared_version,
         randomness_state_obj_initial_shared_version,
+        bridge_obj_initial_shared_version,
     );
     perpetual_db
         .set_epoch_start_configuration(&epoch_start_configuration)

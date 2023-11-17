@@ -300,6 +300,8 @@ EndOfEpochTransactionKind:
           TYPENAME: AuthenticatorStateExpire
     3:
       RandomnessStateCreate: UNIT
+    4:
+      BridgeCreate: UNIT
 Envelope:
   STRUCT:
     - data:

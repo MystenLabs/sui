@@ -599,6 +599,11 @@ mod checked {
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
                             panic!("EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::BridgeCreate => {
+                            panic!(
+                                "EndOfEpochTransactionKind::BridgeCreate should not exist in v1"
+                            );
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

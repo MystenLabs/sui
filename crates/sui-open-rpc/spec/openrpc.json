@@ -1354,6 +1354,7 @@
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "ban_entry_init": false,
+                "bridge": false,
                 "commit_root_state_digest": false,
                 "consensus_order_end_of_epoch_last": true,
                 "disable_invariant_violation_check_in_swap_loc": false,
@@ -8357,7 +8358,8 @@
             "type": "string",
             "enum": [
               "AuthenticatorStateCreate",
-              "RandomnessStateCreate"
+              "RandomnessStateCreate",
+              "BridgeCreate"
             ]
           },
           {

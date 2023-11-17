@@ -325,6 +325,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
 
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
 
@@ -1034,6 +1038,15 @@ impl ProtocolConfig {
         ret
     }
 
+    pub fn bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // jwk updates required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
+    }
+
     pub fn enable_effects_v2(&self) -> bool {
         self.feature_flags.enable_effects_v2
     }
@@ -1681,6 +1694,10 @@ impl ProtocolConfig {
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    }
+                    // enable bridge in devnet and testnet
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.bridge = true;
                     }
 
                     // enable nw cert v2 on mainnet

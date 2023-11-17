@@ -199,6 +199,7 @@ use simulator::*;
 pub use simulator::set_jwk_injector;
 use sui_core::consensus_handler::ConsensusHandlerInitializer;
 use sui_core::mysticeti_adapter::LazyMysticetiClient;
+use sui_types::bridge::get_bridge_obj_initial_shared_version;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -1577,12 +1578,15 @@ impl SuiNode {
         let randomness_state_obj_initial_shared_version =
             get_randomness_state_obj_initial_shared_version(&state.database)
                 .expect("read cannot fail");
+        let bridge_obj_initial_shared_version =
+            get_bridge_obj_initial_shared_version(&state.database).expect("read cannot fail");
 
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             authenticator_state_obj_initial_shared_version,
             randomness_state_obj_initial_shared_version,
+            bridge_obj_initial_shared_version,
         );
 
         let new_epoch_store = self

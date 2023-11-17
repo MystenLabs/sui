@@ -499,6 +499,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::RandomnessStateCreate => {
                                 SuiEndOfEpochTransactionKind::RandomnessStateCreate
                             }
+                            EndOfEpochTransactionKind::BridgeCreate => {
+                                SuiEndOfEpochTransactionKind::BridgeCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1360,6 +1363,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
     RandomnessStateCreate,
+    BridgeCreate,
 }
 
 #[serde_as]

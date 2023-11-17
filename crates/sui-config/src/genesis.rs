@@ -11,6 +11,7 @@ use sui_types::authenticator_state::{
     AuthenticatorStateInner,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::bridge::get_bridge_obj_initial_shared_version;
 use sui_types::clock::Clock;
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::DefaultHash;
@@ -164,6 +165,11 @@ impl Genesis {
 
     pub fn randomness_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
         get_randomness_state_obj_initial_shared_version(&self.objects())
+            .expect("Read from genesis cannot fail")
+    }
+
+    pub fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        get_bridge_obj_initial_shared_version(&self.objects())
             .expect("Read from genesis cannot fail")
     }
 

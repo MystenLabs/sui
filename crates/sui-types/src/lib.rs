@@ -29,6 +29,7 @@ pub mod accumulator;
 pub mod authenticator_state;
 pub mod balance;
 pub mod base_types;
+pub mod bridge;
 pub mod clock;
 pub mod coin;
 pub mod collection_types;
@@ -101,6 +102,11 @@ pub const SUI_SYSTEM_PACKAGE_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_AD
 pub const DEEPBOOK_ADDRESS: AccountAddress = deepbook_addr();
 pub const DEEPBOOK_PACKAGE_ID: ObjectID = ObjectID::from_address(DEEPBOOK_ADDRESS);
 
+/// 0xb-- account address where Bridge modules are stored
+/// Same as the ObjectID
+pub const BRIDGE_ADDRESS: AccountAddress = address_from_single_byte(11);
+pub const BRIDGE_PACKAGE_ID: ObjectID = ObjectID::from_address(BRIDGE_ADDRESS);
+
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_ADDRESS: AccountAddress = address_from_single_byte(5);
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_STATE_ADDRESS);
@@ -122,12 +128,20 @@ pub const SUI_RANDOMNESS_STATE_ADDRESS: AccountAddress = address_from_single_byt
 pub const SUI_RANDOMNESS_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_RANDOMNESS_STATE_ADDRESS);
 
+/// 0x8: hardcode object ID for the singleton bridge object.
+pub const SUI_BRIDGE_ADDRESS: AccountAddress = address_from_single_byte(9);
+pub const SUI_BRIDGE_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_BRIDGE_ADDRESS);
+
 /// Return `true` if `addr` is a special system package that can be upgraded at epoch boundaries.
 /// All new system package ID's must be added here.
 pub fn is_system_package(addr: impl Into<AccountAddress>) -> bool {
     matches!(
         addr.into(),
-        MOVE_STDLIB_ADDRESS | SUI_FRAMEWORK_ADDRESS | SUI_SYSTEM_ADDRESS | DEEPBOOK_ADDRESS
+        MOVE_STDLIB_ADDRESS
+            | SUI_FRAMEWORK_ADDRESS
+            | SUI_SYSTEM_ADDRESS
+            | DEEPBOOK_ADDRESS
+            | BRIDGE_ADDRESS
     )
 }
 
@@ -165,6 +179,7 @@ fn resolve_address(addr: &str) -> Option<AccountAddress> {
         "std" => Some(MOVE_STDLIB_ADDRESS),
         "sui" => Some(SUI_FRAMEWORK_ADDRESS),
         "sui_system" => Some(SUI_SYSTEM_ADDRESS),
+        "bridge" => Some(BRIDGE_ADDRESS),
         _ => None,
     }
 }

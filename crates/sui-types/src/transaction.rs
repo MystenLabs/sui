@@ -293,6 +293,7 @@ pub enum EndOfEpochTransactionKind {
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(AuthenticatorStateExpire),
     RandomnessStateCreate,
+    BridgeCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -336,6 +337,10 @@ impl EndOfEpochTransactionKind {
         Self::RandomnessStateCreate
     }
 
+    pub fn new_bridge_create() -> Self {
+        Self::BridgeCreate
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -354,6 +359,7 @@ impl EndOfEpochTransactionKind {
                 }]
             }
             Self::RandomnessStateCreate => vec![],
+            Self::BridgeCreate => vec![],
         }
     }
 
@@ -367,6 +373,7 @@ impl EndOfEpochTransactionKind {
             })),
             Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
             Self::RandomnessStateCreate => Either::Right(iter::empty()),
+            Self::BridgeCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -380,6 +387,10 @@ impl EndOfEpochTransactionKind {
             Self::RandomnessStateCreate => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.random_beacon());
+            }
+            Self::BridgeCreate => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.bridge());
             }
         }
         Ok(())
@@ -453,6 +464,13 @@ impl VersionedProtocolMessage for TransactionKind {
                                 if !protocol_config.random_beacon() {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "random beacon not enabled".to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::BridgeCreate => {
+                                if !protocol_config.bridge() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "bridge not enabled".to_string(),
                                     });
                                 }
                             }

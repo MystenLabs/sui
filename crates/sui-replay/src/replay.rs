@@ -43,6 +43,7 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::bridge::get_bridge_obj_initial_shared_version;
 use sui_types::{
     authenticator_state::get_authenticator_state_obj_initial_shared_version,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -2122,6 +2123,7 @@ async fn create_epoch_store(
             .expect("read cannot fail"),
         get_randomness_state_obj_initial_shared_version(&authority_state.database)
             .expect("read cannot fail"),
+        get_bridge_obj_initial_shared_version(&authority_state.database).expect("read cannot fail"),
     );
 
     let registry = Registry::new();

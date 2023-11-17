@@ -28,7 +28,7 @@ use sui_types::{
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::ExecutionError,
     move_package::{is_test_fun, FnInfoMap},
-    SUI_FRAMEWORK_ADDRESS,
+    BRIDGE_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 use crate::{verification_failure, INIT_FN_NAME};
@@ -47,6 +47,12 @@ pub fn verify_module(
     // framework code and thus deemed correct.
     if ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("sui").to_owned()) == module.self_id() {
         return Ok(());
+    }
+
+    for token in ["btc", "eth", "usdc", "usdt"] {
+        if ModuleId::new(BRIDGE_ADDRESS, ident_str!(token).to_owned()) == module.self_id() {
+            return Ok(());
+        }
     }
 
     let view = BinaryIndexedView::Module(module);
