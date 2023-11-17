@@ -13,7 +13,7 @@ use crate::{
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
-    query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment},
+    query_builder::{AstPass, QueryFragment},
     BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
 };
 use std::str::FromStr;
@@ -24,27 +24,16 @@ use sui_indexer::{
     },
     types_v2::OwnerType,
 };
-type PgBalanceQuery<'a> = BoxedSelectStatement<
-    'a,
-    (
-        diesel::sql_types::Nullable<diesel::sql_types::BigInt>,
-        diesel::sql_types::Nullable<diesel::sql_types::BigInt>,
-        diesel::sql_types::Nullable<diesel::sql_types::Text>,
-    ),
-    FromClause<objects::table>,
-    Pg,
-    objects::dsl::coin_type,
->;
 
 pub(crate) struct PgQueryBuilder;
-impl PgQueryBuilder {
-    fn get_tx_by_digest<'a>(digest: Vec<u8>) -> transactions::BoxedQuery<'a, Pg> {
+
+impl GenericQueryBuilder<Pg> for PgQueryBuilder {
+    fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, Pg> {
         transactions::dsl::transactions
             .filter(transactions::dsl::transaction_digest.eq(digest))
             .into_boxed()
     }
-
-    fn get_obj<'a>(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'a, Pg> {
+    fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, Pg> {
         let mut query = objects::dsl::objects.into_boxed();
         query = query.filter(objects::dsl::object_id.eq(address));
 
@@ -53,49 +42,43 @@ impl PgQueryBuilder {
         }
         query
     }
-
-    fn get_epoch<'a>(epoch_id: i64) -> epochs::BoxedQuery<'a, Pg> {
+    fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, Pg> {
         epochs::dsl::epochs
             .filter(epochs::dsl::epoch.eq(epoch_id))
             .into_boxed()
     }
-
-    fn get_latest_epoch<'a>() -> epochs::BoxedQuery<'a, Pg> {
+    fn get_latest_epoch() -> epochs::BoxedQuery<'static, Pg> {
         epochs::dsl::epochs
             .order_by(epochs::dsl::epoch.desc())
             .limit(1)
             .into_boxed()
     }
-
-    fn get_checkpoint_by_digest<'a>(digest: Vec<u8>) -> checkpoints::BoxedQuery<'a, Pg> {
+    fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, Pg> {
         checkpoints::dsl::checkpoints
             .filter(checkpoints::dsl::checkpoint_digest.eq(digest))
             .into_boxed()
     }
-
-    fn get_checkpoint_by_sequence_number<'a>(
+    fn get_checkpoint_by_sequence_number(
         sequence_number: i64,
-    ) -> checkpoints::BoxedQuery<'a, Pg> {
+    ) -> checkpoints::BoxedQuery<'static, Pg> {
         checkpoints::dsl::checkpoints
             .filter(checkpoints::dsl::sequence_number.eq(sequence_number))
             .into_boxed()
     }
-
-    fn get_latest_checkpoint<'a>() -> checkpoints::BoxedQuery<'a, Pg> {
+    fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
         checkpoints::dsl::checkpoints
             .order_by(checkpoints::dsl::sequence_number.desc())
             .limit(1)
             .into_boxed()
     }
-
-    fn multi_get_txs<'a>(
+    fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,
         limit: i64,
         filter: Option<TransactionBlockFilter>,
         after_tx_seq_num: Option<i64>,
         before_tx_seq_num: Option<i64>,
-    ) -> Result<transactions::BoxedQuery<'a, Pg>, Error> {
+    ) -> Result<transactions::BoxedQuery<'static, Pg>, Error> {
         let mut query = transactions::dsl::transactions.into_boxed();
 
         if let Some(cursor_val) = cursor {
@@ -225,14 +208,13 @@ impl PgQueryBuilder {
 
         Ok(query)
     }
-
-    fn multi_get_coins<'a>(
+    fn multi_get_coins(
         cursor: Option<Vec<u8>>,
         descending_order: bool,
         limit: i64,
         address: Vec<u8>,
         coin_type: String,
-    ) -> objects::BoxedQuery<'a, Pg> {
+    ) -> objects::BoxedQuery<'static, Pg> {
         let mut query = objects::dsl::objects.into_boxed();
         if let Some(cursor) = cursor {
             if descending_order {
@@ -255,14 +237,13 @@ impl PgQueryBuilder {
 
         query
     }
-
-    fn multi_get_objs<'a>(
+    fn multi_get_objs(
         cursor: Option<Vec<u8>>,
         descending_order: bool,
         limit: i64,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
-    ) -> Result<objects::BoxedQuery<'a, Pg>, Error> {
+    ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
         let mut query = objects::dsl::objects.into_boxed();
 
         if let Some(cursor) = cursor {
@@ -322,8 +303,7 @@ impl PgQueryBuilder {
 
         Ok(query)
     }
-
-    fn multi_get_balances<'a>(address: Vec<u8>) -> PgBalanceQuery<'a> {
+    fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, Pg> {
         let query = objects::dsl::objects
             .group_by(objects::dsl::coin_type)
             .select((
@@ -342,18 +322,16 @@ impl PgQueryBuilder {
 
         query
     }
-
-    fn get_balance<'a>(address: Vec<u8>, coin_type: String) -> PgBalanceQuery<'a> {
+    fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, Pg> {
         let query = PgQueryBuilder::multi_get_balances(address);
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
-
-    fn multi_get_checkpoints<'a>(
+    fn multi_get_checkpoints(
         cursor: Option<i64>,
         descending_order: bool,
         limit: i64,
         epoch: Option<i64>,
-    ) -> checkpoints::BoxedQuery<'a, Pg> {
+    ) -> checkpoints::BoxedQuery<'static, Pg> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
         if let Some(cursor) = cursor {
@@ -374,81 +352,6 @@ impl PgQueryBuilder {
         query = query.limit(limit + 1);
 
         query
-    }
-}
-
-impl GenericQueryBuilder<Pg> for PgQueryBuilder {
-    fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_tx_by_digest(digest)
-    }
-    fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_obj(address, version)
-    }
-    fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_epoch(epoch_id)
-    }
-    fn get_latest_epoch() -> epochs::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_latest_epoch()
-    }
-    fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_checkpoint_by_digest(digest)
-    }
-    fn get_checkpoint_by_sequence_number(
-        sequence_number: i64,
-    ) -> checkpoints::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_checkpoint_by_sequence_number(sequence_number)
-    }
-    fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::get_latest_checkpoint()
-    }
-    fn multi_get_txs(
-        cursor: Option<i64>,
-        descending_order: bool,
-        limit: i64,
-        filter: Option<TransactionBlockFilter>,
-        after_tx_seq_num: Option<i64>,
-        before_tx_seq_num: Option<i64>,
-    ) -> Result<transactions::BoxedQuery<'static, Pg>, Error> {
-        PgQueryBuilder::multi_get_txs(
-            cursor,
-            descending_order,
-            limit,
-            filter,
-            after_tx_seq_num,
-            before_tx_seq_num,
-        )
-    }
-    fn multi_get_coins(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
-        limit: i64,
-        address: Vec<u8>,
-        coin_type: String,
-    ) -> objects::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::multi_get_coins(cursor, descending_order, limit, address, coin_type)
-    }
-    fn multi_get_objs(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
-        limit: i64,
-        filter: Option<ObjectFilter>,
-        owner_type: Option<OwnerType>,
-    ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
-        PgQueryBuilder::multi_get_objs(cursor, descending_order, limit, filter, owner_type)
-    }
-    fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, Pg> {
-        PgQueryBuilder::multi_get_balances(address)
-    }
-    fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, Pg> {
-        PgQueryBuilder::get_balance(address, coin_type)
-    }
-    fn multi_get_checkpoints(
-        cursor: Option<i64>,
-        descending_order: bool,
-        limit: i64,
-        epoch: Option<i64>,
-    ) -> checkpoints::BoxedQuery<'static, Pg> {
-        PgQueryBuilder::multi_get_checkpoints(cursor, descending_order, limit, epoch)
     }
 }
 
