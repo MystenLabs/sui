@@ -136,8 +136,9 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     }
 
     async fn cut(&mut self) -> anyhow::Result<()> {
-        if !self.current_checkpoint_range.is_empty() {
-            self.writer.flush(self.current_checkpoint_range.end)?;
+        if !self.current_checkpoint_range.is_empty()
+            && self.writer.flush(self.current_checkpoint_range.end)?
+        {
             let file_metadata = FileMetadata::new(
                 self.config.file_type,
                 self.config.file_format,
