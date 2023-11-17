@@ -192,7 +192,7 @@ impl FeatureGate {
             FeatureGate::DotCall => "Method syntax is",
             FeatureGate::PositionalFields => "Positional fields are",
             FeatureGate::LetMut => "'mut' variable modifiers are",
-            FeatureGate::Move2024Optimizations => "Move 2024 optimizations are are",
+            FeatureGate::Move2024Optimizations => "Move 2024 optimizations are",
         }
     }
 }

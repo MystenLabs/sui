@@ -11,7 +11,7 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::BTreeMap, iter::Peekable};
+use std::iter::Peekable;
 
 //**************************************************************************************************
 // Description
@@ -242,7 +242,6 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
         ..
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    // let signature = function_signature(context, signature);
     function_body(context, body);
     context.env.pop_warning_filter_scope();
 }
@@ -341,7 +340,9 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
 fn tail_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
     let last_exp = seq.iter().last();
-    let stmt_flow = statement_block(context, seq, false, true);
+    let stmt_flow = statement_block(
+        context, seq, /* stmt_pos */ false, /* skip_last */ true,
+    );
     if let (Some(control_flow), Some(sp!(_, S::Seq(last)))) = (stmt_flow, last_exp) {
         context.report_statement_tail_error(control_flow, last);
         None
@@ -424,7 +425,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                                 return next;
                             }
                         }
-                        T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+                        T::ExpListItem::Splat(_, _, _) => panic!("ICE splat is unsupported."),
                     }
                 }
                 None
@@ -468,7 +469,9 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
 fn value_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
     let last_exp = seq.iter().last();
-    let stmt_flow = statement_block(context, seq, false, true);
+    let stmt_flow = statement_block(
+        context, seq, /* stmt_pos */ false, /* skip_last */ true,
+    );
     if let (Some(control_flow), Some(sp!(_, S::Seq(last)))) = (stmt_flow, last_exp) {
         context.report_statement_tail_error(control_flow, last);
         already_reported(control_flow.loc)
@@ -539,7 +542,9 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block(seq) => statement_block(context, seq, true, false),
+        E::Block(seq) => statement_block(
+            context, seq, /* stmt_pos */ true, /* skip_last */ false,
+        ),
         E::Return(rhs) => {
             if let Some(rhs_control_flow) = value(context, rhs) {
                 context.report_value_error(rhs_control_flow);
@@ -621,7 +626,9 @@ fn statement_block(
     // statement position.
     if stmt_pos && has_trailing_unit(seq) {
         let last = seq.iter().last();
-        let result = statement_block(context, seq, false, true);
+        let result = statement_block(
+            context, seq, /* stmt_pos */ false, /* skip_last */ true,
+        );
         return if let (Some(control_flow), Some(sp!(_, S::Seq(entry)))) = (result, last) {
             context.report_statement_tail_error(control_flow, entry);
             None
@@ -635,7 +642,7 @@ fn statement_block(
     } else {
         seq.iter().enumerate().collect::<Vec<_>>()
     };
-    let last_ndx = iterator.iter().skip(1).len();
+    let last_ndx = usize::saturating_sub(iterator.len(), 1);
     let locs: Vec<_> = iterator.iter().map(|(_, s)| s.loc).collect();
 
     for (ndx, sp!(_, seq_item)) in iterator {
