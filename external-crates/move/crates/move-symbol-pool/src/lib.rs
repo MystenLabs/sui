@@ -72,6 +72,8 @@ static_symbols!(
     "SUI",
     "authenticator_state",
     "AuthenticatorState",
+    "random",
+    "Random",
     "id",
     "transfer",
     "freeze_object",

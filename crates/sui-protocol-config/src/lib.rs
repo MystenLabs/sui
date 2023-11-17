@@ -1633,11 +1633,6 @@ impl ProtocolConfig {
                     }
 
                     cfg.random_beacon_reduction_allowed_delta = Some(800);
-                    // Only enable random beacon on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
-                        cfg.feature_flags.random_beacon = true;
-                    }
                     // Only enable effects v2 on devnet and testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1663,6 +1658,12 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
+                    }
+
+                    // Only enable random beacon on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_header_v2 = true;
+                        cfg.feature_flags.random_beacon = true;
                     }
                 }
                 // Use this template when making changes:

@@ -89,6 +89,10 @@ mod sim_only_tests {
         transaction::TransactionKind,
         MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     };
+    use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+        SUI_SYSTEM_STATE_OBJECT_ID,
+    };
     use test_cluster::TestCluster;
     use tokio::time::{sleep, Duration};
     use tracing::info;
@@ -425,7 +429,14 @@ mod sim_only_tests {
             .iter()
             .find_map(|(obj, owner)| {
                 if let Owner::Shared { .. } = owner {
-                    Some(obj.0)
+                    let is_framework_obj = [
+                        SUI_SYSTEM_STATE_OBJECT_ID,
+                        SUI_CLOCK_OBJECT_ID,
+                        SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    ]
+                    .contains(&obj.0);
+                    (!is_framework_obj).then_some(obj.0)
                 } else {
                     None
                 }

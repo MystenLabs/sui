@@ -12,6 +12,7 @@ module sui::object {
     friend sui::dynamic_object_field;
     friend sui::transfer;
     friend sui::authenticator_state;
+    friend sui::random;
 
     #[test_only]
     friend sui::test_scenario;
@@ -24,6 +25,9 @@ module sui::object {
 
     /// The hardcoded ID for the singleton AuthenticatorState Object.
     const SUI_AUTHENTICATOR_STATE_ID: address = @0x7;
+
+    /// The hardcoded ID for the singleton Random Object.
+    const SUI_RANDOM_ID: address = @0x8;
 
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
@@ -99,6 +103,14 @@ module sui::object {
     public(friend) fun authenticator_state(): UID {
         UID {
             id: ID { bytes: SUI_AUTHENTICATOR_STATE_ID }
+        }
+    }
+
+    /// Create the `UID` for the singleton `Random` object.
+    /// This should only be called once from `random`.
+    public(friend) fun randomness_state(): UID {
+        UID {
+            id: ID { bytes: SUI_RANDOM_ID }
         }
     }
 

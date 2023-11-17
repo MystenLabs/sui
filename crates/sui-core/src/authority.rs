@@ -3983,6 +3983,25 @@ impl AuthorityState {
         Some(tx)
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn create_randomness_state_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().random_beacon() {
+            info!("randomness state transactions not enabled");
+            return None;
+        }
+
+        if epoch_store.randomness_state_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_randomness_state_create();
+        info!("Creating RandomnessStateCreate tx");
+        Some(tx)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -4004,6 +4023,9 @@ impl AuthorityState {
         let mut txns = Vec::new();
 
         if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_randomness_state_tx(epoch_store) {
             txns.push(tx);
         }
 

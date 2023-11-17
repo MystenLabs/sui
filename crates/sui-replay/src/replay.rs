@@ -42,7 +42,6 @@ use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::storage::{get_module, PackageObjectArc};
 use sui_types::{
     authenticator_state::get_authenticator_state_obj_initial_shared_version,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -63,6 +62,10 @@ use sui_types::{
         TransactionKind, VerifiedCertificate, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
+};
+use sui_types::{
+    randomness_state::get_randomness_state_obj_initial_shared_version,
+    storage::{get_module, PackageObjectArc},
 };
 use tracing::{error, info, warn};
 
@@ -2120,6 +2123,8 @@ async fn create_epoch_store(
         sys_state,
         CheckpointDigest::random(),
         get_authenticator_state_obj_initial_shared_version(&authority_state.database)
+            .expect("read cannot fail"),
+        get_randomness_state_obj_initial_shared_version(&authority_state.database)
             .expect("read cannot fail"),
     );
 

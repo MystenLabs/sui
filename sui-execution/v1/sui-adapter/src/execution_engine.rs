@@ -583,6 +583,9 @@ mod checked {
                             // safe mode.
                             builder = setup_authenticator_state_expire(builder, expire);
                         }
+                        EndOfEpochTransactionKind::RandomnessStateCreate => {
+                            panic!("EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -598,6 +601,9 @@ mod checked {
                     metrics,
                 )?;
                 Ok(Mode::empty_results())
+            }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                panic!("RandomnessStateUpdate should not exist in v1");
             }
         }?;
         temporary_store.check_execution_results_consistency()?;

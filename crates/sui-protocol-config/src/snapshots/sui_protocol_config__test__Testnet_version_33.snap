@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 30
+version: 33
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -35,6 +35,7 @@ feature_flags:
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
+  accept_zklogin_in_multisig: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -201,7 +202,7 @@ check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
-execution_version: 1
+execution_version: 2
 consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1

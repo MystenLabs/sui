@@ -3,9 +3,9 @@
 
 use crate::consensus_types::AuthorityIndex;
 use fastcrypto::hash::Hash;
-use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI};
+use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI, SystemMessage};
 use std::fmt::Display;
-use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 
 /// A list of tuples of:
 /// (certificate origin authority index, all transactions corresponding to the certificate).
@@ -65,7 +65,18 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
             .zip(&self.batches)
             .map(|(cert, batches)| {
                 assert_eq!(cert.header().payload().len(), batches.len());
-                let transactions: Vec<(&[u8], ConsensusTransaction)> = batches.iter().flat_map(|batch| {
+                let transactions: Vec<(&[u8], ConsensusTransaction)> =  cert.header().system_messages().iter().filter_map(|msg| {
+                    // Generate transactions to write new randomness.
+                    if let SystemMessage::RandomnessSignature(round, bytes) = msg {
+                        Some(([0u8; 0].as_slice(), ConsensusTransaction{
+                            tracking_id: [0; 8],
+                            kind: ConsensusTransactionKind::RandomnessStateUpdate(round.0, bytes.clone())
+                        }))
+                    } else {
+                        None
+                    }
+                }).chain(
+                batches.iter().flat_map(|batch| {
                     let digest = batch.digest();
                     assert!(cert.header().payload().contains_key(&digest));
                     batch.transactions().iter().map(move |serialized_transaction| {
@@ -83,7 +94,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                         };
                         (serialized_transaction.as_ref(), transaction)
                     })
-                }).collect();
+                })).collect();
                 (cert.origin().0, transactions)
             }).collect()
     }
