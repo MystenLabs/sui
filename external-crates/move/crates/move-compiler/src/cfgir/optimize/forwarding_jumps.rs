@@ -76,6 +76,7 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
     let mut final_jumps: LabelMap = BTreeMap::new();
 
     for start in forwarding_jumps.keys() {
+        if final_jumps.contains_key(start) { break };
         let mut target = *start;
         let mut seen = BTreeSet::new();
         while let Some(next_target) = forwarding_jumps.get(&target) {
@@ -95,6 +96,9 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
             }
         }
         final_jumps.insert(*start, target);
+        for source in seen {
+            final_jumps.insert(source, target);
+        }
     }
 
     final_jumps
@@ -123,8 +127,8 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>
             target,
             from_user: _,
         } => {
-            if final_jumps.contains_key(target) {
-                *target = final_jumps[target];
+            if let Some(final_target) = final_jumps.get(target) {
+                *target = *final_target;
                 true
             } else {
                 false
@@ -136,12 +140,12 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>
             if_false,
         } => {
             let mut result = false;
-            if final_jumps.contains_key(if_true) {
-                *if_true = final_jumps[if_true];
+            if let Some(final_target) = final_jumps.get(if_true) {
+                *if_true = *final_target;
                 result = true;
             }
-            if final_jumps.contains_key(if_false) {
-                *if_false = final_jumps[if_false];
+            if let Some(final_target) = final_jumps.get(if_false) {
+                *if_false = *final_target;
                 result = true;
             }
             result

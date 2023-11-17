@@ -85,8 +85,6 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 // Context
 //**************************************************************************************************
 
-const DEBUG_PRINT: bool = false;
-
 struct Context<'env> {
     env: &'env mut CompilationEnv,
     current_package: Option<Symbol>,
@@ -312,9 +310,6 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         body,
     } = f;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    if DEBUG_PRINT {
-        println!("Processing {:?}", _name);
-    }
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, body);
     context.env.pop_warning_filter_scope();
@@ -375,11 +370,6 @@ fn function_body_defined(
     seq: T::Sequence,
 ) -> (UniqueMap<H::Var, H::SingleType>, Block) {
     context.signature = Some(signature.clone());
-
-    if DEBUG_PRINT {
-        println!("--------------------------------------------------");
-        seq.print_verbose();
-    }
     let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
     if let Some(ret_exp) = final_value {
         let ret_loc = ret_exp.exp.loc;
@@ -391,15 +381,6 @@ fn function_body_defined(
     }
 
     let locals = context.extract_function_locals();
-    if DEBUG_PRINT {
-        println!("--------------------");
-        body.print_verbose();
-    }
-    if DEBUG_PRINT {
-        println!("-- optimized -------");
-        body.print_verbose();
-        println!("--------------------------------------------------");
-    }
     context.exit_function();
     (locals, body)
 }
@@ -798,7 +779,12 @@ fn value(
         let out_type = type_(context, e.ty.clone());
         let eloc = e.exp.loc;
         let out_vec = value_list(context, block, Some(&out_type), e);
-        return maybe_freeze(context, block, expected_type.cloned(), H::exp(out_type, sp(eloc, HE::Multiple(out_vec))));
+        return maybe_freeze(
+            context,
+            block,
+            expected_type.cloned(),
+            H::exp(out_type, sp(eloc, HE::Multiple(out_vec))),
+        );
     }
 
     let T::Exp {
@@ -1208,7 +1194,8 @@ fn value_list(
         .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
     {
         value_list_opt(context, result, ty, e)
-    } else if let TE::ExpList(items) = e.exp.value { // clippy insisted on this if structure!
+    } else if let TE::ExpList(items) = e.exp.value {
+        // clippy insisted on this if structure!
         value_list_items_to_vec(context, result, ty, e.exp.loc, items)
     } else if let TE::Unit { .. } = e.exp.value {
         vec![]
@@ -1612,7 +1599,6 @@ fn is_exp_list(e: &T::Exp) -> bool {
     use T::UnannotatedExp_ as E;
     matches!(e.exp.value, E::ExpList(_))
 }
-
 
 macro_rules! hcmd {
     ($cmd:pat) => {

@@ -13,7 +13,7 @@ use crate::{
     expansion::ast::{AbilitySet, ModuleIdent},
     hlir::ast::{self as H, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
-    shared::{ast_debug::AstDebug, unique_map::UniqueMap, CompilationEnv},
+    shared::{unique_map::UniqueMap, CompilationEnv},
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
@@ -28,8 +28,6 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
-
-const DEBUG_PRINT: bool = false;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -571,20 +569,11 @@ fn function_body(
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, body } => {
-            if DEBUG_PRINT {
-                println!("-----------------------------------------------------------------------");
-                println!("Processing {:?}", name);
-                body.print_verbose();
-            }
-
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
             let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
-            if DEBUG_PRINT {
-                println!("-------------------------------");
-                blocks.print_verbose();
-            }
+
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
@@ -603,13 +592,6 @@ fn function_body(
             if !context.env.has_errors() {
                 cfgir::optimize(signature, &locals, &UniqueMap::new(), &mut cfg);
             }
-            if DEBUG_PRINT {
-                println!("-------------------------------");
-                blocks.print_verbose();
-            }
-            // if DEBUG_PRINT {
-            //     println!("-- cfg built ------------------");
-            // }
 
             let block_info = block_info
                 .into_iter()
