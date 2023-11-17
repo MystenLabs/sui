@@ -49,7 +49,6 @@ use crate::{
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
     apis::GovernanceReadApiV2,
@@ -147,6 +146,25 @@ impl PgManager {
     ) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
+        IndexerReader::new_with_config(db_url, config)
+            .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
+    }
+}
+
+pub(crate) struct PgManager {
+    pub inner: IndexerReader,
+    pub limits: Limits,
+}
+
+impl PgManager {
+    pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
+        Self { inner, limits }
+    }
+
+    /// Create a new underlying reader, which is used by this type as well as other data providers.
+    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
+        let mut config = PgConnectionPoolConfig::default();
+        config.set_pool_size(3);
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
