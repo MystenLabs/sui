@@ -73,7 +73,7 @@ module.exports = {
 	},
 	overrides: [
 		{
-			files: ['sdk/typescript/src/**/*', 'sdk/dapp-kit/**/*', 'sdk/zklogin/**/*'],
+			files: ['sdk/typescript/src/**/*', 'sdk/dapp-kit/**/*', 'sdk/zklogin/**/*', 'sdk/enoki/**/*'],
 			rules: {
 				'require-extensions/require-extensions': 'error',
 				'require-extensions/require-index': 'error',

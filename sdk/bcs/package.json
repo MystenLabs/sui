@@ -7,6 +7,7 @@
 	"main": "./dist/index.js",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.ts",
+	"sideEffects": false,
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -14,7 +15,6 @@
 			"require": "./dist/index.js"
 		}
 	},
-	"sideEffects": false,
 	"files": [
 		"dist",
 		"src",
