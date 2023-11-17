@@ -1,8 +1,9 @@
-use std::path::PathBuf;
-
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use clap::*;
+use regex::Regex;
+use std::{fmt, path::PathBuf};
 
 #[derive(Parser, Clone, ValueEnum, Debug)]
 pub enum Env {
@@ -15,7 +16,8 @@ pub enum Env {
     NewLocal,
 }
 
-#[derive(Parser, Debug)]
+#[derive(derivative::Derivative, Parser)]
+#[derivative(Debug)]
 #[clap(name = "", rename_all = "kebab-case")]
 pub struct ClusterTestOpt {
     #[clap(value_enum)]
@@ -34,6 +36,7 @@ pub struct ClusterTestOpt {
     pub use_indexer_v2: bool,
     /// URL for the Indexer Postgres DB
     #[clap(long)]
+    #[derivative(Debug(format_with = "obfuscated_pg_address"))]
     pub pg_address: Option<String>,
     /// TODO(gegao): remove this after indexer migration is complete.
     #[clap(long)]
@@ -43,6 +46,21 @@ pub struct ClusterTestOpt {
     /// URL for the indexer RPC server
     #[clap(long)]
     pub graphql_address: Option<String>,
+}
+
+fn obfuscated_pg_address(val: &Option<String>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match val {
+        None => write!(f, "None"),
+        Some(val) => {
+            write!(
+                f,
+                "{}",
+                Regex::new(r":.*@")
+                    .unwrap()
+                    .replace_all(val.as_str(), ":*****@")
+            )
+        }
+    }
 }
 
 impl ClusterTestOpt {
