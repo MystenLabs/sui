@@ -937,13 +937,13 @@ fn verify_sender_signature_correctly_with_flag() {
     // create a sender keypair with Ed25519
     let sender_kp_2 = SuiKeyPair::Ed25519(get_key_pair().1);
     let mut tx_data_2 = tx_data.clone();
-    *tx_data_2.sender_mut() = (&sender_kp_2.public()).into();
+    *tx_data_2.sender_mut_for_testing() = (&sender_kp_2.public()).into();
     tx_data_2.gas_data_mut().owner = tx_data_2.sender();
 
     // create a sender keypair with Secp256r1
     let sender_kp_3 = SuiKeyPair::Secp256r1(get_key_pair().1);
     let mut tx_data_3 = tx_data.clone();
-    *tx_data_3.sender_mut() = (&sender_kp_3.public()).into();
+    *tx_data_3.sender_mut_for_testing() = (&sender_kp_3.public()).into();
     tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
     let transaction =

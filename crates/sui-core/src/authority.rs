@@ -146,6 +146,10 @@ use crate::transaction_manager::TransactionManager;
 pub mod authority_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/transaction_tests.rs"]
+pub mod transaction_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/batch_transaction_tests.rs"]
 mod batch_transaction_tests;
 
@@ -1176,7 +1180,7 @@ impl AuthorityState {
                 self.metrics.authenticator_state_update_failed.inc();
             }
             debug_assert!(execution_error_opt.is_none());
-            epoch_store.update_authenticator_state(auth_state);
+            epoch_store.update_authenticator_state(&auth_state);
 
             // double check that the signature verifier always matches the authenticator state
             if cfg!(debug_assertions) {

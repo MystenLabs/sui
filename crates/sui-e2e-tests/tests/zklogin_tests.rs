@@ -6,7 +6,8 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::utils::{
-    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx,
+    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
+    sign_zklogin_tx_with_default_proof,
 };
 use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -138,7 +139,7 @@ async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
         .transfer_sui(None, sender)
         .build();
 
-    let (_, signed_txn, _) = sign_zklogin_tx(txn, false);
+    let (_, signed_txn, _) = sign_zklogin_tx_with_default_proof(txn, false);
 
     context.execute_transaction_must_succeed(signed_txn).await;
 
