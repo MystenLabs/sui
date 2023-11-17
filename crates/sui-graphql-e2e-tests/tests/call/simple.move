@@ -35,11 +35,6 @@ module Test::M1 {
 
 //# view-checkpoint
 
-//# run-graphql
-
-{
-    chainIdentifier
-}
 
 //# advance-epoch
 
@@ -50,7 +45,6 @@ module Test::M1 {
 {
   checkpoint {
     sequenceNumber
-    digest
   }
 }
 //# create-checkpoint
@@ -62,7 +56,6 @@ module Test::M1 {
 {
   checkpoint {
     sequenceNumber
-    digest
   }
 }
 
@@ -71,7 +64,6 @@ module Test::M1 {
 {
   checkpoint {
     sequenceNumber
-    digest
   }
 }
 
