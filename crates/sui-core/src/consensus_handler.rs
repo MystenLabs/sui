@@ -566,7 +566,6 @@ impl<T, C> ConsensusHandler<T, C> {
         randomness_round: u64,
         random_bytes: Vec<u8>,
     ) -> VerifiedExecutableTransaction {
-        debug!("creating randomness state update transaction");
         assert!(self.epoch_store.randomness_state_enabled());
         let transaction = VerifiedTransaction::new_randomness_state_update(
             self.epoch(),
@@ -578,6 +577,7 @@ impl<T, C> ConsensusHandler<T, C> {
                 .randomness_obj_initial_shared_version()
                 .expect("randomness state obj must exist"),
         );
+        debug!("created randomness state update transaction: {transaction:?}");
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 

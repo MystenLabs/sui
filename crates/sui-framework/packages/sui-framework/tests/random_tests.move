@@ -7,7 +7,7 @@
 module sui::random_tests {
     use std::vector;
 
-    use sui::test_scenario::{Self};
+    use sui::test_scenario;
     use sui::random::{
         Self,
         Random,

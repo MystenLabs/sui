@@ -11,19 +11,20 @@ module sui::random {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
+    use sui::versioned::{Self, Versioned};
 
     // Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
+    const EInvalidRandomnessUpdate: u64 = 2;
 
     const CURRENT_VERSION: u64 = 1;
 
     /// Singleton shared object which stores the global randomness state.
-    /// The actual state is stored in a dynamic field of type RandomnessStateInner to support
-    /// future versions of the randomness state.
+    /// The actual state is stored in a versioned inner field.
     struct Random has key {
         id: UID,
-        version: u64,
+        inner: Versioned,
     }
 
     struct RandomInner has store {
@@ -38,7 +39,7 @@ module sui::random {
     /// Create and share the Random object. This function is called exactly once, when
     /// the Random object is first created.
     /// Can only be called by genesis or change_epoch transactions.
-    fun create(ctx: &TxContext) {
+    fun create(ctx: &mut TxContext) {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
         let version = CURRENT_VERSION;
@@ -52,28 +53,24 @@ module sui::random {
 
         let self = Random {
             id: object::randomness_state(),
-            version,
+            inner: versioned::create(version, inner, ctx),
         };
-
-        dynamic_field::add(&mut self.id, version, inner);
         transfer::share_object(self);
     }
 
     #[test_only]
-    public fun create_for_testing(ctx: &TxContext) {
+    public fun create_for_testing(ctx: &mut TxContext) {
         create(ctx);
     }
 
     fun load_inner_mut(
         self: &mut Random,
     ): &mut RandomInner {
-        let version = self.version;
+        let version = versioned::version(&self.inner);
 
-        // replace this with a lazy update function when we add a new version of the inner object.
+        // Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-
-        let inner: &mut RandomInner = dynamic_field::borrow_mut(&mut self.id, self.version);
-
+        let inner: &mut RandomInner = versioned::load_value_mut(&mut self.inner);
         assert!(inner.version == version, EWrongInnerVersion);
         inner
     }
@@ -82,11 +79,11 @@ module sui::random {
     fun load_inner(
         self: &Random,
     ): &RandomInner {
-        let version = self.version;
+        let version = versioned::version(&self.inner);
 
-        // replace this with a lazy update function when we add a new version of the inner object.
+        // Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-let inner: &RandomInner = dynamic_field::borrow(&self.id, self.version);
+        let inner: &RandomInner = versioned::load_value(&self.inner);
         assert!(inner.version == version, EWrongInnerVersion);
         inner
     }
@@ -103,13 +100,14 @@ let inner: &RandomInner = dynamic_field::borrow(&self.id, self.version);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
-        // Randomness should only be incremented. Ignore out-of-order updates.
+        // Randomness should only be incremented.
         let epoch = tx_context::epoch(ctx);
         let inner = load_inner_mut(self);
-        if (!((epoch == inner.epoch + 1 && inner.randomness_round == 0) ||
-                new_round == inner.randomness_round + 1)) {
-            return
-        };
+        assert!(
+            (epoch == inner.epoch + 1 && inner.randomness_round == 0) ||
+                (new_round == inner.randomness_round + 1),
+            EInvalidRandomnessUpdate
+        );
 
         inner.epoch = tx_context::epoch(ctx);
         inner.randomness_round = new_round;

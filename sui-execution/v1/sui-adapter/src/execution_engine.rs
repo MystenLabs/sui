@@ -584,7 +584,6 @@ mod checked {
                             builder = setup_authenticator_state_expire(builder, expire);
                         }
                         EndOfEpochTransactionKind::RandomnessStateCreate => {
-                            // TODO-DNS is this right?
                             panic!("EndOfEpochTransactionKind::RandomnessStateCreate should not exist in v1");
                         }
                     }
