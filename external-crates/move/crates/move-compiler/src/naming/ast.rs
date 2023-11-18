@@ -5,8 +5,9 @@
 use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
-        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes, Fields,
-        Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_, Visibility,
+        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
+        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_,
+        Visibility,
     },
     parser::ast::{
         Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
@@ -280,9 +281,7 @@ pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
-    Move(Var),
-    Copy(Var),
-    Use(Var),
+    Var(Var),
     Constant(ModuleIdent, ConstantName),
 
     ModuleCall(
@@ -320,8 +319,7 @@ pub enum Exp_ {
         trailing: bool,
     },
 
-    DerefBorrow(ExpDotted),
-    Borrow(bool, ExpDotted),
+    ExpDotted(DottedUsage, ExpDotted),
 
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
@@ -1168,15 +1166,7 @@ impl AstDebug for Exp_ {
                 trailing: _trailing,
             } => w.write("/*()*/"),
             E::Value(v) => v.ast_debug(w),
-            E::Move(v) => {
-                w.write("move ");
-                v.ast_debug(w)
-            }
-            E::Copy(v) => {
-                w.write("copy ");
-                v.ast_debug(w)
-            }
-            E::Use(v) => v.ast_debug(w),
+            E::Var(v) => v.ast_debug(w),
             E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
@@ -1319,15 +1309,15 @@ impl AstDebug for Exp_ {
                 w.write(" ");
                 r.ast_debug(w)
             }
-            E::Borrow(mut_, e) => {
-                w.write("&");
-                if *mut_ {
-                    w.write("mut ");
-                }
-                e.ast_debug(w);
-            }
-            E::DerefBorrow(ed) => {
-                w.write("(&*)");
+            E::ExpDotted(usage, ed) => {
+                let case = match usage {
+                    DottedUsage::Move(_) => "move ",
+                    DottedUsage::Copy(_) => "copy ",
+                    DottedUsage::Use => "use ",
+                    DottedUsage::Borrow(false) => "&",
+                    DottedUsage::Borrow(true) => "&mut ",
+                };
+                w.write(case);
                 ed.ast_debug(w)
             }
             E::Cast(e, ty) => {

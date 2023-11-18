@@ -1,0 +1,24 @@
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_2024/typing/implicit_const_copy_method.move:7:9
+  │
+7 │         C.next();
+  │         ^ Borrowing, or accessing the field of, a constant will first copy the entire constant. Consider first binding the value to a variable to make this copy explicit.
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_2024/typing/implicit_const_copy_method.move:8:9
+  │
+8 │         BYTES.length();
+  │         ^^^^^ Borrowing, or accessing the field of, a constant will first copy the entire constant. Consider first binding the value to a variable to make this copy explicit.
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+  ┌─ tests/move_2024/typing/implicit_const_copy_method.move:9:9
+  │
+9 │         BYTES.push_back(0);
+  │         ^^^^^ Borrowing, or accessing the field of, a constant will first copy the entire constant. Consider first binding the value to a variable to make this copy explicit.
+  │
+  = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

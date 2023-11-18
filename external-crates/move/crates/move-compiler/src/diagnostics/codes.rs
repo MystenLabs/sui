@@ -182,6 +182,7 @@ codes!(
         InvalidSpecBlockMember: { msg: "invalid spec block member", severity: NonblockingError },
         InvalidRestrictedIdentifier:
             { msg: "invalid identifier escape", severity: NonblockingError },
+        InvalidMoveOrCopy: { msg: "invalid 'move' or 'copy'", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -259,6 +260,9 @@ codes!(
         InvalidImmVariableUsage:
             { msg: "invalid usage of immutable variable", severity: NonblockingError },
         InvalidControlFlow: { msg: "invalid control flow", severity: BlockingError },
+        InvalidCopyOp: { msg: "invalid 'copy' usage_msg", severity: NonblockingError },
+        InvalidMoveOp: { msg: "invalid 'move' usage_msg", severity: NonblockingError },
+        ImplicitConstantCopy: { msg: "implicit copy of a constant", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

@@ -784,7 +784,19 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                 } = self.parent.parent.unary_op_symbol(&op.value);
                 self.translate_call(&loc, &Some(module_name), symbol, None, &args, expected_type)
             }
-            EA::Exp_::ExpDotted(dotted) => self.translate_dotted(dotted, expected_type),
+            EA::Exp_::ExpDotted(usage, dotted) => match usage {
+                EA::DottedUsage::Move(_)
+                | EA::DottedUsage::Copy(_)
+                | EA::DottedUsage::Borrow(_) => {
+                    if self.translating_fun_as_spec_fun {
+                        self.translate_dotted(dotted, expected_type)
+                    } else {
+                        self.error(&loc, "expression construct not supported in specifications");
+                        self.new_error_exp()
+                    }
+                }
+                EA::DottedUsage::Use => self.translate_dotted(dotted, expected_type),
+            },
             EA::Exp_::Index(target, index) => {
                 self.translate_index(&loc, target, index, expected_type)
             }
@@ -821,7 +833,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                 self.error(&loc, "assignment only allowed in spec var updates");
                 self.new_error_exp()
             }
-            EA::Exp_::Dereference(exp) | EA::Exp_::Borrow(_, exp) => {
+            EA::Exp_::Dereference(exp) => {
                 if self.translating_fun_as_spec_fun {
                     self.translate_exp(exp, expected_type)
                 } else {
