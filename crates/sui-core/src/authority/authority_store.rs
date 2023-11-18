@@ -1993,6 +1993,19 @@ impl AuthorityStore {
         info!("Removing all versions of object: {:?}", entries);
         self.perpetual_tables.objects.multi_remove(entries).unwrap();
     }
+
+    // Counts the number of versions exist in object store for `object_id`. This includes tombstone.
+    #[cfg(msim)]
+    pub fn count_object_versions(&self, object_id: ObjectID) -> usize {
+        self.perpetual_tables
+            .objects
+            .iter_with_bounds(
+                Some(ObjectKey(object_id, VersionNumber::MIN)),
+                Some(ObjectKey(object_id, VersionNumber::MAX)),
+            )
+            .collect::<Vec<_>>()
+            .len()
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {
