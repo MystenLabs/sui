@@ -417,7 +417,9 @@ impl CommittedSubDagShell {
 /// Shutdown token dropped when a task is properly shut down.
 pub type ShutdownToken = mpsc::Sender<()>;
 
-// Digest of ConsususOutput and CommittedSubDag
+// Digest of ConsususOutput and CommittedSubDag.
+// In non-byzantine environment, ConsensusOutputDigest of each consensus output in different
+// validator must be the same.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ConsensusOutputDigest([u8; crypto::DIGEST_LENGTH]);
 

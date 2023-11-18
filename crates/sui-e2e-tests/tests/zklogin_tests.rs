@@ -59,7 +59,6 @@ async fn test_zklogin_feature_legacy_address_deny() {
     let err = do_zklogin_test(get_legacy_zklogin_user_address(), true)
         .await
         .unwrap_err();
-    eprintln!("ZZZZZ error {:?}", err);
     assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
 }
 

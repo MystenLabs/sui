@@ -349,6 +349,8 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     accept_zklogin_in_multisig: bool,
 
+    // If true, consensus prologue transaction also includes the consensus output digest.
+    // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
     include_consensus_digest_in_prologue: bool,
 }
@@ -1676,6 +1678,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
+                    }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;

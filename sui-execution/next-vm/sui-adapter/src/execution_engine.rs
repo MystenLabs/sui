@@ -43,7 +43,7 @@ mod checked {
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;

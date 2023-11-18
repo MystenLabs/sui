@@ -1319,7 +1319,6 @@ pub struct SuiConsensusCommitPrologueV2 {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
-
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
 

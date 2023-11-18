@@ -940,6 +940,10 @@ impl ConsensusCommitDigest {
     pub const fn into_inner(self) -> [u8; 32] {
         self.0.into_inner()
     }
+
+    pub fn random() -> Self {
+        Self(Digest::random())
+    }
 }
 
 impl Default for ConsensusCommitDigest {

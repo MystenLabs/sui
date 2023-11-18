@@ -273,6 +273,7 @@ pub enum TransactionKind {
     EndOfEpochTransaction(Vec<EndOfEpochTransactionKind>),
 
     RandomnessStateUpdate(RandomnessStateUpdate),
+    // V2 ConsensusCommitPrologue also includes the digest of the current consensus output.
     ConsensusCommitPrologueV2(ConsensusCommitPrologueV2),
     // .. more transaction types go here
 }
@@ -1348,6 +1349,7 @@ impl Display for TransactionKind {
             Self::ConsensusCommitPrologueV2(p) => {
                 writeln!(writer, "Transaction Kind : Consensus Commit Prologue V2")?;
                 writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
+                writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
             }
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
