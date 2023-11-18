@@ -5913,6 +5913,7 @@ dependencies = [
  "sha2 0.9.9",
  "tempfile",
  "toml 0.5.10",
+ "toml_edit 0.14.4",
  "treeline",
  "walkdir",
  "whoami",

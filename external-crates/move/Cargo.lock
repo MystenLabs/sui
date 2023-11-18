@@ -971,6 +971,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dissimilar"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86e3bdc80eee6e16b2b6b0f87fbc98c04bee3455e35174c0de1a125d0688c632"
+
+[[package]]
 name = "dunce"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1046,6 +1052,16 @@ name = "ethnum"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
+
+[[package]]
+name = "expect-test"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d9eafeadd538e68fb28016364c9732d78e420b9ff8853fa5e4058861e9f8d3"
+dependencies = [
+ "dissimilar",
+ "once_cell",
+]
 
 [[package]]
 name = "fail"
@@ -2117,6 +2133,7 @@ dependencies = [
  "clap 4.4.1",
  "colored",
  "datatest-stable",
+ "expect-test",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -2135,6 +2152,7 @@ dependencies = [
  "sha2 0.9.9",
  "tempfile",
  "toml",
+ "toml_edit 0.14.4",
  "treeline",
  "walkdir",
  "whoami",
