@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClientContext } from '@mysten/dapp-kit';
-import type { SuiClient } from '@mysten/sui.js/client';
-import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import { useQueries } from '@tanstack/react-query';
 
 import type { SuiRpcMethods, UseSuiClientQueryOptions } from './useSuiClientQuery.js';
