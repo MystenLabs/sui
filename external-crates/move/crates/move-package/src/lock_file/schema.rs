@@ -11,6 +11,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
+use toml_edit::{Item::Value as EItem, Value as EValue};
 
 use crate::BuildConfig;
 
@@ -162,34 +163,38 @@ pub fn update_compiler_toolchain(
     let mut toml = toml_string.parse::<toml_edit::Document>()?;
     let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
     move_table["compiler-version"] = toml_edit::value(compiler_version);
-    let compiler_flags = toml::to_string(build_config)?.parse()?;
+    let compiler_flags = toml::Value::try_from(build_config)?;
     let compiler_flags = to_toml_edit_value(&compiler_flags);
-    move_table["compiler-flags"] = toml_edit::value(compiler_flags);
+    move_table["compiler-flags"] = compiler_flags;
     write!(file, "{}", toml)?;
     file.flush()?;
     Ok(())
 }
 
-fn to_toml_edit_value(value: &toml::Value) -> toml_edit::Value {
+fn to_toml_edit_value(value: &toml::Value) -> toml_edit::Item {
     match value {
-        toml::Value::String(v) => toml_edit::Value::from(v.clone()),
-        toml::Value::Integer(v) => toml_edit::Value::from(*v),
-        toml::Value::Float(v) => toml_edit::Value::from(*v),
-        toml::Value::Boolean(v) => toml_edit::Value::from(*v),
-        toml::Value::Datetime(v) => toml_edit::Value::from(v.to_string()),
-        toml::Value::Array(arr) => {
+        Value::String(v) => EItem(EValue::from(v.clone())),
+        Value::Integer(v) => EItem(EValue::from(*v)),
+        Value::Float(v) => EItem(EValue::from(*v)),
+        Value::Boolean(v) => EItem(EValue::from(*v)),
+        Value::Datetime(v) => EItem(EValue::from(v.to_string())),
+        Value::Array(arr) => {
             let mut toml_edit_arr = toml_edit::Array::new();
             for x in arr {
-                toml_edit_arr.push(to_toml_edit_value(x));
+                let item = to_toml_edit_value(x);
+                match item {
+                    EItem(i) => toml_edit_arr.push(i),
+                    _ => panic!("cant"),
+                }
             }
-            toml_edit::Value::from(toml_edit_arr)
+            EItem(EValue::from(toml_edit_arr))
         }
-        toml::Value::Table(table) => {
+        Value::Table(table) => {
             let mut toml_edit_table = toml_edit::Table::new();
             for (k, v) in table {
-                toml_edit_table[k] = toml_edit::Item::Value(to_toml_edit_value(v));
+                toml_edit_table[k] = to_toml_edit_value(v);
             }
-            toml_edit::Value::InlineTable(toml_edit_table.into_inline_table())
+            toml_edit::Item::Table(toml_edit_table)
         }
     }
 }

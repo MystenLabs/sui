@@ -219,11 +219,9 @@ impl BuildConfig {
     }
 
     pub fn update_lock_file_toolchain_version(&self, compiler_version: String) -> Result<()> {
-        let lock_file = self.lock_file.as_ref();
-        if lock_file.is_none() {
+        let Some(lock_file) = self.lock_file.as_ref() else {
             return Ok(());
         };
-        let lock_file = lock_file.unwrap();
         let install_dir = self
             .install_dir
             .clone()
