@@ -659,7 +659,8 @@ impl NodeStateGetter for PersistedStoreInnerReadOnlyWrapper {
 
 impl PersistedStoreInnerReadOnlyWrapper {
     pub fn sync(&self) {
-        self.inner.try_catch_up_with_primary_all()
+        self.inner
+            .try_catch_up_with_primary_all()
             .expect("Fatal: DB sync failed");
     }
 }
