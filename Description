@@ -1,0 +1,17 @@
+Description
+This PR implements consensus folk detection by adding consensus output digest into consensus commit prologue transaction. The digest implementation uses the existing ConsensusOutputCommit.
+
+Test Plan
+Unit test to test to test basic ConsensusCommitPrologueV2
+Unit test to test CheckpointSummary creates different digest if the included ConsensusCommitPrologueV2 transactions have different consensus output digest.
+
+If your changes are not user-facing and not a breaking change, you can skip the following section. Otherwise, please indicate what changed, and then add to the Release Notes section as highlighted during the release process.
+
+Type of Change (Check all that apply)
+ protocol change
+ user-visible impact
+ breaking change for a client SDKs
+ breaking change for FNs (FN binary must upgrade)
+ breaking change for validators or node operators (must upgrade binaries)
+ breaking change for on-chain data layout
+ necessitate either a data wipe or data migration
