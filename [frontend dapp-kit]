@@ -1,0 +1,28 @@
+In certain scenarios, dApp needs to utilize useQueries for data retrieval.
+
+Here is an example:
+
+const { data: coinBalanceList = [] } = useSuiClientQuery("getAllBalances", {
+  owner: walletAddress,
+});
+
+// After obtaining the balance for each coin, 
+// it is necessary to further retrieve the metadata for each individual coin.
+const coinListMetadata = useSuiClientQueries(
+  ...coinBalanceList.map(
+    (coin): ["getCoinMetadata", SuiRpcMethods["getCoinMetadata"]["params"]] => {
+      return [
+        "getCoinMetadata",
+        {
+          coinType: coin.coinType,
+        },
+      ];
+    }
+  )
+);
+
+const metadataList: CoinMetadata[] = coinListMetadata.map((data) => data);
+With the useSuiClientQueries hook, retrieving the aforementioned data will be much more easy.
+
+If there are any changes needed or if you have any suggestions, please feel free to contact me at any time!
+Thanks!
