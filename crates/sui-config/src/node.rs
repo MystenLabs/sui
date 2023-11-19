@@ -560,16 +560,9 @@ pub struct AuthorityStorePruningConfig {
     /// number of epochs to keep the latest version of transactions and effects for
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_epochs_to_retain_for_checkpoints: Option<u64>,
-    /// enables pruner to prune no longer needed object tombstones. We don't serialize it if it is the default value, true.
-    #[serde(
-        default = "default_enable_pruning_tombstones",
-        skip_serializing_if = "Clone::clone"
-    )]
-    pub enable_pruning_tombstones: bool,
-}
-
-fn default_enable_pruning_tombstones() -> bool {
-    true
+    /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub killswitch_tombstone_pruning: bool,
 }
 
 impl Default for AuthorityStorePruningConfig {
@@ -586,7 +579,7 @@ impl Default for AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: None,
-            enable_pruning_tombstones: true,
+            killswitch_tombstone_pruning: false,
         }
     }
 }
@@ -606,7 +599,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
-            enable_pruning_tombstones: true,
+            killswitch_tombstone_pruning: false,
         }
     }
     pub fn fullnode_config() -> Self {
@@ -623,7 +616,7 @@ impl AuthorityStorePruningConfig {
             max_transactions_in_batch: 1000,
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints,
-            enable_pruning_tombstones: true,
+            killswitch_tombstone_pruning: false,
         }
     }
 
@@ -644,8 +637,8 @@ impl AuthorityStorePruningConfig {
             })
     }
 
-    pub fn set_enable_pruning_tombstones(&mut self, enable_pruning_tombstones: bool) {
-        self.enable_pruning_tombstones = enable_pruning_tombstones;
+    pub fn set_killswitch_tombstone_pruning(&mut self, killswitch_tombstone_pruning: bool) {
+        self.killswitch_tombstone_pruning = killswitch_tombstone_pruning;
     }
 }
 
