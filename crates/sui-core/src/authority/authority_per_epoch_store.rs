@@ -1224,12 +1224,6 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult {
         let tx_digest = certificate.digest();
 
-        debug!(
-            ?tx_digest,
-            ?assigned_versions,
-            "set_assigned_shared_object_versions"
-        );
-
         #[allow(clippy::needless_collect)]
         let shared_input_objects: Vec<_> = certificate
             .data()
@@ -1238,6 +1232,13 @@ impl AuthorityPerEpochStore {
             .shared_input_objects()
             .map(SharedInputObject::into_id_and_version)
             .collect();
+
+        debug!(
+            ?tx_digest,
+            ?assigned_versions,
+            ?shared_input_objects,
+            "set_assigned_shared_object_versions"
+        );
 
         self.get_or_init_next_object_versions(shared_input_objects.into_iter(), object_store)
             .await?;
@@ -1332,16 +1333,22 @@ impl AuthorityPerEpochStore {
         effects: &TransactionEffects,
         object_store: impl ObjectStore,
     ) -> SuiResult {
-        self.set_assigned_shared_object_versions(
-            certificate,
-            &effects
-                .input_shared_objects()
-                .into_iter()
-                .map(|iso| iso.id_and_version())
-                .collect(),
-            object_store,
-        )
-        .await
+        let assigned_versions: Vec<_> = effects
+            .input_shared_objects()
+            .into_iter()
+            .map(|iso| iso.id_and_version())
+            .collect();
+        if assigned_versions.is_empty() {
+            let tx_digest = certificate.digest();
+            debug!(
+                ?tx_digest,
+                "no assigned shared object versions:\ncert: {:?}\neffects: {:?}",
+                certificate,
+                effects
+            );
+        }
+        self.set_assigned_shared_object_versions(certificate, &assigned_versions, object_store)
+            .await
     }
 
     /// When submitting a certificate caller **must** provide a ReconfigState lock guard
