@@ -1028,7 +1028,13 @@ type MoveModule {
   fileFormatVersion: Int!
 
   moduleId: MoveModuleId!
-  friends: [MoveModule!]
+
+  friendConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String
+  ): MoveModuleConnection
 
   struct(name: String!): MoveStruct
   structConnection(
@@ -1241,6 +1247,17 @@ type MoveFunctionConnection {
 type MoveFunctionEdge {
   cursor: String
   node: MoveFunction!
+}
+
+# MoveModuleConnection
+type MoveModuleConnection {
+  edges: [MoveModuleEdge]
+  pageInfo: PageInfo!
+}
+
+type MoveModuleEdge {
+  cursor: String
+  node: MoveModule
 }
 
 # MoveStructConnection

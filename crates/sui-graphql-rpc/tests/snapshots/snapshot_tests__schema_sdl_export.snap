@@ -555,6 +555,15 @@ and functions that operate on these types.
 """
 type MoveModule {
 	fileFormatVersion: Int!
+	moduleId: MoveModuleId!
+	"""
+	The Base64 encoded bcs serialization of the module.
+	"""
+	bytes: Base64
+	"""
+	Textual representation of the module's bytecode.
+	"""
+	disassembly: String
 }
 
 type MoveModuleConnection {
