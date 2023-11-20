@@ -947,14 +947,14 @@ TransactionKind:
         NEWTYPE:
           TYPENAME: AuthenticatorStateUpdate
     5:
-      RandomnessStateUpdate:
-        NEWTYPE:
-          TYPENAME: RandomnessStateUpdate
-    6:
       EndOfEpochTransaction:
         NEWTYPE:
           SEQ:
             TYPENAME: EndOfEpochTransactionKind
+    6:
+      RandomnessStateUpdate:
+        NEWTYPE:
+          TYPENAME: RandomnessStateUpdate
 TypeArgumentError:
   ENUM:
     0:

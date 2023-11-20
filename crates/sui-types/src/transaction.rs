@@ -267,11 +267,12 @@ pub enum TransactionKind {
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
     AuthenticatorStateUpdate(AuthenticatorStateUpdate),
-    RandomnessStateUpdate(RandomnessStateUpdate),
 
     /// EndOfEpochTransaction replaces ChangeEpoch with a list of transactions that are allowed to
     /// run at the end of the epoch.
     EndOfEpochTransaction(Vec<EndOfEpochTransactionKind>),
+
+    RandomnessStateUpdate(RandomnessStateUpdate),
     // .. more transaction types go here
 }
 
