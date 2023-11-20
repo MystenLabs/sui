@@ -96,6 +96,7 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Add sui::token module to sui framework.
 //             Enable transfer to object in testnet.
 //             Enable Narwhal CertificateV2 on mainnet
+//             Make critbit tree and order getters public in deepbook.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
