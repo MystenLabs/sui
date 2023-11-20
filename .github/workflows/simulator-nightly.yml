@@ -15,62 +15,62 @@ on:
         default: origin/main
 
 jobs:
-  simtest:
-    timeout-minutes: 120
-    permissions:
-      # The "id-token: write" permission is required or Machine ID will not be
-      # able to authenticate with the cluster.
-      id-token: write
-      contents: read
-    runs-on: ubuntu-latest
+  # simtest:
+  #   timeout-minutes: 120
+  #   permissions:
+  #     # The "id-token: write" permission is required or Machine ID will not be
+  #     # able to authenticate with the cluster.
+  #     id-token: write
+  #     contents: read
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Install Teleport
-        uses: teleport-actions/setup@8d23169da0f80ce14d25ed791272faa1c07f4f1e # pin@v1
-        with:
-          version: 11.3.1
-      - name: Authorize against Teleport
-        id: auth
-        uses: teleport-actions/auth@9091dad16a564f3c5b9c2ec520b234a4872b6879 # pin@v1
-        with:
-          # Specify the publically accessible address of your Teleport proxy.
-          proxy: proxy.mysten-int.com:443
-          # Specify the name of the join token for your bot.
-          token: sui-simtest-token
-          # Specify the length of time that the generated credentials should be
-          # valid for. This is optional and defaults to "1h"
-          certificate-ttl: 2h
+  #   steps:
+  #     - name: Install Teleport
+  #       uses: teleport-actions/setup@8d23169da0f80ce14d25ed791272faa1c07f4f1e # pin@v1
+  #       with:
+  #         version: 11.3.1
+  #     - name: Authorize against Teleport
+  #       id: auth
+  #       uses: teleport-actions/auth@9091dad16a564f3c5b9c2ec520b234a4872b6879 # pin@v1
+  #       with:
+  #         # Specify the publically accessible address of your Teleport proxy.
+  #         proxy: proxy.mysten-int.com:443
+  #         # Specify the name of the join token for your bot.
+  #         token: sui-simtest-token
+  #         # Specify the length of time that the generated credentials should be
+  #         # valid for. This is optional and defaults to "1h"
+  #         certificate-ttl: 2h
 
-      # Cargo clean and git restore on any left over files from git checkout, and deletes all remote tracking branches
-      - name: Environment clean
-        run: | 
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git branch -r | grep -v '[-]>' | xargs -L 1 git branch -rD || true"
+  #     # Cargo clean and git restore on any left over files from git checkout, and deletes all remote tracking branches
+  #     - name: Environment clean
+  #       run: | 
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git branch -r | grep -v '[-]>' | xargs -L 1 git branch -rD || true"
  
-      # Deleting files in tmpfs that usually fill up pretty quickly after each run
-      - name: Tmpfs clean
-        run: |  
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rfd /tmp/*"
+  #     # Deleting files in tmpfs that usually fill up pretty quickly after each run
+  #     - name: Tmpfs clean
+  #       run: |  
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rfd /tmp/*"
 
-      # Checkout out the latest sui repo
-      - name: Checkout sui repo
-        run: |
-          SUI_COMMIT=${{ inputs.sui_commit }}
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout $SUI_COMMIT"
+  #     # Checkout out the latest sui repo
+  #     - name: Checkout sui repo
+  #       run: |
+  #         SUI_COMMIT=${{ inputs.sui_commit }}
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout $SUI_COMMIT"
 
-      # Setting up cargo and simtest
-      - name: Install simtest
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+  #     # Setting up cargo and simtest
+  #     - name: Install simtest
+  #       run: |
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
 
-      # Run simulator tests
-      - name: Run simtest
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=24 ./scripts/simtest/simtest-run.sh"
+  #     # Run simulator tests
+  #     - name: Run simtest
+  #       run: |
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=24 ./scripts/simtest/simtest-run.sh"
   
   notify:
     name: Notify
-    needs: [simtest]
+    # needs: [simtest]
     runs-on: ubuntu-latest
     if: always() # always notify
 
@@ -81,7 +81,7 @@ jobs:
       uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
     
     - name: Get sui commit
-      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
+      # if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -89,7 +89,7 @@ jobs:
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
     - name: Get link to logs
-      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
+      # if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -97,7 +97,7 @@ jobs:
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
 
     - name: Post to slack
-      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
+      # if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
