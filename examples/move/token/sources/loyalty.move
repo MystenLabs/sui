@@ -48,7 +48,7 @@ module examples::loyalty {
             ctx
         );
 
-        let (policy, policy_cap) = token::new(&treasury_cap, ctx);
+        let (policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
 
         // but we constrain spend by this shop:
         token::add_rule_for_action<LOYALTY, GiftShop>(
