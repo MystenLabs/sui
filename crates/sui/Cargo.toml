@@ -72,6 +72,15 @@ workspace-hack.workspace = true
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
 
+move-vm-test-utils = {workspace = true, optional = true}
+move-vm-types = {workspace = true, optional = true}
+move-vm-profiler = {workspace = true, optional = true}
+move-cli = {workspace = true, optional = true}
+move-unit-test = {workspace = true, optional = true}
+move-vm-config = {workspace = true, optional = true}
+sui-execution = {workspace = true, optional = true}
+#move-vm-runtime = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime", option = true}
+
 [dev-dependencies]
 prometheus.workspace = true
 fs_extra.workspace = true
@@ -95,6 +104,16 @@ test = false
 name = "sui"
 path = "src/main.rs"
 
-#[features]
-#default = ["gas-profiler"]
-
+[features]
+default = ["gas-profiler"]
+gas-profiler = [
+    "sui-types/gas-profiler",
+    "move-cli/gas-profiler",
+    "move-unit-test/gas-profiler",
+    "move-vm-config/gas-profiler",
+    "move-vm-profiler/gas-profiler",
+    "move-vm-types/gas-profiler",
+    "move-vm-test-utils/gas-profiler",
+    "sui-execution/gas-profiler",
+    #"move-vm-runtime/gas-profiler",
+]

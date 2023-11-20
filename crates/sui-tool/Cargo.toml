@@ -50,7 +50,12 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-archival.workspace = true
 workspace-hack.workspace = true
-move-vm-profiler = { workspace = true, features = ["gas-profiler"] }
+
+move-vm-config = {workspace = true, optional = true}
+move-vm-test-utils = {workspace = true, optional = true}
+move-vm-types = {workspace = true, optional = true}
+move-vm-profiler = {workspace = true, optional = true}
+move-unit-test = {workspace = true, optional = true}
 
 [[bin]]
 name = "sui-tool"
@@ -58,3 +63,12 @@ path = "src/main.rs"
 
 [features]
 default = ["gas-profiler"]
+gas-profiler = [
+    "sui-types/gas-profiler",
+    "move-vm-config/gas-profiler",
+    "move-vm-profiler/gas-profiler",
+    "move-vm-test-utils/gas-profiler",
+    "move-vm-types/gas-profiler",
+    "move-unit-test/gas-profiler",
+]
+

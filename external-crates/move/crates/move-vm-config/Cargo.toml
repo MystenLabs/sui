@@ -10,3 +10,7 @@ edition = "2021"
 [dependencies]
 move-binary-format.workspace = true
 once_cell.workspace = true
+
+[features]
+default = []
+gas-profiler = []

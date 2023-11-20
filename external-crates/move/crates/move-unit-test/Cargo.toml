@@ -46,3 +46,6 @@ path = "src/main.rs"
 [[test]]
 name = "move_unit_test_testsuite"
 harness = false
+
+[features]
+gas-profiler = []

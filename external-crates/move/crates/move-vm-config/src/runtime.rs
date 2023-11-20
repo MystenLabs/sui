@@ -3,11 +3,14 @@
 
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::file_format_common::VERSION_MAX;
+#[cfg(feature = "gas-profiler")]
 use once_cell::sync::Lazy;
+#[cfg(feature = "gas-profiler")]
 use std::path::PathBuf;
 
 pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
 
+#[cfg(feature = "gas-profiler")]
 pub static DEFAULT_PROFILE_OUTPUT_PATH: Lazy<PathBuf> = Lazy::new(|| std::path::PathBuf::from("."));
 
 /// Dynamic config options for the Move VM.
@@ -64,7 +67,7 @@ impl Default for VMRuntimeLimitsConfig {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 #[derive(Clone, Debug)]
 pub struct VMProfilerConfig {
     pub enabled: bool,
@@ -76,6 +79,28 @@ pub struct VMProfilerConfig {
     pub track_bytecode_instructions: bool,
     /// Whether or not to use the long name for functions
     pub use_long_function_name: bool,
+}
+
+#[cfg(feature = "gas-profiler")]
+impl VMProfilerConfig {
+    pub fn new(enable_profiler: Option<PathBuf>) -> Self {
+        VMProfilerConfig {
+            enabled: enable_profiler.is_some(),
+            base_path: (*match enable_profiler {
+                Some(ref p) => p.clone().to_path_buf(),
+                None => std::path::PathBuf::from("."),
+            })
+            .to_owned(),
+            full_path: enable_profiler.filter(|p| {
+                !matches!(
+                    p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
+                    Some(std::cmp::Ordering::Equal)
+                )
+            }),
+            track_bytecode_instructions: false,
+            use_long_function_name: false,
+        }
+    }
 }
 
 #[cfg(feature = "gas-profiler")]

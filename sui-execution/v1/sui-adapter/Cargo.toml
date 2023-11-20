@@ -34,3 +34,6 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 move-package.workspace = true
+
+[features]
+gas-profiler = []

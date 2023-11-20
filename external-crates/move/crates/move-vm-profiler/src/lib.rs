@@ -17,15 +17,15 @@ const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
 static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
-#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
+#[cfg(feature = "gas-profiler")]
 pub struct FrameName {
     name: String,
     file: String,
 }
 
-#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
+#[cfg(feature = "gas-profiler")]
 pub struct Shared {
     frames: Vec<FrameName>,
 
@@ -33,8 +33,8 @@ pub struct Shared {
     frame_table: BTreeMap<String, usize>,
 }
 
-#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
+#[cfg(feature = "gas-profiler")]
 pub struct Event {
     #[serde(rename(serialize = "type"))]
     ty: String,
@@ -42,9 +42,9 @@ pub struct Event {
     at: u64,
 }
 
-#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(feature = "gas-profiler")]
 pub struct Profile {
     #[serde(rename(serialize = "type"))]
     ty: String,
@@ -55,9 +55,9 @@ pub struct Profile {
     events: Vec<Event>,
 }
 
-#[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(feature = "gas-profiler")]
 pub struct GasProfiler {
     exporter: String,
     name: String,

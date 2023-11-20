@@ -668,6 +668,10 @@ impl SuiClientCommands {
                 tx_digest,
                 profile_output_filepath,
             } => {
+                #[cfg(feature = "gas-profiler")]
+                println!("the gas-profile feature is enabled");
+                #[cfg(not(feature = "gas-profiler"))]
+                println!("the gas-profile feature is not enabled");
                 let cmd = ReplayToolCommand::ProfileTransaction {
                     tx_digest,
                     show_effects: false,

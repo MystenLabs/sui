@@ -45,3 +45,6 @@ workspace-hack.workspace = true
 [dev-dependencies]
 cargo_metadata = "0.15.4"
 petgraph = "0.5.1"
+
+[features]
+gas-profiler = []

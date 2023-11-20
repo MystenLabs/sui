@@ -517,7 +517,7 @@ move-core-types = { path = "external-crates/move/crates/move-core-types" }
 move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
-move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
+move-vm-config = { path = "external-crates/move/crates/move-vm-config"}
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
   "tiered-gas",
 ] }
@@ -552,7 +552,7 @@ mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
 simulacrum = { path = "crates/simulacrum" }
-sui = { path = "crates/sui" }
+sui = { path = "crates/sui", default-features = false  }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
@@ -606,7 +606,7 @@ sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rest-api = { path = "crates/sui-rest-api" }
-sui-tool = { path = "crates/sui-tool" }
+sui-tool = { path = "crates/sui-tool", default-features = false  }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }

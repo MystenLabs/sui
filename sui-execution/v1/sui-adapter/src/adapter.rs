@@ -13,9 +13,12 @@ mod checked {
     use move_bytecode_verifier::meter::Meter;
     use move_bytecode_verifier::verify_module_with_config_metered;
     use move_core_types::account_address::AccountAddress;
+    #[cfg(feature = "gas-profiler")]
     use move_vm_config::runtime::VMProfilerConfig;
+    #[cfg(feature = "gas-profiler")]
+    use move_vm_config::runtime::DEFAULT_PROFILE_OUTPUT_PATH;
     use move_vm_config::{
-        runtime::{VMConfig, VMRuntimeLimitsConfig, DEFAULT_PROFILE_OUTPUT_PATH},
+        runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
     };
     use move_vm_runtime::{
@@ -86,7 +89,7 @@ mod checked {
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
         paranoid_type_checks: bool,
-        enable_profiler: Option<PathBuf>,
+        _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
         MoveVM::new_with_config(
             natives,
@@ -106,22 +109,9 @@ mod checked {
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
                 #[cfg(feature = "gas-profiler")]
-                profiler_config: VMProfilerConfig {
-                    enabled: enable_profiler.is_some(),
-                    base_path: (*match enable_profiler {
-                        Some(ref p) => p.clone().to_path_buf(),
-                        None => std::path::PathBuf::from("."),
-                    })
-                    .to_owned(),
-                    full_path: enable_profiler.filter(|p| {
-                        !matches!(
-                            p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
-                            Some(std::cmp::Ordering::Equal)
-                        )
-                    }),
-                    track_bytecode_instructions: false,
-                    use_long_function_name: false,
-                },
+                profiler_config: VMProfiler::new(_enable_profiler),
+                #[cfg(not(feature = "gas-profiler"))]
+                profiler_config: Default::default(),
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
             },

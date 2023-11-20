@@ -13,7 +13,7 @@ use sui_protocol_config::SupportedProtocolVersions;
 use sui_telemetry::send_telemetry_event;
 use sui_types::multiaddr::Multiaddr;
 use tokio::time::sleep;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
@@ -76,6 +76,9 @@ fn main() {
         "Supported protocol versions: {:?}",
         config.supported_protocol_versions
     );
+
+    #[cfg(feature = "gas-profiler")]
+    warn!("The gas-profile feature is enabled");
 
     info!(
         "Started Prometheus HTTP endpoint at {}",

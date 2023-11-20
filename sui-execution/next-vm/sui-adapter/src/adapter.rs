@@ -83,6 +83,7 @@ mod checked {
     pub fn new_move_vm(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
+        _enable_profiler: Option<std::path::PathBuf>,
     ) -> Result<MoveVM, SuiError> {
         MoveVM::new_with_config(
             natives,
@@ -102,8 +103,10 @@ mod checked {
                     .disable_invariant_violation_check_in_swap_loc(),
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
-                #[cfg(debug_assertions)]
-                profiler_config: std::default::Default::default(),
+                #[cfg(feature = "gas-profiler")]
+                profiler_config: VMProfiler::new(_enable_profiler),
+                #[cfg(not(feature = "gas-profiler"))]
+                profiler_config: Default::default(),
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
             },

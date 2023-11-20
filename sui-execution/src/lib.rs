@@ -57,6 +57,7 @@ pub fn executor(
             protocol_config,
             paranoid_type_checks,
             silent,
+            enable_profiler,
         )?),
 
         v => panic!("Unsupported execution version {v}"),
