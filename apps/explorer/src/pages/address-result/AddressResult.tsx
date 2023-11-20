@@ -52,7 +52,7 @@ function AddressResult({ address }: { address: string }) {
 	};
 
 	const rightPane = {
-		panel: <OwnedObjects id={address} />,
+		panel: <OwnedObjects id={address} fullHeight={isMediumOrAbove} />,
 		minSize: LEFT_RIGHT_PANEL_MIN_SIZE,
 	};
 

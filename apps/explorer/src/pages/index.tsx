@@ -14,6 +14,7 @@ import TransactionResult from './transaction-result/TransactionResult';
 import { ValidatorDetails } from './validator/ValidatorDetails';
 import { ValidatorPageResult } from './validators/Validators';
 import { Layout } from '~/components/Layout';
+import { ObjectAddress } from '~/pages/object-address';
 
 function RedirectWithId({ base }: { base: string }) {
 	const params = useParams();
@@ -38,6 +39,7 @@ export const router = sentryCreateBrowserRouter([
 			{ path: 'address/:id', element: <AddressResult /> },
 			{ path: 'validators', element: <ValidatorPageResult /> },
 			{ path: 'validator/:id', element: <ValidatorDetails /> },
+			{ path: 'experimental--object-address/:id', element: <ObjectAddress /> },
 		],
 	},
 	{

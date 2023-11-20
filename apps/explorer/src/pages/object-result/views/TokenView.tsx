@@ -9,7 +9,7 @@ import { type ReactNode, useState } from 'react';
 
 import { DynamicFieldsCard } from '~/components/Object/DynamicFieldsCard';
 import { ObjectFieldsCard } from '~/components/Object/ObjectFieldsCard';
-import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress/TransactionBlocksForAddress';
+import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 function FieldsContainer({ children }: { children: ReactNode }) {
@@ -55,22 +55,20 @@ function useObjectFieldsCard(id: string) {
 
 	return {
 		loading: isPending || loadingNormalizedStruct,
-		error: isError || errorNormalizedMoveStruct,
+		isError: isError || errorNormalizedMoveStruct,
 		normalizedStructData,
 		suiObjectResponseData,
 		objectType,
 	};
 }
 
-export function TokenView({ data }: { data: SuiObjectResponse }) {
-	const objectId = data.data?.objectId!;
-
+export function FieldsContent({ objectId }: { objectId: string }) {
 	const {
 		normalizedStructData,
 		suiObjectResponseData,
 		objectType,
 		loading: objectFieldsCardLoading,
-		error: objectFieldsCardError,
+		isError: objectFieldsCardError,
 	} = useObjectFieldsCard(objectId);
 
 	const fieldsCount = normalizedStructData?.fields.length;
@@ -79,43 +77,56 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 
 	const { data: dynamicFieldsData } = useGetDynamicFields(objectId);
 
+	const renderFields = !!fieldsCount;
 	const renderDynamicFields = !!dynamicFieldsData?.pages?.[0].data.length;
+
+	if (!renderFields && !renderDynamicFields) {
+		return null;
+	}
+
+	return (
+		<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
+			<TabsList>
+				<TabsTrigger value={TABS_VALUES.FIELDS}>
+					<Heading variant="heading4/semibold">{fieldsCount} Fields</Heading>
+				</TabsTrigger>
+
+				{renderDynamicFields && (
+					<TabsTrigger value={TABS_VALUES.DYNAMIC_FIELDS}>
+						<Heading variant="heading4/semibold">Dynamic Fields</Heading>
+					</TabsTrigger>
+				)}
+			</TabsList>
+
+			<TabsContent value={TABS_VALUES.FIELDS}>
+				<FieldsContainer>
+					<ObjectFieldsCard
+						objectType={objectType || ''}
+						normalizedStructData={normalizedStructData}
+						suiObjectResponseData={suiObjectResponseData}
+						loading={objectFieldsCardLoading}
+						error={objectFieldsCardError}
+						id={objectId}
+					/>
+				</FieldsContainer>
+			</TabsContent>
+			{renderDynamicFields && (
+				<TabsContent value={TABS_VALUES.DYNAMIC_FIELDS}>
+					<FieldsContainer>
+						<DynamicFieldsCard id={objectId} />
+					</FieldsContainer>
+				</TabsContent>
+			)}
+		</Tabs>
+	);
+}
+
+export function TokenView({ data }: { data: SuiObjectResponse }) {
+	const objectId = data.data?.objectId!;
 
 	return (
 		<div className="flex flex-col flex-nowrap gap-14">
-			<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
-				<TabsList>
-					<TabsTrigger value={TABS_VALUES.FIELDS}>
-						<Heading variant="heading4/semibold">{fieldsCount} Fields</Heading>
-					</TabsTrigger>
-
-					{renderDynamicFields && (
-						<TabsTrigger value={TABS_VALUES.DYNAMIC_FIELDS}>
-							<Heading variant="heading4/semibold">Dynamic Fields</Heading>
-						</TabsTrigger>
-					)}
-				</TabsList>
-
-				<TabsContent value={TABS_VALUES.FIELDS}>
-					<FieldsContainer>
-						<ObjectFieldsCard
-							objectType={objectType || ''}
-							normalizedStructData={normalizedStructData}
-							suiObjectResponseData={suiObjectResponseData}
-							loading={objectFieldsCardLoading}
-							error={objectFieldsCardError}
-							id={objectId}
-						/>
-					</FieldsContainer>
-				</TabsContent>
-				{renderDynamicFields && (
-					<TabsContent value={TABS_VALUES.DYNAMIC_FIELDS}>
-						<FieldsContainer>
-							<DynamicFieldsCard id={objectId} />
-						</FieldsContainer>
-					</TabsContent>
-				)}
-			</Tabs>
+			<FieldsContent objectId={objectId} />
 
 			<TransactionBlocksForAddress address={objectId} isObject />
 		</div>

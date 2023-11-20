@@ -57,7 +57,7 @@ function getShowPagination(
 	return currentPage !== 0 || itemsLength > SHOW_PAGINATION_MAX_ITEMS;
 }
 
-export function OwnedObjects({ id }: { id: string }) {
+export function OwnedObjects({ id, fullHeight }: { id: string; fullHeight?: boolean }) {
 	const [limit, setLimit] = useState(50);
 	const [filter, setFilter] = useLocalStorage<string | undefined>(
 		OWNED_OBJECTS_LOCAL_STORAGE_FILTER,
@@ -138,7 +138,12 @@ export function OwnedObjects({ id }: { id: string }) {
 	}
 
 	return (
-		<div className={clsx(!noAssets && 'h-coinsAndAssetsContainer md:h-full')}>
+		<div
+			className={clsx(
+				!noAssets && 'h-coinsAndAssetsContainer',
+				!noAssets && fullHeight && 'h-full',
+			)}
+		>
 			<div className={clsx('flex h-full overflow-hidden md:pl-10', !showPagination && 'pb-2')}>
 				<div className="relative flex h-full w-full flex-col gap-4">
 					<div className="flex w-full flex-col items-start gap-3 border-b border-gray-45 max-sm:pb-3 sm:h-14 sm:min-h-14 sm:flex-row sm:items-center">

@@ -13,6 +13,7 @@ import {
 import { Pagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
+import clsx from 'clsx';
 
 export enum FILTER_VALUES {
 	INPUT = 'InputObject',
@@ -23,6 +24,8 @@ type TransactionBlocksForAddressProps = {
 	address: string;
 	filter?: FILTER_VALUES;
 	isObject?: boolean;
+	noBorderBottom?: boolean;
+	noHeader?: boolean;
 };
 
 enum PAGE_ACTIONS {
@@ -68,10 +71,32 @@ const reducer = (state: PageStateByFilterMap, action: TransactionBlocksForAddres
 	}
 };
 
+function FiltersControl({
+	filterValue,
+	setFilterValue,
+}: {
+	filterValue: string;
+	setFilterValue: any;
+}) {
+	return (
+		<RadioGroup
+			aria-label="transaction filter"
+			value={filterValue}
+			onValueChange={(value) => setFilterValue(value as FILTER_VALUES)}
+		>
+			{FILTER_OPTIONS.map((filter) => (
+				<RadioGroupItem key={filter.value} value={filter.value} label={filter.label} />
+			))}
+		</RadioGroup>
+	);
+}
+
 function TransactionBlocksForAddress({
 	address,
 	filter = FILTER_VALUES.CHANGED,
 	isObject = false,
+	noBorderBottom,
+	noHeader,
 }: TransactionBlocksForAddressProps) {
 	const [filterValue, setFilterValue] = useState(filter);
 	const [currentPageState, dispatch] = useReducer(reducer, {
@@ -92,25 +117,19 @@ function TransactionBlocksForAddress({
 
 	return (
 		<div data-testid="tx">
-			<div className="flex items-center justify-between border-b border-gray-45 pb-5">
-				<Heading color="gray-90" variant="heading4/semibold">
-					Transaction Blocks
-				</Heading>
+			{!noHeader && (
+				<div className="flex items-center justify-between border-b border-gray-45 pb-5">
+					<Heading color="gray-90" variant="heading4/semibold">
+						Transaction Blocks
+					</Heading>
 
-				{isObject && (
-					<RadioGroup
-						aria-label="transaction filter"
-						value={filterValue}
-						onValueChange={(value) => setFilterValue(value as FILTER_VALUES)}
-					>
-						{FILTER_OPTIONS.map((filter) => (
-							<RadioGroupItem key={filter.value} value={filter.value} label={filter.label} />
-						))}
-					</RadioGroup>
-				)}
-			</div>
+					{isObject && <FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />}
+				</div>
+			)}
 
-			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
+			{isObject && <FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />}
+
+			<div className={clsx(!noHeader && 'pt-5', 'flex flex-col space-y-5 text-left xl:pr-10')}>
 				{isPending || isFetching || isFetchingNextPage || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}
@@ -120,7 +139,11 @@ function TransactionBlocksForAddress({
 					/>
 				) : (
 					<div>
-						<TableCard data={cardData.data} columns={cardData.columns} />
+						<TableCard
+							data={cardData.data}
+							columns={cardData.columns}
+							noBorderBottom={noBorderBottom}
+						/>
 					</div>
 				)}
 
