@@ -3,14 +3,11 @@
 
 import { JsonRpcError } from './errors.js';
 
-export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
+function getWebsocketUrl(httpUrl: string): string {
 	const url = new URL(httpUrl);
 	url.protocol = url.protocol.replace('http', 'ws');
-	if (port) {
-		url.port = port.toString();
-	}
 	return url.toString();
-};
+}
 
 type JsonRpcMessage =
 	| {

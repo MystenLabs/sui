@@ -5,7 +5,7 @@ import { execSync } from 'child_process';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
-import { w3cwebsocket } from 'websocket';
+import { WebSocket } from 'ws';
 
 import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
 import {
@@ -59,7 +59,7 @@ export function getClient(): SuiClient {
 	return new SuiClient({
 		transport: new SuiHTTPTransport({
 			url: DEFAULT_FULLNODE_URL,
-			WebSocketConstructor: w3cwebsocket as never,
+			WebSocketConstructor: WebSocket as never,
 		}),
 	});
 }
