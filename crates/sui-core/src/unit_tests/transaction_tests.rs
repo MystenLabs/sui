@@ -133,7 +133,7 @@ async fn test_duplicate_gas_data() {
         0,
         |tx| {
             let gas_data = tx.gas_data_mut();
-            let new_gas = gas_data.payment[0].clone();
+            let new_gas = gas_data.payment[0];
             gas_data.payment.push(new_gas);
         },
         |_| {},
@@ -171,7 +171,7 @@ async fn test_gas_wrong_owner() {
 }
 
 pub fn init_transfer_transaction(
-    pre_sign_mutations: impl FnOnce(&mut TransactionData) -> (),
+    pre_sign_mutations: impl FnOnce(&mut TransactionData),
     sender: SuiAddress,
     secret: &AccountKeyPair,
     recipient: SuiAddress,
@@ -194,8 +194,8 @@ pub fn init_transfer_transaction(
 
 async fn do_transaction_test_skip_cert_checks(
     expected_sig_errors: u64,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData) -> (),
-    post_sign_mutations: impl FnOnce(&mut Transaction) -> (),
+    pre_sign_mutations: impl FnOnce(&mut TransactionData),
+    post_sign_mutations: impl FnOnce(&mut Transaction),
 ) {
     do_transaction_test_impl(
         expected_sig_errors,
@@ -208,8 +208,8 @@ async fn do_transaction_test_skip_cert_checks(
 
 async fn do_transaction_test(
     expected_sig_errors: u64,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData) -> (),
-    post_sign_mutations: impl FnOnce(&mut Transaction) -> (),
+    pre_sign_mutations: impl FnOnce(&mut TransactionData),
+    post_sign_mutations: impl FnOnce(&mut Transaction),
 ) {
     do_transaction_test_impl(
         expected_sig_errors,
@@ -223,8 +223,8 @@ async fn do_transaction_test(
 async fn do_transaction_test_impl(
     expected_sig_errors: u64,
     check_forged_cert: bool,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData) -> (),
-    post_sign_mutations: impl FnOnce(&mut Transaction) -> (),
+    pre_sign_mutations: impl FnOnce(&mut TransactionData),
+    post_sign_mutations: impl FnOnce(&mut Transaction),
 ) {
     telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -322,7 +322,7 @@ async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
             };
 
             let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
-            let sig = Signature::new_secure(&intent_message, &unknown_key).into();
+            let sig = Signature::new_secure(&intent_message, &unknown_key);
             *zklogin.user_signature_mut_for_testing() = sig;
         },
     )
@@ -394,7 +394,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
             let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
             // replace the signature with a bogus one
             *zklogin.user_signature_mut_for_testing() =
-                Signature::new_secure(&intent_message, &unknown_key).into();
+                Signature::new_secure(&intent_message, &unknown_key);
         }
         _ => panic!(),
     }
@@ -425,8 +425,8 @@ async fn zklogin_test_cached_proof_wrong_key() {
 
 async fn do_zklogin_transaction_test(
     expected_sig_errors: u64,
-    pre_sign_mutations: impl FnOnce(&mut TransactionData) -> (),
-    post_sign_mutations: impl FnOnce(&mut Transaction) -> (),
+    pre_sign_mutations: impl FnOnce(&mut TransactionData),
+    post_sign_mutations: impl FnOnce(&mut Transaction),
 ) {
     let (
         object_ids,

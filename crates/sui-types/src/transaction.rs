@@ -2176,8 +2176,6 @@ impl Message for SenderSignedData {
             }
         );
         // TODO: gas checks
-        
-
 
         Ok(())
     }
