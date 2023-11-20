@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	decrypt as metamaskDecrypt,
-	encrypt as metamaskEncrypt,
-} from '@metamask/browser-passworder';
+import { fromB64, toB64 } from '@mysten/sui.js/utils';
 
 /**
  * An interface
@@ -18,13 +15,77 @@ export interface Encryption {
  * Create the default encryption interface, which uses the browsers built-in crypto primitives.
  */
 export function createDefaultEncryption(): Encryption {
+	type EncryptedJSON = {
+		payload: string;
+		iv: string;
+		salt: string;
+	};
+
+	async function keyFromPassword(password: string, salt: Uint8Array) {
+		const key = await crypto.subtle.importKey(
+			'raw',
+			new TextEncoder().encode(password),
+			{ name: 'PBKDF2' },
+			false,
+			['deriveBits', 'deriveKey'],
+		);
+
+		const derivedKey = await crypto.subtle.deriveKey(
+			{
+				name: 'PBKDF2',
+				salt,
+				iterations: 900_000,
+				hash: 'SHA-256',
+			},
+			key,
+			{ name: 'AES-GCM', length: 256 },
+			false,
+			['encrypt', 'decrypt'],
+		);
+
+		return { key, derivedKey };
+	}
+
 	return {
 		async encrypt(password, data) {
-			return metamaskEncrypt(password, data);
+			const salt = crypto.getRandomValues(new Uint8Array(16));
+			const iv = crypto.getRandomValues(new Uint8Array(12));
+
+			const { derivedKey } = await keyFromPassword(password, salt);
+
+			const payload = await crypto.subtle.encrypt(
+				{
+					name: 'AES-GCM',
+					iv,
+				},
+				derivedKey,
+				new TextEncoder().encode(data),
+			);
+
+			return JSON.stringify({
+				payload: toB64(new Uint8Array(payload)),
+				iv: toB64(iv),
+				salt: toB64(salt),
+			} satisfies EncryptedJSON);
 		},
 		async decrypt(password, data) {
-			const decrypted = await metamaskDecrypt(password, data);
-			return decrypted as string;
+			const parsed = JSON.parse(data) as EncryptedJSON;
+			if (!parsed.payload || !parsed.iv || !parsed.salt) {
+				throw new Error('Invalid encrypted data');
+			}
+
+			const { derivedKey } = await keyFromPassword(password, fromB64(parsed.salt));
+
+			const decryptedContent = await crypto.subtle.decrypt(
+				{
+					name: 'AES-GCM',
+					iv: fromB64(parsed.iv),
+				},
+				derivedKey,
+				fromB64(parsed.payload),
+			);
+
+			return new TextDecoder().decode(decryptedContent);
 		},
 	};
 }
