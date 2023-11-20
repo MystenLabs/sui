@@ -59,7 +59,7 @@ module kiosk::collection_bidding_ext {
     struct NewBid<phantom T, phantom Market> has copy, drop {
         kiosk_id: ID,
         bids: vector<u64>,
-        kiosk_owner: Option<address>,
+        is_personal: bool,
     }
 
     /// An event that is emitted when a bid is accepted.
@@ -114,7 +114,7 @@ module kiosk::collection_bidding_ext {
         event::emit(NewBid<T, Market> {
             kiosk_id: object::id(self),
             bids: amounts,
-            kiosk_owner: personal_kiosk::try_owner(self)
+            is_personal: personal_kiosk::is_personal(self)
         });
 
         bag::add(ext::storage_mut(Extension {}, self), Bid<T, Market> {}, bids);

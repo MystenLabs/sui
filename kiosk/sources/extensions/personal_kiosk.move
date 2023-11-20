@@ -133,6 +133,7 @@ module kiosk::personal_kiosk {
         }
     }
 
+    #[lint_allow(self_transfer)]
     /// Transfer the `PersonalKioskCap` to the transaction sender.
     public fun transfer_to_sender(self: PersonalKioskCap, ctx: &mut TxContext) {
         transfer::transfer(self, sender(ctx));

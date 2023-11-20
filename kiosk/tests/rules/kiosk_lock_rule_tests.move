@@ -36,7 +36,7 @@ module kiosk::kiosk_lock_rule_tests {
         kiosk::lock(&mut bob_kiosk, &bob_kiosk_cap, &policy, item);
 
         // The difference!
-        kiosk_lock::prove(&mut request, &mut bob_kiosk);
+        kiosk_lock::prove(&mut request, &bob_kiosk);
         policy::confirm_request(&policy, request);
 
         // Carl the Cleaner;

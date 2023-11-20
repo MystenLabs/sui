@@ -20,7 +20,7 @@ module kiosk::floor_price_rule_tests {
         let request = policy::new_request(test::fresh_id(ctx), 1_000_000_000, test::fresh_id(ctx));
 
         floor_price_rule::prove(&mut policy, &mut request);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         test::wrapup(policy, cap, ctx);
     }
@@ -36,7 +36,7 @@ module kiosk::floor_price_rule_tests {
         let request = policy::new_request(test::fresh_id(ctx), 100_000_000_000, test::fresh_id(ctx));
 
         floor_price_rule::prove(&mut policy, &mut request);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         test::wrapup(policy, cap, ctx);
     }
@@ -54,7 +54,7 @@ module kiosk::floor_price_rule_tests {
         let request = policy::new_request(test::fresh_id(ctx), 999_999_999, test::fresh_id(ctx));
 
         floor_price_rule::prove(&mut policy, &mut request);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         test::wrapup(policy, cap, ctx);
     }

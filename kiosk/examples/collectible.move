@@ -76,6 +76,7 @@ module kiosk::collectible {
     /// OTW to initialize the Registry and the base type.
     struct COLLECTIBLE has drop {}
 
+    #[allow(unused_function)]
     /// Create the centralized Registry of Collectibles to provide access
     /// to the Publisher functionality of the Collectible.
     fun init(otw: COLLECTIBLE, ctx: &mut TxContext) {
@@ -85,6 +86,7 @@ module kiosk::collectible {
         })
     }
 
+    #[lint_allow(self_transfer)]
     /// Called in the external module initializer. Sends a `CollectionTicket`
     /// to the transaction sender which then enables them to initialize the
     /// Collection.
@@ -105,6 +107,7 @@ module kiosk::collectible {
         }, sender(ctx));
     }
 
+    #[lint_allow(share_owned)]
     /// Use the `CollectionTicket` to start a new collection and receive a
     /// `CollectionCap`.
     public fun create_collection<T: store>(
@@ -159,6 +162,7 @@ module kiosk::collectible {
         }
     }
 
+    #[lint_allow(self_transfer)]
     /// Batch mint a vector of Collectibles specifying the fields. Lengths of
     /// the optional fields must match the length of the `image_urls` vector.
     /// Metadata vector is also optional, which

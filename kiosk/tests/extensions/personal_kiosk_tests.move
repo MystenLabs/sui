@@ -11,6 +11,7 @@ module kiosk::personal_kiosk_tests {
     use kiosk::personal_kiosk;
 
     #[test]
+    #[lint_allow(share_owned)]
     fun new_and_transfer() {
         let ctx = &mut test::ctx();
         let (kiosk, kiosk_cap) = test::get_kiosk(ctx);
@@ -20,6 +21,7 @@ module kiosk::personal_kiosk_tests {
     }
 
     #[test]
+    #[lint_allow(share_owned)]
     fun new_borrow() {
         let ctx = &mut test::ctx();
         let (kiosk, kiosk_cap) = test::get_kiosk(ctx);
@@ -38,7 +40,7 @@ module kiosk::personal_kiosk_tests {
         let (kiosk_cap, borrow) = personal_kiosk::borrow_val(&mut p_cap);
 
         assert!(kiosk::has_access(&mut kiosk, &kiosk_cap), 0);
-        assert!(kiosk::has_access(&mut kiosk, &mut kiosk_cap), 0);
+        assert!(kiosk::has_access(&mut kiosk, &kiosk_cap), 0);
 
         personal_kiosk::return_val(&mut p_cap, kiosk_cap, borrow);
         personal_kiosk::transfer_to_sender(p_cap, ctx);

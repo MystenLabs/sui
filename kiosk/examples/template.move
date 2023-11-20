@@ -12,6 +12,7 @@ module kiosk::template {
 
     const TOTAL_SUPPLY: u32 = 10;
 
+    #[allow(unused_function)]
     fun init(otw: TEMPLATE, ctx: &mut TxContext) {
         let supply = if (TOTAL_SUPPLY == 0) {
             none()

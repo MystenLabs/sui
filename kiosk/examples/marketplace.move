@@ -18,6 +18,8 @@ module kiosk::marketplace_example {
     /// A type identifying the Marketplace.
     struct MyMarket has drop {}
 
+    #[allow(unused_function)]
+    #[lint_allow(share_owned)]
     /// As easy as creating a Publisher; for simplicity's sake we also create
     /// the `TransferPolicy` but this action can be performed offline in a PTB.
     fun init(otw: MARKETPLACE_EXAMPLE, ctx: &mut TxContext) {

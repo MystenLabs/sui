@@ -23,7 +23,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(0, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         let profits = test::wrapup(policy, cap, ctx);
         assert!(profits == 0, 1);
@@ -42,7 +42,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(10, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         let profits = test::wrapup(policy, cap, ctx);
         assert!(profits == 0, 1);
@@ -60,7 +60,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(1000, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         let profits = test::wrapup(policy, cap, ctx);
         assert!(profits == 1000, 1);
@@ -78,7 +78,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(100_000, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
 
         let profits = test::wrapup(policy, cap, ctx);
         assert!(profits == 100_000, 1);
@@ -96,7 +96,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(10_000, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
         assert!(test::wrapup(policy, cap, ctx) == 10_000, 1);
     }
 
@@ -112,7 +112,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(10_000, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
         assert!(test::wrapup(policy, cap, ctx) == 10_000, 1);
     }
 
@@ -128,7 +128,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(20_000, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
         assert!(test::wrapup(policy, cap, ctx) == 20_000, 1);
     }
 
@@ -156,7 +156,7 @@ module kiosk::royalty_rule_tests {
         let payment = coin::mint_for_testing<SUI>(999, ctx);
 
         royalty_rule::pay(&mut policy, &mut request, payment);
-        policy::confirm_request(&mut policy, request);
+        policy::confirm_request(&policy, request);
         test::wrapup(policy, cap, ctx);
     }
 }
