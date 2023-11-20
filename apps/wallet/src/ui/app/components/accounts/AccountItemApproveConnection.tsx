@@ -12,8 +12,8 @@ import clsx from 'clsx';
 
 interface Props {
 	account: SerializedUIAccount;
-	selected: boolean;
 	disabled: boolean;
+	selected?: boolean;
 	showLock?: boolean;
 }
 

@@ -149,7 +149,6 @@ function SiteConnectPage() {
 											showLock
 											account={account}
 											disabled={account.isLocked}
-											selected={false}
 										/>
 									))}
 								</div>
