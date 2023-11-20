@@ -13,7 +13,6 @@ module kiosk::marketplace_adapter_tests {
 
     use kiosk::marketplace_adapter as mkt;
 
-
     /// The Marketplace witness.
     struct MyMarket has drop {}
 

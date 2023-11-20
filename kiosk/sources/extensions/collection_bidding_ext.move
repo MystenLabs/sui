@@ -64,11 +64,12 @@ module kiosk::collection_bidding_ext {
 
     /// An event that is emitted when a bid is accepted.
     struct BidAccepted<phantom T, phantom Market> has copy, drop {
-        kiosk_id: ID,
+        seller_kiosk_id: ID,
+        buyer_kiosk_id: ID,
         item_id: ID,
         amount: u64,
-        source_kiosk_owner: Option<address>,
-        destination_kiosk_owner: Option<address>,
+        buyer_is_personal: bool,
+        seller_is_personal: bool,
     }
 
     /// An event that is emitted when a bid is canceled.
@@ -154,16 +155,18 @@ module kiosk::collection_bidding_ext {
     /// functions (see `PERMISSIONS`). The extension must be installed and enabled
     /// for this to work.
     public fun accept_market_bid<T: key + store, Market>(
-        destination: &mut Kiosk,
-        source: &mut Kiosk,
+        buyer: &mut Kiosk,
+        seller: &mut Kiosk,
         mkt_cap: MarketPurchaseCap<T, Market>,
         policy: &TransferPolicy<T>,
         // keeping these arguments for extendability
         _lock: bool,
         ctx: &mut TxContext
     ): (TransferRequest<T>, TransferRequest<Market>) {
-        assert!(ext::is_installed<Extension>(source), EExtensionNotInstalled);
-        let storage = ext::storage_mut(Extension {}, source);
+        assert!(ext::is_installed<Extension>(buyer), EExtensionNotInstalled);
+        assert!(ext::is_installed<Extension>(seller), EExtensionNotInstalled);
+
+        let storage = ext::storage_mut(Extension {}, buyer);
         assert!(bag::contains(storage, Bid<T, Market> {}), EBidNotFound);
 
         // Take 1 Coin from the bag - this is our bid (bids can't be empty, we
@@ -171,10 +174,10 @@ module kiosk::collection_bidding_ext {
         let bid = vector::pop_back(bag::borrow_mut(storage, Bid<T, Market> {}));
 
         // If there are no bids left, remove the bag and the key from the storage.
-        if (bid_count<T, Market>(source) == 0) {
+        if (bid_count<T, Market>(buyer) == 0) {
             vector::destroy_empty<Coin<SUI>>(
                 bag::remove(
-                    ext::storage_mut(Extension {}, source),
+                    ext::storage_mut(Extension {}, buyer),
                     Bid<T, Market> {}
                 )
             );
@@ -182,24 +185,25 @@ module kiosk::collection_bidding_ext {
 
         let amount = coin::value(&bid);
 
-        assert!(ext::is_enabled<Extension>(destination), EExtensionDisabled);
-        assert!(mkt::kiosk(&mkt_cap) == object::id(source), EIncorrectKiosk);
+        assert!(ext::is_enabled<Extension>(seller), EExtensionDisabled);
+        assert!(mkt::kiosk(&mkt_cap) == object::id(seller), EIncorrectKiosk);
         assert!(mkt::min_price(&mkt_cap) <= amount, EBidDoesntMatchExpectation);
         assert!(type_name::get<Market>() != type_name::get<NoMarket>(), EIncorrectMarketArg);
 
         // Perform the purchase operation in the seller's Kiosk using the `Bid`.
-        let (item, request, market_request) = mkt::purchase(source, mkt_cap, bid, ctx);
+        let (item, request, market_request) = mkt::purchase(seller, mkt_cap, bid, ctx);
 
         event::emit(BidAccepted<T, Market> {
             amount,
             item_id: object::id(&item),
-            kiosk_id: object::id(destination),
-            destination_kiosk_owner: personal_kiosk::try_owner(destination),
-            source_kiosk_owner: personal_kiosk::try_owner(source)
+            buyer_kiosk_id: object::id(buyer),
+            seller_kiosk_id: object::id(seller),
+            buyer_is_personal: personal_kiosk::is_personal(buyer),
+            seller_is_personal: personal_kiosk::is_personal(seller)
         });
 
-        // Place or lock the item in the `destination` Kiosk.
-        place_or_lock(destination, item, policy);
+        // Place or lock the item in the `source` Kiosk.
+        place_or_lock(buyer, item, policy);
 
         (request, market_request)
     }
