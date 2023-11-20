@@ -28,10 +28,6 @@ Epoch advanced: 5
 task 7 'view-checkpoint'. lines 41-41:
 CheckpointSummary { epoch: 5, seq: 10, content_digest: AYWnAH2mnV56mBixSbTBco6dqZRksmeHncHKJEEiAL7w,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
-
-task 8 'run-graphql'. lines 43-49:
-Response: {
-  "data": {
     "checkpoint": {
       "sequenceNumber": 10
     }

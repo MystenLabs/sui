@@ -31,6 +31,7 @@ pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
 pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, DB>;
     fn get_obj(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'static, DB>;
+    fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, DB>;
     fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, DB>;
     fn get_latest_epoch() -> epochs::BoxedQuery<'static, DB>;
     fn get_checkpoint_by_digest(digest: Vec<u8>) -> checkpoints::BoxedQuery<'static, DB>;
