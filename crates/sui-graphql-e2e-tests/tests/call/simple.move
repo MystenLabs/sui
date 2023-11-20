@@ -31,12 +31,12 @@ module Test::M1 {
 
 //# view-object 2,0
 
-//# create-checkpoint
+//# create-checkpoint 4
 
 //# view-checkpoint
 
 
-//# advance-epoch
+//# advance-epoch 6
 
 //# view-checkpoint
 
@@ -68,3 +68,5 @@ module Test::M1 {
 }
 
 //# view-checkpoint
+
+//# advance-epoch
