@@ -22,20 +22,34 @@ pub(crate) struct CheckpointId {
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Checkpoint {
-    // id: ID1,
+    /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58.
+    /// This hash can be used to verify checkpoint contents by checking signatures against the committee,
+    /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
     pub digest: String,
+    /// This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
     pub sequence_number: u64,
+    /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
+    /// Transactions that access time in this checkpoint will observe this timestamp.
     pub timestamp: Option<DateTime>,
+    /// This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
     pub validator_signature: Option<Base64>,
+    /// The digest of the checkpoint at the previous sequence number.
     pub previous_checkpoint_digest: Option<String>,
+    /// This is a commitment by the committee at the end of epoch
+    /// on the contents of the live object set at that time.
+    /// This can be used to verify state snapshots.
     pub live_object_set_digest: Option<String>,
+    /// Tracks the total number of transaction blocks in the network at the time of the checkpoint.
     pub network_total_transactions: Option<u64>,
+    /// The computation and storage cost, storage rebate, and nonrefundable storage fee accumulated
+    /// during this epoch, up to and including this checkpoint.
+    /// These values increase monotonically across checkpoints in the same epoch.
     pub rolling_gas_summary: Option<GasCostSummary>,
     #[graphql(skip)]
     pub epoch_id: u64,
+    /// End of epoch data is only available on the final checkpoint of an epoch.
+    /// This field provides information on the new committee and protocol version for the next epoch.
     pub end_of_epoch: Option<EndOfEpochData>,
-    // transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
-    // address_metrics: AddressMetrics,
 }
 
 #[ComplexObject]

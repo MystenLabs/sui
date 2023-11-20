@@ -33,3 +33,4 @@ CREATE TABLE objects (
 CREATE INDEX objects_owner ON objects (owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
 CREATE INDEX objects_coin ON objects (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_checkpoint_sequence_number ON objects (checkpoint_sequence_number);
+CREATE INDEX objects_type ON objects (object_type);

@@ -5,14 +5,14 @@ use std::str::FromStr;
 
 use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::annotated_value::MoveStruct;
 use move_core_types::identifier::Identifier;
-use move_core_types::value::MoveStruct;
 
 use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
-use sui_types::object::{MoveObject, ObjectFormatOptions};
+use sui_types::object::MoveObject;
 use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
@@ -107,11 +107,7 @@ impl StoredEvent {
 
         let type_ = parse_sui_struct_tag(&self.event_type)?;
 
-        let layout = MoveObject::get_layout_from_struct_tag(
-            type_.clone(),
-            ObjectFormatOptions::default(),
-            module_cache,
-        )?;
+        let layout = MoveObject::get_layout_from_struct_tag(type_.clone(), module_cache)?;
         let move_object = MoveStruct::simple_deserialize(&self.bcs, &layout)
             .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
         let parsed_json = SuiMoveStruct::from(move_object).to_json_value();
@@ -135,5 +131,38 @@ impl StoredEvent {
             parsed_json,
             timestamp_ms: Some(self.timestamp_ms as u64),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
+    use sui_types::event::Event;
+
+    #[test]
+    fn test_canonical_string_of_event_type() {
+        let tx_digest = TransactionDigest::default();
+        let event = Event {
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::new("test").unwrap(),
+            sender: AccountAddress::random().into(),
+            type_: StructTag {
+                address: AccountAddress::TWO,
+                module: Identifier::new("test").unwrap(),
+                name: Identifier::new("test").unwrap(),
+                type_params: vec![],
+            },
+            contents: vec![],
+        };
+
+        let indexed_event = IndexedEvent::from_event(1, 1, 1, tx_digest, &event, 100);
+
+        let stored_event = StoredEvent::from(indexed_event);
+
+        assert_eq!(
+            stored_event.event_type,
+            "0x0000000000000000000000000000000000000000000000000000000000000002::test::test"
+        );
     }
 }

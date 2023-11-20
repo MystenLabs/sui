@@ -83,6 +83,8 @@ pub(crate) trait DataFetcher {
         &self,
         reverse: bool,
     ) -> Result<Vec<SuiEvent>, ReplayEngineError>;
+
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError>;
 }
 
 #[derive(Clone)]
@@ -208,6 +210,12 @@ impl DataFetcher for Fetchers {
         match self {
             Fetchers::Remote(q) => q.get_epoch_change_events(reverse).await,
             Fetchers::NodeStateDump(q) => q.get_epoch_change_events(reverse).await,
+        }
+    }
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
+        match self {
+            Fetchers::Remote(q) => q.get_chain_id().await,
+            Fetchers::NodeStateDump(q) => q.get_chain_id().await,
         }
     }
 }
@@ -567,6 +575,16 @@ impl DataFetcher for RemoteFetcher {
 
         Ok(epoch_change_events)
     }
+
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
+        let chain_id = self
+            .rpc_client
+            .read_api()
+            .get_chain_identifier()
+            .await
+            .map_err(|e| ReplayEngineError::UnableToGetChainId { err: e.to_string() })?;
+        Ok(chain_id)
+    }
 }
 
 fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, ReplayEngineError> {
@@ -772,5 +790,9 @@ impl DataFetcher for NodeStateDumpFetcher {
         _reverse: bool,
     ) -> Result<Vec<SuiEvent>, ReplayEngineError> {
         unimplemented!("get_epoch_change_events for state dump is not implemented")
+    }
+
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
+        unimplemented!("get_chain_id for state dump is not implemented")
     }
 }

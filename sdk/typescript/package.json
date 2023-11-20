@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sui-typescript-docs.vercel.app",
-	"version": "0.44.0",
+	"version": "0.46.1",
 	"license": "Apache-2.0",
 	"sideEffects": false,
 	"files": [
@@ -30,62 +30,50 @@
 	"type": "commonjs",
 	"exports": {
 		"./bcs": {
-			"source": "./src/bcs/index.ts",
 			"import": "./dist/esm/bcs/index.js",
 			"require": "./dist/cjs/bcs/index.js"
 		},
 		"./client": {
-			"source": "./src/client/index.ts",
 			"import": "./dist/esm/client/index.js",
 			"require": "./dist/cjs/client/index.js"
 		},
 		"./cryptography": {
-			"source": "./src/cryptography/index.ts",
 			"import": "./dist/esm/cryptography/index.js",
 			"require": "./dist/cjs/cryptography/index.js"
 		},
 		"./faucet": {
-			"source": "./src/faucet/index.ts",
 			"import": "./dist/esm/faucet/index.js",
 			"require": "./dist/cjs/faucet/index.js"
 		},
 		"./keypairs/ed25519": {
-			"source": "./src/keypairs/ed25519/index.ts",
 			"import": "./dist/esm/keypairs/ed25519/index.js",
 			"require": "./dist/cjs/keypairs/ed25519/index.js"
 		},
 		"./keypairs/secp256k1": {
-			"source": "./src/keypairs/secp256k1/index.ts",
 			"import": "./dist/esm/keypairs/secp256k1/index.js",
 			"require": "./dist/cjs/keypairs/secp256k1/index.js"
 		},
 		"./keypairs/secp256r1": {
-			"source": "./src/keypairs/secp256r1/index.ts",
 			"import": "./dist/esm/keypairs/secp256r1/index.js",
 			"require": "./dist/cjs/keypairs/secp256r1/index.js"
 		},
 		"./multisig": {
-			"source": "./src/multisig/index.ts",
 			"import": "./dist/esm/multisig/index.js",
 			"require": "./dist/cjs/multisig/index.js"
 		},
 		"./transactions": {
-			"source": "./src/builder/export.ts",
 			"import": "./dist/esm/builder/export.js",
 			"require": "./dist/cjs/builder/export.js"
 		},
 		"./utils": {
-			"source": "./src/utils/index.ts",
 			"import": "./dist/esm/utils/index.js",
 			"require": "./dist/cjs/utils/index.js"
 		},
 		"./verify": {
-			"source": "./src/verify/index.ts",
 			"import": "./dist/esm/verify/index.js",
 			"require": "./dist/cjs/verify/index.js"
 		},
 		"./zklogin": {
-			"source": "./src/zklogin/index.ts",
 			"import": "./dist/esm/zklogin/index.js",
 			"require": "./dist/cjs/zklogin/index.js"
 		}
@@ -100,9 +88,9 @@
 		"test": "pnpm test:typecheck && pnpm test:unit",
 		"test:typecheck": "tsc -p ./test",
 		"test:unit": "vitest run unit __tests__",
-		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest run e2e",
+		"test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 180000 && vitest run e2e",
 		"test:e2e:nowait": "vitest run e2e",
-		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator",
+		"prepare:e2e": "docker-compose down && docker-compose up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --use-indexer-v2 --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",

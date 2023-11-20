@@ -91,6 +91,7 @@ allow = [
     "MPL-2.0",
     "ISC",
     "CC0-1.0",
+    "0BSD",
     "LicenseRef-ring",
     "BSL-1.0",
     "Unicode-DFS-2016",

@@ -1,12 +1,4 @@
 ---
-AbortLocation:
-  ENUM:
-    0:
-      Module:
-        NEWTYPE:
-          TYPENAME: ModuleId
-    1:
-      Script: UNIT
 AccountAddress:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -204,6 +196,8 @@ CommandArgumentError:
       InvalidObjectByValue: UNIT
     10:
       InvalidObjectByMutRef: UNIT
+    11:
+      SharedObjectOperationNotAllowed: UNIT
 CompressedSignature:
   ENUM:
     0:
@@ -224,6 +218,10 @@ CompressedSignature:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 64
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: GenericSignature
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -290,6 +288,8 @@ EndOfEpochTransactionKind:
       AuthenticatorStateExpire:
         NEWTYPE:
           TYPENAME: AuthenticatorStateExpire
+    3:
+      RandomnessStateCreate: UNIT
 Envelope:
   STRUCT:
     - data:
@@ -408,6 +408,10 @@ ExecutionFailureStatus:
       CertificateDenied: UNIT
     30:
       SuiMoveVerificationTimedout: UNIT
+    31:
+      SharedObjectWrapped: UNIT
+    32:
+      InputObjectDeleted: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -500,12 +504,6 @@ ModuleId:
         TYPENAME: AccountAddress
     - name:
         TYPENAME: Identifier
-MoveFieldLayout:
-  STRUCT:
-    - name:
-        TYPENAME: Identifier
-    - layout:
-        TYPENAME: MoveTypeLayout
 MoveLocation:
   STRUCT:
     - module:
@@ -562,54 +560,6 @@ MovePackage:
             TYPENAME: ObjectID
           VALUE:
             TYPENAME: UpgradeInfo
-MoveStructLayout:
-  ENUM:
-    0:
-      Runtime:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: MoveTypeLayout
-    1:
-      WithFields:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: MoveFieldLayout
-    2:
-      WithTypes:
-        STRUCT:
-          - type_:
-              TYPENAME: StructTag
-          - fields:
-              SEQ:
-                TYPENAME: MoveFieldLayout
-MoveTypeLayout:
-  ENUM:
-    0:
-      bool: UNIT
-    1:
-      u8: UNIT
-    2:
-      u64: UNIT
-    3:
-      u128: UNIT
-    4:
-      address: UNIT
-    5:
-      vector:
-        NEWTYPE:
-          TYPENAME: MoveTypeLayout
-    6:
-      struct:
-        NEWTYPE:
-          TYPENAME: MoveStructLayout
-    7:
-      signer: UNIT
-    8:
-      u16: UNIT
-    9:
-      u32: UNIT
-    10:
-      u256: UNIT
 MultiSig:
   STRUCT:
     - sigs:
@@ -783,6 +733,19 @@ PublicKey:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 33
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: ZkLoginPublicIdentifier
+RandomnessStateUpdate:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - randomness_round: U64
+    - random_bytes:
+        SEQ: U8
+    - randomness_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
 SenderSignedData:
   NEWTYPESTRUCT:
     SEQ:
@@ -984,6 +947,10 @@ TransactionKind:
         NEWTYPE:
           TYPENAME: AuthenticatorStateUpdate
     5:
+      RandomnessStateUpdate:
+        NEWTYPE:
+          TYPENAME: RandomnessStateUpdate
+    6:
       EndOfEpochTransaction:
         NEWTYPE:
           SEQ:
@@ -1053,10 +1020,21 @@ UnchangedSharedKind:
           TUPLE:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    1:
+      MutateDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    2:
+      ReadDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 UpgradeInfo:
   STRUCT:
     - upgraded_id:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+ZkLoginPublicIdentifier:
+  NEWTYPESTRUCT:
+    SEQ: U8
 

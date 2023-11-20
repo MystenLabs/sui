@@ -10,7 +10,7 @@ use sui_move_build::CompiledPackage;
 use sui_types::error::SuiObjectResponseError;
 use thiserror::Error;
 
-use move_compiler::compiled_unit::{CompiledUnitEnum, NamedCompiledModule};
+use move_compiler::compiled_unit::NamedCompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_package::compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_symbol_pool::Symbol;
@@ -332,10 +332,7 @@ fn local_modules(
 
     if include_deps {
         for (package, local_unit) in &compiled_package.deps_compiled_units {
-            let CompiledUnitEnum::Module(m) = &local_unit.unit else {
-                continue;
-            };
-
+            let m = &local_unit.unit;
             let module = m.name;
             let address = m.address.into_inner();
             if address == AccountAddress::ZERO {
@@ -353,9 +350,7 @@ fn local_modules(
         // Include the root compiled units, at their current addresses.
         SourceMode::Verify => {
             for local_unit in &compiled_package.root_compiled_units {
-                let CompiledUnitEnum::Module(m) = &local_unit.unit else {
-                    continue;
-                };
+                let m = &local_unit.unit;
 
                 let module = m.name;
                 let address = m.address.into_inner();
@@ -374,9 +369,7 @@ fn local_modules(
         // addresses substituted
         SourceMode::VerifyAt(root_address) => {
             for local_unit in &compiled_package.root_compiled_units {
-                let CompiledUnitEnum::Module(m) = &local_unit.unit else {
-                    continue;
-                };
+                let m = &local_unit.unit;
 
                 let module = m.name;
                 map.insert(
@@ -386,10 +379,7 @@ fn local_modules(
             }
 
             for (package, local_unit) in &compiled_package.deps_compiled_units {
-                let CompiledUnitEnum::Module(m) = &local_unit.unit else {
-                    continue;
-                };
-
+                let m = &local_unit.unit;
                 let module = m.name;
                 let address = m.address.into_inner();
                 if address != AccountAddress::ZERO {

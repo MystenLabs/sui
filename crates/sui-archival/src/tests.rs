@@ -235,6 +235,7 @@ async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
             0..(latest_archived_checkpoint_seq_num + 1),
             tx_counter,
             checkpoint_counter,
+            true,
         )
         .await?;
     ma::assert_ge!(

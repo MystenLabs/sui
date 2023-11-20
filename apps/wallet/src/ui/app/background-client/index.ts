@@ -611,7 +611,7 @@ export class BackgroundClient {
 		} else if (isMethodPayload(payload, 'entitiesUpdated')) {
 			const entitiesQueryKey = entitiesToClientQueryKeys[payload.args.type];
 			if (entitiesQueryKey) {
-				queryClient.invalidateQueries(entitiesQueryKey);
+				queryClient.invalidateQueries({ queryKey: entitiesQueryKey });
 			}
 		}
 		if (action) {

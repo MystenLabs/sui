@@ -7,36 +7,33 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::resolver::ModuleResolver;
-use move_core_types::value::MoveStructLayout;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
-use sui_json_rpc_types::DevInspectResults;
-use sui_json_rpc_types::EventFilter;
-use sui_json_rpc_types::ProtocolConfigResponse;
-use sui_json_rpc_types::SuiTransactionBlockEvents;
-use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DelegatedStake,
-    DynamicFieldPage, EventPage, MoveCallParams, MoveFunctionArgType, ObjectChange,
-    ObjectValueKind::ByImmutableReference, ObjectValueKind::ByMutableReference,
-    ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef, Page, RPCTransactionRequestParams,
-    Stake, StakeStatus, SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus,
-    SuiGetPastObjectRequest, SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility,
-    SuiMoveAbilitySet, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    DevInspectResults, DynamicFieldPage, EventFilter, EventPage, MoveCallParams,
+    MoveFunctionArgType, ObjectChange, ObjectValueKind::ByImmutableReference,
+    ObjectValueKind::ByMutableReference, ObjectValueKind::ByValue, ObjectsPage, OwnedObjectRef,
+    Page, ProtocolConfigResponse, RPCTransactionRequestParams, Stake, StakeStatus, SuiCoinMetadata,
+    SuiCommittee, SuiData, SuiEvent, SuiExecutionStatus, SuiGetPastObjectRequest,
+    SuiLoadedChildObject, SuiLoadedChildObjectsResponse, SuiMoveAbility, SuiMoveAbilitySet,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiMoveNormalizedType, SuiMoveVisibility, SuiObjectData, SuiObjectDataFilter,
     SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedData,
     SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponseQuery, TransactionBlockBytes,
-    TransactionBlocksPage, TransferObjectParams,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1, SuiTransactionBlockEvents,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
+    TransactionFilter, TransferObjectParams,
 };
 use sui_json_rpc_types::{SuiTypeTag, ValidatorApy, ValidatorApys};
 use sui_open_rpc::ExamplePairing;
@@ -48,7 +45,6 @@ use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::coin::CoinMetadata;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
@@ -56,7 +52,6 @@ use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldT
 use sui_types::event::EventID;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::id::UID;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::MoveObject;
 use sui_types::object::Owner;
@@ -913,15 +908,13 @@ impl RpcExampleProvider {
     }
 
     fn suix_get_coin_metadata(&mut self) -> Examples {
-        let id = UID::new(ObjectID::new(self.rng.gen()));
-
-        let result = CoinMetadata {
+        let result = SuiCoinMetadata {
             decimals: 9,
             name: "Usdc".to_string(),
             symbol: "USDC".to_string(),
             description: "Stable coin.".to_string(),
             icon_url: None,
-            id,
+            id: Some(ObjectID::new(self.rng.gen())),
         };
 
         Examples::new(
@@ -1226,14 +1219,13 @@ impl RpcExampleProvider {
             value: serde_json::Value::String("some_value".to_string()),
         };
 
+        let struct_tag = parse_sui_struct_tag("0x9::test::TestField").unwrap();
         let resp = SuiObjectResponse::new_with_data(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     unsafe {
                         MoveObject::new_from_execution_with_limit(
-                            MoveObjectType::from(
-                                parse_sui_struct_tag("0x9::test::TestField").unwrap(),
-                            ),
+                            MoveObjectType::from(struct_tag.clone()),
                             true,
                             SequenceNumber::from_u64(1),
                             Vec::new(),
@@ -1241,7 +1233,10 @@ impl RpcExampleProvider {
                         )
                         .unwrap()
                     },
-                    MoveStructLayout::WithFields(Vec::new()),
+                    MoveStructLayout {
+                        type_: struct_tag,
+                        fields: Vec::new(),
+                    },
                 )
                 .unwrap(),
             ),
@@ -1406,35 +1401,42 @@ impl RpcExampleProvider {
     fn suix_get_stakes(&mut self) -> Examples {
         let principal = 200000000000;
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
-        let result = DelegatedStake {
-            validator_address: SuiAddress::from(ObjectID::new(self.rng.gen())),
-            staking_pool: ObjectID::new(self.rng.gen()),
-            stakes: vec![
-                Stake {
-                    staked_sui_id: ObjectID::new(self.rng.gen()),
-                    stake_request_epoch: 62,
-                    stake_active_epoch: 63,
-                    principal,
-                    status: StakeStatus::Active {
-                        estimated_reward: (principal as f64 * 0.0026) as u64,
+        let result = vec![
+            DelegatedStake {
+                validator_address: SuiAddress::from(ObjectID::new(self.rng.gen())),
+                staking_pool: ObjectID::new(self.rng.gen()),
+                stakes: vec![
+                    Stake {
+                        staked_sui_id: ObjectID::new(self.rng.gen()),
+                        stake_request_epoch: 62,
+                        stake_active_epoch: 63,
+                        principal,
+                        status: StakeStatus::Active {
+                            estimated_reward: (principal as f64 * 0.0026) as u64,
+                        },
                     },
-                },
-                Stake {
-                    staked_sui_id: ObjectID::new(self.rng.gen()),
-                    stake_request_epoch: 142,
-                    stake_active_epoch: 143,
-                    principal,
-                    status: StakeStatus::Pending,
-                },
-                Stake {
+                    Stake {
+                        staked_sui_id: ObjectID::new(self.rng.gen()),
+                        stake_request_epoch: 142,
+                        stake_active_epoch: 143,
+                        principal,
+                        status: StakeStatus::Pending,
+                    },
+                ],
+            },
+            DelegatedStake {
+                validator_address: SuiAddress::from(ObjectID::new(self.rng.gen())),
+                staking_pool: ObjectID::new(self.rng.gen()),
+                stakes: vec![Stake {
                     staked_sui_id: ObjectID::new(self.rng.gen()),
                     stake_request_epoch: 244,
                     stake_active_epoch: 245,
                     principal,
                     status: StakeStatus::Unstaked,
-                },
-            ],
-        };
+                }],
+            },
+        ];
+
         Examples::new(
             "suix_getStakes",
             vec![ExamplePairing::new(

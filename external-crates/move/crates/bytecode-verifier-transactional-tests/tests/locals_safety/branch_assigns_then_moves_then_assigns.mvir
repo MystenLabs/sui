@@ -1,0 +1,22 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let x: u64;
+    let y: u64;
+label b0:
+    jump_if (true) b2;
+label b1:
+    x = 0;
+    jump b3;
+label b2:
+    x = 1;
+    y = move(x);
+    x = 5;
+label b3:
+    // valid copy
+    assert(copy(x) == 5, 42);
+    return;
+}
+
+}

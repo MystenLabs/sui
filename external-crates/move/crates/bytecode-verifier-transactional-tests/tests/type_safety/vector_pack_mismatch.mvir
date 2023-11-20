@@ -1,0 +1,56 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let v: vector<bool>;
+label b0:
+    (1);                // 0
+    vec_pack_1<bool>(); // 1
+    v = ();             // 2
+    return;             // 3
+}
+
+}
+
+//# run
+module 0x42.m {
+
+entry foo() {
+    let v: vector<bool>;
+label b0:
+    (0);                // 0
+    (false);            // 1
+    vec_pack_2<bool>(); // 2
+    v = ();             // 3
+    return;             // 4
+    return;
+}
+
+}
+
+//# run
+module 0x42.m {
+
+entry foo() {
+    let v: vector<u8>;
+label b0:
+    (1u8, false, 2u8);
+    v = vec_pack_3<u8>();
+    return;
+}
+
+}
+
+//# run
+module 0x42.m {
+
+entry foo() {
+    let v: vector<bool>;
+label b0:
+    (false, 0, 0, 0);
+    v = vec_pack_3<bool>();
+    _ = ();
+    return;
+}
+
+}

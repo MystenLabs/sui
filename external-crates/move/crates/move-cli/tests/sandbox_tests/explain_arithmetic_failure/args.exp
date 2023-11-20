@@ -1,0 +1,3 @@
+Command `sandbox publish`:
+Command `sandbox run storage/0x0000000000000000000000000000000000000000000000000000000000000042/modules/m.mv main`:
+Execution failed because of an arithmetic error (i.e., integer overflow/underflow, div/mod by zero, or invalid shift) in 0000000000000000000000000000000000000000000000000000000000000042::m::main at code offset 2

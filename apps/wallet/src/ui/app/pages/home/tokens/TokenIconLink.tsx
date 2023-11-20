@@ -20,7 +20,7 @@ export function TokenIconLink({
 	accountAddress: string;
 	disabled: boolean;
 }) {
-	const { data: delegatedStake, isLoading } = useGetDelegatedStake({
+	const { data: delegatedStake, isPending } = useGetDelegatedStake({
 		address: accountAddress,
 		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
 		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
@@ -49,9 +49,9 @@ export function TokenIconLink({
 					sourceFlow: 'Home page',
 				});
 			}}
-			loading={isLoading || queryResult.isLoading}
+			loading={isPending || queryResult.isPending}
 			before={<WalletActionStake24 />}
-			data-testId={`stake-button-${formatted}-${symbol}`}
+			data-testid={`stake-button-${formatted}-${symbol}`}
 		>
 			<div className="flex flex-col">
 				<Text variant="pBody" weight="semibold">

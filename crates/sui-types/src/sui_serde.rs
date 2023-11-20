@@ -181,7 +181,7 @@ pub fn to_sui_struct_tag_string(value: &StructTag) -> Result<String, fmt::Error>
     let address = if SUI_ADDRESSES.contains(&value.address) {
         value.address.short_str_lossless()
     } else {
-        value.address.to_canonical_string()
+        value.address.to_canonical_string(/* with_prefix */ false)
     };
 
     write!(f, "0x{}::{}::{}", address, value.module, value.name)?;

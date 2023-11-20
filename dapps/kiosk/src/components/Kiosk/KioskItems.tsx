@@ -32,7 +32,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }) {
 
 	const [modalItem, setModalItem] = useState<OwnedObjectType | null>(null);
 
-	const { data: kioskData, isLoading, isError, refetch: getKioskData } = useKiosk(kioskId);
+	const { data: kioskData, isPending, isError, refetch: getKioskData } = useKiosk(kioskId);
 
 	const navigate = useNavigate();
 
@@ -50,7 +50,7 @@ export function KioskItems({ kioskId }: { kioskId?: string }) {
 
 	if (isError && isKioskPage) return <KioskNotFound />;
 
-	if (isLoading) return <Loading />;
+	if (isPending) return <Loading />;
 
 	if (!kioskId || kioskItems.length === 0)
 		return <div className="py-12">The kiosk you are viewing is empty!</div>;

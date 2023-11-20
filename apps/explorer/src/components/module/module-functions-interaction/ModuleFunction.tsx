@@ -117,7 +117,7 @@ export function ModuleFunction({
 						variant="primary"
 						type="submit"
 						disabled={isExecuteDisabled}
-						loading={execute.isLoading}
+						loading={execute.isPending}
 					>
 						Execute
 					</Button>

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(unused_const)]
 /// In addition to the fields declared in its type definition, a Sui object can have dynamic fields
 /// that can be added after the object has been constructed. Unlike ordinary field names
 /// (which are always statically declared identifiers) a dynamic field name can be any value with
@@ -14,19 +15,17 @@ module sui::dynamic_field {
 
     friend sui::dynamic_object_field;
 
-    #[allow(unused_const)]
     /// The object already has a dynamic field with this name (with the value and type specified)
     const EFieldAlreadyExists: u64 = 0;
-    #[allow(unused_const)]
     /// Cannot load dynamic field.
     /// The object does not have a dynamic field with this name (with the value and type specified)
     const EFieldDoesNotExist: u64 = 1;
-    #[allow(unused_const)]
     /// The object has a field with that name, but the value type does not match
     const EFieldTypeMismatch: u64 = 2;
-    #[allow(unused_const)]
     /// Failed to serialize the field's name
     const EBCSSerializationFailure: u64 = 3;
+    /// The object added as a dynamic field was previously a shared object
+    const ESharedObjectOperationNotSupported: u64 = 4;
 
     /// Internal object used for storing the field and value
     struct Field<Name: copy + drop + store, Value: store> has key {

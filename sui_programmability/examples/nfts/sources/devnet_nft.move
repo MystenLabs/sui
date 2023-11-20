@@ -104,21 +104,21 @@ module nfts::devnet_nftTests {
         // send it from A to B
         ts::next_tx(&mut scenario, addr1);
         {
-            let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
+            let nft = ts::take_from_sender<DevNetNFT>(&scenario);
             transfer::public_transfer(nft, addr2);
         };
         // update its description
         ts::next_tx(&mut scenario, addr2);
         {
-            let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
+            let nft = ts::take_from_sender<DevNetNFT>(&scenario);
             devnet_nft::update_description(&mut nft, b"a new description") ;
             assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
-            ts::return_to_sender(&mut scenario, nft);
+            ts::return_to_sender(&scenario, nft);
         };
         // burn it
         ts::next_tx(&mut scenario, addr2);
         {
-            let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
+            let nft = ts::take_from_sender<DevNetNFT>(&scenario);
             devnet_nft::burn(nft)
         };
         ts::end(scenario);

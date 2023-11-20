@@ -1,0 +1,19 @@
+processed 9 tasks
+
+task 2 'run'. lines 38-46:
+mutable inputs after call: local#0: false
+
+task 3 'run'. lines 47-54:
+mutable inputs after call: local#1: false, local#3: { 0 }
+
+task 4 'run'. lines 56-64:
+mutable inputs after call: local#1: false, local#3: { 0 }
+
+task 6 'run'. lines 67-67:
+mutable inputs after call: local#0: false
+
+task 7 'run'. lines 69-69:
+mutable inputs after call: local#1: false, local#3: { 0 }
+
+task 8 'run'. lines 71-71:
+mutable inputs after call: local#1: false, local#3: { 0 }

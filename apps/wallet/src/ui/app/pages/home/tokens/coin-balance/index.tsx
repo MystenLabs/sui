@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
+import { useAppSelector } from '_hooks';
+import { API_ENV } from '_shared/api-env';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 import { useFormatCoin, useSuiCoinData } from '@mysten/core';
@@ -13,9 +15,8 @@ export type CoinProps = {
 	amount: bigint;
 };
 
-export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
+function WalletBalanceUsd({ amount: walletBalance }: { amount: bigint }) {
 	const isDefiWalletEnabled = useIsWalletDefiEnabled();
-	const [formatted, symbol] = useFormatCoin(walletBalance, type);
 	const { data } = useSuiCoinData();
 	const { currentPrice } = data || {};
 
@@ -31,6 +32,21 @@ export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
 		})} USD`;
 	}, [currentPrice, walletBalance]);
 
+	if (!walletBalanceInUsd) {
+		return null;
+	}
+
+	return (
+		<Text variant="caption" weight="medium" color={isDefiWalletEnabled ? 'hero-darkest' : 'steel'}>
+			{walletBalanceInUsd}
+		</Text>
+	);
+}
+
+export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
+	const { apiEnv } = useAppSelector((state) => state.app);
+	const [formatted, symbol] = useFormatCoin(walletBalance, type);
+
 	return (
 		<div className="flex flex-col gap-1 items-center justify-center">
 			<div className="flex items-center justify-center gap-2">
@@ -42,17 +58,7 @@ export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
 					{symbol}
 				</Heading>
 			</div>
-			<div>
-				{walletBalanceInUsd ? (
-					<Text
-						variant="caption"
-						weight="medium"
-						color={isDefiWalletEnabled ? 'hero-darkest' : 'steel'}
-					>
-						{walletBalanceInUsd}
-					</Text>
-				) : null}
-			</div>
+			<div>{apiEnv === API_ENV.mainnet ? <WalletBalanceUsd amount={walletBalance} /> : null}</div>
 		</div>
 	);
 }

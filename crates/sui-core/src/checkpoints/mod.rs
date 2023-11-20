@@ -50,9 +50,12 @@ use tokio::{
     time::timeout,
 };
 use tracing::{debug, error, info, instrument, warn};
-use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
+use typed_store::{
+    rocks::{DBMap, MetricConf},
+    TypedStoreError,
+};
 use typed_store_derive::DBMapUtils;
 
 pub type CheckpointCommitHeight = u64;
@@ -554,6 +557,16 @@ impl CheckpointStore {
         Ok(checkpoint)
     }
 
+    pub fn insert_epoch_last_checkpoint(
+        &self,
+        epoch_id: EpochId,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> SuiResult {
+        self.epoch_last_checkpoint_map
+            .insert(&epoch_id, checkpoint.sequence_number())?;
+        Ok(())
+    }
+
     /// Given the epoch ID, and the last checkpoint of the epoch, derive a few statistics of the epoch.
     pub fn get_epoch_stats(
         &self,
@@ -910,6 +923,7 @@ impl CheckpointBuilder {
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
                         | TransactionKind::AuthenticatorStateUpdate(_)
+                        | TransactionKind::RandomnessStateUpdate(_)
                 ) {
                     transaction_keys.push(SequencedConsensusTransactionKey::External(
                         ConsensusTransactionKey::Certificate(*effects.transaction_digest()),

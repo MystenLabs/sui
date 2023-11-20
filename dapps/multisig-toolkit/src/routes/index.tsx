@@ -4,6 +4,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import MultiSigCombinedSignatureGenerator from './combine-sigs';
+import ExecuteTransaction from './execute-transaction';
 import MultiSigAddressGenerator from './multisig-address';
 import OfflineSigner from './offline-signer';
 import { Root } from './root';
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
 			{
 				path: 'combine-signatures',
 				element: <MultiSigCombinedSignatureGenerator />,
+			},
+			{
+				path: 'execute-transaction',
+				element: <ExecuteTransaction />,
 			},
 		],
 	},

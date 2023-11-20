@@ -7,6 +7,7 @@ use std::fmt;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use std::{ffi::OsString, fs, path::Path, process::Command};
 use tokio::sync::oneshot::Sender;
 
@@ -14,6 +15,7 @@ use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, IntoMakeService};
+use axum::Extension;
 use axum::{Json, Router, Server};
 use hyper::http::{HeaderName, HeaderValue, Method};
 use hyper::server::conn::AddrIncoming;
@@ -21,12 +23,13 @@ use hyper::{HeaderMap, StatusCode};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use mysten_metrics::RegistryService;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use url::Url;
 
-use move_compiler::compiled_unit::CompiledUnitEnum;
 use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
@@ -51,6 +54,11 @@ pub const TESTNET_WS_URL: &str = "wss://rpc.testnet.sui.io:443";
 pub const DEVNET_WS_URL: &str = "wss://rpc.devnet.sui.io:443";
 pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 
+pub const WS_PING_INTERVAL: Duration = Duration::from_millis(20_000);
+
+pub const METRICS_ROUTE: &str = "/metrics";
+pub const METRICS_HOST_PORT: &str = "0.0.0.0:9184";
+
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
         Some(v) => v.to_string(),
@@ -58,12 +66,12 @@ pub fn host_port() -> String {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Config {
     pub packages: Vec<PackageSource>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "source", content = "values")]
 pub enum PackageSource {
     Repository(RepositorySource),
@@ -177,10 +185,7 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         let path = v.source_path.to_path_buf();
         let source = Some(fs::read_to_string(path.as_path())?);
-        let name = match v.unit {
-            CompiledUnitEnum::Module(ref m) => m.name,
-            CompiledUnitEnum::Script(ref m) => m.name,
-        };
+        let name = v.unit.name;
         if let Some(existing) = address_map.get_mut(&address) {
             existing.insert(name, SourceInfo { path, source });
         } else {
@@ -376,9 +381,11 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 pub async fn watch_for_upgrades(
     packages: Vec<PackageSource>,
     app_state: Arc<RwLock<AppState>>,
+    network: Network,
     channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
+    let mut num_packages = 0;
     for s in packages {
         let packages = match s {
             PackageSource::Repository(RepositorySource { packages, .. }) => packages,
@@ -386,21 +393,33 @@ pub async fn watch_for_upgrades(
         };
         for p in packages {
             if let Some(id) = p.watch {
+                num_packages += 1;
                 watch_ids.insert(TransactionFilter::ChangedObject(id))?
             }
         }
     }
 
-    let client: WsClient = WsClientBuilder::default().build(LOCALNET_WS_URL).await?;
+    let websocket_url = match network {
+        Network::Mainnet => MAINNET_WS_URL,
+        Network::Testnet => TESTNET_WS_URL,
+        Network::Devnet => DEVNET_WS_URL,
+        Network::Localnet => LOCALNET_WS_URL,
+    };
+
+    let client: WsClient = WsClientBuilder::default()
+        .ping_interval(WS_PING_INTERVAL)
+        .build(websocket_url)
+        .await?;
     let mut subscription: Subscription<SuiTransactionBlockEffects> = client
         .subscribe(
             "suix_subscribeTransaction",
             watch_ids,
             "suix_unsubscribeTransaction",
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow!("Failed to open websocket connection for {}: {}", network, e))?;
 
-    info!("Listening for upgrades...");
+    info!("Listening for upgrades on {num_packages} package(s) on {websocket_url}...");
     loop {
         let result: Option<Result<SuiTransactionBlockEffects, _>> = subscription.next().await;
         match result {
@@ -423,7 +442,8 @@ pub async fn watch_for_upgrades(
                 info!("Saw failed transaction when listening to upgrades.")
             }
             None => {
-                bail!("Fatal: WebSocket connection lost while listening for upgrades. Shutting down server.")
+                error!("Fatal: WebSocket connection lost while listening for upgrades. Shutting down server.");
+                std::process::exit(1)
             }
         }
     }
@@ -431,6 +451,7 @@ pub async fn watch_for_upgrades(
 
 pub struct AppState {
     pub sources: NetworkLookup,
+    pub metrics: Option<SourceServiceMetrics>,
 }
 
 pub fn serve(
@@ -490,6 +511,9 @@ async fn api_route(
     };
 
     let app_state = app_state.read().unwrap();
+    if let Some(metrics) = &app_state.metrics {
+        metrics.total_requests_received.inc();
+    }
     let source_result = app_state
         .sources
         .get(&network)
@@ -561,4 +585,41 @@ async fn check_version_header<B>(
 
 async fn list_route(State(_app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
     (StatusCode::OK, "").into_response()
+}
+
+pub struct SourceServiceMetrics {
+    pub total_requests_received: IntCounter,
+}
+
+impl SourceServiceMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            total_requests_received: register_int_counter_with_registry!(
+                "total_requests",
+                "Total number of requests received by Source Service",
+                registry
+            )
+            .unwrap(),
+        }
+    }
+}
+
+pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
+    let registry = Registry::new();
+
+    let registry_service = RegistryService::new(registry);
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(mysten_metrics::metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::from_tcp(addr)
+            .unwrap()
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    registry_service
 }

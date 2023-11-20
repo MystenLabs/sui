@@ -17,6 +17,7 @@ import {
 } from '@floating-ui/react';
 import type { Placement } from '@floating-ui/react';
 import { Info16 } from '@mysten/icons';
+import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -27,9 +28,10 @@ interface TooltipProps {
 	tip: ReactNode;
 	children: ReactNode;
 	placement?: Placement;
+	noFullWidth?: boolean;
 }
 
-export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
+export function Tooltip({ tip, children, noFullWidth, placement = 'top' }: TooltipProps) {
 	const [open, setOpen] = useState(false);
 	const arrowRef = useRef(null);
 
@@ -84,7 +86,11 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 
 	return (
 		<>
-			<div tabIndex={0} className="w-full flex" {...getReferenceProps({ ref: refs.setReference })}>
+			<div
+				tabIndex={0}
+				className={clsx('flex', !noFullWidth && 'w-full')}
+				{...getReferenceProps({ ref: refs.setReference })}
+			>
 				{children}
 			</div>
 			<FloatingPortal>

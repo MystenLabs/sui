@@ -2,8 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::consensus::LeaderSwapTable;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use consensus::consensus::LeaderSwapTable;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use test_utils::{fixture_payload, latest_protocol_version, CommitteeFixture};
@@ -159,7 +159,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
 
-    let result = tx_parents.send((parents, 1, 0)).await;
+    let result = tx_parents.send((parents, 1)).await;
     assert!(result.is_ok());
 
     // THEN the header should contain max_num_of_batches
@@ -253,7 +253,7 @@ async fn equivocation_protection() {
         .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
 
-    let result = tx_parents.send((parents, 1, 0)).await;
+    let result = tx_parents.send((parents, 1)).await;
     assert!(result.is_ok());
     assert!(rx_ack.await.is_ok());
 
@@ -327,7 +327,7 @@ async fn equivocation_protection() {
         .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
 
-    let result = tx_parents.send((parents, 1, 0)).await;
+    let result = tx_parents.send((parents, 1)).await;
     assert!(result.is_ok());
     assert!(rx_ack.await.is_ok());
 

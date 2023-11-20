@@ -1,5 +1,68 @@
 # @mysten/dapp-kit
 
+## 0.9.0
+
+### Minor Changes
+
+- c5d4db238: Have useSignPersonalMessage fall back to use sui:signMessage
+
+### Patch Changes
+
+- Updated dependencies [652bcdd92]
+  - @mysten/sui.js@0.46.1
+  - @mysten/wallet-standard@0.8.9
+
+## 0.8.0
+
+### Minor Changes
+
+- 103ad29c0: Fix the connect button component not opening the modal
+
+### Patch Changes
+
+- Updated dependencies [28c2c3330]
+- Updated dependencies [43444c58f]
+- Updated dependencies [8d1e74e52]
+- Updated dependencies [093554a0d]
+- Updated dependencies [3718a230b]
+  - @mysten/sui.js@0.46.0
+  - @mysten/wallet-standard@0.8.8
+
+## 0.7.0
+
+### Minor Changes
+
+- b359868e3: Fix how esm types are built
+- 5d7055365: Fix bug where style resets were being applied to custom trigger buttons
+
+### Patch Changes
+
+- Updated dependencies [30b47b758]
+  - @mysten/sui.js@0.45.1
+  - @mysten/wallet-standard@0.8.7
+
+## 0.6.0
+
+### Minor Changes
+
+- d4d9c9218: Upgrade dapp-kit and the scaffold applications to react-query v5
+- fb0ce3485: Add global connection status info and change the hook interface of `useCurrentWallet` to
+  return an object to encapsulate connection info together. To migrate:
+
+  Before:
+  const currentWallet = useCurrentWallet();
+
+  After:
+  const { currentWallet } = useCurrentWallet();
+
+### Patch Changes
+
+- 09c103002: fix pagination in useSuiClientInfiniteQuery
+- e0578094b: Fix typing of data for useSuiClientInfiniteQuery
+- Updated dependencies [b9afb5567]
+  - @mysten/sui.js@0.45.0
+  - @mysten/wallet-standard@0.8.6
+
 ## 0.5.0
 
 ### Minor Changes

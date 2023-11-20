@@ -1,0 +1,374 @@
+---
+title: Sui Client CLI
+description: The Sui Client CLI provides command-level access to interact with the Sui network.
+---
+
+The Sui Client CLI provides command-level access to interact with the Sui network. Typical uses for the Sui Client CLI include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.
+
+{@include: ../../snippets/cli-check-install.mdx}
+
+## Commands
+
+The following list itemizes all the available subcommands for the `sui client` command.
+
+```
+Usage: sui client [OPTIONS] [COMMAND]
+
+Commands:
+  active-address     	Default address used for commands when none specified
+  active-env         	Default environment used for commands when none specified
+  addresses          	Obtain the Addresses managed by the client
+  call               		Call Move function
+  chain-identifier   	Query the chain identifier from the rpc endpoint
+  dynamic-field      	Query a dynamic field by its address
+  envs               	List all Sui environments
+  execute-signed-tx  	Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute
+  gas                	Obtain all gas objects owned by the address
+  merge-coin         	Merge two coin objects into one coin
+  new-address        	Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1} with optional derivation path, default to m/44'/784'/0'/0'/0' for
+                         	ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be { word12 | word15 | word18 | word21 | word24} default to word12 if not specified
+  new-env            	Add new Sui environment
+  object             	Get object info
+  objects            	Obtain all objects owned by the address
+  pay                	Pay coins to recipients following specified amounts, with input coins. Length of recipients must be the same as that of amounts
+  pay-all-sui        	Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost. The input coins also include the coin for gas payment, so no extra gas
+                         	coin is required
+  pay-sui            	Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also
+                         	include the coin for gas payment, so no extra gas coin is required
+  publish            	Publish Move modules
+  replay-transaction    Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
+  replay-batch          Replay transactions listed in a file.
+  replay-checkpoint     Replay all transactions in a range of checkpoints. 
+  split-coin         	Split a coin object into multiple coins
+  switch             	Switch active address and network(e.g., devnet, local rpc server)
+  tx-block           	Get the effects of executing the given transaction block
+  transfer           	Transfer object
+  transfer-sui       	Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, only the amount is transferred; otherwise the entire object is transferred
+  upgrade            	Upgrade Move modules
+  verify-bytecode-meter  Run the bytecode verifier on the package
+  verify-source      	Verify local Move packages against on-chain packages, and optionally their dependencies
+  help               	Print this message or the help of the given subcommand(s)
+
+Options:
+  	--client.config <CONFIG>  Sets the file storing the state of our user accounts (an empty one will be created if missing)
+  	--json                	Return command outputs in json format
+  -y, --yes
+  -h, --help                	Print help
+```
+
+## JSON output
+
+Append the `--json` flag to commands to format responses in JSON instead of the more human-friendly default Sui CLI output. This can be useful for extremely large datasets, for example, as those results can have a troublesome display on smaller screens. In these cases, the `--json` flag is useful.
+
+## Examples
+
+The following examples demonstrate some of the most often used commands.
+
+### List available network environments
+
+Use the `sui client envs` command to find the network environments set up in the CLI. The information for these environments is also stored in the client.yaml file in the Sui configuration directory (`~/.sui/sui_config`).
+
+```shell
+╭────────┬────────────────────────────────────┬────────╮
+│ alias  │ url                                │ active │
+├────────┼────────────────────────────────────┼────────┤
+│ devnet │ https://fullnode.devnet.sui.io:443 │ *  	   │
+╰────────┴────────────────────────────────────┴────────╯
+```
+
+### Create network environment
+
+Use `client new-env` to add details for a new network environment. This example creates an environment pointer to Sui Mainnet. Setting the `alias` value makes referencing the environment less prone to typographical errors. After running this command, Sui updates your client.yaml file in `~/.sui/sui_config` with the new information.
+
+```
+$ sui client new-env --alias=mainnet --rpc https://fullnode.mainnet.sui.io:443
+
+Added new Sui env [mainnet] to config.
+```
+
+### Set current environment
+
+Use the `sui client switch` command to change the current network. This example switches the current network to `mainnet`.
+
+```shell
+$ sui client switch --env mainnet
+
+Active environment switched to [mainnet]
+```
+
+If you run `sui client envs` after this command, you see the asterisk in the `active` column on the `mainnet` row of the table.
+
+### Get current active environment
+
+Use the `sui client active-address` command to reveal the current address. The CLI uses the current active address to execute address-specific CLI commands (like `sui client objects`) when you don't provide them with a Sui address value.
+
+```shell
+$ sui client active-address
+0x514692f08249c3e9951234ce29074695840422564bff85e424b56de462913e0d
+```
+
+### Get objects owned by an address
+
+Use `sui client objects` to list summary information about the objects the current active address owns. You can provide a Sui address value to the command to list objects for a particular address. This example lists objects for the current active address.
+
+```
+$ sui client objects 0x36df11369cf00ecf0be68d6ba965b0abe2e883bc5245911e3a29ebfa0aaf6b69
+
+╭───────────────────────────────────────────────────────────────────────────────────────╮
+| ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f  │ │
+│ │ version	   │  33363559                                                        	  │ │
+│ │ digest 	   │  IY7/qsIJhliQL0uxwSzNYu0SMcn5AMsqQklSGngn1V0=                    	  │ │
+│ │ objectType │  0x0000..0002::coin::Coin                                        	  │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+│ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │
+│ │ objectId   │  0xfffe59fb6f78b1ced7f6537e69a205cc45d105270857bfd66332f9a627a38ae0  │ │
+│ │ version	   │  33370864                                                            │ │
+│ │ digest     │  b+tKChvujbCk/UCm8L+lflyb6Vjt7beB+uz6+ahUHmM=                    	  │ │
+│ │ objectType │  0x0000..0002::coin::Coin                                        	  │ │
+│ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Get complete object information
+
+Use `sui client object <OBJECT-ID>` to list object information for the ID you provide. This example displays the information for a Coin object.
+
+```
+$ sui client object 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f
+╭───────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ objectId  	│  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f                                             	  │
+│ version   	│  33363559                                                                                                       	  │
+│ digest    	│  3FzvXJVVVcXb9H6dEXdARaY9EmxXyyNFduet3X4eYV4x                                                                   	  │
+│ objType   	│  0x2::coin::Coin<0x2::sui::SUI>                                                                                 	  │
+│ ownerType 	│  AddressOwner                                                                                                   	  │
+│ prevTx    	│  ES2RQThjRE5u8rwiUEnhcnMoLA3cHeEGYJ8Pq98tmyAc                                                                   	  │
+│ storageRebate │  988000                                                                                                         	  │
+│ content   	│ ╭───────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│           	│ │ dataType      	  │  moveObject                                                                            	    │ │
+│           	│ │ type          	  │  0x2::coin::Coin<0x2::sui::SUI>                                                       	    │ │
+│           	│ │ hasPublicTransfer │  true                                                                                   	│ │
+│           	│ │ fields        	  │ ╭─────────┬───────────────────────────────────────────────────────────────────────────────╮ │ │
+│           	│ │               	  │ │ balance │  530076676                                                                	  │ │ │
+│           	│ │               	  │ │ id  	  │ ╭────┬──────────────────────────────────────────────────────────────────────╮ │ │ │
+│           	│ │               	  │ │     	  │ │ id │  0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f  │ │ │ │
+│           	│ │               	  │ │     	  │ ╰────┴──────────────────────────────────────────────────────────────────────╯ │ │ │
+│           	│ │               	  │ ╰─────────┴───────────────────────────────────────────────────────────────────────────────╯ │ │
+│           	│ ╰───────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────╯ │
+╰───────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Get dynamic fields of an object
+
+Use the `sui client dynamic-field <DYNAMIC-FIELD-ID>` command to list the details of the dynamic field with the ID you provide.
+
+```
+$ sui client dynamic-field 0x5
+╭─────────────┬───────────────────────────────────────────────────────────────────────────────────────────╮
+│ hasNextPage │  false                                                                                	  │
+│ nextCursor  │  0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1                   	  │
+│ data     	  │ ╭───────────────────────────────────────────────────────────────────────────────────────╮ │
+│         	  │ │ ╭────────────┬──────────────────────────────────────────────────────────────────────╮ │ │
+│         	  │ │ │ name   	   │ ╭───────┬───────╮                                                	  │ │ │
+│         	  │ │ │        	   │ │ type  │  u64  │                                                	  │ │ │
+│         	  │ │ │        	   │ │ value │  2	 │                                                	  │ │ │
+│         	  │ │ │        	   │ ╰───────┴───────╯                                                	  │ │ │
+│         	  │ │ │ bcsName	   │  LQM2cdzDY3                                                      	  │ │ │
+│         	  │ │ │ type   	   │  DynamicField                                                    	  │ │ │
+│         	  │ │ │ objectType │  0x3::sui_system_state_inner::SuiSystemStateInnerV2              	  │ │ │
+│         	  │ │ │ objectId   │  0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1  │ │ │
+│         	  │ │ │ version	   │  112                                                             	  │ │ │
+│         	  │ │ │ digest 	   │  HMrm1KNKjq3GfB1cWTRdvRo8gk7auhgvoZXaVoyEHqUR                    	  │ │ │
+│         	  │ │ ╰────────────┴──────────────────────────────────────────────────────────────────────╯ │ │
+│         	  │ ╰───────────────────────────────────────────────────────────────────────────────────────╯ │
+╰─────────────┴───────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+## Publish a Move package
+
+One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to the Devnet network, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: `https://github.com/MystenLabs/sui/tree/main/examples/move`
+
+This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
+
+1. Open a terminal or console to the root of your local Sui repository and navigate to the move_tutorial example.
+    ```shell
+    cd examples/move
+    cd first_package
+    ```
+1. Switch to the Devnet network. This command uses an alias, so the `devnet` value might be different for you, depending on the alias name set in your configuration.
+    ```shell
+    sui client switch --env devnet
+    ```
+1. Use `sui move build` to build the package. You must run this command at the same level as the package manifest file ([Move.toml](/references/move/move-toml.mdx)). The console responds with the status of the build.
+    ```shell
+    sui move build
+    INCLUDING DEPENDENCY Sui
+    INCLUDING DEPENDENCY MoveStdlib
+    BUILDING first_package
+    ```
+1. Use `sui move test` to run the unit tests. The console responds with updates of its progress.
+    ```shell
+    sui move test
+    INCLUDING DEPENDENCY Sui
+    INCLUDING DEPENDENCY MoveStdlib
+    BUILDING first_package
+    Running Move unit tests
+    [ PASS    ] 0x0::example::test_module_init
+    [ PASS    ] 0x0::example::test_sword_transactions
+    Test result: OK. Total tests: 2; passed: 2; failed: 0
+     ```
+1. Use the `sui client verify-bytecode-meter` to check if the module passes the bytecode meter. The console responds with the maximum allowed values as well as the amount the package uses.
+    ```shell
+    $ sui client verify-bytecode-meter
+    Running bytecode verifier for 1 modules
+    ╭──────────────────────────────────╮
+    │ Module will pass metering check! │
+    ├────────┬────────────┬────────────┤
+    │        │ Module     │ Function   │
+    │ Max    │ 16000000   │ 16000000   │
+    │ Used   │ 4565       │ 4565       │
+    ╰────────┴────────────┴────────────╯
+    ```
+1. Use `sui client gas` to verify that the active address has a gas coin for paying gas. In the case of this example, the console responds with the information that the address is coinless.
+    ```shell
+    $ sui client gas
+    No gas coins are owned by this address
+    ```
+1. If you need coins, use a cURL command to get gas for the address (not available for Mainnet). For more information on gassing up addresses on development networks, see [Get Sui Tokens](/guides/developer/getting-started/get-coins.mdx).
+    ```shell
+    $ curl --location --request POST 'https://faucet.devnet.sui.io/v1/gas' \
+    --header 'Content-Type: application/json' \
+    --data-raw '{
+        "FixedAmountRequest": {
+            "recipient": "0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"
+        }
+    }'
+    {"task":"10bba759-d4fe-4a7a-ab59-5264056b5665","error":null}
+    ```
+1. Use `sui client gas` to verify the current active address received the coins.
+    ```shell
+    $ sui client gas
+    ╭────────────────────────────────────────────────────────────────────┬─────────────╮
+    │ gasCoinId                                                      	 │ gasBalance  │
+    ├────────────────────────────────────────────────────────────────────┼─────────────┤
+    │ 0x2f3799d094573b0958eef703b95996fe459bb00afc2d09866335c30cf480e522 │ 10000000000 │
+    ╰────────────────────────────────────────────────────────────────────┴─────────────╯
+    ```
+1. Use `sui client publish` to publish the package, being sure to set an appropriate value for the `gas-budget` flag. The console responds with the details of the publish. You can use `sui client object <OBJECT-ID>` to check the details of any of the objects from the process.
+    ```shell
+    $ sui client publish --gas-budget 5000000
+
+    INCLUDING DEPENDENCY Sui
+    INCLUDING DEPENDENCY MoveStdlib
+    BUILDING MyFirstPackage
+    Successfully verified dependencies on-chain against source.
+    ----- Transaction Digest ----
+    CUQ1zpA3huX4ihQFA6gP7csRkiWk6eWRcjTWmjjDPeYn
+    ----- Transaction Data ----
+    Transaction Signature: [Signature(Ed25519SuiSignature(Ed25519SuiSignature([0, 189, 223, 46, 165, 20, 213, 149, 2, 12, 79, 255, 17, 126, 202, 76, 195, 212, 99, 166, 254, 93, 190, 133, 204, 161, 25, 190, 69, 131, 195, 163, 93, 160, 72, 223, 134, 144, 114, 173, 221, 70, 170, 43, 131, 46, 102, 86, 145, 18, 14, 148, 51, 0, 55, 55, 187, 32, 146, 96, 78, 83, 31, 87, 12, 162, 66, 26, 47, 17, 241, 59, 37, 133, 135, 78, 216, 225, 200, 140, 142, 171, 110, 191, 173, 163, 87, 145, 250, 249, 78, 142, 40, 11, 99, 164, 151])))]
+    Transaction Kind : Programmable
+    Inputs: [Pure(SuiPureValue { value_type: Some(Address), value: "0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d" })]
+    Commands: [
+    Publish(<modules>,0x0000000000000000000000000000000000000000000000000000000000000001,0x0000000000000000000000000000000000000000000000000000000000000002),
+    TransferObjects([Result(0)],Input(0)),
+    ]
+
+    Sender: 0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d
+    Gas Payment: Object ID: 0x2f3799d094573b0958eef703b95996fe459bb00afc2d09866335c30cf480e522, version: 0x4, digest: 2fuBEeoR22HizJr9XXD3XdbHQ3JAvt8U3fcqnxvkgjnk
+    Gas Owner: 0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d
+    Gas Price: 1000
+    Gas Budget: 50000000
+
+    ----- Transaction Effects ----
+    Status : Success
+    Created Objects:
+    - ID: 0x1197a4e9ff864f2f271d9e8765c38f3b5a5a7910a9efc7b0817fc6eb1be88397 , Owner: Immutable
+    - ID: 0x5920fedb5e0b6e31af6e10355fdbef9e0f812d29c4f74635e13b950792e64098 , Owner: Account Address ( 0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d )
+    - ID: 0xb9996e75239d7235e8e6cd8f77b04717639d7a3f061bbb818a6d3667967ae14f , Owner: Account Address ( 0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d )
+    Mutated Objects:
+    - ID: 0x2f3799d094573b0958eef703b95996fe459bb00afc2d09866335c30cf480e522 , Owner: Account Address ( 0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d )
+
+    ----- Events ----
+    Array []
+    ----- Object changes ----
+    Array [
+        Object {
+            "type": String("mutated"),
+            "sender": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            "owner": Object {
+                "AddressOwner": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            },
+            "objectType": String("0x2::coin::Coin<0x2::sui::SUI>"),
+            "objectId": String("0x2f3799d094573b0958eef703b95996fe459bb00afc2d09866335c30cf480e522"),
+            "version": String("5"),
+            "previousVersion": String("4"),
+            "digest": String("7T2QvGtYh4ZZw7NgYeyTAey85t6G1zNTmd1G6S9ue6LS"),
+        },
+        Object {
+            "type": String("published"),
+            "packageId": String("0x1197a4e9ff864f2f271d9e8765c38f3b5a5a7910a9efc7b0817fc6eb1be88397"),
+            "version": String("1"),
+            "digest": String("772oquNYzS4n9X76dCuFroRufgGy1rUjxLYucnVSA7iV"),
+            "modules": Array [
+                String("my_module"),
+            ],
+        },
+        Object {
+            "type": String("created"),
+            "sender": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            "owner": Object {
+                "AddressOwner": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            },
+            "objectType": String("0x1197a4e9ff864f2f271d9e8765c38f3b5a5a7910a9efc7b0817fc6eb1be88397::my_module::Forge"),
+            "objectId": String("0x5920fedb5e0b6e31af6e10355fdbef9e0f812d29c4f74635e13b950792e64098"),
+            "version": String("5"),
+            "digest": String("9knQ6sKza7MZqpn98M2r4EdYiGifTBFJ41B8bTQnYGDs"),
+        },
+        Object {
+            "type": String("created"),
+            "sender": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            "owner": Object {
+                "AddressOwner": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            },
+            "objectType": String("0x2::package::UpgradeCap"),
+            "objectId": String("0xb9996e75239d7235e8e6cd8f77b04717639d7a3f061bbb818a6d3667967ae14f"),
+            "version": String("5"),
+            "digest": String("zPz3XUKyrN1gL8TrnTcuXkdDfEseSpVcSykEjwuw6dc"),
+        },
+    ]
+    ----- Balance changes ----
+    Array [
+        Object {
+            "owner": Object {
+                "AddressOwner": String("0x514692f08249c3e9957799ce29074695840422564bff85e424b56de462913e0d"),
+            },
+            "coinType": String("0x2::sui::SUI"),
+            "amount": String("-10327480"),
+        },
+    ]
+    ```
+
+## Help
+
+Each command has its own help section. For example, `sui client call --help` displays the following prompt:
+
+```
+Call Move function
+
+Usage: sui client call [OPTIONS] --package <PACKAGE> --module <MODULE> --function <FUNCTION> --gas-budget <GAS_BUDGET>
+
+Options:
+  	--package <PACKAGE>           	Object ID of the package, which contains the module
+  	--module <MODULE>             	The name of the module in the package
+  	--function <FUNCTION>         	Function name in module
+  	--type-args <TYPE_ARGS>...    	Type arguments to the generic function being called. All must be specified, or the call will fail
+  	--args <ARGS>...              	Simplified ordered args like in the function syntax ObjectIDs, Addresses must be hex strings
+  	--gas <GAS>                   	ID of the gas object for gas payment, in 20 bytes Hex string If not provided, a gas object with at least gas_budget value will be selected
+  	--gas-budget <GAS_BUDGET>     	Gas budget for this call
+  	--serialize-unsigned-transaction  Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data (TransactionData) using base64 encoding, and print out
+                                    	the string
+  	--serialize-signed-transaction	Instead of executing the transaction, serialize the bcs bytes of the signed transaction data (SenderSignedData) using base64 encoding, and print out the
+                                    	string
+  	--json                        	Return command outputs in json format
+  -h, --help                        	Print help
+```

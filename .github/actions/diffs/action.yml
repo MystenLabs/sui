@@ -4,6 +4,9 @@ outputs:
   isDoc:
     description: True when changes happened to some documentation
     value: "${{ steps.diff.outputs.isDoc }}"
+  isOldDoc:
+    description: True when changes happened to old doc folder
+    value: "${{ steps.diff.outputs.isOldDoc }}"    
   isRust:
     description: True when changes happened to the Rust code
     value: "${{ steps.diff.outputs.isRust }}"
@@ -11,8 +14,8 @@ outputs:
     description: True when changes happened to the Move code
     value: "${{ steps.diff.outputs.isMove }}"
   isReleaseNotesEligible:
-    description: True when changes happened in Release Notes eligible paths 
-    value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"    
+    description: True when changes happened in Release Notes eligible paths
+    value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"
 
 runs:
   using: composite
@@ -33,15 +36,19 @@ runs:
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
         isDoc:
-          - 'doc/**'
-          - '*.md'
+          - 'docs/content/**'
+          - '*.mdx'
           - '.github/workflows/docs.yml'
+        isOldDoc:
+          - 'doc/**'
+          - '*.md'  
         isMove:
           - 'crates/sui-framework/**'
           - 'crates/sui-framework-build/**'
           - 'crates/sui-framework-tests/**'
           - 'crates/sui_move/**'
           - 'Cargo.toml'
+          - 'examples/**'
           - 'sui_programmability/**'
         isReleaseNotesEligible:
           - 'crates/**'

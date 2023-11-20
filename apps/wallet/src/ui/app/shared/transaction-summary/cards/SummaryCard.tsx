@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { ChevronDown16, ChevronRight16 } from '@mysten/icons';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { useState, type ReactNode } from 'react';
 
 import { Text } from '../../../shared/text';

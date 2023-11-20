@@ -6,7 +6,7 @@ use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc_types::{OwnedObjectRef, SuiGasData};
-use sui_sdk::types::{
+use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     gas::GasCostSummary as NativeGasCostSummary,
     transaction::GasData,
@@ -48,10 +48,12 @@ impl From<&GasData> for GasInput {
 
 #[Object]
 impl GasInput {
+    /// Address of the owner of the gas object(s) used
     async fn gas_sponsor(&self) -> Option<Address> {
         Some(Address::from(SuiAddress::from(self.owner)))
     }
 
+    /// Objects used to pay for a transaction's execution and storage
     async fn gas_payment(
         &self,
         ctx: &Context<'_>,
@@ -76,10 +78,12 @@ impl GasInput {
             .extend()
     }
 
+    /// An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
     async fn gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.price))
     }
 
+    /// The maximum number of gas units that can be expended by executing this transaction
     async fn gas_budget(&self) -> Option<BigInt> {
         Some(BigInt::from(self.budget))
     }

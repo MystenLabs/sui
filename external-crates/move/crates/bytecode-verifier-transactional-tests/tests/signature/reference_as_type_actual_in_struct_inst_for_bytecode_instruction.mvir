@@ -1,0 +1,65 @@
+//# publish
+module 0x1.M {
+    import 0x1.signer;
+
+    struct Some<T> has key { item: T }
+
+    id<T>(x: T): T { label b0: abort(0); }
+    foo() {
+    label b0:
+        Self.id<Self.Some<&u64>>();
+        return;
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct Some<T> { item: T }
+
+    foo() {
+        let x: u64;
+        let y: &u64;
+        let v: Self.Some<u64>;
+    label b0:
+        y = &x;
+        // cannot use refs in generics
+        v = Some<&u64> { item: move(y) };
+        return;
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct Some<T> { item: T }
+
+    foo() {
+        let x: &u64;
+        let v: Self.Some<u64>;
+    label b0:
+        // cannot use refs in generics
+        Some<&u64> { item: x } = move(v);
+        return;
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct S<T> { v: T }
+
+    // cannot use refs in generics
+    foo(s: Self.S<&u64>): u64 {
+    label b0:
+        return *(*(&(&s).S::v));
+    }
+}
+
+//# publish
+module 0x1.M {
+    struct S<T> { v: T }
+
+    // cannot use refs in generics
+    foo(s: Self.S<&u64>): u64 {
+    label b0:
+        return *(*(&mut (&mut s).S::v));
+    }
+}

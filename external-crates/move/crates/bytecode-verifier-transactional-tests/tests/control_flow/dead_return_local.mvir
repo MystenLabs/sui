@@ -1,0 +1,10 @@
+//# run
+module 0x42.m {
+// TODO: should the verifier allow dead code?
+entry foo() {
+label b0:
+    return;
+    assert(false, 42);
+    return;
+}
+}

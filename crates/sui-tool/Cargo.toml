@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+num_cpus.workspace = true
 bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
 colored.workspace = true
@@ -15,10 +16,12 @@ comfy-table.workspace = true
 eyre.workspace = true
 futures.workspace = true
 hex.workspace = true
+move-core-types.workspace = true
 itertools.workspace = true
 rocksdb.workspace = true
 ron.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 tempfile.workspace = true
@@ -39,6 +42,8 @@ narwhal-types.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-network.workspace = true
+sui-snapshot.workspace = true
+sui-protocol-config.workspace = true
 sui-replay.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true

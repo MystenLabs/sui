@@ -18,15 +18,15 @@ details on the full set of options available.
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
+	const { data, isPending, isError, error, refetch } = useSuiClientQuery(
 		'getOwnedObjects',
 		{ owner: '0x123' },
 		{
-			cacheTime: 10000,
+			gcTime: 10000,
 		},
 	);
 
-	if (isLoading) {
+	if (isPending) {
 		return <div>Loading...</div>;
 	}
 
@@ -48,12 +48,12 @@ For more details checkout out the
 import { useSuiClientInfiniteQuery } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isLoading, isError, error, isFetching, fetchNextPage, hasNextPage } =
+	const { data, isPending, isError, error, isFetching, fetchNextPage, hasNextPage } =
 		useSuiClientInfiniteQuery('getOwnedObjects', {
 			owner: '0x123',
 		});
 
-	if (isLoading) {
+	if (isPending) {
 		return <div>Loading...</div>;
 	}
 
@@ -99,9 +99,9 @@ To get the SuiNS name for a given address, use the `useResolveSuiNSName` hook.
 import { useResolveSuiNSName } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isLoading } = useResolveSuiNSName('0x123');
+	const { data, isPending } = useResolveSuiNSName('0x123');
 
-	if (isLoading) {
+	if (isPending) {
 		return <div>Loading...</div>;
 	}
 

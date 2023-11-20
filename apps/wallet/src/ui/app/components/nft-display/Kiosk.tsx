@@ -3,7 +3,7 @@
 import { getKioskIdFromOwnerCap, hasDisplayData, useGetKioskContents } from '@mysten/core';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { getObjectDisplay } from '@mysten/sui.js/types';
-import cl from 'classnames';
+import cl from 'clsx';
 
 import { useActiveAddress } from '../../hooks';
 import { Text } from '../../shared/text';
@@ -34,7 +34,7 @@ function getLabel(item?: SuiObjectResponse) {
 
 export function Kiosk({ object, orientation, ...nftImageProps }: KioskProps) {
 	const address = useActiveAddress();
-	const { data: kioskData, isLoading } = useGetKioskContents(address);
+	const { data: kioskData, isPending } = useGetKioskContents(address);
 
 	const kioskId = getKioskIdFromOwnerCap(object);
 	const kiosk = kioskData?.kiosks.get(kioskId!);
@@ -47,7 +47,7 @@ export function Kiosk({ object, orientation, ...nftImageProps }: KioskProps) {
 	// get the label for the first item to show on hover
 	const displayName = getLabel(items[0]);
 
-	if (isLoading) return null;
+	if (isPending) return null;
 
 	return (
 		<div className="relative hover:bg-transparent group rounded-xl transform-gpu overflow-visible w-36 h-36">

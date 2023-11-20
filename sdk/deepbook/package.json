@@ -2,7 +2,7 @@
 	"name": "@mysten/deepbook",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Deepbook SDK",
-	"version": "0.5.5",
+	"version": "0.5.9",
 	"license": "Apache-2.0",
 	"files": [
 		"dist",
@@ -18,7 +18,6 @@
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
-			"source": "./src/index.ts",
 			"import": "./dist/index.mjs",
 			"require": "./dist/index.js"
 		}

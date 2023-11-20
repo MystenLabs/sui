@@ -11,6 +11,7 @@ aws-config.workspace = true
 aws-sdk-dynamodb.workspace = true
 aws-sdk-s3.workspace = true
 async-trait.workspace = true
+backoff.workspace = true
 base64-url.workspace = true
 tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true, features = ["backtrace"] }

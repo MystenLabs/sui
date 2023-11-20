@@ -82,6 +82,42 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_counter_read(
+        self,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        counter_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "counter",
+            "value",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: false,
+            })],
+        )
+    }
+
+    pub fn call_counter_delete(
+        self,
+        package_id: ObjectID,
+        counter_id: ObjectID,
+        counter_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "counter",
+            "delete",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: counter_id,
+                initial_shared_version: counter_initial_shared_version,
+                mutable: true,
+            })],
+        )
+    }
+
     pub fn call_nft_create(self, package_id: ObjectID) -> Self {
         self.move_call(
             package_id,
@@ -294,7 +330,7 @@ impl TestTransactionBuilder {
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer));
+            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
         }
 
         let multisig =
@@ -314,7 +350,7 @@ impl TestTransactionBuilder {
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer));
+            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
         }
 
         let multisig = GenericSignature::MultiSigLegacy(

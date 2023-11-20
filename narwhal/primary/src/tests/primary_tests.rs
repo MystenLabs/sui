@@ -3,12 +3,13 @@
 use super::{Primary, PrimaryReceiverHandler, CHANNEL_CAPACITY};
 use crate::{
     common::create_db_stores,
+    consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable},
     metrics::{PrimaryChannelMetrics, PrimaryMetrics},
     synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
+
 use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters};
-use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -21,7 +22,7 @@ use prometheus::Registry;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     num::NonZeroUsize,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 use storage::{NodeStorage, VoteDigestStore};
@@ -290,6 +291,9 @@ async fn test_request_vote_has_missing_parents() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
@@ -317,6 +321,8 @@ async fn test_request_vote_has_missing_parents() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -344,23 +350,19 @@ async fn test_request_vote_has_missing_parents() {
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
     // Create a test header.
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .author(author_id)
-            .round(3)
-            .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                0,
-                0,
-            )
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .author(author_id)
+        .round(3)
+        .parents(round_2_certs.iter().map(|c| c.digest()).collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
+            0,
+            0,
+        )
+        .build()
+        .unwrap()
+        .into();
 
     // Write some certificates from round 2 into the store, and leave out the rest to test
     // headers with some parents but not all available. Round 1 certificates should be written
@@ -459,6 +461,9 @@ async fn test_request_vote_accept_missing_parents() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
@@ -486,6 +491,8 @@ async fn test_request_vote_accept_missing_parents() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -514,23 +521,19 @@ async fn test_request_vote_accept_missing_parents() {
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
     // Create a test header.
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .author(author_id)
-            .round(3)
-            .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                0,
-                0,
-            )
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .author(author_id)
+        .round(3)
+        .parents(round_2_certs.iter().map(|c| c.digest()).collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
+            0,
+            0,
+        )
+        .build()
+        .unwrap()
+        .into();
 
     // Populate all round 1 certificates and some round 2 certificates into the storage.
     // The new header will have some round 2 certificates missing as parents, but these parents
@@ -654,6 +657,9 @@ async fn test_request_vote_missing_batches() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
@@ -681,6 +687,8 @@ async fn test_request_vote_missing_batches() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -688,20 +696,19 @@ async fn test_request_vote_missing_batches() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != authority_id) {
-        let header = Header::V1(
-            primary
-                .header_builder(&latest_protocol_version(), &fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
-                .build()
-                .unwrap(),
-        );
+        let header: Header = primary
+            .header_builder(&latest_protocol_version(), &fixture.committee())
+            .with_payload_batch(
+                test_utils::fixture_batch_with_transactions(
+                    10,
+                    &test_utils::latest_protocol_version(),
+                ),
+                0,
+                0,
+            )
+            .build()
+            .unwrap()
+            .into();
 
         let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
@@ -712,22 +719,18 @@ async fn test_request_vote_missing_batches() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .round(2)
-            .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
+            1,
+            0,
+        )
+        .build()
+        .unwrap()
+        .into();
     let test_digests: HashSet<_> = test_header
         .payload()
         .iter()
@@ -801,6 +804,9 @@ async fn test_request_vote_already_voted() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -829,6 +835,8 @@ async fn test_request_vote_already_voted() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -836,20 +844,19 @@ async fn test_request_vote_already_voted() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != id) {
-        let header = Header::V1(
-            primary
-                .header_builder(&latest_protocol_version(), &fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
-                .build()
-                .unwrap(),
-        );
+        let header: Header = primary
+            .header_builder(&latest_protocol_version(), &fixture.committee())
+            .with_payload_batch(
+                test_utils::fixture_batch_with_transactions(
+                    10,
+                    &test_utils::latest_protocol_version(),
+                ),
+                0,
+                0,
+            )
+            .build()
+            .unwrap()
+            .into();
 
         let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
@@ -881,22 +888,18 @@ async fn test_request_vote_already_voted() {
         .unwrap();
 
     // Verify Handler generates a Vote.
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .round(2)
-            .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
+            1,
+            0,
+        )
+        .build()
+        .unwrap()
+        .into();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
@@ -933,22 +936,18 @@ async fn test_request_vote_already_voted() {
     assert_eq!(vote.digest(), response.into_body().vote.unwrap().digest());
 
     // Verify a different request for the same round receives an error.
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .round(2)
-            .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
+            1,
+            0,
+        )
+        .build()
+        .unwrap()
+        .into();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
@@ -993,6 +992,9 @@ async fn test_fetch_certificates_v1_handler() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -1020,6 +1022,8 @@ async fn test_fetch_certificates_v1_handler() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -1168,6 +1172,9 @@ async fn test_fetch_certificates_v2_handler() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -1195,6 +1202,8 @@ async fn test_fetch_certificates_v2_handler() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -1359,6 +1368,9 @@ async fn test_request_vote_created_at_in_future() {
     let (_tx_consensus_round_updates, rx_consensus_round_updates) =
         watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (tx_randomness_partial_signatures, _rx_randomness_partial_signatures) =
+        test_utils::test_channel!(1);
+    let randomness_vss_key_lock = Arc::new(OnceLock::new());
 
     let synchronizer = Arc::new(Synchronizer::new(
         id,
@@ -1386,6 +1398,8 @@ async fn test_request_vote_created_at_in_future() {
         certificate_store: certificate_store.clone(),
         vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
+        randomness_vss_key_lock,
+        tx_randomness_partial_signatures,
         parent_digests: Default::default(),
         metrics: metrics.clone(),
     };
@@ -1393,20 +1407,19 @@ async fn test_request_vote_created_at_in_future() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != id) {
-        let header = Header::V1(
-            primary
-                .header_builder(&latest_protocol_version(), &fixture.committee())
-                .with_payload_batch(
-                    test_utils::fixture_batch_with_transactions(
-                        10,
-                        &test_utils::latest_protocol_version(),
-                    ),
-                    0,
-                    0,
-                )
-                .build()
-                .unwrap(),
-        );
+        let header: Header = primary
+            .header_builder(&latest_protocol_version(), &fixture.committee())
+            .with_payload_batch(
+                test_utils::fixture_batch_with_transactions(
+                    10,
+                    &test_utils::latest_protocol_version(),
+                ),
+                0,
+                0,
+            )
+            .build()
+            .unwrap()
+            .into();
 
         let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
@@ -1442,23 +1455,19 @@ async fn test_request_vote_created_at_in_future() {
     // Set the creation time to be deep in the future (an hour)
     let created_at = now() + 60 * 60 * 1000;
 
-    let test_header = Header::V1(
-        author
-            .header_builder(&latest_protocol_version(), &fixture.committee())
-            .round(2)
-            .parents(certificates.keys().cloned().collect())
-            .with_payload_batch(
-                test_utils::fixture_batch_with_transactions(
-                    10,
-                    &test_utils::latest_protocol_version(),
-                ),
-                1,
-                0,
-            )
-            .created_at(created_at)
-            .build()
-            .unwrap(),
-    );
+    let test_header: Header = author
+        .header_builder(&latest_protocol_version(), &fixture.committee())
+        .round(2)
+        .parents(certificates.keys().cloned().collect())
+        .with_payload_batch(
+            test_utils::fixture_batch_with_transactions(10, &test_utils::latest_protocol_version()),
+            1,
+            0,
+        )
+        .created_at(created_at)
+        .build()
+        .unwrap()
+        .into();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -1495,7 +1504,7 @@ async fn test_request_vote_created_at_in_future() {
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
-        header: Header::V1(test_header.clone()),
+        header: test_header.clone().into(),
         parents: Vec::new(),
     });
     assert!(request

@@ -1,5 +1,0 @@
-//# run
-
-script {
-fun main() {}
-}

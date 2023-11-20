@@ -1,0 +1,11 @@
+//# run --signers 0x1
+module 0x42.m {
+
+entry foo(s: signer) {
+label b0:
+    assert(&s == &s, 42);
+    assert(!(&s != &s), 42);
+    return;
+}
+
+}

@@ -8,7 +8,10 @@ use crate::authority_aggregator::authority_aggregator_tests::{
 };
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
-use crate::test_utils::{init_local_authorities, make_transfer_object_move_transaction};
+use crate::test_utils::{
+    init_local_authorities, init_local_authorities_with_overload_thresholds,
+    make_transfer_object_move_transaction,
+};
 use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 
 use std::collections::BTreeSet;
@@ -16,6 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use itertools::Itertools;
+use sui_config::node::OverloadThresholdConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
@@ -560,10 +564,137 @@ async fn test_per_object_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(shared_txn.data());
+        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooManyTransactionsPendingOnObject"),
+        "{}",
+        message
+    );
+}
+
+#[tokio::test]
+async fn test_txn_age_overload() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize a network with 1 account and 3 gas objects.
+    let (addr, key): (_, AccountKeyPair) = get_key_pair();
+    let gas_objects = (0..3)
+        .map(|_| Object::with_owner_for_testing(addr))
+        .collect_vec();
+    let (aggregator, authorities, _genesis, package) =
+        init_local_authorities_with_overload_thresholds(
+            4,
+            gas_objects.clone(),
+            OverloadThresholdConfig {
+                max_txn_age_in_queue: Duration::from_secs(5),
+            },
+        )
+        .await;
+    let rgp = authorities
+        .get(0)
+        .unwrap()
+        .reference_gas_price_for_testing()
+        .unwrap();
+    let authority_clients: Vec<_> = authorities
+        .iter()
+        .map(|a| aggregator.authority_clients[&a.name].clone())
+        .collect();
+
+    // Create a shared counter.
+    let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[0].id()).await;
+    let create_counter_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
+        .call_counter_create(package)
+        .build_and_sign(&key);
+    let create_counter_cert = try_sign_on_first_three_authorities(
+        &authority_clients,
+        &aggregator.committee,
+        &create_counter_txn,
+    )
+    .await
+    .unwrap();
+    for authority in authorities.iter().take(3) {
+        send_consensus(authority, &create_counter_cert).await;
+    }
+    for authority in authorities.iter().take(3) {
+        authority
+            .database
+            .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+    }
+
+    // Signing and executing this transaction on the last authority should succeed.
+    authority_clients[3]
+        .handle_transaction(create_counter_txn.clone())
+        .await
+        .unwrap();
+    send_consensus(&authorities[3], &create_counter_cert).await;
+    let create_counter_effects = authorities[3]
+        .database
+        .notify_read_executed_effects(vec![*create_counter_cert.digest()])
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
+    let Owner::Shared {
+        initial_shared_version: shared_counter_initial_version,
+    } = owner
+    else {
+        panic!("Not a shared object! {:?} {:?}", shared_counter_ref, owner);
+    };
+
+    // Stop execution on the last authority, to simulate having a backlog.
+    authorities[3].shutdown_execution_for_test();
+    // Make sure execution driver has exited.
+    sleep(Duration::from_secs(1)).await;
+
+    // Sign and try execute 2 txns on the first three authorities. And enqueue them on the last authority.
+    // First shared counter txn has input object available on authority 3. So to put a txn in the queue, we
+    // will need another txn.
+    for gas_object in gas_objects.iter().take(2) {
+        let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_object.id()).await;
+        let shared_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
+            .call_counter_increment(
+                package,
+                shared_counter_ref.0,
+                shared_counter_initial_version,
+            )
+            .build_and_sign(&key);
+        let shared_cert = try_sign_on_first_three_authorities(
+            &authority_clients,
+            &aggregator.committee,
+            &shared_txn,
+        )
+        .await
+        .unwrap();
+        for authority in authorities.iter().take(3) {
+            send_consensus(authority, &shared_cert).await;
+        }
+        send_consensus(&authorities[3], &shared_cert).await;
+    }
+
+    // Sleep for 6 seconds to make sure the transaction is old enough since our threshold is 5.
+    tokio::time::sleep(Duration::from_secs(6)).await;
+
+    // Trying to sign a new transaction would now fail.
+    let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[2].id()).await;
+    let shared_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
+        .call_counter_increment(
+            package,
+            shared_counter_ref.0,
+            shared_counter_initial_version,
+        )
+        .build_and_sign(&key);
+    let res = authorities[3]
+        .transaction_manager()
+        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+    let message = format!("{res:?}");
+    assert!(
+        message.contains("TooOldTransactionPendingOnObject"),
         "{}",
         message
     );

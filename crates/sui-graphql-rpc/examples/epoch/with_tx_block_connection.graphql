@@ -1,0 +1,31 @@
+# Fetch the first 20 transactions after 231220100 for epoch 97
+{
+  epoch(id:97) {
+    transactionBlockConnection(first: 20, after:"231220100") {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          digest
+          sender {
+            location
+          }
+          effects {
+            gasEffects {
+              gasObject {
+                location
+              }
+            }
+          }
+          gasInput {
+            gasPrice
+            gasBudget
+          }
+        }
+      }
+    }
+  }
+}

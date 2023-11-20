@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{env, fmt};
 
 use crate::{error::SuiError, sui_serde::Readable};
 use fastcrypto::encoding::{Base58, Encoding};
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 use sui_protocol_config::Chain;
+use tracing::info;
 
 /// A representation of a 32 byte digest
 #[serde_as]
@@ -159,16 +160,42 @@ pub struct ChainIdentifier(CheckpointDigest);
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
+/// For testing purposes, you can set this environment variable to force protocol config to use
+/// a specific Chain.
+const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE";
+
+static SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: Lazy<Option<Chain>> = Lazy::new(|| {
+    if let Ok(s) = env::var(SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME) {
+        info!("SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {:?}", s);
+        match s.as_str() {
+            "mainnet" => Some(Chain::Mainnet),
+            "testnet" => Some(Chain::Testnet),
+            "" => None,
+            _ => panic!("unrecognized SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: {s:?}"),
+        }
+    } else {
+        None
+    }
+});
+
 impl ChainIdentifier {
     pub fn chain(&self) -> Chain {
         let mainnet_id = get_mainnet_chain_identifier();
         let testnet_id = get_testnet_chain_identifier();
 
-        match self {
+        let chain = match self {
             id if *id == mainnet_id => Chain::Mainnet,
             id if *id == testnet_id => Chain::Testnet,
             _ => Chain::Unknown,
+        };
+        if let Some(override_chain) = *SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE {
+            if chain != Chain::Unknown {
+                panic!("not allowed to override real chain {chain:?}");
+            }
+            return override_chain;
         }
+
+        chain
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
+use crate::{ParquetSchema, ParquetValue};
 use serde::Serialize;
+use strum_macros::Display;
+use sui_analytics_indexer_derive::SerializeParquet;
 // use std::collections::BTreeSet;
 
 //
@@ -11,7 +14,7 @@ use serde::Serialize;
 //
 
 // Checkpoint information.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct CheckpointEntry {
     // indexes
     pub(crate) checkpoint_digest: String,
@@ -38,7 +41,7 @@ pub(crate) struct CheckpointEntry {
 }
 
 // Transaction information.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct TransactionEntry {
     // main indexes
     pub(crate) transaction_digest: String,
@@ -91,11 +94,13 @@ pub(crate) struct TransactionEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) raw_transaction: String,
+    pub(crate) has_zklogin_sig: bool,
+    pub(crate) has_upgraded_multisig: bool,
 }
 
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct EventEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -114,10 +119,11 @@ pub(crate) struct EventEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) bcs: String,
+    pub(crate) event_json: String,
 }
 
 // Used in the transaction object table to identify the type of input object.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Display)]
 pub enum InputObjectKind {
     Input,
     SharedInput,
@@ -126,7 +132,7 @@ pub enum InputObjectKind {
 
 // Used in the object table to identify the status of object, its result in the last transaction
 // effect.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Display)]
 pub enum ObjectStatus {
     Created,
     Mutated,
@@ -134,7 +140,7 @@ pub enum ObjectStatus {
 }
 
 // Object owner information.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Display)]
 pub enum OwnerType {
     AddressOwner,
     ObjectOwner,
@@ -144,7 +150,7 @@ pub enum OwnerType {
 
 // Object information.
 // A row in the live object table.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct ObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -168,6 +174,12 @@ pub(crate) struct ObjectEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) bcs: String,
+
+    pub(crate) coin_type: Option<String>,
+    pub(crate) coin_balance: Option<u64>,
+
+    pub(crate) struct_tag: Option<String>,
+    pub(crate) object_json: Option<String>,
 }
 
 // Objects used and manipulated in a transaction.
@@ -175,7 +187,7 @@ pub(crate) struct ObjectEntry {
 // input kind (for input objects) and status (for objets in effects).
 // An object may appear twice as an input and output object. In that case, the
 // version will be different.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct TransactionObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -190,7 +202,7 @@ pub(crate) struct TransactionObjectEntry {
 }
 
 // A Move call expressed as a package, module and function.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct MoveCallEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -204,7 +216,7 @@ pub(crate) struct MoveCallEntry {
 }
 
 // A Move package. Pacakge id and MovePackage object bytes
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct MovePackageEntry {
     // indexes
     pub(crate) package_id: String,
@@ -216,4 +228,6 @@ pub(crate) struct MovePackageEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) bcs: String,
+    // txn publishing the package
+    pub(crate) transaction_digest: String,
 }

@@ -35,6 +35,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::Committee;
+use sui_types::quorum_driver_types::QuorumDriverError;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
@@ -168,6 +169,8 @@ enum NextOp {
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
     },
+    // The transaction failed and could not be retried
+    Failure,
     Retry(RetryType),
 }
 
@@ -760,11 +763,28 @@ async fn run_bench_worker(
             }
             Err(err) => {
                 error!("{}", err);
-                metrics_cloned
-                    .num_error
-                    .with_label_values(&[&payload.to_string()])
-                    .inc();
-                NextOp::Retry(Box::new((transaction, payload)))
+                if err
+                    .downcast::<QuorumDriverError>()
+                    .and_then(|err| {
+                        if matches!(
+                            err,
+                            QuorumDriverError::NonRecoverableTransactionError { .. }
+                        ) {
+                            Err(err.into())
+                        } else {
+                            Ok(())
+                        }
+                    })
+                    .is_err()
+                {
+                    NextOp::Failure
+                } else {
+                    metrics_cloned
+                        .num_error
+                        .with_label_values(&[&payload.to_string()])
+                        .inc();
+                    NextOp::Retry(Box::new((transaction, payload)))
+                }
             }
         }
     };
@@ -896,6 +916,14 @@ async fn run_bench_worker(
                             break;
                         }
                     }
+                    NextOp::Failure => {
+                        error!("Permanent failure to execute payload. May result in gas objects being leaked");
+                        num_error_txes += 1;
+                        // Update total benchmark progress
+                        if update_progress(1) {
+                            break;
+                        }
+                    }
                     NextOp::Response { latency, num_commands, payload, gas_used } => {
                         num_success_txes += 1;
                         num_success_cmds += num_commands as u64;
@@ -947,6 +975,12 @@ async fn run_bench_worker(
     );
     while let Some(result) = futures.next().await {
         let p = match result {
+            NextOp::Failure => {
+                error!(
+                    "Permanent failure to execute payload. May result in gas objects being leaked"
+                );
+                continue;
+            }
             NextOp::Response {
                 latency: _,
                 num_commands: _,
@@ -968,14 +1002,23 @@ async fn run_bench_worker(
 /// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
 /// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
 fn create_progress_bar(duration: Interval) -> ProgressBar {
+    fn new_progress_bar(len: u64) -> ProgressBar {
+        if cfg!(msim) {
+            // don't print any progress when running in the simulator
+            ProgressBar::hidden()
+        } else {
+            ProgressBar::new(len)
+        }
+    }
+
     match duration {
-        Interval::Count(count) => ProgressBar::new(count)
+        Interval::Count(count) => new_progress_bar(count)
             .with_prefix("Running benchmark(count):")
             .with_style(
                 ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}").unwrap(),
             ),
         Interval::Time(Duration::MAX) => ProgressBar::hidden(),
-        Interval::Time(duration) => ProgressBar::new(duration.as_secs())
+        Interval::Time(duration) => new_progress_bar(duration.as_secs())
             .with_prefix("Running benchmark(duration):")
             .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
     }

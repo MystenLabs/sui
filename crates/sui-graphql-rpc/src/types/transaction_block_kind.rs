@@ -3,16 +3,16 @@
 
 use super::{big_int::BigInt, date_time::DateTime, epoch::Epoch, sui_address::SuiAddress};
 use crate::context_data::db_data_provider::PgManager;
-use async_graphql::{ComplexObject, Context, Result, ResultExt, SimpleObject, Union};
+use async_graphql::*;
 
 #[derive(Union, PartialEq, Clone, Eq)]
-#[allow(clippy::enum_variant_names)]
 pub(crate) enum TransactionBlockKind {
     ConsensusCommitPrologueTransaction(ConsensusCommitPrologueTransaction),
     GenesisTransaction(GenesisTransaction),
     ChangeEpochTransaction(ChangeEpochTransaction),
     ProgrammableTransactionBlock(ProgrammableTransaction),
     AuthenticatorStateUpdateTransaction(AuthenticatorStateUpdate),
+    RandomnessStateUpdateTransaction(RandomnessStateUpdate),
     EndOfEpochTransaction(EndOfEpochTransaction),
 }
 
@@ -25,6 +25,12 @@ pub(crate) struct ProgrammableTransaction {
 // TODO: flesh out the authenticator state update type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct AuthenticatorStateUpdate {
+    pub value: String,
+}
+
+// TODO: flesh out the randomness state update type
+#[derive(SimpleObject, Clone, Eq, PartialEq)]
+pub(crate) struct RandomnessStateUpdate {
     pub value: String,
 }
 

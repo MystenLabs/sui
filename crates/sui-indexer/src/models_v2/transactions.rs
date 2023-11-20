@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use diesel::prelude::*;
+
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::BalanceChange;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlock;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
@@ -35,10 +36,39 @@ pub struct StoredTransaction {
     pub balance_changes: Vec<Option<Vec<u8>>>,
     pub events: Vec<Option<Vec<u8>>>,
     pub transaction_kind: i16,
+    pub success_command_count: i16,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionTimestamp {
+    pub tx_sequence_number: i64,
+    pub timestamp_ms: i64,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionCheckpoint {
+    pub tx_sequence_number: i64,
+    pub checkpoint_sequence_number: i64,
+}
+
+#[derive(Clone, Debug, Queryable)]
+pub struct StoredTransactionSuccessCommandCount {
+    pub tx_sequence_number: i64,
+    pub checkpoint_sequence_number: i64,
+    pub success_command_count: i16,
+    pub timestamp_ms: i64,
 }
 
 impl From<&IndexedTransaction> for StoredTransaction {
     fn from(tx: &IndexedTransaction) -> Self {
+        let cmd_count = tx
+            .sender_signed_data
+            .intent_message()
+            .value
+            .execution_parts()
+            .0
+            .num_commands();
+
         StoredTransaction {
             tx_sequence_number: tx.tx_sequence_number as i64,
             transaction_digest: tx.tx_digest.into_inner().to_vec(),
@@ -60,8 +90,9 @@ impl From<&IndexedTransaction> for StoredTransaction {
                 .iter()
                 .map(|e| Some(bcs::to_bytes(&e).unwrap()))
                 .collect(),
-            transaction_kind: tx.transaction_kind.clone() as i16,
             timestamp_ms: tx.timestamp_ms as i64,
+            transaction_kind: tx.transaction_kind.clone() as i16,
+            success_command_count: tx.effects.status().is_ok() as i16 * cmd_count as i16,
         }
     }
 }
@@ -203,21 +234,5 @@ impl StoredTransaction {
         })?;
         let effects = SuiTransactionBlockEffects::try_from(effects)?;
         Ok(effects)
-    }
-
-    pub fn get_successful_tx_num(&self) -> IndexerResult<u64> {
-        let tx_cmd_num = self
-            .try_into_sender_signed_data()?
-            .intent_message()
-            .value
-            .execution_parts()
-            .0
-            .num_commands() as u64;
-
-        if self.try_into_sui_transaction_effects()?.status().is_ok() {
-            Ok(tx_cmd_num)
-        } else {
-            Ok(0)
-        }
     }
 }

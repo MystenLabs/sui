@@ -4,9 +4,11 @@
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
+use once_cell::unsync::OnceCell;
 use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest, VersionNumber,
 };
@@ -14,12 +16,15 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
-    ParentSync, ReceivedMarkerQuery,
+    PackageObjectArc, ParentSync,
 };
+use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult};
 
+// TODO: We won't need a special purpose InMemoryObjectStore once the InMemoryCache is ready.
 #[derive(Clone)]
 pub(crate) struct InMemoryObjectStore {
     objects: Arc<HashMap<ObjectID, Object>>,
+    package_cache: Arc<PackageObjectCache>,
     num_object_reads: Arc<AtomicU64>,
 }
 
@@ -27,12 +32,85 @@ impl InMemoryObjectStore {
     pub(crate) fn new(objects: HashMap<ObjectID, Object>) -> Self {
         Self {
             objects: Arc::new(objects),
+            package_cache: PackageObjectCache::new(),
             num_object_reads: Arc::new(AtomicU64::new(0)),
         }
     }
 
     pub(crate) fn get_num_object_reads(&self) -> u64 {
         self.num_object_reads.get()
+    }
+
+    // TODO: remove this when TransactionInputLoader is able to use the ExecutionCache trait
+    // note: does not support shared object deletion.
+    pub(crate) fn read_objects_for_execution(
+        &self,
+        shared_locks: &dyn GetSharedLocks,
+        tx_digest: &TransactionDigest,
+        input_object_kinds: &[InputObjectKind],
+    ) -> SuiResult<InputObjects> {
+        let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
+        let mut input_objects = Vec::new();
+        for kind in input_object_kinds {
+            let obj: Option<Arc<_>> = match kind {
+                InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => self
+                    .get_object_by_key(&objref.0, objref.1)?
+                    .map(|o| o.into()),
+
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let shared_locks = shared_locks_cell.get_or_try_init(|| {
+                        Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
+                            shared_locks
+                                .get_shared_locks(tx_digest)?
+                                .into_iter()
+                                .collect(),
+                        )
+                    })?;
+                    let version = shared_locks.get(id).unwrap_or_else(|| {
+                        panic!(
+                            "Shared object locks should have been set. tx_digest: {:?}, obj id: {:?}",
+                            tx_digest, id
+                        )
+                    });
+
+                    self.get_object_by_key(id, *version)?.map(|o| o.into())
+                }
+            };
+
+            input_objects.push(ObjectReadResult::new(
+                *kind,
+                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
+            ));
+        }
+
+        Ok(input_objects.into())
+    }
+
+    pub(crate) fn read_objects_for_synchronous_execution(
+        &self,
+        input_object_kinds: &[InputObjectKind],
+    ) -> SuiResult<InputObjects> {
+        let mut input_objects = Vec::new();
+        for kind in input_object_kinds {
+            let obj: Option<Arc<_>> = match kind {
+                InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => self
+                    .get_object_by_key(&objref.0, objref.1)?
+                    .map(|o| o.into()),
+
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    self.get_object(id)?.map(|o| o.into())
+                }
+            };
+
+            input_objects.push(ObjectReadResult::new(
+                *kind,
+                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
+            ));
+        }
+
+        Ok(input_objects.into())
     }
 }
 
@@ -58,14 +136,8 @@ impl ObjectStore for InMemoryObjectStore {
 }
 
 impl BackingPackageStore for InMemoryObjectStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.get_object(package_id).unwrap().and_then(|o| {
-            if o.is_package() {
-                Some(o.clone())
-            } else {
-                None
-            }
-        }))
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+        self.package_cache.get_package_object(package_id, self)
     }
 }
 
@@ -104,18 +176,6 @@ impl GetModule for InMemoryObjectStore {
 
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         get_module_by_id(self, id)
-    }
-}
-
-impl ReceivedMarkerQuery for InMemoryObjectStore {
-    fn have_received_object_at_version(
-        &self,
-        _object_id: &ObjectID,
-        _version: VersionNumber,
-        _epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        // Currently the workload doesn't yet support receiving objects.
-        unimplemented!()
     }
 }
 

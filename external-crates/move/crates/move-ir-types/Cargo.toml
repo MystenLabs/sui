@@ -1,0 +1,21 @@
+[package]
+name = "move-ir-types"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Types for Move IR"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde.workspace = true
+hex.workspace = true
+once_cell.workspace = true
+
+move-core-types.workspace = true
+move-symbol-pool.workspace = true
+move-command-line-common.workspace = true

@@ -1,5 +1,36 @@
 # @mysten/sui.js
 
+## 0.46.1
+
+### Patch Changes
+
+- 652bcdd92: Remove some multisig methods that had previously been deprecated and are no longer exported
+
+## 0.46.0
+
+### Minor Changes
+
+- 093554a0d: Remove deprecated framework code.
+
+### Patch Changes
+
+- 28c2c3330: Use the same issuer string in address derivation for the two google's iss values
+- 43444c58f: Extend the `TransactionBlock#object()` API to accept the `TransactionResult` type as well, so that it can be used flexibly in SDKs.
+- 8d1e74e52: Fix setting gasPrice for devInspectTransactionBlock
+- 3718a230b: Adds `txb.pure.id()` to pass ID pure values more intuitively
+
+## 0.45.1
+
+### Patch Changes
+
+- 30b47b758: Fix formatting when parsing addresses with bcs.Address
+
+## 0.45.0
+
+### Minor Changes
+
+- b9afb5567: adds "transfer to object" (receivingRef) support
+
 ## 0.44.0
 
 ### Minor Changes

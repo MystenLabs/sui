@@ -1,0 +1,18 @@
+Command `new P1`:
+External Command `cat P1/Move.toml`:
+[package]
+name = "P1"
+version = "0.0.0"
+
+[dependencies]
+
+[addresses]
+Command `new P2 -p other_dir`:
+External Command `cat other_dir/Move.toml`:
+[package]
+name = "P2"
+version = "0.0.0"
+
+[dependencies]
+
+[addresses]

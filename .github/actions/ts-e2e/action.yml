@@ -3,7 +3,7 @@ description: Run e2e tests with specified branch
 
 inputs:
   ref:
-    description: "The branch to checkout and run e2e tests on"
+    description: 'The branch to checkout and run e2e tests on'
     required: true
 
 runs:
@@ -51,8 +51,8 @@ runs:
     - name: Install Nodejs
       uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
       with:
-        node-version: "18"
-        cache: "pnpm"
+        node-version: '18'
+        cache: 'pnpm'
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash
@@ -62,7 +62,7 @@ runs:
 
     - name: Set env
       run: |
-        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
+        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator) --with-indexer --use-indexer-v2 --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
         echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
       shell: bash
 

@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import { useAccounts } from './useAccounts';
 
 export function useCountAccountsByType() {
-	const { data: accounts, isLoading } = useAccounts();
+	const { data: accounts, isPending } = useAccounts();
 	const countPerType = useMemo(
 		() =>
 			accounts?.reduce<
@@ -28,5 +28,5 @@ export function useCountAccountsByType() {
 			}, {}) || {},
 		[accounts],
 	);
-	return { data: countPerType, isLoading };
+	return { data: countPerType, isPending };
 }

@@ -69,6 +69,7 @@ impl PackageHandler {
                 epoch,
                 timestamp_ms,
                 bcs: Base64::encode(bcs::to_bytes(p).unwrap()),
+                transaction_digest: object.previous_transaction.to_string(),
             };
             self.packages.push(package)
         }

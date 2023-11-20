@@ -10,10 +10,10 @@ use crate::{
 };
 use crate::{base_types::ObjectID, id::UID, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::{
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,7 @@ impl Coin {
     }
 
     pub fn layout(type_param: TypeTag) -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(type_param.clone()),
             fields: vec![
                 MoveFieldLayout::new(
@@ -137,6 +137,12 @@ pub struct TreasuryCap {
 }
 
 impl TreasuryCap {
+    pub fn is_treasury_type(other: &StructTag) -> bool {
+        other.address == SUI_FRAMEWORK_ADDRESS
+            && other.module.as_ident_str() == COIN_MODULE_NAME
+            && other.name.as_ident_str() == COIN_TREASURE_CAP_NAME
+    }
+
     /// Create a TreasuryCap from BCS bytes
     pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, SuiError> {
         bcs::from_bytes(content).map_err(|err| SuiError::ObjectDeserializationError {
@@ -151,6 +157,24 @@ impl TreasuryCap {
             module: COIN_MODULE_NAME.to_owned(),
             type_params: vec![TypeTag::Struct(Box::new(type_param))],
         }
+    }
+}
+
+impl TryFrom<Object> for TreasuryCap {
+    type Error = SuiError;
+    fn try_from(object: Object) -> Result<Self, Self::Error> {
+        match &object.data {
+            Data::Move(o) => {
+                if o.type_().is_treasury_cap() {
+                    return TreasuryCap::from_bcs_bytes(o.contents());
+                }
+            }
+            Data::Package(_) => {}
+        }
+
+        Err(SuiError::TypeError {
+            error: format!("Object type is not a TreasuryCap: {:?}", object),
+        })
     }
 }
 

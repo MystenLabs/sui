@@ -10,8 +10,8 @@ import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
 import { getFullnodeUrl, SuiClient, SuiObjectChangePublished } from '../../../src/client';
 import { Keypair } from '../../../src/cryptography';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
-import { Coin } from '../../../src/framework';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
+import { SUI_TYPE_ARG } from '../../../src/utils';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
@@ -37,17 +37,11 @@ export class TestToolbox {
 		return this.keypair.getPublicKey().toSuiAddress();
 	}
 
-	// TODO(chris): replace this with provider.getCoins instead
 	async getGasObjectsOwnedByAddress() {
-		const objects = await this.client.getOwnedObjects({
+		return await this.client.getCoins({
 			owner: this.address(),
-			options: {
-				showType: true,
-				showContent: true,
-				showOwner: true,
-			},
+			coinType: SUI_TYPE_ARG,
 		});
-		return objects.data.filter((obj) => Coin.isSUI(obj));
 	}
 
 	public async getActiveValidators() {
@@ -64,6 +58,10 @@ export function getClient(): SuiClient {
 export async function setup() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
+	return setupWithFundedAddress(keypair, address);
+}
+
+export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: string) {
 	const client = getClient();
 	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
@@ -73,6 +71,21 @@ export async function setup() {
 		retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
+
+	await retry(
+		async () => {
+			const balance = await client.getBalance({ owner: address });
+
+			if (balance.totalBalance === '0') {
+				throw new Error('Balance is still 0');
+			}
+		},
+		{
+			backoff: () => 1000,
+			timeout: 30 * 1000,
+			retryIf: () => true,
+		},
+	);
 	return new TestToolbox(keypair, client);
 }
 
@@ -110,6 +123,9 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			showObjectChanges: true,
 		},
 	});
+
+	await toolbox.client.waitForTransactionBlock({ digest: publishTxn.digest });
+
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(

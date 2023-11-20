@@ -279,7 +279,7 @@ module sui::authenticator_state {
             } else if (jwk_id_equal(option::borrow(&prev), &jwk.jwk_id)) {
                 // skip duplicate jwks in input
                 i = i + 1;
-                continue;
+                continue
             } else {
                 *option::borrow_mut(&mut prev) = jwk.jwk_id;
             };

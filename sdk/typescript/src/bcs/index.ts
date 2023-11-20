@@ -182,7 +182,7 @@ function enumKind<T extends object, Input extends object>(type: BcsType<T, Input
 const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	input: (val: string | Uint8Array) =>
 		typeof val === 'string' ? fromHEX(normalizeSuiAddress(val)) : val,
-	output: (val) => toHEX(val),
+	output: (val) => normalizeSuiAddress(toHEX(val)),
 });
 
 const ObjectDigest = bcs.vector(bcs.u8()).transform({
@@ -374,12 +374,14 @@ const CompressedSignature = bcs.enum('CompressedSignature', {
 	ED25519: bcs.fixedArray(64, bcs.u8()),
 	Secp256k1: bcs.fixedArray(64, bcs.u8()),
 	Secp256r1: bcs.fixedArray(64, bcs.u8()),
+	ZkLogin: bcs.vector(bcs.u8()),
 });
 
 const PublicKey = bcs.enum('PublicKey', {
 	ED25519: bcs.fixedArray(32, bcs.u8()),
 	Secp256k1: bcs.fixedArray(33, bcs.u8()),
 	Secp256r1: bcs.fixedArray(33, bcs.u8()),
+	ZkLogin: bcs.vector(bcs.u8()),
 });
 
 const MultiSigPkMap = bcs.struct('MultiSigPkMap', {

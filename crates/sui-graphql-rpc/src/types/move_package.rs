@@ -1,140 +1,204 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::base64::Base64;
 use super::move_module::MoveModule;
 use super::object::Object;
+use super::sui_address::SuiAddress;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
-use crate::error::code::INTERNAL_SERVER_ERROR;
-use crate::error::graphql_error;
+use crate::context_data::DEFAULT_PAGE_SIZE;
+use crate::error::Error;
 use async_graphql::connection::{Connection, Edge};
-use async_graphql::Error;
 use async_graphql::*;
-use move_binary_format::CompiledModule;
-use sui_types::object::Object as NativeSuiObject;
-use sui_types::Identifier;
-
-const DEFAULT_PAGE_SIZE: usize = 10;
+use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
+use sui_types::{move_package::MovePackage as NativeMovePackage, object::Data};
 
 #[derive(Clone)]
 pub(crate) struct MovePackage {
-    pub native_object: NativeSuiObject,
+    /// Representation of this Move Object as a generic Object.
+    pub super_: Object,
+
+    /// Move-object-specific data, extracted from the native representation at
+    /// `graphql_object.native_object.data`.
+    pub native: NativeMovePackage,
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
+/// Information used by a package to link to a specific version of its dependency.
+#[derive(SimpleObject)]
+struct Linkage {
+    /// The ID on-chain of the first version of the dependency.
+    original_id: SuiAddress,
+
+    /// The ID on-chain of the version of the dependency that this package depends on.
+    upgraded_id: SuiAddress,
+
+    /// The version of the dependency that this package depends on.
+    version: u64,
+}
+
+/// Information about which previous versions of a package introduced its types.
+#[derive(SimpleObject)]
+struct TypeOrigin {
+    /// Module defining the type.
+    module: String,
+
+    /// Name of the struct.
+    #[graphql(name = "struct")]
+    struct_: String,
+
+    /// The storage ID of the package that first defined this type.
+    defining_id: SuiAddress,
+}
+
+pub(crate) struct MovePackageDowncastError;
+
 #[Object]
 impl MovePackage {
-    async fn module(&self, name: String) -> Result<Option<MoveModule>, Error> {
-        let identifier = Identifier::new(name).map_err(|e| Error::new(e.to_string()))?;
-        let module = self.native_object.data.try_as_package().map(|x| {
-            x.deserialize_module(
-                &identifier,
-                move_binary_format::file_format_common::VERSION_MAX,
-                true,
-            )
-            .map(|x| MoveModule { native_module: x })
-        });
-        if let Some(modu) = module {
-            return Ok(Some(modu?));
+    /// A representation of the module called `name` in this package, including the
+    /// structs and functions it defines.
+    async fn module(&self, name: String) -> Result<Option<MoveModule>> {
+        use PackageCacheError as E;
+        match self.parsed_package().extend()?.module(&name) {
+            Ok(module) => Ok(Some(MoveModule {
+                parsed: module.clone(),
+            })),
+            Err(E::ModuleNotFound(_, _)) => Ok(None),
+            Err(e) => {
+                Err(Error::Internal(format!("Unexpected error fetching module: {e}")).extend())
+            }
         }
-        Ok(None)
     }
 
+    /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
-        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, MoveModule>>> {
+        use std::ops::Bound as B;
+
         // TODO: make cursor opaque.
         // for now it same as module name
-        validate_cursor_pagination(&first, &after, &last, &before)?;
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
 
-        if let Some(mod_map) = self
-            .native_object
-            .data
-            .try_as_package()
-            .map(|x| x.serialized_module_map())
-        {
-            if mod_map.is_empty() {
-                return Err(graphql_error(
-                    INTERNAL_SERVER_ERROR,
-                    format!(
-                        "Published package cannot contain zero modules. Id: {}",
-                        self.native_object.id()
-                    ),
-                )
-                .into());
-            }
+        let parsed = self.parsed_package()?;
+        let module_range = parsed.modules().range((
+            after.map_or(B::Unbounded, B::Excluded),
+            before.map_or(B::Unbounded, B::Excluded),
+        ));
 
-            let mut forward = true;
-            let mut count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64);
-            count = last.unwrap_or(count);
+        let total = module_range.clone().count() as u64;
+        let (skip, take) = match (first, last) {
+            (Some(first), Some(last)) if last < first => (first - last, last),
+            (Some(first), _) => (0, first),
+            (None, Some(last)) => (total - last, last),
+            (None, None) => (0, DEFAULT_PAGE_SIZE),
+        };
 
-            let mut mod_list = mod_map
-                .clone()
-                .into_iter()
-                .collect::<Vec<(String, Vec<u8>)>>();
-
-            // ok to unwrap because we know mod_map is not empty
-            let mut start = &if last.is_some() {
-                forward = false;
-                mod_list.last().map(|c| c.0.clone())
-            } else {
-                mod_list.first().map(|c| c.0.clone())
-            }
-            .unwrap();
-
-            if let Some(aft) = &after {
-                start = aft;
-            } else if let Some(bef) = &before {
-                start = bef;
-                forward = false;
-            };
-
-            if !forward {
-                mod_list = mod_list.into_iter().rev().collect();
-            }
-
-            let mut res: Vec<_> = mod_list
-                .iter()
-                .skip_while(|(name, _)| name.as_str() != start)
-                .skip((after.is_some() || before.is_some()) as usize)
-                .take(count as usize)
-                .map(|(name, module)| {
-                    CompiledModule::deserialize_with_config(
-                        module,
-                        move_binary_format::file_format_common::VERSION_MAX,
-                        true,
-                    )
-                    .map(|x| (name, MoveModule { native_module: x }))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let mut has_prev_page = &mod_list.first().unwrap().0 != start;
-            let mut has_next_page =
-                !res.is_empty() && &mod_list.last().unwrap().0 != res.last().unwrap().0;
-            if !forward {
-                res = res.into_iter().rev().collect();
-                has_prev_page = &mod_list.first().unwrap().0 != start;
-                has_next_page =
-                    !res.is_empty() && &mod_list.last().unwrap().0 != res.first().unwrap().0;
-            }
-
-            let mut connection = Connection::new(has_prev_page, has_next_page);
-
-            connection.edges.extend(
-                res.into_iter()
-                    .map(|(name, module)| Edge::new(name.clone(), module)),
-            );
-            return Ok(Some(connection));
+        let mut connection = Connection::new(false, false);
+        for (name, module) in module_range.skip(skip as usize).take(take as usize) {
+            connection.edges.push(Edge::new(
+                name.clone(),
+                MoveModule {
+                    parsed: module.clone(),
+                },
+            ))
         }
 
-        Ok(None)
+        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
+            parsed
+                .modules()
+                .range::<String, _>((B::Unbounded, B::Excluded(&fst.cursor)))
+                .count()
+                > 0
+        });
+
+        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
+            parsed
+                .modules()
+                .range::<String, _>((B::Excluded(&lst.cursor), B::Unbounded))
+                .count()
+                > 0
+        });
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
     }
 
-    async fn as_object(&self) -> Option<Object> {
-        Some(Object::from(&self.native_object))
+    /// The transitive dependencies of this package.
+    async fn linkage(&self) -> Option<Vec<Linkage>> {
+        let linkage = self
+            .native
+            .linkage_table()
+            .iter()
+            .map(|(&runtime_id, upgrade_info)| Linkage {
+                original_id: runtime_id.into(),
+                upgraded_id: upgrade_info.upgraded_id.into(),
+                version: upgrade_info.upgraded_version.value(),
+            })
+            .collect();
+
+        Some(linkage)
+    }
+
+    /// The (previous) versions of this package that introduced its types.
+    async fn type_origins(&self) -> Option<Vec<TypeOrigin>> {
+        let type_origins = self
+            .native
+            .type_origin_table()
+            .iter()
+            .map(|origin| TypeOrigin {
+                module: origin.module_name.clone(),
+                struct_: origin.struct_name.clone(),
+                defining_id: origin.package.into(),
+            })
+            .collect();
+
+        Some(type_origins)
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn bcs(&self) -> Result<Option<Base64>> {
+        let bcs = bcs::to_bytes(self.native.serialized_module_map())
+            .map_err(|_| {
+                Error::Internal(format!("Failed to serialize package {}", self.native.id()))
+            })
+            .extend()?;
+
+        Ok(Some(bcs.into()))
+    }
+
+    async fn as_object(&self) -> &Object {
+        &self.super_
+    }
+}
+
+impl MovePackage {
+    fn parsed_package(&self) -> Result<ParsedMovePackage, Error> {
+        // TODO: Leverage the package cache (attempt to read from it, and if that doesn't succeed,
+        // write back the parsed Package to the cache as well.)
+        ParsedMovePackage::read(&self.super_.native)
+            .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
+    }
+}
+
+impl TryFrom<&Object> for MovePackage {
+    type Error = MovePackageDowncastError;
+
+    fn try_from(object: &Object) -> Result<Self, Self::Error> {
+        if let Data::Package(move_package) = &object.native.data {
+            Ok(Self {
+                super_: object.clone(),
+                native: move_package.clone(),
+            })
+        } else {
+            Err(MovePackageDowncastError)
+        }
     }
 }

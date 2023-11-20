@@ -1,0 +1,11 @@
+//# run
+module 0x42.m {
+
+entry foo() {
+    let x: u64;
+label b0:
+    x = false; // invalid assignment
+    return;
+}
+
+}

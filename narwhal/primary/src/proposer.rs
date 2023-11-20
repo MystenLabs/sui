@@ -1,9 +1,10 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use crate::consensus::LeaderSchedule;
 use crate::metrics::PrimaryMetrics;
-use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
-use consensus::consensus::LeaderSchedule;
+use config::{AuthorityIdentifier, Committee, WorkerId};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -65,7 +66,7 @@ pub struct Proposer {
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives the parents to include in the next header (along with their round number) from core.
-    rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+    rx_parents: Receiver<(Vec<Certificate>, Round)>,
     /// Receives the batches' digests from our workers.
     rx_our_digests: Receiver<OurDigestMessage>,
     /// Receives system messages to include in the next header.
@@ -123,7 +124,7 @@ impl Proposer {
         min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
         rx_shutdown: ConditionalBroadcastReceiver,
-        rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
+        rx_parents: Receiver<(Vec<Certificate>, Round)>,
         rx_our_digests: Receiver<OurDigestMessage>,
         rx_system_messages: Receiver<SystemMessage>,
         tx_headers: Sender<Header>,
@@ -636,23 +637,13 @@ impl Proposer {
                     }
                 },
 
-                Some((parents, round, epoch)) = self.rx_parents.recv() => {
+                Some((parents, round)) = self.rx_parents.recv() => {
                     debug!("Proposer received parents, round={} parent.round={} num_parents={}", self.round, round, parents.len());
-
-                    // If the core already moved to the next epoch we should pull the next
-                    // committee as well.
-
-                    match epoch.cmp(&self.committee.epoch()) {
-                        Ordering::Equal => {
-                            // we can proceed.
-                        }
-                        _ => continue
-                    }
 
                     // Sanity check: verify provided certs are of the correct round & epoch.
                     for parent in parents.iter() {
-                        if parent.round() != round || parent.epoch() != epoch {
-                            error!("Proposer received certificate {parent:?} that failed to match expected round {round} or epoch {epoch}. This should not be possible.");
+                        if parent.round() != round {
+                            error!("Proposer received certificate {parent:?} that failed to match expected round {round}. This should not be possible.");
                         }
                     }
 

@@ -19,7 +19,7 @@ import {
 	Price,
 	PurchaseOptions,
 } from '../types';
-import { getNormalizedRuleType, objArg } from '../utils';
+import { getNormalizedRuleType } from '../utils';
 import { type KioskClient } from './kiosk-client';
 
 export type KioskTransactionParams = {
@@ -396,9 +396,9 @@ export class KioskTransaction {
 	 */
 	setCap(cap: KioskOwnerCap) {
 		this.#validateFinalizedStatus();
-		this.kiosk = objArg(this.transactionBlock, cap.kioskId);
+		this.kiosk = this.transactionBlock.object(cap.kioskId);
 		if (!cap.isPersonal) {
-			this.kioskCap = objArg(this.transactionBlock, cap.objectId);
+			this.kioskCap = this.transactionBlock.object(cap.objectId);
 			return;
 		}
 
@@ -433,7 +433,7 @@ export class KioskTransaction {
 				target: `${packageId}::personal_kiosk::return_val`,
 				arguments: [
 					this.#personalCap,
-					objArg(this.transactionBlock, this.kioskCap!),
+					this.transactionBlock.object(this.kioskCap!),
 					this.#promise!,
 				],
 			});
@@ -487,11 +487,11 @@ export class KioskTransaction {
 			target: `${this.kioskClient.getRulePackageId(
 				'personalKioskRulePackageId',
 			)}::personal_kiosk::borrow_val`,
-			arguments: [objArg(this.transactionBlock, personalCap)],
+			arguments: [this.transactionBlock.object(personalCap)],
 		});
 
 		this.kioskCap = kioskCap;
-		this.#personalCap = objArg(this.transactionBlock, personalCap);
+		this.#personalCap = this.transactionBlock.object(personalCap);
 		this.#promise = promise;
 
 		return this;

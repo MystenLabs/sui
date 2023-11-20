@@ -12,7 +12,6 @@ bcs.workspace = true
 bincode.workspace = true
 bytes.workspace = true
 config = { path = "../config", package = "narwhal-config" }
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 futures.workspace = true
 primary = { path = "../primary", package = "narwhal-primary" }

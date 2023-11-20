@@ -11,7 +11,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::digests::ObjectDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
-use sui_types::object::{ObjectFormatOptions, ObjectRead};
+use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::schema_v2::objects;
@@ -74,7 +74,10 @@ impl From<IndexedObject> for StoredObject {
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
             owner_id: o.owner_id.map(|id| id.to_vec()),
-            object_type: o.object.type_().map(|t| t.to_string()),
+            object_type: o
+                .object
+                .type_()
+                .map(|t| t.to_canonical_string(/* with_prefix */ true)),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
@@ -109,7 +112,7 @@ impl StoredObject {
     ) -> Result<ObjectRead, IndexerError> {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
-        let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
+        let layout = object.get_layout(module_cache)?;
         Ok(ObjectRead::Exists(oref, object, layout))
     }
 
@@ -290,6 +293,104 @@ impl From<CoinBalance> for Balance {
             // TODO: deal with overflow
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
+    use sui_types::{
+        coin::Coin,
+        digests::TransactionDigest,
+        gas_coin::{GasCoin, GAS},
+        object::{Data, MoveObject, Owner},
+        Identifier, TypeTag,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_canonical_string_of_object_type_for_coin() {
+        let test_obj = Object::new_gas_for_testing();
+        let indexed_obj = IndexedObject::from_object(1, test_obj, None);
+
+        let stored_obj = StoredObject::from(indexed_obj);
+
+        match stored_obj.object_type {
+            Some(t) => {
+                assert_eq!(t, "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>");
+            }
+            None => {
+                panic!("object_type should not be none");
+            }
+        }
+    }
+
+    #[test]
+    fn test_convert_stored_obj_to_sui_coin() {
+        let test_obj = Object::new_gas_for_testing();
+        let indexed_obj = IndexedObject::from_object(1, test_obj, None);
+
+        let stored_obj = StoredObject::from(indexed_obj);
+
+        let sui_coin = SuiCoin::try_from(stored_obj).unwrap();
+        assert_eq!(
+            sui_coin.coin_type,
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+        );
+    }
+
+    #[test]
+    fn test_vec_of_coin_sui_conversion() {
+        // 0xe7::vec_coin::VecCoin<vector<0x2::coin::Coin<0x2::sui::SUI>>>
+        let vec_coins_type = TypeTag::Vector(Box::new(
+            Coin::type_(TypeTag::Struct(Box::new(GAS::type_()))).into(),
+        ));
+        let object_type = StructTag {
+            address: AccountAddress::from_hex_literal("0xe7").unwrap(),
+            module: Identifier::new("vec_coin").unwrap(),
+            name: Identifier::new("VecCoin").unwrap(),
+            type_params: vec![vec_coins_type],
+        };
+
+        let id = ObjectID::ZERO;
+        let gas = 10;
+
+        let contents = bcs::to_bytes(&vec![GasCoin::new(id, gas)]).unwrap();
+        let data = Data::Move(
+            unsafe {
+                MoveObject::new_from_execution_with_limit(
+                    object_type.into(),
+                    true,
+                    1.into(),
+                    contents,
+                    256,
+                )
+            }
+            .unwrap(),
+        );
+
+        let owner = AccountAddress::from_hex_literal("0x1").unwrap();
+
+        let object = Object {
+            owner: Owner::AddressOwner(owner.into()),
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+            storage_rebate: 0,
+        };
+
+        let indexed_obj = IndexedObject::from_object(1, object, None);
+
+        let stored_obj = StoredObject::from(indexed_obj);
+
+        match stored_obj.object_type {
+            Some(t) => {
+                assert_eq!(t, "0x00000000000000000000000000000000000000000000000000000000000000e7::vec_coin::VecCoin<vector<0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>>>");
+            }
+            None => {
+                panic!("object_type should not be none");
+            }
         }
     }
 }

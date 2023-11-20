@@ -50,6 +50,13 @@ module basics::counter {
     public entry fun assert_value(counter: &Counter, value: u64) {
         assert!(counter.value == value, 0)
     }
+
+    /// Delete counter (only runnable by the Counter owner)
+    public entry fun delete(counter: Counter, ctx: &TxContext) {
+        assert!(counter.owner == tx_context::sender(ctx), 0);
+        let Counter {id, owner:_, value:_} = counter;
+        object::delete(id);
+    }
 }
 
 #[test_only]

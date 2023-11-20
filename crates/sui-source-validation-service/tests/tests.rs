@@ -23,10 +23,10 @@ use tokio::sync::oneshot;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    host_port, initialize, serve, verify_packages, watch_for_upgrades, AddressLookup, AppState,
-    CloneCommand, Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package,
-    PackageSource, RepositorySource, SourceInfo, SourceLookup, SourceResponse,
-    SUI_SOURCE_VALIDATION_VERSION_HEADER,
+    host_port, initialize, serve, start_prometheus_server, verify_packages, watch_for_upgrades,
+    AddressLookup, AppState, CloneCommand, Config, DirectorySource, ErrorResponse, Network,
+    NetworkLookup, Package, PackageSource, RepositorySource, SourceInfo, SourceLookup,
+    SourceResponse, SourceServiceMetrics, METRICS_HOST_PORT, SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -90,10 +90,15 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Start watching for upgrades.
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, AddressLookup::new());
-    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    let app_state = Arc::new(RwLock::new(AppState {
+        sources,
+        metrics: None,
+    }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
-    tokio::spawn(async move { watch_for_upgrades(config.packages, app_state, Some(tx)).await });
+    tokio::spawn(async move {
+        watch_for_upgrades(config.packages, app_state, Network::Localnet, Some(tx)).await
+    });
 
     // Set up to upgrade package.
     let package = effects
@@ -174,7 +179,7 @@ async fn run_publish(
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        lint: false,
+        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -205,7 +210,7 @@ async fn run_upgrade(
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        lint: false,
+        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -288,7 +293,10 @@ async fn test_api_route() -> anyhow::Result<()> {
     address_lookup.insert(account_address, source_lookup);
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, address_lookup);
-    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    let app_state = Arc::new(RwLock::new(AppState {
+        sources,
+        metrics: None,
+    }));
     tokio::spawn(serve(app_state).expect("Cannot start service."));
 
     let client = Client::new();
@@ -325,6 +333,32 @@ async fn test_api_route() -> anyhow::Result<()> {
         expect!["Unsupported version 'bogus' specified in header x-sui-source-validation-version"];
     expected.assert_eq(&json.error);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_metrics_route() -> anyhow::Result<()> {
+    // Start metrics server
+    let metrics_listener = std::net::TcpListener::bind(METRICS_HOST_PORT)?;
+    let registry_service = start_prometheus_server(metrics_listener);
+    let prometheus_registry = registry_service.default_registry();
+    SourceServiceMetrics::new(&prometheus_registry);
+
+    let client = Client::new();
+    let response = client
+        .get(format!("http://{METRICS_HOST_PORT}/metrics"))
+        .send()
+        .await
+        .expect("Request failed.")
+        .text()
+        .await?;
+
+    let expected = expect![[r#"
+        # HELP total_requests Total number of requests received by Source Service
+        # TYPE total_requests counter
+        total_requests 0
+    "#]];
+    expected.assert_eq(response.as_str());
     Ok(())
 }
 

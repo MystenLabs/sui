@@ -19,6 +19,7 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 futures.workspace = true
 im.workspace = true
+indexmap.workspace = true
 itertools.workspace = true
 lru.workspace = true
 num_cpus.workspace = true
@@ -80,6 +81,8 @@ sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 workspace-hack.workspace = true
+zeroize.workspace = true
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "318d61d27f47d257d99a86983d835e9e9756bc59" }
 
 [dev-dependencies]
 clap.workspace = true

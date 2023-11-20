@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { Coins, getUSDCurrency, useBalanceConversion } from '_app/hooks/useDeepBook';
 import { Text } from '_app/shared/text';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
-import { SUI_CONVERSION_RATE, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
+import { SUI_USDC_AVERAGE_CONVERSION_RATE, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
+import { getBalanceConversion, getUSDCurrency } from '_pages/swap/utils';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { useCoinMetadata, useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -15,11 +15,16 @@ export function GasFeeSection({
 	totalGas,
 	amount,
 	isValid,
+	averages,
 }: {
 	activeCoinType: string | null;
 	amount: string;
 	isValid: boolean;
 	totalGas: string;
+	averages: {
+		averageBaseToQuote: string;
+		averageQuoteToBase: string;
+	};
 }) {
 	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
 	const isAsk = activeCoinType === SUI_TYPE_ARG;
@@ -32,19 +37,22 @@ export function GasFeeSection({
 		return new BigNumber(amount).times(WALLET_FEES_PERCENTAGE / 100);
 	}, [amount, isValid]);
 
-	const { rawValue } = useBalanceConversion(
-		estimatedFees,
-		isAsk ? Coins.SUI : Coins.USDC,
-		isAsk ? Coins.USDC : Coins.SUI,
-		isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
-	);
+	const rawValue = getBalanceConversion({
+		balance: estimatedFees,
+		isAsk,
+		averages,
+	});
+
+	const convertedRawValue = new BigNumber(rawValue)
+		.shiftedBy(isAsk ? SUI_USDC_AVERAGE_CONVERSION_RATE : -SUI_USDC_AVERAGE_CONVERSION_RATE)
+		.toNumber();
 
 	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);
 
-	const formattedEstimatedFees = getUSDCurrency(rawValue);
+	const formattedEstimatedFees = getUSDCurrency(convertedRawValue);
 
 	return (
-		<div className="flex flex-col border border-hero-darkest/20 rounded-xl p-5 gap-4 border-solid">
+		<div className="flex flex-col border border-hero-darkest/20 rounded-xl px-5 py-3 gap-2 border-solid">
 			<DescriptionItem
 				title={
 					<Text variant="bodySmall" weight="medium" color="steel-dark">

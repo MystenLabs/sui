@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMenuIsOpen, useNextMenuUrl } from '_components/menu/hooks';
-import cl from 'classnames';
+import cl from 'clsx';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 

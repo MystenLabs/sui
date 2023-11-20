@@ -1,0 +1,117 @@
+processed 12 tasks
+
+task 1 'publish'. lines 15-37:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run-graphql'. lines 39-52:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": []
+      }
+    }
+  }
+}
+
+task 3 'run'. lines 54-54:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'view-object'. lines 56-56:
+Owner: Account Address ( A )
+Version: 3
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+
+task 5 'create-checkpoint'. lines 58-58:
+Checkpoint created: 1
+
+task 6 'view-checkpoint'. lines 60-60:
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 3roqGGtXUFwWgryXd47b8excsteDJyFXKoKUmFEcUbpD,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
+
+task 7 'run-graphql'. lines 62-75:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
+              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 77-90:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
+              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 92-105:
+Response: {
+  "data": {
+    "address": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
+              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 107-120:
+Response: {
+  "data": {
+    "owner": {
+      "objectConnection": {
+        "edges": [
+          {
+            "node": {
+              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
+              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "kind": "OWNED"
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 122-135:
+Response: {
+  "data": {
+    "object": null
+  }
+}

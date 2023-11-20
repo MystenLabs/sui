@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/zklogin",
-	"version": "0.3.2",
+	"version": "0.3.6",
 	"description": "Utilities for interacting with zkLogin in Sui",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
@@ -10,7 +10,6 @@
 	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		}

@@ -1,0 +1,7 @@
+processed 2 tasks
+
+task 0 'print-bytecode'. lines 1-8:
+Error: ParserError: Invalid Token: expected Tok::NameValue
+
+task 1 'print-bytecode'. lines 10-17:
+Error: ParserError: Invalid Token: expected Tok::NameValue

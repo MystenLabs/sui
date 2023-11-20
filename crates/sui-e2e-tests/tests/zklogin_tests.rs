@@ -2,20 +2,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::SuiAddress;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx};
+use sui_types::utils::{
+    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx,
+};
 use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 
-async fn do_zklogin_test(legacy: bool) -> SuiResult {
+async fn do_zklogin_test(address: SuiAddress, legacy: bool) -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let (_, tx, _) = make_zklogin_tx(legacy);
+    let (_, tx, _) = make_zklogin_tx(address, legacy);
 
     test_cluster
         .authority_aggregator()
@@ -38,7 +39,9 @@ async fn test_zklogin_feature_deny() {
         config
     });
 
-    let err = do_zklogin_test(false).await.unwrap_err();
+    let err = do_zklogin_test(get_zklogin_user_address(), false)
+        .await
+        .unwrap_err();
 
     assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
 }
@@ -52,7 +55,9 @@ async fn test_zklogin_feature_legacy_address_deny() {
         config
     });
 
-    let err = do_zklogin_test(true).await.unwrap_err();
+    let err = do_zklogin_test(get_legacy_zklogin_user_address(), true)
+        .await
+        .unwrap_err();
     assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
 }
 
@@ -63,28 +68,11 @@ async fn test_legacy_zklogin_address_accept() {
         config.set_verify_legacy_zklogin_address(true);
         config
     });
-    let err = do_zklogin_test(true).await.unwrap_err();
+    let err = do_zklogin_test(get_legacy_zklogin_user_address(), true)
+        .await
+        .unwrap_err();
 
     // it does not hit the signer absent error.
-    assert!(matches!(err, SuiError::InvalidSignature { .. }));
-}
-
-#[sim_test]
-async fn test_zklogin_provider_not_supported() {
-    use sui_protocol_config::ProtocolConfig;
-
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_zklogin_auth_for_testing(true);
-        config.set_enable_jwk_consensus_updates_for_testing(true);
-        config.set_zklogin_supported_providers(BTreeSet::from([
-            "Google".to_string(),
-            "Facebook".to_string(),
-        ]));
-        config
-    });
-
-    // Doing a Twitch zklogin tx fails because its not in the supported list.
-    let err = do_zklogin_test(false).await.unwrap_err();
     assert!(matches!(err, SuiError::InvalidSignature { .. }));
 }
 

@@ -3,7 +3,7 @@
 
 use crate::apis::{
     CoinReadApiV2, ExtendedApiV2, GovernanceReadApiV2, IndexerApiV2, MoveUtilsApiV2, ReadApiV2,
-    TransactionBuilderApiV2,
+    TransactionBuilderApiV2, WriteApi,
 };
 use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
@@ -115,9 +115,9 @@ pub async fn build_json_rpc_server(
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+    let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
 
-    // TODO: Register modules here
-
+    builder.register_module(WriteApi::new(http_client.clone()))?;
     builder.register_module(IndexerApiV2::new(reader.clone()))?;
     builder.register_module(TransactionBuilderApiV2::new(reader.clone()))?;
     builder.register_module(MoveUtilsApiV2::new(reader.clone()))?;
@@ -125,7 +125,6 @@ pub async fn build_json_rpc_server(
     builder.register_module(ReadApiV2::new(reader.clone()))?;
     builder.register_module(CoinReadApiV2::new(reader.clone()))?;
     builder.register_module(ExtendedApiV2::new(reader.clone()))?;
-    // builder.register_module()...
 
     let default_socket_addr: SocketAddr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.

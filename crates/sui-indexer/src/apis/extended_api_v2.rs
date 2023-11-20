@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use crate::indexer_reader::IndexerReader;
 use jsonrpsee::{core::RpcResult, RpcModule};
 use sui_json_rpc::{
@@ -12,8 +8,8 @@ use sui_json_rpc::{
     SuiRpcModule,
 };
 use sui_json_rpc_types::{
-    AddressMetrics, CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics,
-    Page, QueryObjectsPage, SuiObjectResponseQuery,
+    AddressMetrics, CheckpointedObjectID, EpochInfo, EpochMetrics, EpochMetricsPage, EpochPage,
+    MoveCallMetrics, NetworkMetrics, Page, QueryObjectsPage, SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
 use sui_types::sui_serde::BigInt;
@@ -58,6 +54,45 @@ impl ExtendedApiServer for ExtendedApiV2 {
         })
     }
 
+    async fn get_epoch_metrics(
+        &self,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<usize>,
+        descending_order: Option<bool>,
+    ) -> RpcResult<EpochMetricsPage> {
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+        let epochs = self
+            .inner
+            .spawn_blocking(move |this| {
+                this.get_epochs(
+                    cursor.map(|x| *x),
+                    limit + 1,
+                    descending_order.unwrap_or(false),
+                )
+            })
+            .await?;
+
+        let mut epoch_metrics = epochs
+            .into_iter()
+            .map(|e| EpochMetrics {
+                epoch: e.epoch,
+                epoch_total_transactions: e.epoch_total_transactions,
+                first_checkpoint_id: e.first_checkpoint_id,
+                epoch_start_timestamp: e.epoch_start_timestamp,
+                end_of_epoch_info: e.end_of_epoch_info,
+            })
+            .collect::<Vec<_>>();
+
+        let has_next_page = epoch_metrics.len() > limit;
+        epoch_metrics.truncate(limit);
+        let next_cursor = epoch_metrics.last().map(|e| e.epoch);
+        Ok(Page {
+            data: epoch_metrics,
+            next_cursor: next_cursor.map(|id| id.into()),
+            has_next_page,
+        })
+    }
+
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo> {
         let stored_epoch = self
             .inner
@@ -68,9 +103,9 @@ impl ExtendedApiServer for ExtendedApiV2 {
 
     async fn query_objects(
         &self,
-        query: SuiObjectResponseQuery,
-        cursor: Option<CheckpointedObjectID>,
-        limit: Option<usize>,
+        _query: SuiObjectResponseQuery,
+        _cursor: Option<CheckpointedObjectID>,
+        _limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
         Err(jsonrpsee::types::error::CallError::Custom(
             jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
@@ -122,7 +157,11 @@ impl ExtendedApiServer for ExtendedApiV2 {
     }
 
     async fn get_total_transactions(&self) -> RpcResult<BigInt<u64>> {
-        unimplemented!()
+        let latest_checkpoint = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_checkpoint())
+            .await?;
+        Ok(latest_checkpoint.network_total_transactions.into())
     }
 }
 

@@ -2,15 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::hash::Hash;
+use std::collections::BTreeSet;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_types::{
+    get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
+};
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
@@ -21,22 +25,20 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey,
-    ObjectStore, ReceivedMarkerQuery,
+    get_module, BackingPackageStore, ChildObjectResolver, InputKey, MarkerValue, ObjectKey,
+    ObjectStore, PackageObjectArc,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
-use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
+use typed_store::rocks::errors::typed_store_err_from_bcs_err;
 use typed_store::traits::Map;
-
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store_types::{
-    get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
+use typed_store::{
+    rocks::{DBBatch, DBMap},
+    TypedStoreError,
 };
-use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
@@ -49,6 +51,8 @@ use typed_store::rocks::util::is_ref_count_value;
 const NUM_SHARDS: usize = 4096;
 
 struct AuthorityStoreMetrics {
+    pending_notify_read: IntGauge,
+
     sui_conservation_check_latency: IntGauge,
     sui_conservation_live_object_count: IntGauge,
     sui_conservation_live_object_size: IntGauge,
@@ -61,6 +65,12 @@ struct AuthorityStoreMetrics {
 impl AuthorityStoreMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
+            pending_notify_read: register_int_gauge_with_registry!(
+                "pending_notify_read",
+                "Pending notify read requests",
+                registry,
+            )
+                .unwrap(),
             sui_conservation_check_latency: register_int_gauge_with_registry!(
                 "sui_conservation_check_latency",
                 "Number of seconds took to scan all live objects in the store for SUI conservation check",
@@ -134,6 +144,8 @@ pub struct AuthorityStore {
     enable_epoch_sui_conservation_check: bool,
 
     metrics: AuthorityStoreMetrics,
+
+    package_cache: Arc<PackageObjectCache>,
 }
 
 pub type ExecutionLockReadGuard<'a> = RwLockReadGuard<'a, EpochId>;
@@ -157,6 +169,7 @@ impl AuthorityStore {
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
                 genesis.authenticator_state_obj_initial_shared_version(),
+                genesis.randomness_state_obj_initial_shared_version(),
             );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
@@ -245,6 +258,7 @@ impl AuthorityStore {
             indirect_objects_threshold,
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
+            package_cache: PackageObjectCache::new(),
         });
         // Only initialize an empty database.
         if store
@@ -399,6 +413,55 @@ impl AuthorityStore {
             .perpetual_tables
             .executed_effects
             .contains_key(digest)?)
+    }
+
+    pub fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, TypedStoreError> {
+        let object_key = (epoch_id, ObjectKey(*object_id, *version));
+
+        match self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .get(&object_key)?
+        {
+            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn get_last_shared_object_deletion_info(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
+        let object_key = ObjectKey::max_for_id(object_id);
+        let marker_key = (epoch_id, object_key);
+
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .unbounded_iter()
+            .skip_prior_to(&marker_key)?
+            .next();
+        match marker_entry {
+            // Make sure the object was deleted or wrapped.
+            Some(((epoch, key), MarkerValue::SharedDeleted(digest))) => {
+                // Make sure object id matches and version is >= `version`
+                let object_id_matches = key.0 == *object_id;
+                // Make sure we don't have a stale epoch for some reason (e.g., a revert)
+                let epoch_data_ok = epoch == epoch_id;
+                if object_id_matches && epoch_data_ok {
+                    Ok(Some((key.1, digest)))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Returns future containing the state hash for the given epoch
@@ -586,22 +649,22 @@ impl AuthorityStore {
         }
     }
 
-    /// Gets the input object keys and lock modes from input object kinds, by determining the
-    /// versions and types of owned, shared and package objects.
+    /// Gets the input object keys from input object kinds, by determining the versions of owned,
+    /// shared and package objects.
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub fn get_input_object_locks(
+    pub fn get_input_object_keys(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> BTreeMap<InputKey, LockMode> {
+    ) -> BTreeSet<InputKey> {
         let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
         objects
             .iter()
             .map(|kind| {
                 match kind {
-                    InputObjectKind::SharedMoveObject { id, initial_shared_version: _, mutable } => {
+                    InputObjectKind::SharedMoveObject { id, .. } => {
                         if shared_locks.is_empty() {
                             shared_locks = epoch_store
                                 .get_shared_locks(digest)
@@ -618,17 +681,10 @@ impl AuthorityStore {
                                 id: {id:?}",
                             )
                         };
-                        let lock_mode = if *mutable {
-                            LockMode::Default
-                        } else {
-                            LockMode::ReadOnly
-                        };
-                        (InputKey::VersionedObject{ id: *id, version: *version}, lock_mode)
+                        InputKey::VersionedObject{ id: *id, version: *version}
                     }
-                    // TODO: use ReadOnly lock?
-                    InputObjectKind::MovePackage(id) => (InputKey::Package { id: *id }, LockMode::Default),
-                    // Cannot use ReadOnly lock because we do not know if the object is immutable.
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => (InputKey::VersionedObject {id: objref.0, version: objref.1}, LockMode::Default),
+                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
                 }
             })
             .collect()
@@ -680,6 +736,17 @@ impl AuthorityStore {
                         epoch_store.epoch(),
                     )?;
                 versioned_results.push((*idx, is_available));
+            } else if self
+                .get_deleted_shared_object_previous_tx_digest(
+                    &input_key.id(),
+                    &input_key.version().unwrap(),
+                    epoch_store.epoch(),
+                )?
+                .is_some()
+            {
+                // If the object is an already deleted shared object, mark it as available if the
+                // version for that object is in the shared deleted marker table.
+                versioned_results.push((*idx, true));
             } else {
                 versioned_results.push((*idx, false));
             }
@@ -774,7 +841,9 @@ impl AuthorityStore {
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
     pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
-        self.bulk_insert_genesis_objects(objects).await
+        self.bulk_insert_genesis_objects(objects).await?;
+        self.force_reload_system_packages_into_cache();
+        Ok(())
     }
 
     /// This function should only be used for initializing genesis and should remain private.
@@ -870,6 +939,10 @@ impl AuthorityStore {
         }
         let sha3_digest = hasher.finalize().digest;
         if *expected_sha3_digest != sha3_digest {
+            error!(
+                "Sha does not match! expected: {:?}, actual: {:?}",
+                expected_sha3_digest, sha3_digest
+            );
             return Err(SuiError::from("Sha does not match"));
         }
         batch.write()?;
@@ -943,6 +1016,12 @@ impl AuthorityStore {
         // Commit.
         write_batch.write()?;
 
+        if transaction.transaction_data().is_end_of_epoch_tx() {
+            // At the end of epoch, since system packages may have been upgraded, force
+            // reload them in the cache.
+            self.force_reload_system_packages_into_cache();
+        }
+
         // test crashing before notifying
         fail_point_async!("crash");
 
@@ -951,7 +1030,19 @@ impl AuthorityStore {
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);
 
+        self.metrics
+            .pending_notify_read
+            .set(self.executed_effects_notify_read.num_pending() as i64);
+
+        debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
+
         Ok(())
+    }
+
+    fn force_reload_system_packages_into_cache(&self) {
+        info!("Reload all system packages in the cache");
+        self.package_cache
+            .force_reload_system_packages(BuiltInFramework::all_package_ids(), self);
     }
 
     /// Acquires read locks for affected indirect objects
@@ -989,7 +1080,7 @@ impl AuthorityStore {
         epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
-            input_objects: _,
+            input_objects,
             mutable_inputs,
             written,
             events,
@@ -997,22 +1088,12 @@ impl AuthorityStore {
             loaded_runtime_objects: _,
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
+            lamport_version,
         } = inner_temporary_store;
         trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
-        let deleted: HashMap<_, _> = effects
-            .deleted()
-            .iter()
-            .map(|oref| (oref.0, oref.1))
-            .chain(effects.wrapped().iter().map(|oref| (oref.0, oref.1)))
-            .chain(
-                effects
-                    .unwrapped_then_deleted()
-                    .iter()
-                    .map(|oref| (oref.0, oref.1)),
-            )
-            .collect();
+        let deleted: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
 
         // Get the actual set of objects that have been received -- any received
         // object will show up in the modified-at set.
@@ -1025,23 +1106,48 @@ impl AuthorityStore {
                 .collect()
         };
 
-        // We record any received or deleted objects since they could be pruned.
-        let markers_to_place = received_objects
-            .iter()
-            .map(|(object_id, version, _)| {
+        // We record any received or deleted objects since they could be pruned, and smear shared
+        // object deletions in the marker table. For deleted entries in the marker table we need to
+        // make sure we don't accidentally overwrite entries.
+        let markers_to_place = {
+            let received = received_objects.iter().map(|(object_id, version, _)| {
                 (
                     (epoch_id, ObjectKey(*object_id, *version)),
                     MarkerValue::Received,
                 )
-            })
-            .chain(deleted.into_iter().map(|(object_id, version)| {
-                (
-                    (epoch_id, ObjectKey(object_id, version)),
-                    MarkerValue::OwnedDeleted,
-                )
-            }));
+            });
 
-        // Insert each received and deleted object into the objects marker table
+            let deleted = deleted.into_iter().map(|(object_id, version)| {
+                let object_key = (epoch_id, ObjectKey(object_id, version));
+                if input_objects
+                    .get(&object_id)
+                    .is_some_and(|object| object.is_shared())
+                {
+                    (
+                        object_key,
+                        MarkerValue::SharedDeleted(*transaction.digest()),
+                    )
+                } else {
+                    (object_key, MarkerValue::OwnedDeleted)
+                }
+            });
+
+            // We "smear" shared deleted objects in the marker table to allow for proper sequencing
+            // of transactions that are submitted after the deletion of the shared object.
+            // NB: that we do _not_ smear shared objects that were taken immutably in the
+            // transaction.
+            let smeared_objects = effects.deleted_mutably_accessed_shared_objects();
+            let shared_smears = smeared_objects.into_iter().map(move |object_id| {
+                let object_key = (epoch_id, ObjectKey(object_id, lamport_version));
+                (
+                    object_key,
+                    MarkerValue::SharedDeleted(*transaction.digest()),
+                )
+            });
+
+            received.chain(deleted).chain(shared_smears)
+        };
+
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table,
             markers_to_place,
@@ -1157,12 +1263,6 @@ impl AuthorityStore {
     }
 
     /// Acquires a lock for a transaction on the given objects if they have all been initialized previously
-    /// to None state.  It is also OK if they have been set to the same transaction.
-    /// The locks are all set to the given transaction digest.
-    /// Returns UserInputError::ObjectNotFound if no lock record can be found for one of the objects.
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if one of the objects is not locked at the given version.
-    /// Returns SuiError::ObjectLockConflict if one of the objects is locked by a different transaction in the same epoch.
-    /// Returns SuiError::ObjectLockedAtFutureEpoch if one of the objects is locked in a future epoch (bug).
     pub(crate) async fn acquire_transaction_locks(
         &self,
         epoch: EpochId,
@@ -1460,9 +1560,9 @@ impl AuthorityStore {
         }
 
         let tombstones = effects
-            .all_removed_objects()
+            .all_tombstones()
             .into_iter()
-            .map(|(obj_ref, _)| ObjectKey(obj_ref.0, obj_ref.1));
+            .map(|(id, version)| ObjectKey(id, version));
         write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
@@ -1488,8 +1588,9 @@ impl AuthorityStore {
                             .perpetual_tables
                             .object(
                                 &key,
-                                obj_opt
-                                    .expect(&format!("Older object version not found: {:?}", key)),
+                                obj_opt.unwrap_or_else(|| {
+                                    panic!("Older object version not found: {:?}", key)
+                                }),
                             )
                             .expect("Matching indirect object not found")?;
 
@@ -1550,6 +1651,18 @@ impl AuthorityStore {
     ) -> Result<Option<ObjectRef>, SuiError> {
         self.perpetual_tables
             .get_latest_object_ref_or_tombstone(object_id)
+    }
+
+    /// Returns the latest object reference if and only if the object is still live (i.e. it does
+    /// not return tombstones)
+    pub fn get_latest_object_ref_if_alive(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        match self.get_latest_object_ref_or_tombstone(object_id)? {
+            Some(objref) if objref.2.is_alive() => Ok(Some(objref)),
+            _ => Ok(None),
+        }
     }
 
     /// Returns the latest object we have for this object_id in the objects table.
@@ -1637,7 +1750,9 @@ impl AuthorityStore {
                 raw_bytes_option
                     .map(|tx_bytes| {
                         let tx: VerifiedTransaction =
-                            bcs::from_bytes::<TrustedTransaction>(&tx_bytes)?.into();
+                            bcs::from_bytes::<TrustedTransaction>(&tx_bytes)
+                                .map_err(typed_store_err_from_bcs_err)?
+                                .into();
                         Ok((tx, tx_bytes.len()))
                     })
                     .transpose()
@@ -1674,7 +1789,6 @@ impl AuthorityStore {
         let mut pending_objects = vec![];
         let mut count = 0;
         let mut size = 0;
-        let package_cache = PackageObjectCache::new(self.clone());
         let (mut total_sui, mut total_storage_rebate) = thread::scope(|s| {
             let pending_tasks = FuturesUnordered::new();
             for o in self.iter_live_object_set(false) {
@@ -1686,10 +1800,9 @@ impl AuthorityStore {
                         if count % 1_000_000 == 0 {
                             let mut task_objects = vec![];
                             mem::swap(&mut pending_objects, &mut task_objects);
-                            let package_cache_clone = package_cache.clone();
                             pending_tasks.push(s.spawn(move || {
                                 let mut layout_resolver =
-                                    executor.type_layout_resolver(Box::new(&package_cache_clone));
+                                    executor.type_layout_resolver(Box::new(self.as_ref()));
                                 let mut total_storage_rebate = 0;
                                 let mut total_sui = 0;
                                 for object in task_objects {
@@ -1880,31 +1993,24 @@ impl AuthorityStore {
         info!("Removing all versions of object: {:?}", entries);
         self.perpetual_tables.objects.multi_remove(entries).unwrap();
     }
-}
 
-impl ReceivedMarkerQuery for AuthorityStore {
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        self.have_received_object_at_version(object_id, version, epoch_id)
+    // Counts the number of versions exist in object store for `object_id`. This includes tombstone.
+    #[cfg(msim)]
+    pub fn count_object_versions(&self, object_id: ObjectID) -> usize {
+        self.perpetual_tables
+            .objects
+            .iter_with_bounds(
+                Some(ObjectKey(object_id, VersionNumber::MIN)),
+                Some(ObjectKey(object_id, VersionNumber::MAX)),
+            )
+            .collect::<Vec<_>>()
+            .len()
     }
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        let package = self.get_object(package_id)?;
-        if let Some(obj) = &package {
-            fp_ensure!(
-                obj.is_package(),
-                SuiError::BadObjectType {
-                    error: format!("Package expected, Move object found: {package_id}"),
-                }
-            );
-        }
-        Ok(package)
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+        self.package_cache.get_package_object(package_id, self)
     }
 }
 
@@ -1988,44 +2094,13 @@ impl ParentSync for AuthorityStore {
     }
 }
 
-impl ModuleResolver for AuthorityStore {
-    type Error = SuiError;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        // TODO: We should cache the deserialized modules to avoid
-        // fetching from the store / re-deserializing them every time.
-        // https://github.com/MystenLabs/sui/issues/809
-        Ok(self
-            .get_package_object(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                // unwrap safe since get_package() ensures it's a package object.
-                package
-                    .data
-                    .try_as_package()
-                    .unwrap()
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
-    }
-}
-
-impl GetModule for AuthorityStore {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        get_module_by_id(self, id)
-    }
-}
-
 /// A wrapper to make Orphan Rule happy
-pub struct ResolverWrapper<T: ModuleResolver> {
+pub struct ResolverWrapper<T: BackingPackageStore> {
     pub resolver: Arc<T>,
     pub metrics: Arc<ResolverMetrics>,
 }
 
-impl<T: ModuleResolver> ResolverWrapper<T> {
+impl<T: BackingPackageStore> ResolverWrapper<T> {
     pub fn new(resolver: Arc<T>, metrics: Arc<ResolverMetrics>) -> Self {
         metrics.module_cache_size.set(0);
         ResolverWrapper { resolver, metrics }
@@ -2038,11 +2113,11 @@ impl<T: ModuleResolver> ResolverWrapper<T> {
     }
 }
 
-impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
-    type Error = T::Error;
+impl<T: BackingPackageStore> ModuleResolver for ResolverWrapper<T> {
+    type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
-        self.resolver.get_module(module_id)
+        get_module(&self.resolver, module_id)
     }
 }
 
@@ -2107,56 +2182,4 @@ impl From<LockDetails> for LockDetailsWrapper {
         // always use latest version.
         LockDetailsWrapper::V1(details)
     }
-}
-
-/// A potential input to a transaction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum InputKey {
-    VersionedObject {
-        id: ObjectID,
-        version: SequenceNumber,
-    },
-    Package {
-        id: ObjectID,
-    },
-}
-
-impl InputKey {
-    pub fn id(&self) -> ObjectID {
-        match self {
-            InputKey::VersionedObject { id, .. } => *id,
-            InputKey::Package { id } => *id,
-        }
-    }
-
-    pub fn version(&self) -> Option<SequenceNumber> {
-        match self {
-            InputKey::VersionedObject { version, .. } => Some(*version),
-            InputKey::Package { .. } => None,
-        }
-    }
-}
-
-impl From<&Object> for InputKey {
-    fn from(obj: &Object) -> Self {
-        if obj.is_package() {
-            InputKey::Package { id: obj.id() }
-        } else {
-            InputKey::VersionedObject {
-                id: obj.id(),
-                version: obj.version(),
-            }
-        }
-    }
-}
-
-/// How a transaction should lock a given input object.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum LockMode {
-    /// In the default mode, the transaction can acquire the lock whenever the object is available
-    /// and there is no pending or executing transaction with ReadOnly locks.
-    Default,
-    /// In the ReadOnly mode, the transaction can acquire the lock whenever the object is available.
-    /// The invariant is that no transaction should have locks on the object in default mode.
-    ReadOnly,
 }

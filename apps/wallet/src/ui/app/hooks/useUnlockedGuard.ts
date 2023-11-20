@@ -9,7 +9,7 @@ import { useActiveAccount } from '../hooks/useActiveAccount';
 
 export function useUnlockedGuard() {
 	const navigate = useNavigate();
-	const { data: allAccounts, isLoading: isAccountsLoading } = useAccounts();
+	const { data: allAccounts, isPending: isAccountsLoading } = useAccounts();
 	const activeAccount = useActiveAccount();
 	const loading = isAccountsLoading || !activeAccount;
 	const isInitialized = !!allAccounts?.length;

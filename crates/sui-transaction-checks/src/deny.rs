@@ -27,16 +27,16 @@ macro_rules! deny_if_true {
 pub fn check_transaction_for_signing(
     tx_data: &TransactionData,
     tx_signatures: &[GenericSignature],
-    input_objects: &[InputObjectKind],
+    input_object_kinds: &[InputObjectKind],
     receiving_objects: &[ObjectRef],
     filter_config: &TransactionDenyConfig,
-    package_store: &impl BackingPackageStore,
+    package_store: &dyn BackingPackageStore,
 ) -> SuiResult {
     check_disabled_features(filter_config, tx_data, tx_signatures)?;
 
     check_signers(filter_config, tx_data)?;
 
-    check_input_objects(filter_config, input_objects)?;
+    check_input_objects(filter_config, input_object_kinds)?;
 
     check_package_dependencies(filter_config, tx_data, package_store)?;
 
@@ -126,7 +126,7 @@ fn check_signers(filter_config: &TransactionDenyConfig, tx_data: &TransactionDat
 
 fn check_input_objects(
     filter_config: &TransactionDenyConfig,
-    input_objects: &[InputObjectKind],
+    input_object_kinds: &[InputObjectKind],
 ) -> SuiResult {
     let deny_map = filter_config.get_object_deny_set();
     let shared_object_disabled = filter_config.shared_object_disabled();
@@ -134,14 +134,14 @@ fn check_input_objects(
         // No need to iterate through the input objects if no relevant policy is set.
         return Ok(());
     }
-    for object_kind in input_objects {
-        let id = object_kind.object_id();
+    for input_object_kind in input_object_kinds {
+        let id = input_object_kind.object_id();
         deny_if_true!(
             deny_map.contains(&id),
             format!("Access to input object {:?} is temporarily disabled", id)
         );
         deny_if_true!(
-            shared_object_disabled && object_kind.is_shared_object(),
+            shared_object_disabled && input_object_kind.is_shared_object(),
             "Usage of shared object in transactions is temporarily disabled"
         );
     }
@@ -151,7 +151,7 @@ fn check_input_objects(
 fn check_package_dependencies(
     filter_config: &TransactionDenyConfig,
     tx_data: &TransactionData,
-    package_store: &impl BackingPackageStore,
+    package_store: &dyn BackingPackageStore,
 ) -> SuiResult {
     let deny_map = filter_config.get_package_deny_set();
     if deny_map.is_empty() {
@@ -173,15 +173,14 @@ fn check_package_dependencies(
                 dependencies.push(*package_id);
             }
             Command::MoveCall(call) => {
-                let package =
-                    package_store
-                        .get_package(&call.package)?
-                        .ok_or(SuiError::UserInputError {
-                            error: UserInputError::ObjectNotFound {
-                                object_id: call.package,
-                                version: None,
-                            },
-                        })?;
+                let package = package_store.get_package_object(&call.package)?.ok_or(
+                    SuiError::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: call.package,
+                            version: None,
+                        },
+                    },
+                )?;
                 // linkage_table maps from the original package ID to the upgraded ID for each
                 // dependency. Here we only check the upgraded (i.e. the latest) ID against the
                 // deny list. This means that we only make sure that the denied package is not
@@ -189,11 +188,12 @@ fn check_package_dependencies(
                 // package but permits the use of a newer version.
                 dependencies.extend(
                     package
+                        .move_package()
                         .linkage_table()
                         .values()
                         .map(|upgrade_info| upgrade_info.upgraded_id),
                 );
-                dependencies.push(package.id());
+                dependencies.push(package.move_package().id());
             }
             Command::TransferObjects(..)
             | &Command::SplitCoins(..)

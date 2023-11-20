@@ -6,9 +6,10 @@ use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
     effects::Op,
     language_storage::StructTag,
-    value::{MoveStruct, MoveTypeLayout, MoveValue},
+    runtime_value as R,
     vm_status::StatusCode,
 };
 use move_vm_types::{
@@ -29,7 +30,8 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
@@ -290,6 +292,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_SYSTEM_STATE_OBJECT_ID,
             SUI_CLOCK_OBJECT_ID,
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+            SUI_RANDOMNESS_STATE_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains_key(&id) {
@@ -368,7 +371,7 @@ impl<'a> ObjectRuntime<'a> {
         child: ObjectID,
         child_version: SequenceNumber,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<Option<ObjectResult<Value>>> {
@@ -404,7 +407,7 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut GlobalValue>> {
@@ -452,6 +455,13 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn loaded_runtime_objects(&self) -> BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata> {
+        // The loaded child objects, and the received objects, should be disjoint. If they are not,
+        // this is an error since it could lead to incorrect transaction dependency computations.
+        debug_assert!(self
+            .child_object_store
+            .cached_objects()
+            .keys()
+            .all(|id| !self.state.received.contains_key(id)));
         self.child_object_store
             .cached_objects()
             .iter()
@@ -683,22 +693,19 @@ fn get_all_uids_in_value(
             }
             _ => continue,
         };
-        match s {
-            MoveStruct::WithTypes { type_, fields } => {
-                if type_ == &UID::type_() {
-                    let inner = match &fields[0].1 {
-                        MoveValue::Struct(MoveStruct::WithTypes { fields, .. }) => fields,
-                        v => return Err(format!("Unexpected UID layout. {v:?}")),
-                    };
-                    match &inner[0].1 {
-                        MoveValue::Address(id) => acc.insert((*id).into()),
-                        v => return Err(format!("Unexpected ID layout. {v:?}")),
-                    };
-                } else {
-                    stack.extend(fields.iter().map(|(_, v)| v));
-                }
-            }
-            v => return Err(format!("Unexpected struct layout. {v:?}")),
+
+        let MoveStruct { type_, fields } = s;
+        if type_ == &UID::type_() {
+            let inner = match &fields[0].1 {
+                MoveValue::Struct(MoveStruct { fields, .. }) => fields,
+                v => return Err(format!("Unexpected UID layout. {v:?}")),
+            };
+            match &inner[0].1 {
+                MoveValue::Address(id) => acc.insert((*id).into()),
+                v => return Err(format!("Unexpected ID layout. {v:?}")),
+            };
+        } else {
+            stack.extend(fields.iter().map(|(_, v)| v));
         }
     }
     Ok(())

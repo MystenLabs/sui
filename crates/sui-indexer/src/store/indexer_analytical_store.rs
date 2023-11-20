@@ -6,8 +6,10 @@ use async_trait::async_trait;
 use crate::models_v2::address_metrics::{StoredActiveAddress, StoredAddress, StoredAddressMetrics};
 use crate::models_v2::checkpoints::StoredCheckpoint;
 use crate::models_v2::move_call_metrics::{StoredMoveCall, StoredMoveCallMetrics};
-use crate::models_v2::network_metrics::StoredNetworkMetrics;
-use crate::models_v2::transactions::StoredTransaction;
+use crate::models_v2::network_metrics::StoredEpochPeakTps;
+use crate::models_v2::transactions::{
+    StoredTransactionCheckpoint, StoredTransactionSuccessCommandCount, StoredTransactionTimestamp,
+};
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
 use crate::models_v2::tx_indices::{StoredTxCalls, StoredTxRecipients, StoredTxSenders};
 use crate::types_v2::IndexerResult;
@@ -20,28 +22,35 @@ pub trait IndexerAnalyticalStore {
         start_checkpoint: i64,
         end_checkpoint: i64,
     ) -> IndexerResult<Vec<StoredCheckpoint>>;
-    async fn get_transactions_in_checkpoint_range(
+    async fn get_tx_timestamps_in_checkpoint_range(
         &self,
         start_checkpoint: i64,
         end_checkpoint: i64,
-    ) -> IndexerResult<Vec<StoredTransaction>>;
-    async fn get_estimated_count(&self, table: &str) -> IndexerResult<i64>;
+    ) -> IndexerResult<Vec<StoredTransactionTimestamp>>;
+    async fn get_tx_checkpoints_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionCheckpoint>>;
+    async fn get_tx_success_cmd_counts_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionSuccessCommandCount>>;
 
     // for network metrics including TPS and counts of objects etc.
     async fn get_latest_tx_count_metrics(&self) -> IndexerResult<StoredTxCountMetrics>;
-    async fn get_peak_network_peak_tps(&self, epoch: i64, day: i64) -> IndexerResult<f64>;
+    async fn get_latest_epoch_peak_tps(&self) -> IndexerResult<StoredEpochPeakTps>;
     async fn persist_tx_count_metrics(
         &self,
-        tx_count_metrics: StoredTxCountMetrics,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
     ) -> IndexerResult<()>;
-    async fn persist_network_metrics(
-        &self,
-        network_metrics: StoredNetworkMetrics,
-    ) -> IndexerResult<()>;
+    async fn persist_epoch_peak_tps(&self, epoch: i64) -> IndexerResult<()>;
 
     // for address metrics
     async fn get_latest_address_metrics(&self) -> IndexerResult<StoredAddressMetrics>;
-    async fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()>;
+    fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()>;
     async fn get_senders_in_tx_range(
         &self,
         start_tx_seq: i64,
@@ -52,7 +61,7 @@ pub trait IndexerAnalyticalStore {
         start_tx_seq: i64,
         end_tx_seq: i64,
     ) -> IndexerResult<Vec<StoredTxRecipients>>;
-    async fn persist_active_addresses(
+    fn persist_active_addresses(
         &self,
         active_addresses: Vec<StoredActiveAddress>,
     ) -> IndexerResult<()>;
@@ -72,7 +81,7 @@ pub trait IndexerAnalyticalStore {
         start_tx_seq: i64,
         end_tx_seq: i64,
     ) -> IndexerResult<Vec<StoredTxCalls>>;
-    async fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()>;
+    fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()>;
     async fn calculate_move_call_metrics(
         &self,
         checkpoint: StoredCheckpoint,

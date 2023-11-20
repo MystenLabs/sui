@@ -1,5 +1,0 @@
-//# run
-main<T>() { // too few type arguments
-label b0:
-    return;
-}

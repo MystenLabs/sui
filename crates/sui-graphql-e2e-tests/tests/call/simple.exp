@@ -1,0 +1,83 @@
+processed 14 tasks
+
+task 1 'publish'. lines 6-28:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 30-30:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 32-32:
+Owner: Account Address ( A )
+Version: 3
+Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 0u64}
+
+task 4 'create-checkpoint'. lines 34-34:
+Checkpoint created: 1
+
+task 5 'view-checkpoint'. lines 36-36:
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 3roqGGtXUFwWgryXd47b8excsteDJyFXKoKUmFEcUbpD,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
+
+task 6 'advance-epoch'. lines 39-39:
+Epoch advanced: 0
+
+task 7 'view-checkpoint'. lines 41-41:
+CheckpointSummary { epoch: 0, seq: 2, content_digest: HWHYKr1zLvWnGLeeiHFrHe9p7E23t8U6J4GWgwZxPWcE,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
+
+task 8 'run-graphql'. lines 43-49:
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 2
+    }
+  }
+}
+
+task 9 'create-checkpoint'. lines 50-50:
+Checkpoint created: 3
+
+task 10 'view-checkpoint'. lines 52-52:
+CheckpointSummary { epoch: 1, seq: 3, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
+
+task 11 'run-graphql'. lines 54-60:
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 3
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 62-68:
+Headers: {
+    "content-type": "application/json",
+    "content-length": "136",
+    "x-sui-rpc-version": "0.1.0",
+}
+Service version: 0.1.0
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 3
+    }
+  },
+  "extensions": {
+    "usage": {
+      "nodes": 2,
+      "depth": 2,
+      "variables": 0,
+      "fragments": 0,
+      "query_payload": 41
+    }
+  }
+}
+
+task 13 'view-checkpoint'. lines 70-70:
+CheckpointSummary { epoch: 1, seq: 3, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
+            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}

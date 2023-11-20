@@ -68,7 +68,7 @@ export function ZkLoginAccountWarningModal() {
 					<DialogFooter>
 						<Button
 							text="I understand"
-							loading={warningMutation.isLoading}
+							loading={warningMutation.isPending}
 							onClick={() =>
 								warningMutation.mutate(
 									{ accountID: activeAccount.id },

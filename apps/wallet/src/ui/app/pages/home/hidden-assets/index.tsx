@@ -10,7 +10,9 @@ import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
+import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
 import { EyeClose16 } from '@mysten/icons';
+import { keepPreviousData } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -18,14 +20,15 @@ import { useHiddenAssets } from './HiddenAssetsProvider';
 
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();
+	const kioskClient = useKioskClient();
 
-	const { data, isInitialLoading, isLoading, isError, error } = useMultiGetObjects(
+	const { data, isLoading, isPending, isError, error } = useMultiGetObjects(
 		hiddenAssetIds,
 		{
 			showDisplay: true,
 			showType: true,
 		},
-		{ keepPreviousData: true },
+		{ placeholderData: keepPreviousData },
 	);
 
 	const filteredAndSortedNfts = useMemo(() => {
@@ -52,7 +55,7 @@ function HiddenNftsPage() {
 			});
 	}, [hiddenAssetIds, data]);
 
-	if (isInitialLoading) {
+	if (isLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
 				<LoadingSpinner />
@@ -63,7 +66,7 @@ function HiddenNftsPage() {
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
 			<PageTitle title="Hidden Assets" back="/nfts" />
-			<Loading loading={isLoading && Boolean(hiddenAssetIds.length)}>
+			<Loading loading={isPending && Boolean(hiddenAssetIds.length)}>
 				{isError ? (
 					<Alert>
 						<div>
@@ -80,7 +83,7 @@ function HiddenNftsPage() {
 								<div className="flex justify-between items-center pt-2 pr-1" key={objectId}>
 									<Link
 										to={
-											isKioskOwnerToken(nft.data)
+											isKioskOwnerToken(kioskClient.network, nft.data)
 												? `/kiosk?${new URLSearchParams({
 														kioskId: getKioskIdFromOwnerCap(nft.data!),
 												  })}`

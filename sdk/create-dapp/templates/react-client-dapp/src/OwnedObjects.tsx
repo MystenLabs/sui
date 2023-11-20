@@ -3,7 +3,7 @@ import { Flex, Heading, Text } from "@radix-ui/themes";
 
 export function OwnedObjects() {
   const account = useCurrentAccount();
-  const { data, isLoading, error } = useSuiClientQuery(
+  const { data, isPending, error } = useSuiClientQuery(
     "getOwnedObjects",
     {
       owner: account?.address as string,
@@ -21,7 +21,7 @@ export function OwnedObjects() {
     return <Flex>Error: {error.message}</Flex>;
   }
 
-  if (isLoading || !data) {
+  if (isPending || !data) {
     return <Flex>Loading...</Flex>;
   }
 

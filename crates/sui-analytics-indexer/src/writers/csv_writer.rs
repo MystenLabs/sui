@@ -15,7 +15,7 @@ use sui_storage::object_store::util::path_to_filesystem;
 use sui_types::base_types::EpochId;
 
 use crate::writers::AnalyticsWriter;
-use crate::{FileFormat, FileType};
+use crate::{FileFormat, FileType, ParquetSchema};
 
 // Save table entries to csv files.
 pub(crate) struct CSVWriter {
@@ -77,7 +77,7 @@ impl CSVWriter {
     }
 }
 
-impl<S: Serialize> AnalyticsWriter<S> for CSVWriter {
+impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
     fn file_format(&self) -> Result<FileFormat> {
         Ok(FileFormat::CSV)
     }
@@ -89,7 +89,7 @@ impl<S: Serialize> AnalyticsWriter<S> for CSVWriter {
         Ok(())
     }
 
-    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<()> {
+    fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<bool> {
         self.writer.flush()?;
         let old_file_path = self.file_path(self.epoch, self.checkpoint_range.clone())?;
         let new_file_path = self.file_path(
@@ -97,7 +97,7 @@ impl<S: Serialize> AnalyticsWriter<S> for CSVWriter {
             self.checkpoint_range.start..end_checkpoint_seq_num,
         )?;
         fs::rename(old_file_path, new_file_path)?;
-        Ok(())
+        Ok(true)
     }
 
     fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {

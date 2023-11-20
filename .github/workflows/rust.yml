@@ -221,6 +221,22 @@ jobs:
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
+
+  # This job ensures that Move unit tests are run if there are changes
+  # to Move code but not Rust code (If there are Rust changes, they
+  # will be run as part of a larger test suite).
+  move-test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
+    timeout-minutes: 10
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: taiki-e/install-action@nextest
+      - name: Run move tests
+        run: |
+          cargo nextest run -p sui-framework-tests -- unit_tests::
+
   # # Disabled
   # rosetta-validation:
   #   needs: diff
@@ -326,7 +342,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all --check
+          args: --check
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
@@ -403,15 +419,19 @@ jobs:
          - 5432:5432
    steps:
      - uses: actions/checkout@v3
+     - uses: taiki-e/install-action@nextest
      - name: Setup db
        run: |
-         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;'
+         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;' -c 'ALTER SYSTEM SET max_connections = 500;'
        env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgrespw
      - name: tests-requiring-postgres
        run: |
-         cargo test --package sui-graphql-rpc --test e2e_tests --features pg_integration
+         cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --features pg_integration pg_backend
+         cargo nextest run --test-threads 1 --package sui-graphql-e2e-tests --features pg_integration pg_backend
+         cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration pg_backend
+
        env:
          POSTGRES_HOST: localhost
          POSTGRES_PORT: 5432

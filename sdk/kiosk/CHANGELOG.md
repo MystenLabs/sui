@@ -1,5 +1,39 @@
 # @mysten/kiosk
 
+## 0.7.10
+
+### Patch Changes
+
+- Updated dependencies [652bcdd92]
+  - @mysten/sui.js@0.46.1
+
+## 0.7.9
+
+### Patch Changes
+
+- 43444c58f: Extend the `TransactionBlock#object()` API to accept the `TransactionResult` type as well, so that it can be used flexibly in SDKs.
+- 3718a230b: Adds `txb.pure.id()` to pass ID pure values more intuitively
+- Updated dependencies [28c2c3330]
+- Updated dependencies [43444c58f]
+- Updated dependencies [8d1e74e52]
+- Updated dependencies [093554a0d]
+- Updated dependencies [3718a230b]
+  - @mysten/sui.js@0.46.0
+
+## 0.7.8
+
+### Patch Changes
+
+- Updated dependencies [30b47b758]
+  - @mysten/sui.js@0.45.1
+
+## 0.7.7
+
+### Patch Changes
+
+- Updated dependencies [b9afb5567]
+  - @mysten/sui.js@0.45.0
+
 ## 0.7.6
 
 ### Patch Changes

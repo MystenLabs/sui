@@ -38,13 +38,13 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 	const stakeIdParams = searchParams.get('staked');
 	const {
 		data: system,
-		isLoading: loadingValidators,
+		isPending: loadingValidators,
 		isError: errorValidators,
 	} = useSuiClientQuery('getLatestSuiSystemState');
 
 	const {
 		data: stakeData,
-		isLoading,
+		isPending,
 		isError,
 		error,
 	} = useGetDelegatedStake({
@@ -91,7 +91,7 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 		apy: null,
 	};
 
-	if (isLoading || loadingValidators) {
+	if (isPending || loadingValidators) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />
@@ -135,11 +135,14 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 				>
 					<div className="flex flex-col gap-3.5">
 						<div className="flex gap-2 items-center justify-between">
-							<div className="flex gap-1 items-baseline text-steel">
+							<div className="flex gap-1 items-center text-steel">
 								<Text variant="body" weight="medium" color="steel-darker">
 									Staking APY
 								</Text>
-								<IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
+								<IconTooltip
+									noFullWidth
+									tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future."
+								/>
 							</div>
 
 							<Text variant="body" weight="semibold" color="gray-90">
@@ -147,11 +150,14 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 							</Text>
 						</div>
 						<div className="flex gap-2 items-center justify-between">
-							<div className="flex gap-1 items-baseline text-steel">
+							<div className="flex gap-1 items-center text-steel">
 								<Text variant="body" weight="medium" color="steel-darker">
 									Stake Share
 								</Text>
-								<IconTooltip tip="The percentage of total stake managed by this validator" />
+								<IconTooltip
+									noFullWidth
+									tip="The percentage of total stake managed by this validator"
+								/>
 							</div>
 
 							<Text variant="body" weight="semibold" color="gray-90">
@@ -161,11 +167,14 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 
 						{!unstake && (
 							<div className="flex gap-2 items-center justify-between mb-3.5">
-								<div className="flex gap-1 items-baseline text-steel">
+								<div className="flex gap-1 items-center text-steel">
 									<Text variant="body" weight="medium" color="steel-darker">
 										Total Staked
 									</Text>
-									<IconTooltip tip="The total SUI staked on the network by this validator and its delegators, to validate the network and earn rewards." />
+									<IconTooltip
+										noFullWidth
+										tip="The total SUI staked on the network by this validator and its delegators, to validate the network and earn rewards."
+									/>
 								</div>
 								<StakeAmount balance={totalValidatorStake} variant="body" />
 							</div>

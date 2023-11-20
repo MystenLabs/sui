@@ -6,9 +6,8 @@ use clap;
 use move_command_line_common::parser::{parse_u256, parse_u64};
 use move_command_line_common::values::{ParsableValue, ParsedValue};
 use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
-use move_core_types::identifier::Identifier;
+use move_core_types::runtime_value::{MoveStruct, MoveValue};
 use move_core_types::u256::U256;
-use move_core_types::value::{MoveStruct, MoveValue};
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::SyntaxChoice;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
@@ -31,7 +30,7 @@ pub struct SuiRunArgs {
     pub summarize: bool,
 }
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, clap::Parser, Default)]
 pub struct SuiPublishArgs {
     #[clap(long = "sender")]
     pub sender: Option<String>,
@@ -49,6 +48,10 @@ pub struct SuiInitArgs {
     pub protocol_version: Option<u64>,
     #[clap(long = "max-gas")]
     pub max_gas: Option<u64>,
+    #[clap(long = "shared-object-deletion")]
+    pub shared_object_deletion: Option<bool>,
+    #[clap(long = "simulator")]
+    pub simulator: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -134,6 +137,16 @@ pub struct AdvanceClockCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct RunGraphqlCommand {
+    #[clap(long = "show-usage")]
+    pub show_usage: bool,
+    #[clap(long = "show-headers")]
+    pub show_headers: bool,
+    #[clap(long = "show-service-version")]
+    pub show_service_version: bool,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -155,6 +168,10 @@ pub enum SuiSubcommand {
     AdvanceEpoch,
     #[clap(name = "advance-clock")]
     AdvanceClock(AdvanceClockCommand),
+    #[clap(name = "view-checkpoint")]
+    ViewCheckpoint,
+    #[clap(name = "run-graphql")]
+    RunGraphql(RunGraphqlCommand),
 }
 
 #[derive(Clone, Debug)]
@@ -265,9 +282,9 @@ impl SuiValue {
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
         };
         let obj_res = if let Some(v) = version {
-            test_adapter.executor.get_object_by_key(&id, v)
+            sui_types::storage::ObjectStore::get_object_by_key(&*test_adapter.executor, &id, v)
         } else {
-            test_adapter.executor.get_object(&id)
+            sui_types::storage::ObjectStore::get_object(&*test_adapter.executor, &id)
         };
         let obj = match obj_res {
             Ok(Some(obj)) => obj,
@@ -376,20 +393,10 @@ impl ParsableValue for SuiExtraValueArgs {
         }
     }
 
-    fn concrete_struct(
-        _addr: move_core_types::account_address::AccountAddress,
-        _module: String,
-        _name: String,
-        values: std::collections::BTreeMap<String, Self::ConcreteValue>,
-    ) -> anyhow::Result<Self::ConcreteValue> {
-        Ok(SuiValue::MoveValue(MoveValue::Struct(
-            MoveStruct::WithFields(
-                values
-                    .into_iter()
-                    .map(|(f, v)| Ok((Identifier::new(f)?, v.assert_move_value())))
-                    .collect::<anyhow::Result<_>>()?,
-            ),
-        )))
+    fn concrete_struct(values: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue> {
+        Ok(SuiValue::MoveValue(MoveValue::Struct(MoveStruct(
+            values.into_iter().map(|v| v.assert_move_value()).collect(),
+        ))))
     }
 
     fn into_concrete_value(

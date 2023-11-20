@@ -23,7 +23,7 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
-use typed_store::rocks::TypedStoreError;
+use typed_store::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
@@ -106,7 +106,9 @@ where
     S: std::ops::Deref<Target = T>,
     T: AccumulatorReadStore,
 {
-    if protocol_config.simplified_unwrap_then_delete() {
+    if protocol_config.enable_effects_v2() {
+        accumulate_effects_v3(effects)
+    } else if protocol_config.simplified_unwrap_then_delete() {
         accumulate_effects_v2(store, effects)
     } else {
         accumulate_effects_v1(store, effects, protocol_config)
@@ -288,6 +290,36 @@ where
         })
         .collect();
     acc.remove_all(modified_at_digests);
+
+    acc
+}
+
+fn accumulate_effects_v3(effects: Vec<TransactionEffects>) -> Accumulator {
+    let mut acc = Accumulator::default();
+
+    // process insertions to the set
+    acc.insert_all(
+        effects
+            .iter()
+            .flat_map(|fx| {
+                fx.all_changed_objects()
+                    .into_iter()
+                    .map(|(object_ref, _, _)| object_ref.2)
+            })
+            .collect::<Vec<ObjectDigest>>(),
+    );
+
+    // process modified objects to the set
+    acc.remove_all(
+        effects
+            .iter()
+            .flat_map(|fx| {
+                fx.old_object_metadata()
+                    .into_iter()
+                    .map(|(object_ref, _owner)| object_ref.2)
+            })
+            .collect::<Vec<ObjectDigest>>(),
+    );
 
     acc
 }

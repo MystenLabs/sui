@@ -1136,6 +1136,7 @@ async fn sync_checkpoint_contents_from_archive<S>(
                         checkpoint_range,
                         txn_counter.clone(),
                         checkpoint_counter.clone(),
+                        true,
                     )
                     .await
                 {

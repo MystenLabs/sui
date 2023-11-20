@@ -6,7 +6,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use mysten_metrics::spawn_monitored_task;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
+    IntCounterVec, Registry,
+};
 use std::{io, sync::Arc};
 use sui_network::{
     api::{Validator, ValidatorServer},
@@ -85,14 +88,15 @@ impl AuthorityServer {
         consensus_address: Multiaddr,
     ) -> Self {
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient::new(consensus_address)),
+            Arc::new(LazyNarwhalClient::new(consensus_address)),
             state.name,
-            Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
             None,
             None,
             ConsensusAdapterMetrics::new_test(),
+            state.epoch_store_for_testing().protocol_config().clone(),
         ));
 
         let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
@@ -147,6 +151,8 @@ pub struct ValidatorServiceMetrics {
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
     num_rejected_cert_in_epoch_boundary: IntCounter,
+    num_rejected_tx_during_overload: IntCounterVec,
+    num_rejected_cert_during_overload: IntCounterVec,
 }
 
 impl ValidatorServiceMetrics {
@@ -202,6 +208,20 @@ impl ValidatorServiceMetrics {
             num_rejected_cert_in_epoch_boundary: register_int_counter_with_registry!(
                 "validator_service_num_rejected_cert_in_epoch_boundary",
                 "Number of rejected transaction certificate during epoch transitioning",
+                registry,
+            )
+            .unwrap(),
+            num_rejected_tx_during_overload: register_int_counter_vec_with_registry!(
+                "validator_service_num_rejected_tx_during_overload",
+                "Number of rejected transaction due to system overload",
+                &["error_type"],
+                registry,
+            )
+            .unwrap(),
+            num_rejected_cert_during_overload: register_int_counter_vec_with_registry!(
+                "validator_service_num_rejected_cert_during_overload",
+                "Number of rejected transaction certificate due to system overload",
+                &["error_type"],
                 registry,
             )
             .unwrap(),
@@ -306,7 +326,15 @@ impl ValidatorService {
             }
             .into()
         );
-        state.check_system_overload(&consensus_adapter, transaction.data())?;
+        let overload_check_res =
+            state.check_system_overload(&consensus_adapter, transaction.data());
+        if let Err(error) = overload_check_res {
+            metrics
+                .num_rejected_tx_during_overload
+                .with_label_values(&[error.as_ref()])
+                .inc();
+            return Err(error.into());
+        }
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
@@ -394,7 +422,15 @@ impl ValidatorService {
         );
 
         // Check system overload
-        state.check_system_overload(&consensus_adapter, certificate.data())?;
+        let overload_check_res =
+            state.check_system_overload(&consensus_adapter, certificate.data());
+        if let Err(error) = overload_check_res {
+            metrics
+                .num_rejected_cert_during_overload
+                .with_label_values(&[error.as_ref()])
+                .inc();
+            return Err(error.into());
+        }
 
         // code block within reconfiguration lock
         let certificate = {

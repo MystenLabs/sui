@@ -1,0 +1,24 @@
+//# publish
+
+module 0x42.Test {
+    public t(fr: &u64) {
+    label b0:
+        _ = move(fr);
+        return;
+     }
+}
+
+//# run
+module 0x42.m {
+
+import 0x42.Test;
+
+entry foo() {
+    let x: u64;
+label b0:
+    x = 0;
+    // arg type mismatch, no implicit freeze
+    Test.t(&mut x);
+    return;
+}
+}

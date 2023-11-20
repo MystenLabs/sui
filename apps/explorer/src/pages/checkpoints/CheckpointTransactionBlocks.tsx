@@ -20,13 +20,13 @@ export function CheckpointTransactionBlocks({ id }: { id: string }) {
 		limit,
 	);
 
-	const { data, isFetching, pagination, isLoading } = useCursorPagination(transactions);
+	const { data, isFetching, pagination, isPending } = useCursorPagination(transactions);
 
 	const cardData = data ? genTableDataFromTxData(data.data) : undefined;
 
 	return (
 		<div className="flex flex-col space-y-5 text-left xl:pr-10">
-			{isLoading || isFetching || !cardData ? (
+			{isPending || isFetching || !cardData ? (
 				<PlaceholderTable
 					rowCount={20}
 					rowHeight="16px"

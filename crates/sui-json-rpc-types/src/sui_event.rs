@@ -1,20 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::{Base58, Base64};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use mysten_metrics::monitored_scope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use serde_json::{json, Value};
+use serde_with::{serde_as, DisplayFromStr};
+use std::fmt;
+use std::fmt::Display;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::event::{Event, EventEnvelope, EventID};
 use sui_types::sui_serde::BigInt;
+
+use json_to_table::json_to_table;
+use tabled::settings::Style as TableStyle;
 
 use crate::{type_and_fields_from_move_struct, Page};
 use sui_types::sui_serde::SuiStructTag;
@@ -120,6 +124,57 @@ impl SuiEvent {
             timestamp_ms,
         })
     }
+}
+
+impl Display for SuiEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let parsed_json = &mut self.parsed_json.clone();
+        bytes_array_to_base64(parsed_json);
+        let mut table = json_to_table(parsed_json);
+        let style = TableStyle::modern();
+        table.collapse().with(style);
+        write!(f,
+            " ┌──\n │ EventID: {}:{}\n │ PackageID: {}\n │ Transaction Module: {}\n │ Sender: {}\n │ EventType: {}\n",
+            self.id.tx_digest, self.id.event_seq, self.package_id, self.transaction_module, self.sender, self.type_)?;
+        if let Some(ts) = self.timestamp_ms {
+            writeln!(f, " │ Timestamp: {}\n └──", ts)?;
+        }
+        writeln!(f, " │ ParsedJSON:")?;
+        let table_string = table.to_string();
+        let table_rows = table_string.split_inclusive('\n');
+        for r in table_rows {
+            write!(f, " │   {r}")?;
+        }
+
+        write!(f, "\n └──")
+    }
+}
+
+/// Convert a json array of bytes to Base64
+fn bytes_array_to_base64(v: &mut Value) {
+    match v {
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => (),
+        Value::Array(vals) => {
+            if let Some(vals) = vals.iter().map(try_into_byte).collect::<Option<Vec<_>>>() {
+                *v = json!(Base64::from_bytes(&vals).encoded())
+            } else {
+                for val in vals {
+                    bytes_array_to_base64(val)
+                }
+            }
+        }
+        Value::Object(map) => {
+            for val in map.values_mut() {
+                bytes_array_to_base64(val)
+            }
+        }
+    }
+}
+
+/// Try to convert a json Value object into an u8.
+fn try_into_byte(v: &Value) -> Option<u8> {
+    let num = v.as_u64()?;
+    (num <= 255).then_some(num as u8)
 }
 
 #[serde_as]

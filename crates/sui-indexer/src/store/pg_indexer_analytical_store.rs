@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::time::Duration;
+use tap::tap::TapFallible;
+use tracing::error;
 
 use async_trait::async_trait;
 use core::result::Result::Ok;
-use diesel::dsl::{count, max};
+use diesel::dsl::count;
 use diesel::upsert::excluded;
 use diesel::ExpressionMethods;
 use diesel::{QueryDsl, RunQueryDsl};
@@ -18,21 +20,21 @@ use crate::models_v2::move_call_metrics::{
     build_move_call_metric_query, QueriedMoveCallMetrics, QueriedMoveMetrics, StoredMoveCall,
     StoredMoveCallMetrics,
 };
-use crate::models_v2::network_metrics::{RowCountEstimation, StoredNetworkMetrics};
-use crate::models_v2::transactions::StoredTransaction;
+use crate::models_v2::network_metrics::{StoredEpochPeakTps, Tps};
+use crate::models_v2::transactions::{
+    StoredTransactionCheckpoint, StoredTransactionSuccessCommandCount, StoredTransactionTimestamp,
+};
 use crate::models_v2::tx_count_metrics::StoredTxCountMetrics;
 use crate::models_v2::tx_indices::{StoredTxCalls, StoredTxRecipients, StoredTxSenders};
 use crate::schema_v2::{
-    active_addresses, address_metrics, addresses, checkpoints, move_call_metrics, move_calls,
-    network_metrics, transactions, tx_calls, tx_count_metrics, tx_recipients, tx_senders,
+    active_addresses, address_metrics, addresses, checkpoints, epoch_peak_tps, move_call_metrics,
+    move_calls, transactions, tx_calls, tx_count_metrics, tx_recipients, tx_senders,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::types_v2::IndexerResult;
 use crate::PgConnectionPool;
 
 use super::IndexerAnalyticalStore;
-
-const PG_COMMIT_CHUNK_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct PgIndexerAnalyticalStore {
@@ -73,44 +75,66 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(cps)
     }
 
-    async fn get_transactions_in_checkpoint_range(
+    async fn get_tx_timestamps_in_checkpoint_range(
         &self,
         start_checkpoint: i64,
         end_checkpoint: i64,
-    ) -> IndexerResult<Vec<StoredTransaction>> {
-        let tx_batch = read_only_blocking!(&self.blocking_cp, |conn| {
+    ) -> IndexerResult<Vec<StoredTransactionTimestamp>> {
+        let tx_timestamps = read_only_blocking!(&self.blocking_cp, |conn| {
             transactions::dsl::transactions
                 .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
                 .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
                 .order(transactions::dsl::tx_sequence_number.asc())
-                .load::<StoredTransaction>(conn)
+                .select((
+                    transactions::dsl::tx_sequence_number,
+                    transactions::dsl::timestamp_ms,
+                ))
+                .load::<StoredTransactionTimestamp>(conn)
         })
-        .context("Failed reading transactions from PostgresDB")?;
-        Ok(tx_batch)
+        .context("Failed reading transaction timestamps from PostgresDB")?;
+        Ok(tx_timestamps)
     }
 
-    async fn get_peak_network_peak_tps(&self, epoch: i64, day: i64) -> IndexerResult<f64> {
-        let peak_tps = read_only_blocking!(&self.blocking_cp, |conn| {
-            network_metrics::dsl::network_metrics
-                .filter(network_metrics::epoch.ge(epoch - day))
-                .select(max(network_metrics::real_time_tps))
-                .first::<Option<f64>>(conn)
+    async fn get_tx_checkpoints_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionCheckpoint>> {
+        let tx_checkpoints = read_only_blocking!(&self.blocking_cp, |conn| {
+            transactions::dsl::transactions
+                .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
+                .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
+                .order(transactions::dsl::tx_sequence_number.asc())
+                .select((
+                    transactions::dsl::tx_sequence_number,
+                    transactions::dsl::checkpoint_sequence_number,
+                ))
+                .load::<StoredTransactionCheckpoint>(conn)
         })
-        .context("Failed reading peak tps from PostgresDB")?;
-        Ok(peak_tps.unwrap_or(0.0))
+        .context("Failed reading transaction checkpoints from PostgresDB")?;
+        Ok(tx_checkpoints)
     }
 
-    async fn get_estimated_count(&self, table: &str) -> IndexerResult<i64> {
-        let row_count_estimation = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(format!("ANALYZE {};", table)).execute(conn)?;
-            diesel::sql_query(format!(
-                "SELECT reltuples::bigint AS estimated_count FROM pg_class WHERE relname='{}';",
-                table
-            ))
-            .get_result::<RowCountEstimation>(conn)
+    async fn get_tx_success_cmd_counts_in_checkpoint_range(
+        &self,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
+    ) -> IndexerResult<Vec<StoredTransactionSuccessCommandCount>> {
+        let tx_success_cmd_counts = read_only_blocking!(&self.blocking_cp, |conn| {
+            transactions::dsl::transactions
+                .filter(transactions::dsl::checkpoint_sequence_number.ge(start_checkpoint))
+                .filter(transactions::dsl::checkpoint_sequence_number.lt(end_checkpoint))
+                .order(transactions::dsl::tx_sequence_number.asc())
+                .select((
+                    transactions::dsl::tx_sequence_number,
+                    transactions::dsl::checkpoint_sequence_number,
+                    transactions::dsl::success_command_count,
+                    transactions::dsl::timestamp_ms,
+                ))
+                .load::<StoredTransactionSuccessCommandCount>(conn)
         })
-        .context("Failed reading estimated count from PostgresDB")?;
-        Ok(row_count_estimation.estimated_count)
+        .context("Failed reading transaction success command counts from PostgresDB")?;
+        Ok(tx_success_cmd_counts)
     }
 
     async fn get_latest_tx_count_metrics(&self) -> IndexerResult<StoredTxCountMetrics> {
@@ -123,16 +147,27 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(latest_tx_count)
     }
 
+    async fn get_latest_epoch_peak_tps(&self) -> IndexerResult<StoredEpochPeakTps> {
+        let latest_network_metrics = read_only_blocking!(&self.blocking_cp, |conn| {
+            epoch_peak_tps::dsl::epoch_peak_tps
+                .order(epoch_peak_tps::dsl::epoch.desc())
+                .first::<StoredEpochPeakTps>(conn)
+        })
+        .context("Failed reading latest epoch peak TPS from PostgresDB")?;
+        Ok(latest_network_metrics)
+    }
+
     async fn persist_tx_count_metrics(
         &self,
-        tx_count_metrics: StoredTxCountMetrics,
+        start_checkpoint: i64,
+        end_checkpoint: i64,
     ) -> IndexerResult<()> {
+        let tx_count_query = construct_checkpoint_tx_count_query(start_checkpoint, end_checkpoint);
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                diesel::insert_into(tx_count_metrics::table)
-                    .values(tx_count_metrics.clone())
-                    .execute(conn)
+                diesel::sql_query(tx_count_query.clone()).execute(conn)?;
+                Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
         )
@@ -140,20 +175,40 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
-    async fn persist_network_metrics(
-        &self,
-        network_metrics: StoredNetworkMetrics,
-    ) -> IndexerResult<()> {
+    async fn persist_epoch_peak_tps(&self, epoch: i64) -> IndexerResult<()> {
+        let epoch_peak_tps_query = construct_peak_tps_query(epoch, 1);
+        let peak_tps_30d_query = construct_peak_tps_query(epoch, 30);
+        let epoch_tps: Tps = read_only_blocking!(&self.blocking_cp, |conn|
+            // diesel::sql_query(epoch_peak_tps_query).first::<Option<f64>>(conn).map(|x| x.unwrap_or(0.0))
+            diesel::RunQueryDsl::get_result(
+                diesel::sql_query(epoch_peak_tps_query),
+                conn
+            ))
+        .context("Failed reading epoch peak TPS from PostgresDB")?;
+        let tps_30d: Tps = read_only_blocking!(&self.blocking_cp, |conn|
+            // diesel::sql_query(peak_tps_30d_query).first::<Option<f64>>(conn).map(|x| x.unwrap_or(0.0))
+            diesel::RunQueryDsl::get_result(
+                diesel::sql_query(peak_tps_30d_query),
+                conn
+            ))
+        .context("Failed reading 30d peak TPS from PostgresDB")?;
+
+        let epoch_peak_tps = StoredEpochPeakTps {
+            epoch,
+            peak_tps: epoch_tps.peak_tps,
+            peak_tps_30d: tps_30d.peak_tps,
+        };
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                diesel::insert_into(network_metrics::table)
-                    .values(network_metrics.clone())
+                diesel::insert_into(epoch_peak_tps::table)
+                    .values(epoch_peak_tps.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
         )
-        .context("Failed persisting network metrics to PostgresDB")?;
+        .context("Failed persisting epoch peak TPS to PostgresDB.")?;
         Ok(())
     }
 
@@ -199,23 +254,20 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(recipients)
     }
 
-    async fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()> {
+    fn persist_addresses(&self, addresses: Vec<StoredAddress>) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for address_chunk in addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(addresses::table)
-                        .values(address_chunk)
-                        .on_conflict(addresses::address)
-                        .do_update()
-                        .set((
-                            addresses::last_appearance_time
-                                .eq(excluded(addresses::last_appearance_time)),
-                            addresses::last_appearance_tx
-                                .eq(excluded(addresses::last_appearance_tx)),
-                        ))
-                        .execute(conn)?;
-                }
+                diesel::insert_into(addresses::table)
+                    .values(addresses.clone())
+                    .on_conflict(addresses::address)
+                    .do_update()
+                    .set((
+                        addresses::last_appearance_time
+                            .eq(excluded(addresses::last_appearance_time)),
+                        addresses::last_appearance_tx.eq(excluded(addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -224,26 +276,24 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(())
     }
 
-    async fn persist_active_addresses(
+    fn persist_active_addresses(
         &self,
         active_addresses: Vec<StoredActiveAddress>,
     ) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for active_address_chunk in active_addresses.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(active_addresses::table)
-                        .values(active_address_chunk)
-                        .on_conflict(active_addresses::address)
-                        .do_update()
-                        .set((
-                            active_addresses::last_appearance_time
-                                .eq(excluded(active_addresses::last_appearance_time)),
-                            active_addresses::last_appearance_tx
-                                .eq(excluded(active_addresses::last_appearance_tx)),
-                        ))
-                        .execute(conn)?;
-                }
+                diesel::insert_into(active_addresses::table)
+                    .values(active_addresses.clone())
+                    .on_conflict(active_addresses::address)
+                    .do_update()
+                    .set((
+                        active_addresses::last_appearance_time
+                            .eq(excluded(active_addresses::last_appearance_time)),
+                        active_addresses::last_appearance_tx
+                            .eq(excluded(active_addresses::last_appearance_tx)),
+                    ))
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -296,6 +346,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             |conn| {
                 diesel::insert_into(address_metrics::table)
                     .values(address_metrics.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
@@ -330,15 +381,14 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         Ok(move_calls)
     }
 
-    async fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()> {
+    fn persist_move_calls(&self, move_calls: Vec<StoredMoveCall>) -> IndexerResult<()> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for move_call_chunk in move_calls.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(move_calls::table)
-                        .values(move_call_chunk)
-                        .execute(conn)?;
-                }
+                diesel::insert_into(move_calls::table)
+                    .values(move_calls.clone())
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
@@ -356,27 +406,47 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         let move_call_query_7d = build_move_call_metric_query(epoch, 7);
         let move_call_query_30d = build_move_call_metric_query(epoch, 30);
 
-        let move_call_metrics_3d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-        let move_call_metrics_7d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-        let move_call_metrics_30d = read_only_blocking!(&self.blocking_cp, |conn| {
-            diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
-        })?;
-
-        let chained = move_call_metrics_3d
+        let mut calculate_tasks = vec![];
+        let blocking_cp_3d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_3d, |conn| {
+                diesel::sql_query(move_call_query_3d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let blocking_cp_7d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_7d, |conn| {
+                diesel::sql_query(move_call_query_7d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let blocking_cp_30d = self.blocking_cp.clone();
+        calculate_tasks.push(tokio::task::spawn_blocking(move || {
+            read_only_blocking!(&blocking_cp_30d, |conn| {
+                diesel::sql_query(move_call_query_30d).get_results::<QueriedMoveMetrics>(conn)
+            })
+        }));
+        let chained = futures::future::join_all(calculate_tasks)
+            .await
             .into_iter()
-            .chain(move_call_metrics_7d)
-            .chain(move_call_metrics_30d)
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
+                error!("Error joining move call calculation tasks: {:?}", e);
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
+                error!("Error calculating move call metrics: {:?}", e);
+            })?
+            .into_iter()
+            .flatten()
             .collect::<Vec<_>>();
+
         let move_call_metrics: Vec<StoredMoveCallMetrics> = chained
             .into_iter()
             .filter_map(|queried_move_metrics| {
                 let package = ObjectID::from_bytes(queried_move_metrics.move_package.clone()).ok();
                 let package_str = match package {
-                    Some(p) => p.to_string(),
+                    Some(p) => p.to_canonical_string(/* with_prefix */ true),
                     None => {
                         tracing::error!(
                             "Failed to parse move package ID: {:?}",
@@ -409,6 +479,7 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
             |conn| {
                 diesel::insert_into(move_call_metrics::table)
                     .values(move_call_metrics.clone())
+                    .on_conflict_do_nothing()
                     .execute(conn)
             },
             Duration::from_secs(60)
@@ -416,4 +487,62 @@ impl IndexerAnalyticalStore for PgIndexerAnalyticalStore {
         .context("Failed persisting move call metrics to PostgresDB")?;
         Ok(())
     }
+}
+
+fn construct_checkpoint_tx_count_query(start_checkpoint: i64, end_checkpoint: i64) -> String {
+    format!(
+        "With filtered_txns AS (
+            SELECT 
+                t.checkpoint_sequence_number,
+                c.epoch,
+                t.timestamp_ms,
+                t.success_command_count
+            FROM transactions t
+            LEFT JOIN checkpoints c
+            ON t.checkpoint_sequence_number = c.sequence_number
+            WHERE t.checkpoint_sequence_number >= {} AND t.checkpoint_sequence_number <= {}
+          )
+          SELECT 
+            checkpoint_sequence_number,
+            epoch,
+            MAX(timestamp_ms) AS timestamp_ms,
+            COUNT(*) AS total_transaction_blocks,
+            SUM(CASE WHEN success_command_count > 0 THEN 1 ELSE 0 END) AS total_successful_transaction_blocks,
+            SUM(success_command_count) AS total_successful_transactions
+          FROM filtered_txns
+          GROUP BY checkpoint_sequence_number, epoch ORDER BY checkpoint_sequence_number;
+        ", start_checkpoint, end_checkpoint
+    )
+}
+
+fn construct_peak_tps_query(epoch: i64, offset: i64) -> String {
+    format!(
+        "WITH filtered_checkpoints AS (
+            SELECT
+              MAX(checkpoint_sequence_number) AS checkpoint_sequence_number,
+              SUM(total_successful_transactions) AS total_successful_transactions,
+              timestamp_ms
+            FROM
+              tx_count_metrics
+              WHERE epoch > ({} - {})
+            GROUP BY
+              timestamp_ms
+          ),
+          tps_data AS (
+            SELECT
+              checkpoint_sequence_number,
+              total_successful_transactions,
+              timestamp_ms - LAG(timestamp_ms) OVER (ORDER BY timestamp_ms) AS time_diff
+            FROM 
+              filtered_checkpoints
+          )
+          SELECT 
+            MAX(total_successful_transactions * 1000.0 / time_diff)::float8 as peak_tps
+          FROM 
+            tps_data
+          WHERE 
+            time_diff IS NOT NULL;
+        ",
+        epoch, offset
+    )
 }

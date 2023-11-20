@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError};
+use async_graphql::{ErrorExtensionValues, ErrorExtensions, Pos, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
 use sui_json_rpc::name_service::DomainParseError;
@@ -14,6 +14,7 @@ use crate::context_data::db_data_provider::DbValidationError;
 pub(crate) mod code {
     pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
+    pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
 }
 
@@ -44,8 +45,27 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
     }
 }
 
+pub(crate) fn graphql_error_at_pos(
+    code: &str,
+    message: impl Into<String>,
+    pos: Pos,
+) -> ServerError {
+    let mut ext = ErrorExtensionValues::default();
+    ext.set("code", code);
+
+    ServerError {
+        message: message.into(),
+        source: None,
+        locations: vec![pos],
+        path: vec![],
+        extensions: Some(ext),
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("This query is unavailable through address. Please try again with the object or owner type.")]
+    DynamicFieldOnAddress,
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
     ProtocolVersionUnsupported(u64, u64),
     #[error("Invalid filter option or value provided")]
@@ -79,7 +99,8 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::InvalidFilter
+            Error::DynamicFieldOnAddress
+            | Error::InvalidFilter
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)

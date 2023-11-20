@@ -33,7 +33,6 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 tokio.workspace = true
-typed-store.workspace = true
 
 sui-config.workspace = true
 sui-core.workspace = true

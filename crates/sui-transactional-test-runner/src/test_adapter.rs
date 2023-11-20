@@ -3,13 +3,13 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
+use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
-use fastcrypto::traits::KeyPair;
-use move_binary_format::{file_format::CompiledScript, CompiledModule};
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
@@ -21,11 +21,12 @@ use move_compiler::{
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    value::MoveStruct,
 };
 use move_symbol_pool::Symbol;
+use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
@@ -42,37 +43,38 @@ use std::{
 };
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
-use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::config::ConnectionConfig;
+use sui_graphql_rpc::test_infra::cluster::serve_executor;
+use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
+use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
-use sui_json_rpc_types::{
-    DevInspectResults, EventFilter, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
-};
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
+use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
+use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::get_authority_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
+use sui_types::DEEPBOOK_ADDRESS;
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
+use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
+    base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
-    object::{self, Object, ObjectFormatOptions},
-    object::{MoveObject, Owner},
+    object::{self, Object},
     transaction::{Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction},
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
-use sui_types::{id::UID, DEEPBOOK_ADDRESS};
 use sui_types::{
     move_package::MovePackage,
     transaction::{Argument, CallArg},
@@ -106,6 +108,8 @@ const RNG_SEED: [u8; 32] = [
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
+const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
+
 pub struct SuiTestAdapter<'a> {
     pub(crate) compiled_state: CompiledState<'a>,
     /// For upgrades: maps an upgraded package name to the original package name.
@@ -117,13 +121,15 @@ pub struct SuiTestAdapter<'a> {
     next_fake: (u64, u64),
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
+    is_simulator: bool,
+    pub(crate) cluster: Option<ExecutorCluster>,
     pub(crate) executor: Box<dyn TransactionalAdapter>,
 }
 
 pub(crate) struct StagedPackage {
     file: NamedTempFile,
     syntax: SyntaxChoice,
-    modules: Vec<(Option<Symbol>, CompiledModule)>,
+    modules: Vec<MaybeNamedCompiledModule>,
     pub(crate) digest: Vec<u8>,
 }
 
@@ -143,77 +149,6 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
-}
-
-static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
-static GENESIS_PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> =
-    Lazy::new(ProtocolConfig::get_for_min_version);
-
-struct Genesis {
-    pub objects: Vec<Object>,
-    pub packages: Vec<Object>,
-    pub modules: Vec<Vec<CompiledModule>>,
-}
-
-pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
-    GENESIS.modules.clone()
-}
-
-pub fn clone_genesis_objects() -> Vec<Object> {
-    GENESIS.objects.clone()
-}
-
-fn genesis_module_objects_for_protocol_version(protocol_version: ProtocolVersion) -> Vec<Object> {
-    if protocol_version == ProtocolVersion::max() {
-        return GENESIS.packages.clone();
-    }
-    sui_framework_snapshot::load_bytecode_snapshot(protocol_version.as_u64())
-        .expect("Unable to load bytecode snapshot")
-        .into_iter()
-        .map(|pkg| pkg.genesis_object())
-        .collect()
-}
-
-/// Create and return objects wrapping the genesis modules for sui
-fn create_genesis_module_objects() -> Genesis {
-    Genesis {
-        objects: vec![create_clock()],
-        packages: BuiltInFramework::genesis_objects().collect(),
-        modules: BuiltInFramework::iter_system_packages()
-            .map(|p| p.modules())
-            .collect(),
-    }
-}
-
-fn create_clock() -> Object {
-    // SAFETY: unwrap safe because genesis objects should be serializable
-    let contents = bcs::to_bytes(&Clock {
-        id: UID::new(SUI_CLOCK_OBJECT_ID),
-        timestamp_ms: 0,
-    })
-    .unwrap();
-
-    // SAFETY: Whether `Clock` has public transfer or not is statically known, and unwrap safe
-    // because genesis objects should never exceed max size
-    let move_object = unsafe {
-        let has_public_transfer = false;
-        MoveObject::new_from_execution(
-            Clock::type_().into(),
-            has_public_transfer,
-            SUI_CLOCK_OBJECT_SHARED_VERSION,
-            contents,
-            &GENESIS_PROTOCOL_CONSTANTS,
-        )
-        .unwrap()
-    };
-
-    Object::new_move(
-        move_object,
-        Owner::Shared {
-            initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-        },
-        TransactionDigest::genesis(),
-    )
 }
 
 #[async_trait]
@@ -242,90 +177,75 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             )>,
         >,
     ) -> (Self, Option<String>) {
-        let mut rng = StdRng::from_seed(RNG_SEED);
+        let rng = StdRng::from_seed(RNG_SEED);
         assert!(
             pre_compiled_deps.is_some(),
             "Must populate 'pre_compiled_deps' with Sui framework"
         );
-        let (additional_mapping, account_names, protocol_config) = match task_opt.map(|t| t.command)
-        {
-            Some((
-                InitCommand { named_addresses },
-                SuiInitArgs {
-                    accounts,
-                    protocol_version,
-                    max_gas,
-                },
-            )) => {
-                let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                let accounts = accounts
-                    .map(|v| v.into_iter().collect::<BTreeSet<_>>())
-                    .unwrap_or_default();
-                let mut protocol_config = if let Some(protocol_version) = protocol_version {
-                    ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
-                } else {
-                    ProtocolConfig::get_for_max_version_UNSAFE()
-                };
-                if let Some(mx_tx_gas_override) = max_gas {
-                    protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+
+        // Unpack the init arguments
+        let (additional_mapping, account_names, protocol_config, is_simulator) =
+            match task_opt.map(|t| t.command) {
+                Some((
+                    InitCommand { named_addresses },
+                    SuiInitArgs {
+                        accounts,
+                        protocol_version,
+                        max_gas,
+                        shared_object_deletion,
+                        simulator,
+                    },
+                )) => {
+                    let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
+                    let accounts = accounts
+                        .map(|v| v.into_iter().collect::<BTreeSet<_>>())
+                        .unwrap_or_default();
+
+                    let mut protocol_config = if let Some(protocol_version) = protocol_version {
+                        ProtocolConfig::get_for_version(protocol_version.into(), Chain::Unknown)
+                    } else {
+                        ProtocolConfig::get_for_max_version_UNSAFE()
+                    };
+                    if let Some(enable) = shared_object_deletion {
+                        protocol_config.set_shared_object_deletion(enable);
+                    }
+                    if let Some(mx_tx_gas_override) = max_gas {
+                        if simulator {
+                            panic!("Cannot set max gas in simulator mode");
+                        }
+                        protocol_config.set_max_tx_gas_for_testing(mx_tx_gas_override)
+                    }
+                    (map, accounts, protocol_config, simulator)
                 }
-                (map, accounts, protocol_config)
-            }
-            None => (
-                BTreeMap::new(),
-                BTreeSet::new(),
-                ProtocolConfig::get_for_max_version_UNSAFE(),
-            ),
-        };
-
-        let mut named_address_mapping = NAMED_ADDRESSES.clone();
-
-        let mut objects = genesis_module_objects_for_protocol_version(protocol_config.version);
-        objects.extend(clone_genesis_objects());
-        let mut account_objects = BTreeMap::new();
-        let mut accounts = BTreeMap::new();
-        let mut mk_account = || {
-            let (address, key_pair) = get_key_pair_from_rng(&mut rng);
-            let obj = Object::with_id_owner_gas_for_testing(
-                ObjectID::new(rng.gen()),
-                address,
-                GAS_FOR_TESTING,
-            );
-            let test_account = TestAccount {
-                address,
-                key_pair,
-                gas: obj.id(),
+                None => {
+                    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+                    (BTreeMap::new(), BTreeSet::new(), protocol_config, false)
+                }
             };
-            objects.push(obj);
-            test_account
+
+        let (
+            executor,
+            AccountSetup {
+                default_account,
+                accounts,
+                named_address_mapping,
+                objects,
+                account_objects,
+            },
+            cluster,
+        ) = if is_simulator {
+            init_sim_executor(rng, account_names, additional_mapping, &protocol_config).await
+        } else {
+            init_val_fullnode_executor(rng, account_names, additional_mapping, &protocol_config)
+                .await
         };
-        for n in account_names {
-            let test_account = mk_account();
-            account_objects.insert(n.clone(), test_account.gas);
-            accounts.insert(n, test_account);
-        }
-        let default_account = mk_account();
-        let additional_mapping =
-            additional_mapping
-                .into_iter()
-                .chain(accounts.iter().map(|(n, test_account)| {
-                    let addr =
-                        NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
-                    (n.clone(), addr)
-                }));
-        for (name, addr) in additional_mapping {
-            if named_address_mapping.contains_key(&name) || name == "sui" {
-                panic!("Invalid init. The named address '{}' is reserved", name)
-            }
-            named_address_mapping.insert(name, addr);
-        }
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
 
-        let executor = create_val_fullnode_executor(&protocol_config, &objects).await;
-
         let mut test_adapter = Self {
-            executor: Box::new(executor),
+            is_simulator,
+            cluster,
+            executor,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -345,6 +265,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             gas_price: 1000,
             staged_modules: BTreeMap::new(),
         };
+
         for well_known in WELL_KNOWN_OBJECTS.iter().copied() {
             test_adapter
                 .object_enumeration
@@ -371,23 +292,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
     async fn publish_modules(
         &mut self,
-        modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
+        modules: Vec<MaybeNamedCompiledModule>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
+    ) -> anyhow::Result<(Option<String>, Vec<MaybeNamedCompiledModule>)> {
         self.next_task();
         let SuiPublishArgs {
             sender,
             upgradeable,
             dependencies,
         } = extra;
-        let named_addr_opt = modules.first().unwrap().0;
-        let first_module_name = modules.first().unwrap().1.self_id().name().to_string();
+        let named_addr_opt = modules.first().unwrap().named_address;
+        let first_module_name = modules.first().unwrap().module.self_id().name().to_string();
         let modules_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes).unwrap();
+                m.module.serialize(&mut module_bytes).unwrap();
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<_>>()?;
@@ -461,11 +382,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .unwrap()
             .serialized_module_map()
             .iter()
-            .map(|(_, published_module_bytes)| {
-                (
-                    named_addr_opt,
-                    CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
-                )
+            .map(|(_, published_module_bytes)| MaybeNamedCompiledModule {
+                named_address: named_addr_opt,
+                module: CompiledModule::deserialize_with_defaults(published_module_bytes).unwrap(),
+                source_map: None,
             })
             .collect();
         Ok((output, published_modules))
@@ -518,28 +438,6 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         Ok((output, empty))
     }
 
-    async fn execute_script(
-        &mut self,
-        _script: CompiledScript,
-        _type_args: Vec<TypeTag>,
-        _signers: Vec<ParsedAddress>,
-        _args: Vec<SuiValue>,
-        _gas_budget: Option<u64>,
-        _extra: Self::ExtraRunArgs,
-    ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
-        bail!("Scripts are not supported")
-    }
-
-    async fn view_data(
-        &mut self,
-        _address: AccountAddress,
-        _module: &ModuleId,
-        _resource: &IdentStr,
-        _type_args: Vec<TypeTag>,
-    ) -> anyhow::Result<String> {
-        bail!("Resource viewing is not supported")
-    }
-
     async fn handle_subcommand(
         &mut self,
         task: TaskInput<Self::Subcommand>,
@@ -576,13 +474,54 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::RunGraphql(RunGraphqlCommand {
+                show_usage,
+                show_headers,
+                show_service_version,
+            }) => {
+                let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
+                let contents = std::fs::read_to_string(file.path())?;
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+                cluster
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
+                    .await;
+
+                let resp = cluster
+                    .graphql_client
+                    .execute_to_graphql(contents.trim().to_owned(), show_usage, vec![], vec![])
+                    .await?;
+
+                let mut output = vec![];
+                if show_headers {
+                    output.push(format!("Headers: {:#?}", resp.http_headers_without_date()));
+                }
+                if show_service_version {
+                    output.push(format!("Service version: {}", resp.graphql_version()?));
+                }
+                output.push(format!("Response: {}", resp.response_body_json_pretty()));
+
+                Ok(Some(output.join("\n")))
+            }
+            SuiSubcommand::ViewCheckpoint => {
+                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
+                let chk = self
+                    .executor
+                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                Ok(Some(format!("{}", chk.data())))
+            }
             SuiSubcommand::CreateCheckpoint => {
                 self.executor.create_checkpoint().await?;
-                Ok(None)
+                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
+                Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
             SuiSubcommand::AdvanceEpoch => {
                 self.executor.advance_epoch().await?;
-                Ok(None)
+                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
+                let chk = self
+                    .executor
+                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                Ok(Some(format!("Epoch advanced: {}", chk.data().epoch)))
             }
             SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
                 self.executor
@@ -595,11 +534,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
-                        let layout = move_obj
-                            .get_layout(ObjectFormatOptions::default(), &&*self)
-                            .unwrap();
+                        let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+
                         self.stabilize_str(format!(
                             "Owner: {}\nVersion: {}\nContents: {}",
                             &obj.owner,
@@ -667,6 +605,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 dev_inspect,
                 inputs,
             }) => {
+                if dev_inspect && self.is_simulator() {
+                    bail!("Dev inspect is not supported on simulator mode");
+                }
+
                 let inputs = self.compiled_state().resolve_args(inputs)?;
                 let inputs: Vec<CallArg> = inputs
                     .into_iter()
@@ -688,9 +630,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                     .get(&Symbol::from(p))?
                                     .modules
                                     .iter()
-                                    .map(|(_n, m)| {
+                                    .map(|m| {
                                         let mut buf = vec![];
-                                        m.serialize(&mut buf).unwrap();
+                                        m.module.serialize(&mut buf).unwrap();
                                         buf
                                     })
                                     .collect();
@@ -800,7 +742,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                 .unwrap_or_else(|| panic!("Internal error: expected dependency {name} in map when restoring address."));
                         }
 
-                        let upgraded_name = modules.first().unwrap().0.unwrap();
+                        let upgraded_name = modules.first().unwrap().named_address.unwrap();
                         let package = &Symbol::from(package.as_str());
                         let original_name = adapter
                             .package_upgrade_mapping
@@ -859,11 +801,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 )
                 .await?;
                 assert!(!modules.is_empty());
-                let Some(package_name) = modules.first().unwrap().0 else {
+                let Some(package_name) = modules.first().unwrap().named_address else {
                     bail!("Staged modules must have a named address")
                 };
-                for (named_addr, _) in &modules {
-                    let Some(named_addr) = named_addr else {
+                for m in &modules {
+                    let Some(named_addr) = &m.named_address else {
                         bail!("Staged modules must have a named address")
                     };
                     if named_addr != &package_name {
@@ -877,9 +819,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     self.get_dependency_ids(dependencies, /* include_std */ true)?;
                 let module_bytes = modules
                     .iter()
-                    .map(|(_, m)| {
+                    .map(|m| {
                         let mut buf = vec![];
-                        m.serialize(&mut buf).unwrap();
+                        m.module.serialize(&mut buf).unwrap();
                         buf
                     })
                     .collect::<Vec<_>>();
@@ -921,7 +863,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                                         published_module_bytes,
                                     )
                                     .unwrap();
-                                    (Some(*address_sym), module)
+                                    MaybeNamedCompiledModule {
+                                        named_address: Some(*address_sym),
+                                        module,
+                                        source_map: None,
+                                    }
                                 })
                                 .collect()
                         });
@@ -971,10 +917,22 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
 }
 
 impl<'a> SuiTestAdapter<'a> {
+    pub fn is_simulator(&self) -> bool {
+        self.is_simulator
+    }
+
+    pub fn executor(&self) -> &dyn TransactionalAdapter {
+        &*self.executor
+    }
+
+    pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
+        self.executor
+    }
+
     async fn upgrade_package(
         &mut self,
         before_upgrade: NumericalAddress,
-        modules: &[(Option<Symbol>, CompiledModule)],
+        modules: &[MaybeNamedCompiledModule],
         upgrade_capability: FakeID,
         dependencies: Vec<String>,
         sender: String,
@@ -983,9 +941,9 @@ impl<'a> SuiTestAdapter<'a> {
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
-            .map(|(_, module)| {
+            .map(|m| {
                 let mut module_bytes = vec![];
-                module.serialize(&mut module_bytes)?;
+                m.module.serialize(&mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -1045,7 +1003,7 @@ impl<'a> SuiTestAdapter<'a> {
             })
             .unwrap();
         let package_addr = NumericalAddress::new(created_package.into_bytes(), NumberFormat::Hex);
-        if let Some(new_package_name) = modules[0].0 {
+        if let Some(new_package_name) = modules[0].named_address {
             let prev_package = self
                 .compiled_state
                 .named_address_mapping
@@ -1147,17 +1105,8 @@ impl<'a> SuiTestAdapter<'a> {
             ExecutionStatus::Success { .. } => {
                 let events = self
                     .executor
-                    .query_events(
-                        EventFilter::Transaction(*digest),
-                        None,
-                        *QUERY_MAX_RESULT_LIMIT,
-                        /* descending */ false,
-                    )
-                    .await
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|sui_event| sui_event.into())
-                    .collect();
+                    .query_tx_events_asc(digest, *QUERY_MAX_RESULT_LIMIT)
+                    .await?;
                 Ok(TxnSummary {
                     events,
                     gas_summary: gas_summary.clone(),
@@ -1171,10 +1120,7 @@ impl<'a> SuiTestAdapter<'a> {
             }
             ExecutionStatus::Failure { error, command } => {
                 let execution_msg = if with_shared {
-                    format!(
-                        "Cannot return execution error with shared objects. \
-                        Debug of error: {error:?} at command {command:?}"
-                    )
+                    format!("Debug of error: {error:?} at command {command:?}")
                 } else {
                     format!("Execution Error: {}", error_opt.unwrap())
                 };
@@ -1260,9 +1206,9 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn get_object(&self, id: &ObjectID, version: Option<SequenceNumber>) -> anyhow::Result<Object> {
         let obj_res = if let Some(v) = version {
-            self.executor.get_object_by_key(id, v)
+            sui_types::storage::ObjectStore::get_object_by_key(&*self.executor, id, v)
         } else {
-            self.executor.get_object(id)
+            sui_types::storage::ObjectStore::get_object(&*self.executor, id)
         };
         match obj_res {
             Ok(Some(obj)) => Ok(obj),
@@ -1550,7 +1496,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
     let sui_system_sources = {
@@ -1596,27 +1542,12 @@ async fn create_validator_fullnode(
     protocol_config: &ProtocolConfig,
     objects: &[Object],
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>) {
-    let dir = tempfile::TempDir::new().unwrap();
-    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
-    let genesis = network_config.genesis;
-    let keypair = network_config.validator_configs[0]
-        .protocol_key_pair()
-        .copy();
-    let genesis = &genesis;
-    let authority_key = &keypair;
-    let state = TestAuthorityBuilder::new()
-        .with_genesis_and_keypair(genesis, authority_key)
+    let builder = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config.clone())
-        .build()
-        .await;
+        .with_starting_objects(objects);
+    let state = builder.clone().build().await;
     let fullnode_key_pair = get_authority_key_pair().1;
-    let fullnode = TestAuthorityBuilder::new()
-        .with_keypair(&fullnode_key_pair)
-        .with_protocol_config(protocol_config.clone())
-        .build()
-        .await;
-    state.insert_genesis_objects(objects).await;
-    fullnode.insert_genesis_objects(objects).await;
+    let fullnode = builder.with_keypair(&fullnode_key_pair).build().await;
     (state, fullnode)
 }
 
@@ -1636,5 +1567,270 @@ async fn create_val_fullnode_executor(
         validator,
         fullnode,
         kv_store,
+    }
+}
+
+struct AccountSetup {
+    pub default_account: TestAccount,
+    pub named_address_mapping: BTreeMap<String, NumericalAddress>,
+    pub objects: Vec<Object>,
+    pub account_objects: BTreeMap<String, ObjectID>,
+    pub accounts: BTreeMap<String, TestAccount>,
+}
+
+fn create_accounts_objects(
+    rng: &mut StdRng,
+    account_names: BTreeSet<String>,
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+) -> AccountSetup {
+    // Initial list of named addresses with specified values
+    let mut named_address_mapping = NAMED_ADDRESSES.clone();
+    let mut account_objects = BTreeMap::new();
+    let mut accounts = BTreeMap::new();
+    let mut objects = vec![];
+
+    // Closure to create accounts with gas objects of value `GAS_FOR_TESTING`
+    let mut mk_account = || {
+        let (address, key_pair) = get_key_pair_from_rng(rng);
+        let obj = Object::with_id_owner_gas_for_testing(
+            ObjectID::new(rng.gen()),
+            address,
+            GAS_FOR_TESTING,
+        );
+        let test_account = TestAccount {
+            address,
+            key_pair,
+            gas: obj.id(),
+        };
+        objects.push(obj);
+        test_account
+    };
+
+    // For each named Sui account without an address value, create an account with an adddress
+    // and a gas object
+    for n in account_names {
+        let test_account = mk_account();
+        account_objects.insert(n.clone(), test_account.gas);
+        accounts.insert(n, test_account);
+    }
+
+    // Make a default account with a gas object
+    let default_account = mk_account();
+
+    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+
+    AccountSetup {
+        default_account,
+        named_address_mapping,
+        objects,
+        account_objects,
+        accounts,
+    }
+}
+
+/// Create the executor for a validator with a fullnode
+/// The issue with this executor is we cannot control the checkpoint
+/// and epoch creation process
+async fn init_val_fullnode_executor(
+    mut rng: StdRng,
+    account_names: BTreeSet<String>,
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+    protocol_config: &ProtocolConfig,
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
+    let acc_setup = create_accounts_objects(&mut rng, account_names, additional_mapping);
+    let executor = create_val_fullnode_executor(protocol_config, &acc_setup.objects).await;
+    (Box::new(executor), acc_setup, None)
+}
+
+/// Create an executor using a simulator
+/// This means we can control the checkpoint, epoch creation process and
+/// manually advance clock as needed
+async fn init_sim_executor(
+    mut rng: StdRng,
+    account_names: BTreeSet<String>,
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+    protocol_config: &ProtocolConfig,
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
+    // Initial list of named addresses with specified values
+    let mut named_address_mapping = NAMED_ADDRESSES.clone();
+    let mut account_objects = BTreeMap::new();
+    let mut account_kps = BTreeMap::new();
+    let mut accounts = BTreeMap::new();
+    let mut objects = vec![];
+
+    // For each named Sui account without an address value, create a key pair
+    for n in account_names {
+        let test_account = get_key_pair_from_rng(&mut rng);
+        account_kps.insert(n, test_account);
+    }
+
+    // Make a default account keypair
+    let default_account_kp = get_key_pair_from_rng(&mut rng);
+
+    let mut acc_cfgs = account_kps
+        .values()
+        .map(|acc| AccountConfig {
+            address: Some(acc.0),
+            gas_amounts: vec![GAS_FOR_TESTING],
+        })
+        .collect::<Vec<_>>();
+    acc_cfgs.push(AccountConfig {
+        address: Some(default_account_kp.0),
+        gas_amounts: vec![GAS_FOR_TESTING],
+    });
+
+    // Create the simulator with the specific account configs, which also crates objects
+
+    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+        rng,
+        DEFAULT_CHAIN_START_TIMESTAMP,
+        protocol_config.version,
+        acc_cfgs,
+        None,
+    );
+
+    let cluster = serve_executor(
+        ConnectionConfig::ci_integration_test_cfg(),
+        DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+        Arc::new(read_replica),
+    )
+    .await;
+
+    // Get the actual object values from the simulator
+    for (name, (addr, kp)) in account_kps {
+        let o = sim.store().owned_objects(addr).next().unwrap();
+        objects.push(o.clone());
+        account_objects.insert(name.clone(), o.id());
+
+        accounts.insert(
+            name.to_owned(),
+            TestAccount {
+                address: addr,
+                key_pair: kp,
+                gas: o.id(),
+            },
+        );
+    }
+    let o = sim
+        .store()
+        .owned_objects(default_account_kp.0)
+        .next()
+        .unwrap();
+    let default_account = TestAccount {
+        address: default_account_kp.0,
+        key_pair: default_account_kp.1,
+        gas: o.id(),
+    };
+    objects.push(o.clone());
+
+    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+
+    (
+        Box::new(sim),
+        AccountSetup {
+            default_account,
+            named_address_mapping,
+            objects,
+            account_objects,
+            accounts,
+        },
+        Some(cluster),
+    )
+}
+
+fn update_named_address_mapping(
+    named_address_mapping: &mut BTreeMap<String, NumericalAddress>,
+    accounts: &BTreeMap<String, TestAccount>,
+    additional_mapping: BTreeMap<String, NumericalAddress>,
+) {
+    // For mappings where the address is specified, populate the named address mapping
+    let additional_mapping =
+        additional_mapping
+            .into_iter()
+            .chain(accounts.iter().map(|(n, test_account)| {
+                let addr =
+                    NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
+                (n.clone(), addr)
+            }));
+    // Extend the mappings of all named addresses with values
+    for (name, addr) in additional_mapping {
+        if named_address_mapping.contains_key(&name) || name == "sui" {
+            panic!("Invalid init. The named address '{}' is reserved", name)
+        }
+        named_address_mapping.insert(name, addr);
+    }
+}
+
+impl NodeStateGetter for SuiTestAdapter<'_> {
+    fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
+    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::VerifiedCheckpoint> {
+        self.executor
+            .get_verified_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::CheckpointSequenceNumber> {
+        self.executor.get_latest_checkpoint_sequence_number()
+    }
+
+    fn get_checkpoint_contents(
+        &self,
+        content_digest: sui_types::messages_checkpoint::CheckpointContentsDigest,
+    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::CheckpointContents> {
+        self.executor.get_checkpoint_contents(content_digest)
+    }
+
+    fn multi_get_transaction_blocks(
+        &self,
+        tx_digests: &[sui_types::digests::TransactionDigest],
+    ) -> sui_types::error::SuiResult<Vec<Option<VerifiedTransaction>>> {
+        self.executor.multi_get_transaction_blocks(tx_digests)
+    }
+
+    fn multi_get_executed_effects(
+        &self,
+        digests: &[sui_types::digests::TransactionDigest],
+    ) -> sui_types::error::SuiResult<Vec<Option<sui_types::effects::TransactionEffects>>> {
+        self.executor.multi_get_executed_effects(digests)
+    }
+
+    fn multi_get_events(
+        &self,
+        event_digests: &[sui_types::digests::TransactionEventsDigest],
+    ) -> sui_types::error::SuiResult<Vec<Option<sui_types::effects::TransactionEvents>>> {
+        self.executor.multi_get_events(event_digests)
+    }
+
+    fn multi_get_object_by_key(
+        &self,
+        object_keys: &[sui_types::storage::ObjectKey],
+    ) -> Result<Vec<Option<Object>>, sui_types::error::SuiError> {
+        self.executor.multi_get_object_by_key(object_keys)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+        sui_types::storage::ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+    }
+
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+        sui_types::storage::ObjectStore::get_object(&*self.executor, object_id)
     }
 }

@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::context_data::package_cache::DbPackageStore;
 use crate::{
     config::ServerConfig,
-    context_data::{
-        data_provider::DataProvider,
-        db_data_provider::PgManager,
-        sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0},
-    },
+    context_data::db_data_provider::PgManager,
     error::Error,
     extensions::{
         feature_gate::FeatureGate,
@@ -30,21 +27,23 @@ use axum::{
 use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
-use std::{any::Any, net::SocketAddr, sync::Arc};
+use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
+use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
+use tokio::sync::OnceCell;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
 }
 
-#[allow(dead_code)]
 impl Server {
     pub async fn run(self) -> Result<(), Error> {
+        get_or_init_server_start_time().await;
         self.server
             .await
             .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
     }
 
-    pub async fn from_yaml_config(path: &str) -> Result<Self, crate::error::Error> {
+    pub async fn from_yaml_config(path: &str) -> Result<Self, Error> {
         let config = ServerConfig::from_yaml(path)?;
         Self::from_config(&config).await
     }
@@ -53,14 +52,12 @@ impl Server {
         let mut builder =
             ServerBuilder::new(config.connection.port, config.connection.host.clone());
 
-        // TODO: remove rpc 1.0 dependency once DB work done
-        let sui_sdk_client_v0 = sui_sdk_client_v0(&config.connection.rpc_url).await;
-        let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
-        let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
-
         let name_service_config = config.name_service.clone();
-        let pg_conn_pool = PgManager::new(config.connection.db_url.clone(), None)
+        let reader = PgManager::reader(config.connection.db_url.clone())
             .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+        let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
+        let package_store = DbPackageStore(reader);
+        let package_cache = PackageStoreWithLruCache::new(package_store);
 
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -82,10 +79,11 @@ impl Server {
         builder = builder
             .max_query_depth(config.service.limits.max_query_depth)
             .max_query_nodes(config.service.limits.max_query_nodes)
-            .context_data(data_provider)
-            .context_data(data_loader)
+            .context_data(config.service.clone())
             .context_data(pg_conn_pool)
+            .context_data(Resolver::new(package_cache))
             .context_data(name_service_config)
+            .ide_title(config.ide.ide_title.clone())
             .context_data(Arc::new(metrics))
             .context_data(config.clone());
 
@@ -99,7 +97,7 @@ impl Server {
             builder = builder.extension(QueryLimitsChecker::default());
         }
         if config.internal_features.query_timeout {
-            builder = builder.extension(Timeout::default());
+            builder = builder.extension(Timeout);
         }
 
         builder.build()
@@ -111,6 +109,7 @@ pub(crate) struct ServerBuilder {
     host: String,
 
     schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
+    ide_title: Option<String>,
 }
 
 impl ServerBuilder {
@@ -119,6 +118,7 @@ impl ServerBuilder {
             port,
             host,
             schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
+            ide_title: None,
         }
     }
 
@@ -146,17 +146,26 @@ impl ServerBuilder {
         self
     }
 
+    fn ide_title(mut self, name: String) -> Self {
+        self.ide_title = Some(name);
+        self
+    }
+
     fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
         self.schema.finish()
     }
 
     pub fn build(self) -> Result<Server, Error> {
         let address = self.address();
+        let ide_title = self.ide_title.clone();
         let schema = self.build_schema();
 
         let app = axum::Router::new()
             .route("/", axum::routing::get(graphiql).post(graphql_handler))
+            .route("/schema", axum::routing::get(get_schema))
+            .route("/health", axum::routing::get(health_checks))
             .layer(axum::extract::Extension(schema))
+            .layer(axum::extract::Extension(ide_title))
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
         Ok(Server {
@@ -168,6 +177,19 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
         })
     }
+}
+
+async fn get_schema() -> impl axum::response::IntoResponse {
+    let schema = include_str!("../../schema/current_progress_schema.graphql").to_string();
+    let schema = format!(
+        r#"
+    <span style="white-space: pre;">{}
+    </span>
+    "#,
+        schema
+    );
+
+    axum::response::Html(schema)
 }
 
 async fn graphql_handler(
@@ -186,37 +208,89 @@ async fn graphql_handler(
     schema.execute(req).await.into()
 }
 
-async fn graphiql() -> impl axum::response::IntoResponse {
-    axum::response::Html(
-        async_graphql::http::GraphiQLSource::build()
-            .endpoint("/")
-            .finish(),
+async fn graphiql(ide_title: axum::Extension<Option<String>>) -> impl axum::response::IntoResponse {
+    let gq = async_graphql::http::GraphiQLSource::build().endpoint("/");
+    if let axum::Extension(Some(title)) = ide_title {
+        axum::response::Html(gq.title(&title).finish())
+    } else {
+        axum::response::Html(gq.finish())
+    }
+}
+
+async fn health_checks(
+    schema: axum::Extension<SuiGraphQLSchema>,
+) -> impl axum::response::IntoResponse {
+    // Simple request to check if the DB is up
+    // TODO: add more checks
+    let req = r#"
+        query {
+            chainIdentifier
+        }
+        "#;
+    let db_up = match schema.execute(req).await.is_ok() {
+        true => "UP",
+        false => "DOWN",
+    };
+    let uptime = get_or_init_server_start_time()
+        .await
+        .elapsed()
+        .as_secs_f64();
+    format!(
+        r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
+        "#,
+        uptime, db_up
     )
 }
 
-#[cfg(test)]
-mod tests {
+// One server per proc, so this is okay
+async fn get_or_init_server_start_time() -> &'static Instant {
+    static ONCE: OnceCell<Instant> = OnceCell::const_new();
+    ONCE.get_or_init(|| async move { Instant::now() }).await
+}
+
+pub mod tests {
     use super::*;
     use crate::{
-        config::ServiceConfig,
-        context_data::{
-            data_provider::DataProvider, db_data_provider::PgManager,
-            sui_sdk_data_provider::sui_sdk_client_v0,
-        },
+        config::{ConnectionConfig, Limits, ServiceConfig},
+        context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
-        extensions::timeout::{Timeout, TimeoutConfig},
+        extensions::timeout::Timeout,
         metrics::RequestMetrics,
+        test_infra::cluster::{serve_executor, ExecutorCluster, DEFAULT_INTERNAL_DATA_SOURCE_PORT},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
+    use rand::{rngs::StdRng, SeedableRng};
+    use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use std::time::Duration;
-    use std::{env, sync::Arc};
+    use tokio::time::sleep;
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_timeout() {
+    async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
+        sleep(Duration::from_secs(2)).await;
+        let rng = StdRng::from_seed([12; 32]);
+        let mut sim = Simulacrum::new_with_rng(rng);
+
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        (
+            connection_config.clone(),
+            serve_executor(
+                connection_config,
+                DEFAULT_INTERNAL_DATA_SOURCE_PORT,
+                Arc::new(sim),
+            )
+            .await,
+        )
+    }
+
+    pub async fn test_timeout_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -242,27 +316,24 @@ mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
-            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-            let pg_conn_pool = PgManager::new(db_url, None)
-                .map_err(|e| {
-                    println!("Failed to create pg connection pool: {}", e);
-                    e
-                })
-                .unwrap();
+        async fn test_timeout(
+            delay: Duration,
+            timeout: Duration,
+            connection_config: &ConnectionConfig,
+        ) -> Response {
+            let db_url: String = connection_config.db_url.clone();
+            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+            let pg_conn_pool = PgManager::new(reader, Limits::default());
+            let mut cfg = ServiceConfig::default();
+            cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-                .context_data(data_provider)
                 .context_data(pg_conn_pool)
+                .context_data(cfg)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout {
-                    config: TimeoutConfig {
-                        request_timeout: timeout,
-                    },
-                })
+                .extension(Timeout)
                 .build_schema();
             schema.execute("{ chainIdentifier }").await
         }
@@ -271,11 +342,11 @@ mod tests {
         let delay = Duration::from_millis(100);
 
         // Should complete successfully
-        let resp = test_timeout(delay, timeout).await;
+        let resp = test_timeout(delay, timeout, &connection_config).await;
         assert!(resp.is_ok());
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(timeout, timeout)
+        let errs: Vec<_> = test_timeout(timeout, timeout, &connection_config)
             .await
             .into_result()
             .unwrap_err()
@@ -286,21 +357,18 @@ mod tests {
         assert_eq!(errs, vec![exp]);
     }
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_query_depth_limit() {
-        async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
-            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-            let pg_conn_pool = PgManager::new(db_url, None)
-                .map_err(|e| {
-                    println!("Failed to create pg connection pool: {}", e);
-                    e
-                })
-                .unwrap();
+    pub async fn test_query_depth_limit_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
+        async fn exec_query_depth_limit(
+            depth: u32,
+            query: &str,
+            connection_config: &ConnectionConfig,
+        ) -> Response {
+            let db_url: String = connection_config.db_url.clone();
+            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+            let pg_conn_pool = PgManager::new(reader, Limits::default());
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-                .context_data(data_provider)
                 .context_data(pg_conn_pool)
                 .max_query_depth(depth)
                 .build_schema();
@@ -308,17 +376,18 @@ mod tests {
         }
 
         // Should complete successfully
-        let resp = exec_query_depth_limit(1, "{ chainIdentifier }").await;
+        let resp = exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config).await;
         assert!(resp.is_ok());
         let resp = exec_query_depth_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await;
         assert!(resp.is_ok());
 
         // Should fail
-        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
+        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }", &connection_config)
             .await
             .into_result()
             .unwrap_err()
@@ -330,6 +399,7 @@ mod tests {
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await
         .into_result()
@@ -340,21 +410,18 @@ mod tests {
         assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_query_node_limit() {
-        async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
-            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-            let pg_conn_pool = PgManager::new(db_url, None)
-                .map_err(|e| {
-                    println!("Failed to create pg connection pool: {}", e);
-                    e
-                })
-                .unwrap();
+    pub async fn test_query_node_limit_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
+        async fn exec_query_node_limit(
+            nodes: u32,
+            query: &str,
+            connection_config: &ConnectionConfig,
+        ) -> Response {
+            let db_url: String = connection_config.db_url.clone();
+            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+            let pg_conn_pool = PgManager::new(reader, Limits::default());
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-                .context_data(data_provider)
                 .context_data(pg_conn_pool)
                 .max_query_nodes(nodes)
                 .build_schema();
@@ -362,17 +429,18 @@ mod tests {
         }
 
         // Should complete successfully
-        let resp = exec_query_node_limit(1, "{ chainIdentifier }").await;
+        let resp = exec_query_node_limit(1, "{ chainIdentifier }", &connection_config).await;
         assert!(resp.is_ok());
         let resp = exec_query_node_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await;
         assert!(resp.is_ok());
 
         // Should fail
-        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
+        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }", &connection_config)
             .await
             .into_result()
             .unwrap_err()
@@ -384,6 +452,7 @@ mod tests {
         let err: Vec<_> = exec_query_node_limit(
             4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await
         .into_result()
@@ -394,31 +463,24 @@ mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_query_complexity_metrics() {
-        let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
+    pub async fn test_query_complexity_metrics_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         let metrics = RequestMetrics::new(&registry);
         let metrics = Arc::new(metrics);
         let metrics2 = metrics.clone();
 
         let service_config = ServiceConfig::default();
-        let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-        let data_provider: Box<dyn DataProvider> = Box::new(sdk);
 
-        let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-        let pg_conn_pool = PgManager::new(db_url, None)
-            .map_err(|e| {
-                println!("Failed to create pg connection pool: {}", e);
-                e
-            })
-            .unwrap();
+        let db_url: String = connection_config.db_url.clone();
+        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .max_query_depth(service_config.limits.max_query_depth)
             .max_query_nodes(service_config.limits.max_query_nodes)
             .context_data(service_config)
-            .context_data(data_provider)
             .context_data(pg_conn_pool)
             .context_data(metrics)
             .extension(QueryLimitsChecker::default())

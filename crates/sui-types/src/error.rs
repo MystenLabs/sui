@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
-use typed_store::rocks::TypedStoreError;
+use typed_store_error::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";
@@ -316,6 +316,13 @@ pub enum SuiError {
         threshold: usize,
     },
 
+    #[error("Input {object_id} has a transaction {txn_age_sec} seconds old pending, above threshold of {threshold} seconds")]
+    TooOldTransactionPendingOnObject {
+        object_id: ObjectID,
+        txn_age_sec: u64,
+        threshold: u64,
+    },
+
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
@@ -512,8 +519,6 @@ pub enum SuiError {
     FailedToSubmitToConsensus(String),
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
-    #[error("Failed to hear back from consensus: {0}")]
-    FailedToHearBackFromConsensus(String),
     #[error("Failed to execute handle_consensus_transaction on Sui: {0}")]
     HandleConsensusTransactionFailure(String),
 
@@ -735,6 +740,7 @@ impl SuiError {
             // Overload errors
             SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
             SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
+            SuiError::TooOldTransactionPendingOnObject { .. } => (true, true),
             SuiError::TooManyTransactionsPendingConsensus => (true, true),
 
             // Non retryable error
@@ -769,6 +775,7 @@ impl SuiError {
             self,
             SuiError::TooManyTransactionsPendingExecution { .. }
                 | SuiError::TooManyTransactionsPendingOnObject { .. }
+                | SuiError::TooOldTransactionPendingOnObject { .. }
                 | SuiError::TooManyTransactionsPendingConsensus
         )
     }

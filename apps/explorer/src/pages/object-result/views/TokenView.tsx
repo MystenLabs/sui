@@ -26,7 +26,7 @@ enum TABS_VALUES {
 }
 
 function useObjectFieldsCard(id: string) {
-	const { data: suiObjectResponseData, isLoading, isError } = useGetObject(id);
+	const { data: suiObjectResponseData, isPending, isError } = useGetObject(id);
 
 	const objectType =
 		suiObjectResponseData?.data?.type ??
@@ -39,7 +39,7 @@ function useObjectFieldsCard(id: string) {
 	// Get the normalized struct for the object
 	const {
 		data: normalizedStructData,
-		isLoading: loadingNormalizedStruct,
+		isPending: loadingNormalizedStruct,
 		isError: errorNormalizedMoveStruct,
 	} = useSuiClientQuery(
 		'getNormalizedMoveStruct',
@@ -54,7 +54,7 @@ function useObjectFieldsCard(id: string) {
 	);
 
 	return {
-		loading: isLoading || loadingNormalizedStruct,
+		loading: isPending || loadingNormalizedStruct,
 		error: isError || errorNormalizedMoveStruct,
 		normalizedStructData,
 		suiObjectResponseData,

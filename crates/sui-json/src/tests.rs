@@ -5,12 +5,10 @@ use std::path::Path;
 use std::str::FromStr;
 
 use fastcrypto::encoding::{Encoding, Hex};
+use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
-use move_core_types::value::{MoveFieldLayout, MoveStructLayout};
-use move_core_types::{
-    account_address::AccountAddress, ident_str, identifier::Identifier, value::MoveTypeLayout,
-};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use serde_json::{json, Value};
 use test_fuzz::runtime::num_traits::ToPrimitive;
 
@@ -775,7 +773,7 @@ fn test_from_str() {
 fn test_sui_call_arg_string_type() {
     let arg1 = bcs::to_bytes("Some String").unwrap();
 
-    let string_layout = Some(MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+    let string_layout = Some(MoveTypeLayout::Struct(MoveStructLayout {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: STD_ASCII_MODULE_NAME.into(),
@@ -796,7 +794,7 @@ fn test_sui_call_arg_string_type() {
 fn test_sui_call_arg_option_type() {
     let arg1 = bcs::to_bytes(&Some("Some String")).unwrap();
 
-    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: STD_ASCII_MODULE_NAME.into(),
@@ -809,7 +807,7 @@ fn test_sui_call_arg_option_type() {
         }],
     });
 
-    let option_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+    let option_layout = MoveTypeLayout::Struct(MoveStructLayout {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: STD_OPTION_MODULE_NAME.into(),
@@ -842,6 +840,8 @@ fn test_convert_struct() {
     let value = json!({"id":"0xf1416fe18c7baa1673187375777a7606708481311cb3548509ec91a5871c6b9a", "balance": "1000000"});
     let sui_json = SuiJsonValue::new(value).unwrap();
 
+    println!("JS: {:#?}", sui_json);
+
     let bcs = sui_json.to_bcs_bytes(&layout).unwrap();
 
     let coin: GasCoin = bcs::from_bytes(&bcs).unwrap();
@@ -857,7 +857,7 @@ fn test_convert_struct() {
 fn test_convert_string_vec() {
     let test_vec = vec!["0xbbb", "test_str"];
     let bcs = bcs::to_bytes(&test_vec).unwrap();
-    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: STD_ASCII_MODULE_NAME.into(),
@@ -892,7 +892,7 @@ fn test_string_vec_df_name_child_id_eq() {
         ]
     });
 
-    let string_layout = MoveTypeLayout::Struct(MoveStructLayout::WithTypes {
+    let string_layout = MoveTypeLayout::Struct(MoveStructLayout {
         type_: StructTag {
             address: MOVE_STDLIB_ADDRESS,
             module: STD_ASCII_MODULE_NAME.into(),
@@ -905,10 +905,18 @@ fn test_string_vec_df_name_child_id_eq() {
         }],
     });
 
-    let layout = MoveTypeLayout::Struct(MoveStructLayout::WithFields(vec![MoveFieldLayout::new(
-        Identifier::from_str("labels").unwrap(),
-        MoveTypeLayout::Vector(Box::new(string_layout)),
-    )]));
+    let layout = MoveTypeLayout::Struct(MoveStructLayout {
+        type_: StructTag {
+            address: MOVE_STDLIB_ADDRESS,
+            module: STD_ASCII_MODULE_NAME.into(),
+            name: STD_ASCII_STRUCT_NAME.into(),
+            type_params: vec![],
+        },
+        fields: vec![MoveFieldLayout::new(
+            Identifier::from_str("labels").unwrap(),
+            MoveTypeLayout::Vector(Box::new(string_layout)),
+        )],
+    });
 
     let sui_json = SuiJsonValue::new(name).unwrap();
     let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
