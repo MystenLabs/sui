@@ -510,13 +510,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .get_verified_checkpoint_by_sequence_number(latest_chk)?;
                 Ok(Some(format!("{}", chk.data())))
             }
-            SuiSubcommand::CreateCheckpoint => {
-                self.executor.create_checkpoint().await?;
+            SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
+                for _ in 0..count.unwrap_or(1) {
+                    self.executor.create_checkpoint().await?;
+                }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch => {
-                self.executor.advance_epoch().await?;
+            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand { count }) => {
+                for _ in 0..count.unwrap_or(1) {
+                    self.executor.advance_epoch().await?;
+                }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor

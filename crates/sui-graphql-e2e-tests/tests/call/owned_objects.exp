@@ -30,7 +30,7 @@ task 5 'create-checkpoint'. lines 58-58:
 Checkpoint created: 1
 
 task 6 'view-checkpoint'. lines 60-60:
-CheckpointSummary { epoch: 0, seq: 1, content_digest: 3roqGGtXUFwWgryXd47b8excsteDJyFXKoKUmFEcUbpD,
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 94FSxnwDKDpJ8txUBNcnxU75aathRbysGuihNUchZokV,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 7 'run-graphql'. lines 62-75:
@@ -41,8 +41,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
-              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
+              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
               "kind": "OWNED"
             }
           }
@@ -60,8 +60,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
-              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
+              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
               "kind": "OWNED"
             }
           }
@@ -79,8 +79,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
-              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
+              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
               "kind": "OWNED"
             }
           }
@@ -98,8 +98,8 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x3934a5985b62d7536d183a67a650e36c6c2cc18cf5949e3d430fadbd4c40e9f7",
-              "digest": "Gm1nFyPuQ1w938sScdfzuyJ5HgtmCxV8URwu4jTtatt8",
+              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
+              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
               "kind": "OWNED"
             }
           }
