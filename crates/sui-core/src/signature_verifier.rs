@@ -361,29 +361,7 @@ impl SignatureVerifier {
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
                 );
-                dbg!("HAY");
-                signed_tx
-                    .tx_signatures()
-                    .iter()
-                    .try_for_each(|sig| match sig {
-                        // If a zkLogin signature is found, check cache first. If it is in
-                        // the cache, just verifies for uncached checks, otherwise verifies
-                        // the entire zkLogin signature.
-                        GenericSignature::ZkLoginAuthenticator(z) => {
-                            self.zklogin_inputs_cache.is_verified(
-                                dbg!(z.hash_inputs()),
-                                || {
-                                    dbg!("1");
-                                    signed_tx.verify_message_signature(&verify_params)
-                                },
-                                || {
-                                    dbg!("2");
-                                    signed_tx.verify_uncached_checks(&verify_params)
-                                },
-                            )
-                        }
-                        _ => signed_tx.verify_message_signature(&verify_params),
-                    })
+                signed_tx.verify_message_signature(&verify_params)
             },
             || Ok(()),
         )
