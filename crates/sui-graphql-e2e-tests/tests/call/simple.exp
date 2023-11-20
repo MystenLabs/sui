@@ -19,14 +19,14 @@ task 4 'create-checkpoint'. lines 34-34:
 Checkpoint created: 1
 
 task 5 'view-checkpoint'. lines 36-36:
-CheckpointSummary { epoch: 0, seq: 1, content_digest: 967T2ejWu25x5LEPDdbRte2bSD2i2jfsDE3XNUtfuqBy,
+CheckpointSummary { epoch: 0, seq: 1, content_digest: 3roqGGtXUFwWgryXd47b8excsteDJyFXKoKUmFEcUbpD,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 6 'advance-epoch'. lines 39-39:
 Epoch advanced: 0
 
 task 7 'view-checkpoint'. lines 41-41:
-CheckpointSummary { epoch: 0, seq: 2, content_digest: 7ez6SVqHPjVu8c4yEFoMVPEc8j1qbFFKhkwY2VaT72oV,
+CheckpointSummary { epoch: 0, seq: 2, content_digest: HWHYKr1zLvWnGLeeiHFrHe9p7E23t8U6J4GWgwZxPWcE,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
 
 task 8 'run-graphql'. lines 43-49:
