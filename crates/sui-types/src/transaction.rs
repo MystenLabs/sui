@@ -2416,25 +2416,30 @@ impl VerifiedTransaction {
         epoch: u64,
         round: u64,
         commit_timestamp_ms: CheckpointTimestamp,
-        consensus_digest: Option<ConsensusCommitDigest>,
     ) -> Self {
-        match consensus_digest {
-            Some(digest) => ConsensusCommitPrologueV2 {
-                epoch,
-                round,
-                commit_timestamp_ms,
-                consensus_commit_digest: digest,
-            }
-            .pipe(TransactionKind::ConsensusCommitPrologueV2)
-            .pipe(Self::new_system_transaction),
-            None => ConsensusCommitPrologue {
-                epoch,
-                round,
-                commit_timestamp_ms,
-            }
-            .pipe(TransactionKind::ConsensusCommitPrologue)
-            .pipe(Self::new_system_transaction),
+        ConsensusCommitPrologue {
+            epoch,
+            round,
+            commit_timestamp_ms,
         }
+        .pipe(TransactionKind::ConsensusCommitPrologue)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_consensus_commit_prologue_v2(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+        consensus_commit_digest: ConsensusCommitDigest,
+    ) -> Self {
+        ConsensusCommitPrologueV2 {
+            epoch,
+            round,
+            commit_timestamp_ms,
+            consensus_commit_digest,
+        }
+        .pipe(TransactionKind::ConsensusCommitPrologueV2)
+        .pipe(Self::new_system_transaction)
     }
 
     pub fn new_authenticator_state_update(
