@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::db_backend::{Cursor, GenericQueryBuilder, QueryDirection, SortOrder};
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -91,8 +92,6 @@ use sui_types::{
     },
     Identifier, TypeTag,
 };
-
-use super::db_backend::GenericQueryBuilder;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
@@ -409,6 +408,21 @@ impl PgManager {
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
+        let cursor_type = if after.is_some() {
+            Some(Cursor::After)
+        } else if before.is_some() {
+            Some(Cursor::Before)
+        } else {
+            None
+        };
+        let direction = if last.is_some() {
+            QueryDirection::Last(last.unwrap() as i64)
+        } else if first.is_some() {
+            QueryDirection::First(first.unwrap() as i64)
+        } else {
+            QueryDirection::First(limit)
+        };
+
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
@@ -419,8 +433,10 @@ impl PgManager {
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
                         cursor,
-                        descending_order,
+                        cursor_type,
                         limit,
+                        SortOrder::Asc,
+                        direction,
                         epoch.map(|e| e as i64),
                     ))
                 },
@@ -1807,17 +1823,17 @@ pub(crate) fn validate_cursor_pagination(
     last: &Option<u64>,
     before: &Option<String>,
 ) -> Result<(), Error> {
-    if first.is_some() && before.is_some() {
-        return Err(DbValidationError::FirstAfter.into());
-    }
+    // if first.is_some() && before.is_some() {
+    //     return Err(DbValidationError::FirstAfter.into());
+    // }
 
-    if last.is_some() && after.is_some() {
-        return Err(DbValidationError::LastBefore.into());
-    }
+    // if last.is_some() && after.is_some() {
+    //     return Err(DbValidationError::LastBefore.into());
+    // }
 
-    if before.is_some() && after.is_some() {
-        return Err(Error::CursorNoBeforeAfter);
-    }
+    // if before.is_some() && after.is_some() {
+    //     return Err(Error::CursorNoBeforeAfter);
+    // }
 
     if first.is_some() && last.is_some() {
         return Err(Error::CursorNoFirstLast);

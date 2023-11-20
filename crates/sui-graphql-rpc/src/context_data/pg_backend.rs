@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
+    db_backend::{
+        BalanceQuery, Cursor, Explain, Explained, GenericQueryBuilder, QueryDirection, SortOrder,
+        Subqueried, Subquery,
+    },
     db_data_provider::DbValidationError,
 };
 use crate::context_data::db_data_provider::PgManager;
@@ -12,9 +15,15 @@ use crate::{
 };
 use async_trait::async_trait;
 use diesel::{
+    associations::HasTable,
+    helper_types::IntoBoxed,
     pg::Pg,
-    query_builder::{AstPass, QueryFragment},
-    BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
+    query_builder::{
+        AsQuery, AstPass, BoxedSelectStatement, FromClause, Query, QueryFragment, SelectStatement,
+    },
+    query_dsl::methods::BoxedDsl,
+    BoolExpressionMethods, Expression, ExpressionMethods, PgConnection, QueryDsl, QueryResult,
+    QuerySource, RunQueryDsl, Table,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -26,6 +35,80 @@ use sui_indexer::{
 };
 
 pub(crate) struct PgQueryBuilder;
+
+impl PgQueryBuilder {
+    fn handle_checkpoint_pagination_first(
+        cursor: i64,
+        cursor_type: Cursor,
+        sort_order: SortOrder,
+    ) -> checkpoints::BoxedQuery<'static, Pg> {
+        let mut query = checkpoints::dsl::checkpoints.into_boxed();
+
+        match (cursor_type, sort_order) {
+            (Cursor::After, SortOrder::Asc) => {
+                query = query
+                    .filter(checkpoints::dsl::sequence_number.gt(cursor))
+                    .order(checkpoints::dsl::sequence_number.asc());
+            }
+            (Cursor::Before, SortOrder::Asc) => {
+                query = query
+                    .filter(checkpoints::dsl::sequence_number.lt(cursor))
+                    .order(checkpoints::dsl::sequence_number.asc());
+            }
+            (Cursor::After, SortOrder::Desc) => {
+                query = query
+                    .filter(checkpoints::dsl::sequence_number.lt(cursor))
+                    .order(checkpoints::dsl::sequence_number.desc());
+            }
+            (Cursor::Before, SortOrder::Desc) => {
+                query = query
+                    .filter(checkpoints::dsl::sequence_number.gt(cursor))
+                    .order(checkpoints::dsl::sequence_number.desc());
+            }
+        }
+        query
+    }
+
+    fn handle_checkpoint_pagination_last(
+        cursor: i64,
+        cursor_type: Cursor,
+        sort_order: SortOrder,
+    ) -> checkpoints::BoxedQuery<'static, Pg> {
+        let subquery = match (cursor_type, sort_order) {
+            (Cursor::After, SortOrder::Asc) => PgQueryBuilder::handle_checkpoint_pagination_first(
+                cursor,
+                Cursor::Before,
+                SortOrder::Desc,
+            ), // outer asc
+            (Cursor::Before, SortOrder::Asc) => PgQueryBuilder::handle_checkpoint_pagination_first(
+                cursor,
+                Cursor::After,
+                SortOrder::Desc,
+            ), // outer asc
+            (Cursor::After, SortOrder::Desc) => PgQueryBuilder::handle_checkpoint_pagination_first(
+                cursor,
+                Cursor::Before,
+                SortOrder::Asc,
+            ), // outer desc
+            (Cursor::Before, SortOrder::Desc) => {
+                PgQueryBuilder::handle_checkpoint_pagination_first(
+                    cursor,
+                    Cursor::After,
+                    SortOrder::Asc,
+                )
+            } // outer desc
+        };
+
+        match sort_order {
+            SortOrder::Asc => subquery
+                .subquery()
+                .order(checkpoints::dsl::sequence_number.asc()),
+            SortOrder::Desc => subquery
+                .subquery()
+                .order(checkpoints::dsl::sequence_number.desc()),
+        }
+    }
+}
 
 impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, Pg> {
@@ -337,27 +420,34 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     }
     fn multi_get_checkpoints(
         cursor: Option<i64>,
-        descending_order: bool,
+        cursor_type: Option<Cursor>,
         limit: i64,
+        sort_order: SortOrder,
+        query_direction: QueryDirection,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(checkpoints::dsl::sequence_number.lt(cursor));
-            } else {
-                query = query.filter(checkpoints::dsl::sequence_number.gt(cursor));
-            }
-        }
-        if descending_order {
-            query = query.order(checkpoints::dsl::sequence_number.desc());
+        if let (Some(cursor), Some(cursor_type)) = (cursor, cursor_type) {
+            query = match query_direction {
+                QueryDirection::First(_) => PgQueryBuilder::handle_checkpoint_pagination_first(
+                    cursor,
+                    cursor_type,
+                    sort_order,
+                ),
+                QueryDirection::Last(_) => PgQueryBuilder::handle_checkpoint_pagination_last(
+                    cursor,
+                    cursor_type,
+                    sort_order,
+                ),
+            };
         } else {
-            query = query.order(checkpoints::dsl::sequence_number.asc());
+            query = match sort_order {
+                SortOrder::Asc => query.order(checkpoints::dsl::sequence_number.asc()),
+                SortOrder::Desc => query.order(checkpoints::dsl::sequence_number.desc()),
+            };
         }
-        if let Some(epoch) = epoch {
-            query = query.filter(checkpoints::dsl::epoch.eq(epoch));
-        }
+
         query = query.limit(limit + 1);
 
         query
@@ -376,6 +466,42 @@ where
         out.push_sql("EXPLAIN (FORMAT JSON) ");
         self.query.walk_ast(out.reborrow())?;
         Ok(())
+    }
+}
+
+/// Allows methods like load(), get_result(), etc. on a Subqueried query
+impl<T> RunQueryDsl<PgConnection> for Subqueried<T> {}
+
+/// Implement logic wrapping queries in a SELECT * FROM (query) AS SUB
+impl<T> QueryFragment<Pg> for Subqueried<T>
+where
+    T: QueryFragment<Pg>,
+{
+    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
+        out.push_sql("SELECT * FROM (");
+        self.query.walk_ast(out.reborrow())?;
+        out.push_sql(") AS sub");
+        Ok(())
+    }
+}
+
+// impl<T: Query> AsQuery for Subqueried<T> {
+//     type SqlType = <T as Query>::SqlType;
+//     type Query = T;
+
+//     fn as_query(self) -> <T as AsQuery>::Query {
+//         self
+//     }
+// }
+
+impl<T> BoxedDsl<'_, Pg> for Subqueried<T>
+where
+    T: Table + HasTable<Table = T> + AsQuery + QueryFragment<Pg> + 'static,
+{
+    type Output = BoxedSelectStatement<'static, T::SqlType, Self, Pg>;
+
+    fn internal_into_boxed(self) -> Self::Output {
+        self.as_query().internal_into_boxed()
     }
 }
 
