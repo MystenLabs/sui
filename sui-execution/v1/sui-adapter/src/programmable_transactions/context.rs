@@ -394,6 +394,17 @@ mod checked {
                 return Err(CommandArgumentError::InvalidObjectByValue);
             }
 
+            // Any input object taken by value must be mutable
+            if matches!(
+                input_metadata_opt,
+                Some(InputObjectMetadata::InputObject {
+                    is_mutable_input: false,
+                    ..
+                })
+            ) {
+                return Err(CommandArgumentError::InvalidObjectByValue);
+            }
+
             // ensure we don't transfer shared objects to new owners
             if matches!(
                 input_metadata_opt,
