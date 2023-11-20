@@ -71,6 +71,21 @@ export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: s
 		retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
+
+	await retry(
+		async () => {
+			const balance = await client.getBalance({ owner: address });
+
+			if (balance.totalBalance === '0') {
+				throw new Error('Balance is still 0');
+			}
+		},
+		{
+			backoff: () => 1000,
+			timeout: 30 * 1000,
+			retryIf: () => true,
+		},
+	);
 	return new TestToolbox(keypair, client);
 }
 
@@ -108,6 +123,9 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			showObjectChanges: true,
 		},
 	});
+
+	await toolbox.client.waitForTransactionBlock({ digest: publishTxn.digest });
+
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(
