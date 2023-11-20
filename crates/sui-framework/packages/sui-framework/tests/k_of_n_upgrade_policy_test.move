@@ -5,7 +5,7 @@
 module sui::k_of_n_upgrade_policy_test {
     use sui::address::from_u256;
     use sui::k_of_n_upgrade_policy::{Self, KofNUpgradeCap, ProposedUpgrade, VotingCap};
-    use sui::object::{Self, id_from_address as id};
+    use sui::object::id_from_address as id;
     use sui::package;
     use sui::vec_set::{Self, VecSet};
     use sui::test_scenario::{Self as test, Scenario, ctx};
