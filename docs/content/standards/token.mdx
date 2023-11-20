@@ -79,9 +79,7 @@ Token has a set of public and protected actions which can be used to manage the 
 
 ## Protected Actions & Action Request
 
-Some actions are protected and disabled by default. Token creator can enable them by either creating a "TokenPolicy" and "allow"-ing them there or setting up Rules for the action. In standard implementation Token has 4 protected functions:
-
-{/* TODO: revisit ^ above */}
+Some actions are disabled by default. Token creator can enable them by creating a "TokenPolicy" and specifying conditions (Rules) for their execution. In the standard implementation Token has 4 protected functions:
 
 - `token::transfer` - transfer a Token to a recipient
 - `token::from_coin` - convert a Coin into a Token
@@ -105,6 +103,42 @@ An example of a function creating an `ActionRequest`:
 public fun transfer<T>(t: Token<T>, recipient: address, ctx: &mut TxContext): ActionRequest<T>;
 ```
 
+## TokenPolicy
+
+A `TokenPolicy` is a shared object which can be created by the Token owner using the TreasuryCap. Here's an example of how a policy can be created (with `transfer` operation allowed):
+
+```js
+let tx = new TransactionBlock();
+let tokenType = '0x....::my_token::MY_TOKEN';
+let treasuryCapArg = tx.object('0x....');
+
+// for each TokenPolicy there's a TokenPolicyCap which allows managing it
+let [policy, policy_cap] = tx.moveCall({
+    target: '0x2::token::new_policy',
+    arguments: [ treasuryCapArg ],
+    typeArguments: [ tokenType ],
+});
+
+// allow `transfer` operation; other operations are disabled
+tx.moveCall({
+    target: '0x2::token::allow',
+    arguments: [ policy, policy_cap, tx.pure.string("transfer") ],
+    typeArguments: [ tokenType ]
+});
+
+tx.transferObjects([ policy_cap ], tx.pure.address('0x...sender'));
+
+// policy must be shared with this function
+tx.moveCall({
+    target: '0x2::token::share_policy',
+    arguments: [ policy ],
+    typeArguments: [ tokenType ]
+});
+
+// submit the transaction
+// ...
+```
+
 ## Request Confirmation
 
 There are 2 main ways to confirm an `ActionRequest`:
@@ -112,7 +146,11 @@ There are 2 main ways to confirm an `ActionRequest`:
 1. With a `TreasuryCap` - token creator (or an application storing the TreasuryCap) can confirm any request by calling `token::confirm_with_treasury_cap` function. This method is useful for applications that store the TreasuryCap and implement custom logic; it also allows the Token creator to `mint` and `transfer` tokens bypassing the restrictions.
 2. With a `TokenPolicy` - token creator can create and share a `TokenPolicy` and set up allowed actions and requirements for each action. This way any application or a wallet would know which actions can be considered "public" and would be able to perform them.
 
-An example of a transaction implemented in TypeScript with sui.js, confirming an `ActionRequest` with a TreasuryCap:
+### Confirming with TreasuryCap
+
+TreasuryCap can be used to confirm any ActionRequest for the Token. It's useful for admin actions (eg mint and transfer) as well as for simple applications that don't require a TokenPolicy and wrap the TreasuryCap into the main object.
+
+An example of a transaction implemented in TypeScript with sui.js, confirming an `ActionRequest` with a TreasuryCap. Here the TreasuryCap is owned by the admin account and is used to mint and confirm the transfer request for the token:
 
 ```js
 let tx = new TransactionBlock();
@@ -144,11 +182,62 @@ tx.moveCall({
 // ...
 ```
 
-## TokenPolicy & Rules
+### Confirming with TokenPolicy
 
-...TBD
+TokenPolicy is a way of enabling certain actions network-wide. Once shared, the TokenPolicy is available to everyone. Hence, it can be used by wallets or any other clients to confirm allowed operations.
 
+An example of a client transfer request confirmation in JavaScript:
 
+```js
+let tx = new TransactionBlock();
+let tokenType = '0x....::my_token::MY_TOKEN';
+let myTokenArg = tx.object('0x...token_object');
+let receiverArg = tx.pure.address('0x...receiver');
+let tokenPolicyArg = tx.object('0x...token_policy');
+
+let request = tx.moveCall({
+    target: '0x2::token::transfer',
+    arguments: [ myTokenArg, receiverArg ],
+    typeArguments: [ tokenType ],
+});
+
+// expecting the `TokenPolicy` to have the `transfer` operation allowed
+tx.moveCall({
+    target: '0x2::token::confirm_request',
+    arguments: [ tokenPolicyArg, request ],
+    typeArguments: [ tokenType ],
+});
+
+// submit the transaction
+// ...
+```
+
+## Rules and Restrictions
+
+TokenPolicy can specify custom conditions for each action. These conditions are called "Rules" and are typically implemented as separate Move modules. For most common scenario, a Rule module would contain:
+
+- the Rule type (eg "struct Denylist")
+- the verifying function (eg "verify\(\)") that "stamps" the ActionRequest
+
+Here's an example of a Rule module that denies transfers to a specific account:
+```move
+module examples::blank_rule {
+    use sui::token::{Self, TokenPolicy, ActionRequest};
+    use sui::tx_context::TxContext;
+
+    /// The type of the Rule, can be specified for any ActionRequest in a TokenPolicy
+    struct Blank has drop {}
+
+    /// The function to be called on action
+    public fun verify<T>(
+        self: &TokenPolicy<T>,
+        request: &mut ActionRequest<T>,
+        ctx: &mut TxContext
+    ) {
+        token::add_approval(Blank {}, request, ctx)
+    }
+}
+```
 
 ## Appendix A: Coin / Token API comparison
 
@@ -163,5 +252,5 @@ tx.moveCall({
 | keep                        | -    | +           | Send Token to sender, not required for Coin due to lack of transfer restrictions |
 | transfer                    | +    | \[protected] | Coin is transferable by default, Token requires authorization                    |
 | to_balance / to_coin        | +    | \[protected] | Token can be converted "to_coin", requires authorization                         |
-| from_balance / from_balance | +    | \[protected] | Token can be created "from_coin", requires authorization                         |
+| from_balance / from_coin    | +    | \[protected] | Token can be created "from_coin", requires authorization                         |
 | spend                       | -    | \[protected] | Token can be "spent", requires authorization (see "spending")                    |
