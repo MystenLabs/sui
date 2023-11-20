@@ -132,7 +132,7 @@ jobs:
               {
                 "type": "section",
                 "text": {
-                  "type": "plain_text",
+                  "type": "mrkdwn",
                   "text": "<@sui-core>, to debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
                 }
               }
