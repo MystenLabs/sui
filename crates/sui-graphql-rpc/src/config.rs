@@ -20,12 +20,22 @@ const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
 
+// Default values for the server connection configuration.
+pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
+pub(crate) const DEFAULT_SERVER_CONNECTION_HOST: &str = "127.0.0.1";
+pub(crate) const DEFAULT_SERVER_DB_URL: &str =
+    "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2";
+pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
+pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
+pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
+
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
     pub(crate) db_url: String,
+    pub(crate) db_pool_size: u32,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
 }
@@ -98,6 +108,7 @@ impl ConnectionConfig {
         port: Option<u16>,
         host: Option<String>,
         db_url: Option<String>,
+        db_pool_size: Option<u32>,
         prom_url: Option<String>,
         prom_port: Option<u16>,
     ) -> Self {
@@ -106,6 +117,7 @@ impl ConnectionConfig {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
             db_url: db_url.unwrap_or(default.db_url),
+            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
         }
@@ -120,6 +132,10 @@ impl ConnectionConfig {
 
     pub fn db_url(&self) -> String {
         self.db_url.clone()
+    }
+
+    pub fn db_pool_size(&self) -> u32 {
+        self.db_pool_size
     }
 
     pub fn server_address(&self) -> String {
@@ -184,11 +200,12 @@ impl ServiceConfig {
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
-            port: 8000,
-            host: "127.0.0.1".to_string(),
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
-            prom_url: "0.0.0.0".to_string(),
-            prom_port: 9184,
+            port: DEFAULT_SERVER_CONNECTION_PORT,
+            host: DEFAULT_SERVER_CONNECTION_HOST.to_string(),
+            db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
+            prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
+            prom_port: DEFAULT_SERVER_PROM_PORT,
         }
     }
 }
