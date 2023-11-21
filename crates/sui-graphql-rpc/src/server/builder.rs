@@ -269,10 +269,8 @@ pub mod tests {
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::time::sleep;
 
     async fn prep_cluster() -> (ConnectionConfig, ExecutorCluster) {
-        sleep(Duration::from_secs(2)).await;
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
 
