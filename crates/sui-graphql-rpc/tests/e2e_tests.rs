@@ -3,9 +3,6 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
-    use diesel::OptionalExtension;
-    use diesel::RunQueryDsl;
-    use diesel::{ExpressionMethods, QueryDsl};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -16,12 +13,6 @@ mod tests {
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
-    use sui_indexer::indexer_reader::IndexerReader;
-    use sui_indexer::models_v2::objects::StoredObject;
-    use sui_indexer::new_pg_connection_pool_impl;
-    use sui_indexer::schema_v2::objects;
-    use sui_indexer::utils::reset_database;
-    use sui_indexer::PgConnectionPoolConfig;
     use sui_types::digests::ChainIdentifier;
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;

@@ -119,7 +119,7 @@ pub enum DbValidationError {
     InvalidOwnerType,
     #[error("Query cost exceeded - cost: {0}, limit: {1}")]
     QueryCostExceeded(u64, u64),
-    #[error("Number of elements requested '{0}' exceeds maximum page size: '{1}'")]
+    #[error("Page size exceeded - requested: {0}, limit: {1}")]
     PageSizeExceeded(u64, u64),
 }
 
@@ -226,7 +226,6 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
@@ -307,7 +306,6 @@ impl PgManager {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
@@ -389,7 +387,6 @@ impl PgManager {
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-
         let descending_order = last.is_some();
         let cursor = after
             .or(before)

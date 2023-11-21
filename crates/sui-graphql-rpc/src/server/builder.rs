@@ -490,7 +490,7 @@ pub mod tests {
             .collect();
         assert_eq!(
             err,
-            vec!["Number of elements requested '51' exceeds maximum page size: '50".to_string()]
+            vec!["Page size exceeded - requested: 51, limit: 50".to_string()]
         );
     }
 
