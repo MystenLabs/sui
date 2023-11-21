@@ -41,7 +41,6 @@ import { PortfolioName } from './PortfolioName';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
-import SvgSuiTokensStack from './TokensStackIcon';
 
 type TokenDetailsProps = {
 	coinType?: string;
@@ -304,6 +303,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	);
 
 	const { apiEnv } = useAppSelector((state) => state.app);
+	const isMainnet = apiEnv === API_ENV.mainnet;
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
@@ -314,7 +314,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		// Keep cached for 2 minutes:
 		staleTime: 2 * 60 * 1000,
 		retry: false,
-		enabled: apiEnv === API_ENV.mainnet,
+		enabled: isMainnet,
 	});
 
 	const {
@@ -375,7 +375,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	}
 	return (
 		<>
-			{apiEnv === API_ENV.mainnet && data?.degraded && (
+			{isMainnet && data?.degraded && (
 				<div className="rounded-2xl bg-warning-light border border-solid border-warning-dark/20 text-warning-dark flex items-center py-2 px-3 mb-4">
 					<Info12 className="shrink-0" />
 					<div className="ml-2">
@@ -408,23 +408,22 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 										isDefiWalletEnabled ? 'bg-gradients-graph-cards' : 'bg-hero/5',
 									)}
 								>
-									{accountHasSui ? (
-										<div className="flex flex-col gap-1 items-center">
-											<CoinBalance amount={tokenBalance} type={activeCoinType} />
-										</div>
-									) : (
+									<div className="flex flex-col gap-1 items-center">
+										<CoinBalance amount={tokenBalance} type={activeCoinType} />
+									</div>
+
+									{!accountHasSui ? (
 										<div className="flex flex-col gap-5">
 											<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
-												<SvgSuiTokensStack className="h-14 w-14 text-steel" />
-												<div className="flex flex-col gap-2 justify-center">
-													<Text variant="pBodySmall" color="gray-80" weight="normal">
-														To send transactions on the Sui network, you need SUI in your wallet.
-													</Text>
-												</div>
+												<Text variant="pBodySmall" color="gray-80" weight="normal">
+													{isMainnet
+														? 'Buy SUI to get started'
+														: 'To send transactions on the Sui network, you need SUI in your wallet.'}
+												</Text>
 											</div>
 											<FaucetRequestButton />
 										</div>
-									)}
+									) : null}
 									{isError ? (
 										<Alert>
 											<div>
@@ -433,13 +432,22 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 										</Alert>
 									) : null}
 									<div className="grid grid-cols-3 gap-3 w-full">
-										<LargeButton
-											center
-											to="/onramp"
-											disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-										>
-											Buy
-										</LargeButton>
+										{isMainnet ? (
+											<LargeButton
+												spacing="sm"
+												className={
+													!accountHasSui && isMainnet
+														? 'col-span-3 !bg-sui-primaryBlue2023 !text-white'
+														: ''
+												}
+												primary={!accountHasSui}
+												center
+												to="/onramp"
+												disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
+											>
+												Buy
+											</LargeButton>
+										) : null}
 
 										<LargeButton
 											center
@@ -480,9 +488,15 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 										>
 											Swap
 										</LargeButton>
+										{!accountHasSui && (
+											<LargeButton disabled to="/stake" center>
+												Stake
+											</LargeButton>
+										)}
 									</div>
+
 									<div className="w-full">
-										{activeCoinType === SUI_TYPE_ARG ? (
+										{activeCoinType === SUI_TYPE_ARG && accountHasSui ? (
 											<TokenIconLink
 												disabled={!tokenBalance}
 												accountAddress={activeAccountAddress}
