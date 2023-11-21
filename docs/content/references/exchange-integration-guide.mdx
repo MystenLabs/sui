@@ -93,7 +93,7 @@ Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1
 
 The following code sample demonstrates how to derive a Sui address in Rust:
 
-```move
+```rust
 let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = MultiSig
 // Hash the [flag, public key] bytearray using Blake2b
 let mut hasher = DefaultHash::default();
@@ -137,7 +137,7 @@ The response is a JSON object that includes the totalBalance for the address:
 
 The following example demonstrates using sui_getBalance in Rust:
 
-```move
+```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
 use sui_sdk::{SuiClient, SuiClientBuilder};
