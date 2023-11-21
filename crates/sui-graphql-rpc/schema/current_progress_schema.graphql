@@ -19,6 +19,14 @@ type Address implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	This resolver is not supported on the Address type.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	This resolver is not supported on the Address type.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -233,7 +241,16 @@ type ConsensusCommitPrologueTransaction {
 scalar DateTime
 
 type DynamicField {
+	"""
+	The string type, data, and serialized value of the DynamicField's 'name' field.
+	This field is used to uniquely identify a child of the parent object.
+	"""
 	name: MoveValue
+	"""
+	The actual data stored in the dynamic field.
+	The returned dynamic field is an object if its return type is MoveObject,
+	in which case it is also accessible off-chain via its address.
+	"""
 	value: DynamicFieldValue
 }
 
@@ -264,6 +281,18 @@ type DynamicFieldEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+input DynamicFieldName {
+	"""
+	The string type of the DynamicField's 'name' field.
+	A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
+	"""
+	type: String!
+	"""
+	The Base64 encoded bcs serialization of the DynamicField's 'name' field.
+	"""
+	bcs: Base64!
 }
 
 union DynamicFieldValue = MoveObject | MoveValue
@@ -725,6 +754,25 @@ type Object implements ObjectOwner {
 	The domain that a user address has explicitly configured as their default domain
 	"""
 	defaultNameServiceName: String
+	"""
+	Access a dynamic field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The dynamic fields on an object.
+	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+	"""
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -793,6 +841,8 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	dynamicField(name: DynamicFieldName!): DynamicField
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -814,6 +864,25 @@ type Owner implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	Access a dynamic field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The dynamic fields on an object.
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
+	"""
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 

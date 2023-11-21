@@ -9,7 +9,7 @@ use crate::{context_data::db_data_provider::PgManager, error::Error};
 use super::{
     balance::Balance,
     coin::Coin,
-    dynamic_field::DynamicField,
+    dynamic_field::{DynamicField, DynamicFieldName},
     object::{Object, ObjectFilter},
     stake::StakedSui,
     sui_address::SuiAddress,
@@ -156,6 +156,19 @@ impl Address {
     // ) -> Result<Option<Connection<String, NameService>>> {
     //     unimplemented!()
     // }
+
+    /// This resolver is not supported on the Address type.
+    pub async fn dynamic_field(&self, _name: DynamicFieldName) -> Result<Option<DynamicField>> {
+        Err(Error::DynamicFieldOnAddress.extend())
+    }
+
+    /// This resolver is not supported on the Address type.
+    pub async fn dynamic_object_field(
+        &self,
+        _name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        Err(Error::DynamicFieldOnAddress.extend())
+    }
 
     pub async fn dynamic_field_connection(
         &self,

@@ -1,11 +1,11 @@
-processed 12 tasks
+processed 11 tasks
 
 task 1 'publish'. lines 15-37:
 created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run-graphql'. lines 39-52:
+task 2 'run-graphql'. lines 39-53:
 Response: {
   "data": {
     "address": {
@@ -16,24 +16,20 @@ Response: {
   }
 }
 
-task 3 'run'. lines 54-54:
+task 3 'run'. lines 55-55:
 created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 56-56:
+task 4 'view-object'. lines 57-57:
 Owner: Account Address ( A )
 Version: 3
 Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
 
-task 5 'create-checkpoint'. lines 58-58:
+task 5 'create-checkpoint'. lines 59-59:
 Checkpoint created: 1
 
-task 6 'view-checkpoint'. lines 60-60:
-CheckpointSummary { epoch: 0, seq: 1, content_digest: 94FSxnwDKDpJ8txUBNcnxU75aathRbysGuihNUchZokV,
-            epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 2000000, storage_cost: 7873600, storage_rebate: 978120, non_refundable_storage_fee: 9880 }}
-
-task 7 'run-graphql'. lines 62-75:
+task 6 'run-graphql'. lines 61-75:
 Response: {
   "data": {
     "address": {
@@ -41,9 +37,10 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
-              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
-              "kind": "OWNED"
+              "kind": "OWNED",
+              "owner": {
+                "location": "0x0000000000000000000000000000000000000000000000000000000000000042"
+              }
             }
           }
         ]
@@ -52,7 +49,7 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 77-90:
+task 7 'run-graphql'. lines 77-91:
 Response: {
   "data": {
     "address": {
@@ -60,9 +57,10 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
-              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
-              "kind": "OWNED"
+              "kind": "OWNED",
+              "owner": {
+                "location": "0x0000000000000000000000000000000000000000000000000000000000000042"
+              }
             }
           }
         ]
@@ -71,7 +69,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 92-105:
+task 8 'run-graphql'. lines 93-107:
 Response: {
   "data": {
     "address": {
@@ -79,9 +77,10 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
-              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
-              "kind": "OWNED"
+              "kind": "OWNED",
+              "owner": {
+                "location": "0x0000000000000000000000000000000000000000000000000000000000000042"
+              }
             }
           }
         ]
@@ -90,7 +89,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 107-120:
+task 9 'run-graphql'. lines 109-123:
 Response: {
   "data": {
     "owner": {
@@ -98,9 +97,10 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0x289d74be6572c74c6b9652175e2f77d8cffc181b9cf997c7782b000ceed6edf0",
-              "digest": "9KxfyrxUUSMJK1UD7PAMzVEbdRF3wQHghE1qHrMh47fV",
-              "kind": "OWNED"
+              "kind": "OWNED",
+              "owner": {
+                "location": "0x0000000000000000000000000000000000000000000000000000000000000042"
+              }
             }
           }
         ]
@@ -109,7 +109,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 122-135:
+task 10 'run-graphql'. lines 125-139:
 Response: {
   "data": {
     "object": null
