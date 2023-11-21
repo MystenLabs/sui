@@ -14,11 +14,11 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03002]: unbound module
+error[E03006]: unexpected name in this position
   ┌─ ./sources/UseSigner.move:5:5
   │
 5 │     signer::address_of(account)
-  │     ^^^^^^ Unbound module alias 'signer'
+  │     ^^^^^^ Could not resolve the name 'signer'
 
 Command `-d -v build`:
 INCLUDING DEPENDENCY MoveStdlib
