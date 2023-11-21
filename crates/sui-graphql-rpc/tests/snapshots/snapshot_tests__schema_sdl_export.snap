@@ -814,7 +814,7 @@ type Owner implements ObjectOwner {
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	The stake objects for the given address
+	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
@@ -911,6 +911,13 @@ type Query {
 	epoch(id: Int): Epoch
 	checkpoint(id: CheckpointId): Checkpoint
 	transactionBlock(digest: String!): TransactionBlock
+	"""
+	The coin objects that exist in the network.
+	The type field is a string of the inner type of the coin
+	by which to filter. If no type is provided, it will use the default SUI coin type,
+	0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI.
+	"""
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection

@@ -7,6 +7,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
+    coin::Coin,
     epoch::Epoch,
     event::{Event, EventFilter},
     object::{Object, ObjectFilter},
@@ -111,6 +112,25 @@ impl Query {
     ) -> Result<Option<TransactionBlock>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_tx(&digest)
+            .await
+            .extend()
+    }
+
+    /// The coin objects that exist in the network.
+    /// The type field is a string of the inner type of the coin
+    /// by which to filter. If no type is provided, it will use the default SUI coin type,
+    /// 0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI.
+    async fn coin_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        type_: Option<String>,
+    ) -> Result<Option<Connection<String, Coin>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coins(None, type_, first, after, last, before)
             .await
             .extend()
     }

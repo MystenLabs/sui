@@ -50,7 +50,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
         cursor: Option<Vec<u8>>,
         descending_order: bool,
         limit: i64,
-        address: Vec<u8>,
+        address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, DB>;
     fn multi_get_objs(

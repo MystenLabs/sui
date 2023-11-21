@@ -216,9 +216,11 @@ impl PgManager {
         Ok(ChainIdentifier::from(digest))
     }
 
+    /// Fetches the coins owned by the address and filters them by the given coin type.
+    /// If no address is given, it fetches all available coin objects matching the coin type.
     async fn multi_get_coins(
         &self,
-        address: Vec<u8>,
+        address: Option<Vec<u8>>,
         coin_type: String,
         first: Option<u64>,
         after: Option<String>,
@@ -923,16 +925,19 @@ impl PgManager {
         }
     }
 
+    /// Fetches all coins owned by the given address that match the given coin type.
+    /// If no address is given, then it will fetch all coin objects of the given type.
+    /// If no coin type is provided, it will use the default gas coin (SUI).
     pub(crate) async fn fetch_coins(
         &self,
-        address: SuiAddress,
+        address: Option<SuiAddress>,
         coin_type: Option<String>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>, Error> {
-        let address = address.into_vec();
+        let address = address.map(|addr| addr.into_vec());
         let coin_type = coin_type.unwrap_or_else(|| {
             GAS::type_().to_canonical_string(/* with_prefix */ true)
         });
