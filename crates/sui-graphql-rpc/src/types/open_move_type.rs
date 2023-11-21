@@ -4,16 +4,27 @@
 use std::fmt;
 
 use async_graphql::*;
+use move_binary_format::file_format::Ability;
 use serde::{Deserialize, Serialize};
 use sui_package_resolver::OpenSignatureBody;
 
-/// Represents types that could contain references or free type parameters.  Such types can appear
-/// as function parameters, in fields of structs, or as actual type parameter.
-#[derive(SimpleObject)]
-#[graphql(complex)]
 pub(crate) struct OpenMoveType {
-    /// Structured representation of the type signature.
     signature: OpenMoveTypeSignature,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum MoveAbility {
+    Copy,
+    Drop,
+    Key,
+    Store,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum MoveVisibility {
+    Public,
+    Private,
+    Friend,
 }
 
 scalar!(
@@ -37,10 +48,10 @@ type OpenMoveTypeSignatureBody =
         package: string,
         module: string,
         type: string,
-        typeParameters: [OpenMoveTypeSignatureBody]?
+        typeParameters: [OpenMoveTypeSignatureBody]
       }
     }
-  | { TypeParameter: number }"
+  | { typeParameter: number }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,11 +92,26 @@ pub(crate) enum OpenMoveTypeSignatureBody {
     },
 }
 
-#[ComplexObject]
+/// Represents types that could contain references or free type parameters.  Such types can appear
+/// as function parameters, in fields of structs, or as actual type parameter.
+#[Object]
 impl OpenMoveType {
+    /// Structured representation of the type signature.
+    async fn signature(&self) -> Option<&OpenMoveTypeSignature> {
+        Some(&self.signature)
+    }
+
     /// Flat representation of the type signature, as a displayable string.
-    async fn repr(&self) -> String {
-        self.signature.to_string()
+    async fn repr(&self) -> Option<String> {
+        Some(self.signature.to_string())
+    }
+}
+
+impl From<OpenSignatureBody> for OpenMoveType {
+    fn from(signature: OpenSignatureBody) -> Self {
+        OpenMoveType {
+            signature: signature.into(),
+        }
     }
 }
 
@@ -123,6 +149,20 @@ impl From<OpenSignatureBody> for OpenMoveTypeSignatureBody {
             },
 
             OSB::TypeParameter(idx) => OMTSB::TypeParameter(idx),
+        }
+    }
+}
+
+impl From<Ability> for MoveAbility {
+    fn from(ability: Ability) -> Self {
+        use Ability as A;
+        use MoveAbility as M;
+
+        match ability {
+            A::Copy => M::Copy,
+            A::Drop => M::Drop,
+            A::Store => M::Store,
+            A::Key => M::Key,
         }
     }
 }

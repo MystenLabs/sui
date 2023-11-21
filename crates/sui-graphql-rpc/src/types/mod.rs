@@ -21,12 +21,12 @@ pub(crate) mod json;
 pub(crate) mod move_module;
 pub(crate) mod move_object;
 pub(crate) mod move_package;
+pub(crate) mod move_struct;
 pub(crate) mod move_type;
 pub(crate) mod move_value;
 pub(crate) mod name_service;
 pub(crate) mod object;
 pub(crate) mod object_change;
-#[allow(dead_code)] // TODO: Remove when integrated
 pub(crate) mod open_move_type;
 pub(crate) mod owner;
 pub(crate) mod protocol_config;

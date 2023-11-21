@@ -530,6 +530,13 @@ type Linkage {
 	version: Int!
 }
 
+enum MoveAbility {
+	COPY
+	DROP
+	KEY
+	STORE
+}
+
 """
 The contents of a Move Value, corresponding to the following recursive type:
 
@@ -545,6 +552,11 @@ type MoveData =
 """
 scalar MoveData
 
+type MoveField {
+	name: String!
+	type: OpenMoveType
+}
+
 """
 Represents a module in Move, a library that defines struct types
 and functions that operate on these types.
@@ -557,6 +569,10 @@ type MoveModule {
 	functions from this module).
 	"""
 	friendConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
+	"""
+	Look-up the definition of a struct defined in this module, by its name.
+	"""
+	struct(name: String!): MoveStruct
 	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
@@ -658,6 +674,40 @@ type MovePackage {
 	"""
 	bcs: Base64
 	asObject: Object!
+}
+
+"""
+Description of a type, defined in a Move module.
+"""
+type MoveStruct {
+	"""
+	The module this struct was originally defined in.
+	"""
+	module: MoveModule!
+	"""
+	The struct's (unqualified) type name.
+	"""
+	name: String!
+	"""
+	Abilities this struct has.
+	"""
+	abilities: [MoveAbility!]
+	"""
+	Constraints on the struct's formal type parameters.  Move bytecode does not name type
+	parameters, so when they are referenced (e.g. in field types) they are identified by their
+	index in this list.
+	"""
+	typeParameters: [MoveStructTypeParameter!]
+	"""
+	The names and types of the struct's fields.  Field types reference type parameters, by their
+	index in the defining struct's `typeParameters` list.
+	"""
+	fields: [MoveField!]
+}
+
+type MoveStructTypeParameter {
+	constraints: [MoveAbility!]!
+	isPhantom: Boolean!
 }
 
 """
@@ -892,6 +942,46 @@ interface ObjectOwner {
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
+
+"""
+Represents types that could contain references or free type parameters.  Such types can appear
+as function parameters, in fields of structs, or as actual type parameter.
+"""
+type OpenMoveType {
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: OpenMoveTypeSignature
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
+	repr: String
+}
+
+"""
+The shape of an abstract Move Type (a type that can contain free type parameters, and can optionally be taken by reference), corresponding to the following recursive type:
+
+type OpenMoveTypeSignature = {
+  ref: ("&" | "&mut")?,
+  body: OpenMoveTypeSignatureBody,
+}
+
+type OpenMoveTypeSignatureBody =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: OpenMoveTypeSignatureBody }
+  | {
+      struct {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [OpenMoveTypeSignatureBody]
+      }
+    }
+  | { typeParameter: number }
+"""
+scalar OpenMoveTypeSignature
 
 type Owner implements ObjectOwner {
 	asAddress: Address
