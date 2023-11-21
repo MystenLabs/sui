@@ -5,8 +5,8 @@ use super::base64::Base64;
 use super::move_module::MoveModule;
 use super::object::Object;
 use super::sui_address::SuiAddress;
+use crate::config::ServiceConfig;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
-use crate::context_data::DEFAULT_PAGE_SIZE;
 use crate::error::Error;
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::*;
@@ -72,12 +72,20 @@ impl MovePackage {
     /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, MoveModule>>> {
         use std::ops::Bound as B;
+
+        let default_page_size = ctx
+            .data::<ServiceConfig>()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .extend()?
+            .limits
+            .max_page_size;
 
         // TODO: make cursor opaque.
         // for now it same as module name
@@ -94,7 +102,7 @@ impl MovePackage {
             (Some(first), Some(last)) if last < first => (first - last, last),
             (Some(first), _) => (0, first),
             (None, Some(last)) => (total - last, last),
-            (None, None) => (0, DEFAULT_PAGE_SIZE),
+            (None, None) => (0, default_page_size),
         };
 
         let mut connection = Connection::new(false, false);
