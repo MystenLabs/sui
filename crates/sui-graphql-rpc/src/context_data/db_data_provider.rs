@@ -119,6 +119,8 @@ pub enum DbValidationError {
     InvalidOwnerType,
     #[error("Query cost exceeded - cost: {0}, limit: {1}")]
     QueryCostExceeded(u64, u64),
+    #[error("Number of elements requested '{0}' exceeds maximum page size: '{1}'")]
+    PageSizeExceeded(u64, u64),
 }
 
 pub(crate) struct PgManager {
@@ -223,6 +225,8 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        self.validate_page_limit(first, last)?;
+
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
@@ -303,6 +307,8 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
+        self.validate_page_limit(first, last)?;
+
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
@@ -383,6 +389,8 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        self.validate_page_limit(first, last)?;
+
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
@@ -425,6 +433,8 @@ impl PgManager {
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        self.validate_page_limit(first, last)?;
+
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
@@ -528,6 +538,30 @@ impl PgManager {
         }
         if filter.object_keys.is_some() {
             return Err(DbValidationError::UnsupportedObjectKeys.into());
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn validate_page_limit(
+        &self,
+        first: Option<u64>,
+        last: Option<u64>,
+    ) -> Result<(), Error> {
+        if let Some(f) = first {
+            if f > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        if let Some(l) = last {
+            if l > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
+                );
+            }
         }
 
         Ok(())

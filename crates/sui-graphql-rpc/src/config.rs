@@ -14,6 +14,7 @@ const MAX_QUERY_DEPTH: u32 = 20;
 const MAX_QUERY_NODES: u32 = 200;
 const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
+const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page on a connection
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
@@ -54,6 +55,8 @@ pub struct Limits {
     pub(crate) max_query_payload_size: u32,
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
+    #[serde(default)]
+    pub(crate) max_page_size: u64,
     #[serde(default)]
     pub(crate) request_timeout_ms: u64,
 }
@@ -154,6 +157,11 @@ impl ServiceConfig {
         BigInt::from(self.limits.max_db_query_cost)
     }
 
+    /// Maximum number of elements allowed on a single page of a connection.
+    async fn max_page_size(&self) -> BigInt {
+        BigInt::from(self.limits.max_page_size)
+    }
+
     /// Maximum time in milliseconds that will be spent to serve one request.
     async fn request_timeout_ms(&self) -> BigInt {
         BigInt::from(self.limits.request_timeout_ms)
@@ -184,6 +192,7 @@ impl Default for Limits {
             max_query_nodes: MAX_QUERY_NODES,
             max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: MAX_DB_QUERY_COST,
+            max_page_size: MAX_PAGE_SIZE,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
         }
     }
@@ -278,6 +287,7 @@ mod tests {
                 max-query-nodes = 300
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
+                max-page-size = 50
                 request-timeout-ms = 27000
             "#,
         )
@@ -289,6 +299,7 @@ mod tests {
                 max_query_nodes: 300,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
+                max_page_size: 50,
                 request_timeout_ms: 27_000,
             },
             ..Default::default()
@@ -345,6 +356,7 @@ mod tests {
                 max-query-nodes = 320
                 max-query-payload-size = 200
                 max-db-query-cost = 20
+                max-page-size = 20
                 request-timeout-ms = 30000
 
                 [experiments]
@@ -359,6 +371,7 @@ mod tests {
                 max_query_nodes: 320,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
+                max_page_size: 20,
                 request_timeout_ms: 30_000,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),

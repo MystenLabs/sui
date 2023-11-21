@@ -313,6 +313,12 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn test_query_page_limit() {
+        test_query_page_limit_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn test_query_complexity_metrics() {
         test_query_complexity_metrics_impl().await;
     }
