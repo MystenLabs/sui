@@ -8,12 +8,22 @@ use sui_json_rpc_types::NetworkMetrics;
 
 use crate::schema_v2::epoch_peak_tps;
 
-#[derive(Clone, Debug, Default, Queryable, Insertable)]
+#[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = epoch_peak_tps)]
 pub struct StoredEpochPeakTps {
     pub epoch: i64,
     pub peak_tps: f64,
     pub peak_tps_30d: f64,
+}
+
+impl Default for StoredEpochPeakTps {
+    fn default() -> Self {
+        Self {
+            epoch: -1,
+            peak_tps: 0.0,
+            peak_tps_30d: 0.0,
+        }
+    }
 }
 
 #[derive(QueryableByName, Debug, Clone, Default)]

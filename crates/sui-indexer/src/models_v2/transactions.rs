@@ -12,7 +12,6 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
@@ -39,6 +38,17 @@ pub struct StoredTransaction {
     pub success_command_count: i16,
 }
 
+#[derive(Debug, Queryable)]
+pub struct TxSeq {
+    pub seq: i64,
+}
+
+impl Default for TxSeq {
+    fn default() -> Self {
+        Self { seq: -1 }
+    }
+}
+
 #[derive(Clone, Debug, Queryable)]
 pub struct StoredTransactionTimestamp {
     pub tx_sequence_number: i64,
@@ -61,14 +71,6 @@ pub struct StoredTransactionSuccessCommandCount {
 
 impl From<&IndexedTransaction> for StoredTransaction {
     fn from(tx: &IndexedTransaction) -> Self {
-        let cmd_count = tx
-            .sender_signed_data
-            .intent_message()
-            .value
-            .execution_parts()
-            .0
-            .num_commands();
-
         StoredTransaction {
             tx_sequence_number: tx.tx_sequence_number as i64,
             transaction_digest: tx.tx_digest.into_inner().to_vec(),
@@ -92,7 +94,7 @@ impl From<&IndexedTransaction> for StoredTransaction {
                 .collect(),
             timestamp_ms: tx.timestamp_ms as i64,
             transaction_kind: tx.transaction_kind.clone() as i16,
-            success_command_count: tx.effects.status().is_ok() as i16 * cmd_count as i16,
+            success_command_count: tx.successful_tx_num as i16,
         }
     }
 }
