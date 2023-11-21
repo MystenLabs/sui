@@ -267,20 +267,26 @@
     },
 
     "literals": [
-      /** Ascii  String literal: b"<ASCII string>" */
+      /** ASCII Bytestring literal: b"this is ascii" */
       {
         pattern: /(?:b)"(\\[\s\S]|[^\\"])*"/,
         lookbehind: true,
         alias: "string",
       },
-      /** Boolean value */
+      /** HEX Bytestring literal: x"AF" */
+      {
+        pattern: /(?:x)"([0-9A-F]+)"/,
+        lookbehind: true,
+        alias: "string",
+      },
+      /** Boolean literal: true */
       {
         pattern: /\b(?:true|false)\b/,
         alias: "boolean",
       },
-      /** Numeric value */
+      /** Number literal: 10, 10u8 */
       {
-        pattern: /\b\d[\d_]*\b/,
+        pattern: /\b\d[\d_]*(u8|u16|u32|u64|u128|u256)?\b/,
         alias: "number",
       },
       /** Address literal */
