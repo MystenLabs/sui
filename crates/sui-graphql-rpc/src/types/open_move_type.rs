@@ -4,15 +4,8 @@
 use std::fmt;
 
 use async_graphql::*;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{SignatureToken, StructHandleIndex},
-    CompiledModule,
-};
 use serde::{Deserialize, Serialize};
-
-use crate::error::Error;
-use crate::types::move_type::unexpected_signer_error;
+use sui_package_resolver::OpenSignatureBody;
 
 /// Represents types that could contain references or free type parameters.  Such types can appear
 /// as function parameters, in fields of structs, or as actual type parameter.
@@ -96,84 +89,41 @@ impl OpenMoveType {
     }
 }
 
-impl OpenMoveTypeSignature {
-    pub(crate) fn read(
-        signature: SignatureToken,
-        bytecode: &CompiledModule,
-    ) -> Result<Self, Error> {
-        use OpenMoveTypeReference as R;
-        use SignatureToken as S;
-
-        Ok(match signature {
-            S::Reference(signature) => OpenMoveTypeSignature {
-                ref_: Some(R::Immutable),
-                body: OpenMoveTypeSignatureBody::read(*signature, bytecode)?,
-            },
-
-            S::MutableReference(signature) => OpenMoveTypeSignature {
-                ref_: Some(R::Mutable),
-                body: OpenMoveTypeSignatureBody::read(*signature, bytecode)?,
-            },
-
-            signature => OpenMoveTypeSignature {
-                ref_: None,
-                body: OpenMoveTypeSignatureBody::read(signature, bytecode)?,
-            },
-        })
+impl From<OpenSignatureBody> for OpenMoveTypeSignature {
+    fn from(signature: OpenSignatureBody) -> Self {
+        OpenMoveTypeSignature {
+            ref_: None,
+            body: signature.into(),
+        }
     }
 }
 
-impl OpenMoveTypeSignatureBody {
-    fn read(signature: SignatureToken, bytecode: &CompiledModule) -> Result<Self, Error> {
-        use OpenMoveTypeSignatureBody as B;
-        use SignatureToken as S;
+impl From<OpenSignatureBody> for OpenMoveTypeSignatureBody {
+    fn from(signature: OpenSignatureBody) -> Self {
+        use OpenMoveTypeSignatureBody as OMTSB;
+        use OpenSignatureBody as OSB;
 
-        Ok(match signature {
-            S::Reference(_) | S::MutableReference(_) => return Err(unexpected_reference_error()),
-            S::Signer => return Err(unexpected_signer_error()),
+        match signature {
+            OSB::Address => OMTSB::Address,
+            OSB::Bool => OMTSB::Bool,
+            OSB::U8 => OMTSB::U8,
+            OSB::U16 => OMTSB::U16,
+            OSB::U32 => OMTSB::U32,
+            OSB::U64 => OMTSB::U64,
+            OSB::U128 => OMTSB::U128,
+            OSB::U256 => OMTSB::U256,
 
-            S::TypeParameter(idx) => B::TypeParameter(idx),
+            OSB::Vector(signature) => OMTSB::Vector(Box::new(OMTSB::from(*signature))),
 
-            S::Bool => B::Bool,
-            S::U8 => B::U8,
-            S::U16 => B::U16,
-            S::U32 => B::U32,
-            S::U64 => B::U64,
-            S::U128 => B::U128,
-            S::U256 => B::U256,
-            S::Address => B::Address,
+            OSB::Struct(struct_, type_params) => OMTSB::Struct {
+                package: struct_.package.to_canonical_string(/* with_prefix */ true),
+                module: struct_.module.to_string(),
+                type_: struct_.name.to_string(),
+                type_parameters: type_params.into_iter().map(OMTSB::from).collect(),
+            },
 
-            S::Vector(signature) => B::Vector(Box::new(OpenMoveTypeSignatureBody::read(
-                *signature, bytecode,
-            )?)),
-
-            S::Struct(struct_) => {
-                let (package, module, type_) = read_struct(struct_, bytecode);
-
-                B::Struct {
-                    package,
-                    module,
-                    type_,
-                    type_parameters: vec![],
-                }
-            }
-
-            S::StructInstantiation(struct_, type_parameters) => {
-                let (package, module, type_) = read_struct(struct_, bytecode);
-
-                let type_parameters = type_parameters
-                    .into_iter()
-                    .map(|signature| OpenMoveTypeSignatureBody::read(signature, bytecode))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                B::Struct {
-                    package,
-                    module,
-                    type_,
-                    type_parameters,
-                }
-            }
-        })
+            OSB::TypeParameter(idx) => OMTSB::TypeParameter(idx),
+        }
     }
 }
 
@@ -233,72 +183,32 @@ impl fmt::Display for OpenMoveTypeSignatureBody {
     }
 }
 
-/// Read the package, module and name of the struct at index `idx` of `bytecode`'s `StructHandle`
-/// table.
-fn read_struct(idx: StructHandleIndex, bytecode: &CompiledModule) -> (String, String, String) {
-    let struct_handle = bytecode.struct_handle_at(idx);
-    let module_handle = bytecode.module_handle_at(struct_handle.module);
-
-    let package = bytecode
-        .address_identifier_at(module_handle.address)
-        .to_canonical_string(/* with_prefix */ true);
-
-    let module = bytecode.identifier_at(module_handle.name).to_string();
-
-    let type_ = bytecode.identifier_at(struct_handle.name).to_string();
-
-    (package, module, type_)
-}
-
-/// Error from seeing a reference or mutable reference in the interior of a type signature.
-fn unexpected_reference_error() -> Error {
-    Error::Internal("Unexpected reference in signature.".to_string())
-}
-
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     use expect_test::expect;
-    use move_core_types::account_address::AccountAddress;
-    use sui_framework::BuiltInFramework;
-    use sui_types::base_types::ObjectID;
+    use move_core_types::language_storage::StructTag;
+    use sui_package_resolver::{StructKey, StructRef};
 
-    /// Get the signature token for the first return of a function in the framework.
-    fn param(
-        package: AccountAddress,
-        module: &str,
-        func: &str,
-        idx: usize,
-    ) -> (SignatureToken, CompiledModule) {
-        let framework = BuiltInFramework::get_package_by_id(&ObjectID::from(package));
-        let bytecode = framework
-            .modules()
-            .into_iter()
-            .find(|bytecode| bytecode.name().as_str() == module)
-            .unwrap();
+    use OpenSignatureBody as S;
 
-        let function_handle = bytecode
-            .function_handles()
-            .iter()
-            .find(|handle| bytecode.identifier_at(handle.name).as_str() == func)
-            .unwrap();
-
-        let parameters = &bytecode.signature_at(function_handle.parameters).0;
-
-        (parameters[idx].clone(), bytecode)
+    fn struct_key(s: &str) -> StructKey {
+        StructRef::from(&StructTag::from_str(s).unwrap()).as_key()
     }
 
     #[test]
     fn generic_signature() {
-        let (st, bc) = param(AccountAddress::TWO, "table", "borrow_mut", 0);
-        let signature = OpenMoveTypeSignature::read(st, &bc).unwrap();
+        let signature = OpenMoveTypeSignature::from(S::Struct(
+            struct_key("0x2::table::Table"),
+            vec![S::TypeParameter(0), S::TypeParameter(1)],
+        ));
 
         let expect = expect![[r#"
             OpenMoveTypeSignature {
-                ref_: Some(
-                    Mutable,
-                ),
+                ref_: None,
                 body: Struct {
                     package: "0x0000000000000000000000000000000000000000000000000000000000000002",
                     module: "table",
@@ -318,8 +228,10 @@ mod tests {
 
     #[test]
     fn instance_signature() {
-        let (st, bc) = param(AccountAddress::TWO, "sui", "transfer", 0);
-        let signature = OpenMoveTypeSignature::read(st, &bc).unwrap();
+        let signature = OpenMoveTypeSignature::from(S::Struct(
+            struct_key("0x2::coin::Coin"),
+            vec![S::Struct(struct_key("0x2::sui::SUI"), vec![])],
+        ));
 
         let expect = expect![[r#"
             OpenMoveTypeSignature {
@@ -343,57 +255,23 @@ mod tests {
 
     #[test]
     fn generic_signature_repr() {
-        let (st, bc) = param(AccountAddress::TWO, "table", "borrow_mut", 0);
-        let signature = OpenMoveTypeSignature::read(st, &bc).unwrap();
+        let signature = OpenMoveTypeSignature::from(S::Struct(
+            struct_key("0x2::table::Table"),
+            vec![S::TypeParameter(0), S::TypeParameter(1)],
+        ));
 
-        let expect = expect!["&mut 0x0000000000000000000000000000000000000000000000000000000000000002::table::Table<$0, $1>"];
+        let expect = expect!["0x0000000000000000000000000000000000000000000000000000000000000002::table::Table<$0, $1>"];
         expect.assert_eq(&format!("{signature}"));
     }
 
     #[test]
     fn instance_signature_repr() {
-        let (st, bc) = param(AccountAddress::TWO, "sui", "transfer", 0);
-        let signature = OpenMoveTypeSignature::read(st, &bc).unwrap();
+        let signature = OpenMoveTypeSignature::from(S::Struct(
+            struct_key("0x2::coin::Coin"),
+            vec![S::Struct(struct_key("0x2::sui::SUI"), vec![])],
+        ));
 
         let expect = expect!["0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"];
         expect.assert_eq(&format!("{signature}"));
-    }
-
-    #[test]
-    fn signer_type() {
-        let (_, bc) = param(AccountAddress::TWO, "transfer", "transfer", 0);
-        let error = OpenMoveTypeSignature::read(SignatureToken::Signer, &bc).unwrap_err();
-
-        let expect = expect![
-            "Internal error occurred while processing request: Unexpected value of type: signer."
-        ];
-        expect.assert_eq(&error.to_string());
-    }
-
-    #[test]
-    fn nested_signer_type() {
-        let (_, bc) = param(AccountAddress::TWO, "transfer", "transfer", 0);
-        let error = OpenMoveTypeSignature::read(
-            SignatureToken::Vector(Box::new(SignatureToken::Signer)),
-            &bc,
-        )
-        .unwrap_err();
-
-        let expect = expect![
-            "Internal error occurred while processing request: Unexpected value of type: signer."
-        ];
-        expect.assert_eq(&error.to_string());
-    }
-
-    #[test]
-    fn nested_reference() {
-        let (st, bc) = param(AccountAddress::TWO, "table", "borrow_mut", 0);
-        let error =
-            OpenMoveTypeSignature::read(SignatureToken::Vector(Box::new(st)), &bc).unwrap_err();
-
-        let expect = expect![
-            "Internal error occurred while processing request: Unexpected reference in signature."
-        ];
-        expect.assert_eq(&error.to_string());
     }
 }
