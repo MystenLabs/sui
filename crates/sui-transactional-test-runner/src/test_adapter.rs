@@ -503,7 +503,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
                     .await;
 
-                let used_variables = self.resolve_graphq_variables(&variables)?;
+                let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
                     .graphql_client
                     .execute_to_graphql(
@@ -982,7 +982,7 @@ impl<'a> SuiTestAdapter<'a> {
         }
         variables
     }
-    fn resolve_graphq_variables(
+    fn resolve_graphql_variables(
         &self,
         declared: &[String],
     ) -> anyhow::Result<Vec<GraphqlQueryVariable>> {
