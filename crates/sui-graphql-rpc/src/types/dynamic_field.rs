@@ -84,6 +84,8 @@ impl DynamicField {
     }
 
     /// The actual data stored in the dynamic field.
+    /// The returned dynamic field is an object if its return type is MoveObject,
+    /// in which case it is also accessible off-chain via its address.
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             let obj = ctx

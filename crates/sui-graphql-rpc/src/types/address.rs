@@ -157,16 +157,15 @@ impl Address {
     //     unimplemented!()
     // }
 
-    pub async fn dynamic_field(
-        &self,
-        _dynamic_field_name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>> {
+    /// This resolver is not supported on the Address type.
+    pub async fn dynamic_field(&self, _name: DynamicFieldName) -> Result<Option<DynamicField>> {
         Err(Error::DynamicFieldOnAddress.extend())
     }
 
+    /// This resolver is not supported on the Address type.
     pub async fn dynamic_object_field(
         &self,
-        _dynamic_field_name: DynamicFieldName,
+        _name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         Err(Error::DynamicFieldOnAddress.extend())
     }

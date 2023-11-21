@@ -886,7 +886,7 @@
 >    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
 >  ) {
 >    dynamicField(
->      dynamicFieldName: {
+>      name: {
 >        type: "0x2::kiosk::Listing",
 >        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
 >      }
@@ -998,7 +998,7 @@
 >    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
 >  ) {
 >    dynamicObjectField(
->      dynamicFieldName: {type: "0x2::kiosk::Item", bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw="}
+>      name: {type: "0x2::kiosk::Item", bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw="}
 >    ) {
 >      ...DynamicFieldSelect
 >    }

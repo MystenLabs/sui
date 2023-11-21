@@ -234,41 +234,39 @@ impl Object {
     //     unimplemented!()
     // }
 
-    /// A field on an object that can be added or removed on-the-fly,
-    /// only affects gas when accessed, and can store heterogenous values.
+    /// Access a dynamic field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
     pub async fn dynamic_field(
         &self,
         ctx: &Context<'_>,
-        dynamic_field_name: DynamicFieldName,
+        name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(
-                self.address,
-                dynamic_field_name,
-                DynamicFieldType::DynamicField,
-            )
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
             .await
             .extend()
     }
 
-    /// An object stored as a dynamic field on the parent object.
-    /// This object is also accessible directly via its address.
-    /// A dynamic field is an object field if its returned type is MoveObject.
+    /// Access a dynamic object field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
     pub async fn dynamic_object_field(
         &self,
         ctx: &Context<'_>,
-        dynamic_field_name: DynamicFieldName,
+        name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_dynamic_field(
-                self.address,
-                dynamic_field_name,
-                DynamicFieldType::DynamicObject,
-            )
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
             .await
             .extend()
     }
 
+    /// The dynamic fields on an object.
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
     pub async fn dynamic_field_connection(
         &self,
         ctx: &Context<'_>,
