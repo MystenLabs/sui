@@ -53,8 +53,11 @@ impl Server {
             ServerBuilder::new(config.connection.port, config.connection.host.clone());
 
         let name_service_config = config.name_service.clone();
-        let reader = PgManager::reader(config.connection.db_url.clone())
-            .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+        let reader = PgManager::reader_with_config(
+            config.connection.db_url.clone(),
+            config.connection.db_pool_size,
+        )
+        .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);

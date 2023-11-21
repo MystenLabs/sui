@@ -227,6 +227,34 @@ type CoinEdge {
 	cursor: String!
 }
 
+type CoinMetadata {
+	"""
+	The number of decimal places used to represent the token.
+	"""
+	decimals: Int
+	"""
+	Full, official name of the token.
+	"""
+	name: String
+	"""
+	The token's identifying abbreviation.
+	"""
+	symbol: String
+	"""
+	Optional description of the token, provided by the creator of the token.
+	"""
+	description: String
+	iconUrl: String
+	"""
+	The overall quantity of tokens that will be issued.
+	"""
+	supply: BigInt
+	"""
+	Convert the coin metadata object into a Move object.
+	"""
+	asMoveObject: MoveObject!
+}
+
 type CommitteeMember {
 	authorityName: String
 	stakeUnit: Int
@@ -586,6 +614,10 @@ type MoveObject {
 	Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
 	"""
 	asStakedSui: StakedSui
+	"""
+	Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
+	"""
+	asCoinMetadata: CoinMetadata
 }
 
 type MovePackage {
@@ -978,9 +1010,8 @@ type Query {
 	transactionBlock(digest: String!): TransactionBlock
 	"""
 	The coin objects that exist in the network.
-	The type field is a string of the inner type of the coin
-	by which to filter. If no type is provided, it will use the default SUI coin type,
-	0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI.
+	The type field is a string of the inner type of the coin by which to filter.
+	If no type is provided, it will default to 0x2::sui::SUI.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
@@ -993,6 +1024,7 @@ type Query {
 	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
+	coinMetadata(coinType: String!): CoinMetadata
 }
 
 type RandomnessStateUpdate {

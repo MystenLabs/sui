@@ -8,6 +8,7 @@ use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
     coin::Coin,
+    coin_metadata::CoinMetadata,
     epoch::Epoch,
     event::{Event, EventFilter},
     object::{Object, ObjectFilter},
@@ -117,9 +118,8 @@ impl Query {
     }
 
     /// The coin objects that exist in the network.
-    /// The type field is a string of the inner type of the coin
-    /// by which to filter. If no type is provided, it will use the default SUI coin type,
-    /// 0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI.
+    /// The type field is a string of the inner type of the coin by which to filter.
+    /// If no type is provided, it will default to 0x2::sui::SUI.
     async fn coin_connection(
         &self,
         ctx: &Context<'_>,
@@ -220,6 +220,17 @@ impl Query {
     async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
         ctx.data_unchecked::<PgManager>()
             .fetch_latest_sui_system_state()
+            .await
+            .extend()
+    }
+
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coin_metadata(coin_type)
             .await
             .extend()
     }

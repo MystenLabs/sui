@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::coin::CoinDowncastError;
+use super::coin_metadata::{CoinMetadata, CoinMetadataDowncastError};
 use super::move_value::MoveValue;
 use super::stake::StakedSuiDowncastError;
 use super::{coin::Coin, object::Object};
@@ -65,6 +66,17 @@ impl MoveObject {
             Err(StakedSuiDowncastError::NotAStakedSui) => Ok(None),
             Err(StakedSuiDowncastError::Bcs(e)) => Err(Error::Internal(format!(
                 "Failed to deserialize staked sui: {e}"
+            ))),
+        }
+    }
+
+    /// Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
+    async fn as_coin_metadata(&self) -> Result<Option<CoinMetadata>, Error> {
+        match CoinMetadata::try_from(self) {
+            Ok(metadata) => Ok(Some(metadata)),
+            Err(CoinMetadataDowncastError::NotCoinMetadata) => Ok(None),
+            Err(CoinMetadataDowncastError::Bcs(e)) => Err(Error::Internal(format!(
+                "Failed to deserialize coin metadata: {e}"
             ))),
         }
     }

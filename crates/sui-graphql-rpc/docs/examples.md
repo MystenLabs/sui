@@ -20,56 +20,58 @@
 #### &emsp;&emsp;[Last Ten After Checkpoint](#262142)
 ### [Coin Connection](#5)
 #### &emsp;&emsp;[Coin Connection](#327675)
-### [Epoch](#6)
-#### &emsp;&emsp;[Latest Epoch](#393210)
-#### &emsp;&emsp;[Specific Epoch](#393211)
-#### &emsp;&emsp;[With Checkpoint Connection](#393212)
-#### &emsp;&emsp;[With Tx Block Connection](#393213)
-#### &emsp;&emsp;[With Tx Block Connection Latest Epoch](#393214)
-### [Event Connection](#7)
-#### &emsp;&emsp;[Event Connection](#458745)
-### [Name Service](#8)
-#### &emsp;&emsp;[Name Service](#524280)
-### [Object](#9)
-#### &emsp;&emsp;[Object](#589815)
-### [Object Connection](#10)
-#### &emsp;&emsp;[Filter Object Ids](#655350)
-#### &emsp;&emsp;[Filter Owner](#655351)
-#### &emsp;&emsp;[Object Connection](#655352)
-### [Owner](#11)
-#### &emsp;&emsp;[Dynamic Field](#720885)
-#### &emsp;&emsp;[Dynamic Field Connection](#720886)
-#### &emsp;&emsp;[Dynamic Object Field](#720887)
-#### &emsp;&emsp;[Owner](#720888)
-### [Protocol Configs](#12)
-#### &emsp;&emsp;[Key Value](#786420)
-#### &emsp;&emsp;[Key Value Feature Flag](#786421)
-#### &emsp;&emsp;[Specific Config](#786422)
-#### &emsp;&emsp;[Specific Feature Flag](#786423)
-### [Service Config](#13)
-#### &emsp;&emsp;[Service Config](#851955)
-### [Stake Connection](#14)
-#### &emsp;&emsp;[Stake Connection](#917490)
-### [Sui System State Summary](#15)
-#### &emsp;&emsp;[Sui System State Summary](#983025)
-### [Transaction Block](#16)
-#### &emsp;&emsp;[Transaction Block](#1048560)
-#### &emsp;&emsp;[Transaction Block Kind](#1048561)
-### [Transaction Block Connection](#17)
-#### &emsp;&emsp;[Before After Checkpoint](#1114095)
-#### &emsp;&emsp;[Changed Object Filter](#1114096)
-#### &emsp;&emsp;[Input Object Filter](#1114097)
-#### &emsp;&emsp;[Input Object Sent Addr Filter](#1114098)
-#### &emsp;&emsp;[Package Filter](#1114099)
-#### &emsp;&emsp;[Package Module Filter](#1114100)
-#### &emsp;&emsp;[Package Module Func Filter](#1114101)
-#### &emsp;&emsp;[Recv Addr Filter](#1114102)
-#### &emsp;&emsp;[Sent Addr Filter](#1114103)
-#### &emsp;&emsp;[Tx Ids Filter](#1114104)
-#### &emsp;&emsp;[Tx Kind Filter](#1114105)
-#### &emsp;&emsp;[With Defaults Ascending](#1114106)
-### [Transaction Block Effects](#18)
-#### &emsp;&emsp;[Transaction Block Effects](#1179630)
+### [Coin Metadata](#6)
+#### &emsp;&emsp;[Coin Metadata](#393210)
+### [Epoch](#7)
+#### &emsp;&emsp;[Latest Epoch](#458745)
+#### &emsp;&emsp;[Specific Epoch](#458746)
+#### &emsp;&emsp;[With Checkpoint Connection](#458747)
+#### &emsp;&emsp;[With Tx Block Connection](#458748)
+#### &emsp;&emsp;[With Tx Block Connection Latest Epoch](#458749)
+### [Event Connection](#8)
+#### &emsp;&emsp;[Event Connection](#524280)
+### [Name Service](#9)
+#### &emsp;&emsp;[Name Service](#589815)
+### [Object](#10)
+#### &emsp;&emsp;[Object](#655350)
+### [Object Connection](#11)
+#### &emsp;&emsp;[Filter Object Ids](#720885)
+#### &emsp;&emsp;[Filter Owner](#720886)
+#### &emsp;&emsp;[Object Connection](#720887)
+### [Owner](#12)
+#### &emsp;&emsp;[Dynamic Field](#786420)
+#### &emsp;&emsp;[Dynamic Field Connection](#786421)
+#### &emsp;&emsp;[Dynamic Object Field](#786422)
+#### &emsp;&emsp;[Owner](#786423)
+### [Protocol Configs](#13)
+#### &emsp;&emsp;[Key Value](#851955)
+#### &emsp;&emsp;[Key Value Feature Flag](#851956)
+#### &emsp;&emsp;[Specific Config](#851957)
+#### &emsp;&emsp;[Specific Feature Flag](#851958)
+### [Service Config](#14)
+#### &emsp;&emsp;[Service Config](#917490)
+### [Stake Connection](#15)
+#### &emsp;&emsp;[Stake Connection](#983025)
+### [Sui System State Summary](#16)
+#### &emsp;&emsp;[Sui System State Summary](#1048560)
+### [Transaction Block](#17)
+#### &emsp;&emsp;[Transaction Block](#1114095)
+#### &emsp;&emsp;[Transaction Block Kind](#1114096)
+### [Transaction Block Connection](#18)
+#### &emsp;&emsp;[Before After Checkpoint](#1179630)
+#### &emsp;&emsp;[Changed Object Filter](#1179631)
+#### &emsp;&emsp;[Input Object Filter](#1179632)
+#### &emsp;&emsp;[Input Object Sent Addr Filter](#1179633)
+#### &emsp;&emsp;[Package Filter](#1179634)
+#### &emsp;&emsp;[Package Module Filter](#1179635)
+#### &emsp;&emsp;[Package Module Func Filter](#1179636)
+#### &emsp;&emsp;[Recv Addr Filter](#1179637)
+#### &emsp;&emsp;[Sent Addr Filter](#1179638)
+#### &emsp;&emsp;[Tx Ids Filter](#1179639)
+#### &emsp;&emsp;[Tx Kind Filter](#1179640)
+#### &emsp;&emsp;[With Defaults Ascending](#1179641)
+### [Transaction Block Effects](#19)
+#### &emsp;&emsp;[Transaction Block Effects](#1245165)
 ## <a id=0></a>
 ## Address
 ### <a id=0></a>
@@ -479,8 +481,27 @@
 >}</pre>
 
 ## <a id=6></a>
-## Epoch
+## Coin Metadata
 ### <a id=393210></a>
+### Coin Metadata
+
+><pre>query CoinMetadata {
+>  coinMetadata(coinType: "0x2::sui::SUI") {
+>    decimals
+>    name
+>    symbol
+>    description
+>    iconUrl
+>    supply
+>    asMoveObject {
+>      hasPublicTransfer
+>    }
+>  }
+>}</pre>
+
+## <a id=7></a>
+## Epoch
+### <a id=458745></a>
 ### Latest Epoch
 ####  Latest epoch, since epoch omitted
 
@@ -532,7 +553,7 @@
 >  }
 >}</pre>
 
-### <a id=393211></a>
+### <a id=458746></a>
 ### Specific Epoch
 ####  Selecting all fields for epoch 100
 
@@ -584,7 +605,7 @@
 >  }
 >}</pre>
 
-### <a id=393212></a>
+### <a id=458747></a>
 ### With Checkpoint Connection
 
 ><pre>{
@@ -621,7 +642,7 @@
 >  }
 >}</pre>
 
-### <a id=393213></a>
+### <a id=458748></a>
 ### With Tx Block Connection
 ####  Fetch the first 20 transactions after 231220100 for epoch 97
 
@@ -656,7 +677,7 @@
 >  }
 >}</pre>
 
-### <a id=393214></a>
+### <a id=458749></a>
 ### With Tx Block Connection Latest Epoch
 ####  the last checkpoint of epoch 97 is 8097645
 ####  last tx number of the checkpoint is 261225985
@@ -691,9 +712,9 @@
 >  }
 >}</pre>
 
-## <a id=7></a>
+## <a id=8></a>
 ## Event Connection
-### <a id=458745></a>
+### <a id=524280></a>
 ### Event Connection
 
 ><pre>{
@@ -724,9 +745,9 @@
 >  }
 >}</pre>
 
-## <a id=8></a>
+## <a id=9></a>
 ## Name Service
-### <a id=524280></a>
+### <a id=589815></a>
 ### Name Service
 
 ><pre>{
@@ -748,9 +769,9 @@
 >  }
 >}</pre>
 
-## <a id=9></a>
+## <a id=10></a>
 ## Object
-### <a id=589815></a>
+### <a id=655350></a>
 ### Object
 
 ><pre>{
@@ -771,9 +792,9 @@
 >  }
 >}</pre>
 
-## <a id=10></a>
+## <a id=11></a>
 ## Object Connection
-### <a id=655350></a>
+### <a id=720885></a>
 ### Filter Object Ids
 ####  Filter on objectIds
 
@@ -794,7 +815,7 @@
 >  }
 >}</pre>
 
-### <a id=655351></a>
+### <a id=720886></a>
 ### Filter Owner
 ####  Filter on owner
 
@@ -813,7 +834,7 @@
 >  }
 >}</pre>
 
-### <a id=655352></a>
+### <a id=720887></a>
 ### Object Connection
 
 ><pre>{
@@ -839,9 +860,9 @@
 >  }
 >}</pre>
 
-## <a id=11></a>
+## <a id=12></a>
 ## Owner
-### <a id=720885></a>
+### <a id=786420></a>
 ### Dynamic Field
 
 ><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
@@ -896,7 +917,7 @@
 >  }
 >}</pre>
 
-### <a id=720886></a>
+### <a id=786421></a>
 ### Dynamic Field Connection
 
 ><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
@@ -953,7 +974,7 @@
 >  }
 >}</pre>
 
-### <a id=720887></a>
+### <a id=786422></a>
 ### Dynamic Object Field
 
 ><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
@@ -1005,7 +1026,7 @@
 >  }
 >}</pre>
 
-### <a id=720888></a>
+### <a id=786423></a>
 ### Owner
 
 ><pre>{
@@ -1016,9 +1037,9 @@
 >  }
 >}</pre>
 
-## <a id=12></a>
+## <a id=13></a>
 ## Protocol Configs
-### <a id=786420></a>
+### <a id=851955></a>
 ### Key Value
 ####  Select the key and value of the protocol configuration
 
@@ -1031,7 +1052,7 @@
 >  }
 >}</pre>
 
-### <a id=786421></a>
+### <a id=851956></a>
 ### Key Value Feature Flag
 ####  Select the key and value of the feature flag
 
@@ -1044,7 +1065,7 @@
 >  }
 >}</pre>
 
-### <a id=786422></a>
+### <a id=851957></a>
 ### Specific Config
 ####  Select the key and value of the specific protocol configuration, in this case `max_move_identifier_len`
 
@@ -1057,7 +1078,7 @@
 >  }
 >}</pre>
 
-### <a id=786423></a>
+### <a id=851958></a>
 ### Specific Feature Flag
 
 ><pre>{
@@ -1069,9 +1090,9 @@
 >  }
 >}</pre>
 
-## <a id=13></a>
+## <a id=14></a>
 ## Service Config
-### <a id=851955></a>
+### <a id=917490></a>
 ### Service Config
 ####  Get the configuration of the running service
 
@@ -1084,9 +1105,9 @@
 >  }
 >}</pre>
 
-## <a id=14></a>
+## <a id=15></a>
 ## Stake Connection
-### <a id=917490></a>
+### <a id=983025></a>
 ### Stake Connection
 ####  Get all the staked objects for this address and all the active validators at the epoch when the stake became active
 
@@ -1126,9 +1147,9 @@
 >  }
 >}</pre>
 
-## <a id=15></a>
+## <a id=16></a>
 ## Sui System State Summary
-### <a id=983025></a>
+### <a id=1048560></a>
 ### Sui System State Summary
 
 ><pre>{
@@ -1175,9 +1196,9 @@
 >  }
 >}</pre>
 
-## <a id=16></a>
+## <a id=17></a>
 ## Transaction Block
-### <a id=1048560></a>
+### <a id=1114095></a>
 ### Transaction Block
 ####  Get the data for a TransactionBlock by its digest
 
@@ -1214,7 +1235,7 @@
 >  }
 >}</pre>
 
-### <a id=1048561></a>
+### <a id=1114096></a>
 ### Transaction Block Kind
 
 ><pre>{
@@ -1249,9 +1270,9 @@
 >  }
 >}</pre>
 
-## <a id=17></a>
+## <a id=18></a>
 ## Transaction Block Connection
-### <a id=1114095></a>
+### <a id=1179630></a>
 ### Before After Checkpoint
 ####  Filter on before_ and after_checkpoint. If both are provided, before must be greater than after
 
@@ -1271,7 +1292,7 @@
 >  }
 >}</pre>
 
-### <a id=1114096></a>
+### <a id=1179631></a>
 ### Changed Object Filter
 ####  Filter on changedObject
 
@@ -1293,7 +1314,7 @@
 >  }
 >}</pre>
 
-### <a id=1114097></a>
+### <a id=1179632></a>
 ### Input Object Filter
 ####  Filter on inputObject
 
@@ -1315,7 +1336,7 @@
 >  }
 >}</pre>
 
-### <a id=1114098></a>
+### <a id=1179633></a>
 ### Input Object Sent Addr Filter
 ####  multiple filters
 
@@ -1345,7 +1366,7 @@
 >  }
 >}</pre>
 
-### <a id=1114099></a>
+### <a id=1179634></a>
 ### Package Filter
 ####  Filtering on package
 
@@ -1367,7 +1388,7 @@
 >  }
 >}</pre>
 
-### <a id=1114100></a>
+### <a id=1179635></a>
 ### Package Module Filter
 ####  Filtering on package and module
 
@@ -1390,7 +1411,7 @@
 >  }
 >}</pre>
 
-### <a id=1114101></a>
+### <a id=1179636></a>
 ### Package Module Func Filter
 ####  Filtering on package, module and function
 
@@ -1414,7 +1435,7 @@
 >  }
 >}</pre>
 
-### <a id=1114102></a>
+### <a id=1179637></a>
 ### Recv Addr Filter
 ####  Filter on recvAddress
 
@@ -1436,7 +1457,7 @@
 >  }
 >}</pre>
 
-### <a id=1114103></a>
+### <a id=1179638></a>
 ### Sent Addr Filter
 ####  Filter on sign or sentAddress
 
@@ -1458,7 +1479,7 @@
 >  }
 >}</pre>
 
-### <a id=1114104></a>
+### <a id=1179639></a>
 ### Tx Ids Filter
 ####  Filter on transactionIds
 
@@ -1478,7 +1499,7 @@
 >  }
 >}</pre>
 
-### <a id=1114105></a>
+### <a id=1179640></a>
 ### Tx Kind Filter
 ####  Filter on TransactionKind (only SYSTEM_TX or PROGRAMMABLE_TX)
 
@@ -1496,7 +1517,7 @@
 >  }
 >}</pre>
 
-### <a id=1114106></a>
+### <a id=1179641></a>
 ### With Defaults Ascending
 ####  Fetch some default amount of transactions, ascending
 
@@ -1533,9 +1554,9 @@
 >  }
 >}</pre>
 
-## <a id=18></a>
+## <a id=19></a>
 ## Transaction Block Effects
-### <a id=1179630></a>
+### <a id=1245165></a>
 ### Transaction Block Effects
 
 ><pre>{
