@@ -119,7 +119,7 @@ impl MoveModule {
             .extend());
         };
 
-        for (ix, decl) in bytecode
+        for (idx, decl) in bytecode
             .friend_decls
             .iter()
             .enumerate()
@@ -148,7 +148,7 @@ impl MoveModule {
                 .extend());
             };
 
-            connection.edges.push(Edge::new(ix.to_string(), friend));
+            connection.edges.push(Edge::new(idx.to_string(), friend));
         }
 
         Ok(connection)
