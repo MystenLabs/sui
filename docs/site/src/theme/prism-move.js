@@ -195,7 +195,7 @@
     },
 
     "function-visibility": {
-      pattern: /\b(public|native|script)\b/,
+      pattern: /\b(public|entry|native|\(friend\))\b/,
       alias: "keyword"
     },
 
@@ -285,7 +285,7 @@
       },
       /** Address literal */
       {
-        pattern: /\b@0x[0-9A-F]+\b/,
+        pattern: /@0x[0-9A-F]+/,
         alias: "constant",
       },
     ],

@@ -64,7 +64,7 @@ let unsubscribe = await provider.subscribeEvent({
 
 Move smart contracts can call other smart contracts that emit events. For example, `Deepbook_utils` can call the `dee9` smart contract and emit this event. Note that using package, transaction module to query for `dee9/clob_v2` misses the following event even though it is actually an event the `dee9` package emits. The current workaround for this issue is to know all the `packageId`s you care about and search those in the `queryEvent` call.
 
-```move
+```json
 {
   "id": {
     "txDigest": "bZnc1E7k1fJYLxWihfre5xCw1tX1CyAN6579zypJeiU",
@@ -86,7 +86,7 @@ Move smart contracts can call other smart contracts that emit events. For exampl
     "price": "500000"
   },
   "bcs": "2pWctGGQ9KULfmnzNtGuPpggLQrj1ZiUQaxva4neM6QWAtUAkuPAzU2eGrdZaGHti3bsUefDioUwwYoVR3bYBkG7Gxf5JVVSxxqTqzxdg5os5ESwFaP69ZcrNsya4G9rHK4KBac9i3m1MseN38xDwMvAMx3"
-
+}
 ```
 
 https://suiexplorer.com/txblock/bZnc1E7k1fJYLxWihfre5xCw1tX1CyAN6579zypJeiU
@@ -94,7 +94,7 @@ https://suiexplorer.com/txblock/bZnc1E7k1fJYLxWihfre5xCw1tX1CyAN6579zypJeiU
 Here's an example of a transaction that is using the original `dee9` package.
 https://suiexplorer.com/txblock/896CKHod5GQ4kzhF7EwTAGyhQBdaTb9rQS41dcL76gj8
 
-```move
+```json
 {
   "id": {
     "txDigest": "896CKHod5GQ4kzhF7EwTAGyhQBdaTb9rQS41dcL76gj8",
@@ -116,7 +116,7 @@ https://suiexplorer.com/txblock/896CKHod5GQ4kzhF7EwTAGyhQBdaTb9rQS41dcL76gj8
     "price": "274518000000"
   },
   "bcs": "4SgemkCzrqEsTHLFgMcbUtttZCf2CrEH2njjFL1rizCHzvAoYsToGrbFLffQPtGxsSt96Xr4j2SLNeLcBGKeYXDrVYWqivhf3551Mqj71DZBxq5D1Qwfgh1TKeF43Jz4b4XH1nEpkya2Pr8515vzJbHUkpP"
-
+}
 ```
 
 ## Examples
@@ -129,7 +129,7 @@ This example leverages the Sui TypeScript SDK to subscribe to events the package
 
 To create the event subscription, you can use a basic Node.js app. You need the Sui TypeScript SDK, so install the module using `npm install @mysten/sui.js` at the root of your project. In your TypeScript code, import `JsonRpcProvider` and a connection from the library.
 
-```typescript
+```ts
 import { JsonRpcProvider, testnetConnection } from '@mysten/sui.js';
 
 // Package is on Testnet.
@@ -188,7 +188,7 @@ subscribeEvent {
 
 ### Rust SDK
 
-```move
+```rust
 use futures::StreamExt;
 use sui_sdk::rpc_types::SuiEventFilter;
 use sui_sdk::{SuiClient, SuiClientBuilder};
