@@ -49,5 +49,5 @@ Quick reference on best practices for Sui Network developers.
 
 ## zkLogin
 
-- Call the proving service as sparingly as possible. Design your app flows such that you only call the proving service when the user is about to perform a real transaction.
+- Call the proving service as sparingly as possible. Design your app flows such that you call the proving service only when the user is about to perform a real transaction.
 - Beware of how you cache the ephemeral private key. Treat the private key akin to a piece of highly sensitive data, e.g., password. If an (unexpired) ephemeral private key and its corresponding ZK proof are leaked, then an attacker can steal user's assets.
