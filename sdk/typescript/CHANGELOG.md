@@ -1,5 +1,33 @@
 # @mysten/sui.js
 
+## 0.47.0
+
+### Minor Changes
+
+- 0259aec82: Removed dependency on @open-rpc/client-js and replaced it with standard fetch and WebSocket based APIs
+
+  If you are using the `subscribeEvent` or `subscribeTransaction` in environments that do not support the `WebSocket` api natively (This will be true for most versions of Node.js) you will need to provide a WebSocket implementation when creating your SuiClient. You can either use a global polyfill for the WebSocket class, or pass a compatible WebSocket implementation into SuiHTTPTransport (eg, using the `ws` package)
+
+  ```typescript
+  import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
+  import { WebSocket } from 'ws';
+
+  new SuiClient({
+  	transport: new SuiHTTPTransport({
+  		url: getFullnodeUrl('mainnet'),
+  		// The typescript definitions may not match perfectly, casting to never avoids these minor incompatibilities
+  		WebSocketConstructor: WebSocket as never,
+  	}),
+  });
+  ```
+
+- 64d45ba27: Add support for zklogin sig inside multisig
+
+### Patch Changes
+
+- 194c980cb: Properly determine shared object mutability when being passed by value.
+- 9ac7e2f3d: Add additional type exports to zklogin package
+
 ## 0.46.1
 
 ### Patch Changes
