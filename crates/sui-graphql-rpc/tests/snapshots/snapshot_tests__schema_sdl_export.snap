@@ -966,6 +966,10 @@ type ServiceConfig {
 	"""
 	maxDbQueryCost: BigInt!
 	"""
+	Maximum number of elements allowed on a single page of a connection.
+	"""
+	maxPageSize: BigInt!
+	"""
 	Maximum time in milliseconds that will be spent to serve one request.
 	"""
 	requestTimeoutMs: BigInt!

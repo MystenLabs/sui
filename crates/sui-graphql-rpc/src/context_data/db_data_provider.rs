@@ -90,7 +90,7 @@ use sui_types::{
     Identifier,
 };
 
-use super::{db_backend::GenericQueryBuilder, DEFAULT_PAGE_SIZE};
+use super::db_backend::GenericQueryBuilder;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
@@ -119,6 +119,8 @@ pub enum DbValidationError {
     InvalidOwnerType,
     #[error("Query cost exceeded - cost: {0}, limit: {1}")]
     QueryCostExceeded(u64, u64),
+    #[error("Page size exceeded - requested: {0}, limit: {1}")]
+    PageSizeExceeded(u64, u64),
 }
 
 pub(crate) struct PgManager {
@@ -223,12 +225,12 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
@@ -303,12 +305,13 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_tx_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+
         let mut after_tx_seq_num: Option<i64> = None;
         let mut before_tx_seq_num: Option<i64> = None;
         if let Some(filter) = &filter {
@@ -383,12 +386,12 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
@@ -425,12 +428,12 @@ impl PgManager {
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let query = move || {
             QueryBuilder::multi_get_objs(
@@ -531,6 +534,33 @@ impl PgManager {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn validate_page_limit(
+        &self,
+        first: Option<u64>,
+        last: Option<u64>,
+    ) -> Result<i64, Error> {
+        if let Some(f) = first {
+            if f > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        if let Some(l) = last {
+            if l > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        // TODO (wlmyng): even though we do not allow passing in both first and last,
+        // per the cursor connection specs, if both are provided, from the response,
+        // we need to take the first F from the left and then take the last L from the right.
+        Ok(first.or(last).unwrap_or(self.limits.max_page_size) as i64)
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
@@ -1181,7 +1211,7 @@ impl PgManager {
         };
 
         let descending_order = before.is_some();
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as usize;
+        let limit = self.validate_page_limit(first, last)? as usize;
         let cursor = after
             .or(before)
             .map(|c| self.parse_event_cursor(c))
