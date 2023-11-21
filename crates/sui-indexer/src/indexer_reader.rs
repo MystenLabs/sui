@@ -33,8 +33,8 @@ use diesel::{
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use itertools::{any, Itertools};
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::StructTag;
-use move_core_types::value::MoveStructLayout;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
@@ -575,6 +575,7 @@ impl IndexerReader {
             let mut query = objects::dsl::objects
                 .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
+                .order(objects::dsl::object_id.asc())
                 .limit(limit as i64)
                 .into_boxed();
             if let Some(filter) = filter {
@@ -606,7 +607,7 @@ impl IndexerReader {
                         for filter in filters {
                             if let SuiObjectDataFilter::StructType (struct_tag) = filter {
                                 let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
-                                query = query.filter(objects::dsl::object_type.ne(object_type));
+                                query = query.filter(objects::dsl::object_type.not_like(format!("{}%", object_type)));
                             } else {
                                 return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
@@ -625,9 +626,7 @@ impl IndexerReader {
             if let Some(object_cursor) = cursor {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
-            let debug_query = diesel::debug_query::<diesel::pg::Pg, _>(&query);
 
-            println!("{:?}", debug_query);
             query.load::<StoredObject>(conn).map_err(|e| IndexerError::PostgresReadError(e.to_string()))
         })
     }
