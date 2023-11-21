@@ -231,6 +231,34 @@ type CoinEdge {
 	cursor: String!
 }
 
+type CoinMetadata {
+	"""
+	The number of decimal places used to represent the token.
+	"""
+	decimals: Int
+	"""
+	Full, official name of the token.
+	"""
+	name: String
+	"""
+	The token's identifying abbreviation.
+	"""
+	symbol: String
+	"""
+	Optional description of the token, provided by the creator of the token.
+	"""
+	description: String
+	iconUrl: String
+	"""
+	The overall quantity of tokens that will be issued.
+	"""
+	supply: BigInt
+	"""
+	Convert the coin metadata object into a Move object.
+	"""
+	asMoveObject: MoveObject!
+}
+
 type CommitteeMember {
 	authorityName: String
 	stakeUnit: Int
@@ -590,6 +618,10 @@ type MoveObject {
 	Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
 	"""
 	asStakedSui: StakedSui
+	"""
+	Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
+	"""
+	asCoinMetadata: CoinMetadata
 }
 
 type MovePackage {
@@ -997,6 +1029,7 @@ type Query {
 	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
+	coinMetadata(coinType: String!): CoinMetadata
 }
 
 type RandomnessStateUpdate {

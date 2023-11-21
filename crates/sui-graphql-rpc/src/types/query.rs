@@ -8,6 +8,7 @@ use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
     coin::Coin,
+    coin_metadata::CoinMetadata,
     epoch::Epoch,
     event::{Event, EventFilter},
     object::{Object, ObjectFilter},
@@ -220,6 +221,17 @@ impl Query {
     async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
         ctx.data_unchecked::<PgManager>()
             .fetch_latest_sui_system_state()
+            .await
+            .extend()
+    }
+
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coin_metadata(coin_type)
             .await
             .extend()
     }

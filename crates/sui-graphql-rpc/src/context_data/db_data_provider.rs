@@ -11,6 +11,7 @@ use crate::{
         big_int::BigInt,
         checkpoint::Checkpoint,
         coin::Coin,
+        coin_metadata::CoinMetadata,
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
@@ -60,7 +61,7 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::{
-    coin_api::parse_to_type_tag,
+    coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
 use sui_json_rpc_types::{
@@ -71,16 +72,18 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     base_types::{MoveObjectType, ObjectID},
+    coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
     effects::TransactionEffects,
     event::EventID,
-    gas_coin::GAS,
+    gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
+    object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
@@ -166,6 +169,14 @@ impl PgManager {
     ) -> Result<Option<StoredObject>, Error> {
         self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_obj(address.clone(), version)),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+        )
+        .await
+    }
+
+    async fn get_obj_by_type(&self, object_type: String) -> Result<Option<StoredObject>, Error> {
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_obj_by_type(object_type.clone())),
             |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
         )
         .await
@@ -1359,6 +1370,64 @@ impl PgManager {
             }));
         }
         Ok(None)
+    }
+    pub(crate) async fn fetch_coin_metadata(
+        &self,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>, Error> {
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+
+        let coin_metadata_type =
+            NativeCoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
+
+        let Some(coin_metadata) = self.get_obj_by_type(coin_metadata_type).await? else {
+            return Ok(None);
+        };
+
+        let object = Object::try_from(coin_metadata)?;
+        let move_object = MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not an object.",
+                object.address,
+            ))
+        })?;
+
+        let coin_metadata_object = CoinMetadata::try_from(&move_object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not.",
+                object.address,
+            ))
+        })?;
+
+        Ok(Some(coin_metadata_object))
+    }
+
+    pub(crate) async fn fetch_total_supply(&self, coin_type: String) -> Result<Option<u64>, Error> {
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+
+        let supply = if GAS::is_gas(&coin_struct) {
+            TOTAL_SUPPLY_SUI
+        } else {
+            let treasury_cap_type =
+                TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
+
+            let Some(treasury_cap) = self.get_obj_by_type(treasury_cap_type).await? else {
+                return Ok(None);
+            };
+
+            let native_object = NativeObject::try_from(treasury_cap)?;
+            let object_id = native_object.id();
+            let treasury_cap_object = TreasuryCap::try_from(native_object).map_err(|e| {
+                Error::Internal(format!(
+                    "Error while deserializing treasury cap object {object_id}: {e}"
+                ))
+            })?;
+            treasury_cap_object.total_supply.value
+        };
+
+        Ok(Some(supply))
     }
 }
 
