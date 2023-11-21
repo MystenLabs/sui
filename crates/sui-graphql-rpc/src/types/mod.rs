@@ -26,6 +26,8 @@ pub(crate) mod move_value;
 pub(crate) mod name_service;
 pub(crate) mod object;
 pub(crate) mod object_change;
+#[allow(dead_code)] // TODO: Remove when integrated
+pub(crate) mod open_move_type;
 pub(crate) mod owner;
 pub(crate) mod protocol_config;
 pub(crate) mod query;

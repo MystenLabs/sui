@@ -10872,6 +10872,7 @@ dependencies = [
  "serial_test",
  "similar",
  "simulacrum",
+ "sui-framework",
  "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-types",
