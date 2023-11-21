@@ -78,6 +78,8 @@ pub enum Error {
     DbValidation(#[from] DbValidationError),
     #[error("Provide one of digest or sequence_number, not both")]
     InvalidCheckpointQuery,
+    #[error("Invalid coin type: {0}")]
+    InvalidCoinType(String),
     #[error("String is not valid base58: {0}")]
     InvalidBase58(String),
     #[error("Invalid digest length: expected {expected}, actual {actual}")]
@@ -111,6 +113,7 @@ impl ErrorExtensions for Error {
             | Error::DomainParse(_)
             | Error::DbValidation(_)
             | Error::InvalidCheckpointQuery
+            | Error::InvalidCoinType(_)
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination
