@@ -239,7 +239,7 @@ impl ExecutorCluster {
                 .unwrap()
                 .unwrap();
             while highest_checkpoint < checkpoint {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 highest_checkpoint = s
                     .indexer_store
                     .get_latest_tx_checkpoint_sequence_number()

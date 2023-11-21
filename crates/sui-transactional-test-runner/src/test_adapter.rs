@@ -957,7 +957,21 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn graphql_variables(&self) -> BTreeMap<String, GraphqlQueryVariable> {
         let mut variables = BTreeMap::new();
-        for (name, addr) in &self.compiled_state.named_address_mapping {
+        let named_addrs = self
+            .compiled_state
+            .named_address_mapping
+            .iter()
+            .map(|(name, addr)| (name.clone(), addr.to_string()));
+
+        let objects = self
+            .object_enumeration
+            .iter()
+            .filter_map(|(oid, fid)| match fid {
+                FakeID::Known(_) => None,
+                FakeID::Enumerated(x, y) => Some((format!("obj_{x}_{y}"), oid.to_string())),
+            });
+
+        for (name, addr) in named_addrs.chain(objects) {
             let addr = addr.to_string();
 
             // Required variant
