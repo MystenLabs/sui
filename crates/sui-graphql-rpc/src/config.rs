@@ -76,6 +76,14 @@ impl Default for Ide {
     }
 }
 
+impl Ide {
+    pub fn new(ide_title: Option<String>) -> Self {
+        Self {
+            ide_title: ide_title.unwrap_or_default(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Experiments {

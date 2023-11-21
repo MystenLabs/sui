@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
+use sui_graphql_rpc::config::Ide;
 use sui_graphql_rpc::config::{ConnectionConfig, ServerConfig, ServiceConfig};
 use sui_graphql_rpc::schema_sdl_export;
 use sui_graphql_rpc::server::builder::Server;
@@ -51,6 +52,7 @@ async fn main() {
             println!("Written examples to file: {:?}", file);
         }
         Command::StartServer {
+            ide_title,
             db_url,
             port,
             host,
@@ -68,6 +70,7 @@ async fn main() {
             let server_config = ServerConfig {
                 connection,
                 service: service_config,
+                ide: Ide::new(ide_title),
                 ..ServerConfig::default()
             };
 
