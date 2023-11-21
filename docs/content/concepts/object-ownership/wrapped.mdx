@@ -42,7 +42,7 @@ There are a few ways to wrap a Sui object into another Sui object, and their use
 
 If you put a Sui object type directly as a field in another Sui object type (as in the preceding example), it is called _direct wrapping_. The most important property achieved through direct wrapping is that the wrapped object cannot be unwrapped unless the wrapping object is destroyed. In the preceding example, to make `Bar` a standalone object again, unpack (and hence delete) the `Foo` object. Direct wrapping is the best way to implement object locking, which is to lock an object with constrained access. You can unlock it only through specific contract calls.
 
-The following example implementation of a tmoveed swap demonstrates how to use direct wrapping. Assume there is an NFT-style `Object` type that has `scarcity` and `style`. In this example, `scarcity` determines how rare the object is (presumably the more scarce the higher its market value), and `style` determines the object content/type or how it's rendered. If you own some of these objects and want to trade your objects with others, you want to make sure it's a fair trade. You are willing to trade an object only with another one that has identical `scarcity`, but want a different `style` (so that you can collect more styles).
+The following example implementation of a trusted swap demonstrates how to use direct wrapping. Assume there is an NFT-style `Object` type that has `scarcity` and `style`. In this example, `scarcity` determines how rare the object is (presumably the more scarce the higher its market value), and `style` determines the object content/type or how it's rendered. If you own some of these objects and want to trade your objects with others, you want to make sure it's a fair trade. You are willing to trade an object only with another one that has identical `scarcity`, but want a different `style` (so that you can collect more styles).
 
 First, define such an object type:
 
@@ -152,7 +152,7 @@ After this call, the two objects are swapped and the service provider takes the 
 
 Since the contract defined only one way to deal with `SwapRequest` - `execute_swap` - there is no other way the service operator can interact with `SwapRequest` despite its ownership.
 
-Find the full source code in the [tmoveed_swap](https://github.com/MystenLabs/sui/blob/main/examples/move/tmoveed_swap) example.
+Find the full source code in the [trusted_swap](https://github.com/MystenLabs/sui/blob/main/examples/move/trusted_swap) example.
 
 To view a more complex example of how to use direct wrapping, see the [escrow](https://github.com/MystenLabs/sui/tree/main/examples/move/escrow) example.
 

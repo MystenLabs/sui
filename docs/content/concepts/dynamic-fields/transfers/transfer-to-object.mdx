@@ -36,7 +36,7 @@ sui::transfer::public_transfer(c, @0x0B);
 
 Transferring an object to an object ID results in the same result as if you transferred the object to an address - the object's owner is the 32-byte address or object ID provided. Additionally, because there is no difference in the result of the object transfer, you can use existing RPC methods such as `getOwnedObjects` on the 32-byte ID. If the ID represents an address, then the method returns the objects owned by that address. If the ID is an object ID, then the method returns the objects the object ID owns (transferred objects).
 
-```move
+```json
 // Get the objects owned by the address 0xADD. Returns `b`.
 {
   "jsonrpc": "2.0",
@@ -76,7 +76,8 @@ module sui::transfer {
     /// define custom access/permission policies around receiving objects sent
     /// to objects of a type that it defines. You can see this more in the examples.
     public native fun receive<T: key>(parent: &mut UID, object: Receiving<T>): T;
-...
+
+    ...
 }
 ```
 
