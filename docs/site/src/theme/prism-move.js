@@ -115,6 +115,27 @@
     },
 
     /**
+     * Scope: Module:Friend
+     */
+    "friend": {
+      pattern: /\b(friend).*;/,
+      inside: {
+        "friend-keyword": {
+          pattern: /\b(friend)\b/,
+          alias: "keyword",
+        },
+        "double-colon": {
+          pattern: /::/,
+          alias: "punctuation",
+        },
+        "friend-address": {
+          pattern: /((0x[0-9A-F]+)|([a-z][a-z_0-9]+))/,
+          alias: "address-alias",
+        },
+      }
+    },
+
+    /**
      * Scope: Module:Const
      */
 
