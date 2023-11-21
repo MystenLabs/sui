@@ -15,11 +15,11 @@ The `public` modifier also allows a function to be called from a programmable tr
 - You want strong guarantees that your function is not being combined with third-party module functions, in programmable transaction blocks.  The canonical example of this is a swap protocol that does not want to interact with a flash loan provider: If the swap protocol exposes only `entry` functions to perform swaps, it will not be possible to pass in a flash loaned `Coin`, because that coin will be the output of some previous transaction.
 - You do not want the function's signature to appear in your module's ABI.  `public` function signatures must be maintained by upgrades while `entry` function signatures do not.
 
-It is also possible to create a `public entry` function, which can be called by other modules and by programmable transaction blocks but is restricted like an `entry` function in the latter case.  This is rarely useful -- you probably only want one of `public` or `entry`.
+It is also possible to create a `public` function, which can be called by other modules and by programmable transaction blocks but is restricted like an `entry` function in the latter case.  This is rarely useful -- you probably only want one of `public` or `entry`.
 
 ## Example
 
-```rust
+```move
 module entry_functions::example {
     use sui::object::{Self, UID};
     use sui::transfer;

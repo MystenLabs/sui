@@ -6,7 +6,7 @@ import ExampleImport from '@site/src/components/ExampleImport';
 
 A hot potato is a struct that has no capabilities, therefore you can only pack and unpack it in its module. In this struct, you must call function B after function A in the case where function A returns a hot potato and function B consumes it. A hot potato pattern is useful when implementing flash loans, for example.
 
-```rust
+```move
 module examples::trade_in {
     use sui::transfer;
     use sui::sui::SUI;
