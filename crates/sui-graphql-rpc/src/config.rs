@@ -113,7 +113,7 @@ impl ConnectionConfig {
 
     pub fn ci_integration_test_cfg() -> Self {
         Self {
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
+            db_url: "postgres://postgres:poweredframegrowth@mnt-graphql-rpc1dot5.cmfcilyym3eh.us-east-1.rds.amazonaws.com:5432/defaultdb".to_string(),
             ..Default::default()
         }
     }
