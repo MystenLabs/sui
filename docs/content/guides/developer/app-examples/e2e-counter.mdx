@@ -78,7 +78,7 @@ Now that you have your Move code, you need to publish it. The Client App with Su
 
 First, update the Sui dependency in Move.toml by changing the `rev` from `framework/testnet` to `framework/devnet`.
 
-```move
+```toml
 ...
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }

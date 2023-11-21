@@ -496,7 +496,7 @@ Array [
 The result provides a new ID for the upgraded package. As was the case before the upgrade, you need to include that information in your manifest so any of your other packages that depend on your `sui_package` know where to find the on-chain bytecode for verification. Edit your manifest once again to provide the upgraded package ID for the `published-at` value, and return the original `sui_package` ID value in the `[addresses]` section:
 
 
-```move
+```toml
 [package]
 name = "sui_package"
 version = "0.0.1"
