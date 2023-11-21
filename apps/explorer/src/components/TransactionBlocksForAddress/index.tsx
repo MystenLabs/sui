@@ -127,8 +127,6 @@ function TransactionBlocksForAddress({
 				</div>
 			)}
 
-			{isObject && <FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />}
-
 			<div className={clsx(!noHeader && 'pt-5', 'flex flex-col space-y-5 text-left xl:pr-10')}>
 				{isPending || isFetching || isFetchingNextPage || !cardData ? (
 					<PlaceholderTable

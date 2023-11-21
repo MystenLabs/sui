@@ -23,7 +23,9 @@ import { FieldsContent } from '~/pages/object-result/views/TokenView';
 import { Divider } from '~/ui/Divider';
 import { Heading } from '@mysten/ui';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
-import TransactionBlocksForAddress from '~/components/TransactionBlocksForAddress';
+import TransactionBlocksForAddress, {
+	FILTER_VALUES,
+} from '~/components/TransactionBlocksForAddress';
 import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { useState } from 'react';
 
@@ -31,7 +33,8 @@ const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 
 enum TABS_TRANSACTIONS_VALUES {
 	ADDRESS = 'address',
-	OBJECT = 'object',
+	INPUT_OBJECT = 'inputObject',
+	OUTPUT_OBJECT = 'outputObject',
 }
 
 function Header({
@@ -124,8 +127,12 @@ function TransactionsSection({ address }: { address: string }) {
 					<Heading variant="heading4/semibold">Address</Heading>
 				</TabsTrigger>
 
-				<TabsTrigger value={TABS_TRANSACTIONS_VALUES.OBJECT}>
-					<Heading variant="heading4/semibold">Object</Heading>
+				<TabsTrigger value={TABS_TRANSACTIONS_VALUES.INPUT_OBJECT}>
+					<Heading variant="heading4/semibold">Input Objects</Heading>
+				</TabsTrigger>
+
+				<TabsTrigger value={TABS_TRANSACTIONS_VALUES.OUTPUT_OBJECT}>
+					<Heading variant="heading4/semibold">Output Objects</Heading>
 				</TabsTrigger>
 			</TabsList>
 
@@ -134,8 +141,24 @@ function TransactionsSection({ address }: { address: string }) {
 					<TransactionsForAddress address={address} type="address" />
 				</TabsContent>
 
-				<TabsContent value={TABS_TRANSACTIONS_VALUES.OBJECT}>
-					<TransactionBlocksForAddress noBorderBottom address={address} isObject noHeader />
+				<TabsContent value={TABS_TRANSACTIONS_VALUES.INPUT_OBJECT}>
+					<TransactionBlocksForAddress
+						noBorderBottom
+						address={address}
+						filter={FILTER_VALUES.INPUT}
+						isObject
+						noHeader
+					/>
+				</TabsContent>
+
+				<TabsContent value={TABS_TRANSACTIONS_VALUES.OUTPUT_OBJECT}>
+					<TransactionBlocksForAddress
+						noBorderBottom
+						address={address}
+						filter={FILTER_VALUES.CHANGED}
+						isObject
+						noHeader
+					/>
 				</TabsContent>
 			</ErrorBoundary>
 		</Tabs>
