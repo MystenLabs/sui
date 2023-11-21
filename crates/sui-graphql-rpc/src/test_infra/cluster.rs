@@ -63,7 +63,7 @@ pub async fn start_cluster(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -108,7 +108,7 @@ pub async fn serve_executor(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -239,7 +239,7 @@ impl ExecutorCluster {
                 .unwrap()
                 .unwrap();
             while highest_checkpoint < checkpoint {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 highest_checkpoint = s
                     .indexer_store
                     .get_latest_tx_checkpoint_sequence_number()
