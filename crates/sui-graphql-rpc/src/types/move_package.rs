@@ -76,7 +76,7 @@ impl MovePackage {
             .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
             .extend()?
             .limits
-            .max_page_size;
+            .default_page_size;
 
         // TODO: make cursor opaque.
         // for now it same as module name

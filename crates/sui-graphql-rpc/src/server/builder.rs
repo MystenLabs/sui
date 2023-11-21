@@ -464,7 +464,43 @@ pub mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
-    pub async fn test_query_page_limit_impl() {
+    pub async fn test_query_default_page_limit_impl() {
+        sleep(Duration::from_secs(5)).await;
+        let rng = StdRng::from_seed([12; 32]);
+        let mut sim = Simulacrum::new_with_rng(rng);
+
+        sim.create_checkpoint();
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let mut limits = Limits::default();
+        limits.default_page_size = 1;
+        let db_url: String = connection_config.db_url.clone();
+        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let pg_conn_pool = PgManager::new(reader, limits);
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            .context_data(pg_conn_pool)
+            .build_schema();
+
+        let resp = schema
+            .execute("{ checkpointConnection { nodes { sequenceNumber } } }")
+            .await;
+        let data = resp.data.clone().into_json().unwrap();
+        let checkpoints = data
+            .get("checkpointConnection")
+            .unwrap()
+            .get("nodes")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        assert_eq!(
+            checkpoints.len(),
+            1,
+            "Checkpoints should have exactly one element"
+        );
+    }
+
+    pub async fn test_query_max_page_limit_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
         let db_url: String = connection_config.db_url.clone();
