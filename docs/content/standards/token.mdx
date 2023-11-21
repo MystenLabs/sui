@@ -81,10 +81,10 @@ Token has a set of public and protected actions which can be used to manage the 
 
 Some actions are disabled by default. Token creator can enable them by creating a "TokenPolicy" and specifying conditions (Rules) for their execution. In the standard implementation Token has 4 protected functions:
 
-- `token::transfer` - transfer a Token to a recipient
-- `token::from_coin` - convert a Coin into a Token
-- `token::to_coin` - convert a Token into a Coin
-- `token::spend` - spend a Token (see "spending" section)
+- `token::transfer` - transfer a Token to a recipient (action name: "transfer")
+- `token::from_coin` - convert a Coin into a Token (action name: "from_coin")
+- `token::to_coin` - convert a Token into a Coin (action name: "to_coin")
+- `token::spend` - spend a Token (action name: "spend") - see "Spend Action" for more details
 
 Protected actions are functions that issue an `ActionRequest` - a special hot-potato struct which must be "confirmed" for the transaction to succeed. ActionRequest is defined in the `sui::token` module and contains the following fields:
 
@@ -113,7 +113,7 @@ let tokenType = '0x....::my_token::MY_TOKEN';
 let treasuryCapArg = tx.object('0x....');
 
 // for each TokenPolicy there's a TokenPolicyCap which allows managing it
-let [policy, policy_cap] = tx.moveCall({
+let [policy, policyCap] = tx.moveCall({
     target: '0x2::token::new_policy',
     arguments: [ treasuryCapArg ],
     typeArguments: [ tokenType ],
@@ -122,11 +122,11 @@ let [policy, policy_cap] = tx.moveCall({
 // allow `transfer` operation; other operations are disabled
 tx.moveCall({
     target: '0x2::token::allow',
-    arguments: [ policy, policy_cap, tx.pure.string("transfer") ],
+    arguments: [ policy, policyCap, tx.pure.string("transfer") ],
     typeArguments: [ tokenType ]
 });
 
-tx.transferObjects([ policy_cap ], tx.pure.address('0x...sender'));
+tx.transferObjects([ policyCap ], tx.pure.address('0x...sender'));
 
 // policy must be shared with this function
 tx.moveCall({
