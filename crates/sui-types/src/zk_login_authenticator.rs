@@ -26,7 +26,7 @@ mod zk_login_authenticator_test;
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZkLoginAuthenticator {
-    inputs: ZkLoginInputs,
+    pub inputs: ZkLoginInputs,
     max_epoch: EpochId,
     user_signature: Signature,
     #[serde(skip)]
@@ -61,6 +61,10 @@ impl ZkLoginAuthenticator {
 
     pub fn get_iss(&self) -> &str {
         self.inputs.get_iss()
+    }
+
+    pub fn user_signature_mut_for_testing(&mut self) -> &mut Signature {
+        &mut self.user_signature
     }
 }
 

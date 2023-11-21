@@ -95,6 +95,10 @@ impl Message for TransactionEffects {
         TransactionEffectsDigest::new(default_hash(self))
     }
 
+    fn verify_user_input(&self) -> SuiResult {
+        Ok(())
+    }
+
     fn verify_epoch(&self, _: EpochId) -> SuiResult {
         // Authorities are allowed to re-sign effects from prior epochs, so we do not verify the
         // epoch here.

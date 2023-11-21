@@ -146,6 +146,10 @@ use crate::transaction_manager::TransactionManager;
 pub mod authority_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/transaction_tests.rs"]
+pub mod transaction_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/batch_transaction_tests.rs"]
 mod batch_transaction_tests;
 

@@ -15,7 +15,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
@@ -25,6 +24,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::{effects::TransactionEffectsAPI, message_envelope::Message};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -289,6 +289,9 @@ impl ValidatorService {
         } = self;
 
         let transaction = request.into_inner();
+
+        transaction.verify_user_input()?;
+
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
@@ -375,6 +378,7 @@ impl ValidatorService {
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
+        certificate.verify_user_input()?;
 
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -539,7 +543,9 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+        request.get_ref().verify_user_input()?;
         let validator_service = self.clone();
+
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         spawn_monitored_task!(async move {
@@ -561,6 +567,7 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
+        request.get_ref().verify_user_input()?;
         self.handle_certificate_v2(request)
             .await
             .map(|v| tonic::Response::new(v.into_inner().into()))

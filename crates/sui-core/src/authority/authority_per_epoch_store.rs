@@ -2768,6 +2768,10 @@ impl AuthorityPerEpochStore {
             self.signature_verifier.insert_jwk(jwk_id, jwk);
         }
     }
+
+    pub fn clear_signature_cache(&self) {
+        self.signature_verifier.clear_signature_cache();
+    }
 }
 
 impl GetSharedLocks for AuthorityPerEpochStore {
