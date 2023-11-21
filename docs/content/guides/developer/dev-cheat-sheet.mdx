@@ -20,6 +20,7 @@ Quick reference on best practices for Sui Network developers.
   - Move objects have a maximum size of 250KB—any attempt to create a larger object leads to an aborted transaction. Ensure that your objects do not have an ever-growing `vector`-backed collection.
 - If your function `f` needs a payment in (e.g.) SUI from the caller, use `fun f(payment: Coin<SUI>)` not `fun f(payment: &mut Coin<SUI>, amount: u64)`. This is safer for callers—they know exactly how much they are paying, and do not need to trust `f` to extract the right amount.
 - Don't micro-optimize gas usage. Sui computation costs are rounded up to the closest _bucket_, so only very drastic changes will make a difference. In particular, if your transaction is already in the lowest cost bucket, it can't get any cheaper.
+- Since the addition of [programmable transaction blocks](https://docs.sui.io/concepts/transactions/prog-txn-blocks), it is now possible to call `public` functions in PTBs. As a result, `entry` functions have been made redundant, and even limiting. `public` functions can return anything, but `entry` functions can only return `T: drop`. Thus it is recommended to only use `public` functions.
 - Follow the [Move coding conventions](https://move-language.github.io/move/coding-conventions.html) for consistent style.
 
 ### Composability
