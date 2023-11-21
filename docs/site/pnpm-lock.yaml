@@ -68,9 +68,6 @@ importers:
       prism-react-renderer:
         specifier: ^1.3.5
         version: 1.3.5(react@17.0.2)
-      prism-theme-one-light-dark:
-        specifier: ^1.0.4
-        version: 1.0.4
       prismjs:
         specifier: ^1.29.0
         version: 1.29.0
@@ -8375,10 +8372,6 @@ packages:
       react: '>=0.14.9'
     dependencies:
       react: 17.0.2
-    dev: false
-
-  /prism-theme-one-light-dark@1.0.4:
-    resolution: {integrity: sha512-ift6vo6p6llo2DP9XOUa9nIOgPMOwQ1+Kuv5cS873PuomjUzYGC8dSAP1kz9pYhK07GujLz3i/knf+5DpxAeDA==}
     dev: false
 
   /prismjs@1.27.0:
