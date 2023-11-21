@@ -84,6 +84,14 @@ type Query {
     last: Int,
     before: String,
   ): CheckpointConnection
+  
+  coinConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    type: String,
+  ): CheckpointConnection
 
   transactionBlockConnection(
     first: Int,

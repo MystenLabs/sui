@@ -161,12 +161,12 @@ impl Owner {
         type_: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_coins(self.address, type_, first, after, last, before)
+            .fetch_coins(Some(self.address), type_, first, after, last, before)
             .await
             .extend()
     }
 
-    /// The stake objects for the given address
+    /// The `0x3::staking_pool::StakedSui` objects owned by the given object.
     pub async fn staked_sui_connection(
         &self,
         ctx: &Context<'_>,

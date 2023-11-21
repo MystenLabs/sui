@@ -193,7 +193,7 @@ impl Object {
         type_: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_coins(self.address, type_, first, after, last, before)
+            .fetch_coins(Some(self.address), type_, first, after, last, before)
             .await
             .extend()
     }
