@@ -3,6 +3,7 @@
 
 use super::address::Address;
 use super::dynamic_field::DynamicField;
+use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
@@ -13,6 +14,7 @@ use crate::types::sui_address::SuiAddress;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::dynamic_field::DynamicFieldType;
 
 #[derive(Interface)]
 #[graphql(
@@ -66,6 +68,16 @@ use sui_json_rpc::name_service::NameServiceConfig;
     //     arg(name = "last", ty = "Option<u64>"),
     //     arg(name = "before", ty = "Option<String>")
     // )
+    field(
+        name = "dynamic_field",
+        ty = "Option<DynamicField>",
+        arg(name = "name", ty = "DynamicFieldName")
+    ),
+    field(
+        name = "dynamic_object_field",
+        ty = "Option<DynamicField>",
+        arg(name = "name", ty = "DynamicFieldName")
+    ),
     field(
         name = "dynamic_field_connection",
         ty = "Option<Connection<String, DynamicField>>",
@@ -200,6 +212,39 @@ impl Owner {
     //     unimplemented!()
     // }
 
+    /// Access a dynamic field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
+    pub async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
+            .await
+            .extend()
+    }
+
+    /// Access a dynamic object field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
+    pub async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
+            .await
+            .extend()
+    }
+
+    /// The dynamic fields on an object.
+    /// This field exists as a convenience when accessing a dynamic field on a wrapped object.
     pub async fn dynamic_field_connection(
         &self,
         ctx: &Context<'_>,

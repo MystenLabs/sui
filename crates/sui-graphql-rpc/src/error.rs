@@ -92,6 +92,9 @@ pub enum Error {
     _CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
+    #[error("{0}")]
+    // Catch-all for client-fault errors
+    Client(String),
     #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
 }
@@ -112,7 +115,8 @@ impl ErrorExtensions for Error {
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. } => {
+            | Error::InvalidDigestLength { .. }
+            | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {

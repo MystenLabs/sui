@@ -7,9 +7,10 @@ use sui_indexer::errors::IndexerError;
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_types::dynamic_field::DynamicFieldType;
 
 use super::big_int::BigInt;
-use super::dynamic_field::DynamicField;
+use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::{
@@ -233,6 +234,39 @@ impl Object {
     //     unimplemented!()
     // }
 
+    /// Access a dynamic field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+    pub async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicField)
+            .await
+            .extend()
+    }
+
+    /// Access a dynamic object field on an object using its name.
+    /// Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+    /// using their type, and their BCS contents, Base64 encoded.
+    /// The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+    pub async fn dynamic_object_field(
+        &self,
+        ctx: &Context<'_>,
+        name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field(self.address, name, DynamicFieldType::DynamicObject)
+            .await
+            .extend()
+    }
+
+    /// The dynamic fields on an object.
+    /// Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
     pub async fn dynamic_field_connection(
         &self,
         ctx: &Context<'_>,

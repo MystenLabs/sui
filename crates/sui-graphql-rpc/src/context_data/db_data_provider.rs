@@ -14,7 +14,7 @@ use crate::{
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
-        dynamic_field::DynamicField,
+        dynamic_field::{DynamicField, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
@@ -87,7 +87,7 @@ use sui_types::{
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
-    Identifier,
+    Identifier, TypeTag,
 };
 
 use super::db_backend::GenericQueryBuilder;
@@ -1310,8 +1310,48 @@ impl PgManager {
                 },
             ));
         }
-
         Ok(Some(connection))
+    }
+
+    pub(crate) async fn fetch_dynamic_field(
+        &self,
+        address: SuiAddress,
+        name: DynamicFieldName,
+        kind: DynamicFieldType,
+    ) -> Result<Option<DynamicField>, Error> {
+        let name_bcs_value = &name.bcs.0;
+        let parent_object_id =
+            ObjectID::from_bytes(address.as_slice()).map_err(|e| Error::Client(e.to_string()))?;
+        let mut type_tag =
+            TypeTag::from_str(&name.type_).map_err(|e| Error::Client(e.to_string()))?;
+
+        if kind == DynamicFieldType::DynamicObject {
+            let dynamic_object_field_struct =
+                sui_types::dynamic_field::DynamicFieldInfo::dynamic_object_field_wrapper(type_tag);
+            type_tag = TypeTag::Struct(Box::new(dynamic_object_field_struct));
+        }
+
+        let id = sui_types::dynamic_field::derive_dynamic_field_id(
+            parent_object_id,
+            &type_tag,
+            name_bcs_value,
+        )
+        .map_err(|e| Error::Internal(format!("Deriving dynamic field id cannot fail: {e}")))?;
+
+        let stored_obj = self.get_obj(id.to_vec(), None).await?;
+        if let Some(stored_object) = stored_obj {
+            let df_object_id = stored_object.df_object_id.as_ref().ok_or_else(|| {
+                Error::Internal("Dynamic field does not have df_object_id".to_string())
+            })?;
+            let df_object_id =
+                SuiAddress::from_bytes(df_object_id).map_err(|e| Error::Internal(e.to_string()))?;
+            return Ok(Some(DynamicField {
+                stored_object,
+                df_object_id,
+                df_kind: kind,
+            }));
+        }
+        Ok(None)
     }
 }
 

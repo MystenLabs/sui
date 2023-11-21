@@ -4,6 +4,7 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
       repr
     }
     data
+    __typename
   }
   ... on MoveObject {
     hasPublicTransfer
@@ -13,6 +14,7 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
       }
       data
     }
+    __typename
   }
 }
 
@@ -33,21 +35,17 @@ fragment DynamicFieldSelect on DynamicField {
   }
 }
 
-query DynamicFieldConnection {
+query DynamicField {
   object(
     address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
   ) {
-    dynamicFieldConnection {
-      pageInfo {
-        hasNextPage
-        endCursor
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Listing",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA",
       }
-      edges {
-        cursor
-        node {
-          ...DynamicFieldSelect
-        }
-      }
+    ) {
+      ...DynamicFieldSelect
     }
   }
 }
