@@ -14,17 +14,7 @@ Checkpoint created: 1
 task 3 'run-graphql'. lines 24-37:
 Response: {
   "data": {
-    "coinMetadata": {
-      "decimals": 2,
-      "name": "",
-      "symbol": "FAKE",
-      "description": "",
-      "iconUrl": null,
-      "supply": "0",
-      "asMoveObject": {
-        "hasPublicTransfer": true
-      }
-    }
+    "coinMetadata": null
   }
 }
 
@@ -39,16 +29,6 @@ Checkpoint created: 2
 task 6 'run-graphql'. lines 46-59:
 Response: {
   "data": {
-    "coinMetadata": {
-      "decimals": 2,
-      "name": "",
-      "symbol": "FAKE",
-      "description": "",
-      "iconUrl": null,
-      "supply": "100",
-      "asMoveObject": {
-        "hasPublicTransfer": true
-      }
-    }
+    "coinMetadata": null
   }
 }
