@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 
 use super::response::GraphqlResponse;
 
-#[derive(Clone, Debug)]
 pub struct GraphqlQueryVariable {
     pub name: String,
     pub ty: String,
