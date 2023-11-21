@@ -26,15 +26,14 @@ pub(crate) enum QueryDirection {
     Last,
 }
 
-/// Controls the final ordering of the result set
+/// Controls the final ordering of the result set.
+/// Does not directly correspond to whether the query is ordered by ascending or descending.
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub(crate) enum SortOrder {
-    /// Preserves the original order of the result set.
-    /// This is typically a query ordered by some key in ascending order.
+    /// Preserves the original ordering of the set before applying cursor and limit.
     Asc,
-    /// Reverses the order of the result set.
-    /// This is typically a query ordered by some key in descending order.
+    /// Reverses the ordering of the set before applying cursor and limit.
     Desc,
 }
 
