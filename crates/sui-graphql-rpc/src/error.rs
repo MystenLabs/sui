@@ -64,8 +64,6 @@ pub(crate) fn graphql_error_at_pos(
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Invalid coin type: {0}")]
-    InvalidCoinType(String),
     #[error("This query is unavailable through address. Please try again with the object or owner type.")]
     DynamicFieldOnAddress,
     #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
@@ -113,7 +111,6 @@ impl ErrorExtensions for Error {
             | Error::DomainParse(_)
             | Error::DbValidation(_)
             | Error::InvalidCheckpointQuery
-            | Error::InvalidCoinType(_)
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination
