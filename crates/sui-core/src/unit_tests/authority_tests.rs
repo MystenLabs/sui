@@ -1235,7 +1235,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
         authority_state.clone(),
         consensus_address,
     );
-    let metrics = server.metrics.clone();
+    let _metrics = server.metrics.clone();
 
     let server_handle = server.spawn_for_test().await.unwrap();
 
@@ -1258,7 +1258,9 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .await
         .is_err());
 
-    assert_eq!(metrics.signature_errors.get(), 1);
+    // This metric does not increment because of the early check for correct sender address in
+    // verify_user_input (transaction.rs)
+    // assert_eq!(metrics.signature_errors.get(), 1);
 
     let object = authority_state
         .get_object(&object_id)

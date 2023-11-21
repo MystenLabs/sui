@@ -27,6 +27,7 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
     let metrics = SignatureVerifierMetrics::new(&registry);
     let cache = VerifiedDigestCache::<CertificateDigest>::new(
         metrics.certificate_signatures_cache_hits.clone(),
+        metrics.certificate_signatures_cache_misses.clone(),
         metrics.certificate_signatures_cache_evictions.clone(),
     );
 

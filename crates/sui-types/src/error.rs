@@ -331,7 +331,7 @@ pub enum SuiError {
         expected: String,
         actual: Vec<String>,
     },
-    #[error("Expect {actual} signer signatures but got {expected}.")]
+    #[error("Expect {expected} signer signatures but got {actual}.")]
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },

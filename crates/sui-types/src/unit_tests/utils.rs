@@ -155,6 +155,8 @@ pub fn mock_certified_checkpoint<'a>(
 mod zk_login {
     use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
 
+    use crate::zk_login_util::get_zklogin_inputs;
+
     use super::*;
 
     fn get_inputs() -> ZkLoginInputs {
@@ -218,20 +220,31 @@ mod zk_login {
         } else {
             make_transaction_data(get_zklogin_user_address())
         };
-        sign_zklogin_tx(data, legacy)
+        sign_zklogin_tx_with_default_proof(data, legacy)
     }
 
-    pub fn sign_zklogin_tx(
+    pub fn sign_zklogin_tx_with_default_proof(
         data: TransactionData,
         legacy: bool,
     ) -> (SuiAddress, Transaction, GenericSignature) {
-        // Sign the user transaction with the user's ephemeral key.
-        //let tx = make_transaction(user_address, &user_key, Intent::sui_transaction());
+        let inputs = if legacy {
+            get_inputs_with_bad_address_seed()
+        } else {
+            get_zklogin_inputs()
+        };
 
+        sign_zklogin_tx(&get_zklogin_user_key(), inputs, data)
+    }
+
+    pub fn sign_zklogin_tx(
+        user_key: &SuiKeyPair,
+        proof: ZkLoginInputs,
+        data: TransactionData,
+    ) -> (SuiAddress, Transaction, GenericSignature) {
         let tx = Transaction::from_data_and_signer(
-            data,
+            data.clone(),
             Intent::sui_transaction(),
-            vec![&get_zklogin_user_key()],
+            vec![user_key],
         );
 
         let s = match tx.inner().tx_signatures.first().unwrap() {
@@ -239,29 +252,16 @@ mod zk_login {
             _ => panic!("Expected a signature"),
         };
 
-        let inputs = if legacy {
-            get_inputs_with_bad_address_seed()
-        } else {
-            get_inputs()
-        };
         // Construct the authenticator with all user submitted components.
-        let authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
-            inputs,
-            10,
-            s.clone(),
-        ));
+        let authenticator =
+            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(proof, 10, s.clone()));
 
         let tx = Transaction::new(SenderSignedData::new(
             tx.transaction_data().clone(),
             Intent::sui_transaction(),
             vec![authenticator.clone()],
         ));
-        let addr = if legacy {
-            get_legacy_zklogin_user_address()
-        } else {
-            get_zklogin_user_address()
-        };
-        (addr, tx, authenticator)
+        (data.execution_parts().1, tx, authenticator)
     }
 }
 
