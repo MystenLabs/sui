@@ -1396,7 +1396,7 @@ impl PgManager {
         Ok(Some(coin_metadata_object))
     }
 
-    pub(crate) async fn fetch_treasury_cap(&self, coin_type: String) -> Result<Option<u64>, Error> {
+    pub(crate) async fn fetch_total_supply(&self, coin_type: String) -> Result<Option<u64>, Error> {
         let coin_struct =
             parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
 

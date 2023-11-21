@@ -45,7 +45,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, Pg> {
         objects::dsl::objects
             .filter(objects::dsl::object_type.eq(object_type))
-            .limit(1)
+            .limit(1) // Fetches for a single object and as such has a limit of 1
             .into_boxed()
     }
     fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, Pg> {

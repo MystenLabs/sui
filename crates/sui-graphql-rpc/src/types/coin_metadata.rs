@@ -54,7 +54,7 @@ impl CoinMetadata {
 
         let supply = ctx
             .data_unchecked::<PgManager>()
-            .fetch_treasury_cap(coin_type.to_canonical_string(/* with_prefix */ true))
+            .fetch_total_supply(coin_type.to_canonical_string(/* with_prefix */ true))
             .await
             .extend()?;
 
