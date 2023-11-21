@@ -12166,6 +12166,7 @@ dependencies = [
  "once_cell",
  "rand 0.8.5",
  "rocksdb",
+ "serde_json",
  "simulacrum",
  "sui-config",
  "sui-core",
