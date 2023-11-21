@@ -118,9 +118,8 @@ impl Query {
     }
 
     /// The coin objects that exist in the network.
-    /// The type field is a string of the inner type of the coin
-    /// by which to filter. If no type is provided, it will use the default SUI coin type,
-    /// 0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI.
+    /// The type field is a string of the inner type of the coin by which to filter.
+    /// If no type is provided, it will default to 0x2::sui::SUI.
     async fn coin_connection(
         &self,
         ctx: &Context<'_>,
