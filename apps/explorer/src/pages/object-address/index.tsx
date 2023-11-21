@@ -26,8 +26,10 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import TransactionBlocksForAddress, {
 	FILTER_VALUES,
 } from '~/components/TransactionBlocksForAddress';
-import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
-import { useState } from 'react';
+import { TransactionsForAddressTable } from '~/components/transactions/TransactionsForAddress';
+import { useEffect, useState } from 'react';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { useQuery } from '@tanstack/react-query';
 
 const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 
@@ -118,14 +120,50 @@ function OwnedObjectsSection({ address }: { address: string }) {
 }
 
 function TransactionsSection({ address }: { address: string }) {
+	const client = useSuiClient();
 	const [activeTab, setActiveTab] = useState<string>(TABS_TRANSACTIONS_VALUES.ADDRESS);
+
+	const {
+		data: transactionsForAddressData,
+		isPending,
+		isError,
+		isLoading,
+	} = useQuery({
+		queryKey: ['transactions-for-address', address],
+		queryFn: () =>
+			client.queryTransactionBlocks({
+				filter: {
+					FromAndToAddress: {
+						from: address,
+						to: address,
+					},
+				},
+				order: 'descending',
+				limit: 100,
+				options: {
+					showEffects: true,
+					showInput: true,
+				},
+			}),
+	});
+
+	const renderTransactionForAddressTable =
+		isLoading || (transactionsForAddressData?.data && transactionsForAddressData.data.length > 0);
+
+	useEffect(() => {
+		if (!renderTransactionForAddressTable) {
+			setActiveTab(TABS_TRANSACTIONS_VALUES.INPUT_OBJECT);
+		}
+	}, [renderTransactionForAddressTable]);
 
 	return (
 		<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
 			<TabsList>
-				<TabsTrigger value={TABS_TRANSACTIONS_VALUES.ADDRESS}>
-					<Heading variant="heading4/semibold">Address</Heading>
-				</TabsTrigger>
+				{renderTransactionForAddressTable && (
+					<TabsTrigger value={TABS_TRANSACTIONS_VALUES.ADDRESS}>
+						<Heading variant="heading4/semibold">Address</Heading>
+					</TabsTrigger>
+				)}
 
 				<TabsTrigger value={TABS_TRANSACTIONS_VALUES.INPUT_OBJECT}>
 					<Heading variant="heading4/semibold">Input Objects</Heading>
@@ -137,9 +175,16 @@ function TransactionsSection({ address }: { address: string }) {
 			</TabsList>
 
 			<ErrorBoundary>
-				<TabsContent value={TABS_TRANSACTIONS_VALUES.ADDRESS}>
-					<TransactionsForAddress address={address} type="address" />
-				</TabsContent>
+				{renderTransactionForAddressTable && (
+					<TabsContent value={TABS_TRANSACTIONS_VALUES.ADDRESS}>
+						<TransactionsForAddressTable
+							data={transactionsForAddressData?.data ?? []}
+							isPending={isPending}
+							isError={isError}
+							address={address}
+						/>
+					</TabsContent>
+				)}
 
 				<TabsContent value={TABS_TRANSACTIONS_VALUES.INPUT_OBJECT}>
 					<TransactionBlocksForAddress
