@@ -111,7 +111,6 @@ impl ErrorExtensions for Error {
             | Error::DomainParse(_)
             | Error::DbValidation(_)
             | Error::InvalidCheckpointQuery
-            | Error::InvalidCoinType(_)
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination
