@@ -270,6 +270,27 @@ module deepbook::clob_v2 {
         owner: address
     }
 
+    /// Accessor functions
+    public fun usr_open_orders_exist<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+        owner: address
+    ): bool {
+        table::contains(&pool.usr_open_orders, owner)
+    }
+
+    public fun usr_open_orders_for_address<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+        owner: address
+    ): &LinkedTable<u64, u64> {
+        table::borrow(&pool.usr_open_orders, owner)
+    }
+
+    public fun usr_open_orders<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+    ): &Table<address, LinkedTable<u64, u64>> {
+        &pool.usr_open_orders
+    }
+
     /// Function to withdraw fees created from a pool
     public fun withdraw_fees<BaseAsset, QuoteAsset>(
         _pool_owner_cap: &PoolOwnerCap,
@@ -1678,8 +1699,11 @@ module deepbook::clob_v2 {
         account_cap: &AccountCap
     ): vector<Order> {
         let owner = account_owner(account_cap);
-        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let open_orders = vector::empty<Order>();
+        if (!usr_open_orders_exist(pool, owner)) {
+            return open_orders
+        };
+        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let order_id = linked_table::front(usr_open_order_ids);
         while (!option::is_none(order_id)) {
             let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));

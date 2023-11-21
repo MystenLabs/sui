@@ -399,7 +399,7 @@ impl InMemoryStore {
 
         self.epoch_to_committee.push(committee);
 
-        if self.epoch_to_committee.len() != epoch {
+        if self.epoch_to_committee.len() != epoch + 1 {
             error!("committee was inserted into EpochCommitteeMap out of order");
         }
     }

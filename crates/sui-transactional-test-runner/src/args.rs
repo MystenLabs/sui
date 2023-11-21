@@ -149,6 +149,16 @@ pub struct RunGraphqlCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct CreateCheckpointCommand {
+    pub count: Option<u64>,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct AdvanceEpochCommand {
+    pub count: Option<u64>,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -165,9 +175,9 @@ pub enum SuiSubcommand {
     #[clap(name = "set-address")]
     SetAddress(SetAddressCommand),
     #[clap(name = "create-checkpoint")]
-    CreateCheckpoint,
+    CreateCheckpoint(CreateCheckpointCommand),
     #[clap(name = "advance-epoch")]
-    AdvanceEpoch,
+    AdvanceEpoch(AdvanceEpochCommand),
     #[clap(name = "advance-clock")]
     AdvanceClock(AdvanceClockCommand),
     #[clap(name = "view-checkpoint")]

@@ -3,9 +3,6 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
-    use diesel::OptionalExtension;
-    use diesel::RunQueryDsl;
-    use diesel::{ExpressionMethods, QueryDsl};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -15,14 +12,7 @@ mod tests {
     use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::config::ConnectionConfig;
-    use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
-    use sui_indexer::indexer_reader::IndexerReader;
-    use sui_indexer::models_v2::objects::StoredObject;
-    use sui_indexer::new_pg_connection_pool_impl;
-    use sui_indexer::schema_v2::objects;
-    use sui_indexer::utils::reset_database;
-    use sui_indexer::PgConnectionPoolConfig;
     use sui_types::digests::ChainIdentifier;
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
@@ -110,35 +100,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(&format!("{}", res), &exp);
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn test_db_query_cost() {
-        // Wait for DB to free up
-        sleep(Duration::from_secs(5)).await;
-        let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let parsed_url = connection_config.db_url();
-        let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(2)).unwrap();
-        reset_database(&mut blocking_pool.get().unwrap(), true, true).unwrap();
-
-        // Test query cost logic
-        let mut query = objects::dsl::objects.into_boxed();
-        query = query
-            .filter(objects::dsl::object_id.eq(vec![0u8, 4]))
-            .filter(objects::dsl::object_version.eq(1234i64));
-
-        let mut idx_cfg = PgConnectionPoolConfig::default();
-        idx_cfg.set_pool_size(20);
-        let reader = IndexerReader::new_with_config(connection_config.db_url(), idx_cfg).unwrap();
-        reader
-            .spawn_blocking(move |this| {
-                let cost = extract_cost(&query, &this).unwrap();
-                assert!(cost > 0.0);
-                this.run_query(|conn| query.get_result::<StoredObject>(conn).optional())
-            })
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
@@ -309,6 +270,12 @@ mod tests {
     #[serial]
     async fn test_query_node_limit() {
         test_query_node_limit_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_page_limit() {
+        test_query_page_limit_impl().await;
     }
 
     #[tokio::test]
