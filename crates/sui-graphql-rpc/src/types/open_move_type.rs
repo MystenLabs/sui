@@ -97,7 +97,10 @@ impl OpenMoveType {
 }
 
 impl OpenMoveTypeSignature {
-    pub(crate) fn read(signature: SignatureToken, bytecode: &CompiledModule) -> Result<Self, Error> {
+    pub(crate) fn read(
+        signature: SignatureToken,
+        bytecode: &CompiledModule,
+    ) -> Result<Self, Error> {
         use OpenMoveTypeReference as R;
         use SignatureToken as S;
 
