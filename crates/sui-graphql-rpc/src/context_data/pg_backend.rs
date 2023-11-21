@@ -30,6 +30,7 @@ use sui_indexer::{
 pub(crate) struct PgQueryBuilder;
 
 impl PgQueryBuilder {
+    /// Handles pagination logic when the query selects for the first n
     fn handle_checkpoint_pagination_first(
         before: Option<i64>,
         after: Option<i64>,
@@ -61,7 +62,8 @@ impl PgQueryBuilder {
         query
     }
 
-    // 'last' queries require a final reverse ordering
+    /// Handles pagination logic when the query selects for the last n
+    /// These queries require a reverse ordering of the result set
     fn handle_checkpoint_pagination_last(
         before: Option<i64>,
         after: Option<i64>,
