@@ -42,9 +42,10 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          location
-          digest
           kind
+          owner {
+            location
+          }
         }
       }
     }
@@ -57,17 +58,16 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# view-checkpoint
-
 //# run-graphql
 {
   address(address: "0x42") {
     objectConnection{
       edges {
         node {
-          location
-          digest
           kind
+          owner {
+            location
+          }
         }
       }
     }
@@ -80,9 +80,10 @@ module Test::M1 {
     objectConnection(filter: {owner: "0x42"}) {
       edges {
         node {
-          location
-          digest
           kind
+          owner {
+            location
+          }
         }
       }
     }
@@ -95,9 +96,10 @@ module Test::M1 {
     objectConnection(filter: {owner: "0x888"}) {
       edges {
         node {
-          location
-          digest
           kind
+          owner {
+            location
+          }
         }
       }
     }
@@ -110,9 +112,10 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          location
-          digest
           kind
+          owner {
+            location
+          }
         }
       }
     }
@@ -125,9 +128,10 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          location
-          digest
           kind
+          owner {
+            location
+          }
         }
       }
     }
