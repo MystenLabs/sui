@@ -133,7 +133,7 @@
           alias: ["constant", "abort-code"],
         },
         "const-name": {
-          pattern: /\b\w+(?=\s*:)/,
+          pattern: /\b\w+\b/,
           greedy: true,
           alias: "constant",
         },
@@ -293,6 +293,11 @@
       {
         pattern: /@0x[0-9A-F]+/,
         alias: "constant",
+      },
+      /** Numeric HEX literal */
+      {
+        pattern: /0x[0-9A-F]+/,
+        alias: "number",
       },
     ],
 
