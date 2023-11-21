@@ -7,43 +7,50 @@ import { useQueries } from '@tanstack/react-query';
 import { useSuiClientContext } from './useSuiClient.js';
 import type { SuiRpcMethods, UseSuiClientQueryOptions } from './useSuiClientQuery.js';
 
-type BaseSuiClientQueriesArgs = {
-	method: keyof SuiRpcMethods;
-	params?: object;
-	options?: UseSuiClientQueryOptions<keyof SuiRpcMethods, unknown>;
-}[];
-
-type TypedSuiClientQueriesArgs<Args extends BaseSuiClientQueriesArgs> = {
-	[K in keyof Args]: Args[K] extends { method: infer T extends keyof SuiRpcMethods }
-		? undefined extends SuiRpcMethods[T]['params']
+type SuiClientQueryOptions = SuiRpcMethods[keyof SuiRpcMethods] extends infer Method
+	? Method extends {
+			name: infer M extends keyof SuiRpcMethods;
+			params?: infer P;
+	  }
+		? undefined extends P
 			? {
-					method: T;
-					params?: SuiRpcMethods[T]['params'];
-					options?: UseSuiClientQueryOptions<T, SuiRpcMethods[T]['result']>;
+					method: M;
+					params?: P;
+					options?: UseSuiClientQueryOptions<M, unknown>;
 			  }
 			: {
-					method: T;
-					params: SuiRpcMethods[T]['params'];
-					options?: UseSuiClientQueryOptions<T, SuiRpcMethods[T]['result']>;
+					method: M;
+					params: P;
+					options?: UseSuiClientQueryOptions<M, unknown>;
 			  }
+		: never
+	: never;
+
+type UseSuiClientQueriesResults<Args extends readonly SuiClientQueryOptions[]> = {
+	-readonly [K in keyof Args]: Args[K] extends {
+		method: infer M extends keyof SuiRpcMethods;
+		options?: {
+			select?: (...args: any[]) => infer R;
+		};
+	}
+		? UseQueryResult<unknown extends R ? SuiRpcMethods[M]['result'] : R, Error>
 		: never;
 };
 
 export function useSuiClientQueries<
-	Args extends BaseSuiClientQueriesArgs,
-	TypedArgs extends TypedSuiClientQueriesArgs<Args>,
->(
-	...args: Args extends TypedArgs ? Args : TypedArgs
-): {
-	[K in keyof Args]: Args[K] extends { method: infer T extends keyof SuiRpcMethods }
-		? UseQueryResult<SuiRpcMethods[T]['result'], Error>
-		: never;
-} {
-	const queries = args;
-
+	const Queries extends readonly SuiClientQueryOptions[],
+	Results = UseSuiClientQueriesResults<Queries>,
+>({
+	queries,
+	combine,
+}: {
+	queries: Queries;
+	combine?: (results: UseSuiClientQueriesResults<Queries>) => Results;
+}): Results {
 	const suiContext = useSuiClientContext();
 
 	return useQueries({
+		combine: combine as never,
 		queries: queries.map((query) => {
 			const { method, params, options: { queryKey = [], ...restOptions } = {} } = query;
 
@@ -54,6 +61,6 @@ export function useSuiClientQueries<
 					return await suiContext.client[method](params as never);
 				},
 			};
-		}),
+		}) as [],
 	});
 }
