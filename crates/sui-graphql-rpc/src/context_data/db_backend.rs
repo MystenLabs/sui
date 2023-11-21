@@ -27,6 +27,7 @@ pub(crate) enum QueryDirection {
 }
 
 /// Controls the final ordering of the result set
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub(crate) enum SortOrder {
     /// Preserves the original order of the result set.
