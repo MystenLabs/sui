@@ -4,17 +4,17 @@
 /// Simple upgrade policy that requires a `k` out of `n` quorum in order to perform
 /// a proposed upgrade.
 /// 
-/// This policy is initiated with a call to `k_of_n_upgrade_policy::new` providing 
+/// This policy is created with a call to `quorum_upgrade_policy::new` providing
 /// the `UpgradeCap` of the package to be controlled by the policy, the `k` value 
-/// (number of votes to be received for the upgrade to be allowed) and the list of
+/// (number of votes, quorum to be reached for the upgrade to be allowed) and the list of
 /// `address`es allowed to vote. The `address`es provided will receive
-/// a `VotingCap` that allows them to vote. 
-/// This policy can be created at any point during the lifetime of the package upgrade 
-/// cap.
+/// a `VotingCap` that allows them to vote for a proposed upgrade. 
+/// This policy can be created at any point intime during the lifetime of the package
+/// upgrade cap.
 /// 
-/// An upgrade is proposed via `k_of_n_upgrade_policy::propose_upgrade` and saved as 
+/// An upgrade is proposed via `quorum_upgrade_policy::propose_upgrade` and saved as
 /// a shared object.
-/// Once the number of votes is reached the proposer of the upgrade can perform
+/// Once the number of votes, the quorum is reached the proposer of the upgrade can perform
 /// the upgrade.
 /// 
 /// Events are emitted to track the main operations on the proposal.
@@ -22,10 +22,10 @@
 /// `UpgradeProposed`, `UpgradeVoted` and `UpgradePerformed` or `UpgradeDiscarded`.
 /// 
 /// Multiple upgrades can be live at the same time. That is not the expected behavior
-/// but there are no restriction to the number of upgrades open at any point in time.
+/// but there are no restrictions to the number of upgrades open at any point in time.
 /// When that happens the first upgrade executed "wins" and subsequent attempt to
 /// authorize an upgrade will fail as the version will not match any longer.
-module sui::k_of_n_upgrade_policy {
+module quorum_upgrade_policy::quorum_upgrade_policy {
     use std::vector;
     use sui::event;
     use sui::object::{Self, ID, UID};
@@ -36,11 +36,12 @@ module sui::k_of_n_upgrade_policy {
 
     /// The capability controlling the upgrade. 
     /// Initialized with `new` is returned to the caller to be stored as desired.
-    struct KofNUpgradeCap has key, store {
+    /// From this point on every upgrade is performed via this policy.
+    struct QuorumUpgradeCap has key, store {
         id: UID,
         /// Upgrade cap of the package controlled by this policy.
         upgrade_cap: UpgradeCap,
-        /// Number of votes required for the upgrade to be allowed.
+        /// Number of votes (quorum) required for the upgrade to be allowed.
         required_votes: u64,
         /// Allowed voters.
         voters: VecSet<address>,
@@ -48,14 +49,14 @@ module sui::k_of_n_upgrade_policy {
         voter_caps: VecSet<ID>,
     }
 
-    /// A capability to vote an upgrade.
+    /// Capability to vote an upgrade.
     /// Sent to each registered address when a new upgrade is created.
     /// Receiving parties will use the capability to vote for the upgrade. 
     struct VotingCap has key {
         id: UID,
         /// The original address the capability was sent to.
         owner: address,
-        /// The ID of the `KofNUpgradeCap` this capability refers to.
+        /// The ID of the `QuorumUpgradeCap` this capability refers to.
         upgrade_cap: ID,
         /// The count of transfers this capability went through. 
         /// It is informational only and can be used to track transfers of
@@ -69,12 +70,12 @@ module sui::k_of_n_upgrade_policy {
     /// `ProposedUpgrade` instances are shared objects that will be passed as 
     /// an argument, together with a `VotingCap`, when voting.
     /// It's possible to have multiple proposed upgrades at the same time and 
-    /// the first successful update will obsolete all the others, given
+    /// the first successful upgrade will obsolete all the others, given
     /// an attempt to upgrade with a "concurrent" one will fail because of
     /// versioning.
     struct ProposedUpgrade has key {
         id: UID,
-        /// The ID of the `KofNUpgradeCap` that this vote was initiated from.
+        /// The ID of the `QuorumUpgradeCap` that this vote was initiated from.
         upgrade_cap: ID,
         /// The address requesting permission to perform the upgrade.
         /// This is the sender of the transaction that proposes and 
@@ -92,24 +93,25 @@ module sui::k_of_n_upgrade_policy {
 
     /// A new proposal for an upgrade.
     struct UpgradeProposed has copy, drop {
-        /// the instance of the k out of n policy
+        /// The instance of the quorum upgrade policy.
         upgrade_cap: ID,
-        /// the ID of the proposal (`ProposedUpgrade` instance)
+        /// The ID of the proposal (`ProposedUpgrade` instance).
         proposal: ID,
-        /// digest of the proposal
+        /// Digest of the proposal.
         digest: vector<u8>,
-        /// the address (sender) of the proposal
+        /// The address (sender) of the proposal.
         proposer: address,
-        /// allowed voters
+        /// Allowed voters.
         voters: VecSet<address>,
     }
 
+    /// A given proposal was voted.
     struct UpgradeVoted has copy, drop {
-        /// the ID of the proposal (`ProposedUpgrade` instance)
+        /// The ID of the proposal (`ProposedUpgrade` instance).
         proposal: ID,
-        /// digest of the proposal
+        /// Digest of the proposal.
         digest: vector<u8>,
-        /// the ID of the voter (VotingCap instance)
+        /// The ID of the voter (VotingCap instance).
         voter: ID,
         /// The signer of the transaction that voted.
         signer: address,
@@ -117,29 +119,29 @@ module sui::k_of_n_upgrade_policy {
 
     /// A succesful upgrade.
     struct UpgradePerformed has copy, drop {
-        /// the instance of the k out of n policy
+        /// The instance of the quorum upgrade policy.
         upgrade_cap: ID,
-        /// the ID of the proposal (`ProposedUpgrade` instance)
+        /// the ID of the proposal (`ProposedUpgrade` instance).
         proposal: ID,
-        /// digest of the proposal
+        /// digest of the proposal.
         digest: vector<u8>,
-        /// proposer of the upgrade
+        /// proposer of the upgrade.
         proposer: address,
     }
 
     /// A discarded upgrade.
     struct UpgradeDiscarded has copy, drop {
-        /// the instance of the k out of n policy
+        /// The instance of the quorum upgrade policy.
         upgrade_cap: ID,
-        /// the ID of the proposal (`ProposedUpgrade` instance)
+        /// The ID of the proposal (`ProposedUpgrade` instance).
         proposal: ID,
-        /// digest of the proposal
+        /// Digest of the proposal.
         digest: vector<u8>,
-        /// proposer of the upgrade
+        /// Proposer of the upgrade.
         proposer: address,
     }
 
-    /// Allowed voters must in the [2, 100] range.
+    /// Allowed voters must in the [1, 100] range.
     const EAllowedVotersError: u64 = 0;
     /// Required votes must be less than allowed voters.
     const ERequiredVotesError: u64 = 1;
@@ -153,22 +155,23 @@ module sui::k_of_n_upgrade_policy {
     const ENotEnoughVotes: u64 = 5;
     /// The operation required the signer to be the same as the upgrade proposer.
     const ESignerMismatch: u64 = 6;
-    /// Proposal (`KofNUpgradeCap`) and upgrade (`ProposedUpgrade`) do not match.
+    /// Proposal (`QuorumUpgradeCap`) and upgrade (`ProposedUpgrade`) do not match.
     const EInvalidProposalForUpgrade: u64 = 7;
 
-    /// Create a `KofNUpgradeCap` given an `UpgradeCap`.
+    /// Create a `QuorumUpgradeCap` given an `UpgradeCap`.
     /// The returned instance is the only and exclusive controller of upgrades. 
     /// The `k` (`required_votes`) out of `n` (length of `voters`) is set up
     /// at construction time and it is immutable.
+    /// The `Votera` will receive a `VotingCap` that allows them to vote.
     public fun new(
         upgrade_cap: UpgradeCap,
         required_votes: u64,
         voters: VecSet<address>,
         ctx: &mut TxContext,
-    ): KofNUpgradeCap {
+    ): QuorumUpgradeCap {
         // currently the allowed voters is limited to 100 and the number of
         // required votes must be at least 2 and less or equal than the number of voters
-        assert!(vec_set::size(&voters) > 1, EAllowedVotersError);
+        assert!(vec_set::size(&voters) > 0, EAllowedVotersError);
         assert!(vec_set::size(&voters) <= 100, EAllowedVotersError);
         assert!(required_votes > 0, ERequiredVotesError);
         assert!(required_votes <= vec_set::size(&voters), ERequiredVotesError);
@@ -198,7 +201,7 @@ module sui::k_of_n_upgrade_policy {
             vec_set::insert(&mut voter_caps, voter_id);
         };
 
-        KofNUpgradeCap {
+        QuorumUpgradeCap {
             id: cap_uid,
             upgrade_cap,
             required_votes,
@@ -207,10 +210,10 @@ module sui::k_of_n_upgrade_policy {
         }
     }
 
-    /// Make the package immutable by destroying the k of n upgrade cap and the
+    /// Make the package immutable by destroying the quorum upgrade cap and the
     /// underlying upgrade cap.
-    public fun make_immutable(cap: KofNUpgradeCap) {
-        let KofNUpgradeCap {
+    public fun make_immutable(cap: QuorumUpgradeCap) {
+        let QuorumUpgradeCap {
             id,
             upgrade_cap,
             required_votes: _,
@@ -222,12 +225,12 @@ module sui::k_of_n_upgrade_policy {
     }
 
     /// Restrict upgrades to "add code only", or "change dependencies".
-    public fun only_additive_upgrades(cap: &mut KofNUpgradeCap) {
+    public fun only_additive_upgrades(cap: &mut QuorumUpgradeCap) {
         package::only_additive_upgrades(&mut cap.upgrade_cap)
     }
 
     /// Restrict upgrades to "change dependencies only".
-    public fun only_dep_upgrades(cap: &mut KofNUpgradeCap) {
+    public fun only_dep_upgrades(cap: &mut QuorumUpgradeCap) {
         package::only_dep_upgrades(&mut cap.upgrade_cap)
     }
 
@@ -236,7 +239,7 @@ module sui::k_of_n_upgrade_policy {
     /// The proposer is the sender of the transaction and must be the signer
     /// of the commit transaction as well.
     public fun propose_upgrade(
-        cap: &KofNUpgradeCap,
+        cap: &QuorumUpgradeCap,
         digest: vector<u8>,
         ctx: &mut TxContext,
     ) {
@@ -288,12 +291,12 @@ module sui::k_of_n_upgrade_policy {
         });
     }
 
-    /// Issue an `UpgradeTicket` for the upgrade being voted on.  Aborts if 
+    /// Issue an `UpgradeTicket` for the upgrade being voted on. Aborts if 
     /// there are not enough votes yet, or if the upgrade was already performed.
     /// The signer of the transaction must be the same as the one proposing the
     /// upgrade.
     public fun authorize_upgrade(
-        cap: &mut KofNUpgradeCap,
+        cap: &mut QuorumUpgradeCap,
         proposal: &mut ProposedUpgrade, 
         ctx: &TxContext,
     ): UpgradeTicket {
@@ -326,7 +329,7 @@ module sui::k_of_n_upgrade_policy {
 
     /// Finalize the upgrade to produce the given receipt.
     public fun commit_upgrade(
-        cap: &mut KofNUpgradeCap, 
+        cap: &mut QuorumUpgradeCap, 
         receipt: UpgradeReceipt,
     ) {
         package::commit_upgrade(&mut cap.upgrade_cap, receipt)
@@ -359,17 +362,17 @@ module sui::k_of_n_upgrade_policy {
     //
 
     /// Get the `UpgradeCap` of the package protected by the policy.
-    public fun upgrade_cap(cap: &KofNUpgradeCap): &UpgradeCap {
+    public fun upgrade_cap(cap: &QuorumUpgradeCap): &UpgradeCap {
         &cap.upgrade_cap
     }
 
     /// Get the number of required votes for an upgrade to be valid.
-    public fun required_votes(cap: &KofNUpgradeCap): u64 {
+    public fun required_votes(cap: &QuorumUpgradeCap): u64 {
         cap.required_votes
     }
 
     /// Get the allowed voters for the policy.
-    public fun voters(cap: &KofNUpgradeCap): &VecSet<address> {
+    public fun voters(cap: &QuorumUpgradeCap): &VecSet<address> {
         &cap.voters
     }
 
