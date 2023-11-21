@@ -88,6 +88,8 @@ impl MoveModule {
             return Ok(connection);
         }
 
+        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
+        // lowerbound.
         if let Some(first) = first {
             let first = first as usize;
             if hi - lo > first {
@@ -95,6 +97,8 @@ impl MoveModule {
             }
         }
 
+        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
+        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
         if let Some(last) = last {
             let last = last as usize;
             if hi - lo > last {
@@ -119,6 +123,8 @@ impl MoveModule {
             .extend());
         };
 
+        // Select `friend_decls[lo..hi]` using iterators to enumerate before taking a sub-sequence
+        // from it, to get pairs `(i, friend_decls[i])`.
         for (idx, decl) in bytecode
             .friend_decls
             .iter()
