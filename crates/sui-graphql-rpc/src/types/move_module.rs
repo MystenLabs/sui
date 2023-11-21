@@ -2,16 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Loc;
 
 use crate::context_data::db_data_provider::PgManager;
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
-use super::{move_package::MovePackage, sui_address::SuiAddress};
+use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {
+    pub native: Vec<u8>,
     pub parsed: ParsedMoveModule,
+}
+
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub(crate) struct MoveModuleId {
+    #[graphql(skip)]
+    pub package: SuiAddress,
+    pub name: String,
 }
 
 /// Represents a module in Move, a library that defines struct types
@@ -24,8 +36,22 @@ impl MoveModule {
 
     // TODO: impl all fields
 
-    // moduleId: MoveModuleId!
-    // friends: [MoveModule!]
+    async fn module_id(&self) -> MoveModuleId {
+        // TODO: Rethink the need for MoveModuleId -- we probably don't need it (MoveModule should
+        // expose access to its package).
+        let self_id = self.parsed.bytecode().self_id();
+        MoveModuleId {
+            package: SuiAddress::from(*self_id.address()),
+            name: self_id.name().to_string(),
+        }
+    }
+
+    // friendConnection(
+    //   first: Int,
+    //   after: String,
+    //   last: Int,
+    //   before: String
+    // ): MoveModuleConnection
 
     // struct(name: String!): MoveStructDecl
     // structConnection(
@@ -43,16 +69,23 @@ impl MoveModule {
     //   before: String,
     // ): MoveFunctionConnection
 
-    // bytes: Base64
-    // disassembly: String
-}
+    /// The Base64 encoded bcs serialization of the module.
+    async fn bytes(&self) -> Option<Base64> {
+        Some(Base64::from(self.native.clone()))
+    }
 
-#[derive(SimpleObject)]
-#[graphql(complex)]
-pub(crate) struct MoveModuleId {
-    #[graphql(skip)]
-    pub package: SuiAddress,
-    pub name: String,
+    /// Textual representation of the module's bytecode.
+    async fn disassembly(&self) -> Result<Option<String>> {
+        let view = BinaryIndexedView::Module(self.parsed.bytecode());
+        Ok(Some(
+            Disassembler::from_view(view, Loc::invalid())
+                .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
+                .extend()?
+                .disassemble()
+                .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
+                .extend()?,
+        ))
+    }
 }
 
 #[ComplexObject]

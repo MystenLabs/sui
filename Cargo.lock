@@ -10857,6 +10857,8 @@ dependencies = [
  "move-bytecode-utils",
  "move-compiler",
  "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
  "mysten-metrics",
  "once_cell",
  "prometheus",

@@ -1,0 +1,51 @@
+processed 4 tasks
+
+task 1 'publish'. lines 6-25:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5327600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 27-27:
+Checkpoint created: 1
+
+task 3 'run-graphql'. lines 29-62:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "location": "0xd9645e1129b10332bfee7418d49d28780422c2b3a5d8cac0b4a89839c71ad0c1",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "location": "0x6c38433df7c85db6313a3b28c4d6a1bbee8ef2b05d53a05347e53246a8573012",
+                  "asMovePackage": {
+                    "module": {
+                      "moduleId": {
+                        "name": "m",
+                        "package": {
+                          "asObject": {
+                            "location": "0x6c38433df7c85db6313a3b28c4d6a1bbee8ef2b05d53a05347e53246a8573012"
+                          }
+                        }
+                      },
+                      "fileFormatVersion": 6,
+                      "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZWw4Qz33yF22MTo7KMTWobvujvKwXVOgU0flMkaoVzASAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                      "disassembly": "// Move bytecode v6\nmodule 6c38433df7c85db6313a3b28c4d6a1bbee8ef2b05d53a05347e53246a8573012.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

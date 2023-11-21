@@ -58,12 +58,17 @@ impl MovePackage {
     /// structs and functions it defines.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
         use PackageCacheError as E;
-        match self.parsed_package().extend()?.module(&name) {
-            Ok(module) => Ok(Some(MoveModule {
-                parsed: module.clone(),
+        match (
+            self.native.serialized_module_map().get(&name),
+            self.parsed_package().extend()?.module(&name),
+        ) {
+            (Some(native), Ok(parsed)) => Ok(Some(MoveModule {
+                native: native.clone(),
+                parsed: parsed.clone(),
             })),
-            Err(E::ModuleNotFound(_, _)) => Ok(None),
-            Err(e) => {
+
+            (None, _) | (_, Err(E::ModuleNotFound(_, _))) => Ok(None),
+            (_, Err(e)) => {
                 Err(Error::Internal(format!("Unexpected error fetching module: {e}")).extend())
             }
         }
@@ -106,11 +111,19 @@ impl MovePackage {
         };
 
         let mut connection = Connection::new(false, false);
-        for (name, module) in module_range.skip(skip as usize).take(take as usize) {
+        for (name, parsed) in module_range.skip(skip as usize).take(take as usize) {
+            let Some(native) = self.native.serialized_module_map().get(name) else {
+                return Err(Error::Internal(format!(
+                    "Module '{name}' exists in PackageCache but not in serialized map.",
+                ))
+                .extend());
+            };
+
             connection.edges.push(Edge::new(
                 name.clone(),
                 MoveModule {
-                    parsed: module.clone(),
+                    native: native.clone(),
+                    parsed: parsed.clone(),
                 },
             ))
         }
