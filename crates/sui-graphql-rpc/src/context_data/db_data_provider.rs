@@ -234,7 +234,7 @@ impl PgManager {
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
         let coin_type = parse_to_type_tag(Some(coin_type))
-            .map_err(|_| Error::Internal("Invalid coin type.".to_string()))?
+            .map_err(|e| Error::Internal(e.to_string()))?
             .to_canonical_string(/* with_prefix */ true);
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
@@ -864,7 +864,7 @@ impl PgManager {
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
         let coin_type = parse_to_type_tag(coin_type)
-            .map_err(|_| Error::Internal("Invalid coin type.".to_string()))?
+            .map_err(|e| Error::Internal(e.to_string()))?
             .to_canonical_string(/* with_prefix */ true);
         let result = self.get_balance(address, coin_type).await?;
 
