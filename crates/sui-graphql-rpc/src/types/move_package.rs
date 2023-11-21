@@ -114,7 +114,7 @@ impl MovePackage {
         for (name, parsed) in module_range.skip(skip as usize).take(take as usize) {
             let Some(native) = self.native.serialized_module_map().get(name) else {
                 return Err(Error::Internal(format!(
-                    "Module '{name}' in PackageCache but not in serialized map.",
+                    "Module '{name}' exists in PackageCache but not in serialized map.",
                 ))
                 .extend());
             };
