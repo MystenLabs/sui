@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::{backend::Backend, query_builder::AsQuery, query_dsl::methods::BoxedDsl};
+use diesel::backend::Backend;
 use sui_indexer::{
     schema_v2::{checkpoints, epochs, objects, transactions},
     types_v2::OwnerType,
@@ -16,21 +16,14 @@ use diesel::{
     sql_types::Text,
 };
 
-#[derive(Clone, Copy)]
-pub(crate) enum Cursor {
-    After,
-    Before,
-}
-
-/// Controls how many records the query fetches before or after some cursor
-#[derive(Clone, Copy)]
+/// An enum representing whether first and/ or last was provided in the graphql request.
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum QueryDirection {
-    /// Fetch first n records after some cursor (exclusive) or from the beginning.
-    /// The edge closest to the cursor or beginning comes first in the result set.
-    First(i64),
-    /// Fetch last n records before some cursor (exclusive) or from the end.
-    /// The edge closest to the cursor or end comes last in the result set.
-    Last(i64),
+    /// If first is provided, the result set fetched from the db does not need to be reversed.
+    /// Queries default to this direction.
+    First,
+    /// The direction is last iff first is not provided and last is provided.
+    Last,
 }
 
 /// Controls the final ordering of the result set
@@ -92,8 +85,8 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
-        cursor: Option<i64>,
-        cursor_type: Option<Cursor>,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         edge_order: SortOrder,
         query_direction: QueryDirection,
@@ -126,31 +119,4 @@ impl<T: QueryId> QueryId for Explained<T> {
 /// Explained<T> is a fully structured query with return of type Text
 impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained<T> {
     type SqlType = Text;
-}
-
-/// The struct returned for query.subquery()
-#[derive(Debug, Clone, Copy)]
-pub struct Subqueried<T> {
-    pub query: T,
-}
-
-/// Allows .subquery() method on any Diesel query
-pub trait Subquery: AsQuery + Sized {
-    fn subquery(self) -> Subqueried<Self>;
-}
-impl<T: AsQuery> Subquery for T {
-    fn subquery(self) -> Subqueried<Self> {
-        Subqueried { query: self }
-    }
-}
-
-/// All queries need to implement QueryId
-impl<T: QueryId> QueryId for Subqueried<T> {
-    type QueryId = (T::QueryId, std::marker::PhantomData<&'static str>);
-    const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID;
-}
-
-/// Subqueried<T> wraps the query in a SELECT * FROM (query) AS SUB
-impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Subqueried<T> {
-    type SqlType = T::SqlType;
 }

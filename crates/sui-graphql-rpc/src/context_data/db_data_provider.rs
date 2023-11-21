@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::{Cursor, GenericQueryBuilder, QueryDirection, SortOrder};
+use super::db_backend::{GenericQueryBuilder, QueryDirection, SortOrder};
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -406,25 +406,16 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        validate_cursor_pagination_post_fix(&first, &last)?;
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor_type = if after.is_some() {
-            Some(Cursor::After)
-        } else if before.is_some() {
-            Some(Cursor::Before)
-        } else {
-            None
+        let direction = match (first, last) {
+            (None, Some(_)) => QueryDirection::Last,
+            _ => QueryDirection::First,
         };
-        let direction = if last.is_some() {
-            QueryDirection::Last(last.unwrap() as i64)
-        } else if first.is_some() {
-            QueryDirection::First(first.unwrap() as i64)
-        } else {
-            QueryDirection::First(limit)
-        };
-
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_checkpoint_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
 
@@ -432,8 +423,8 @@ impl PgManager {
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
-                        cursor,
-                        cursor_type,
+                        before,
+                        after,
                         limit,
                         SortOrder::Asc,
                         direction,
@@ -449,6 +440,10 @@ impl PgManager {
                 let has_next_page = stored_checkpoints.len() as i64 > limit;
                 if has_next_page {
                     stored_checkpoints.pop();
+                }
+
+                if direction == QueryDirection::Last {
+                    stored_checkpoints.reverse();
                 }
 
                 Ok((stored_checkpoints, has_next_page))
@@ -883,7 +878,6 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
-        validate_cursor_pagination(&first, &after, &last, &before)?;
         let checkpoints = self
             .multi_get_checkpoints(first, after, last, before, epoch)
             .await?;
@@ -1816,25 +1810,31 @@ impl From<GenesisObject> for SuiAddress {
     }
 }
 
-/// TODO: enfroce limits on first and last
 pub(crate) fn validate_cursor_pagination(
     first: &Option<u64>,
     after: &Option<String>,
     last: &Option<u64>,
     before: &Option<String>,
 ) -> Result<(), Error> {
-    // if first.is_some() && before.is_some() {
-    //     return Err(DbValidationError::FirstAfter.into());
-    // }
+    if first.is_some() && before.is_some() {
+        return Err(DbValidationError::FirstAfter.into());
+    }
 
-    // if last.is_some() && after.is_some() {
-    //     return Err(DbValidationError::LastBefore.into());
-    // }
+    if last.is_some() && after.is_some() {
+        return Err(DbValidationError::LastBefore.into());
+    }
 
-    // if before.is_some() && after.is_some() {
-    //     return Err(Error::CursorNoBeforeAfter);
-    // }
+    if before.is_some() && after.is_some() {
+        return Err(Error::CursorNoBeforeAfter);
+    }
 
+    Ok(())
+}
+
+pub(crate) fn validate_cursor_pagination_post_fix(
+    first: &Option<u64>,
+    last: &Option<u64>,
+) -> Result<(), Error> {
     if first.is_some() && last.is_some() {
         return Err(Error::CursorNoFirstLast);
     }
