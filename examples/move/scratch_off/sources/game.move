@@ -120,9 +120,9 @@ module scratch_off::game {
     }
 
     /// Initializes a ticket and sends it to someone.
-    /// TODO: decide how to do this besides senting a ticket
+    /// TODO: decide how to do this besides sending a ticket
     public fun send_ticket<Asset>(
-        target_address: address,
+        player: address,
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
@@ -130,9 +130,9 @@ module scratch_off::game {
         let ticket = Ticket {
             id: object::new(ctx),
             convenience_store_id: object::uid_to_inner(&store.id),
-            player: target_address
+            player
         };
-        transfer::public_transfer(ticket, target_address);
+        transfer::public_transfer(ticket, player);
     }
 
     /// Calls evaluate ticket by adding it as a dynamic field to the store
