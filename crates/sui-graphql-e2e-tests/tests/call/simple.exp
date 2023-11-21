@@ -104,7 +104,7 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 92-116:
+task 16 'run-graphql'. lines 92-124:
 Response: {
   "data": {
     "address": {
@@ -124,11 +124,17 @@ Response: {
           }
         ]
       }
+    },
+    "object": {
+      "version": 3,
+      "owner": {
+        "location": "0x0000000000000000000000000000000000000000000000000000000000000042"
+      }
     }
   }
 }
 
-task 17 'view-graphql-variables'. lines 119-120:
+task 17 'view-graphql-variables'. lines 127-128:
 Name: A
 Type: SuiAddress!
 Value: "0x42"
@@ -152,6 +158,30 @@ Value: "0xDEE9"
 Name: deepbook_opt
 Type: SuiAddress
 Value: "0xDEE9"
+
+Name: obj_0_0
+Type: SuiAddress!
+Value: "0x962d07ca41195ae05098e86b43656fc76bc67e348a891994154a4597432eb84f"
+
+Name: obj_0_0_opt
+Type: SuiAddress
+Value: "0x962d07ca41195ae05098e86b43656fc76bc67e348a891994154a4597432eb84f"
+
+Name: obj_1_0
+Type: SuiAddress!
+Value: "0xb214f63e7e7cea32dc57edba9c924524f44a7bb50e72d0e102265219d4de7d0e"
+
+Name: obj_1_0_opt
+Type: SuiAddress
+Value: "0xb214f63e7e7cea32dc57edba9c924524f44a7bb50e72d0e102265219d4de7d0e"
+
+Name: obj_2_0
+Type: SuiAddress!
+Value: "0x5dee0c408687d51a12f9edd765733887eb5d784bf38a8511195cf2bc64e3d801"
+
+Name: obj_2_0_opt
+Type: SuiAddress
+Value: "0x5dee0c408687d51a12f9edd765733887eb5d784bf38a8511195cf2bc64e3d801"
 
 Name: std
 Type: SuiAddress!

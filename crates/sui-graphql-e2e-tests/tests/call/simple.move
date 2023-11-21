@@ -89,7 +89,7 @@ module Test::M1 {
   }
 }
 
-//# run-graphql --variables Test A
+//# run-graphql --variables Test A obj_2_0
 {
   address(address: $Test) {
     objectConnection{
@@ -113,6 +113,14 @@ module Test::M1 {
       }
     }
   }
+
+  object(address: $obj_2_0) {
+    version
+    owner {
+      location
+    }
+  }
+
 }
 
 
