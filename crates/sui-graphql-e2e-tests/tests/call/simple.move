@@ -70,3 +70,51 @@ module Test::M1 {
 //# view-checkpoint
 
 //# advance-epoch
+
+// Demonstrates using variables
+// If the variable ends in _opt, this is the optional variant
+
+//# run-graphql --variables A
+{
+  address(address: $A) {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --variables Test A
+{
+  address(address: $Test) {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+  second: address(address: $A) {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+}
+
+
+//# view-graphql-variables
+// List all the graphql variables

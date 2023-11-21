@@ -44,6 +44,7 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
@@ -133,6 +134,7 @@ pub(crate) struct StagedPackage {
     pub(crate) digest: Vec<u8>,
 }
 
+#[derive(Debug)]
 struct TestAccount {
     address: SuiAddress,
     key_pair: AccountKeyPair,
@@ -474,10 +476,24 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ViewGraphqlVariables => {
+                let variables = self.graphql_variables();
+                let mut res = vec![];
+                for (name, value) in variables {
+                    res.push(format!(
+                        "Name: {}\nType: {}\nValue: {}",
+                        name,
+                        value.ty,
+                        serde_json::to_string_pretty(&value.value).unwrap()
+                    ));
+                }
+                Ok(Some(res.join("\n\n")))
+            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
                 show_service_version,
+                variables,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
@@ -487,9 +503,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
                     .await;
 
+                let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
                     .graphql_client
-                    .execute_to_graphql(contents.trim().to_owned(), show_usage, vec![], vec![])
+                    .execute_to_graphql(
+                        contents.trim().to_owned(),
+                        show_usage,
+                        used_variables,
+                        vec![],
+                    )
                     .await?;
 
                 let mut output = vec![];
@@ -931,6 +953,53 @@ impl<'a> SuiTestAdapter<'a> {
 
     pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
         self.executor
+    }
+
+    fn graphql_variables(&self) -> BTreeMap<String, GraphqlQueryVariable> {
+        let mut variables = BTreeMap::new();
+        for (name, addr) in &self.compiled_state.named_address_mapping {
+            let addr = addr.to_string();
+
+            // Required variant
+            variables.insert(
+                name.to_owned(),
+                GraphqlQueryVariable {
+                    name: name.to_string(),
+                    value: serde_json::json!(addr),
+                    ty: "SuiAddress!".to_string(),
+                },
+            );
+            // Optional variant
+            let name = name.to_string() + "_opt";
+            variables.insert(
+                name.clone(),
+                GraphqlQueryVariable {
+                    name: name.to_string(),
+                    value: serde_json::json!(addr),
+                    ty: "SuiAddress".to_string(),
+                },
+            );
+        }
+        variables
+    }
+    fn resolve_graphql_variables(
+        &self,
+        declared: &[String],
+    ) -> anyhow::Result<Vec<GraphqlQueryVariable>> {
+        let variables = self.graphql_variables();
+        let mut res = vec![];
+        for decl in declared {
+            if let Some(var) = variables.get(decl) {
+                res.push(var.clone());
+            } else {
+                return Err(anyhow!(
+                    "Unknown variable: {}\nAllowed variable mappings are are {:#?}",
+                    decl,
+                    variables
+                ));
+            }
+        }
+        Ok(res)
     }
 
     async fn upgrade_package(
