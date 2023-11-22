@@ -35,9 +35,9 @@ use super::aliases::{AliasMapBuilder, ParserExplicitUseFun, UseFunsBuilder};
 
 type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 
-// struct Context<'env, 'map> {
-struct Context<'env> {
+struct Context<'env, 'map> {
     module_members: UniqueMap<ModuleIdent, ModuleMembers>,
+    named_address_mapping: Option<&'map NamedAddressMap>,
     address_conflicts: BTreeSet<Symbol>,
     address: Option<Address>,
     aliases: AliasMap,
@@ -51,8 +51,7 @@ struct Context<'env> {
     env: &'env mut CompilationEnv,
 }
 
-// impl<'env, 'map> Context<'env, 'map> {
-impl<'env> Context<'env> {
+impl<'env, 'map> Context<'env, 'map> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
@@ -66,7 +65,7 @@ impl<'env> Context<'env> {
         }
         Self {
             module_members,
-            env: compilation_env,
+            named_address_mapping: None,
             address_conflicts,
             address: None,
             aliases: AliasMap::new(),
@@ -75,6 +74,7 @@ impl<'env> Context<'env> {
             in_spec_context: false,
             exp_specs: BTreeMap::new(),
             all_filter_alls,
+            env: compilation_env,
         }
     }
 
@@ -220,8 +220,9 @@ pub fn program(
     } in source_definitions
     {
         context.current_package = package;
-        let new_aliases =
-            named_addr_map_to_alias_map_builder(named_address_maps.get(named_address_map));
+        let named_address_map = named_address_maps.get(named_address_map);
+        context.named_address_mapping = Some(named_address_map);
+        let new_aliases = named_addr_map_to_alias_map_builder(named_address_map);
         context.aliases.push_alias_scope(new_aliases);
         definition(&mut context, &mut source_module_map, package, def);
         context.aliases.pop_scope();
@@ -235,8 +236,9 @@ pub fn program(
     } in lib_definitions
     {
         context.current_package = package;
-        let new_aliases =
-            named_addr_map_to_alias_map_builder(named_address_maps.get(named_address_map));
+        let named_address_map = named_address_maps.get(named_address_map);
+        context.named_address_mapping = Some(named_address_map);
+        let new_aliases = named_addr_map_to_alias_map_builder(named_address_map);
         context.aliases.push_alias_scope(new_aliases);
         definition(&mut context, &mut lib_module_map, package, def);
         context.aliases.pop_scope();
@@ -267,12 +269,16 @@ fn definition(
     match def {
         P::Definition::Module(mut m) => {
             let module_paddr = std::mem::take(&mut m.address);
-            let module_addr = module_paddr
-                .map(|a| sp(a.loc, address(context, /* suggest_declaration */ true, a)));
+            let module_addr = module_paddr.map(|a| {
+                sp(
+                    a.loc,
+                    top_level_address(context, /* suggest_declaration */ true, a),
+                )
+            });
             module(context, module_map, package_name, module_addr, m)
         }
         P::Definition::Address(a) => {
-            let addr = address(context, /* suggest_declaration */ false, a.addr);
+            let addr = top_level_address(context, /* suggest_declaration */ false, a.addr);
             for mut m in a.modules {
                 let module_addr = check_module_address(context, a.loc, addr, &mut m);
                 module(context, module_map, package_name, Some(module_addr), m)
@@ -293,7 +299,25 @@ fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) ->
 }
 
 // Access a top level address as declared, not affected by any aliasing/shadowing
-fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameAccess) -> Address {
+fn top_level_address(
+    context: &mut Context,
+    suggest_declaration: bool,
+    ln: P::LeadingNameAccess,
+) -> Address {
+    top_level_address_(
+        context,
+        context.named_address_mapping.as_ref().unwrap(),
+        suggest_declaration,
+        ln,
+    )
+}
+
+fn top_level_address_(
+    context: &mut Context,
+    named_address_map: &NamedAddressMap,
+    suggest_declaration: bool,
+    ln: P::LeadingNameAccess,
+) -> Address {
     let name_res = check_valid_address_name(context, &ln);
     let sp!(loc, ln_) = ln;
     match ln_ {
@@ -301,16 +325,10 @@ fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameA
             debug_assert!(name_res.is_ok());
             Address::anonymous(loc, bytes)
         }
-        P::LeadingNameAccess_::Name(name) => match context.aliases.get(&name) {
-            Some(AliasEntry::Address(addr)) => make_address(context, name, loc, addr),
-            Some(_) => {
-                context.env.add_diag(diag!(
-                    NameResolution::NamePositionMismatch,
-                    (loc, "Expected an address")
-                ));
-                Address::NamedUnassigned(name)
-            }
-            None => {
+        P::LeadingNameAccess_::Name(name) => {
+            if let Some(addr) = named_address_map.get(&name.value) {
+                make_address(context, name, loc, addr.clone())
+            } else {
                 if name_res.is_ok() {
                     context.env.add_diag(address_without_value_error(
                         suggest_declaration,
@@ -320,7 +338,7 @@ fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameA
                 }
                 Address::NamedUnassigned(name)
             }
-        },
+        }
     }
 }
 
@@ -337,7 +355,7 @@ fn module_ident(context: &mut Context, sp!(loc, mident_): P::ModuleIdent) -> Mod
         address: ln,
         module,
     } = mident_;
-    let addr = address(context, /* suggest_declaration */ false, ln);
+    let addr = top_level_address(context, /* suggest_declaration */ false, ln);
     sp(loc, ModuleIdent_::new(addr, module))
 }
 
@@ -351,7 +369,8 @@ fn check_module_address(
     match module_address {
         Some(other_paddr) => {
             let other_loc = other_paddr.loc;
-            let other_addr = address(context, /* suggest_declaration */ true, other_paddr);
+            let other_addr =
+                top_level_address(context, /* suggest_declaration */ true, other_paddr);
             let msg = if addr == other_addr {
                 "Redundant address specification"
             } else {
@@ -858,32 +877,38 @@ fn all_module_members<'a>(
     defs: impl IntoIterator<Item = &'a P::PackageDefinition>,
 ) {
     for P::PackageDefinition {
-        named_address_map,
+        named_address_map: named_address_map_index,
         def,
         ..
     } in defs
     {
-        let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map);
-        let new_aliases = named_addr_map_to_alias_map_builder(named_addr_map);
-        context.aliases.push_alias_scope(new_aliases);
+        let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map_index);
         match def {
             P::Definition::Module(m) => {
                 let addr = match &m.address {
-                    Some(a) => address(context, /* suggest_declaration */ true, *a),
+                    Some(a) => top_level_address_(
+                        context,
+                        named_addr_map,
+                        /* suggest_declaration */ true,
+                        *a,
+                    ),
                     // Error will be handled when the module is compiled
                     None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
                 module_members(members, always_add, addr, m)
             }
             P::Definition::Address(addr_def) => {
-                let addr = address(context, /* suggest_declaration */ false, addr_def.addr);
+                let addr = top_level_address_(
+                    context,
+                    named_addr_map,
+                    /* suggest_declaration */ false,
+                    addr_def.addr,
+                );
                 for m in &addr_def.modules {
                     module_members(members, always_add, addr, m)
                 }
             }
         };
-        // FIXME should we warn on unused addresses here?
-        context.aliases.pop_scope();
     }
 }
 
@@ -2576,7 +2601,7 @@ fn value(context: &mut Context, sp!(loc, pvalue_): P::Value) -> Option<E::Value>
     use P::Value_ as PV;
     let value_ = match pvalue_ {
         PV::Address(addr) => {
-            let addr = address(context, /* suggest_declaration */ true, addr);
+            let addr = top_level_address(context, /* suggest_declaration */ true, addr);
             EV::Address(addr)
         }
         PV::Num(s) if s.ends_with("u8") => match parse_u8(&s[..s.len() - 2]) {
