@@ -21,12 +21,12 @@
 	"files": [
 		"CHANGELOG.md",
 		"dist",
-		"react",
-		"src"
+		"react"
 	],
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-package",
+		"demo": "vite ./demo",
 		"prepublishOnly": "pnpm build",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
@@ -47,9 +47,13 @@
 		"@mysten/build-scripts": "workspace:*",
 		"@types/node": "^20.4.2",
 		"@types/react": "^18.2.15",
+		"@types/react-dom": "^18.2.7",
+		"@vitejs/plugin-react-swc": "^3.3.2",
 		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
 		"tsx": "^3.12.7",
-		"typescript": "^5.1.6"
+		"typescript": "^5.1.6",
+		"vite": "^4.4.4"
 	},
 	"dependencies": {
 		"@mysten/sui.js": "workspace:*",
