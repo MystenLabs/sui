@@ -24,6 +24,12 @@ module pkg::n {
     }
 }
 
+module pkg::o {
+    public fun qux(): u32 {
+        45
+    }
+}
+
 //# create-checkpoint
 
 //# run-graphql
@@ -44,6 +50,77 @@ fragment Modules on Object {
             bytes
             disassembly
         }
+    }
+}
+
+{
+    transactionBlockConnection(last: 1) {
+        nodes {
+            effects {
+                objectChanges {
+                    outputState {
+                        ...Modules
+                    }
+                }
+            }
+        }
+    }
+}
+
+//# run-graphql
+fragment NodeNames on MoveModuleConnection {
+    nodes { moduleId { name } }
+    pageInfo { hasNextPage hasPreviousPage }
+}
+
+fragment Modules on Object {
+    location
+    asMovePackage {
+        # Tests to make sure `after` and `before` correctly limit the
+        # upper and lower bounds on the range of modules, and
+        # correctly detect the existence of predecessor or successor
+        # pages.
+
+        all: moduleConnection { ...NodeNames }
+        after: moduleConnection(after: "m") { ...NodeNames }
+        before: moduleConnection(before: "o") { ...NodeNames }
+    }
+}
+
+{
+    transactionBlockConnection(last: 1) {
+        nodes {
+            effects {
+                objectChanges {
+                    outputState {
+                        ...Modules
+                    }
+                }
+            }
+        }
+    }
+}
+
+//# run-graphql
+fragment NodeNames on MoveModuleConnection {
+    nodes { moduleId { name } }
+    pageInfo { hasNextPage hasPreviousPage }
+}
+
+fragment Modules on Object {
+    location
+    asMovePackage {
+        # Tests to make sure `first` and `last` correctly limit the
+        # number of modules returned and correctly detect the
+        # existence of predecessor or successor pages.
+
+        prefix: moduleConnection(after: "m", first: 1) { ...NodeNames }
+        prefixAll: moduleConnection(after: "m", first: 2) { ...NodeNames }
+        prefixExcess: moduleConnection(after: "m", first: 100) { ...NodeNames }
+
+        suffix: moduleConnection(before: "o", last: 1) { ...NodeNames }
+        suffixAll: moduleConnection(before: "o", last: 2) { ...NodeNames }
+        suffixExcess: moduleConnection(before: "o", last: 100) { ...NodeNames }
     }
 }
 
