@@ -274,6 +274,10 @@ pub enum ToolCommand {
         /// and output will be reduced to necessary status information.
         #[clap(long = "verbose")]
         verbose: bool,
+        /// If true, will skip certain checks against the provided
+        /// bucket name and type. Defaults to false.
+        #[clap(long = "force")]
+        force: bool,
     },
 
     #[clap(name = "replay")]
@@ -479,6 +483,7 @@ impl ToolCommand {
                 archive_bucket_type,
                 no_sign_request,
                 verbose,
+                force,
             } => {
                 if !verbose {
                     tracing_handle
@@ -532,6 +537,25 @@ impl ToolCommand {
                         ObjectStoreType::S3
                     }
                 });
+
+                // check for errors for clients that manually specify mysten hosted snapshot bucket
+                if !force {
+                    if snapshot_bucket_type != ObjectStoreType::GCS
+                        && (snapshot_bucket == Some("mysten-mainnet-formal".to_string())
+                            || snapshot_bucket == Some("mysten-testnet-formal".to_string()))
+                    {
+                        panic!(
+                            "Error: Mysten Labs hosted formal snapshots are supported for GCS only. If this was intentional, please specify --force flag"
+                        );
+                    } else if snapshot_bucket_type != ObjectStoreType::S3
+                        && (snapshot_bucket == Some("mysten-mainnet-snapshots".to_string())
+                            || snapshot_bucket == Some("mysten-testnet-snapshots".to_string()))
+                    {
+                        panic!(
+                            "Error: Mysten Labs hosted db checkpoint snapshots are supported for S3 only. If this was intentional, please specify --force flag"
+                        );
+                    }
+                }
 
                 // index staging is not yet supported for formal snapshots
                 let skip_indexes = skip_indexes || formal;
