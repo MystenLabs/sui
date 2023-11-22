@@ -5,6 +5,7 @@
 // There should be 1 dynamic object field (MoveObject) and 3 dynamic fields.
 // When the object is wrapped, we expect that making the query through Object will return null.
 // But it should still be visible through the Owner type.
+// We run the query again to make sure the ordering is consistent.
 // This test also demonstrates why we need separate dynamicField and dynamicObjectField APIs.
 // It is possible for a dynamic field and a dynamic object field to share the same name lookup.
 
@@ -107,6 +108,33 @@ module Test::m {
             __typename
           }
           ... on MoveValue {
+            __typename
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --variables obj_2_0
+{
+  owner(address: $obj_2_0) {
+    dynamicFieldConnection {
+      nodes {
+        name {
+          type {
+            repr
+          }
+          data
+          bcs
+        }
+        value {
+          ... on MoveObject {
+            __typename
+          }
+          ... on MoveValue {
+            bcs
+            data
             __typename
           }
         }
