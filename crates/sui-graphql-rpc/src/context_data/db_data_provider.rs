@@ -152,6 +152,13 @@ impl PgManager {
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
+    /// handle pagination logic
+    // fn handle_checkpoint_pagination(
+    // before: Option<String>,
+    // after: Option<String>,
+    // sort_order: SortOrder
+    // ) -> Result<(), Error> {}
+
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
         self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_tx_by_digest(digest.clone())),
