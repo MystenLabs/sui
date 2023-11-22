@@ -71,11 +71,12 @@ struct Context<'env> {
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
-    unscoped_constants: BTreeMap<Symbol, Loc>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
+    loop_names: Vec<N::Var>,
+    loop_id: u16,
     /// Type parameters used in a function (they have to be cleared after processing each function).
     used_fun_tparams: BTreeSet<TParamID>,
     /// Indicates if the compiler is currently translating a function (set to true before starting
@@ -157,9 +158,10 @@ impl<'env> Context<'env> {
             scoped_functions,
             scoped_constants,
             unscoped_types,
-            unscoped_constants: BTreeMap::new(),
             local_scopes: vec![],
             local_count: BTreeMap::new(),
+            loop_names: vec![],
+            loop_id: 0,
             used_locals: BTreeSet::new(),
             used_fun_tparams: BTreeSet::new(),
             translating_fun: false,
@@ -372,25 +374,22 @@ impl<'env> Context<'env> {
     fn resolve_constant(
         &mut self,
         sp!(loc, ma_): E::ModuleAccess,
-    ) -> Option<(Option<ModuleIdent>, ConstantName)> {
+    ) -> Option<(ModuleIdent, ConstantName)> {
         use E::ModuleAccess_ as EA;
         match ma_ {
-            EA::Name(n) => match self.unscoped_constants.get(&n.value) {
-                None => {
-                    self.env.add_diag(diag!(
-                        NameResolution::UnboundUnscopedName,
-                        (loc, format!("Unbound constant '{}'", n)),
-                    ));
-                    None
-                }
-                Some(_) => Some((None, ConstantName(n))),
-            },
+            EA::Name(n) => {
+                self.env.add_diag(diag!(
+                    NameResolution::UnboundUnscopedName,
+                    (loc, format!("Unbound constant '{}'", n)),
+                ));
+                None
+            }
             EA::ModuleAccess(m, n) => match self.resolve_module_constant(loc, &m, n) {
                 None => {
                     assert!(self.env.has_errors());
                     None
                 }
-                Some(cname) => Some((Some(m), cname)),
+                Some(cname) => Some((m, cname)),
             },
         }
     }
@@ -399,20 +398,12 @@ impl<'env> Context<'env> {
         self.unscoped_types.insert(s, rt);
     }
 
-    fn bind_constant(&mut self, s: Symbol, loc: Loc) {
-        self.unscoped_constants.insert(s, loc);
+    fn save_unscoped(&self) -> BTreeMap<Symbol, ResolvedType> {
+        self.unscoped_types.clone()
     }
 
-    fn save_unscoped(&self) -> (BTreeMap<Symbol, ResolvedType>, BTreeMap<Symbol, Loc>) {
-        (self.unscoped_types.clone(), self.unscoped_constants.clone())
-    }
-
-    fn restore_unscoped(
-        &mut self,
-        (types, constants): (BTreeMap<Symbol, ResolvedType>, BTreeMap<Symbol, Loc>),
-    ) {
+    fn restore_unscoped(&mut self, types: BTreeMap<Symbol, ResolvedType>) {
         self.unscoped_types = types;
-        self.unscoped_constants = constants;
     }
 
     fn new_local_scope(&mut self) {
@@ -456,6 +447,28 @@ impl<'env> Context<'env> {
             }
         }
     }
+
+    fn enter_loop(&mut self, loc: Loc) {
+        let id = self.loop_id;
+        self.loop_id = id + 1;
+        let loop_local: N::Var = sp(
+            loc,
+            N::Var_ {
+                name: symbol!("loop"),
+                id,
+                color: 0,
+            },
+        );
+        self.loop_names.push(loop_local);
+    }
+
+    fn current_loop(&self) -> Option<N::Var> {
+        self.loop_names.last().copied()
+    }
+
+    fn exit_loop(&mut self) -> N::Var {
+        self.loop_names.pop().unwrap()
+    }
 }
 
 //**************************************************************************************************
@@ -468,13 +481,9 @@ pub fn program(
     prog: E::Program,
 ) -> N::Program {
     let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
-    let E::Program {
-        modules: emodules,
-        scripts: escripts,
-    } = prog;
+    let E::Program { modules: emodules } = prog;
     let modules = modules(&mut context, emodules);
-    let scripts = scripts(&mut context, escripts);
-    let mut inner = N::Program_ { modules, scripts };
+    let mut inner = N::Program_ { modules };
     let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
     N::Program { info, inner }
@@ -519,7 +528,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, &mut spec_dependencies, Some(ident), name, f)
+        function(context, &mut spec_dependencies, ident, name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -539,66 +548,6 @@ fn module(
         structs,
         constants,
         functions,
-        spec_dependencies,
-    }
-}
-
-fn scripts(
-    context: &mut Context,
-    escripts: BTreeMap<Symbol, E::Script>,
-) -> BTreeMap<Symbol, N::Script> {
-    escripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, escript: E::Script) -> N::Script {
-    let E::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs: euse_funs,
-        constants: econstants,
-        function_name,
-        function: efunction,
-        specs,
-    } = escript;
-    context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let outer_unscoped = context.save_unscoped();
-    let mut spec_dependencies = BTreeSet::new();
-    spec_blocks(&mut spec_dependencies, &specs);
-    let use_funs = use_funs(context, euse_funs);
-    for (loc, s, _) in &econstants {
-        context.bind_constant(*s, loc)
-    }
-    let inner_unscoped = context.save_unscoped();
-    let constants = econstants.map(|name, c| {
-        context.restore_unscoped(inner_unscoped.clone());
-        constant(context, name, c)
-    });
-    context.restore_unscoped(inner_unscoped);
-    let function = function(
-        context,
-        &mut spec_dependencies,
-        None,
-        function_name,
-        efunction,
-    );
-    context.restore_unscoped(outer_unscoped);
-    context.env.pop_warning_filter_scope();
-    context.current_package = None;
-    N::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs,
-        constants,
-        function_name,
-        function,
         spec_dependencies,
     }
 }
@@ -801,7 +750,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 fn function(
     context: &mut Context,
     spec_dependencies: &mut BTreeSet<(ModuleIdent, Neighbor)>,
-    module_opt: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     ef: E::Function,
 ) -> N::Function {
@@ -850,7 +799,7 @@ fn function(
         signature,
         body,
     };
-    fake_natives::function(context.env, module_opt, name, &f);
+    fake_natives::function(context.env, module, name, &f);
     let used_locals = std::mem::take(&mut context.used_locals);
     remove_unused_bindings_function(context, &used_locals, &mut f);
     context.local_scopes = vec![];
@@ -1243,8 +1192,17 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
         EE::IfElse(eb, et, ef) => {
             NE::IfElse(exp(context, *eb), exp(context, *et), exp(context, *ef))
         }
-        EE::While(eb, el) => NE::While(exp(context, *eb), exp(context, *el)),
-        EE::Loop(el) => NE::Loop(exp(context, *el)),
+        EE::While(eb, el) => {
+            let cond = exp(context, *eb);
+            context.enter_loop(eloc);
+            let body = exp(context, *el);
+            NE::While(context.exit_loop(), cond, body)
+        }
+        EE::Loop(el) => {
+            context.enter_loop(eloc);
+            let body = exp(context, *el);
+            NE::Loop(context.exit_loop(), body)
+        }
         EE::Block(seq) => NE::Block(sequence(context, seq)),
 
         EE::Assign(a, e) => {
@@ -1277,8 +1235,30 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
 
         EE::Return(es) => NE::Return(exp(context, *es)),
         EE::Abort(es) => NE::Abort(exp(context, *es)),
-        EE::Break => NE::Break,
-        EE::Continue => NE::Continue,
+        EE::Break(rhs) => {
+            let out_rhs = exp(context, *rhs);
+            if let Some(loop_name) = context.current_loop() {
+                NE::Give(loop_name, out_rhs)
+            } else {
+                let msg = "Invalid usage of 'break'. 'break' can only be used inside a loop body";
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::InvalidLoopControl, (eloc, msg)));
+                NE::UnresolvedError
+            }
+        }
+        EE::Continue => {
+            if let Some(loop_name) = context.current_loop() {
+                NE::Continue(loop_name)
+            } else {
+                let msg =
+                    "Invalid usage of 'continue'. 'continue' can only be used inside a loop body";
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::InvalidLoopControl, (eloc, msg)));
+                NE::UnresolvedError
+            }
+        }
 
         EE::Dereference(e) => NE::Dereference(exp(context, *e)),
         EE::UnaryExp(uop, e) => NE::UnaryExp(uop, exp(context, *e)),
@@ -1860,8 +1840,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Copy(_)
         | N::Exp_::Use(_)
         | N::Exp_::Constant(_, _)
-        | N::Exp_::Break
-        | N::Exp_::Continue
+        | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
         | N::Exp_::Spec(_, _)
         | N::Exp_::UnresolvedError => (),
@@ -1871,14 +1850,15 @@ fn remove_unused_bindings_exp(
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
-        | N::Exp_::Loop(e)
+        | N::Exp_::Loop(_, e)
+        | N::Exp_::Give(_, e)
         | N::Exp_::Annotate(e, _) => remove_unused_bindings_exp(context, used, e),
         N::Exp_::IfElse(econd, et, ef) => {
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, et);
             remove_unused_bindings_exp(context, used, ef);
         }
-        N::Exp_::While(econd, ebody) => {
+        N::Exp_::While(_, econd, ebody) => {
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, ebody)
         }
@@ -2121,7 +2101,6 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
         E::Exp_::Value(_)
         | E::Exp_::Move(_)
         | E::Exp_::Copy(_)
-        | E::Exp_::Break
         | E::Exp_::Continue
         | E::Exp_::Unit { .. }
         | E::Exp_::Spec(_, _)
@@ -2130,6 +2109,7 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
         E::Exp_::Loop(einner)
         | E::Exp_::Return(einner)
         | E::Exp_::Abort(einner)
+        | E::Exp_::Break(einner)
         | E::Exp_::Dereference(einner)
         | E::Exp_::UnaryExp(_, einner)
         | E::Exp_::Borrow(_, einner) => spec_exp(used, einner),

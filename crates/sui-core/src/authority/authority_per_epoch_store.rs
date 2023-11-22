@@ -696,6 +696,7 @@ impl AuthorityPerEpochStore {
             supported_providers,
             zklogin_env,
             protocol_config.verify_legacy_zklogin_address(),
+            protocol_config.accept_zklogin_in_multisig(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
@@ -771,6 +772,18 @@ impl AuthorityPerEpochStore {
     pub fn authenticator_state_exists(&self) -> bool {
         self.epoch_start_configuration
             .authenticator_obj_initial_shared_version()
+            .is_some()
+    }
+
+    // Returns true if randomness state is enabled in the protocol config *and* the
+    // randomness state object already exists
+    pub fn randomness_state_enabled(&self) -> bool {
+        self.protocol_config().random_beacon() && self.randomness_state_exists()
+    }
+
+    pub fn randomness_state_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .randomness_obj_initial_shared_version()
             .is_some()
     }
 
@@ -1974,6 +1987,10 @@ impl AuthorityPerEpochStore {
                     return None;
                 }
             }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
+                ..
+            }) => {}
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))
@@ -2198,7 +2215,7 @@ impl AuthorityPerEpochStore {
 
         for tx in transactions {
             let key = tx.0.transaction.key();
-            self.record_consensus_message_processed(batch, key.clone())?;
+            let mut ignored = false;
             match self
                 .process_consensus_transaction(
                     batch,
@@ -2209,19 +2226,24 @@ impl AuthorityPerEpochStore {
                 .await?
             {
                 ConsensusCertificateResult::SuiTransaction(cert) => {
-                    notifications.push(key);
+                    notifications.push(key.clone());
                     verified_certificates.push(cert);
                 }
                 ConsensusCertificateResult::Defered(deferral_key) => {
-                    // Note: record_consensus_message_processed() must have been called for this
+                    // Note: record_consensus_message_processed() must be called for this
                     // cert even though we are not processing it now!
                     deferred_txns
                         .entry(deferral_key)
                         .or_default()
                         .push(tx.clone());
                 }
-                ConsensusCertificateResult::ConsensusMessage => notifications.push(key),
-                ConsensusCertificateResult::Ignored => (),
+                ConsensusCertificateResult::ConsensusMessage => notifications.push(key.clone()),
+                // Note: ignored transactions must not be recorded as processed. Otherwise
+                // they may not get reverted after restart during epoch change.
+                ConsensusCertificateResult::Ignored => ignored = true,
+            }
+            if !ignored {
+                self.record_consensus_message_processed(batch, key.clone())?;
             }
         }
 
@@ -2460,6 +2482,13 @@ impl AuthorityPerEpochStore {
                     );
                 }
                 Ok(ConsensusCertificateResult::ConsensusMessage)
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessStateUpdate(_, _),
+                ..
+            }) => {
+                // These are always generated as System transactions (handled below).
+                panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
                 if !self

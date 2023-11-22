@@ -19,6 +19,14 @@ type Address implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	This resolver is not supported on the Address type.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	This resolver is not supported on the Address type.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -219,6 +227,34 @@ type CoinEdge {
 	cursor: String!
 }
 
+type CoinMetadata {
+	"""
+	The number of decimal places used to represent the token.
+	"""
+	decimals: Int
+	"""
+	Full, official name of the token.
+	"""
+	name: String
+	"""
+	The token's identifying abbreviation.
+	"""
+	symbol: String
+	"""
+	Optional description of the token, provided by the creator of the token.
+	"""
+	description: String
+	iconUrl: String
+	"""
+	The overall quantity of tokens that will be issued.
+	"""
+	supply: BigInt
+	"""
+	Convert the coin metadata object into a Move object.
+	"""
+	asMoveObject: MoveObject!
+}
+
 type CommitteeMember {
 	authorityName: String
 	stakeUnit: Int
@@ -233,7 +269,16 @@ type ConsensusCommitPrologueTransaction {
 scalar DateTime
 
 type DynamicField {
+	"""
+	The string type, data, and serialized value of the DynamicField's 'name' field.
+	This field is used to uniquely identify a child of the parent object.
+	"""
 	name: MoveValue
+	"""
+	The actual data stored in the dynamic field.
+	The returned dynamic field is an object if its return type is MoveObject,
+	in which case it is also accessible off-chain via its address.
+	"""
 	value: DynamicFieldValue
 }
 
@@ -264,6 +309,18 @@ type DynamicFieldEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+input DynamicFieldName {
+	"""
+	The string type of the DynamicField's 'name' field.
+	A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
+	"""
+	type: String!
+	"""
+	The Base64 encoded bcs serialization of the DynamicField's 'name' field.
+	"""
+	bcs: Base64!
 }
 
 union DynamicFieldValue = MoveObject | MoveValue
@@ -494,6 +551,20 @@ and functions that operate on these types.
 """
 type MoveModule {
 	fileFormatVersion: Int!
+	moduleId: MoveModuleId!
+	"""
+	Modules that this module considers friends (these modules can access `public(friend)`
+	functions from this module).
+	"""
+	friendConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
+	"""
+	The Base64 encoded bcs serialization of the module.
+	"""
+	bytes: Base64
+	"""
+	Textual representation of the module's bytecode.
+	"""
+	disassembly: String
 }
 
 type MoveModuleConnection {
@@ -557,6 +628,10 @@ type MoveObject {
 	Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
 	"""
 	asStakedSui: StakedSui
+	"""
+	Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
+	"""
+	asCoinMetadata: CoinMetadata
 }
 
 type MovePackage {
@@ -725,6 +800,25 @@ type Object implements ObjectOwner {
 	The domain that a user address has explicitly configured as their default domain
 	"""
 	defaultNameServiceName: String
+	"""
+	Access a dynamic field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The dynamic fields on an object.
+	Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+	"""
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -793,6 +887,8 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	dynamicField(name: DynamicFieldName!): DynamicField
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -810,10 +906,29 @@ type Owner implements ObjectOwner {
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
-	The stake objects for the given address
+	The `0x3::staking_pool::StakedSui` objects owned by the given object.
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	"""
+	Access a dynamic field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
+	"""
+	dynamicField(name: DynamicFieldName!): DynamicField
+	"""
+	Access a dynamic object field on an object using its name.
+	Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+	using their type, and their BCS contents, Base64 encoded.
+	The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
+	"""
+	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The dynamic fields on an object.
+	This field exists as a convenience when accessing a dynamic field on a wrapped object.
+	"""
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -907,6 +1022,12 @@ type Query {
 	epoch(id: Int): Epoch
 	checkpoint(id: CheckpointId): Checkpoint
 	transactionBlock(digest: String!): TransactionBlock
+	"""
+	The coin objects that exist in the network.
+	The type field is a string of the inner type of the coin by which to filter.
+	If no type is provided, it will default to 0x2::sui::SUI.
+	"""
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
@@ -917,6 +1038,11 @@ type Query {
 	"""
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
+	coinMetadata(coinType: String!): CoinMetadata
+}
+
+type RandomnessStateUpdate {
+	value: String!
 }
 
 """
@@ -957,6 +1083,10 @@ type ServiceConfig {
 	measured in the same units that the database uses in EXPLAIN queries.
 	"""
 	maxDbQueryCost: BigInt!
+	"""
+	Maximum number of elements allowed on a single page of a connection.
+	"""
+	maxPageSize: BigInt!
 	"""
 	Maximum time in milliseconds that will be spent to serve one request.
 	"""
@@ -1294,7 +1424,7 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | EndOfEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | RandomnessStateUpdate | EndOfEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX

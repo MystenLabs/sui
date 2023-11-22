@@ -14,7 +14,7 @@ use crate::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
         ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
-    naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
+    naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_, Var},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
@@ -31,7 +31,6 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
@@ -45,22 +44,18 @@ pub fn program(
 ) -> T::Program {
     let N::Program {
         info,
-        inner: N::Program_ {
-            modules: nmodules,
-            scripts: nscripts,
-        },
+        inner: N::Program_ { modules: nmodules },
     } = prog;
     let mut context = Context::new(compilation_env, pre_compiled_lib, info);
 
     // we extract module use funs into the module info context
     let mut modules = modules(&mut context, nmodules);
-    let mut scripts = scripts(&mut context, nscripts);
 
     assert!(context.constraints.is_empty());
-    dependency_ordering::program(context.env, &mut modules, &mut scripts);
+    dependency_ordering::program(context.env, &mut modules);
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    let mut prog = T::Program_ { modules, scripts };
+    let mut prog = T::Program_ { modules };
     let module_use_funs = context
         .modules
         .modules
@@ -119,7 +114,6 @@ fn module(
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
-    assert!(context.current_script_constants.is_none());
     assert!(context.current_package.is_none());
 
     let N::ModuleDefinition {
@@ -144,7 +138,7 @@ fn module(
         .for_each(|(_, _, s)| struct_def(context, s));
     process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
-    let functions = nfunctions.map(|name, f| function(context, name, f, false));
+    let functions = nfunctions.map(|name, f| function(context, name, f));
     assert!(context.constraints.is_empty());
     context.current_package = None;
     context.pop_use_funs_scope();
@@ -169,66 +163,11 @@ fn module(
     (typed_module, new_friends)
 }
 
-fn scripts(
-    context: &mut Context,
-    nscripts: BTreeMap<Symbol, N::Script>,
-) -> BTreeMap<Symbol, T::Script> {
-    nscripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, nscript: N::Script) -> T::Script {
-    assert!(context.current_script_constants.is_none());
-    assert!(context.current_package.is_none());
-    context.current_module = None;
-    let N::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        use_funs,
-        constants: nconstants,
-        function_name,
-        function: nfunction,
-        spec_dependencies,
-    } = nscript;
-    context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    context.add_use_funs_scope(use_funs);
-    context.bind_script_constants(&nconstants);
-    let constants = nconstants.map(|name, c| constant(context, name, c));
-    let function = function(context, function_name, nfunction, true);
-    context.current_script_constants = None;
-    context.current_package = None;
-    context.pop_use_funs_scope();
-    context.env.pop_warning_filter_scope();
-    T::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        immediate_neighbors: UniqueMap::new(),
-        used_addresses: BTreeSet::new(),
-        constants,
-        function_name,
-        function,
-        spec_dependencies,
-    }
-}
-
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
 
-fn function(
-    context: &mut Context,
-    name: FunctionName,
-    f: N::Function,
-    is_script: bool,
-) -> T::Function {
-    let loc = name.loc();
+fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Function {
     let N::Function {
         warning_filter,
         index,
@@ -249,23 +188,6 @@ fn function(
             None => visibility,
         };
     function_signature(context, &signature);
-    if is_script {
-        let mk_msg = || {
-            let tu = core::error_format_(&Type_::Unit, &Subst::empty());
-            format!(
-                "Invalid 'script' function return type. The function entry point to a \
-                 'script' must have the return type {}",
-                tu
-            )
-        };
-        subtype(
-            context,
-            loc,
-            mk_msg,
-            signature.return_type.clone(),
-            sp(loc, Type_::Unit),
-        );
-    }
     expand::function_signature(context, &mut signature);
 
     let body = function_body(context, n_body);
@@ -462,7 +384,7 @@ mod check_valid_constant {
             //*****************************************
             // Error cases handled elsewhere
             //*****************************************
-            E::Use(_) | E::Continue | E::Break | E::UnresolvedError => return,
+            E::Use(_) | E::Continue(_) | E::Give(_, _) | E::UnresolvedError => return,
 
             //*****************************************
             // Valid cases
@@ -520,7 +442,7 @@ mod check_valid_constant {
                 exp(context, ef);
                 "'if' expressions are"
             }
-            E::While(eb, eloop) => {
+            E::While(_, eb, eloop) => {
                 exp(context, eb);
                 exp(context, eloop);
                 "'while' expressions are"
@@ -1290,13 +1212,11 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::Constant(m, c) => {
             let ty = core::make_constant_type(context, eloc, &m, &c);
-            if let Some(mident) = m {
-                context
-                    .used_module_members
-                    .entry(mident.value)
-                    .or_default()
-                    .insert(c.value());
-            }
+            context
+                .used_module_members
+                .entry(m.value)
+                .or_default()
+                .insert(c.value());
             (ty, TE::Constant(m, c))
         }
 
@@ -1378,7 +1298,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             );
             (ty, TE::IfElse(eb, et, ef))
         }
-        NE::While(nb, nloop) => {
+        NE::While(name, nb, nloop) => {
             let eb = exp(context, nb);
             let bloc = eb.exp.loc;
             subtype(
@@ -1388,12 +1308,16 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 eb.ty.clone(),
                 Type_::bool(bloc),
             );
-            let (_has_break, ty, body) = loop_body(context, eloc, false, nloop);
-            (sp(eloc, ty.value), TE::While(eb, body))
+            let (_has_break, ty, body) = loop_body(context, eloc, name, false, nloop);
+            (sp(eloc, ty.value), TE::While(name, eb, body))
         }
-        NE::Loop(nloop) => {
-            let (has_break, ty, body) = loop_body(context, eloc, true, nloop);
-            let eloop = TE::Loop { has_break, body };
+        NE::Loop(name, nloop) => {
+            let (has_break, ty, body) = loop_body(context, eloc, name, true, nloop);
+            let eloop = TE::Loop {
+                name,
+                has_break,
+                body,
+            };
             (sp(eloc, ty.value), eloop)
         }
         NE::Block(nseq) => {
@@ -1436,34 +1360,19 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
             (sp(eloc, Type_::Anything), TE::Abort(ecode))
         }
-        NE::Break => {
-            if !context.in_loop() {
-                let msg = "Invalid usage of 'break'. 'break' can only be used inside a loop body";
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::InvalidLoopControl, (eloc, msg)))
-            }
-            let current_break_ty = sp(eloc, Type_::Unit);
-            let break_ty = match context.get_break_type() {
-                None => current_break_ty,
-                Some(t) => {
-                    let t = t.clone();
-                    join(context, eloc, || "Invalid break.", t, current_break_ty)
-                }
-            };
-            context.set_break_type(break_ty);
-            (sp(eloc, Type_::Anything), TE::Break)
+        NE::Give(name, rhs) => {
+            let break_rhs = exp(context, rhs);
+            let loop_ty = context.named_block_type(name, eloc);
+            subtype(
+                context,
+                eloc,
+                || "Invalid break",
+                break_rhs.ty.clone(),
+                loop_ty,
+            );
+            (sp(eloc, Type_::Anything), TE::Give(name, break_rhs))
         }
-        NE::Continue => {
-            if !context.in_loop() {
-                let msg =
-                    "Invalid usage of 'continue'. 'continue' can only be used inside a loop body";
-                context
-                    .env
-                    .add_diag(diag!(TypeSafety::InvalidLoopControl, (eloc, msg)))
-            }
-            (sp(eloc, Type_::Anything), TE::Continue)
-        }
+        NE::Continue(name) => (sp(eloc, Type_::Anything), TE::Continue(name)),
 
         NE::Dereference(nref) => {
             let eref = exp(context, nref);
@@ -1628,13 +1537,24 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 fn loop_body(
     context: &mut Context,
     eloc: Loc,
+    name: Var,
     is_loop: bool,
     nloop: Box<N::Exp>,
 ) -> (bool, Type, Box<T::Exp>) {
-    let old_loop_info = context.enter_loop();
-    let eloop = exp(context, nloop);
-    let break_type_opt = context.exit_loop(old_loop_info);
+    // set while break to ()
+    if !is_loop {
+        let while_loop_type = context.named_block_type(name, eloc);
+        // while loop breaks must break with unit
+        subtype(
+            context,
+            eloc,
+            || "Cannot use 'break' with a non-'()' value in 'while'",
+            while_loop_type,
+            sp(eloc, Type_::Unit),
+        );
+    }
 
+    let eloop = exp(context, nloop);
     let lloc = eloop.exp.loc;
     subtype(
         context,
@@ -1643,13 +1563,15 @@ fn loop_body(
         eloop.ty.clone(),
         sp(lloc, Type_::Unit),
     );
-    let has_break = break_type_opt.is_some();
-    let ty = if is_loop && !has_break {
-        core::make_tvar(context, lloc)
+
+    let break_ty_opt = context.named_block_type_opt(name);
+
+    if let Some(break_ty) = break_ty_opt {
+        (true, break_ty, eloop)
     } else {
-        break_type_opt.unwrap_or_else(|| sp(eloc, Type_::Unit))
-    };
-    (has_break, ty, eloop)
+        // if it was a while loop, the `if` case ran, so we can simply make a type var for the loop
+        (false, context.named_block_type(name, eloc), eloop)
+    }
 }
 
 //**************************************************************************************************

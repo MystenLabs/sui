@@ -1,5 +1,25 @@
 # @mysten/sdk-docs
 
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [194c980cb]
+- Updated dependencies [9ac7e2f3d]
+- Updated dependencies [0259aec82]
+- Updated dependencies [64d45ba27]
+  - @mysten/sui.js@0.47.0
+  - @mysten/dapp-kit@0.9.1
+
+## 1.0.7
+
+### Patch Changes
+
+- Updated dependencies [c5d4db238]
+- Updated dependencies [652bcdd92]
+  - @mysten/dapp-kit@0.9.0
+  - @mysten/sui.js@0.46.1
+
 ## 1.0.6
 
 ### Patch Changes

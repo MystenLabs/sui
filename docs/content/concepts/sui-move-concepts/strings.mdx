@@ -4,7 +4,7 @@ title: Strings
 
 Move does not have a native type for strings, but it has a useful wrapper.
 
-```rust
+```move
 module examples::strings {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
@@ -36,7 +36,7 @@ module examples::strings {
 
 Define string literals in Move as byte strings. To do so, prepend `b` to your string.
 
-```rust
+```move
 const IMAGE_URL: vector<u8> = b"https://api.capy.art/capys/";
 
 let keys = vector[

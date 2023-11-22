@@ -7,6 +7,8 @@ use sui_json_rpc::name_service::NameServiceConfig;
 use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
+    coin::Coin,
+    coin_metadata::CoinMetadata,
     epoch::Epoch,
     event::{Event, EventFilter},
     object::{Object, ObjectFilter},
@@ -115,6 +117,24 @@ impl Query {
             .extend()
     }
 
+    /// The coin objects that exist in the network.
+    /// The type field is a string of the inner type of the coin by which to filter.
+    /// If no type is provided, it will default to 0x2::sui::SUI.
+    async fn coin_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        type_: Option<String>,
+    ) -> Result<Option<Connection<String, Coin>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coins(None, type_, first, after, last, before)
+            .await
+            .extend()
+    }
+
     async fn checkpoint_connection(
         &self,
         ctx: &Context<'_>,
@@ -200,6 +220,17 @@ impl Query {
     async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
         ctx.data_unchecked::<PgManager>()
             .fetch_latest_sui_system_state()
+            .await
+            .extend()
+    }
+
+    async fn coin_metadata(
+        &self,
+        ctx: &Context<'_>,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coin_metadata(coin_type)
             .await
             .extend()
     }

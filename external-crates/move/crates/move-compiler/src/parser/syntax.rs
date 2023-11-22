@@ -507,7 +507,6 @@ impl Modifiers {
 }
 
 // Parse module member modifiers: visiblility and native.
-// The modifiers are also used for script-functions
 //      ModuleMemberModifiers = <ModuleMemberModifier>*
 //      ModuleMemberModifier = <Visibility> | "native"
 // ModuleMemberModifiers checks for uniqueness, meaning each individual ModuleMemberModifier can
@@ -564,7 +563,7 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
 }
 
 // Parse a function visibility modifier:
-//      Visibility = "public" ( "(" "script" | "friend" | "package" ")" )?
+//      Visibility = "public" ( "( "friend" | "package" ")" )?
 fn parse_visibility(context: &mut Context) -> Result<Visibility, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     consume_token(context.tokens, Tok::Public)?;
@@ -583,7 +582,6 @@ fn parse_visibility(context: &mut Context) -> Result<Visibility, Box<Diagnostic>
     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
     Ok(match sub_public_vis {
         None => Visibility::Public(loc),
-        Some((Tok::Script, _)) => Visibility::Script(loc),
         Some((Tok::Friend, _)) => Visibility::Friend(loc),
         Some((Tok::Identifier, Visibility::PACKAGE_IDENT)) => Visibility::Package(loc),
         _ => {
@@ -994,7 +992,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 
 // Parse an expression term:
 //      Term =
-//          "break"
+//          "break" <Exp>?
 //          | "continue"
 //          | "vector" ('<' Comma<Type> ">")? "[" Comma<Exp> "]"
 //          | <Value>
@@ -1025,20 +1023,6 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             }
 
             return parse_binop_exp(context, control_exp, /* min_prec */ 1);
-        }
-        Tok::Break => {
-            context.tokens.advance()?;
-            if at_start_of_exp(context) {
-                let mut diag = unexpected_token_error(context.tokens, "the end of an expression");
-                diag.add_note("'break' with a value is not yet supported");
-                return Err(diag);
-            }
-            Exp_::Break
-        }
-
-        Tok::Continue => {
-            context.tokens.advance()?;
-            Exp_::Continue
         }
 
         Tok::Identifier
@@ -1156,7 +1140,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 fn is_control_exp(tok: Tok) -> bool {
     matches!(
         tok,
-        Tok::If | Tok::While | Tok::Loop | Tok::Return | Tok::Abort
+        Tok::Break | Tok::Continue | Tok::If | Tok::While | Tok::Loop | Tok::Return | Tok::Abort
     )
 }
 
@@ -1258,6 +1242,20 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             let (e, ends_in_block) = parse_exp_or_sequence(context)?;
             (Exp_::Abort(Box::new(e)), ends_in_block)
+        }
+        Tok::Break => {
+            context.tokens.advance()?;
+            let (e, ends_in_block) = if !at_start_of_exp(context) {
+                (None, false)
+            } else {
+                let (e, ends_in_block) = parse_exp_or_sequence(context)?;
+                (Some(Box::new(e)), ends_in_block)
+            };
+            (Exp_::Break(e), ends_in_block)
+        }
+        Tok::Continue => {
+            context.tokens.advance()?;
+            (Exp_::Continue, false)
         }
         _ => unreachable!(),
     };
@@ -2070,25 +2068,9 @@ fn parse_function_decl(
 ) -> Result<Function, Box<Diagnostic>> {
     let Modifiers {
         visibility,
-        mut entry,
+        entry,
         native,
     } = modifiers;
-
-    if let Some(Visibility::Script(vloc)) = visibility {
-        let msg = format!(
-            "'{script}' is deprecated in favor of the '{entry}' modifier. \
-            Replace with '{public} {entry}'",
-            script = Visibility::SCRIPT,
-            public = Visibility::PUBLIC,
-            entry = ENTRY_MODIFIER,
-        );
-        context
-            .env
-            .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (vloc, msg,)));
-        if entry.is_none() {
-            entry = Some(vloc)
-        }
-    }
 
     // "fun" <FunctionDefName>
     consume_token(context.tokens, Tok::Fun)?;
@@ -2518,7 +2500,7 @@ fn parse_address_block(
     attributes: Vec<Attributes>,
     context: &mut Context,
 ) -> Result<AddressDefinition, Box<Diagnostic>> {
-    const UNEXPECTED_TOKEN: &str = "Invalid code unit. Expected 'address', 'module', or 'script'";
+    const UNEXPECTED_TOKEN: &str = "Invalid code unit. Expected 'address' or 'module'";
     if context.tokens.peek() != Tok::Identifier {
         let start = context.tokens.start_loc();
         let end = start + context.tokens.content().len();
@@ -2885,86 +2867,6 @@ fn parse_module(
     Ok(def)
 }
 
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-// Parse a script:
-//      Script =
-//          "script" "{"
-//              (<Attributes> <UseDecl>)*
-//              (<Attributes> <ConstantDecl>)*
-//              <Attributes> <DocComments> <ModuleMemberModifiers> <FunctionDecl>
-//              (<Attributes> <SpecBlock>)*
-//          "}"
-fn parse_script(
-    script_attributes: Vec<Attributes>,
-    context: &mut Context,
-) -> Result<Script, Box<Diagnostic>> {
-    let start_loc = context.tokens.start_loc();
-
-    consume_token(context.tokens, Tok::Script)?;
-    consume_token(context.tokens, Tok::LBrace)?;
-
-    // TODO better errors for modifiers
-    let mut uses = vec![];
-    let mut next_item_attributes = parse_attributes(context)?;
-    while context.tokens.peek() == Tok::Use {
-        let start_loc = context.tokens.start_loc();
-        uses.push(parse_use_decl(
-            next_item_attributes,
-            start_loc,
-            Modifiers::empty(),
-            context,
-        )?);
-        next_item_attributes = parse_attributes(context)?;
-    }
-    let mut constants = vec![];
-    while context.tokens.peek() == Tok::Const {
-        let start_loc = context.tokens.start_loc();
-        constants.push(parse_constant_decl(
-            next_item_attributes,
-            start_loc,
-            Modifiers::empty(),
-            context,
-        )?);
-        next_item_attributes = parse_attributes(context)?;
-    }
-
-    context.tokens.match_doc_comments(); // match doc comments to script function
-    let function_start_loc = context.tokens.start_loc();
-    let modifiers = parse_module_member_modifiers(context)?;
-    // don't need to check native modifier, it is checked later
-    let function =
-        parse_function_decl(next_item_attributes, function_start_loc, modifiers, context)?;
-
-    let mut specs = vec![];
-    while context.tokens.peek() == Tok::NumSign || context.tokens.peek() == Tok::Spec {
-        let attributes = parse_attributes(context)?;
-        specs.push(parse_spec_block(attributes, context)?);
-    }
-
-    if context.tokens.peek() != Tok::RBrace {
-        let loc = current_token_loc(context.tokens);
-        let msg = "Unexpected characters after end of 'script' function";
-        return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
-    }
-    consume_token(context.tokens, Tok::RBrace)?;
-
-    let loc = make_loc(
-        context.tokens.file_hash(),
-        start_loc,
-        context.tokens.previous_end_loc(),
-    );
-    Ok(Script {
-        attributes: script_attributes,
-        loc,
-        uses,
-        constants,
-        function,
-        specs,
-    })
-}
 //**************************************************************************************************
 // Specification Blocks
 //**************************************************************************************************
@@ -3664,14 +3566,13 @@ fn singleton_module_spec_block(
 
 // Parse a file:
 //      File =
-//          (<Attributes> (<AddressBlock> | <Module> | <Script>))*
+//          (<Attributes> (<AddressBlock> | <Module> ))*
 fn parse_file(context: &mut Context) -> Result<Vec<Definition>, Box<Diagnostic>> {
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
         let attributes = parse_attributes(context)?;
         defs.push(match context.tokens.peek() {
             Tok::Spec | Tok::Module => Definition::Module(parse_module(attributes, context)?),
-            Tok::Script => Definition::Script(parse_script(attributes, context)?),
             _ => Definition::Address(parse_address_block(attributes, context)?),
         })
     }

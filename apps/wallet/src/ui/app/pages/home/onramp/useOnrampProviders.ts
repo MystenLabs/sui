@@ -6,6 +6,7 @@ import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import Banxa from './icons/Banxa.svg';
 import MoonPay from './icons/MoonPay.svg';
 import Transak from './icons/Transak.svg';
 import { type OnrampProvider } from './types';
@@ -24,6 +25,28 @@ const BACKEND_HOST =
 	process.env.NODE_ENV === 'production' ? 'https://apps-backend.sui.io' : 'http://localhost:3003';
 
 const ONRAMP_PROVIDER: OnrampProvider[] = [
+	{
+		key: 'banxa',
+		name: 'Banxa',
+		icon: Banxa,
+		checkSupported: async () => {
+			const isOn = await growthbook.getFeatureValue('wallet-onramp-banxa', false);
+			return isOn;
+		},
+		getUrl: async (address) => {
+			const params = new URLSearchParams({
+				coinType: 'SUI',
+				fiatType: 'USD',
+				fiatAmount: '100',
+				blockchain: 'SUI',
+				theme: 'dark',
+				walletAddress: address,
+				returnUrl: window.location.href,
+			});
+			const url = `https://suiwallet.banxa.com/?${params}`;
+			return url;
+		},
+	},
 	{
 		key: 'transak',
 		icon: Transak,

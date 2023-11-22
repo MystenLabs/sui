@@ -8,7 +8,7 @@ Objects in Sui can have different types of ownership, with two broad categories:
 
 To convert an object into an immutable object, call the `public_freeze_object` function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
-```rust
+```move
 public native fun public_freeze_object<T: key>(obj: T);
 ```
 
@@ -16,7 +16,7 @@ This call makes the specified object immutable. This is a non-reversible operati
 
 You can see this function's use in one of the [color_object example module](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move) tests. The test creates a new (owned) `ColorObject`, then calls `public_freeze_object` to turn it into an immutable object.
 
-```rust
+```move
 {
     ts::next_tx(&mut ts, alice);
     // Create a new ColorObject
@@ -32,8 +32,8 @@ The `transfer::public_freeze_object` function requires that you pass the object 
 
 Alternatively, you can also provide an API that creates an immutable object at creation:
 
-```rust
-public entry fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+```move
+public fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
     let color_object = new(red, green, blue, ctx);
     transfer::public_freeze_object(color_object)
 }
@@ -50,8 +50,8 @@ Anyone can use immutable objects.
 
 Consider a function that copies the value of one object to another:
 
-```rust
-public entry fun copy_into(from: &ColorObject, into: &mut ColorObject);
+```move
+public fun copy_into(from: &ColorObject, into: &mut ColorObject);
 ```
 
 In this function, anyone can pass an immutable object as the first argument, `from`, but not the second argument.
@@ -65,7 +65,7 @@ The `test_scenario::take_immutable<T>` function is required because you can acce
 
 To see it work in action:
 
-```rust
+```move
 let sender1 = @0x1;
 let scenario_val = test_scenario::begin(sender1);
 let scenario = &mut scenario_val;
@@ -84,7 +84,7 @@ This test submits a transaction as `sender1`, which tries to create an immutable
 
 The `has_most_recent_for_sender<ColorObject>` function no longer returns `true`, because the object is no longer owned. To take this object:
 
-```rust
+```move
 // Any sender can work.
 let sender2 = @0x2;
 test_scenario::next_tx(scenario, sender2);
@@ -100,8 +100,8 @@ To show that this object is indeed not owned by anyone, start the next transacti
 
 To examine whether this object is immutable, add a function that tries to mutate a `ColorObject`:
 
-```rust
-public entry fun update(
+```move
+public fun update(
     object: &mut ColorObject,
     red: u8, green: u8, blue: u8,
 ) {

@@ -17,3 +17,4 @@ packages:
   - '!sdk/typescript/utils'
   - '!sdk/typescript/bcs'
   - '!sdk/typescript/zklogin'
+  - '!sdk/enoki/react'

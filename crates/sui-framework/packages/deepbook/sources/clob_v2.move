@@ -270,6 +270,27 @@ module deepbook::clob_v2 {
         owner: address
     }
 
+    /// Accessor functions
+    public fun usr_open_orders_exist<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+        owner: address
+    ): bool {
+        table::contains(&pool.usr_open_orders, owner)
+    }
+
+    public fun usr_open_orders_for_address<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+        owner: address
+    ): &LinkedTable<u64, u64> {
+        table::borrow(&pool.usr_open_orders, owner)
+    }
+
+    public fun usr_open_orders<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+    ): &Table<address, LinkedTable<u64, u64>> {
+        &pool.usr_open_orders
+    }
+
     /// Function to withdraw fees created from a pool
     public fun withdraw_fees<BaseAsset, QuoteAsset>(
         _pool_owner_cap: &PoolOwnerCap,
@@ -633,7 +654,6 @@ module deepbook::clob_v2 {
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
-                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
                         order_id: maker_order.order_id,
@@ -821,7 +841,6 @@ module deepbook::clob_v2 {
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     custodian::unlock_balance(&mut pool.base_custodian, maker_order.owner, maker_order.quantity);
-                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
                         order_id: maker_order.order_id,
@@ -961,10 +980,13 @@ module deepbook::clob_v2 {
 
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
-                    let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
+                    let (is_round_down, maker_quote_quantity) = clob_math::unsafe_mul_round(maker_order.quantity, maker_order.price);
+                    // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+                    if (is_round_down) {
+                        maker_quote_quantity = maker_quote_quantity + 1;
+                    };
+
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
-                    // TODO (jian): remove the canceled orders after we ensure market makers update
-                    emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, maker_order);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
                         order_id: maker_order.order_id,
@@ -1488,13 +1510,15 @@ module deepbook::clob_v2 {
                 owner
             );
             if (is_bid) {
-                let balance_locked = clob_math::mul(order.quantity, order.price);
+                let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+                // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+                if (is_round_down) {
+                    balance_locked = balance_locked + 1;
+                };
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
-            // TODO (jian): remove the canceled orders after we ensure market makers update
-            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
             let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                 client_order_id: order.client_order_id,
                 order_id: order.order_id,
@@ -1575,7 +1599,6 @@ module deepbook::clob_v2 {
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
-            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
             let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                 client_order_id: order.client_order_id,
                 order_id: order.order_id,
@@ -1640,13 +1663,15 @@ module deepbook::clob_v2 {
             let order = remove_order(open_orders, usr_open_orders, tick_index, order_id, owner);
             assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
             if (is_bid) {
-                let balance_locked = clob_math::mul(order.quantity, order.price);
+                let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
+                // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+                if (is_round_down) {
+                    balance_locked = balance_locked + 1;
+                };
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
             };
-            // TODO (jian): remove the canceled orders after we ensure market makers update
-            emit_order_canceled<BaseAsset, QuoteAsset>(pool_id, &order);
             let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                 client_order_id: order.client_order_id,
                 order_id: order.order_id,
@@ -1674,8 +1699,11 @@ module deepbook::clob_v2 {
         account_cap: &AccountCap
     ): vector<Order> {
         let owner = account_owner(account_cap);
-        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let open_orders = vector::empty<Order>();
+        if (!usr_open_orders_exist(pool, owner)) {
+            return open_orders
+        };
+        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let order_id = linked_table::front(usr_open_order_ids);
         while (!option::is_none(order_id)) {
             let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));

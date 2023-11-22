@@ -244,10 +244,7 @@ impl TestFailure {
             }
 
             for frame in stack_trace {
-                let module_id = match &frame.0 {
-                    Some(v) => v,
-                    None => return "\tmalformed stack trace (no module ID)".to_string(),
-                };
+                let module_id = &frame.0;
                 let named_module = match test_plan.module_info.get(module_id) {
                     Some(v) => v,
                     None => return "\tmalformed stack trace (no module)".to_string(),

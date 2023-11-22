@@ -46,11 +46,3 @@ error[E02001]: duplicate declaration, item, or annotation
    │                                  │      
    │                                  Ability previously given here
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/duplicate_abilities.move:15:23
-   │
-15 │     fun main<T: key + key>() {}
-   │                 ---   ^^^ Duplicate 'key' ability constraint
-   │                 │      
-   │                 Ability previously given here
-

@@ -320,17 +320,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             let _guard = span.enter();
             for (authority_index, authority_transactions) in consensus_output.transactions() {
                 // TODO: consider only messages within 1~3 rounds of the leader?
-                let num_messages = self
-                    .last_consensus_stats
+                self.last_consensus_stats
                     .stats
                     .inc_num_messages(authority_index as usize);
-                self.metrics
-                    .consensus_committed_messages
-                    .with_label_values(&[self
-                        .committee
-                        .authority_hostname_by_index(authority_index)
-                        .unwrap_or_default()])
-                    .set(num_messages as i64);
                 for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
                     self.metrics
@@ -341,19 +333,55 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                         &transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
                     ) {
-                        let num_txns = self
-                            .last_consensus_stats
+                        self.last_consensus_stats
                             .stats
                             .inc_num_user_transactions(authority_index as usize);
-                        self.metrics
-                            .consensus_committed_user_transactions
-                            .with_label_values(&[&authority_index.to_string()])
-                            .set(num_txns as i64);
                     }
-                    let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, authority_index));
+                    if let ConsensusTransactionKind::RandomnessStateUpdate(
+                        randomness_round,
+                        bytes,
+                    ) = &transaction.kind
+                    {
+                        if self.epoch_store.randomness_state_enabled() {
+                            debug!("adding RandomnessStateUpdate tx for round {round:?}");
+                            let randomness_state_update_transaction = self
+                                .randomness_state_update_transaction(
+                                    round,
+                                    *randomness_round,
+                                    bytes.clone(),
+                                );
+
+                            transactions.push((
+                                empty_bytes.as_slice(),
+                                SequencedConsensusTransactionKind::System(
+                                    randomness_state_update_transaction,
+                                ),
+                                consensus_output.leader_author_index(),
+                            ));
+                        } else {
+                            debug!("ignoring RandomnessStateUpdate tx for round {round:?}: randomness state is not enabled on this node")
+                        }
+                    } else {
+                        let transaction = SequencedConsensusTransactionKind::External(transaction);
+                        transactions.push((serialized_transaction, transaction, authority_index));
+                    }
                 }
             }
+        }
+
+        for i in 0..self.committee.size() {
+            let hostname = self
+                .committee
+                .authority_hostname_by_index(i as u16)
+                .unwrap_or_default();
+            self.metrics
+                .consensus_committed_messages
+                .with_label_values(&[hostname])
+                .set(self.last_consensus_stats.stats.get_num_messages(i) as i64);
+            self.metrics
+                .consensus_committed_user_transactions
+                .with_label_values(&[hostname])
+                .set(self.last_consensus_stats.stats.get_num_user_transactions(i) as i64);
         }
         self.metrics
             .consensus_handler_processed_bytes
@@ -535,6 +563,27 @@ impl<T, C> ConsensusHandler<T, C> {
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 
+    fn randomness_state_update_transaction(
+        &self,
+        round: u64,
+        randomness_round: u64,
+        random_bytes: Vec<u8>,
+    ) -> VerifiedExecutableTransaction {
+        assert!(self.epoch_store.randomness_state_enabled());
+        let transaction = VerifiedTransaction::new_randomness_state_update(
+            self.epoch(),
+            round,
+            randomness_round,
+            random_bytes,
+            self.epoch_store
+                .epoch_start_config()
+                .randomness_obj_initial_shared_version()
+                .expect("randomness state obj must exist"),
+        );
+        debug!("created randomness state update transaction: {transaction:?}");
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
     fn epoch(&self) -> EpochId {
         self.epoch_store.epoch()
     }
@@ -553,6 +602,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
         ConsensusTransactionKind::NewJWKFetched(_, _, _) => "new_jwk_fetched",
+        ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
     }
 }
 

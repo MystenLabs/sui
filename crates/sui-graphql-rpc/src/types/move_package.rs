@@ -5,8 +5,8 @@ use super::base64::Base64;
 use super::move_module::MoveModule;
 use super::object::Object;
 use super::sui_address::SuiAddress;
+use crate::config::ServiceConfig;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
-use crate::context_data::DEFAULT_PAGE_SIZE;
 use crate::error::Error;
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::*;
@@ -57,27 +57,26 @@ impl MovePackage {
     /// A representation of the module called `name` in this package, including the
     /// structs and functions it defines.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
-        use PackageCacheError as E;
-        match self.parsed_package().extend()?.module(&name) {
-            Ok(module) => Ok(Some(MoveModule {
-                parsed: module.clone(),
-            })),
-            Err(E::ModuleNotFound(_, _)) => Ok(None),
-            Err(e) => {
-                Err(Error::Internal(format!("Unexpected error fetching module: {e}")).extend())
-            }
-        }
+        self.module_impl(&name)
     }
 
     /// Paginate through the MoveModules defined in this package.
     pub async fn module_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, MoveModule>>> {
         use std::ops::Bound as B;
+
+        let default_page_size = ctx
+            .data::<ServiceConfig>()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .extend()?
+            .limits
+            .max_page_size;
 
         // TODO: make cursor opaque.
         // for now it same as module name
@@ -94,15 +93,23 @@ impl MovePackage {
             (Some(first), Some(last)) if last < first => (first - last, last),
             (Some(first), _) => (0, first),
             (None, Some(last)) => (total - last, last),
-            (None, None) => (0, DEFAULT_PAGE_SIZE),
+            (None, None) => (0, default_page_size),
         };
 
         let mut connection = Connection::new(false, false);
-        for (name, module) in module_range.skip(skip as usize).take(take as usize) {
+        for (name, parsed) in module_range.skip(skip as usize).take(take as usize) {
+            let Some(native) = self.native.serialized_module_map().get(name) else {
+                return Err(Error::Internal(format!(
+                    "Module '{name}' exists in PackageCache but not in serialized map.",
+                ))
+                .extend());
+            };
+
             connection.edges.push(Edge::new(
                 name.clone(),
                 MoveModule {
-                    parsed: module.clone(),
+                    native: native.clone(),
+                    parsed: parsed.clone(),
                 },
             ))
         }
@@ -185,6 +192,24 @@ impl MovePackage {
         // write back the parsed Package to the cache as well.)
         ParsedMovePackage::read(&self.super_.native)
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
+    }
+
+    pub(crate) fn module_impl(&self, name: &str) -> Result<Option<MoveModule>> {
+        use PackageCacheError as E;
+        match (
+            self.native.serialized_module_map().get(name),
+            self.parsed_package().extend()?.module(name),
+        ) {
+            (Some(native), Ok(parsed)) => Ok(Some(MoveModule {
+                native: native.clone(),
+                parsed: parsed.clone(),
+            })),
+
+            (None, _) | (_, Err(E::ModuleNotFound(_, _))) => Ok(None),
+            (_, Err(e)) => {
+                Err(Error::Internal(format!("Unexpected error fetching module: {e}")).extend())
+            }
+        }
     }
 }
 

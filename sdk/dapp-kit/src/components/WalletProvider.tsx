@@ -62,10 +62,10 @@ export function WalletProvider({
 }: WalletProviderProps) {
 	const storeRef = useRef(
 		createWalletStore({
+			autoConnectEnabled: autoConnect,
 			wallets: getRegisteredWallets(preferredWallets, requiredFeatures),
 			storageKey,
 			storage,
-			autoConnect,
 		}),
 	);
 
@@ -75,7 +75,6 @@ export function WalletProvider({
 				preferredWallets={preferredWallets}
 				requiredFeatures={requiredFeatures}
 				enableUnsafeBurner={enableUnsafeBurner}
-				autoConnect={autoConnect}
 			>
 				{/* TODO: We ideally don't want to inject styles if people aren't using the UI components */}
 				{theme ? <InjectedThemeStyles theme={theme} /> : null}
@@ -88,7 +87,7 @@ export function WalletProvider({
 type WalletConnectionManagerProps = Required<
 	Pick<
 		WalletProviderProps,
-		'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'autoConnect' | 'children'
+		'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'children'
 	>
 >;
 
@@ -96,13 +95,12 @@ function WalletConnectionManager({
 	preferredWallets,
 	requiredFeatures,
 	enableUnsafeBurner,
-	autoConnect,
 	children,
 }: WalletConnectionManagerProps) {
 	useWalletsChanged(preferredWallets, requiredFeatures);
 	useWalletPropertiesChanged();
 	useUnsafeBurnerWallet(enableUnsafeBurner);
-	useAutoConnectWallet(autoConnect);
+	useAutoConnectWallet();
 
 	return children;
 }

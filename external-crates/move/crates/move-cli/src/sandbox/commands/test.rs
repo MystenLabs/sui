@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{sandbox::utils::module, DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
+use crate::{DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
 
 use move_command_line_common::{
     env::read_bool_env_var,
@@ -74,7 +74,7 @@ fn collect_coverage(
         .all_modules()
         .map(|unit| {
             let absolute_path = path_to_string(&unit.source_path.canonicalize()?)?;
-            Ok((absolute_path, module(&unit.unit)?.clone()))
+            Ok((absolute_path, unit.unit.module.clone()))
         })
         .collect::<anyhow::Result<HashMap<_, _>>>()?;
 

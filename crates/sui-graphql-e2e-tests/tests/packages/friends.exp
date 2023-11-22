@@ -1,0 +1,188 @@
+processed 5 tasks
+
+task 1 'publish'. lines 6-17:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 19-19:
+Checkpoint created: 1
+
+task 3 'run-graphql'. lines 21-62:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": {
+                    "module": {
+                      "all": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m0"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m2"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": false
+                        }
+                      },
+                      "after": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m2"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": true
+                        }
+                      },
+                      "before": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m0"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 4 'run-graphql'. lines 65-113:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": {
+                    "module": {
+                      "prefix": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": true
+                        }
+                      },
+                      "prefixAll": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m2"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": false,
+                          "hasPreviousPage": true
+                        }
+                      },
+                      "suffix": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": true
+                        }
+                      },
+                      "suffixAll": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m0"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          }
+                        ],
+                        "pageInfo": {
+                          "hasNextPage": true,
+                          "hasPreviousPage": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

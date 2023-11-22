@@ -44,6 +44,7 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
@@ -133,6 +134,7 @@ pub(crate) struct StagedPackage {
     pub(crate) digest: Vec<u8>,
 }
 
+#[derive(Debug)]
 struct TestAccount {
     address: SuiAddress,
     key_pair: AccountKeyPair,
@@ -474,7 +476,25 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
-            SuiSubcommand::RunGraphql => {
+            SuiSubcommand::ViewGraphqlVariables => {
+                let variables = self.graphql_variables();
+                let mut res = vec![];
+                for (name, value) in variables {
+                    res.push(format!(
+                        "Name: {}\nType: {}\nValue: {}",
+                        name,
+                        value.ty,
+                        serde_json::to_string_pretty(&value.value).unwrap()
+                    ));
+                }
+                Ok(Some(res.join("\n\n")))
+            }
+            SuiSubcommand::RunGraphql(RunGraphqlCommand {
+                show_usage,
+                show_headers,
+                show_service_version,
+                variables,
+            }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
                 let cluster = self.cluster.as_ref().unwrap();
@@ -483,12 +503,27 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
                     .await;
 
+                let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
                     .graphql_client
-                    .execute_to_graphql(contents.trim().to_owned(), true, vec![], vec![])
+                    .execute_to_graphql(
+                        contents.trim().to_owned(),
+                        show_usage,
+                        used_variables,
+                        vec![],
+                    )
                     .await?;
 
-                Ok(Some(resp.response_body_json_pretty()))
+                let mut output = vec![];
+                if show_headers {
+                    output.push(format!("Headers: {:#?}", resp.http_headers_without_date()));
+                }
+                if show_service_version {
+                    output.push(format!("Service version: {}", resp.graphql_version()?));
+                }
+                output.push(format!("Response: {}", resp.response_body_json_pretty()));
+
+                Ok(Some(output.join("\n")))
             }
             SuiSubcommand::ViewCheckpoint => {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
@@ -497,13 +532,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .get_verified_checkpoint_by_sequence_number(latest_chk)?;
                 Ok(Some(format!("{}", chk.data())))
             }
-            SuiSubcommand::CreateCheckpoint => {
-                self.executor.create_checkpoint().await?;
+            SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
+                for _ in 0..count.unwrap_or(1) {
+                    self.executor.create_checkpoint().await?;
+                }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch => {
-                self.executor.advance_epoch().await?;
+            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand { count }) => {
+                for _ in 0..count.unwrap_or(1) {
+                    self.executor.advance_epoch().await?;
+                }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor
@@ -914,6 +953,67 @@ impl<'a> SuiTestAdapter<'a> {
 
     pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
         self.executor
+    }
+
+    fn graphql_variables(&self) -> BTreeMap<String, GraphqlQueryVariable> {
+        let mut variables = BTreeMap::new();
+        let named_addrs = self
+            .compiled_state
+            .named_address_mapping
+            .iter()
+            .map(|(name, addr)| (name.clone(), addr.to_string()));
+
+        let objects = self
+            .object_enumeration
+            .iter()
+            .filter_map(|(oid, fid)| match fid {
+                FakeID::Known(_) => None,
+                FakeID::Enumerated(x, y) => Some((format!("obj_{x}_{y}"), oid.to_string())),
+            });
+
+        for (name, addr) in named_addrs.chain(objects) {
+            let addr = addr.to_string();
+
+            // Required variant
+            variables.insert(
+                name.to_owned(),
+                GraphqlQueryVariable {
+                    name: name.to_string(),
+                    value: serde_json::json!(addr),
+                    ty: "SuiAddress!".to_string(),
+                },
+            );
+            // Optional variant
+            let name = name.to_string() + "_opt";
+            variables.insert(
+                name.clone(),
+                GraphqlQueryVariable {
+                    name: name.to_string(),
+                    value: serde_json::json!(addr),
+                    ty: "SuiAddress".to_string(),
+                },
+            );
+        }
+        variables
+    }
+    fn resolve_graphql_variables(
+        &self,
+        declared: &[String],
+    ) -> anyhow::Result<Vec<GraphqlQueryVariable>> {
+        let variables = self.graphql_variables();
+        let mut res = vec![];
+        for decl in declared {
+            if let Some(var) = variables.get(decl) {
+                res.push(var.clone());
+            } else {
+                return Err(anyhow!(
+                    "Unknown variable: {}\nAllowed variable mappings are are {:#?}",
+                    decl,
+                    variables
+                ));
+            }
+        }
+        Ok(res)
     }
 
     async fn upgrade_package(

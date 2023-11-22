@@ -447,10 +447,13 @@ mod checked {
                 )
             }
             TransactionKind::AuthenticatorStateUpdate(_) => {
-                panic!("AuthenticatorStateUpdate should not exist in suivm");
+                panic!("AuthenticatorStateUpdate should not exist in execution layer v0");
+            }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                panic!("RandomnessStateUpdate should not exist in execution layer v0");
             }
             TransactionKind::EndOfEpochTransaction(_) => {
-                panic!("EndOfEpochTransaction should not exist in suivm");
+                panic!("EndOfEpochTransaction should not exist in execution layer v0");
             }
         }
     }

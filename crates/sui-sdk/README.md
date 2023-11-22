@@ -1,5 +1,3 @@
-# Sui Rust SDK
-
 This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. 
 
 ## Getting started
@@ -120,7 +118,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ## Advanced examples
 
-See the programmable transactions [example](examples/programmable_transactions_api.rs).
+See the programmable transactions [example](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/programmable_transactions_api.rs).
 
 ## Games examples
 

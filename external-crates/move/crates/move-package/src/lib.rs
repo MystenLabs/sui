@@ -12,6 +12,7 @@ pub mod source_package;
 
 use anyhow::Result;
 use clap::*;
+use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
     Flags,
@@ -23,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
-    io::Write,
+    io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
 
@@ -31,6 +32,7 @@ use crate::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage, model_builder::ModelBuilder,
     },
+    lock_file::schema::update_compiler_toolchain,
     package_lock::PackageLock,
 };
 
@@ -52,10 +54,6 @@ pub struct BuildConfig {
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
 
-    /// Generate ABIs for packages
-    #[clap(name = "generate-abis", long = "abi", global = true)]
-    pub generate_abis: bool,
-
     /// Installation directory for compiled artifacts. Defaults to current directory.
     #[clap(long = "install-dir", global = true)]
     pub install_dir: Option<PathBuf>,
@@ -67,10 +65,6 @@ pub struct BuildConfig {
     /// Optional location to save the lock file to, if package resolution succeeds.
     #[clap(skip)]
     pub lock_file: Option<PathBuf>,
-
-    /// Additional named address mapping. Useful for tools in rust
-    #[clap(skip)]
-    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 
     /// Only fetch dependency repos to MOVE_HOME
     #[clap(long = "fetch-deps-only", global = true)]
@@ -100,6 +94,10 @@ pub struct BuildConfig {
     /// If set, warnings become errors
     #[clap(long = move_compiler::command_line::WARNINGS_ARE_ERRORS, global = true)]
     pub warnings_are_errors: bool,
+
+    /// Additional named address mapping. Useful for tools in rust
+    #[clap(skip)]
+    pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -218,5 +216,22 @@ impl BuildConfig {
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_silence_warnings(self.silence_warnings)
+    }
+
+    pub fn update_lock_file_toolchain_version(&self, compiler_version: String) -> Result<()> {
+        let Some(lock_file) = self.lock_file.as_ref() else {
+            return Ok(());
+        };
+        let install_dir = self
+            .install_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("."));
+        let mut lock = LockFile::from(install_dir, lock_file)?;
+        lock.seek(SeekFrom::Start(0))?;
+        let build_config = self.clone();
+        update_compiler_toolchain(&mut lock, compiler_version, &build_config)?;
+        let _mutx = PackageLock::lock();
+        lock.commit(lock_file)?;
+        Ok(())
     }
 }

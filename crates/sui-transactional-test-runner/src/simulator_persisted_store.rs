@@ -659,46 +659,8 @@ impl NodeStateGetter for PersistedStoreInnerReadOnlyWrapper {
 
 impl PersistedStoreInnerReadOnlyWrapper {
     pub fn sync(&self) {
-        // Todo: add macro utility for this in typed store derive
         self.inner
-            .checkpoint_digest_to_sequence_number
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .checkpoints
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .effects
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .epoch_to_committee
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .events
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .events_tx_digest_index
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .live_objects
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .objects
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .transactions
-            .try_catch_up_with_primary()
-            .expect("Fatal: DB sync failed");
-        self.inner
-            .checkpoint_contents
-            .try_catch_up_with_primary()
+            .try_catch_up_with_primary_all()
             .expect("Fatal: DB sync failed");
     }
 }

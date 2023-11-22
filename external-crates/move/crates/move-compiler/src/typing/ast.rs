@@ -29,27 +29,6 @@ pub struct Program {
 #[derive(Debug, Clone)]
 pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-    pub scripts: BTreeMap<Symbol, Script>,
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
-    pub package_name: Option<Symbol>,
-    pub attributes: Attributes,
-    pub loc: Loc,
-    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
-    pub used_addresses: BTreeSet<Address>,
-    pub constants: UniqueMap<ConstantName, Constant>,
-    pub function_name: FunctionName,
-    pub function: Function,
-    // module dependencies referenced in specs
-    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -160,27 +139,39 @@ pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum UnannotatedExp_ {
-    Unit { trailing: bool },
+    Unit {
+        trailing: bool,
+    },
     Value(Value),
-    Move { from_user: bool, var: Var },
-    Copy { from_user: bool, var: Var },
+    Move {
+        from_user: bool,
+        var: Var,
+    },
+    Copy {
+        from_user: bool,
+        var: Var,
+    },
     Use(Var),
-    Constant(Option<ModuleIdent>, ConstantName),
+    Constant(ModuleIdent, ConstantName),
 
     ModuleCall(Box<ModuleCall>),
     Builtin(Box<BuiltinFunction>, Box<Exp>),
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, Box<Exp>),
-    Loop { has_break: bool, body: Box<Exp> },
+    While(Var, Box<Exp>, Box<Exp>),
+    Loop {
+        name: Var,
+        has_break: bool,
+        body: Box<Exp>,
+    },
     Block(Sequence),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Break,
-    Continue,
+    Give(Var, Box<Exp>),
+    Continue(Var),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
@@ -276,60 +267,13 @@ impl AstDebug for Program {
 
 impl AstDebug for Program_ {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program_ { modules, scripts } = self;
+        let Program_ { modules } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
         }
-
-        for (n, s) in scripts {
-            w.write(&format!("script {}", n));
-            w.block(|w| s.ast_debug(w));
-            w.new_line()
-        }
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            warning_filter,
-            package_name,
-            attributes,
-            loc: _loc,
-            immediate_neighbors,
-            used_addresses,
-            constants,
-            function_name,
-            function,
-            spec_dependencies,
-        } = self;
-        warning_filter.ast_debug(w);
-        if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
-        }
-        attributes.ast_debug(w);
-        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{mident} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
-        for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
-            w.new_line()
-        }
-        for (m, neighbor) in spec_dependencies {
-            w.write(&format!("spec_dep {m} is"));
-            neighbor.ast_debug(w);
-            w.writeln(";");
-        }
-        for cdef in constants.key_cloned_iter() {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        (*function_name, function).ast_debug(w);
     }
 }
 
@@ -518,8 +462,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("use@");
                 v.ast_debug(w)
             }
-            E::Constant(None, c) => w.write(&format!("{}", c)),
-            E::Constant(Some(m), c) => w.write(&format!("{}::{}", m, c)),
+            E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }
@@ -561,17 +504,25 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, e) => {
-                w.write("while (");
+            E::While(name, b, e) => {
+                w.write("while@");
+                name.ast_debug(w);
+                w.write(" (");
                 b.ast_debug(w);
                 w.write(")");
                 e.ast_debug(w);
             }
-            E::Loop { has_break, body } => {
+            E::Loop {
+                name,
+                has_break,
+                body,
+            } => {
                 w.write("loop");
                 if *has_break {
                     w.write("#with_break");
                 }
+                w.write("@");
+                name.ast_debug(w);
                 w.write(" ");
                 body.ast_debug(w);
             }
@@ -605,8 +556,16 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Break => w.write("break"),
-            E::Continue => w.write("continue"),
+            E::Give(name, exp) => {
+                w.write("give@");
+                name.ast_debug(w);
+                w.write(" ");
+                exp.ast_debug(w);
+            }
+            E::Continue(name) => {
+                w.write("continue@");
+                name.ast_debug(w);
+            }
             E::Dereference(e) => {
                 w.write("*");
                 e.ast_debug(w)

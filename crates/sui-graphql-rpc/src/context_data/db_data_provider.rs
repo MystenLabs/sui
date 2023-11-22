@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::{
-    config::Limits,
+    config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{
         address::{Address, AddressTransactionBlockRelationship},
@@ -10,10 +11,11 @@ use crate::{
         big_int::BigInt,
         checkpoint::Checkpoint,
         coin::Coin,
+        coin_metadata::CoinMetadata,
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
-        dynamic_field::DynamicField,
+        dynamic_field::{DynamicField, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
@@ -35,7 +37,7 @@ use crate::{
         transaction_block_kind::{
             AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
-            TransactionBlockKind,
+            RandomnessStateUpdate, TransactionBlockKind,
         },
         transaction_signature::TransactionSignature,
         validator::Validator,
@@ -44,13 +46,7 @@ use crate::{
     },
 };
 use async_graphql::connection::{Connection, Edge};
-use diesel::{
-    pg::Pg,
-    query_builder::{AstPass, BoxedSelectStatement, FromClause, QueryFragment, QueryId},
-    sql_types::Text,
-    BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
-    QueryResult, RunQueryDsl,
-};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
@@ -60,15 +56,12 @@ use sui_indexer::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
         transactions::StoredTransaction,
     },
-    schema_v2::{
-        checkpoints, epochs, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
-        tx_recipients, tx_senders,
-    },
+    schema_v2::transactions,
     types_v2::OwnerType,
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::{
-    coin_api::parse_to_type_tag,
+    coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
 use sui_json_rpc_types::{
@@ -79,26 +72,31 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     base_types::{MoveObjectType, ObjectID},
+    coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
     effects::TransactionEffects,
     event::EventID,
-    gas_coin::GAS,
+    gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
+    object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
-    Identifier,
+    Identifier, TypeTag,
 };
 
-use super::DEFAULT_PAGE_SIZE;
+use super::db_backend::GenericQueryBuilder;
+
+#[cfg(feature = "pg_backend")]
+use super::pg_backend::{PgQueryExecutor, QueryBuilder};
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
@@ -124,418 +122,8 @@ pub enum DbValidationError {
     InvalidOwnerType,
     #[error("Query cost exceeded - cost: {0}, limit: {1}")]
     QueryCostExceeded(u64, u64),
-}
-
-type BalanceQuery<'a> = BoxedSelectStatement<
-    'a,
-    (
-        diesel::sql_types::Nullable<diesel::sql_types::BigInt>,
-        diesel::sql_types::Nullable<diesel::sql_types::BigInt>,
-        diesel::sql_types::Nullable<diesel::sql_types::Text>,
-    ),
-    FromClause<objects::table>,
-    Pg,
-    objects::dsl::coin_type,
->;
-
-/// Allows .explain() method on any Diesel query
-pub trait Explain: Sized {
-    fn explain(self) -> Explained<Self>;
-}
-impl<T> Explain for T {
-    fn explain(self) -> Explained<Self> {
-        Explained { query: self }
-    }
-}
-
-/// Struct for custom diesel function
-#[derive(Debug, Clone, Copy)]
-pub struct Explained<T> {
-    query: T,
-}
-
-/// All queries need to implement QueryId
-impl<T: QueryId> QueryId for Explained<T> {
-    type QueryId = (T::QueryId, std::marker::PhantomData<&'static str>);
-    const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID;
-}
-
-/// Explained<T> is a fully structured query with return of type Text
-impl<T: diesel::query_builder::Query> diesel::query_builder::Query for Explained<T> {
-    type SqlType = Text;
-}
-
-/// Allows methods like load(), get_result(), etc. on an Explained query
-impl<T> RunQueryDsl<PgConnection> for Explained<T> {}
-
-/// Implement logic for prefixing queries with "EXPLAIN"
-impl<T> QueryFragment<Pg> for Explained<T>
-where
-    T: QueryFragment<Pg>,
-{
-    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Pg>) -> QueryResult<()> {
-        out.push_sql("EXPLAIN (FORMAT JSON) ");
-        self.query.walk_ast(out.reborrow())?;
-        Ok(())
-    }
-}
-
-pub fn extract_cost(explain_result: &str) -> Result<f64, Error> {
-    let parsed: serde_json::Value =
-        serde_json::from_str(explain_result).map_err(|e| Error::Internal(e.to_string()))?;
-    if let Some(cost) = parsed
-        .get(0)
-        .and_then(|entry| entry.get("Plan"))
-        .and_then(|plan| plan.get("Total Cost"))
-        .and_then(|cost| cost.as_f64())
-    {
-        Ok(cost)
-    } else {
-        Err(Error::Internal(
-            "Failed to get cost from query plan".to_string(),
-        ))
-    }
-}
-
-pub struct QueryBuilder;
-impl QueryBuilder {
-    fn get_tx_by_digest<'a>(digest: Vec<u8>) -> transactions::BoxedQuery<'a, Pg> {
-        transactions::dsl::transactions
-            .filter(transactions::dsl::transaction_digest.eq(digest))
-            .into_boxed()
-    }
-
-    fn get_obj<'a>(address: Vec<u8>, version: Option<i64>) -> objects::BoxedQuery<'a, Pg> {
-        let mut query = objects::dsl::objects.into_boxed();
-        query = query.filter(objects::dsl::object_id.eq(address));
-
-        if let Some(version) = version {
-            query = query.filter(objects::dsl::object_version.eq(version));
-        }
-        query
-    }
-
-    fn get_epoch<'a>(epoch_id: i64) -> epochs::BoxedQuery<'a, Pg> {
-        epochs::dsl::epochs
-            .filter(epochs::dsl::epoch.eq(epoch_id))
-            .into_boxed()
-    }
-
-    fn get_latest_epoch<'a>() -> epochs::BoxedQuery<'a, Pg> {
-        epochs::dsl::epochs
-            .order_by(epochs::dsl::epoch.desc())
-            .limit(1)
-            .into_boxed()
-    }
-
-    fn get_checkpoint_by_digest<'a>(digest: Vec<u8>) -> checkpoints::BoxedQuery<'a, Pg> {
-        checkpoints::dsl::checkpoints
-            .filter(checkpoints::dsl::checkpoint_digest.eq(digest))
-            .into_boxed()
-    }
-
-    fn get_checkpoint_by_sequence_number<'a>(
-        sequence_number: i64,
-    ) -> checkpoints::BoxedQuery<'a, Pg> {
-        checkpoints::dsl::checkpoints
-            .filter(checkpoints::dsl::sequence_number.eq(sequence_number))
-            .into_boxed()
-    }
-
-    fn get_latest_checkpoint<'a>() -> checkpoints::BoxedQuery<'a, Pg> {
-        checkpoints::dsl::checkpoints
-            .order_by(checkpoints::dsl::sequence_number.desc())
-            .limit(1)
-            .into_boxed()
-    }
-
-    fn multi_get_txs<'a>(
-        cursor: Option<i64>,
-        descending_order: bool,
-        limit: i64,
-        filter: Option<TransactionBlockFilter>,
-        after_tx_seq_num: Option<i64>,
-        before_tx_seq_num: Option<i64>,
-    ) -> Result<transactions::BoxedQuery<'a, Pg>, Error> {
-        let mut query = transactions::dsl::transactions.into_boxed();
-
-        if let Some(cursor_val) = cursor {
-            if descending_order {
-                let filter_value =
-                    before_tx_seq_num.map_or(cursor_val, |b| std::cmp::min(b, cursor_val));
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(filter_value));
-            } else {
-                let filter_value =
-                    after_tx_seq_num.map_or(cursor_val, |a| std::cmp::max(a, cursor_val));
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(filter_value));
-            }
-        } else {
-            if let Some(av) = after_tx_seq_num {
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(av));
-            }
-            if let Some(bv) = before_tx_seq_num {
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(bv));
-            }
-        }
-
-        if descending_order {
-            query = query.order(transactions::dsl::tx_sequence_number.desc());
-        } else {
-            query = query.order(transactions::dsl::tx_sequence_number.asc());
-        }
-
-        query = query.limit(limit + 1);
-
-        if let Some(filter) = filter {
-            // Filters for transaction table
-            // at_checkpoint mutually exclusive with before_ and after_checkpoint
-            if let Some(checkpoint) = filter.at_checkpoint {
-                query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
-            }
-            if let Some(transaction_ids) = filter.transaction_ids {
-                let digests = transaction_ids
-                    .into_iter()
-                    .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
-                    .collect::<Result<Vec<_>, _>>()?;
-                query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
-            }
-
-            // Queries on foreign tables
-            match (filter.package, filter.module, filter.function) {
-                (Some(p), None, None) => {
-                    let subquery = tx_calls::dsl::tx_calls
-                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                        .select(tx_calls::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-                (Some(p), Some(m), None) => {
-                    let subquery = tx_calls::dsl::tx_calls
-                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                        .filter(tx_calls::dsl::module.eq(m))
-                        .select(tx_calls::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-                (Some(p), Some(m), Some(f)) => {
-                    let subquery = tx_calls::dsl::tx_calls
-                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
-                        .filter(tx_calls::dsl::module.eq(m))
-                        .filter(tx_calls::dsl::func.eq(f))
-                        .select(tx_calls::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-                _ => {}
-            }
-
-            if let Some(signer) = filter.sign_address {
-                if let Some(sender) = filter.sent_address {
-                    let subquery = tx_senders::dsl::tx_senders
-                        .filter(
-                            tx_senders::dsl::sender
-                                .eq(signer.into_vec())
-                                .or(tx_senders::dsl::sender.eq(sender.into_vec())),
-                        )
-                        .select(tx_senders::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                } else {
-                    let subquery = tx_senders::dsl::tx_senders
-                        .filter(tx_senders::dsl::sender.eq(signer.into_vec()))
-                        .select(tx_senders::dsl::tx_sequence_number);
-
-                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-                }
-            } else if let Some(sender) = filter.sent_address {
-                let subquery = tx_senders::dsl::tx_senders
-                    .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
-                    .select(tx_senders::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            if let Some(recipient) = filter.recv_address {
-                let subquery = tx_recipients::dsl::tx_recipients
-                    .filter(tx_recipients::dsl::recipient.eq(recipient.into_vec()))
-                    .select(tx_recipients::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            if filter.paid_address.is_some() {
-                return Err(Error::Internal(
-                    "Paid address filter not supported".to_string(),
-                ));
-            }
-
-            if let Some(input_object) = filter.input_object {
-                let subquery = tx_input_objects::dsl::tx_input_objects
-                    .filter(tx_input_objects::dsl::object_id.eq(input_object.into_vec()))
-                    .select(tx_input_objects::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-            if let Some(changed_object) = filter.changed_object {
-                let subquery = tx_changed_objects::dsl::tx_changed_objects
-                    .filter(tx_changed_objects::dsl::object_id.eq(changed_object.into_vec()))
-                    .select(tx_changed_objects::dsl::tx_sequence_number);
-
-                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
-            }
-        };
-
-        Ok(query)
-    }
-
-    fn multi_get_coins<'a>(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
-        limit: i64,
-        address: Vec<u8>,
-        coin_type: String,
-    ) -> objects::BoxedQuery<'a, Pg> {
-        let mut query = objects::dsl::objects.into_boxed();
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(objects::dsl::object_id.lt(cursor));
-            } else {
-                query = query.filter(objects::dsl::object_id.gt(cursor));
-            }
-        }
-        if descending_order {
-            query = query.order(objects::dsl::object_id.desc());
-        } else {
-            query = query.order(objects::dsl::object_id.asc());
-        }
-        query = query.limit(limit + 1);
-
-        query = query
-            .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16)) // Leverage index on objects table
-            .filter(objects::dsl::coin_type.eq(coin_type));
-
-        query
-    }
-
-    fn multi_get_objs<'a>(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
-        limit: i64,
-        filter: Option<ObjectFilter>,
-        owner_type: Option<OwnerType>,
-    ) -> Result<objects::BoxedQuery<'a, Pg>, Error> {
-        let mut query = objects::dsl::objects.into_boxed();
-
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(objects::dsl::object_id.lt(cursor));
-            } else {
-                query = query.filter(objects::dsl::object_id.gt(cursor));
-            }
-        }
-
-        if descending_order {
-            query = query.order(objects::dsl::object_id.desc());
-        } else {
-            query = query.order(objects::dsl::object_id.asc());
-        }
-
-        query = query.limit(limit + 1);
-
-        if let Some(filter) = filter {
-            if let Some(object_ids) = filter.object_ids {
-                query = query.filter(
-                    objects::dsl::object_id.eq_any(
-                        object_ids
-                            .into_iter()
-                            .map(|id| id.into_vec())
-                            .collect::<Vec<_>>(),
-                    ),
-                );
-            }
-
-            if let Some(owner) = filter.owner {
-                query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
-
-                match owner_type {
-                    Some(OwnerType::Address) => {
-                        query =
-                            query.filter(objects::dsl::owner_type.eq(OwnerType::Address as i16));
-                    }
-                    Some(OwnerType::Object) => {
-                        query = query.filter(objects::dsl::owner_type.eq(OwnerType::Object as i16));
-                    }
-                    None => {
-                        query = query.filter(
-                            objects::dsl::owner_type
-                                .eq(OwnerType::Address as i16)
-                                .or(objects::dsl::owner_type.eq(OwnerType::Object as i16)),
-                        );
-                    }
-                    _ => Err(DbValidationError::InvalidOwnerType)?,
-                }
-            }
-
-            if let Some(object_type) = filter.ty {
-                query = query.filter(objects::dsl::object_type.eq(object_type));
-            }
-        }
-
-        Ok(query)
-    }
-
-    fn multi_get_balances<'a>(address: Vec<u8>) -> BalanceQuery<'a> {
-        let query = objects::dsl::objects
-            .group_by(objects::dsl::coin_type)
-            .select((
-                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::BigInt>>(
-                    "CAST(SUM(coin_balance) AS BIGINT)",
-                ),
-                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::BigInt>>(
-                    "COUNT(*)",
-                ),
-                objects::dsl::coin_type,
-            ))
-            .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
-            .filter(objects::dsl::coin_type.is_not_null())
-            .into_boxed();
-
-        query
-    }
-
-    fn get_balance<'a>(address: Vec<u8>, coin_type: String) -> BalanceQuery<'a> {
-        let query = QueryBuilder::multi_get_balances(address);
-        query.filter(objects::dsl::coin_type.eq(coin_type))
-    }
-
-    fn multi_get_checkpoints<'a>(
-        cursor: Option<i64>,
-        descending_order: bool,
-        limit: i64,
-        epoch: Option<i64>,
-    ) -> checkpoints::BoxedQuery<'a, Pg> {
-        let mut query = checkpoints::dsl::checkpoints.into_boxed();
-
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(checkpoints::dsl::sequence_number.lt(cursor));
-            } else {
-                query = query.filter(checkpoints::dsl::sequence_number.gt(cursor));
-            }
-        }
-        if descending_order {
-            query = query.order(checkpoints::dsl::sequence_number.desc());
-        } else {
-            query = query.order(checkpoints::dsl::sequence_number.asc());
-        }
-        if let Some(epoch) = epoch {
-            query = query.filter(checkpoints::dsl::epoch.eq(epoch));
-        }
-        query = query.limit(limit + 1);
-
-        query
-    }
+    #[error("Page size exceeded - requested: {0}, limit: {1}")]
+    PageSizeExceeded(u64, u64),
 }
 
 pub(crate) struct PgManager {
@@ -550,68 +138,17 @@ impl PgManager {
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
     pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
+        Self::reader_with_config(db_url, DEFAULT_SERVER_DB_POOL_SIZE)
+    }
+
+    pub(crate) fn reader_with_config(
+        db_url: impl Into<String>,
+        pool_size: u32,
+    ) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
-        config.set_pool_size(3);
+        config.set_pool_size(pool_size);
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
-    }
-
-    pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, Error>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        self.inner
-            .run_query_async(query)
-            .await
-            .map_err(|e| Error::Internal(e.to_string()))
-    }
-
-    /// Takes a query_builder_fn that returns Result<QueryFragment> and a lambda to execute the query
-    /// Spawns a blocking task that determines the cost of the query fragment
-    /// And if within limits, then executes the query
-    async fn run_query_async_with_cost<T, Q, QResult, EF, E, F>(
-        &self,
-        mut query_builder_fn: Q,
-        execute_fn: EF,
-    ) -> Result<T, Error>
-    where
-        Q: FnMut() -> Result<QResult, Error> + Send + 'static,
-        QResult: QueryDsl
-            + RunQueryDsl<Pg>
-            + diesel::query_builder::QueryFragment<diesel::pg::Pg>
-            + diesel::query_builder::Query
-            + diesel::query_builder::QueryId
-            + Send
-            + 'static,
-        EF: FnOnce(QResult) -> F + Send + 'static,
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        let max_db_query_cost = self.limits.max_db_query_cost;
-        self.inner
-            .spawn_blocking(move |this| {
-                let query = query_builder_fn()?;
-                let explain_result: String = this
-                    .run_query(|conn| query.explain().get_result(conn))
-                    .map_err(|e| Error::Internal(e.to_string()))?;
-                let cost = extract_cost(&explain_result)?;
-                if cost > max_db_query_cost as f64 {
-                    return Err(DbValidationError::QueryCostExceeded(
-                        cost as u64,
-                        max_db_query_cost,
-                    )
-                    .into());
-                }
-
-                let query = query_builder_fn()?;
-                let execute_closure = execute_fn(query);
-                this.run_query(execute_closure)
-                    .map_err(|e| Error::Internal(e.to_string()))
-            })
-            .await
     }
 }
 
@@ -632,6 +169,14 @@ impl PgManager {
     ) -> Result<Option<StoredObject>, Error> {
         self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_obj(address.clone(), version)),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+        )
+        .await
+    }
+
+    async fn get_obj_by_type(&self, object_type: String) -> Result<Option<StoredObject>, Error> {
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_obj_by_type(object_type.clone())),
             |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
         )
         .await
@@ -689,22 +234,26 @@ impl PgManager {
         Ok(ChainIdentifier::from(digest))
     }
 
+    /// Fetches the coins owned by the address and filters them by the given coin type.
+    /// If no address is given, it fetches all available coin objects matching the coin type.
     async fn multi_get_coins(
         &self,
-        address: Vec<u8>,
+        address: Option<Vec<u8>>,
         coin_type: String,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
-
+        let coin_type = parse_to_type_tag(Some(coin_type))
+            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
+            .to_canonical_string(/* with_prefix */ true);
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
                 move || {
@@ -778,12 +327,13 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_tx_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+
         let mut after_tx_seq_num: Option<i64> = None;
         let mut before_tx_seq_num: Option<i64> = None;
         if let Some(filter) = &filter {
@@ -858,12 +408,12 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
@@ -900,12 +450,12 @@ impl PgManager {
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let query = move || {
             QueryBuilder::multi_get_objs(
@@ -1006,6 +556,33 @@ impl PgManager {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn validate_page_limit(
+        &self,
+        first: Option<u64>,
+        last: Option<u64>,
+    ) -> Result<i64, Error> {
+        if let Some(f) = first {
+            if f > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        if let Some(l) = last {
+            if l > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        // TODO (wlmyng): even though we do not allow passing in both first and last,
+        // per the cursor connection specs, if both are provided, from the response,
+        // we need to take the first F from the left and then take the last L from the right.
+        Ok(first.or(last).unwrap_or(self.limits.max_page_size) as i64)
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
@@ -1219,11 +796,17 @@ impl PgManager {
         filter: Option<ObjectFilter>,
         owner: SuiAddress,
     ) -> Result<Option<Connection<String, Object>>, Error> {
-        let filter = filter.map(|mut x| {
-            x.owner = Some(owner);
-            x
-        });
-        self.fetch_objs(first, after, last, before, filter).await
+        let filter = filter
+            .map(|mut f| {
+                f.owner = Some(owner);
+                f
+            })
+            .unwrap_or_else(|| ObjectFilter {
+                owner: Some(owner),
+                ..Default::default()
+            });
+        self.fetch_objs(first, after, last, before, Some(filter))
+            .await
     }
 
     pub(crate) async fn fetch_objs(
@@ -1298,13 +881,8 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type_tag = parse_to_type_tag(coin_type);
-        if coin_type_tag.is_err() {
-            // The provided `coin_type` cannot be parsed to a type tag so return None here.
-            return Ok(None);
-        }
-        let coin_type = coin_type_tag
-            .unwrap()
+        let coin_type = parse_to_type_tag(coin_type)
+            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
             .to_canonical_string(/* with_prefix */ true);
         let result = self.get_balance(address, coin_type).await?;
 
@@ -1362,16 +940,19 @@ impl PgManager {
         }
     }
 
+    /// Fetches all coins owned by the given address that match the given coin type.
+    /// If no address is given, then it will fetch all coin objects of the given type.
+    /// If no coin type is provided, it will use the default gas coin (SUI).
     pub(crate) async fn fetch_coins(
         &self,
-        address: SuiAddress,
+        address: Option<SuiAddress>,
         coin_type: Option<String>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>, Error> {
-        let address = address.into_vec();
+        let address = address.map(|addr| addr.into_vec());
         let coin_type = coin_type.unwrap_or_else(|| {
             GAS::type_().to_canonical_string(/* with_prefix */ true)
         });
@@ -1650,7 +1231,7 @@ impl PgManager {
         };
 
         let descending_order = before.is_some();
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as usize;
+        let limit = self.validate_page_limit(first, last)? as usize;
         let cursor = after
             .or(before)
             .map(|c| self.parse_event_cursor(c))
@@ -1744,8 +1325,106 @@ impl PgManager {
                 },
             ));
         }
-
         Ok(Some(connection))
+    }
+
+    pub(crate) async fn fetch_dynamic_field(
+        &self,
+        address: SuiAddress,
+        name: DynamicFieldName,
+        kind: DynamicFieldType,
+    ) -> Result<Option<DynamicField>, Error> {
+        let name_bcs_value = &name.bcs.0;
+        let parent_object_id =
+            ObjectID::from_bytes(address.as_slice()).map_err(|e| Error::Client(e.to_string()))?;
+        let mut type_tag =
+            TypeTag::from_str(&name.type_).map_err(|e| Error::Client(e.to_string()))?;
+
+        if kind == DynamicFieldType::DynamicObject {
+            let dynamic_object_field_struct =
+                sui_types::dynamic_field::DynamicFieldInfo::dynamic_object_field_wrapper(type_tag);
+            type_tag = TypeTag::Struct(Box::new(dynamic_object_field_struct));
+        }
+
+        let id = sui_types::dynamic_field::derive_dynamic_field_id(
+            parent_object_id,
+            &type_tag,
+            name_bcs_value,
+        )
+        .map_err(|e| Error::Internal(format!("Deriving dynamic field id cannot fail: {e}")))?;
+
+        let stored_obj = self.get_obj(id.to_vec(), None).await?;
+        if let Some(stored_object) = stored_obj {
+            let df_object_id = stored_object.df_object_id.as_ref().ok_or_else(|| {
+                Error::Internal("Dynamic field does not have df_object_id".to_string())
+            })?;
+            let df_object_id =
+                SuiAddress::from_bytes(df_object_id).map_err(|e| Error::Internal(e.to_string()))?;
+            return Ok(Some(DynamicField {
+                stored_object,
+                df_object_id,
+                df_kind: kind,
+            }));
+        }
+        Ok(None)
+    }
+    pub(crate) async fn fetch_coin_metadata(
+        &self,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>, Error> {
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+
+        let coin_metadata_type =
+            NativeCoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
+
+        let Some(coin_metadata) = self.get_obj_by_type(coin_metadata_type).await? else {
+            return Ok(None);
+        };
+
+        let object = Object::try_from(coin_metadata)?;
+        let move_object = MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not an object.",
+                object.address,
+            ))
+        })?;
+
+        let coin_metadata_object = CoinMetadata::try_from(&move_object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not.",
+                object.address,
+            ))
+        })?;
+
+        Ok(Some(coin_metadata_object))
+    }
+
+    pub(crate) async fn fetch_total_supply(&self, coin_type: String) -> Result<Option<u64>, Error> {
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+
+        let supply = if GAS::is_gas(&coin_struct) {
+            TOTAL_SUPPLY_SUI
+        } else {
+            let treasury_cap_type =
+                TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
+
+            let Some(treasury_cap) = self.get_obj_by_type(treasury_cap_type).await? else {
+                return Ok(None);
+            };
+
+            let native_object = NativeObject::try_from(treasury_cap)?;
+            let object_id = native_object.id();
+            let treasury_cap_object = TreasuryCap::try_from(native_object).map_err(|e| {
+                Error::Internal(format!(
+                    "Error while deserializing treasury cap object {object_id}: {e}"
+                ))
+            })?;
+            treasury_cap_object.total_supply.value
+        };
+
+        Ok(Some(supply))
     }
 }
 
@@ -2072,6 +1751,12 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 )
             }
             // TODO: flesh out type
+            TransactionKind::RandomnessStateUpdate(rsu) => {
+                TransactionBlockKind::RandomnessStateUpdateTransaction(RandomnessStateUpdate {
+                    value: format!("{:?}", rsu),
+                })
+            }
+            // TODO: flesh out type
             TransactionKind::EndOfEpochTransaction(et) => {
                 TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
                     value: format!("{:?}", et),
@@ -2223,52 +1908,5 @@ impl From<SuiAddress> for NativeSuiAddress {
 impl From<&SuiAddress> for NativeSuiAddress {
     fn from(a: &SuiAddress) -> Self {
         NativeSuiAddress::try_from(a.as_slice()).unwrap()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_invalid_json() {
-        let explain_result = "invalid json";
-        let result = extract_cost(explain_result);
-        assert!(matches!(result, Err(Error::Internal(_))));
-    }
-
-    #[test]
-    fn test_missing_entry_at_0() {
-        let explain_result = "[]";
-        let result = extract_cost(explain_result);
-        assert!(matches!(result, Err(Error::Internal(_))));
-    }
-
-    #[test]
-    fn test_missing_plan() {
-        let explain_result = r#"[{}]"#;
-        let result = extract_cost(explain_result);
-        assert!(matches!(result, Err(Error::Internal(_))));
-    }
-
-    #[test]
-    fn test_missing_total_cost() {
-        let explain_result = r#"[{"Plan": {}}]"#;
-        let result = extract_cost(explain_result);
-        assert!(matches!(result, Err(Error::Internal(_))));
-    }
-
-    #[test]
-    fn test_failure_on_conversion_to_f64() {
-        let explain_result = r#"[{"Plan": {"Total Cost": "string_instead_of_float"}}]"#;
-        let result = extract_cost(explain_result);
-        assert!(matches!(result, Err(Error::Internal(_))));
-    }
-
-    #[test]
-    fn test_happy_scenario() {
-        let explain_result = r#"[{"Plan": {"Total Cost": 1.0}}]"#;
-        let result = extract_cost(explain_result).unwrap();
-        assert_eq!(result, 1.0);
     }
 }

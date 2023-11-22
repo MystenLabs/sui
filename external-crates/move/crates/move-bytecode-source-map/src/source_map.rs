@@ -76,8 +76,7 @@ pub struct SourceMap {
     pub definition_location: Loc,
 
     /// The name <address.module_name> of the module that this source map is for.
-    /// `None` if this source map corresponds to a script.
-    pub module_name_opt: Option<(AccountAddress, Identifier)>,
+    pub module_name: (AccountAddress, Identifier),
 
     // A mapping of `StructDefinitionIndex` to source map for each struct/resource.
     struct_map: BTreeMap<TableIndex, StructSourceMap>,
@@ -267,14 +266,14 @@ impl FunctionSourceMap {
 }
 
 impl SourceMap {
-    pub fn new(definition_location: Loc, module_name_opt: Option<ModuleIdent>) -> Self {
-        let module_name_opt = module_name_opt.map(|module_name| {
+    pub fn new(definition_location: Loc, module_name: ModuleIdent) -> Self {
+        let module_name = {
             let ident = Identifier::new(module_name.name.0.as_str()).unwrap();
             (module_name.address, ident)
-        });
+        };
         Self {
             definition_location,
-            module_name_opt,
+            module_name,
             struct_map: BTreeMap::new(),
             function_map: BTreeMap::new(),
             constant_map: BTreeMap::new(),
@@ -493,14 +492,16 @@ impl SourceMap {
     /// with generated or real names depending upon if the source map is available or not.
     pub fn dummy_from_view(view: &BinaryIndexedView, default_loc: Loc) -> Result<Self> {
         let module_ident = match view {
-            BinaryIndexedView::Script(..) => None,
+            BinaryIndexedView::Script(..) => {
+                anyhow::bail!("Scripts are no longer supported for dummy source map")
+            }
             BinaryIndexedView::Module(..) => {
                 let module_handle = view.module_handle_at(ModuleHandleIndex::new(0));
                 let module_name = ModuleName(Symbol::from(
                     view.identifier_at(module_handle.name).as_str(),
                 ));
                 let address = *view.address_identifier_at(module_handle.address);
-                Some(ModuleIdent::new(module_name, address))
+                ModuleIdent::new(module_name, address)
             }
         };
         let mut empty_source_map = Self::new(default_loc, module_ident);

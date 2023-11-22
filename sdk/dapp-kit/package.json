@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A collection of React hooks and components for interacting with the Sui blockchain and wallets.",
 	"homepage": "https://sui-typescript-docs.vercel.app/typescript",
-	"version": "0.8.0",
+	"version": "0.9.1",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
@@ -18,7 +18,6 @@
 	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
@@ -31,7 +30,7 @@
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-dapp-kit",
 		"test": "pnpm test:typecheck && pnpm vitest",
-		"test:typecheck": "tsc -p ./test",
+		"test:typecheck": "tsc -b ./test",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",
@@ -76,7 +75,6 @@
 		"size-limit": "^8.2.6",
 		"tsx": "^3.12.7",
 		"typescript": "^5.1.6",
-		"vite-tsconfig-paths": "^4.2.0",
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {

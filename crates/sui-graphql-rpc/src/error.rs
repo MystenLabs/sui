@@ -76,6 +76,8 @@ pub enum Error {
     DbValidation(#[from] DbValidationError),
     #[error("Provide one of digest or sequence_number, not both")]
     InvalidCheckpointQuery,
+    #[error("Invalid coin type: {0}")]
+    InvalidCoinType(String),
     #[error("String is not valid base58: {0}")]
     InvalidBase58(String),
     #[error("Invalid digest length: expected {expected}, actual {actual}")]
@@ -92,6 +94,9 @@ pub enum Error {
     _CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
+    #[error("{0}")]
+    // Catch-all for client-fault errors
+    Client(String),
     #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
 }
@@ -99,7 +104,8 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::DynamicFieldOnAddress
+            Error::InvalidCoinType(_)
+            | Error::DynamicFieldOnAddress
             | Error::InvalidFilter
             | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
@@ -112,7 +118,8 @@ impl ErrorExtensions for Error {
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. } => {
+            | Error::InvalidDigestLength { .. }
+            | Error::Client(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {

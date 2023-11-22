@@ -88,6 +88,9 @@ pub struct AnalyticsIndexerConfig {
     // Remote object store where data gets written to
     #[command(flatten)]
     pub remote_store_config: ObjectStoreConfig,
+    // Remote object store path prefix to use while writing
+    #[clap(long, default_value = None, global = true)]
+    pub remote_store_path_prefix: Option<Path>,
     // File format to store data in i.e. csv, parquet, etc
     #[clap(long, value_enum, default_value = "csv", global = true)]
     pub file_format: FileFormat,

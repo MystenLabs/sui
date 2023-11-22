@@ -31,7 +31,7 @@ module games::drand_based_scratch_card_tests {
         let game = test_scenario::take_immutable<drand_based_scratch_card::Game>(scenario);
         let reward_val = test_scenario::take_shared<drand_based_scratch_card::Reward>(scenario);
         let drand_final_round = drand_based_scratch_card::end_of_game_round(drand_based_scratch_card::get_game_base_drand_round(&game));
-        assert!(drand_final_round == 5890, 1);
+        assert!(drand_final_round == 58810, 1);
 
         // Since everything here is deterministic, we know that the 49th ticket will be a winner.
         let i = 0;
@@ -48,12 +48,11 @@ module games::drand_based_scratch_card_tests {
             test_scenario::next_tx(scenario, user2);
             let ticket = test_scenario::take_from_sender<drand_based_scratch_card::Ticket>(scenario);
             // Generated using:
-            // curl https://drand.cloudflare.com/8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce/public/5890
+            // curl https://drand.cloudflare.com/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/58810
             drand_based_scratch_card::evaluate(
                 ticket,
                 &game,
-                x"98a99ec46b8bda71fbb0a90a0c6a02e0be92803d756ff66b386fd7647a6071fc33116cd94b0a0f09b48d78e399b6ca590868213a2bb85be829841fdac9487f89b5ce02c2d13d38240d40ce9868bd17f903cf5fba5b825769cdbf38c22cebc6a5",
-                x"b0ee0f3d50e7ed6d5860ce9addbada59fbde444745fedd46f8a15dd48f5c3524adeed06d54775b24bf652aadd087cf790a2f7c55bd81ea29f594d3c68a93bb5c3a595af0f1a368c762c07113f683abad50d7fceb1048e7376deb6febcb4683c6",
+                x"876b8586ed9522abd0ca596d6e214e9a7e9bedc4a2e9698d27970e892287268062aba93fd1a7c24fcc188a4c7f0a0e98",
                 test_scenario::ctx(scenario)
             );
             test_scenario::next_tx(scenario, user2);
@@ -63,7 +62,7 @@ module games::drand_based_scratch_card_tests {
             i = i + 1;
         };
         // This value may change if the object ID is changed.
-        assert!(i == 21, 1);
+        assert!(i == 3, 1);
 
         // Claim the reward.
         let winner = test_scenario::take_from_sender<drand_based_scratch_card::Winner>(scenario);

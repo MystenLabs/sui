@@ -12,9 +12,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
-    file_format::{CompiledModule, CompiledScript},
+    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::{
@@ -428,13 +426,11 @@ impl<'a> CompiledState<'a> {
         };
         if let Some(pcd) = pre_compiled_deps {
             for unit in &pcd.compiled {
-                if let AnnotatedCompiledUnit::Module(annot_module) = unit {
-                    let (named_addr_opt, _id) = annot_module.module_id();
-                    state.add_precompiled(
-                        named_addr_opt.map(|n| n.value),
-                        annot_module.named_module.module.clone(),
-                    );
-                }
+                let (named_addr_opt, _id) = unit.module_id();
+                state.add_precompiled(
+                    named_addr_opt.map(|n| n.value),
+                    unit.named_module.module.clone(),
+                );
             }
         }
         state
@@ -557,23 +553,16 @@ where
             let (units, warnings_opt) = compile_source_units(state, data.path())?;
             let modules = units
                 .into_iter()
-                .map(|unit| match unit {
-                    AnnotatedCompiledUnit::Module(annot_module) => {
-                        let (named_addr_opt, _id) = annot_module.module_id();
-                        let named_addr_opt = named_addr_opt.map(|n| n.value);
-                        let module = annot_module.named_module.module;
-                        let source_map = Some(annot_module.named_module.source_map);
-                        MaybeNamedCompiledModule {
-                            named_address: named_addr_opt,
-                            module,
-                            source_map,
-                        }
+                .map(|unit| {
+                    let (named_addr_opt, _id) = unit.module_id();
+                    let named_addr_opt = named_addr_opt.map(|n| n.value);
+                    let module = unit.named_module.module;
+                    let source_map = Some(unit.named_module.source_map);
+                    MaybeNamedCompiledModule {
+                        named_address: named_addr_opt,
+                        module,
+                        source_map,
                     }
-                    AnnotatedCompiledUnit::Script(_) => panic!(
-                        "Expected a module text block, not a script, \
-                        following '{command}' starting on lines {}-{}",
-                        start_line, command_lines_stop
-                    ),
                 })
                 .collect();
             (modules, warnings_opt)
@@ -679,17 +668,6 @@ pub fn compile_ir_module(
     use move_ir_compiler::Compiler as IRCompiler;
     let code = std::fs::read_to_string(file_name).unwrap();
     IRCompiler::new(state.dep_modules().collect()).into_compiled_module(&code)
-}
-
-pub fn compile_ir_script(
-    state: &CompiledState,
-    file_name: impl AsRef<Path>,
-) -> Result<CompiledScript> {
-    use move_ir_compiler::Compiler as IRCompiler;
-    let code = std::fs::read_to_string(file_name).unwrap();
-    let (script, _) = IRCompiler::new(state.dep_modules().collect())
-        .into_compiled_script_and_source_map(&code)?;
-    Ok(script)
 }
 
 pub async fn handle_actual_output<'a, Adapter>(

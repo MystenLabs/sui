@@ -5,9 +5,15 @@ import { execSync } from 'child_process';
 import tmp from 'tmp';
 import { retry } from 'ts-retry-promise';
 import { expect } from 'vitest';
+import { WebSocket } from 'ws';
 
 import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
-import { getFullnodeUrl, SuiClient, SuiObjectChangePublished } from '../../../src/client';
+import {
+	getFullnodeUrl,
+	SuiClient,
+	SuiHTTPTransport,
+	SuiObjectChangePublished,
+} from '../../../src/client';
 import { Keypair } from '../../../src/cryptography';
 import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
@@ -51,13 +57,20 @@ export class TestToolbox {
 
 export function getClient(): SuiClient {
 	return new SuiClient({
-		url: DEFAULT_FULLNODE_URL,
+		transport: new SuiHTTPTransport({
+			url: DEFAULT_FULLNODE_URL,
+			WebSocketConstructor: WebSocket as never,
+		}),
 	});
 }
 
 export async function setup() {
 	const keypair = Ed25519Keypair.generate();
 	const address = keypair.getPublicKey().toSuiAddress();
+	return setupWithFundedAddress(keypair, address);
+}
+
+export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: string) {
 	const client = getClient();
 	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
@@ -67,6 +80,21 @@ export async function setup() {
 		retryIf: (error: any) => !(error instanceof FaucetRateLimitError),
 		logger: (msg) => console.warn('Retrying requesting from faucet: ' + msg),
 	});
+
+	await retry(
+		async () => {
+			const balance = await client.getBalance({ owner: address });
+
+			if (balance.totalBalance === '0') {
+				throw new Error('Balance is still 0');
+			}
+		},
+		{
+			backoff: () => 1000,
+			timeout: 30 * 1000,
+			retryIf: () => true,
+		},
+	);
 	return new TestToolbox(keypair, client);
 }
 
@@ -104,6 +132,9 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			showObjectChanges: true,
 		},
 	});
+
+	await toolbox.client.waitForTransactionBlock({ digest: publishTxn.digest });
+
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
 	const packageId = ((publishTxn.objectChanges?.filter(

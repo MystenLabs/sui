@@ -4,7 +4,7 @@
 
 use crate::{
     sandbox::utils::{
-        explain_publish_changeset, explain_publish_error, get_gas_status, module,
+        explain_publish_changeset, explain_publish_error, get_gas_status,
         on_disk_state_view::OnDiskStateView,
     },
     NativeFunctionRecord,
@@ -63,7 +63,7 @@ pub fn publish(
     let republished = modules_to_publish
         .iter()
         .filter_map(|unit| {
-            let id = module(&unit.unit).ok()?.self_id();
+            let id = unit.unit.module.self_id();
             if state.has_module(&id) {
                 Some(format!("{}", id))
             } else {
@@ -97,7 +97,7 @@ pub fn publish(
                 let module_bytes = unit.unit.serialize(bytecode_version);
                 module_bytes_vec.push(module_bytes);
 
-                let module_address = *module(&unit.unit)?.self_id().address();
+                let module_address = *unit.unit.module.self_id().address();
                 match &sender_opt {
                     None => {
                         sender_opt = Some(module_address);
@@ -135,7 +135,7 @@ pub fn publish(
             // publish modules sequentially, one module at a time
             for unit in &modules_to_publish {
                 let module_bytes = unit.unit.serialize(bytecode_version);
-                let id = module(&unit.unit)?.self_id();
+                let id = unit.unit.module.self_id();
                 let sender = *id.address();
 
                 let res = session.publish_module(module_bytes, sender, &mut gas_status);
@@ -148,7 +148,7 @@ pub fn publish(
         }
 
         if !has_error {
-            let (changeset, events) = session.finish().0.map_err(|e| e.into_vm_status())?;
+            let (changeset, events) = session.finish().0?;
             assert!(events.is_empty());
             if verbose {
                 explain_publish_changeset(&changeset);
@@ -167,7 +167,7 @@ pub fn publish(
         // and force the CLI to override the on-disk state directly
         let mut serialized_modules = vec![];
         for unit in modules_to_publish {
-            let id = module(&unit.unit)?.self_id();
+            let id = unit.unit.module.self_id();
             let module_bytes = unit.unit.serialize(bytecode_version);
             serialized_modules.push((id, module_bytes));
         }

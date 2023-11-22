@@ -6,16 +6,13 @@
 
 use anyhow::Context;
 use clap::Parser;
-use move_binary_format::{
-    errors::VMError,
-    file_format::{CompiledModule, CompiledScript},
-};
-use move_bytecode_verifier::{dependencies, verify_module_unmetered, verify_script_unmetered};
+use move_binary_format::{errors::VMError, file_format::CompiledModule};
+use move_bytecode_verifier::{dependencies, verify_module_unmetered};
 use move_command_line_common::files::{
     MOVE_COMPILED_EXTENSION, MOVE_IR_EXTENSION, SOURCE_MAP_EXTENSION,
 };
 use move_ir_compiler::util;
-use move_ir_to_bytecode::parser::{parse_module, parse_script};
+use move_ir_to_bytecode::parser::parse_module;
 use std::{
     fs,
     io::Write,
@@ -25,9 +22,6 @@ use std::{
 #[derive(Debug, Parser)]
 #[clap(author, version, about)]
 struct Args {
-    /// Treat input file as a module (default is to treat file as a script)
-    #[clap(short = 'm', long = "module")]
-    pub module_input: bool,
     /// Do not automatically run the bytecode verifier
     #[clap(long = "no-verify")]
     pub no_verify: bool,
@@ -53,13 +47,6 @@ fn print_error_and_exit(verification_error: &VMError) -> ! {
 fn do_verify_module(module: &CompiledModule, dependencies: &[CompiledModule]) {
     verify_module_unmetered(module).unwrap_or_else(|err| print_error_and_exit(&err));
     if let Err(err) = dependencies::verify_module(module, dependencies) {
-        print_error_and_exit(&err);
-    }
-}
-
-fn do_verify_script(script: &CompiledScript, dependencies: &[CompiledModule]) {
-    verify_script_unmetered(script).unwrap_or_else(|err| print_error_and_exit(&err));
-    if let Err(err) = dependencies::verify_script(script, dependencies) {
         print_error_and_exit(&err);
     }
 }
@@ -93,12 +80,9 @@ fn main() {
 
     if args.list_dependencies {
         let source = fs::read_to_string(args.source_path.clone()).expect("Unable to read file");
-        let dependency_list = if args.module_input {
+        let dependency_list = {
             let module = parse_module(&source).expect("Unable to parse module");
             module.get_external_deps()
-        } else {
-            let script = parse_script(&source).expect("Unable to parse module");
-            script.get_external_deps()
         };
         println!(
             "{}",
@@ -127,45 +111,23 @@ fn main() {
         }
     };
 
-    if args.module_input {
-        let (compiled_module, source_map) = util::do_compile_module(&args.source_path, &deps_owned);
-        if !args.no_verify {
-            do_verify_module(&compiled_module, &deps_owned);
-        }
-
-        if args.output_source_maps {
-            let source_map_bytes =
-                bcs::to_bytes(&source_map).expect("Unable to serialize source maps for module");
-            write_output(
-                &source_path.with_extension(source_map_extension),
-                &source_map_bytes,
-            );
-        }
-
-        let mut module = vec![];
-        compiled_module
-            .serialize(&mut module)
-            .expect("Unable to serialize module");
-        write_output(&source_path.with_extension(mv_extension), &module);
-    } else {
-        let (compiled_script, source_map) = util::do_compile_script(&args.source_path, &deps_owned);
-        if !args.no_verify {
-            do_verify_script(&compiled_script, &deps_owned);
-        }
-
-        if args.output_source_maps {
-            let source_map_bytes =
-                bcs::to_bytes(&source_map).expect("Unable to serialize source maps for script");
-            write_output(
-                &source_path.with_extension(source_map_extension),
-                &source_map_bytes,
-            );
-        }
-
-        let mut script = vec![];
-        compiled_script
-            .serialize(&mut script)
-            .expect("Unable to serialize script");
-        write_output(&source_path.with_extension(mv_extension), &script);
+    let (compiled_module, source_map) = util::do_compile_module(&args.source_path, &deps_owned);
+    if !args.no_verify {
+        do_verify_module(&compiled_module, &deps_owned);
     }
+
+    if args.output_source_maps {
+        let source_map_bytes =
+            bcs::to_bytes(&source_map).expect("Unable to serialize source maps for module");
+        write_output(
+            &source_path.with_extension(source_map_extension),
+            &source_map_bytes,
+        );
+    }
+
+    let mut module = vec![];
+    compiled_module
+        .serialize(&mut module)
+        .expect("Unable to serialize module");
+    write_output(&source_path.with_extension(mv_extension), &module);
 }

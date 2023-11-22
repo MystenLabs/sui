@@ -51,14 +51,6 @@ pub enum Constraint {
 pub type Constraints = Vec<Constraint>;
 pub type TParamSubst = HashMap<TParamID, Type>;
 
-pub struct LoopInfo(LoopInfo_);
-
-enum LoopInfo_ {
-    NotInLoop,
-    BreakTypeUnknown,
-    BreakType(Box<Type>),
-}
-
 pub struct Local {
     pub mut_: Mutability,
     pub ty: Type,
@@ -73,14 +65,13 @@ pub struct Context<'env> {
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
-    pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Local>,
 
     pub subst: Subst,
     pub constraints: Constraints,
 
-    loop_info: LoopInfo,
+    named_block_map: BTreeMap<Var, Type>,
 
     /// collects all friends that should be added over the course of 'public(package)' calls
     /// structured as (defining module, new friend, location) where `new friend` is usually the
@@ -143,12 +134,11 @@ impl<'env> Context<'env> {
             current_package: None,
             current_module: None,
             current_function: None,
-            current_script_constants: None,
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
-            loop_info: LoopInfo(LoopInfo_::NotInLoop),
             modules: info,
+            named_block_map: BTreeMap::new(),
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
@@ -229,24 +219,12 @@ impl<'env> Context<'env> {
     }
 
     pub fn reset_for_module_item(&mut self) {
-        assert!(
-            matches!(&self.loop_info, LoopInfo(LoopInfo_::NotInLoop)),
-            "ICE loop_info should be reset after the loop"
-        );
+        self.named_block_map = BTreeMap::new();
         self.return_type = None;
         self.locals = UniqueMap::new();
         self.subst = Subst::empty();
         self.constraints = Constraints::new();
         self.current_function = None;
-    }
-
-    pub fn bind_script_constants(&mut self, constants: &UniqueMap<ConstantName, N::Constant>) {
-        assert!(self.current_script_constants.is_none());
-        self.current_script_constants = Some(constants.ref_map(|cname, cdef| ConstantInfo {
-            attributes: cdef.attributes.clone(),
-            defined_loc: cname.loc(),
-            signature: cdef.signature.clone(),
-        }));
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -417,48 +395,24 @@ impl<'env> Context<'env> {
         self.modules.function_info(m, n)
     }
 
-    fn constant_info(&mut self, m_opt: &Option<ModuleIdent>, n: &ConstantName) -> &ConstantInfo {
-        let constants = match m_opt {
-            None => self.current_script_constants.as_ref().unwrap(),
-            Some(m) => &self.module_info(m).constants,
-        };
+    fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+        let constants = &self.module_info(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
 
-    pub fn in_loop(&self) -> bool {
-        match &self.loop_info.0 {
-            LoopInfo_::NotInLoop => false,
-            LoopInfo_::BreakTypeUnknown | LoopInfo_::BreakType(_) => true,
+    // pass in a location for a better error location
+    pub fn named_block_type(&mut self, name: Var, loc: Loc) -> Type {
+        if let Some(ty) = self.named_block_map.get(&name) {
+            ty.clone()
+        } else {
+            let new_type = make_tvar(self, loc);
+            self.named_block_map.insert(name, new_type.clone());
+            new_type
         }
     }
 
-    pub fn get_break_type(&self) -> Option<&Type> {
-        match &self.loop_info.0 {
-            LoopInfo_::NotInLoop | LoopInfo_::BreakTypeUnknown => None,
-            LoopInfo_::BreakType(t) => Some(t),
-        }
-    }
-
-    pub fn set_break_type(&mut self, t: Type) {
-        match &self.loop_info.0 {
-            LoopInfo_::NotInLoop => (),
-            LoopInfo_::BreakTypeUnknown | LoopInfo_::BreakType(_) => {
-                self.loop_info.0 = LoopInfo_::BreakType(Box::new(t))
-            }
-        }
-    }
-
-    pub fn enter_loop(&mut self) -> LoopInfo {
-        std::mem::replace(&mut self.loop_info, LoopInfo(LoopInfo_::BreakTypeUnknown))
-    }
-
-    // Reset loop info and return the loop's break type, if it has one
-    pub fn exit_loop(&mut self, old_info: LoopInfo) -> Option<Type> {
-        match std::mem::replace(&mut self.loop_info, old_info).0 {
-            LoopInfo_::NotInLoop => panic!("ICE exit_loop called while not in a loop"),
-            LoopInfo_::BreakTypeUnknown => None,
-            LoopInfo_::BreakType(t) => Some(*t),
-        }
+    pub fn named_block_type_opt(&self, name: Var) -> Option<Type> {
+        self.named_block_map.get(&name).cloned()
     }
 }
 
@@ -814,10 +768,10 @@ pub fn make_field_type(
 pub fn make_constant_type(
     context: &mut Context,
     loc: Loc,
-    m: &Option<ModuleIdent>,
+    m: &ModuleIdent,
     c: &ConstantName,
 ) -> Type {
-    let in_current_module = m == &context.current_module;
+    let in_current_module = Some(m) == context.current_module.as_ref();
     let (defined_loc, signature) = {
         let ConstantInfo {
             attributes: _,
@@ -827,10 +781,7 @@ pub fn make_constant_type(
         (*defined_loc, signature.clone())
     };
     if !in_current_module {
-        let msg = match m {
-            None => format!("Invalid access of '{}'", c),
-            Some(mident) => format!("Invalid access of '{}::{}'", mident, c),
-        };
+        let msg = format!("Invalid access of '{}::{}'", m, c);
         let internal_msg = "Constants are internal to their module, and cannot can be accessed \
                             outside of their module";
         context.env.add_diag(diag!(

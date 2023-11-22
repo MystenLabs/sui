@@ -3,7 +3,7 @@
 
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useAppsBackend, useElementDimensions } from '@mysten/core';
-import { LoadingIndicator, Text } from '@mysten/ui';
+import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { type ReactNode, useRef } from 'react';
@@ -13,8 +13,6 @@ import Header from '../header/Header';
 import { useNetworkContext } from '~/context';
 import { Banner } from '~/ui/Banner';
 import { Network } from '~/utils/api/DefaultRpcClient';
-import { Link } from '~/ui/Link';
-import { ArrowUpRight12 } from '@mysten/icons';
 
 export type PageLayoutProps = {
 	gradient?: {
@@ -27,30 +25,6 @@ export type PageLayoutProps = {
 };
 
 const DEFAULT_HEADER_HEIGHT = 68;
-
-const suiVisionTestnetUrl = 'https://testnet.suivision.xyz/';
-const suiScanTestnetUrl = 'https://suiscan.xyz/testnet/home';
-
-function TestnetOutageBanner() {
-	return (
-		<div className="flex flex-wrap gap-4">
-			Sui Explorer&apos;s Testnet backend is undergoing maintenance. The following explorers may
-			provide more accurate data at this time:
-			<div className="flex gap-4 max-md:py-3">
-				<Link href={suiVisionTestnetUrl} after={<ArrowUpRight12 className="h-3 w-3 text-steel" />}>
-					<Text variant="bodySmall/medium" color="hero-darkest">
-						SuiVision
-					</Text>
-				</Link>
-				<Link href={suiScanTestnetUrl} after={<ArrowUpRight12 className="h-3 w-3 text-steel" />}>
-					<Text variant="bodySmall/medium" color="hero-darkest">
-						SuiScan
-					</Text>
-				</Link>
-			</div>
-		</div>
-	);
-}
 
 export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
@@ -75,11 +49,9 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 	const [headerHeight] = useElementDimensions(headerRef, DEFAULT_HEADER_HEIGHT);
 
 	const networkDegradeBannerCopy =
-		network === Network.TESTNET ? (
-			<TestnetOutageBanner />
-		) : (
-			"The explorer is running slower than usual. We're working to fix the issue and appreciate your patience."
-		);
+		network === Network.TESTNET
+			? 'Sui Explorer (Testnet) is currently under-going maintenance. Some data may be incorrect or missing.'
+			: "The explorer is running slower than usual. We're working to fix the issue and appreciate your patience.";
 
 	return (
 		<div className="relative min-h-screen w-full">

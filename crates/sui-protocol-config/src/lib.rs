@@ -94,6 +94,8 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Update semantics of `sui::transfer::receive` and add `sui::transfer::public_receive`.
 // Version 32: Add delete functions for VerifiedID and VerifiedIssuer.
 //             Add sui::token module to sui framework.
+//             Enable transfer to object in testnet.
+//             Enable Narwhal CertificateV2 on mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -340,6 +342,10 @@ struct FeatureFlags {
     // If true, recompute has_public_transfer from the type instead of what is stored in the object
     #[serde(skip_serializing_if = "is_false")]
     recompute_has_public_transfer_in_execution: bool,
+
+    // If true, multisig containing zkLogin sig is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_zklogin_in_multisig: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1034,6 +1040,10 @@ impl ProtocolConfig {
         self.feature_flags.verify_legacy_zklogin_address
     }
 
+    pub fn accept_zklogin_in_multisig(&self) -> bool {
+        self.feature_flags.accept_zklogin_in_multisig
+    }
+
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
@@ -1624,11 +1634,6 @@ impl ProtocolConfig {
                     }
 
                     cfg.random_beacon_reduction_allowed_delta = Some(800);
-                    // Only enable random beacon on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
-                        cfg.feature_flags.random_beacon = true;
-                    }
                     // Only enable effects v2 on devnet and testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1648,7 +1653,23 @@ impl ProtocolConfig {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
                 }
-                32 => {}
+                32 => {
+                    cfg.feature_flags.accept_zklogin_in_multisig = true;
+                    // enable receiving objects in devnet and testnet
+                    if chain != Chain::Mainnet {
+                        cfg.transfer_receive_object_cost_base = Some(52);
+                        cfg.feature_flags.receive_objects = true;
+                    }
+
+                    // Only enable random beacon on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_header_v2 = true;
+                        cfg.feature_flags.random_beacon = true;
+                    }
+
+                    // enable nw cert v2 on mainnet
+                    cfg.feature_flags.narwhal_certificate_v2 = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

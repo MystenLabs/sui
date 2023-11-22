@@ -26,23 +26,6 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 #[derive(Debug, Clone)]
 pub struct Program {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-    pub scripts: BTreeMap<Symbol, Script>,
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-pub struct Script {
-    pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
-    pub package_name: Option<Symbol>,
-    pub attributes: Attributes,
-    pub loc: Loc,
-    pub constants: UniqueMap<ConstantName, Constant>,
-    pub function_name: FunctionName,
-    pub function: Function,
 }
 
 //**************************************************************************************************
@@ -196,10 +179,12 @@ pub enum Statement_ {
         else_block: Block,
     },
     While {
+        name: Var,
         cond: (Block, Box<Exp>),
         block: Block,
     },
     Loop {
+        name: Var,
         block: Block,
         has_break: bool,
     },
@@ -229,8 +214,8 @@ pub enum Command_ {
         from_user: bool,
         exp: Exp,
     },
-    Break,
-    Continue,
+    Break(Var),
+    Continue(Var),
     IgnoreAndPop {
         pop_num: usize,
         exp: Exp,
@@ -405,7 +390,7 @@ impl Command_ {
     pub fn is_terminal(&self) -> bool {
         use Command_::*;
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
             Abort(_) | Return { .. } | Jump { .. } | JumpIf { .. } => true,
         }
@@ -414,7 +399,7 @@ impl Command_ {
     pub fn is_exit(&self) -> bool {
         use Command_::*;
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } | Jump { .. } | JumpIf { .. } => {
                 false
             }
@@ -425,7 +410,7 @@ impl Command_ {
     pub fn is_unit(&self) -> bool {
         use Command_::*;
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Assign(ls, e) => ls.is_empty() && e.is_unit(),
             IgnoreAndPop { exp: e, .. } => e.is_unit(),
 
@@ -438,7 +423,7 @@ impl Command_ {
 
         let mut successors = BTreeSet::new();
         match self {
-            Break | Continue => panic!("ICE break/continue not translated to jumps"),
+            Break(_) | Continue(_) => panic!("ICE break/continue not translated to jumps"),
             Mutate(_, _) | Assign(_, _) | IgnoreAndPop { .. } => {
                 panic!("ICE Should not be last command in block")
             }
@@ -455,17 +440,34 @@ impl Command_ {
         }
         successors
     }
+
+    pub fn is_hlir_terminal(&self) -> bool {
+        use Command_::*;
+        match self {
+            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Break(_) | Continue(_) | Abort(_) | Return { .. } => true,
+            Jump { .. } | JumpIf { .. } => panic!("ICE found jump/jump-if in hlir"),
+        }
+    }
 }
 
 impl Exp {
     pub fn is_unit(&self) -> bool {
         self.exp.value.is_unit()
     }
+
+    pub fn is_unreachable(&self) -> bool {
+        self.exp.value.is_unreachable()
+    }
 }
 
 impl UnannotatedExp_ {
     pub fn is_unit(&self) -> bool {
         matches!(self, UnannotatedExp_::Unit { case: _case })
+    }
+
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self, UnannotatedExp_::Unreachable)
     }
 }
 
@@ -771,43 +773,13 @@ impl std::fmt::Display for Label {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, scripts } = self;
+        let Program { modules } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
             w.new_line();
         }
-
-        for (n, s) in scripts {
-            w.write(&format!("script {}", n));
-            w.block(|w| s.ast_debug(w));
-            w.new_line()
-        }
-    }
-}
-
-impl AstDebug for Script {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        let Script {
-            warning_filter,
-            package_name,
-            attributes,
-            loc: _loc,
-            constants,
-            function_name,
-            function,
-        } = self;
-        warning_filter.ast_debug(w);
-        if let Some(n) = package_name {
-            w.writeln(&format!("{}", n))
-        }
-        attributes.ast_debug(w);
-        for cdef in constants.key_cloned_iter() {
-            cdef.ast_debug(w);
-            w.new_line();
-        }
-        (*function_name, function).ast_debug(w);
     }
 }
 
@@ -1114,17 +1086,25 @@ impl AstDebug for Statement_ {
                 w.write(" else ");
                 w.block(|w| else_block.ast_debug(w));
             }
-            S::While { cond, block } => {
-                w.write("while (");
+            S::While { name, cond, block } => {
+                w.write("while@");
+                name.ast_debug(w);
+                w.write(" (");
                 cond.ast_debug(w);
                 w.write(")");
                 w.block(|w| block.ast_debug(w))
             }
-            S::Loop { block, has_break } => {
+            S::Loop {
+                name,
+                block,
+                has_break,
+            } => {
                 w.write("loop");
                 if *has_break {
                     w.write("#has_break");
                 }
+                w.write("@");
+                name.ast_debug(w);
                 w.write(" ");
                 w.block(|w| block.ast_debug(w))
             }
@@ -1159,8 +1139,14 @@ impl AstDebug for Command_ {
                 w.write("return ");
                 e.ast_debug(w);
             }
-            C::Break => w.write("break"),
-            C::Continue => w.write("continue"),
+            C::Break(name) => {
+                w.write("break@");
+                name.ast_debug(w);
+            }
+            C::Continue(name) => {
+                w.write("continue");
+                name.ast_debug(w);
+            }
             C::IgnoreAndPop { pop_num, exp } => {
                 w.write("pop ");
                 w.comma(0..*pop_num, |w, _| w.write("_"));

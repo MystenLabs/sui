@@ -26,30 +26,13 @@ pub const FAKE_NATIVE_ATTR: AttributeName_ =
 /// verify `FAKE_NATIVE_ATTR` usage
 pub fn function(
     env: &mut CompilationEnv,
-    module_opt: Option<ModuleIdent>,
+    module: ModuleIdent,
     function_name: FunctionName,
     function: &N::Function,
 ) {
     let loc = match function.attributes.get_loc_(&FAKE_NATIVE_ATTR) {
         None => return,
         Some(loc) => *loc,
-    };
-    let module = match module_opt {
-        Some(module) => module,
-        None => {
-            let msg = format!(
-                "Invalid usage of '{}' attribute to map function to bytecode instruction.",
-                NativeAttribute::BYTECODE_INSTRUCTION
-            );
-            let smsg = "Script functions are never mapped to bytecode instructions";
-            let diag = diag!(
-                Attributes::InvalidBytecodeInst,
-                (loc, msg),
-                (function_name.loc(), smsg),
-            );
-            env.add_diag(diag);
-            return;
-        }
     };
     if resolve_builtin(&module, &function_name).is_none() {
         let attr_msg = format!(

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_runtime::LocalProtocolConfig;
+use crate::object_runtime::{get_all_uids, LocalProtocolConfig};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
@@ -25,7 +25,6 @@ use sui_types::{
     storage::ChildObjectResolver,
 };
 
-use super::get_all_uids;
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
@@ -80,13 +79,15 @@ pub(crate) enum ObjectResult<V> {
     Loaded(V),
 }
 
+type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
+
 impl<'a> Inner<'a> {
     fn receive_object_from_store(
         &self,
         owner: ObjectID,
         child: ObjectID,
         version: SequenceNumber,
-    ) -> PartialVMResult<Option<(MoveObject, DynamicallyLoadedObjectMetadata)>> {
+    ) -> PartialVMResult<LoadedWithMetadataResult<MoveObject>> {
         let child_opt = self
             .resolver
             .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
@@ -361,7 +362,7 @@ impl<'a> ChildObjectStore<'a> {
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
-    ) -> PartialVMResult<Option<(ObjectResult<Value>, DynamicallyLoadedObjectMetadata)>> {
+    ) -> PartialVMResult<LoadedWithMetadataResult<ObjectResult<Value>>> {
         let Some((obj, obj_meta)) =
             self.inner
                 .receive_object_from_store(parent, child, child_version)?

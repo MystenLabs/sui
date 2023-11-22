@@ -14,10 +14,20 @@ const MAX_QUERY_DEPTH: u32 = 20;
 const MAX_QUERY_NODES: u32 = 200;
 const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
+const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page on a connection
 
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
+
+// Default values for the server connection configuration.
+pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
+pub(crate) const DEFAULT_SERVER_CONNECTION_HOST: &str = "127.0.0.1";
+pub(crate) const DEFAULT_SERVER_DB_URL: &str =
+    "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2";
+pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
+pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
+pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
@@ -25,6 +35,7 @@ pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
     pub(crate) db_url: String,
+    pub(crate) db_pool_size: u32,
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
 }
@@ -55,6 +66,8 @@ pub struct Limits {
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
     #[serde(default)]
+    pub(crate) max_page_size: u64,
+    #[serde(default)]
     pub(crate) request_timeout_ms: u64,
 }
 
@@ -73,6 +86,14 @@ impl Default for Ide {
     }
 }
 
+impl Ide {
+    pub fn new(ide_title: Option<String>) -> Self {
+        Self {
+            ide_title: ide_title.unwrap_or_default(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Experiments {
@@ -87,6 +108,7 @@ impl ConnectionConfig {
         port: Option<u16>,
         host: Option<String>,
         db_url: Option<String>,
+        db_pool_size: Option<u32>,
         prom_url: Option<String>,
         prom_port: Option<u16>,
     ) -> Self {
@@ -95,6 +117,7 @@ impl ConnectionConfig {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
             db_url: db_url.unwrap_or(default.db_url),
+            db_pool_size: db_pool_size.unwrap_or(default.db_pool_size),
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
         }
@@ -109,6 +132,10 @@ impl ConnectionConfig {
 
     pub fn db_url(&self) -> String {
         self.db_url.clone()
+    }
+
+    pub fn db_pool_size(&self) -> u32 {
+        self.db_pool_size
     }
 
     pub fn server_address(&self) -> String {
@@ -154,6 +181,11 @@ impl ServiceConfig {
         BigInt::from(self.limits.max_db_query_cost)
     }
 
+    /// Maximum number of elements allowed on a single page of a connection.
+    async fn max_page_size(&self) -> BigInt {
+        BigInt::from(self.limits.max_page_size)
+    }
+
     /// Maximum time in milliseconds that will be spent to serve one request.
     async fn request_timeout_ms(&self) -> BigInt {
         BigInt::from(self.limits.request_timeout_ms)
@@ -168,11 +200,12 @@ impl ServiceConfig {
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
-            port: 8000,
-            host: "127.0.0.1".to_string(),
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
-            prom_url: "0.0.0.0".to_string(),
-            prom_port: 9184,
+            port: DEFAULT_SERVER_CONNECTION_PORT,
+            host: DEFAULT_SERVER_CONNECTION_HOST.to_string(),
+            db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            db_pool_size: DEFAULT_SERVER_DB_POOL_SIZE,
+            prom_url: DEFAULT_SERVER_PROM_HOST.to_string(),
+            prom_port: DEFAULT_SERVER_PROM_PORT,
         }
     }
 }
@@ -184,6 +217,7 @@ impl Default for Limits {
             max_query_nodes: MAX_QUERY_NODES,
             max_query_payload_size: MAX_QUERY_PAYLOAD_SIZE,
             max_db_query_cost: MAX_DB_QUERY_COST,
+            max_page_size: MAX_PAGE_SIZE,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
         }
     }
@@ -278,6 +312,7 @@ mod tests {
                 max-query-nodes = 300
                 max-query-payload-size = 2000
                 max-db-query-cost = 50
+                max-page-size = 50
                 request-timeout-ms = 27000
             "#,
         )
@@ -289,6 +324,7 @@ mod tests {
                 max_query_nodes: 300,
                 max_query_payload_size: 2000,
                 max_db_query_cost: 50,
+                max_page_size: 50,
                 request_timeout_ms: 27_000,
             },
             ..Default::default()
@@ -345,6 +381,7 @@ mod tests {
                 max-query-nodes = 320
                 max-query-payload-size = 200
                 max-db-query-cost = 20
+                max-page-size = 20
                 request-timeout-ms = 30000
 
                 [experiments]
@@ -359,6 +396,7 @@ mod tests {
                 max_query_nodes: 320,
                 max_query_payload_size: 200,
                 max_db_query_cost: 20,
+                max_page_size: 20,
                 request_timeout_ms: 30_000,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),

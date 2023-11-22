@@ -7,11 +7,3 @@ module M {
     }
 }
 }
-
-script {
-    fun t() {
-        let x = CONSTANT; x;
-        let y = Self::CONSTANT; y;
-        0 + CONSTANT + Self::CONSTANT;
-    }
-}

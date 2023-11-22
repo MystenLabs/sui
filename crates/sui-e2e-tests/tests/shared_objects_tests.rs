@@ -6,6 +6,7 @@ use futures::join;
 use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
+use sui_config::node::OverloadThresholdConfig;
 use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -528,7 +529,13 @@ async fn access_clock_object_test() {
 
 #[sim_test]
 async fn shared_object_sync() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        // Set the threshold high enough so it won't be triggered.
+        .with_overload_threshold_config(OverloadThresholdConfig {
+            max_txn_age_in_queue: Duration::from_secs(60),
+        })
+        .build()
+        .await;
     let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,

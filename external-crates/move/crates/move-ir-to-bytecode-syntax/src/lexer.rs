@@ -76,7 +76,6 @@ pub enum Tok {
     JumpIfFalse,
     Label,
     Let,
-    Main,
     Module,
     Move,
     Native,
@@ -267,7 +266,6 @@ impl<'input> Lexer<'input> {
                             "vec_push_back" => (Tok::VecPushBack, len),
                             "vec_pop_back" => (Tok::VecPopBack, len),
                             "vec_swap" => (Tok::VecSwap, len),
-                            "main" => (Tok::Main, len),
                             _ => {
                                 if let Some(stripped) = name.strip_prefix("vec_pack_") {
                                     match stripped.parse::<u64>() {
@@ -466,7 +464,6 @@ fn get_name_token(name: &str) -> Tok {
         "jump_if_false" => Tok::JumpIfFalse,
         "label" => Tok::Label,
         "let" => Tok::Let,
-        "main" => Tok::Main,
         "module" => Tok::Module,
         "native" => Tok::Native,
         "invariant" => Tok::Invariant,

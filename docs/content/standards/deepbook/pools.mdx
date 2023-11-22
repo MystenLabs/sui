@@ -7,7 +7,7 @@ At the center of DeepBook is a hyper-efficient per-current pair shared-object Po
 
 For each base and quote asset trading pair, a globally shared Pool is created to 1) bookkeep open orders on the order book and 2) handle placement, cancelation, and settlement of orders. Under this architecture, transactions involving different trading pairs can be easily parallelized to maximize throughput.
 
-```rust
+```move
 struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
     // The key to the following Critbit Tree are order prices.
     id: UID,
@@ -33,5 +33,4 @@ struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
     base_custodian: Custodian<BaseAsset>,
     quote_custodian: Custodian<QuoteAsset>,
 }
-
 ```
