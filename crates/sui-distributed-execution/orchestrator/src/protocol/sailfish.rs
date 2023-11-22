@@ -171,7 +171,7 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
     fn client_command<I>(
         &self,
         instances: I,
-        _parameters: &BenchmarkParameters<SailfishBenchmarkType>,
+        parameters: &BenchmarkParameters<SailfishBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
@@ -192,7 +192,11 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
                         Self::BIN_NAME
                     ),
                     "run",
-                    &format!("--id {id} --config-path {}", config_path.display()),
+                    &format!(
+                        "--id {id} --config-path {} --tx-count {}",
+                        config_path.display(),
+                        parameters.load
+                    ),
                 ]
                 .join(" ");
 
