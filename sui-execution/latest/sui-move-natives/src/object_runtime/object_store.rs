@@ -128,7 +128,7 @@ impl<'a> Inner<'a> {
                     )),
                 );
             }
-            match object.data {
+            match object.into_inner().data {
                 Data::Package(_) => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(

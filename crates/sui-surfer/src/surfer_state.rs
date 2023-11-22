@@ -260,7 +260,7 @@ impl SurferState {
 
     async fn discover_entry_functions(&self, package: Object) {
         let package_id = package.id();
-        let move_package = package.data.try_into_package().unwrap();
+        let move_package = package.into_inner().data.try_into_package().unwrap();
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
         let entry_functions: Vec<_> = move_package
             .normalize(

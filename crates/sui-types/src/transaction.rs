@@ -35,7 +35,6 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -2540,7 +2539,7 @@ pub struct ObjectReadResult {
 
 #[derive(Clone, Debug)]
 pub enum ObjectReadResultKind {
-    Object(Arc<Object>),
+    Object(Object),
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
@@ -2548,12 +2547,6 @@ pub enum ObjectReadResultKind {
 
 impl From<Object> for ObjectReadResultKind {
     fn from(object: Object) -> Self {
-        Self::Object(Arc::new(object))
-    }
-}
-
-impl From<Arc<Object>> for ObjectReadResultKind {
-    fn from(object: Arc<Object>) -> Self {
         Self::Object(object)
     }
 }
@@ -2578,7 +2571,7 @@ impl ObjectReadResult {
         self.input_object_kind.object_id()
     }
 
-    pub fn as_object(&self) -> Option<&Arc<Object>> {
+    pub fn as_object(&self) -> Option<&Object> {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
             ObjectReadResultKind::DeletedSharedObject(_, _) => None,
@@ -2589,7 +2582,7 @@ impl ObjectReadResult {
         let objref = gas.compute_object_reference();
         Self {
             input_object_kind: InputObjectKind::ImmOrOwnedMoveObject(objref),
-            object: ObjectReadResultKind::Object(Arc::new(gas.clone())),
+            object: ObjectReadResultKind::Object(gas.clone()),
         }
     }
 
@@ -2839,7 +2832,7 @@ impl InputObjects {
         )
     }
 
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Arc<Object>> {
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
         self.objects
             .into_iter()
             .filter_map(|o| o.as_object().map(|object| (o.id(), object.clone())))
@@ -2860,13 +2853,13 @@ impl InputObjects {
 // ReceivingObjectReadResultKind::PreviouslyReceivedObject.
 #[derive(Clone, Debug)]
 pub enum ReceivingObjectReadResultKind {
-    Object(Arc<Object>),
+    Object(Object),
     // The object was received by some other transaction, and we were not able to read it
     PreviouslyReceivedObject,
 }
 
 impl ReceivingObjectReadResultKind {
-    pub fn as_object(&self) -> Option<&Arc<Object>> {
+    pub fn as_object(&self) -> Option<&Object> {
         match &self {
             Self::Object(object) => Some(object),
             Self::PreviouslyReceivedObject => None,
@@ -2894,7 +2887,7 @@ impl ReceivingObjectReadResult {
 
 impl From<Object> for ReceivingObjectReadResultKind {
     fn from(object: Object) -> Self {
-        Self::Object(Arc::new(object))
+        Self::Object(object)
     }
 }
 

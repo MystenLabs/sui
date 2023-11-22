@@ -1770,7 +1770,12 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
+    let genesis_module = match BuiltInFramework::genesis_objects()
+        .next()
+        .unwrap()
+        .into_inner()
+        .data
+    {
         Data::Package(m) => CompiledModule::deserialize_with_defaults(
             m.serialized_module_map().values().next().unwrap(),
         )
@@ -1864,7 +1869,12 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module = match BuiltInFramework::genesis_objects().next().unwrap().data {
+    let genesis_module = match BuiltInFramework::genesis_objects()
+        .next()
+        .unwrap()
+        .into_inner()
+        .data
+    {
         Data::Package(m) => CompiledModule::deserialize_with_defaults(
             m.serialized_module_map().values().next().unwrap(),
         )

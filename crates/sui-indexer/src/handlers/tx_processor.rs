@@ -118,8 +118,8 @@ impl IndexingPackageCache {
 }
 
 pub struct InMemObjectCache {
-    id_map: HashMap<ObjectID, Arc<Object>>,
-    seq_map: HashMap<(ObjectID, SequenceNumber), Arc<Object>>,
+    id_map: HashMap<ObjectID, Object>,
+    seq_map: HashMap<(ObjectID, SequenceNumber), Object>,
 }
 
 impl InMemObjectCache {
@@ -130,17 +130,16 @@ impl InMemObjectCache {
         }
     }
 
-    pub fn insert_object(&mut self, object: Object) {
-        let obj = Arc::new(object);
+    pub fn insert_object(&mut self, obj: Object) {
         self.id_map.insert(obj.id(), obj.clone());
         self.seq_map.insert((obj.id(), obj.version()), obj);
     }
 
     pub fn get(&self, id: &ObjectID, version: Option<&SequenceNumber>) -> Option<&Object> {
         if let Some(version) = version {
-            self.seq_map.get(&(*id, *version)).map(|o| o.as_ref())
+            self.seq_map.get(&(*id, *version))
         } else {
-            self.id_map.get(id).map(|o| o.as_ref())
+            self.id_map.get(id)
         }
     }
 }

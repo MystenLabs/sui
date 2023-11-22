@@ -34,7 +34,7 @@ mod checked {
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::PackageObjectArc;
+    use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
@@ -48,7 +48,7 @@ mod checked {
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::{
             BackingPackageStore, ChildObjectResolver, DeleteKind, DeleteKindWithOldVersion,
             ObjectChange, WriteKind,
@@ -1024,7 +1024,7 @@ mod checked {
     fn package_for_linkage(
         session: &Session<LinkageView>,
         package_id: ObjectID,
-    ) -> VMResult<PackageObjectArc> {
+    ) -> VMResult<PackageObject> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
@@ -1150,10 +1150,10 @@ mod checked {
         session: &mut Session<'state, 'vm, LinkageView<'state>>,
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object {
+        let ObjectInner {
             data: Data::Move(object),
             ..
-        } = object
+        } = object.as_inner()
         else {
             invariant_violation!("Expected a Move object");
         };

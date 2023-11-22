@@ -303,12 +303,13 @@ impl TryFrom<Object> for sui_types::object::Object {
                     BTreeMap::new(),
                 )
                 .unwrap();
-                sui_types::object::Object {
+                sui_types::object::ObjectInner {
                     data: Data::Package(package),
                     owner,
                     previous_transaction,
                     storage_rebate: o.storage_rebate as u64,
                 }
+                .into()
             }
             // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
             ObjectType::Struct(object_type) => unsafe {
@@ -328,12 +329,13 @@ impl TryFrom<Object> for sui_types::object::Object {
                 )
                 .unwrap();
 
-                sui_types::object::Object {
+                sui_types::object::ObjectInner {
                     data: Data::Move(object),
                     owner,
                     previous_transaction,
                     storage_rebate: o.storage_rebate as u64,
                 }
+                .into()
             },
         })
     }
