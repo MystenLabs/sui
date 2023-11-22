@@ -104,7 +104,7 @@ jobs:
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
       with:
-        channel-id: 'test-notifications'
+        channel-id: 'simtest-nightly'
         payload: |
           {
             "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
