@@ -83,7 +83,6 @@ struct Context<'env> {
     used_locals: BTreeSet<N::Var_>,
     nominal_blocks: Vec<(Symbol, u16, NominalBlockType)>,
     nominal_block_id: u16,
-    used_labels: BTreeSet<N::Var_>,
     /// Type parameters used in a function (they have to be cleared after processing each function).
     used_fun_tparams: BTreeSet<TParamID>,
     /// Indicates if the compiler is currently translating a function (set to true before starting
@@ -169,7 +168,6 @@ impl<'env> Context<'env> {
             local_count: BTreeMap::new(),
             nominal_blocks: vec![],
             nominal_block_id: 0,
-            used_labels: BTreeSet::new(),
             used_locals: BTreeSet::new(),
             used_fun_tparams: BTreeSet::new(),
             translating_fun: false,
@@ -510,7 +508,6 @@ impl<'env> Context<'env> {
                     id: *id,
                     color: 0,
                 };
-                self.used_labels.insert(nvar_);
                 Some(BlockLabel(sp(loc, nvar_)))
             } else {
                 let msg = format!(
@@ -540,7 +537,6 @@ impl<'env> Context<'env> {
     fn exit_nominal_block(&mut self, loc: Loc) -> BlockLabel {
         let (name, id, _) = self.nominal_blocks.pop().unwrap();
         let nvar_ = N::Var_ { name, id, color: 0 };
-        self.used_labels.insert(nvar_);
         BlockLabel(sp(loc, nvar_))
     }
 }
