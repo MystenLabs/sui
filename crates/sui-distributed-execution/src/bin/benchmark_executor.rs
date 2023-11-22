@@ -1,6 +1,7 @@
 use clap::*;
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr};
+use std::time::Duration;
 use std::{fs, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
 use sui_distributed_execution::sw_agent::*;
@@ -68,8 +69,17 @@ struct Args {
     #[arg(long, default_value_t = 1_000, global = true)]
     pub tx_count: u64,
 
+    /// The minimum duration of the benchmark in seconds.
+    #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
+    duration: Duration,
+
     #[clap(subcommand)]
     operation: Operation,
+}
+
+fn parse_duration(arg: &str) -> Result<Duration, std::num::ParseIntError> {
+    let seconds = arg.parse()?;
+    Ok(Duration::from_secs(seconds))
 }
 
 #[derive(Parser)]
@@ -109,6 +119,7 @@ enum Operation {
 async fn main() {
     let args = Args::parse();
     let tx_count = args.tx_count;
+    let duration = args.duration;
 
     match args.operation {
         Operation::Run { id, config_path } => {
@@ -116,6 +127,8 @@ async fn main() {
             let mut global_config = GlobalConfig::from_path(config_path);
             global_config.0.entry(id).and_modify(|e| {
                 e.attrs.insert("tx_count".to_string(), tx_count.to_string());
+                e.attrs
+                    .insert("duration".to_string(), duration.as_secs().to_string());
             });
 
             // Spawn the executor shard (blocking).

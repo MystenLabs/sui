@@ -151,9 +151,10 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
                     ),
                     "run",
                     &format!(
-                        "--id {id} --config-path {} --tx-count {}",
+                        "--id {id} --config-path {} --tx-count {} --duration {}",
                         config_path.display(),
-                        parameters.load
+                        parameters.load,
+                        parameters.duration.as_secs()
                     ),
                 ]
                 .join(" ");
@@ -193,9 +194,10 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
                     ),
                     "run",
                     &format!(
-                        "--id {id} --config-path {} --tx-count {}",
+                        "--id {id} --config-path {} --tx-count {} --duration {}",
                         config_path.display(),
-                        parameters.load
+                        parameters.load,
+                        parameters.duration.as_secs()
                     ),
                 ]
                 .join(" ");
