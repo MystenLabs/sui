@@ -55,7 +55,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -165,7 +165,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -275,7 +275,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -385,7 +385,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -495,7 +495,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -605,7 +605,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
@@ -715,7 +715,7 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 2
+      num-epochs-to-retain: 0
       max-checkpoints-in-batch: 10
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
