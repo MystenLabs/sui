@@ -81,6 +81,7 @@ jobs:
       uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
     
     - name: Get sui commit
+      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -88,6 +89,7 @@ jobs:
         echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
 
     - name: Get link to logs
+      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -95,12 +97,12 @@ jobs:
         echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
 
     - name: Post to slack
+      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       uses: slackapi/slack-github-action@v1.24.0 # pin@v1.21.0
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
-      if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
       with:
         channel-id: 'simtest-nightly'
         payload: |
@@ -131,7 +133,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
+                  "text": "<@sui-core>, to debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
                 }
               }
             ]
