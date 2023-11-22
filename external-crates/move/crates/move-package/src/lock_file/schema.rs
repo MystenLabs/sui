@@ -110,6 +110,28 @@ impl Packages {
     }
 }
 
+impl ToolchainVersioning {
+    /// Read toolchain versioning info from the lock file. Returns successfully with None if
+    /// parsing the lock file succeeds but an entry for `[toolchain-versioning]` does not exist.
+    pub fn read(lock: &mut impl Read) -> Result<Option<ToolchainVersioning>> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+
+        #[derive(Deserialize)]
+        struct TV {
+            #[serde(rename = "toolchain-versioning")]
+            toolchain_versioning: Option<ToolchainVersioning>,
+        }
+        let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
+            .context("Deserializing toolchain version")?;
+
+        Ok(value.toolchain_versioning)
+    }
+}
+
 /// Read lock file header after verifying that the version of the lock is not newer than the version
 /// supported by this library.
 #[allow(clippy::ptr_arg)] // Allowed to avoid interface changes.
