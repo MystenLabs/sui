@@ -4,8 +4,11 @@
 /// Helper module for working with drand outputs.
 /// Currently works with chain 52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971 (quicknet).
 ///
-/// See examples in drand_based_lottery.move.
+/// See examples of how to use this in drand_based_lottery.move and drand_based_scratch_card.move.
 ///
+/// If you want to use this module with the default network which has a 30s period, you need to change the public key,
+/// genesis time and include the previous signature in verify_drand_signature. See https://drand.love/developer/ or the
+/// previous version of this file: https://github.com/MystenLabs/sui/blob/92df778310679626f00bc4226d7f7a281322cfdd/sui_programmability/examples/games/sources/drand_lib.move
 module games::drand_lib {
     use std::hash::sha2_256;
     use std::vector;
