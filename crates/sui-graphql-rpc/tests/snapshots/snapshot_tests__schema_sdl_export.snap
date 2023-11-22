@@ -557,6 +557,11 @@ type MoveModule {
 	fileFormatVersion: Int!
 	moduleId: MoveModuleId!
 	"""
+	Modules that this module considers friends (these modules can access `public(friend)`
+	functions from this module).
+	"""
+	friendConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection!
+	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
 	bytes: Base64
