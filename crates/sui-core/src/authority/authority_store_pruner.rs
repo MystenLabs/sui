@@ -423,7 +423,7 @@ impl AuthorityStorePruner {
                             checkpoint_number,
                             metrics.clone(),
                             indirect_objects_threshold,
-                            config.enable_pruning_tombstones,
+                            !config.killswitch_tombstone_pruning,
                         )
                         .await?
                     }
@@ -453,7 +453,7 @@ impl AuthorityStorePruner {
                         checkpoint_number,
                         metrics.clone(),
                         indirect_objects_threshold,
-                        config.enable_pruning_tombstones,
+                        !config.killswitch_tombstone_pruning,
                     )
                     .await?
                 }
