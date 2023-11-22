@@ -228,8 +228,12 @@ impl BuildConfig {
             .unwrap_or_else(|| PathBuf::from("."));
         let mut lock = LockFile::from(install_dir, lock_file)?;
         lock.seek(SeekFrom::Start(0))?;
-        let build_config = self.clone();
-        update_compiler_toolchain(&mut lock, compiler_version, &build_config)?;
+        update_compiler_toolchain(
+            &mut lock,
+            compiler_version,
+            self.default_edition.unwrap_or_default(),
+            self.default_flavor.unwrap_or_default(),
+        )?;
         let _mutx = PackageLock::lock();
         lock.commit(lock_file)?;
         Ok(())
