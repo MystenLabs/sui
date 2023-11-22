@@ -3632,7 +3632,7 @@ pub fn parse_file_string(
     input: &str,
     package: Option<Symbol>,
 ) -> Result<(Vec<Definition>, MatchedFileCommentMap), Diagnostics> {
-    let edition = env.syntax_edition(package);
+    let edition = env.edition(package);
     let mut tokens = Lexer::new(input, file_hash, edition);
     match tokens.advance() {
         Err(err) => Err(Diagnostics::from(vec![*err])),

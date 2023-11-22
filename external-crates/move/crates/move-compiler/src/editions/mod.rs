@@ -9,7 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{diag, shared::CompilationEnv};
+use crate::{diag, diagnostics::Diagnostic, shared::CompilationEnv};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -35,6 +35,8 @@ pub enum FeatureGate {
     PositionalFields,
     LetMut,
     Move2024Optimizations,
+    Move2024Keywords,
+    BlockLabels,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -44,17 +46,11 @@ pub enum Flavor {
     Sui,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
-pub enum SyntaxEdition {
-    Legacy,
-    E2024,
-}
-
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
 
-pub fn check_feature(
+pub fn check_feature_or_error(
     env: &mut CompilationEnv,
     edition: Edition,
     feature: FeatureGate,
@@ -62,29 +58,34 @@ pub fn check_feature(
 ) -> bool {
     let supports_feature = edition.supports(feature);
     if !supports_feature {
-        let valid_editions = valid_editions_for_feature(feature)
-            .into_iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let mut diag = diag!(
-            Editions::FeatureTooNew,
-            (
-                loc,
-                format!(
-                    "{} not supported by current edition '{edition}', \
-                    only '{valid_editions}' support this feature",
-                    feature.error_prefix(),
-                )
-            )
-        );
-        diag.add_note(
-            "You can update the edition in the 'Move.toml', \
-            or via command line flag if invoking the compiler directly.",
-        );
-        env.add_diag(diag);
+        env.add_diag(create_feature_error(edition, feature, loc));
     }
     supports_feature
+}
+
+pub fn create_feature_error(edition: Edition, feature: FeatureGate, loc: Loc) -> Diagnostic {
+    assert!(!edition.supports(feature));
+    let valid_editions = valid_editions_for_feature(feature)
+        .into_iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut diag = diag!(
+        Editions::FeatureTooNew,
+        (
+            loc,
+            format!(
+                "{} not supported by current edition '{edition}', \
+                only '{valid_editions}' support this feature",
+                feature.error_prefix(),
+            )
+        )
+    );
+    diag.add_note(
+        "You can update the edition in the 'Move.toml', \
+        or via command line flag if invoking the compiler directly.",
+    );
+    diag
 }
 
 pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
@@ -110,6 +111,8 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::DotCall,
     FeatureGate::PositionalFields,
     FeatureGate::LetMut,
+    FeatureGate::Move2024Keywords,
+    FeatureGate::BlockLabels,
 ];
 
 impl Edition {
@@ -130,13 +133,6 @@ impl Edition {
         SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
     }
 
-    pub fn syntax(&self) -> SyntaxEdition {
-        match *self {
-            Self::LEGACY => SyntaxEdition::Legacy,
-            Self::E2024_ALPHA => SyntaxEdition::E2024,
-            _ => self.unknown_edition_panic(),
-        }
-    }
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
         match *self {
@@ -193,6 +189,8 @@ impl FeatureGate {
             FeatureGate::PositionalFields => "Positional fields are",
             FeatureGate::LetMut => "'mut' variable modifiers are",
             FeatureGate::Move2024Optimizations => "Move 2024 optimizations are",
+            FeatureGate::Move2024Keywords => "Move 2024 keywords are",
+            FeatureGate::BlockLabels => "Block labels are",
         }
     }
 }
