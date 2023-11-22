@@ -59,11 +59,20 @@ module scratch_off::game {
         /// The vector of tickets and their corresponding prize winnings in the pool
         /// of winning tickets. (tickets left, prize awarded)
         winning_tickets: vector<PrizeStruct>,
-        /// Odds of getting a winning ticket
-        winning_ticket_odds: u64,
-        tickets_left: u64,
+        /// Total number of losing tickets
+        losing_tickets_left: u64,
+        /// Total number of winning tickets
+        winning_tickets_left: u64,
+        /// Total number of tickets originally available
+        original_ticket_count: u64,
+        /// Total number of tickets issued
+        tickets_issued: u64,
         public_key: vector<u8>,
 	}     
+
+    public fun total_tickets<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.winning_tickets_left + store.losing_tickets_left
+    }
 
     /// Initializes the store with all of the lottery tickets.
     /// We allow the user of the store.
@@ -73,7 +82,7 @@ module scratch_off::game {
         coin: Coin<Asset>, 
         number_of_prizes: vector<u64>,
         value_of_prizes: vector<u64>,
-        winning_ticket_odds: u64,
+        max_tickets_issued: u64,
         public_key: vector<u8>,
         ctx: &mut TxContext
     ): Coin<Asset> {
@@ -84,7 +93,7 @@ module scratch_off::game {
         let winning_tickets = vector<PrizeStruct>[];
         let idx = 0;
         let prize_pool = balance::zero<Asset>();
-        let ticket_count = 0;
+        let winning_ticket_count = 0;
 
         while (idx < number_of_prizes_len) {
             let target_prize_amount = vector::pop_back(&mut number_of_prizes);
@@ -100,18 +109,22 @@ module scratch_off::game {
             let target_amount = target_prize_amount * target_prize_value;
             // Pull the required balance from the coin and stuff it into a balance.
             balance::join(&mut prize_pool, coin::into_balance(coin::split(&mut coin, target_amount, ctx)));
-            ticket_count = ticket_count + target_prize_amount;
+            winning_ticket_count = winning_ticket_count + target_prize_amount;
             idx = idx + 1;
         };
+
+        assert!(max_tickets_issued == winning_ticket_count, EInvalidInputs);
 
         let new_store = ConvenienceStore<Asset> {
             id: object::new(ctx),
             creator: tx_context::sender(ctx),
             prize_pool,
             winning_tickets,
-            winning_ticket_odds,
+            losing_tickets_left: max_tickets_issued - winning_ticket_count,
+            winning_tickets_left: winning_ticket_count,       
+            original_ticket_count: max_tickets_issued,
+            tickets_issued: 0, 
             public_key,
-            tickets_left: ticket_count,
         };
 
         // Publically share the object
@@ -126,7 +139,8 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-        assert!(store.tickets_left > 0, ENoTicketsLeft);
+        assert!(store.winning_tickets_left > 0, ENoTicketsLeft);
+        store.tickets_issued = store.tickets_issued + 1;
         let ticket = Ticket {
             id: object::new(ctx),
             convenience_store_id: object::uid_to_inner(&store.id),
@@ -143,14 +157,13 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ): ID {
-        assert!(store.tickets_left > 0, ENoTicketsLeft);
+        assert!(store.tickets_issued <= store.original_ticket_count, ENoTicketsLeft);
         let ticket_id = object::uid_to_inner(&ticket.id);
 
         // Modify the ticket holder even if it got transfered so that the evaluation will
         // go to the player who sent this ticket
         ticket.player = tx_context::sender(ctx);
         dof::add(&mut store.id, ticket_id, ticket);
-
         event::emit(NewDrawing<Asset> { 
             ticket_id,
             player: tx_context::sender(ctx),
@@ -176,8 +189,6 @@ module scratch_off::game {
             player
         } = dof::remove<ID, Ticket>(&mut store.id, ticket_id);
 
-        assert!(store.tickets_left > 0, ENoTicketsLeft);
-
         // verify BLS sig
         let msg_vec = object::uid_to_bytes(&id);
         assert!(
@@ -193,14 +204,14 @@ module scratch_off::game {
 
         let is_winner = math::should_draw_prize(
             &hashed_beacon,
-            store.winning_ticket_odds,
-            DEFAULT_TOTAL_ODDS
+            store.winning_tickets_left,
+            store.winning_tickets_left + store.losing_tickets_left
         );
 
         // If we have a winning ticket randomly draw a prize from the prize vector
         if (is_winner) {
             // Randomly pick a ticket from the prizes
-            let target_index = math::get_random_u64_in_range(&hashed_beacon, store.tickets_left);
+            let target_index = math::get_random_u64_in_range(&hashed_beacon, store.winning_tickets_left);
             let current_index = 0;
             // let current_prize = vector::pop_back(&mut store.winning_tickets);
             let winning_tickets_index = 0;
@@ -215,7 +226,7 @@ module scratch_off::game {
             let prize = vector::borrow_mut(&mut store.winning_tickets, winning_tickets_index);
             let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
             prize.ticket_amount = prize.ticket_amount - 1;
-            store.tickets_left = store.tickets_left - 1;
+            store.winning_tickets_left = store.winning_tickets_left - 1;
             transfer::public_transfer(prize_coin, player);
 
             event::emit(DrawingResult<Asset> { 
@@ -224,6 +235,7 @@ module scratch_off::game {
                 amount_won: prize.prize_value,
             });
         } else {
+            store.losing_tickets_left = store.losing_tickets_left - 1;
             event::emit(DrawingResult<Asset> { 
                 ticket_id,
                 player: tx_context::sender(ctx),

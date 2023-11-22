@@ -53,11 +53,11 @@ module scratch_off::math {
     /// 12340 % 10000 = 1234 < 2500 which is true.
     public fun should_draw_prize(
         hashed_beacon: &vector<u8>,
-        prize_odds: u64, 
-        total_lot: u64
+        winning_ticket_amount: u64, 
+        total_tickets: u64
     ): bool {
         let random_number_result = get_random_u64(hashed_beacon);
         // This assumes that mod can hit 0.
-        (random_number_result % total_lot) < prize_odds
+        (random_number_result % total_tickets) < winning_ticket_amount
     }
 }
