@@ -150,7 +150,11 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
                         Self::BIN_NAME
                     ),
                     "run",
-                    &format!("--id {id} --config-path {}", config_path.display()),
+                    &format!(
+                        "--id {id} --config-path {} --tx-count {}",
+                        config_path.display(),
+                        parameters.load
+                    ),
                 ]
                 .join(" ");
 
