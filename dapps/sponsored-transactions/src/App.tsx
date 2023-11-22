@@ -6,7 +6,7 @@ import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { ConnectButton, useWalletKit } from '@mysten/wallet-kit';
 import { ComponentProps, ReactNode, useMemo, useState } from 'react';
 
-import { provider } from './utils/rpc';
+import { client } from './utils/rpc';
 import { sponsorTransaction } from './utils/sponsorTransaction';
 
 const Button = (props: ComponentProps<'button'>) => (
@@ -72,7 +72,7 @@ export function App() {
 								setLoading(true);
 								try {
 									const bytes = await tx!.build({
-										provider,
+										client,
 										onlyTransactionKind: true,
 									});
 									const sponsoredBytes = await sponsorTransaction(currentAccount!.address, bytes);
@@ -118,7 +118,7 @@ export function App() {
 							onClick={async () => {
 								setLoading(true);
 								try {
-									const executed = await provider.executeTransactionBlock({
+									const executed = await client.executeTransactionBlock({
 										transactionBlock: signedTx!.transactionBlockBytes,
 										signature: [signedTx!.signature, sponsoredTx!.signature],
 										options: {
