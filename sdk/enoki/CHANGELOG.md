@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.0.3
+
+### Patch Changes
+
+- dfa523c77: Key storage off of the API key, and add APIs for transaction block sponsorship
+
 ## 0.0.2
 
 ### Patch Changes
