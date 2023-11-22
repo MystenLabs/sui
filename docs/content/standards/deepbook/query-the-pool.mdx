@@ -11,7 +11,7 @@ For limit order, users could query its info using the following API functions
 
 **Function signature for query order info in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
@@ -33,7 +33,7 @@ We provide API functions to query the depth of level2 orders on both ask-side an
 
 **Function signature for get depth of level2 order (ask side) in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
@@ -58,7 +58,7 @@ We provide API function to list all open orders under one account
 
 **Function signature for list all open orders in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
@@ -78,7 +78,7 @@ We provide API function to query the custodian account balance for users. Note t
 
 **Function signature for query user balance in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair

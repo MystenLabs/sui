@@ -4,7 +4,7 @@ title: Debugging
 
 At the moment, there isn't a debugger for Move. To aid with debugging, however, you can use the `std::debug` module to print out arbitrary values. To do so, first import the debug module in your source file:
 
-```rust
+```move
 use std::debug;
 ```
 
@@ -16,7 +16,7 @@ debug::print(&v);
 
 or the following if `v` is already a reference:
 
-```rust
+```move
 debug::print(v);
 ```
 

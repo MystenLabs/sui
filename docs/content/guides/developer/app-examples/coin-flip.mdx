@@ -24,13 +24,13 @@ The full source code for the Move modules, including comments and on overview of
 
 Before you get started, you must initialize a Move package. Open a terminal or console in the directory you want to store the example and run the following command to create an empty package with the name `satoshi_flip`:
 
-```bash
+```shell
 sui move new satoshi_flip
 ```
 
 With that done, it's time to jump into some code. Create a new file in the `sources` directory with the name `house_data.move` and populate the file with the following code:
 
-```rust title='house_data.move'
+```move title='house_data.move'
 module satoshi_flip::house_data {
 
     use sui::object::{Self, UID};
@@ -57,7 +57,7 @@ There are few details to take note of in this code:
 
 Next, add some more code to this module:
 
-```rust title='house_data.move'
+```move title='house_data.move'
     struct HouseData has key {
         id: UID,
         balance: Balance<SUI>,
@@ -93,7 +93,7 @@ Next, add some more code to this module:
 
 So far, you've set up the data structures within the module. Now, create a function that initializes the house data and shares the `HouseData` object:
 
-```rust title='house_data.move'
+```move title='house_data.move'
     public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, ctx: &mut TxContext) {
         assert!(coin::value(&coin) > 0, EInsufficientBalance);
 
@@ -117,7 +117,7 @@ So far, you've set up the data structures within the module. Now, create a funct
 
 With the house data initialized, you also need to add some functions that enable some important administrative tasks for the house to perform:
 
-```rust title='house_data.move'
+```move title='house_data.move'
     public fun top_up(house_data: &mut HouseData, coin: Coin<SUI>, _: &mut TxContext) {
         coin::put(&mut house_data.balance, coin)
     }
@@ -156,7 +156,7 @@ All of these functions contain an `assert!` call that ensures only the house can
 
 You have established the data structure of this module, but without the appropriate functions this data is not accessible. Now add helper functions that return mutable references, read-only references, and test-only functions:
 
-```rust title='house_data.move'
+```move title='house_data.move'
 	// --------------- Mutable References ---------------
 
     public(friend) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
@@ -219,7 +219,7 @@ And with that, your `house_data.move` code is complete.
 
 In the same `sources` directory, now create a file named `counter_nft.move`. A `Counter` object is used as the VRF input for every game that a player plays. First, populate the file with the following:
 
-```rust title='counter_nft.move'
+```move title='counter_nft.move'
 module satoshi_flip::counter_nft {
     use std::vector;
     use sui::object::{Self, UID};
@@ -255,7 +255,7 @@ In addition, you create `mint` and `transfer_to_sender` functions used when the 
 
 You have a `Counter` object, as well as functions that initialize and burn the object, but you need a way to increment the counter. Add the following code to the module:
 
-```rust title='counter_nft.move'
+```move title='counter_nft.move'
     public fun get_vrf_input_and_increment(self: &mut Counter): vector<u8> {
         let vrf_input = object::id_bytes(self);
         let count_to_bytes = bcs::to_bytes(&count(self));
@@ -285,11 +285,11 @@ This code also adds a `count` function that returns the current count, and a tes
 
 ### Game module
 
-Lastly, you need a game module and object that can create a new game, distribute funds after the game, and potentially cancel games. Because this is a one-player game, create an [address-owned object](concepts/object-ownership/address-owned.mdx) rather than a [shared object](/concepts/object-ownership/shared.mdx). 
+Lastly, you need a game module and object that can create a new game, distribute funds after the game, and potentially cancel games. Because this is a one-player game, create an [address-owned object](concepts/object-ownership/address-owned.mdx) rather than a [shared object](/concepts/object-ownership/shared.mdx).
 
 Create the game module. In the `sources` directory, create a new file called `single_player_satoshi.move` and populate with the following:
 
-```rust title='single_player_satoshi.move'
+```move title='single_player_satoshi.move'
 module satoshi_flip::single_player_satoshi {
     use std::string::{Self, String};
     use std::vector;
@@ -345,7 +345,7 @@ Lastly in this section, you also create structs for two [events](concepts/events
 
 Add a struct to the module:
 
-```rust title='single_player_satoshi.move'
+```move title='single_player_satoshi.move'
     struct Game has key, store {
         id: UID,
         guess_placed_epoch: u64,
@@ -361,7 +361,7 @@ The `Game` struct represents a single game and all its information, including th
 
 Now take a look at the main function in this game, `finish_game`:
 
-```rust title='single_player_satoshi.move'
+```move title='single_player_satoshi.move'
     public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseData, ctx: &mut TxContext) {
         assert!(game_exists(house_data, game_id), EGameDoesNotExist);
 
@@ -414,7 +414,7 @@ Now take a look at the main function in this game, `finish_game`:
 
 Now add a function that handles game disputes:
 
-```rust title='single_player_satoshi.move'
+```move title='single_player_satoshi.move'
     public fun dispute_and_win(house_data: &mut HouseData, game_id: ID, ctx: &mut TxContext) {
         assert!(game_exists(house_data, game_id), EGameDoesNotExist);
 
@@ -448,7 +448,7 @@ This function, `dispute_and_win`, ensures that no bet can live in â€œpurgatoryâ€
 
 The rest of the functions are accessors and helper functions used to retrieve values, check if values exist, initialize the game, and so on:
 
-```rust title='single_player_satoshi.move'
+```move title='single_player_satoshi.move'
     // --------------- Read-only References ---------------
 
     public fun guess_placed_epoch(game: &Game): u64 {
@@ -552,7 +552,7 @@ Now that you have written our contracts, it's time to deploy them.
 
 ## Deployment
 
-:::info 
+:::info
 
 See [Publish a Package](guides/developer/first-app/publish) for a more detailed guide on publishing packages or [Sui Client CLI](/references/cli/client.mdx) for a complete reference of `client` commands in the Sui CLI.
 
@@ -627,7 +627,7 @@ Done. Your project has all necessary code to get you started. Lastly, `cd` into 
 ### User interface layout design
 
 The user interface (UI) of this frontend example demonstrates how to use the dApp Kit instead of serving as a production-grade product, so the Player and the House features are in the same UI to simplify the process. In a production solution, your frontend would only contain functionality dedicated to the Player, with a backend service carrying out the interactions with House functions in the smart contracts.
- 
+
 The UI has two columns:
 
 - First column is dedicated to the Player, and all Player-related features live there

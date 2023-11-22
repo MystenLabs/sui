@@ -27,7 +27,7 @@ While the `sui move` command does not support publishing explicitly, you can sti
 
 Continuing the fantasy game example, the `init` function should create a `Forge` object.
 
-``` rust
+```move
     /// Module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         let admin = Forge {
@@ -43,7 +43,7 @@ Continuing the fantasy game example, the `init` function should create a `Forge`
 The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, modify the `sword_create` function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 
-``` rust
+```move
     /// Constructor for creating swords
     public fun new_sword(
         forge: &mut Forge,
@@ -58,7 +58,7 @@ created swords at the end of the function:
 
 Now, create a function to test the module initialization:
 
-``` rust
+```move
     #[test_only] use sui::test_scenario as ts;
 
     #[test_only] const ADMIN: address = @0xAD;

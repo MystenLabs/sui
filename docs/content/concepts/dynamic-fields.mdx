@@ -28,7 +28,7 @@ Unlike an object's regular fields where names must be Move identifiers, dynamic 
 
 Add dynamic fields with the following APIs:
 
-```rust
+```move
 module sui::dynamic_field {
 
 public fun add<Name: copy + drop + store, Value: store>(
@@ -40,7 +40,7 @@ public fun add<Name: copy + drop + store, Value: store>(
 }
 ```
 
-```rust
+```move
 module sui::dynamic_object_field {
 
 public fun add<Name: copy + drop + store, Value: key + store>(
@@ -56,7 +56,7 @@ These functions add a field with name `name` and value `value` to `object`. To s
 
 First, define two object types for the parent and the child:
 
-```rust
+```move
 struct Parent has key {
     id: UID,
 }
@@ -69,7 +69,7 @@ struct Child has key, store {
 
 Next, define an API to add a `Child` object as a dynamic field of a `Parent` object:
 
-```rust
+```move
 use sui::dynamic_object_field as ofield;
 
 public fun add_child(parent: &mut Parent, child: Child) {
@@ -88,7 +88,7 @@ It is an error to overwrite a field (attempt to add a field with the same `<Name
 
 You can reference dynamic fields by reference using the following APIs:
 
-```rust
+```move
 module sui::dynamic_field {
 
 public fun borrow<Name: copy + drop + store, Value: store>(
@@ -114,7 +114,7 @@ Where `object` is the UID of the object the field is defined on and `name` is th
 
 To use these APIs with the `Parent` and `Child` types defined earlier:
 
-```rust
+```move
 use sui::dynamic_object_field as ofield;
 
 public fun mutate_child(child: &mut Child) {
@@ -147,7 +147,7 @@ You must access dynamic object field values through these APIs.  A transaction t
 
 Similar to unwrapping an object held in a regular field, you can remove a dynamic field, exposing its value:
 
-```rust
+```move
 module sui::dynamic_field {
 
 public fun remove<Name: copy + drop + store, Value: store>(
@@ -168,7 +168,7 @@ This function takes a mutable reference to the ID of the `object` the field is d
 
 The value that is returned can be interacted with just like any other value (because it is any other value). For example, removed dynamic object field values can then be `delete`-d or `transfer`-ed to an address (back to the sender):
 
-```rust
+```move
 use sui::dynamic_object_field as ofield;
 use sui::{object, transfer, tx_context};
 use sui::tx_context::TxContext;
@@ -192,6 +192,6 @@ Similar to borrowing a field, a transaction that attempts to remove a non-existe
 
 ### Deleting an object with dynamic fields
 
-It is possible to delete an object that has (potentially non-`drop`) dynamic fields still defined on it. Because field values can be accessed only via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields. 
+It is possible to delete an object that has (potentially non-`drop`) dynamic fields still defined on it. Because field values can be accessed only via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
 
 Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty. To learn more, see [Tables and Bags](./dynamic-fields/tables-bags.mdx).

@@ -4,7 +4,7 @@ title: Witness
 
 A witness is a type with `drop` that proves that its owner was present at the time of some privileged operation, for example having access to the "one-time witness" for a module proves that the code is being run at the time the module was first published. `Coin` uses this pattern to ensure its treasury is only created once.
 
-```rust
+```move
 /// Module that defines a generic type `Guardian<T>` which can only be
 /// instantiated with a witness.
 module examples::guardian {
