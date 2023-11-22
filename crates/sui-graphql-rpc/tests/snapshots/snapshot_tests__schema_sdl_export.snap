@@ -360,28 +360,6 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
-	Epoch's metrics (fees, storage, stakes)
-	"""
-	epochMetrics: EpochMetrics
-	"""
-	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
-	"""
-	protocolConfigs: ProtocolConfigs
-	"""
-	The epoch's corresponding checkpoints
-	"""
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
-	"""
-	The epoch's corresponding transaction blocks
-	"""
-	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
-}
-
-"""
-Rewards and storage fund metrics for an epoch that is not the current epoch.
-"""
-type EpochMetrics {
-	"""
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: BigInt
@@ -417,6 +395,18 @@ type EpochMetrics {
 	who deleted the data associated with past transactions.
 	"""
 	fundOutflow: BigInt
+	"""
+	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The epoch's corresponding checkpoints
+	"""
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	"""
+	The epoch's corresponding transaction blocks
+	"""
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type Event {
