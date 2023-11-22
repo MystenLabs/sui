@@ -488,7 +488,10 @@ impl SequenceWorkerState {
         duration: Duration,
     ) {
         let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
-        println!("Setting up benchmark...");
+        println!(
+            "Setting up benchmark...{tx_count} txs per second for {} seconds",
+            duration.as_secs()
+        );
         let start_time = std::time::Instant::now();
         let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
         let elapsed = start_time.elapsed().as_millis() as f64;
