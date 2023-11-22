@@ -344,6 +344,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     ) -> checkpoints::BoxedQuery<'static, Pg> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
+        // TODO (wlmyng): Reduce redundancy when other multi-gets are refactored
         match sort_order {
             SortOrder::Asc => {
                 query = query.order(checkpoints::dsl::sequence_number.asc());

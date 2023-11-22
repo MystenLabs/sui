@@ -1884,6 +1884,10 @@ pub(crate) fn validate_cursor_pagination(
         return Err(Error::CursorNoBeforeAfter);
     }
 
+    if first.is_some() && last.is_some() {
+        return Err(Error::CursorNoFirstLast);
+    }
+
     Ok(())
 }
 
