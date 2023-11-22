@@ -1,9 +1,15 @@
-processed 8 tasks
+processed 10 tasks
 
-task 1 'create-checkpoint'. lines 16-16:
-Checkpoint created: 11
+task 1 'create-checkpoint'. lines 18-18:
+Checkpoint created: 4
 
-task 2 'run-graphql'. lines 18-25:
+task 2 'create-checkpoint'. lines 20-20:
+Checkpoint created: 8
+
+task 3 'create-checkpoint'. lines 22-22:
+Checkpoint created: 12
+
+task 4 'run-graphql'. lines 24-31:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -25,7 +31,7 @@ Response: {
   }
 }
 
-task 3 'run-graphql'. lines 27-34:
+task 5 'run-graphql'. lines 33-40:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -38,7 +44,7 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 36-43:
+task 6 'run-graphql'. lines 42-49:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -60,14 +66,11 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 45-52:
+task 7 'run-graphql'. lines 51-58:
 Response: {
   "data": {
     "checkpointConnection": {
       "nodes": [
-        {
-          "sequenceNumber": 8
-        },
         {
           "sequenceNumber": 9
         },
@@ -76,13 +79,16 @@ Response: {
         },
         {
           "sequenceNumber": 11
+        },
+        {
+          "sequenceNumber": 12
         }
       ]
     }
   }
 }
 
-task 6 'run-graphql'. lines 54-61:
+task 8 'run-graphql'. lines 60-67:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -104,7 +110,7 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 63-70:
+task 9 'run-graphql'. lines 69-76:
 Response: {
   "data": {
     "checkpointConnection": {
