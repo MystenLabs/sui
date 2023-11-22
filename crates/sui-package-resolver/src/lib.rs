@@ -373,6 +373,22 @@ impl Module {
             .as_str()
     }
 
+    /// Iterate over the structs with names strictly after `after` (or from the beginning), and
+    /// strictly before `before` (or to the end).
+    pub fn structs(
+        &self,
+        after: Option<&str>,
+        before: Option<&str>,
+    ) -> impl Iterator<Item = &str> + Clone {
+        use std::ops::Bound as B;
+        self.struct_index
+            .range::<str, _>((
+                after.map_or(B::Unbounded, B::Excluded),
+                before.map_or(B::Unbounded, B::Excluded),
+            ))
+            .map(|(name, _)| name.as_str())
+    }
+
     /// Get the struct definition corresponding to the struct with name `name` in this module.
     /// Returns `Ok(None)` if the struct cannot be found in this module, `Err(...)` if there was an
     /// error deserializing it, and `Ok(Some(def))` on success.
@@ -1134,6 +1150,120 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, Error::TypeArityMismatch(2, 3)));
+    }
+
+    #[tokio::test]
+    async fn test_structs() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+        let a0 = cache
+            .fetch(AccountAddress::from_str("0xa0").unwrap())
+            .await
+            .unwrap();
+        let m = a0.module("m").unwrap();
+
+        assert_eq!(
+            m.structs(None, None).collect::<Vec<_>>(),
+            vec!["T0", "T1", "T2"],
+        );
+
+        assert_eq!(m.structs(None, Some("T1")).collect::<Vec<_>>(), vec!["T0"],);
+
+        assert_eq!(
+            m.structs(Some("T0"), Some("T2")).collect::<Vec<_>>(),
+            vec!["T1"],
+        );
+
+        assert_eq!(m.structs(Some("T1"), None).collect::<Vec<_>>(), vec!["T2"],);
+
+        let t0 = m.struct_def("T0").unwrap().unwrap();
+        let t1 = m.struct_def("T1").unwrap().unwrap();
+        let t2 = m.struct_def("T2").unwrap().unwrap();
+
+        let expect = expect![[r#"
+            a0::m::T0: StructDef {
+                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+                abilities: [],
+                type_params: [],
+                fields: [
+                    (
+                        "b",
+                        Bool,
+                    ),
+                    (
+                        "v",
+                        Vector(
+                            Struct(
+                                StructRef {
+                                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                    module: "m",
+                                    name: "T1",
+                                },
+                                [
+                                    Struct(
+                                        StructRef {
+                                            package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                            module: "m",
+                                            name: "T2",
+                                        },
+                                        [],
+                                    ),
+                                    U128,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            }
+            a0::m::T1: StructDef {
+                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+                abilities: [],
+                type_params: [
+                    StructTypeParameter {
+                        constraints: [],
+                        is_phantom: false,
+                    },
+                    StructTypeParameter {
+                        constraints: [],
+                        is_phantom: false,
+                    },
+                ],
+                fields: [
+                    (
+                        "a",
+                        Address,
+                    ),
+                    (
+                        "p",
+                        TypeParameter(
+                            0,
+                        ),
+                    ),
+                    (
+                        "q",
+                        Vector(
+                            TypeParameter(
+                                1,
+                            ),
+                        ),
+                    ),
+                ],
+            }
+            a0::m::T2: StructDef {
+                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+                abilities: [],
+                type_params: [],
+                fields: [
+                    (
+                        "x",
+                        U8,
+                    ),
+                ],
+            }"#]];
+        expect.assert_eq(&format!(
+            "a0::m::T0: {t0:#?}\n\
+             a0::m::T1: {t1:#?}\n\
+             a0::m::T2: {t2:#?}"
+        ));
     }
 
     /***** Test Helpers ***************************************************************************/

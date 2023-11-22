@@ -1,4 +1,4 @@
-processed 9 tasks
+processed 11 tasks
 
 init:
 A: object(0,0)
@@ -343,7 +343,7 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 169-203:
+task 8 'run-graphql'. lines 169-202:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -385,6 +385,254 @@ Response: {
           }
         }
       ]
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 205-239:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "all": {
+            "nodes": [
+              {
+                "name": "Coin",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "balance",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "CoinMetadata",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "decimals",
+                    "type": {
+                      "repr": "u8"
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                    }
+                  },
+                  {
+                    "name": "symbol",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::ascii::String"
+                    }
+                  },
+                  {
+                    "name": "description",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                    }
+                  },
+                  {
+                    "name": "icon_url",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::option::Option<0x0000000000000000000000000000000000000000000000000000000000000002::url::Url>"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "CurrencyCreated",
+                "fields": [
+                  {
+                    "name": "decimals",
+                    "type": {
+                      "repr": "u8"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "TreasuryCap",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "total_supply",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Supply<$0>"
+                    }
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          },
+          "after": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              },
+              {
+                "name": "TreasuryCap"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "before": {
+            "nodes": [
+              {
+                "name": "Coin"
+              },
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 241-285:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "prefix": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixAll": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              },
+              {
+                "name": "TreasuryCap"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixExcess": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              },
+              {
+                "name": "TreasuryCap"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "suffix": {
+            "nodes": [
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "suffixAll": {
+            "nodes": [
+              {
+                "name": "Coin"
+              },
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          },
+          "suffixExcess": {
+            "nodes": [
+              {
+                "name": "Coin"
+              },
+              {
+                "name": "CoinMetadata"
+              },
+              {
+                "name": "CurrencyCreated"
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
     }
   }
 }

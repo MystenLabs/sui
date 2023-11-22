@@ -199,5 +199,87 @@ fragment Structs on Object {
             }
         }
     }
+}
 
+
+//# run-graphql
+{
+    object(address: "0x2") {
+        asMovePackage {
+            module(name: "coin") {
+                # Get all the types defined in coin
+                all: structConnection {
+                    nodes {
+                        name
+                        fields {
+                            name
+                            type { repr }
+                        }
+                    }
+                    pageInfo { hasNextPage hasPreviousPage }
+                }
+
+                # After: Coin is the first type and `after` is an
+                # exclusive lower bound, so this query should indicate
+                # there is a previous page, and not include `Coin` in
+                # the output.
+                after: structConnection(after: "Coin") {
+                    nodes { name }
+                    pageInfo { hasNextPage hasPreviousPage }
+                }
+
+                # Before: Similar to `after` but at the end of the range.
+                before: structConnection(before: "TreasuryCap") {
+                    nodes { name }
+                    pageInfo { hasNextPage hasPreviousPage }
+                }
+            }
+        }
+    }
+}
+
+//# run-graphql
+fragment NodeNames on MoveStructConnection {
+    nodes { name }
+    pageInfo { hasNextPage hasPreviousPage }
+}
+
+{
+    object(address: "0x2") {
+        asMovePackage {
+            module(name: "coin") {
+                # Limit the number of elements in the page using
+                # `first` and skip elements using `after`.
+                prefix: structConnection(after: "Coin", first: 2) {
+                    ...NodeNames
+                }
+
+                # Limit has no effect because it matches the total
+                # number of entries in the page.
+                prefixAll: structConnection(after: "Coin", first: 3) {
+                    ...NodeNames
+                }
+
+                # Limit also has no effect, because it exceeds the
+                # total number of entries in the page.
+                prefixExcess: structConnection(after: "Coin", first: 100) {
+                    ...NodeNames
+                }
+
+                # Remaining tests are similar to after/first but with
+                # before/last.
+                suffix: structConnection(before: "TreasuryCap", last: 2) {
+                    ...NodeNames
+                }
+
+                suffixAll: structConnection(before: "TreasuryCap", last: 3) {
+                    ...NodeNames
+                }
+
+                suffixExcess: structConnection(before: "TreasuryCap", last: 100) {
+                    ...NodeNames
+                }
+            }
+        }
+    }
 }
