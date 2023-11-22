@@ -521,6 +521,7 @@ type Epoch {
   validatorSet: ValidatorSet
   startTimestamp: DateTime
   endTimestamp: DateTime
+  epochMetrics: EpochMetrics
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
@@ -539,6 +540,17 @@ type Epoch {
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
+}
+
+type EpochMetrics {
+    totalCheckpoints: BigInt
+    totalGasFees: BigInt
+    totalStakeRewards: BigInt
+    totalStakeSubsidies: BigInt
+    fundSize: BigInt
+    net_inflow: BigInt
+    fund_inflow: BigInt
+    fund_outflow: BigInt
 }
 
 type SuiSystemStateSummary {

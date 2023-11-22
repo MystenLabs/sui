@@ -360,6 +360,10 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	Epoch's metrics (fees, storage, stakes)
+	"""
+	epochMetrics: EpochMetrics
+	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
 	"""
 	protocolConfigs: ProtocolConfigs
@@ -371,6 +375,48 @@ type Epoch {
 	The epoch's corresponding transaction blocks
 	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+}
+
+"""
+Rewards and storage fund metrics for an epoch that is not the current epoch.
+"""
+type EpochMetrics {
+	"""
+	The total number of checkpoints in this epoch.
+	"""
+	totalCheckpoints: BigInt
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch.
+	"""
+	totalGasFees: BigInt
+	"""
+	The total number of stake rewards that were generated in this epoch.
+	"""
+	totalStakeRewards: BigInt
+	"""
+	The total number of stake subsidies in this epoch.
+	"""
+	totalStakeSubsidies: BigInt
+	"""
+	The storage fund available in this epoch.
+	This fund is used to redistribute storage fees from past transactions
+	to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing
+	the net amount of storage fees accumulated in this epoch.
+	"""
+	netInflow: BigInt
+	"""
+	The amount of storage fees paid for transactions executed during the epoch.
+	"""
+	fundInflow: BigInt
+	"""
+	The amount of storage fee rebates paid to users
+	who deleted the data associated with past transactions.
+	"""
+	fundOutflow: BigInt
 }
 
 type Event {
