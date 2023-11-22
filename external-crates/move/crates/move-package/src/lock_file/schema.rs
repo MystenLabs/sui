@@ -7,7 +7,7 @@
 
 use std::io::{Read, Seek, SeekFrom, Write};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
@@ -107,6 +107,25 @@ impl Packages {
             toml::de::from_str::<Schema<Packages>>(&contents).context("Deserializing packages")?;
 
         Ok((packages, read_header(&contents)?))
+    }
+}
+
+impl ToolchainVersioning {
+    /// Read toolchain versioning info from the lock file. Returns successfully with None if
+    /// parsing the lock file succeeds but an entry for `[toolchain-version]` does not exist.
+    pub fn read(lock: &mut impl Read) -> Result<Option<ToolchainVersioning>> {
+        let mut buf = String::new();
+        lock.read_to_string(&mut buf).context("Reading lock file")?;
+        let toml: toml::Value = toml::from_str(&buf)?;
+        let move_ = toml.get("move").ok_or_else(|| anyhow!("No [move] found"))?;
+        match move_.get("toolchain-versioning") {
+            None => Ok(None), // parsing succeeds, no entry for `toolchain-versioning`
+            Some(v) => v
+                .clone()
+                .try_into()
+                .map(Some)
+                .map_err(|e| anyhow!("Error deserializing: {e}")),
+        }
     }
 }
 
