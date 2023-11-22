@@ -465,7 +465,6 @@ pub mod tests {
     }
 
     pub async fn test_query_default_page_limit_impl() {
-        sleep(Duration::from_secs(5)).await;
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
 
@@ -473,8 +472,10 @@ pub mod tests {
         sim.create_checkpoint();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let mut limits = Limits::default();
-        limits.default_page_size = 1;
+        let limits = Limits {
+            default_page_size: 1,
+            ..Default::default()
+        };
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let pg_conn_pool = PgManager::new(reader, limits);
@@ -497,6 +498,23 @@ pub mod tests {
             checkpoints.len(),
             1,
             "Checkpoints should have exactly one element"
+        );
+
+        let resp = schema
+            .execute("{ checkpointConnection(first: 2) { nodes { sequenceNumber } } }")
+            .await;
+        let data = resp.data.clone().into_json().unwrap();
+        let checkpoints = data
+            .get("checkpointConnection")
+            .unwrap()
+            .get("nodes")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        assert_eq!(
+            checkpoints.len(),
+            2,
+            "Checkpoints should return two elements"
         );
     }
 
