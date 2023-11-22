@@ -92,8 +92,8 @@ impl MovePackage {
         let (skip, take) = match (first, last) {
             (Some(first), Some(last)) if last < first => (first - last, last),
             (Some(first), _) => (0, first),
-            (None, Some(last)) => (total - last, last),
-            (None, None) => (0, default_page_size),
+            (None, Some(last)) if last < total => (total - last, last),
+            (None, _) => (0, default_page_size),
         };
 
         let mut connection = Connection::new(false, false);
@@ -118,16 +118,16 @@ impl MovePackage {
             parsed
                 .modules()
                 .range::<String, _>((B::Unbounded, B::Excluded(&fst.cursor)))
-                .count()
-                > 0
+                .next()
+                .is_some()
         });
 
         connection.has_next_page = connection.edges.last().is_some_and(|lst| {
             parsed
                 .modules()
                 .range::<String, _>((B::Excluded(&lst.cursor), B::Unbounded))
-                .count()
-                > 0
+                .next()
+                .is_some()
         });
 
         if connection.edges.is_empty() {
