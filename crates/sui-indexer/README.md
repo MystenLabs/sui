@@ -22,7 +22,7 @@ export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"
 Postgres must run as a service in the background for other tools to communicate with.  If it was installed using homebrew, it can be started as a service with:
 
 ``` sh
-brew service start postgresql@version
+brew services start postgresql@version
 ```
 
 ### Local Development(Recommended)
