@@ -10,7 +10,7 @@ use std::{
 use tempfile::TempDir;
 
 use move_compiler::editions::{Edition, Flavor};
-use move_package::lock_file::schema::ToolchainVersioning;
+use move_package::lock_file::schema::ToolchainVersion;
 use move_package::lock_file::LockFile;
 use move_package::BuildConfig;
 
@@ -85,10 +85,10 @@ fn update_lock_file_toolchain_version() {
     let _ = build_config.update_lock_file_toolchain_version("0.0.1".into());
 
     let mut lock_file = File::open(lock_path).unwrap();
-    let toolchain_versioning =
-        ToolchainVersioning::read(&mut lock_file).expect("Invalid toolchain version");
+    let toolchain_version =
+        ToolchainVersion::read(&mut lock_file).expect("Invalid toolchain version");
     let toml =
-        toml::ser::to_string(&toolchain_versioning).expect("Unable to serialize toolchain version");
+        toml::ser::to_string(&toolchain_version).expect("Unable to serialize toolchain version");
 
     let expected = expect![[r#"
         compiler-version = "0.0.1"
