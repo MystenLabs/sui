@@ -15,6 +15,7 @@ use std::str::FromStr;
 use tap::{Tap, TapFallible};
 
 #[cfg(test)]
+use crate::eth_mock_provider::EthMockProvider;
 use ethers::{
     providers::MockProvider,
     types::{U256, U64},
@@ -34,33 +35,18 @@ impl EthClient<Http> {
 }
 
 #[cfg(test)]
-impl EthClient<MockProvider> {
-    pub async fn new_mocked(provider: MockProvider) -> anyhow::Result<Self> {
+impl EthClient<EthMockProvider> {
+    pub async fn new_mocked(provider: EthMockProvider) -> anyhow::Result<Self> {
         let provider = Provider::new(provider);
         let self_ = Self { provider };
-        // self_.describe().await?;
         Ok(self_)
     }
 }
-
-// pub async fn new_mocked(provider: MockProvider) -> anyhow::Result<Self> {
-//     // let provider = MockProvider::new();
-//     let provider = Arc::new(Provider::new(provider));
-//     let self_ = Self { provider };
-//     Ok(self_)
-// }
 
 impl<P> EthClient<P>
 where
     P: JsonRpcClient,
 {
-    // pub async fn new(provider: JsonRpcClient) -> anyhow::Result<Self> {
-    //     let provider = Arc::new(Provider::new(provider));
-    //     let self_ = Self { provider };
-    //     self_.describe().await?;
-    //     Ok(self_)
-    // }
-
     // TODO assert chain identifier
     async fn describe(&self) -> anyhow::Result<()> {
         let chain_id = self.provider.get_chainid().await?;

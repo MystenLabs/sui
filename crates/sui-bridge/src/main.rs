@@ -1,14 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::types::Address;
 use mysten_metrics::start_prometheus_server;
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
-use sui_bridge::eth_client::EthClient;
 use sui_bridge::server::run_server;
-use sui_bridge::syncer::EthSyncer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -25,22 +20,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // TODO: allow configuration of port
-    // let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000);
-    // run_server(&socket_address).await;
-    let client = EthClient::new("https://eth.llamarpc.com").await?;
-    let addresses = HashMap::from_iter(vec![(
-        Address::from_str("0x5F6AE08B8AeB7078cf2F96AFb089D7c9f51DA47d").unwrap(),
-        18616418,
-    )]);
-    let (handles, mut rx) = EthSyncer::new(std::sync::Arc::new(client), addresses)
-        .run()
-        .await
-        .unwrap();
-
-    while let Some(logs) = rx.recv().await {
-        for log in logs {
-            println!("Received log: {:?}", log.block_number);
-        }
-    }
+    let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000);
+    run_server(&socket_address).await;
     Ok(())
 }

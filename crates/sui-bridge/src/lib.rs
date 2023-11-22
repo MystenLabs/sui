@@ -8,4 +8,6 @@ pub mod handler;
 pub mod server;
 pub mod sui_client;
 pub mod syncer;
+
+#[cfg(test)]
 pub(crate) mod eth_mock_provider;
