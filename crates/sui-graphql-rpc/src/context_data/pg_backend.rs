@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{
-        BalanceQuery, Explain, Explained, GenericQueryBuilder, PaginationBound, SortOrder,
-    },
+    db_backend::{BalanceQuery, CursorBound, Explain, Explained, GenericQueryBuilder, SortOrder},
     db_data_provider::DbValidationError,
 };
 use crate::context_data::db_data_provider::PgManager;
@@ -339,8 +337,8 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     }
     fn multi_get_checkpoints(
         sort_order: SortOrder,
-        before: Option<PaginationBound<i64>>,
-        after: Option<PaginationBound<i64>>,
+        before: Option<CursorBound<i64>>,
+        after: Option<CursorBound<i64>>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
@@ -357,10 +355,10 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
         if let Some(after) = after {
             match after {
-                PaginationBound::Gt(after) => {
+                CursorBound::Gt(after) => {
                     query = query.filter(checkpoints::dsl::sequence_number.gt(after));
                 }
-                PaginationBound::Lt(after) => {
+                CursorBound::Lt(after) => {
                     query = query.filter(checkpoints::dsl::sequence_number.lt(after));
                 }
             }
@@ -368,10 +366,10 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
 
         if let Some(before) = before {
             match before {
-                PaginationBound::Gt(before) => {
+                CursorBound::Gt(before) => {
                     query = query.filter(checkpoints::dsl::sequence_number.gt(before));
                 }
-                PaginationBound::Lt(before) => {
+                CursorBound::Lt(before) => {
                     query = query.filter(checkpoints::dsl::sequence_number.lt(before));
                 }
             }

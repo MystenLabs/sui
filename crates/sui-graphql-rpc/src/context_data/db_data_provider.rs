@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::{GenericQueryBuilder, PaginationBound, QueryDirection, SortOrder};
+use super::db_backend::{CursorBound, GenericQueryBuilder, SortOrder};
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -122,6 +122,65 @@ pub enum DbValidationError {
     QueryCostExceeded(u64, u64),
     #[error("Page size exceeded - requested: {0}, limit: {1}")]
     PageSizeExceeded(u64, u64),
+}
+
+pub(crate) struct CursorBounds<T> {
+    pub before: Option<CursorBound<T>>,
+    pub after: Option<CursorBound<T>>,
+}
+
+impl<T> CursorBounds<T> {
+    pub(crate) fn new(sort_order: SortOrder, before: Option<T>, after: Option<T>) -> Self {
+        Self {
+            after: after.map(|a| match sort_order {
+                SortOrder::Asc => CursorBound::Gt(a),
+                SortOrder::Desc => CursorBound::Lt(a),
+            }),
+            before: before.map(|b| match sort_order {
+                SortOrder::Asc => CursorBound::Lt(b),
+                SortOrder::Desc => CursorBound::Gt(b),
+            }),
+        }
+    }
+}
+
+pub(crate) struct PaginationParams<T> {
+    pub sort_order: SortOrder,
+    pub before: Option<CursorBound<T>>,
+    pub after: Option<CursorBound<T>>,
+    pub requires_invert: bool,
+}
+
+impl<T> PaginationParams<T> {
+    /// Translates graphql cursor arguments to db pagination logic.
+    /// There are two types of pagination, queries with 'first', and queries with 'last'.
+    /// 'First' queries do not require inverting the result set, while 'last' queries do.
+    /// This method returns the sort order, whether the result set needs to be inverted,
+    /// and the pagination logic for 'before' and 'after' cursors.
+    /// A query defaults to 'first' if neither 'first' nor 'last' is provided.
+    pub(crate) fn new(
+        sort_order: Option<SortOrder>,
+        first: Option<u64>,
+        after: Option<T>,
+        last: Option<u64>,
+        before: Option<T>,
+    ) -> Self {
+        let sort_order = sort_order.unwrap_or(SortOrder::Asc);
+        let (new_sort_order, requires_invert) = match (first, last) {
+            (None, Some(_)) => (sort_order.invert(), true),
+            _ => (sort_order, false),
+        };
+
+        // Note that we use the original sort_order - the cursor bounding logic is consistent with 'first' queries
+        let cursors = CursorBounds::new(sort_order, before, after);
+
+        PaginationParams {
+            sort_order: new_sort_order,
+            requires_invert,
+            before: cursors.before,
+            after: cursors.after,
+        }
+    }
 }
 
 pub(crate) struct PgManager {
@@ -398,6 +457,13 @@ impl PgManager {
             .transpose()
     }
 
+    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        let sequence_number = cursor.parse::<i64>().map_err(|e| {
+            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {}", e))
+        })?;
+        Ok(sequence_number)
+    }
+
     async fn multi_get_checkpoints(
         &self,
         first: Option<u64>,
@@ -415,16 +481,15 @@ impl PgManager {
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
 
-        let (sort_order, requires_invert, before, after) =
-            self.handle_cursor_pagination(SortOrder::Asc, first, after, last, before)?;
+        let pagination_params = PaginationParams::new(None, first, after, last, before);
 
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
-                        sort_order,
-                        before,
-                        after,
+                        pagination_params.sort_order,
+                        pagination_params.before,
+                        pagination_params.after,
                         limit,
                         epoch.map(|e| e as i64),
                     ))
@@ -440,7 +505,7 @@ impl PgManager {
                     stored_checkpoints.pop();
                 }
 
-                if requires_invert {
+                if pagination_params.requires_invert {
                     stored_checkpoints.reverse();
                 }
 
@@ -493,62 +558,6 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    pub(crate) fn handle_cursor_pagination<T>(
-        &self,
-        sort_order: SortOrder,
-        first: Option<u64>,
-        after: Option<T>,
-        last: Option<u64>,
-        before: Option<T>,
-    ) -> Result<
-        (
-            SortOrder,
-            bool,
-            Option<PaginationBound<T>>,
-            Option<PaginationBound<T>>,
-        ),
-        Error,
-    > {
-        let selection = match (first, last) {
-            (None, Some(_)) => QueryDirection::Last,
-            _ => QueryDirection::First,
-        };
-
-        let (new_sort_order, requires_invert) = match selection {
-            QueryDirection::First => (sort_order, false),
-            QueryDirection::Last => (sort_order.invert(), true),
-        };
-
-        // Note that we use the original sort_order always
-        // This is because last only impacts asc or desc - the cursor logic is consistent with 'first' queries
-        let (new_after, new_before) = self.determine_cursor_bounds(sort_order, before, after)?;
-        Ok((new_sort_order, requires_invert, new_before, new_after))
-    }
-
-    pub(crate) fn determine_cursor_bounds<T>(
-        &self,
-        sort_order: SortOrder,
-        before: Option<T>,
-        after: Option<T>,
-    ) -> Result<(Option<PaginationBound<T>>, Option<PaginationBound<T>>), Error> {
-        let new_after = after.map(|a| {
-            if sort_order == SortOrder::Asc {
-                PaginationBound::Gt(a)
-            } else {
-                PaginationBound::Lt(a)
-            }
-        });
-        let new_before = before.map(|b| {
-            if sort_order == SortOrder::Asc {
-                PaginationBound::Lt(b)
-            } else {
-                PaginationBound::Gt(b)
-            }
-        });
-
-        Ok((new_after, new_before))
-    }
-
     pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let tx_sequence_number = cursor
             .parse::<i64>()
@@ -560,13 +569,6 @@ impl PgManager {
         Ok(SuiAddress::from_str(cursor)
             .map_err(|e| Error::InvalidCursor(e.to_string()))?
             .into_vec())
-    }
-
-    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        let sequence_number = cursor
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("checkpoint".to_string()))?;
-        Ok(sequence_number)
     }
 
     pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {

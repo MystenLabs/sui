@@ -16,30 +16,18 @@ use diesel::{
     sql_types::Text,
 };
 
+/// An enum that determines whether to select rows that are greater than or less than the cursor.
 #[derive(Clone, Copy, PartialEq)]
-pub(crate) enum PaginationBound<T> {
+pub(crate) enum CursorBound<T> {
     Gt(T),
     Lt(T),
 }
 
-/// An enum representing whether first and/ or last was provided in the graphql request.
-#[derive(Clone, Copy, PartialEq)]
-pub(crate) enum QueryDirection {
-    /// If first is provided, the result set fetched from the db does not need to be reversed.
-    /// Queries default to this direction.
-    First,
-    /// The direction is last iff first is not provided and last is provided.
-    Last,
-}
-
-/// Controls the final ordering of the result set.
-/// Does not directly correspond to whether the query is ordered by ascending or descending.
+/// Controls whether the query is in ascending or descending order.
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum SortOrder {
-    /// Preserves the original ordering of the set before applying cursor and limit.
     Asc,
-    /// Reverses the ordering of the set before applying cursor and limit.
     Desc,
 }
 
@@ -101,8 +89,8 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
         sort_order: SortOrder,
-        before: Option<PaginationBound<i64>>,
-        after: Option<PaginationBound<i64>>,
+        before: Option<CursorBound<i64>>,
+        after: Option<CursorBound<i64>>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
