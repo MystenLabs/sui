@@ -18,7 +18,6 @@ use crate::{
         dynamic_field::{DynamicField, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
-        epoch_metrics::EpochMetrics,
         event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
         move_module::MoveModuleId,
@@ -1617,7 +1616,13 @@ impl TryFrom<StoredEpochInfo> for Epoch {
                 None
             };
 
-        let epoch_metrics = EpochMetrics {
+        Ok(Self {
+            epoch_id: e.epoch as u64,
+            protocol_version: e.protocol_version as u64,
+            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
+            validator_set: Some(validator_set),
+            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
+            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
             total_checkpoints: e
                 .last_checkpoint_id
                 .map(|last_chckp_id| BigInt::from(last_chckp_id - e.first_checkpoint_id)),
@@ -1628,16 +1633,6 @@ impl TryFrom<StoredEpochInfo> for Epoch {
             net_inflow,
             fund_inflow: e.storage_charge.map(BigInt::from),
             fund_outflow: e.storage_rebate.map(BigInt::from),
-        };
-
-        Ok(Self {
-            epoch_id: e.epoch as u64,
-            protocol_version: e.protocol_version as u64,
-            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
-            validator_set: Some(validator_set),
-            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
-            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
-            epoch_metrics: Some(epoch_metrics),
         })
     }
 }
