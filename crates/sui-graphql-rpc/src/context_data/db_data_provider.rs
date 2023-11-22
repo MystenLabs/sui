@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::{GenericQueryBuilder, QueryDirection, SortOrder};
+use super::db_backend::{GenericQueryBuilder, PaginationBound, QueryDirection, SortOrder};
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -152,13 +152,6 @@ impl PgManager {
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
-    /// handle pagination logic
-    // fn handle_checkpoint_pagination(
-    // before: Option<String>,
-    // after: Option<String>,
-    // sort_order: SortOrder
-    // ) -> Result<(), Error> {}
-
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
         self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_tx_by_digest(digest.clone())),
@@ -415,10 +408,6 @@ impl PgManager {
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
         validate_cursor_pagination_post_fix(&first, &last)?;
         let limit = self.validate_page_limit(first, last)?;
-        let direction = match (first, last) {
-            (None, Some(_)) => QueryDirection::Last,
-            _ => QueryDirection::First,
-        };
         let before = before
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
@@ -426,15 +415,17 @@ impl PgManager {
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
 
+        let (sort_order, requires_invert, before, after) =
+            self.handle_cursor_pagination(SortOrder::Asc, first, after, last, before)?;
+
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
+                        sort_order,
                         before,
                         after,
                         limit,
-                        SortOrder::Asc,
-                        direction,
                         epoch.map(|e| e as i64),
                     ))
                 },
@@ -449,7 +440,7 @@ impl PgManager {
                     stored_checkpoints.pop();
                 }
 
-                if direction == QueryDirection::Last {
+                if requires_invert {
                     stored_checkpoints.reverse();
                 }
 
@@ -502,6 +493,62 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
+    pub(crate) fn handle_cursor_pagination<T>(
+        &self,
+        sort_order: SortOrder,
+        first: Option<u64>,
+        after: Option<T>,
+        last: Option<u64>,
+        before: Option<T>,
+    ) -> Result<
+        (
+            SortOrder,
+            bool,
+            Option<PaginationBound<T>>,
+            Option<PaginationBound<T>>,
+        ),
+        Error,
+    > {
+        let selection = match (first, last) {
+            (None, Some(_)) => QueryDirection::Last,
+            _ => QueryDirection::First,
+        };
+
+        let (new_sort_order, requires_invert) = match selection {
+            QueryDirection::First => (sort_order, false),
+            QueryDirection::Last => (sort_order.invert(), true),
+        };
+
+        // Note that we use the original sort_order always
+        // This is because last only impacts asc or desc - the cursor logic is consistent with 'first' queries
+        let (new_after, new_before) = self.determine_cursor_bounds(sort_order, before, after)?;
+        Ok((new_sort_order, requires_invert, new_before, new_after))
+    }
+
+    pub(crate) fn determine_cursor_bounds<T>(
+        &self,
+        sort_order: SortOrder,
+        before: Option<T>,
+        after: Option<T>,
+    ) -> Result<(Option<PaginationBound<T>>, Option<PaginationBound<T>>), Error> {
+        let new_after = after.map(|a| {
+            if sort_order == SortOrder::Asc {
+                PaginationBound::Gt(a)
+            } else {
+                PaginationBound::Lt(a)
+            }
+        });
+        let new_before = before.map(|b| {
+            if sort_order == SortOrder::Asc {
+                PaginationBound::Lt(b)
+            } else {
+                PaginationBound::Gt(b)
+            }
+        });
+
+        Ok((new_after, new_before))
+    }
+
     pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let tx_sequence_number = cursor
             .parse::<i64>()

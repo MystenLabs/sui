@@ -3,7 +3,7 @@
 
 use super::{
     db_backend::{
-        BalanceQuery, Explain, Explained, GenericQueryBuilder, QueryDirection, SortOrder,
+        BalanceQuery, Explain, Explained, GenericQueryBuilder, PaginationBound, SortOrder,
     },
     db_data_provider::DbValidationError,
 };
@@ -28,73 +28,6 @@ use sui_indexer::{
 };
 
 pub(crate) struct PgQueryBuilder;
-
-impl PgQueryBuilder {
-    /// Handles pagination logic when the query selects for the first n
-    fn handle_checkpoint_pagination_first(
-        before: Option<i64>,
-        after: Option<i64>,
-        sort_order: SortOrder,
-    ) -> checkpoints::BoxedQuery<'static, Pg> {
-        let mut query = checkpoints::dsl::checkpoints.into_boxed();
-
-        match sort_order {
-            SortOrder::Asc => {
-                query = query.order(checkpoints::dsl::sequence_number.asc());
-                if let Some(after) = after {
-                    query = query.filter(checkpoints::dsl::sequence_number.gt(after));
-                }
-                if let Some(before) = before {
-                    query = query.filter(checkpoints::dsl::sequence_number.lt(before));
-                }
-            }
-            SortOrder::Desc => {
-                query = query.order(checkpoints::dsl::sequence_number.desc());
-                if let Some(after) = after {
-                    query = query.filter(checkpoints::dsl::sequence_number.lt(after));
-                }
-                if let Some(before) = before {
-                    query = query.filter(checkpoints::dsl::sequence_number.gt(before));
-                }
-            }
-        }
-
-        query
-    }
-
-    /// Handles pagination logic when the query selects for the last n
-    /// These queries require a reverse ordering of the result set
-    fn handle_checkpoint_pagination_last(
-        before: Option<i64>,
-        after: Option<i64>,
-        sort_order: SortOrder,
-    ) -> checkpoints::BoxedQuery<'static, Pg> {
-        let mut query = checkpoints::dsl::checkpoints.into_boxed();
-
-        match sort_order {
-            SortOrder::Asc => {
-                query = query.order(checkpoints::dsl::sequence_number.desc());
-                if let Some(after) = after {
-                    query = query.filter(checkpoints::dsl::sequence_number.gt(after));
-                }
-                if let Some(before) = before {
-                    query = query.filter(checkpoints::dsl::sequence_number.lt(before));
-                }
-            }
-            SortOrder::Desc => {
-                query = query.order(checkpoints::dsl::sequence_number.asc());
-                if let Some(after) = after {
-                    query = query.filter(checkpoints::dsl::sequence_number.lt(after));
-                }
-                if let Some(before) = before {
-                    query = query.filter(checkpoints::dsl::sequence_number.gt(before));
-                }
-            }
-        }
-
-        query
-    }
-}
 
 impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn get_tx_by_digest(digest: Vec<u8>) -> transactions::BoxedQuery<'static, Pg> {
@@ -405,21 +338,44 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
     fn multi_get_checkpoints(
-        before: Option<i64>,
-        after: Option<i64>,
-        limit: i64,
         sort_order: SortOrder,
-        query_direction: QueryDirection,
+        before: Option<PaginationBound<i64>>,
+        after: Option<PaginationBound<i64>>,
+        limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
-        let mut query = match query_direction {
-            QueryDirection::First => {
-                PgQueryBuilder::handle_checkpoint_pagination_first(before, after, sort_order)
+        let mut query = checkpoints::dsl::checkpoints.into_boxed();
+
+        match sort_order {
+            SortOrder::Asc => {
+                query = query.order(checkpoints::dsl::sequence_number.asc());
             }
-            QueryDirection::Last => {
-                PgQueryBuilder::handle_checkpoint_pagination_last(before, after, sort_order)
+            SortOrder::Desc => {
+                query = query.order(checkpoints::dsl::sequence_number.desc());
             }
-        };
+        }
+
+        if let Some(after) = after {
+            match after {
+                PaginationBound::Gt(after) => {
+                    query = query.filter(checkpoints::dsl::sequence_number.gt(after));
+                }
+                PaginationBound::Lt(after) => {
+                    query = query.filter(checkpoints::dsl::sequence_number.lt(after));
+                }
+            }
+        }
+
+        if let Some(before) = before {
+            match before {
+                PaginationBound::Gt(before) => {
+                    query = query.filter(checkpoints::dsl::sequence_number.gt(before));
+                }
+                PaginationBound::Lt(before) => {
+                    query = query.filter(checkpoints::dsl::sequence_number.lt(before));
+                }
+            }
+        }
 
         if let Some(epoch) = epoch {
             query = query.filter(checkpoints::dsl::epoch.eq(epoch));

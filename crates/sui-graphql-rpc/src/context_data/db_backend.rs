@@ -16,6 +16,12 @@ use diesel::{
     sql_types::Text,
 };
 
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum PaginationBound<T> {
+    Gt(T),
+    Lt(T),
+}
+
 /// An enum representing whether first and/ or last was provided in the graphql request.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum QueryDirection {
@@ -29,12 +35,21 @@ pub(crate) enum QueryDirection {
 /// Controls the final ordering of the result set.
 /// Does not directly correspond to whether the query is ordered by ascending or descending.
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum SortOrder {
     /// Preserves the original ordering of the set before applying cursor and limit.
     Asc,
     /// Reverses the ordering of the set before applying cursor and limit.
     Desc,
+}
+
+impl SortOrder {
+    pub fn invert(&self) -> Self {
+        match self {
+            SortOrder::Asc => SortOrder::Desc,
+            SortOrder::Desc => SortOrder::Asc,
+        }
+    }
 }
 
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
@@ -85,11 +100,10 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
-        before: Option<i64>,
-        after: Option<i64>,
+        sort_order: SortOrder,
+        before: Option<PaginationBound<i64>>,
+        after: Option<PaginationBound<i64>>,
         limit: i64,
-        edge_order: SortOrder,
-        query_direction: QueryDirection,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
 }
