@@ -3,7 +3,7 @@
 
 import { useStore } from '@nanostores/react';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 import type { EnokiFlowConfig } from './EnokiFlow.js';
 import { EnokiFlow } from './EnokiFlow.js';
@@ -30,4 +30,34 @@ export function useEnokiFlow() {
 export function useZkLogin() {
 	const flow = useEnokiFlow();
 	return useStore(flow.$zkLoginState);
+}
+
+export function useAuthCallback() {
+	const flow = useEnokiFlow();
+	const [handled, setHandled] = useState(false);
+	const [hash, setHash] = useState<string | null>(null);
+
+	useEffect(() => {
+		const listener = () => setHash(window.location.hash.slice(1).trim());
+		listener();
+
+		window.addEventListener('hashchange', listener);
+		return () => window.removeEventListener('hashchange', listener);
+	}, []);
+
+	useEffect(() => {
+		if (!hash) return;
+
+		(async () => {
+			try {
+				await flow.handleAuthCallback(hash);
+
+				window.location.hash = '';
+			} finally {
+				setHandled(true);
+			}
+		})();
+	}, [hash, flow]);
+
+	return handled;
 }

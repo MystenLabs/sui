@@ -1505,15 +1505,27 @@ importers:
       '@types/react':
         specifier: ^18.2.15
         version: 18.2.15
+      '@types/react-dom':
+        specifier: ^18.2.7
+        version: 18.2.7
+      '@vitejs/plugin-react-swc':
+        specifier: ^3.3.2
+        version: 3.4.0(vite@4.4.11)
       react:
         specifier: ^18.2.0
         version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
       tsx:
         specifier: ^3.12.7
         version: 3.12.7
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
+      vite:
+        specifier: ^4.4.4
+        version: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
 
   sdk/kiosk:
     dependencies:
@@ -1591,6 +1603,8 @@ importers:
       wasm-pack:
         specifier: ^0.12.1
         version: 0.12.1
+
+  sdk/move-binary-format-wasm/pkg: {}
 
   sdk/suins-toolkit:
     dependencies:
@@ -24455,7 +24469,7 @@ packages:
       strip-literal: 1.0.1
       tinybench: 2.5.0
       tinypool: 0.6.0
-      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+      vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
       vite-node: 0.33.0(@types/node@20.4.2)(sass@1.63.6)
       why-is-node-running: 2.2.2
     transitivePeerDependencies:
@@ -24521,7 +24535,7 @@ packages:
       strip-literal: 1.0.1
       tinybench: 2.5.0
       tinypool: 0.6.0
-      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+      vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
       vite-node: 0.33.0(@types/node@20.4.2)(sass@1.63.6)
       why-is-node-running: 2.2.2
     transitivePeerDependencies:
