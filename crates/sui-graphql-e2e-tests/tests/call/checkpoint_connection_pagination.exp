@@ -1,7 +1,7 @@
 processed 8 tasks
 
 task 1 'create-checkpoint'. lines 16-16:
-Checkpoint created: 20
+Checkpoint created: 11
 
 task 2 'run-graphql'. lines 18-25:
 Response: {
@@ -66,16 +66,16 @@ Response: {
     "checkpointConnection": {
       "nodes": [
         {
-          "sequenceNumber": 17
+          "sequenceNumber": 8
         },
         {
-          "sequenceNumber": 18
+          "sequenceNumber": 9
         },
         {
-          "sequenceNumber": 19
+          "sequenceNumber": 10
         },
         {
-          "sequenceNumber": 20
+          "sequenceNumber": 11
         }
       ]
     }
