@@ -18,6 +18,7 @@ use crate::{
         dynamic_field::{DynamicField, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
+        epoch_metrics::EpochMetrics,
         event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
         move_module::MoveModuleId,
@@ -1609,6 +1610,26 @@ impl TryFrom<StoredEpochInfo> for Epoch {
             ..Default::default()
         };
 
+        let net_inflow =
+            if let (Some(fund_inflow), Some(fund_outflow)) = (e.storage_charge, e.storage_rebate) {
+                Some(BigInt::from(fund_inflow - fund_outflow))
+            } else {
+                None
+            };
+
+        let epoch_metrics = EpochMetrics {
+            total_checkpoints: e
+                .last_checkpoint_id
+                .map(|last_chckp_id| BigInt::from(last_chckp_id - e.first_checkpoint_id)),
+            total_gas_fees: e.total_gas_fees.map(BigInt::from),
+            total_stake_rewards: e.total_stake_rewards_distributed.map(BigInt::from),
+            total_stake_subsidies: e.stake_subsidy_amount.map(BigInt::from),
+            fund_size: e.storage_fund_balance.map(BigInt::from),
+            net_inflow,
+            fund_inflow: e.storage_charge.map(BigInt::from),
+            fund_outflow: e.storage_rebate.map(BigInt::from),
+        };
+
         Ok(Self {
             epoch_id: e.epoch as u64,
             protocol_version: e.protocol_version as u64,
@@ -1616,6 +1637,7 @@ impl TryFrom<StoredEpochInfo> for Epoch {
             validator_set: Some(validator_set),
             start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
             end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
+            epoch_metrics: Some(epoch_metrics),
         })
     }
 }

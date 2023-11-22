@@ -15,6 +15,7 @@ pub(crate) mod display;
 pub(crate) mod dynamic_field;
 pub(crate) mod end_of_epoch_data;
 pub(crate) mod epoch;
+pub(crate) mod epoch_metrics;
 pub(crate) mod event;
 pub(crate) mod gas;
 pub(crate) mod json;
