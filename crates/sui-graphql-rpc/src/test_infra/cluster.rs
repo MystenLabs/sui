@@ -230,26 +230,43 @@ pub async fn start_test_indexer_v2(
 }
 
 impl ExecutorCluster {
-    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, timeout: Duration) {
-        async fn inner(s: &ExecutorCluster, checkpoint: u64) {
-            let mut highest_checkpoint = s
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
+        async fn inner(s: &ExecutorCluster, checkpoint: u64, base_timeout: Duration) {
+            let current_checkpoint = s
                 .indexer_store
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .unwrap()
                 .unwrap();
-            while highest_checkpoint < checkpoint {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                highest_checkpoint = s
-                    .indexer_store
-                    .get_latest_tx_checkpoint_sequence_number()
-                    .await
-                    .unwrap()
-                    .unwrap();
+
+            let checkpoint_diff = checkpoint.saturating_sub(current_checkpoint);
+            let total_timeout = base_timeout.mul_f64(checkpoint_diff as f64);
+
+            let timeout_future = tokio::time::sleep(total_timeout);
+            tokio::pin!(timeout_future);
+
+            let mut highest_checkpoint = current_checkpoint;
+            loop {
+                if highest_checkpoint >= checkpoint {
+                    break;
+                }
+
+                tokio::select! {
+                    _ = &mut timeout_future => {
+                        panic!("Timeout waiting for indexer to catchup to checkpoint {}", checkpoint);
+                    }
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
+                        highest_checkpoint = s
+                            .indexer_store
+                            .get_latest_tx_checkpoint_sequence_number()
+                            .await
+                            .unwrap()
+                            .unwrap();
+                    }
+                }
             }
         }
-        tokio::time::timeout(timeout, inner(self, checkpoint))
-            .await
-            .expect("Timeout waiting for indexer to catchup to checkpoint");
+
+        inner(self, checkpoint, base_timeout).await;
     }
 }
