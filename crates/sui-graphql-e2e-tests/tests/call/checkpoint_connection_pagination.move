@@ -15,11 +15,7 @@
 
 //# init --addresses Test=0x0 --simulator
 
-//# create-checkpoint 4
-
-//# create-checkpoint 4
-
-//# create-checkpoint 4
+//# create-checkpoint 12
 
 //# run-graphql
 {
