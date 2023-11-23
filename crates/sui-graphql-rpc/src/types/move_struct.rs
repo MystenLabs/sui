@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
-use move_binary_format::file_format::AbilitySet;
 use sui_package_resolver::StructDef;
 
 use crate::context_data::db_data_provider::PgManager;
@@ -10,7 +9,7 @@ use crate::error::Error;
 
 use super::{
     move_module::MoveModule,
-    open_move_type::{MoveAbility, OpenMoveType},
+    open_move_type::{abilities, MoveAbility, OpenMoveType},
     sui_address::SuiAddress,
 };
 
@@ -119,8 +118,4 @@ impl MoveStruct {
             fields,
         }
     }
-}
-
-fn abilities(set: AbilitySet) -> Vec<MoveAbility> {
-    set.into_iter().map(MoveAbility::from).collect()
 }
