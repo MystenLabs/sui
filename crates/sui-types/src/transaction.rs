@@ -1843,10 +1843,8 @@ pub trait TransactionDataAPI {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
-    #[cfg(test)]
-    fn sender_mut(&mut self) -> &mut SuiAddress;
+    fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
-    #[cfg(test)]
     fn gas_data_mut(&mut self) -> &mut GasData;
 
     // This should be used in testing only.
@@ -1983,12 +1981,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         matches!(self.kind, TransactionKind::Genesis(_))
     }
 
-    #[cfg(test)]
-    fn sender_mut(&mut self) -> &mut SuiAddress {
+    fn sender_mut_for_testing(&mut self) -> &mut SuiAddress {
         &mut self.sender
     }
 
-    #[cfg(test)]
     fn gas_data_mut(&mut self) -> &mut GasData {
         &mut self.gas_data
     }
@@ -2033,6 +2029,10 @@ impl SenderSignedData {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signatures: vec![tx_signature.into()],
         }])
+    }
+
+    pub fn inner_vec_mut_for_testing(&mut self) -> &mut Vec<SenderSignedTransaction> {
+        &mut self.0
     }
 
     pub fn inner(&self) -> &SenderSignedTransaction {
@@ -2156,6 +2156,51 @@ impl Message for SenderSignedData {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
+    fn verify_user_input(&self) -> SuiResult {
+        fp_ensure!(
+            self.0.len() == 1,
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must contain exactly one transaction".to_string()
+                )
+            }
+        );
+        let tx_data = &self.intent_message().value;
+        fp_ensure!(
+            !tx_data.is_system_tx(),
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must not contain system transaction".to_string()
+                )
+            }
+        );
+
+        // Verify signatures are well formed. Steps are ordered in asc complexity order
+        // to minimize abuse.
+        let signers = self.intent_message().value.signers();
+        // Signature number needs to match
+        fp_ensure!(
+            self.inner().tx_signatures.len() == signers.len(),
+            SuiError::SignerSignatureNumberMismatch {
+                actual: self.inner().tx_signatures.len(),
+                expected: signers.len()
+            }
+        );
+
+        // All required signers need to be sign.
+        let present_sigs = self.get_signer_sig_mapping(true)?;
+        for s in signers {
+            if !present_sigs.contains_key(&s) {
+                return Err(SuiError::SignerSignatureAbsent {
+                    expected: s.to_string(),
+                    actual: present_sigs.keys().map(|s| s.to_string()).collect(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         for sig in &self.inner().tx_signatures {
             sig.verify_user_authenticator_epoch(epoch)?;
@@ -2180,6 +2225,7 @@ impl AuthenticatedMessage for SenderSignedData {
         }
         Ok(())
     }
+
     fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult {
         fp_ensure!(
             self.0.len() == 1,
