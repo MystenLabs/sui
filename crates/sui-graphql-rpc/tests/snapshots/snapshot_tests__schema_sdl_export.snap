@@ -1088,6 +1088,10 @@ type ServiceConfig {
 	"""
 	maxDbQueryCost: BigInt!
 	"""
+	Default number of elements allowed on a single page of a connection.
+	"""
+	defaultPageSize: BigInt!
+	"""
 	Maximum number of elements allowed on a single page of a connection.
 	"""
 	maxPageSize: BigInt!

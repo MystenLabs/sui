@@ -184,6 +184,11 @@ impl ServiceConfig {
         BigInt::from(self.limits.max_db_query_cost)
     }
 
+    /// Default number of elements allowed on a single page of a connection.
+    async fn default_page_size(&self) -> BigInt {
+        BigInt::from(self.limits.default_page_size)
+    }
+
     /// Maximum number of elements allowed on a single page of a connection.
     async fn max_page_size(&self) -> BigInt {
         BigInt::from(self.limits.max_page_size)

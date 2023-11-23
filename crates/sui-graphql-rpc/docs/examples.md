@@ -1102,6 +1102,11 @@
 >    enabledFeatures
 >    maxQueryDepth
 >    maxQueryNodes
+>    maxDbQueryCost
+>    defaultPageSize
+>    maxPageSize
+>    requestTimeoutMs
+>    maxQueryPayloadSize
 >  }
 >}</pre>
 
