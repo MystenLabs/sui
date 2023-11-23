@@ -1,4 +1,12 @@
-use std::{collections::BTreeMap, fs, path::{PathBuf, Path}, time::Duration};
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::*;
@@ -91,10 +99,10 @@ fn dump_package(output_dir: &Path, id: SuiAddress, pkg: &[u8]) -> Result<()> {
 
     fs::create_dir(&package_dir).context("Making output directory")?;
 
-    let linkage_json = serde_json::to_string_pretty(package.linkage_table())
-        .context("Serializing linkage")?;
-    let origins_json = serde_json::to_string_pretty(&origins)
-        .context("Serializing type origins")?;
+    let linkage_json =
+        serde_json::to_string_pretty(package.linkage_table()).context("Serializing linkage")?;
+    let origins_json =
+        serde_json::to_string_pretty(&origins).context("Serializing type origins")?;
 
     fs::write(package_dir.join("linkage.json"), linkage_json).context("Writing linkage")?;
     fs::write(package_dir.join("origins.json"), origins_json).context("Writing type origins")?;
