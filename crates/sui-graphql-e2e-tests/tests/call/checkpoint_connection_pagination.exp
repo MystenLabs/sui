@@ -1,15 +1,9 @@
-processed 10 tasks
+processed 8 tasks
 
 task 1 'create-checkpoint'. lines 18-18:
-Checkpoint created: 4
-
-task 2 'create-checkpoint'. lines 20-20:
-Checkpoint created: 8
-
-task 3 'create-checkpoint'. lines 22-22:
 Checkpoint created: 12
 
-task 4 'run-graphql'. lines 24-31:
+task 2 'run-graphql'. lines 20-27:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -31,7 +25,7 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 33-40:
+task 3 'run-graphql'. lines 29-36:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -44,7 +38,7 @@ Response: {
   }
 }
 
-task 6 'run-graphql'. lines 42-49:
+task 4 'run-graphql'. lines 38-45:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -66,7 +60,7 @@ Response: {
   }
 }
 
-task 7 'run-graphql'. lines 51-58:
+task 5 'run-graphql'. lines 47-54:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -88,7 +82,7 @@ Response: {
   }
 }
 
-task 8 'run-graphql'. lines 60-67:
+task 6 'run-graphql'. lines 56-63:
 Response: {
   "data": {
     "checkpointConnection": {
@@ -110,7 +104,7 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 69-76:
+task 7 'run-graphql'. lines 65-72:
 Response: {
   "data": {
     "checkpointConnection": {
