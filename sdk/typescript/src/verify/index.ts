@@ -8,6 +8,7 @@ import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 // eslint-disable-next-line import/no-cycle
 import { MultiSigPublicKey } from '../multisig/publickey.js';
+import { ZkLoginPublicIdentifier } from '../zklogin/publickey.js';
 
 export async function verifySignature(
 	bytes: Uint8Array,
@@ -95,6 +96,8 @@ export function publicKeyFromRawBytes(
 			return new Secp256r1PublicKey(bytes);
 		case 'MultiSig':
 			return new MultiSigPublicKey(bytes);
+		case 'ZkLogin':
+			return new ZkLoginPublicIdentifier(bytes);
 		default:
 			throw new Error(`Unsupported signature scheme ${signatureScheme}`);
 	}

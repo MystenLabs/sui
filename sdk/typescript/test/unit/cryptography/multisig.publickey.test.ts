@@ -8,7 +8,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
 import { IntentScope, messageWithIntent } from '../../../src/cryptography/intent';
-import { decodeMultiSig } from '../../../src/cryptography/multisig';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../../src/cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../../../src/cryptography/signature.js';
@@ -354,23 +353,24 @@ describe('Publickey', () => {
 			'AwIANe9gJJmT5m1UvpV8Hj7nOyif76rS5Zgg1bi7VApts+KwtSc2Bg8WJ6LBfGnZKugrOqtQsk5d2Q+IMRLD4hYmBQFYlrlXc01/ZSdgwSD3eGEdm6kxwtOwAvTWdb2wNZP2Hnkgrh+indYN4s2Qd99iYCz+xsY6aT5lpOBsDZb2x9LyAwADAFriILSy9l6XfBLt5hV5/1FwtsIsAGFow3tefGGvAYCDAQECHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzYCAgInMis6iRoKKA1rwfssuyPSj1SQb9ZAf190H23vV2JgmgMDAA==',
 		);
 
-		const decoded = decodeMultiSig(multisig);
-		expect(decoded).toEqual([
-			{
-				signature: parseSerializedSignature((await k1.signPersonalMessage(data)).signature)
-					.signature,
-				signatureScheme: k1.getKeyScheme(),
-				pubKey: pk1,
-				weight: 1,
-			},
-			{
-				signature: parseSerializedSignature((await k2.signPersonalMessage(data)).signature)
-					.signature,
-				signatureScheme: k2.getKeyScheme(),
-				pubKey: pk2,
-				weight: 2,
-			},
-		]);
+		const decoded = bcs.MultiSig.parse(fromB64(multisig).slice(1));
+
+		expect(decoded).toEqual({
+			bitmap: 3,
+			sigs: [
+				{
+					ED25519: Array.from(
+						parseSerializedSignature((await k1.signPersonalMessage(data)).signature).signature!,
+					),
+				},
+				{
+					Secp256k1: Array.from(
+						parseSerializedSignature((await k2.signPersonalMessage(data)).signature).signature!,
+					),
+				},
+			],
+			multisig_pk: bcs.MultiSigPublicKey.parse(multiSigPublicKey.toRawBytes()),
+		});
 	});
 
 	it('`combinePartialSignatures()` should handle invalid parameters', async () => {

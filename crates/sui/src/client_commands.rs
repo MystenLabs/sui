@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::fmt;
 use std::{
     fmt::{Debug, Display, Formatter, Write},
     path::PathBuf,
@@ -35,7 +34,7 @@ use sui_json_rpc_types::{
     SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
-use sui_json_rpc_types::{ObjectChange, SuiExecutionStatus, SuiObjectDataOptions};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
@@ -1580,10 +1579,10 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::Upgrade(response)
             | SuiClientCommandResult::Publish(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::TransactionBlock(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
@@ -1607,7 +1606,7 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}", raw_object)?;
             }
             SuiClientCommandResult::Call(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) => {
                 writeln!(
@@ -1624,19 +1623,19 @@ impl Display for SuiClientCommandResult {
                 )?;
             }
             SuiClientCommandResult::Transfer(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::TransferSui(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::Pay(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::PaySui(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::PayAllSui(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
@@ -1645,10 +1644,10 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}", ci)?;
             }
             SuiClientCommandResult::SplitCoin(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::MergeCoin(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
@@ -1660,7 +1659,7 @@ impl Display for SuiClientCommandResult {
                 };
             }
             SuiClientCommandResult::ExecuteSignedTx(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1768,74 +1767,6 @@ fn convert_number_to_string(value: Value) -> Value {
         ),
         _ => value,
     }
-}
-
-// TODO(chris): only print out the full response when `--verbose` is provided
-pub fn write_transaction_response(
-    response: &SuiTransactionBlockResponse,
-) -> Result<String, fmt::Error> {
-    let mut writer = String::new();
-    writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
-    writeln!(writer, "{}", response.digest)?;
-    if let Some(t) = &response.transaction {
-        writeln!(writer, "{}", t)?;
-    }
-
-    if let Some(e) = &response.effects {
-        writeln!(writer, "{}", e)?;
-    }
-
-    if let Some(e) = &response.events {
-        writeln!(writer, "{}", e)?;
-    }
-
-    writeln!(writer, "{}", "----- Object changes ----".bold())?;
-    if let Some(e) = &response.object_changes {
-        // Note that this will be refactored under Display for SuiTransactionBlockResponse
-        // as soon I implement all of the Display traits for all the types
-        let (mut created, mut deleted, mut mutated, mut published, mut transferred, mut wrapped) =
-            (vec![], vec![], vec![], vec![], vec![], vec![]);
-
-        for obj in e {
-            match obj {
-                ObjectChange::Created { .. } => created.push(obj),
-                ObjectChange::Deleted { .. } => deleted.push(obj),
-                ObjectChange::Mutated { .. } => mutated.push(obj),
-                ObjectChange::Published { .. } => published.push(obj),
-                ObjectChange::Transferred { .. } => transferred.push(obj),
-                ObjectChange::Wrapped { .. } => wrapped.push(obj),
-            };
-        }
-
-        write_obj_changes(created, "Created", &mut writer)?;
-        write_obj_changes(deleted, "Deleted", &mut writer)?;
-        write_obj_changes(mutated, "Mutated", &mut writer)?;
-        write_obj_changes(published, "Published", &mut writer)?;
-        write_obj_changes(transferred, "Transferred", &mut writer)?;
-        write_obj_changes(wrapped, "Wrapped", &mut writer)?;
-    }
-
-    writeln!(writer, "{}", "----- Balance changes ----".bold())?;
-    if let Some(e) = &response.balance_changes {
-        for balance in e {
-            writeln!(writer, "{}", balance)?;
-        }
-    }
-    Ok(writer)
-}
-
-fn write_obj_changes<T: Display>(
-    values: Vec<T>,
-    output_string: &str,
-    writer: &mut String,
-) -> std::fmt::Result {
-    if !values.is_empty() {
-        writeln!(writer, "\n{} Objects: ", output_string)?;
-        for obj in values {
-            write!(writer, "{}", obj)?;
-        }
-    }
-    Ok(())
 }
 
 impl Debug for SuiClientCommandResult {

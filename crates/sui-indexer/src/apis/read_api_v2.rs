@@ -4,7 +4,6 @@
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_core_types::annotated_value::MoveStructLayout;
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_types::error::SuiObjectResponseError;
 use sui_types::object::ObjectRead;
@@ -14,9 +13,9 @@ use crate::indexer_reader::IndexerReader;
 use sui_json_rpc::api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, ProtocolConfigResponse,
-    SuiEvent, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
+    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -60,33 +59,6 @@ impl ReadApiV2 {
         let genesis_checkpoint = self.get_checkpoint(CheckpointId::SequenceNumber(0)).await?;
         Ok(ChainIdentifier::from(genesis_checkpoint.digest))
     }
-
-    async fn get_display_fields(
-        &self,
-        original_object: &sui_types::object::Object,
-        original_layout: &Option<MoveStructLayout>,
-    ) -> Result<DisplayFieldsResponse, IndexerError> {
-        let (object_type, layout) = if let Some((object_type, layout)) =
-            sui_json_rpc::read_api::get_object_type_and_struct(original_object, original_layout)
-                .map_err(|e| IndexerError::GenericError(e.to_string()))?
-        {
-            (object_type, layout)
-        } else {
-            return Ok(DisplayFieldsResponse {
-                data: None,
-                error: None,
-            });
-        };
-
-        if let Some(display_object) = self.inner.get_display_object_by_type(&object_type).await? {
-            return sui_json_rpc::read_api::get_rendered_fields(display_object.fields, &layout)
-                .map_err(|e| IndexerError::GenericError(e.to_string()));
-        }
-        Ok(DisplayFieldsResponse {
-            data: None,
-            error: None,
-        })
-    }
 }
 
 #[async_trait]
@@ -109,7 +81,7 @@ impl ReadApiServer for ReadApiV2 {
             ObjectRead::Exists(object_ref, o, layout) => {
                 let mut display_fields = None;
                 if options.show_display {
-                    match self.get_display_fields(&o, &layout).await {
+                    match self.inner.get_display_fields(&o, &layout).await {
                         Ok(rendered_fields) => display_fields = Some(rendered_fields),
                         Err(e) => {
                             return Ok(SuiObjectResponse::new(

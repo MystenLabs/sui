@@ -4,9 +4,9 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
+		"dev": "turbo build --filter multisig-toolkit^... && vite",
+		"build": "turbo build --filter multisig-toolkit^... && vite build",
 		"preview": "vite preview",
-		"build": "vite build",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"eslint:check": "eslint --max-warnings=0 .",

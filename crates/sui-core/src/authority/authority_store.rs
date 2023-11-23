@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
@@ -25,7 +26,7 @@ use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
     get_module, BackingPackageStore, ChildObjectResolver, InputKey, MarkerValue, ObjectKey,
-    ObjectStore, PackageObjectArc,
+    ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -168,6 +169,7 @@ impl AuthorityStore {
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
                 genesis.authenticator_state_obj_initial_shared_version(),
+                genesis.randomness_state_obj_initial_shared_version(),
             );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
@@ -647,22 +649,22 @@ impl AuthorityStore {
         }
     }
 
-    /// Gets the input object keys and lock modes from input object kinds, by determining the
-    /// versions and types of owned, shared and package objects.
+    /// Gets the input object keys from input object kinds, by determining the versions of owned,
+    /// shared and package objects.
     /// When making changes, please see if check_sequenced_input_objects() below needs
     /// similar changes as well.
-    pub fn get_input_object_locks(
+    pub fn get_input_object_keys(
         &self,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> BTreeMap<InputKey, LockMode> {
+    ) -> BTreeSet<InputKey> {
         let mut shared_locks = HashMap::<ObjectID, SequenceNumber>::new();
         objects
             .iter()
             .map(|kind| {
                 match kind {
-                    InputObjectKind::SharedMoveObject { id, initial_shared_version: _, mutable } => {
+                    InputObjectKind::SharedMoveObject { id, .. } => {
                         if shared_locks.is_empty() {
                             shared_locks = epoch_store
                                 .get_shared_locks(digest)
@@ -679,17 +681,10 @@ impl AuthorityStore {
                                 id: {id:?}",
                             )
                         };
-                        let lock_mode = if *mutable {
-                            LockMode::Default
-                        } else {
-                            LockMode::ReadOnly
-                        };
-                        (InputKey::VersionedObject{ id: *id, version: *version}, lock_mode)
+                        InputKey::VersionedObject{ id: *id, version: *version}
                     }
-                    // TODO: use ReadOnly lock?
-                    InputObjectKind::MovePackage(id) => (InputKey::Package { id: *id }, LockMode::Default),
-                    // Cannot use ReadOnly lock because we do not know if the object is immutable.
-                    InputObjectKind::ImmOrOwnedMoveObject(objref) => (InputKey::VersionedObject {id: objref.0, version: objref.1}, LockMode::Default),
+                    InputObjectKind::MovePackage(id) => InputKey::Package { id: *id },
+                    InputObjectKind::ImmOrOwnedMoveObject(objref) => InputKey::VersionedObject {id: objref.0, version: objref.1},
                 }
             })
             .collect()
@@ -865,7 +860,7 @@ impl AuthorityStore {
                 ref_and_objects.iter().map(|(oref, o)| {
                     (
                         ObjectKey::from(oref),
-                        get_store_object_pair((**o).clone(), self.indirect_objects_threshold).0,
+                        get_store_object_pair((*o).clone(), self.indirect_objects_threshold).0,
                     )
                 }),
             )?
@@ -873,7 +868,7 @@ impl AuthorityStore {
                 &self.perpetual_tables.indirect_move_objects,
                 ref_and_objects.iter().filter_map(|(_, o)| {
                     let StoreObjectPair(_, indirect_object) =
-                        get_store_object_pair((**o).clone(), self.indirect_objects_threshold);
+                        get_store_object_pair((*o).clone(), self.indirect_objects_threshold);
                     indirect_object.map(|obj| (obj.inner().digest(), obj))
                 }),
             )?;
@@ -1998,10 +1993,23 @@ impl AuthorityStore {
         info!("Removing all versions of object: {:?}", entries);
         self.perpetual_tables.objects.multi_remove(entries).unwrap();
     }
+
+    // Counts the number of versions exist in object store for `object_id`. This includes tombstone.
+    #[cfg(msim)]
+    pub fn count_object_versions(&self, object_id: ObjectID) -> usize {
+        self.perpetual_tables
+            .objects
+            .iter_with_bounds(
+                Some(ObjectKey(object_id, VersionNumber::MIN)),
+                Some(ObjectKey(object_id, VersionNumber::MAX)),
+            )
+            .collect::<Vec<_>>()
+            .len()
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.package_cache.get_package_object(package_id, self)
     }
 }
@@ -2174,15 +2182,4 @@ impl From<LockDetails> for LockDetailsWrapper {
         // always use latest version.
         LockDetailsWrapper::V1(details)
     }
-}
-
-/// How a transaction should lock a given input object.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum LockMode {
-    /// In the default mode, the transaction can acquire the lock whenever the object is available
-    /// and there is no pending or executing transaction with ReadOnly locks.
-    Default,
-    /// In the ReadOnly mode, the transaction can acquire the lock whenever the object is available.
-    /// The invariant is that no transaction should have locks on the object in default mode.
-    ReadOnly,
 }

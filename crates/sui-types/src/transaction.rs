@@ -22,7 +22,8 @@ use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -34,7 +35,6 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -225,6 +225,28 @@ impl AuthenticatorStateUpdate {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct RandomnessStateUpdate {
+    /// Epoch of the randomness state update transaction
+    pub epoch: u64,
+    /// Consensus round of the randomness state update
+    pub round: u64,
+    /// Randomness round of the update
+    pub randomness_round: u64,
+    /// Updated random bytes
+    pub random_bytes: Vec<u8>,
+    /// The initial version of the randomness object that it was shared at.
+    pub randomness_obj_initial_shared_version: SequenceNumber,
+    // to version this struct, do not add new fields. Instead, add a RandomnessStateUpdateV2 to
+    // TransactionKind.
+}
+
+impl RandomnessStateUpdate {
+    pub fn randomness_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.randomness_obj_initial_shared_version
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
     /// A transaction that allows the interleaving of native commands and Move calls
@@ -248,6 +270,8 @@ pub enum TransactionKind {
     /// EndOfEpochTransaction replaces ChangeEpoch with a list of transactions that are allowed to
     /// run at the end of the epoch.
     EndOfEpochTransaction(Vec<EndOfEpochTransactionKind>),
+
+    RandomnessStateUpdate(RandomnessStateUpdate),
     // .. more transaction types go here
 }
 
@@ -257,6 +281,7 @@ pub enum EndOfEpochTransactionKind {
     ChangeEpoch(ChangeEpoch),
     AuthenticatorStateCreate,
     AuthenticatorStateExpire(AuthenticatorStateExpire),
+    RandomnessStateCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -296,6 +321,10 @@ impl EndOfEpochTransactionKind {
         Self::AuthenticatorStateCreate
     }
 
+    pub fn new_randomness_state_create() -> Self {
+        Self::RandomnessStateCreate
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -313,6 +342,7 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 }]
             }
+            Self::RandomnessStateCreate => vec![],
         }
     }
 
@@ -325,6 +355,7 @@ impl EndOfEpochTransactionKind {
                 mutable: true,
             })),
             Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
+            Self::RandomnessStateCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -334,6 +365,10 @@ impl EndOfEpochTransactionKind {
             Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.enable_jwk_consensus_updates());
+            }
+            Self::RandomnessStateCreate => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.random_beacon());
             }
         }
         Ok(())
@@ -376,6 +411,15 @@ impl VersionedProtocolMessage for TransactionKind {
                     })
                 }
             }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                if protocol_config.random_beacon() {
+                    Ok(())
+                } else {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "randomness state updates not enabled".to_string(),
+                    })
+                }
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 if !protocol_config.end_of_epoch_transaction_supported() {
                     Err(SuiError::UnsupportedFeatureError {
@@ -391,6 +435,13 @@ impl VersionedProtocolMessage for TransactionKind {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "authenticator state updates not enabled"
                                             .to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::RandomnessStateCreate => {
+                                if !protocol_config.random_beacon() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "random beacon not enabled".to_string(),
                                     });
                                 }
                             }
@@ -1046,6 +1097,7 @@ impl TransactionKind {
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
                 | TransactionKind::AuthenticatorStateUpdate(_)
+                | TransactionKind::RandomnessStateUpdate(_)
                 | TransactionKind::EndOfEpochTransaction(_)
         )
     }
@@ -1104,6 +1156,13 @@ impl TransactionKind {
                     mutable: true,
                 })))
             }
+            Self::RandomnessStateUpdate(update) => {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: update.randomness_obj_initial_shared_version,
+                    mutable: true,
+                })))
+            }
             Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
                 txns.iter().flat_map(|txn| txn.shared_input_objects()),
             )),
@@ -1127,6 +1186,7 @@ impl TransactionKind {
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => vec![],
             TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects(),
         }
@@ -1159,6 +1219,13 @@ impl TransactionKind {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+            }
+            Self::RandomnessStateUpdate(update) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: update.randomness_obj_initial_shared_version(),
                     mutable: true,
                 }]
             }
@@ -1200,6 +1267,10 @@ impl TransactionKind {
                 // The transaction should have been rejected earlier if the feature is not enabled.
                 assert!(config.enable_jwk_consensus_updates());
             }
+            TransactionKind::RandomnessStateUpdate(_) => {
+                // The transaction should have been rejected earlier if the feature is not enabled.
+                assert!(config.random_beacon());
+            }
         };
         Ok(())
     }
@@ -1234,6 +1305,7 @@ impl TransactionKind {
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
@@ -1264,6 +1336,9 @@ impl Display for TransactionKind {
             }
             Self::AuthenticatorStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::RandomnessStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind : Randomness State Update")?;
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
@@ -1768,10 +1843,8 @@ pub trait TransactionDataAPI {
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
-    #[cfg(test)]
-    fn sender_mut(&mut self) -> &mut SuiAddress;
+    fn sender_mut_for_testing(&mut self) -> &mut SuiAddress;
 
-    #[cfg(test)]
     fn gas_data_mut(&mut self) -> &mut GasData;
 
     // This should be used in testing only.
@@ -1908,12 +1981,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         matches!(self.kind, TransactionKind::Genesis(_))
     }
 
-    #[cfg(test)]
-    fn sender_mut(&mut self) -> &mut SuiAddress {
+    fn sender_mut_for_testing(&mut self) -> &mut SuiAddress {
         &mut self.sender
     }
 
-    #[cfg(test)]
     fn gas_data_mut(&mut self) -> &mut GasData {
         &mut self.gas_data
     }
@@ -1958,6 +2029,10 @@ impl SenderSignedData {
             intent_message: IntentMessage::new(intent, tx_data),
             tx_signatures: vec![tx_signature.into()],
         }])
+    }
+
+    pub fn inner_vec_mut_for_testing(&mut self) -> &mut Vec<SenderSignedTransaction> {
+        &mut self.0
     }
 
     pub fn inner(&self) -> &SenderSignedTransaction {
@@ -2081,6 +2156,51 @@ impl Message for SenderSignedData {
         TransactionDigest::new(default_hash(&self.intent_message().value))
     }
 
+    fn verify_user_input(&self) -> SuiResult {
+        fp_ensure!(
+            self.0.len() == 1,
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must contain exactly one transaction".to_string()
+                )
+            }
+        );
+        let tx_data = &self.intent_message().value;
+        fp_ensure!(
+            !tx_data.is_system_tx(),
+            SuiError::UserInputError {
+                error: UserInputError::Unsupported(
+                    "SenderSignedData must not contain system transaction".to_string()
+                )
+            }
+        );
+
+        // Verify signatures are well formed. Steps are ordered in asc complexity order
+        // to minimize abuse.
+        let signers = self.intent_message().value.signers();
+        // Signature number needs to match
+        fp_ensure!(
+            self.inner().tx_signatures.len() == signers.len(),
+            SuiError::SignerSignatureNumberMismatch {
+                actual: self.inner().tx_signatures.len(),
+                expected: signers.len()
+            }
+        );
+
+        // All required signers need to be sign.
+        let present_sigs = self.get_signer_sig_mapping(true)?;
+        for s in signers {
+            if !present_sigs.contains_key(&s) {
+                return Err(SuiError::SignerSignatureAbsent {
+                    expected: s.to_string(),
+                    actual: present_sigs.keys().map(|s| s.to_string()).collect(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
         for sig in &self.inner().tx_signatures {
             sig.verify_user_authenticator_epoch(epoch)?;
@@ -2096,10 +2216,16 @@ impl AuthenticatedMessage for SenderSignedData {
         for (signer, signature) in
             self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?
         {
-            signature.verify_uncached_checks(self.intent_message(), signer, verify_params)?;
+            signature.verify_uncached_checks(
+                self.intent_message(),
+                signer,
+                verify_params,
+                signature.check_author(),
+            )?;
         }
         Ok(())
     }
+
     fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult {
         fp_ensure!(
             self.0.len() == 1,
@@ -2137,7 +2263,12 @@ impl AuthenticatedMessage for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_claims(self.intent_message(), signer, verify_params)?;
+            signature.verify_claims(
+                self.intent_message(),
+                signer,
+                verify_params,
+                signature.check_author(),
+            )?;
         }
         Ok(())
     }
@@ -2290,6 +2421,24 @@ impl VerifiedTransaction {
         .pipe(Self::new_system_transaction)
     }
 
+    pub fn new_randomness_state_update(
+        epoch: u64,
+        round: u64,
+        randomness_round: u64,
+        random_bytes: Vec<u8>,
+        randomness_obj_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        RandomnessStateUpdate {
+            epoch,
+            round,
+            randomness_round,
+            random_bytes,
+            randomness_obj_initial_shared_version,
+        }
+        .pipe(TransactionKind::RandomnessStateUpdate)
+        .pipe(Self::new_system_transaction)
+    }
+
     pub fn new_end_of_epoch_transaction(txns: Vec<EndOfEpochTransactionKind>) -> Self {
         TransactionKind::EndOfEpochTransaction(txns).pipe(Self::new_system_transaction)
     }
@@ -2436,7 +2585,7 @@ pub struct ObjectReadResult {
 
 #[derive(Clone, Debug)]
 pub enum ObjectReadResultKind {
-    Object(Arc<Object>),
+    Object(Object),
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
@@ -2444,12 +2593,6 @@ pub enum ObjectReadResultKind {
 
 impl From<Object> for ObjectReadResultKind {
     fn from(object: Object) -> Self {
-        Self::Object(Arc::new(object))
-    }
-}
-
-impl From<Arc<Object>> for ObjectReadResultKind {
-    fn from(object: Arc<Object>) -> Self {
         Self::Object(object)
     }
 }
@@ -2474,7 +2617,7 @@ impl ObjectReadResult {
         self.input_object_kind.object_id()
     }
 
-    pub fn as_object(&self) -> Option<&Arc<Object>> {
+    pub fn as_object(&self) -> Option<&Object> {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
             ObjectReadResultKind::DeletedSharedObject(_, _) => None,
@@ -2485,7 +2628,7 @@ impl ObjectReadResult {
         let objref = gas.compute_object_reference();
         Self {
             input_object_kind: InputObjectKind::ImmOrOwnedMoveObject(objref),
-            object: ObjectReadResultKind::Object(Arc::new(gas.clone())),
+            object: ObjectReadResultKind::Object(gas.clone()),
         }
     }
 
@@ -2735,7 +2878,7 @@ impl InputObjects {
         )
     }
 
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Arc<Object>> {
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
         self.objects
             .into_iter()
             .filter_map(|o| o.as_object().map(|object| (o.id(), object.clone())))
@@ -2756,13 +2899,13 @@ impl InputObjects {
 // ReceivingObjectReadResultKind::PreviouslyReceivedObject.
 #[derive(Clone, Debug)]
 pub enum ReceivingObjectReadResultKind {
-    Object(Arc<Object>),
+    Object(Object),
     // The object was received by some other transaction, and we were not able to read it
     PreviouslyReceivedObject,
 }
 
 impl ReceivingObjectReadResultKind {
-    pub fn as_object(&self) -> Option<&Arc<Object>> {
+    pub fn as_object(&self) -> Option<&Object> {
         match &self {
             Self::Object(object) => Some(object),
             Self::PreviouslyReceivedObject => None,
@@ -2790,7 +2933,7 @@ impl ReceivingObjectReadResult {
 
 impl From<Object> for ReceivingObjectReadResultKind {
     fn from(object: Object) -> Self {
-        Self::Object(Arc::new(object))
+        Self::Object(object)
     }
 }
 

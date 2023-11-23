@@ -82,7 +82,8 @@ export async function zkLoginAuthenticate({
 	if (!nonce) {
 		nonce = base64url.encode(randomBytes(20));
 	}
-	const { clientID, url, extraParams, buildExtraParams } = zkLoginProviderDataMap[provider];
+	const { clientID, url, extraParams, buildExtraParams, extractJWT } =
+		zkLoginProviderDataMap[provider];
 	const params = new URLSearchParams(extraParams);
 	params.append('client_id', clientID);
 	params.append('redirect_uri', Browser.identity.getRedirectURL());
@@ -103,8 +104,13 @@ export async function zkLoginAuthenticate({
 			}),
 		);
 	}
-	const responseParams = new URLSearchParams(responseURL.hash.replace('#', ''));
-	const jwt = responseParams.get('id_token');
+	let jwt;
+	if (extractJWT) {
+		jwt = await extractJWT(responseURL);
+	} else {
+		const responseParams = new URLSearchParams(responseURL.hash.replace('#', ''));
+		jwt = responseParams.get('id_token');
+	}
 	if (!jwt) {
 		throw new Error('JWT is missing');
 	}

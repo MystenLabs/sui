@@ -25,7 +25,7 @@ use optimize::optimize;
 use std::collections::BTreeSet;
 
 pub struct CFGContext<'a> {
-    pub module: Option<ModuleIdent>,
+    pub module: ModuleIdent,
     pub member: MemberName,
     pub struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
     pub visibility: Visibility,

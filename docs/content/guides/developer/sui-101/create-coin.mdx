@@ -2,9 +2,9 @@
 title: Create a Coin
 ---
 
-Publishing a coin on Sui is nearly as straightforward as publishing a new type. The main difference is the requirement of a [one-time witness](/concepts/sui-move-concepts/one-time-witness.mdx) when creating a coin. 
+Publishing a coin on Sui is nearly as straightforward as publishing a new type. The main difference is the requirement of a [one-time witness](/concepts/sui-move-concepts/one-time-witness.mdx) when creating a coin.
 
-```rust
+```move
 module examples::mycoin {
     use std::option;
     use sui::coin;
@@ -27,4 +27,3 @@ module examples::mycoin {
 ```
 
 The `Coin<T>` is a generic implementation of a coin on Sui. The owner of the `TreasuryCap` gets control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
-

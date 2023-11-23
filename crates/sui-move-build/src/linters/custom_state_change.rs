@@ -91,9 +91,6 @@ impl SimpleAbsIntConstructor for CustomStateChangeVerifier {
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
-        let Some(_) = &context.module else {
-            return None;
-        };
         let MemberName::Function(fn_name) = context.member else {
             return None;
         };
@@ -191,10 +188,8 @@ fn is_local_obj_with_store(sp!(_, st_): &SingleType, context: &CFGContext) -> bo
             return false;
         }
         if let TypeName_::ModuleType(mident, _) = tname {
-            if let Some(current_mident) = context.module {
-                if mident.value == current_mident.value {
-                    return true;
-                }
+            if mident.value == context.module.value {
+                return true;
             }
         }
     }

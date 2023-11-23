@@ -4,7 +4,7 @@
 use crate::{
     crypto::{CompressedSignature, SignatureScheme},
     multisig::{MultiSig, MultiSigPublicKey},
-    signature::{AuthenticatorTrait, VerifyParams},
+    signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
     sui_serde::SuiBitmap,
 };
 pub use enum_dispatch::enum_dispatch;
@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::{
     base_types::{EpochId, SuiAddress},
-    crypto::{PublicKey, Signature},
+    crypto::PublicKey,
     error::SuiError,
 };
 
@@ -86,6 +86,9 @@ impl Hash for MultiSigLegacy {
 }
 
 impl AuthenticatorTrait for MultiSigLegacy {
+    fn check_author(&self) -> bool {
+        true
+    }
     fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
         Ok(())
     }
@@ -95,6 +98,7 @@ impl AuthenticatorTrait for MultiSigLegacy {
         _value: &IntentMessage<T>,
         _author: SuiAddress,
         _aux_verify_data: &VerifyParams,
+        _check_author: bool,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
@@ -107,12 +111,13 @@ impl AuthenticatorTrait for MultiSigLegacy {
         value: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
+        check_author: bool,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
     {
         let multisig: MultiSig = self.clone().try_into()?;
-        multisig.verify_claims(value, author, aux_verify_data)
+        multisig.verify_claims(value, author, aux_verify_data, check_author)
     }
 
     fn verify_authenticator<T>(
@@ -166,7 +171,7 @@ pub fn bitmap_to_u16(roaring: RoaringBitmap) -> Result<u16, SuiError> {
 impl MultiSigLegacy {
     /// This combines a list of [enum Signature] `flag || signature || pk` to a MultiSig.
     pub fn combine(
-        full_sigs: Vec<Signature>,
+        full_sigs: Vec<GenericSignature>,
         multisig_pk: MultiSigPublicKeyLegacy,
     ) -> Result<Self, SuiError> {
         multisig_pk

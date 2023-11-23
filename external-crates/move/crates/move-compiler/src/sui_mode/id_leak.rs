@@ -26,8 +26,9 @@ use std::collections::BTreeMap;
 
 use super::{
     AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, CLOCK_MODULE_NAME, ID_LEAK_DIAG,
-    OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH, SUI_ADDR_NAME, SUI_CLOCK_CREATE,
-    SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME, UID_TYPE_NAME,
+    OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE,
+    SUI_ADDR_NAME, SUI_CLOCK_CREATE, SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE,
+    SUI_SYSTEM_MODULE_NAME, UID_TYPE_NAME,
 };
 
 pub const FRESH_ID_FUNCTIONS: &[(Symbol, Symbol, Symbol)] = &[
@@ -46,6 +47,11 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
         SUI_ADDR_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME,
         AUTHENTICATOR_STATE_CREATE,
+    ),
+    (
+        SUI_ADDR_NAME,
+        RANDOMNESS_MODULE_NAME,
+        RANDOMNESS_STATE_CREATE,
     ),
 ];
 
@@ -88,9 +94,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
         context: &'a CFGContext<'a>,
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
-        let Some(module) = &context.module else {
-            return None;
-        };
+        let module = &context.module;
         let package_name = program.modules.get(module).unwrap().package_name;
         let config = env.package_config(package_name);
         if config.flavor != Flavor::Sui {

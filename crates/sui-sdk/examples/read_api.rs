@@ -31,13 +31,23 @@ async fn main() -> Result<(), anyhow::Error> {
     println!(" *** Owned Objects ***\n");
 
     // Dynamic Fields
+    let parent_object_id = ObjectID::from_address(active_address.into());
     let dynamic_fields = sui
         .read_api()
-        .get_dynamic_fields(ObjectID::from_address(active_address.into()), None, None)
+        .get_dynamic_fields(parent_object_id, None, None)
         .await?;
     println!(" *** Dynamic Fields ***");
     println!("{:?}", dynamic_fields);
     println!(" *** Dynamic Fields ***\n");
+    if let Some(dynamic_field_info) = dynamic_fields.data.into_iter().next() {
+        println!(" *** First Dynamic Field ***");
+        let dynamic_field = sui
+            .read_api()
+            .get_dynamic_field_object(parent_object_id, dynamic_field_info.name)
+            .await?;
+        println!("{dynamic_field:?}");
+        println!(" *** First Dynamic Field ***\n");
+    }
 
     let object = owned_objects
         .data

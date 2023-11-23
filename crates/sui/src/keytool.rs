@@ -35,8 +35,10 @@ use sui_keys::keypair_file::{
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
-use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
-use sui_types::crypto::{DefaultHash, PublicKey, Signature};
+use sui_types::crypto::{
+    get_authority_key_pair, EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair,
+};
+use sui_types::crypto::{DefaultHash, PublicKey};
 use sui_types::error::SuiResult;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
@@ -126,7 +128,7 @@ pub enum KeyToolCommand {
     /// [sig2, sig1, sig5] is invalid.
     MultiSigCombinePartialSig {
         #[clap(long, num_args(1..))]
-        sigs: Vec<Signature>,
+        sigs: Vec<GenericSignature>,
         #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
         #[clap(long, num_args(1..))]
@@ -136,7 +138,7 @@ pub enum KeyToolCommand {
     },
     MultiSigCombinePartialSigLegacy {
         #[clap(long, num_args(1..))]
-        sigs: Vec<Signature>,
+        sigs: Vec<GenericSignature>,
         #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
         #[clap(long, num_args(1..))]
@@ -190,10 +192,14 @@ pub enum KeyToolCommand {
         #[clap(long, default_value = "devnet")]
         network: String,
         #[clap(long, default_value = "true")]
-        fixed: bool,
+        fixed: bool, // if true, use a fixed kp generated from [0; 32] seed.
+        #[clap(long, default_value = "true")]
+        test_multisig: bool, // if true, use a multisig address with zklogin and a traditional kp.
+        #[clap(long, default_value = "false")]
+        sign_with_sk: bool, // if true, execute tx with the traditional sig (in the multisig), otherwise with the zklogin sig.
     },
 
-    /// A workaround to the above command because sometimes token pasting does not work. All the inputs required here are printed from the command above.
+    /// A workaround to the above command because sometimes token pasting does not work (for Facebook). All the inputs required here are printed from the command above.
     ZkLoginEnterToken {
         #[clap(long)]
         parsed_token: String,
@@ -207,6 +213,10 @@ pub enum KeyToolCommand {
         ephemeral_key_identifier: SuiAddress,
         #[clap(long, default_value = "devnet")]
         network: String,
+        #[clap(long, default_value = "true")]
+        test_multisig: bool,
+        #[clap(long, default_value = "false")]
+        sign_with_sk: bool,
     },
 
     /// Given a zkLogin signature, parse it if valid. If `bytes` provided,
@@ -431,8 +441,8 @@ impl KeyToolCommand {
                         .get(i as usize)
                         .ok_or(anyhow!("Invalid public keys index".to_string()))?;
                     output.participating_keys_signatures.push(DecodedMultiSig {
-                        public_base64_key: Base64::encode(sig.as_ref()).clone(),
-                        sig_base64: pk.encode_base64().clone(),
+                        public_base64_key: pk.encode_base64().clone(),
+                        sig_base64: Base64::encode(sig.as_ref()),
                         weight: w.to_string(),
                     })
                 }
@@ -441,7 +451,8 @@ impl KeyToolCommand {
                     let tx_bytes = Base64::decode(&tx_bytes.unwrap())
                         .map_err(|e| anyhow!("Invalid base64 tx bytes: {:?}", e))?;
                     let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
-                    let res = GenericSignature::MultiSig(multisig).verify_authenticator(
+                    let s = GenericSignature::MultiSig(multisig);
+                    let res = s.verify_authenticator(
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
                         address,
                         None,
@@ -792,6 +803,8 @@ impl KeyToolCommand {
                 max_epoch,
                 network,
                 fixed,
+                test_multisig,
+                sign_with_sk,
             } => {
                 let skp = if fixed {
                     SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])))
@@ -898,6 +911,8 @@ impl KeyToolCommand {
                     ephemeral_key_identifier,
                     keystore,
                     &network,
+                    test_multisig,
+                    sign_with_sk,
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
@@ -909,6 +924,8 @@ impl KeyToolCommand {
                 kp_bigint,
                 ephemeral_key_identifier,
                 network,
+                test_multisig,
+                sign_with_sk,
             } => {
                 let tx_digest = perform_zk_login_test_tx(
                     &parsed_token,
@@ -918,6 +935,8 @@ impl KeyToolCommand {
                     ephemeral_key_identifier,
                     keystore,
                     &network,
+                    test_multisig,
+                    sign_with_sk,
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
@@ -953,7 +972,7 @@ impl KeyToolCommand {
                             "mainnet" | "testnet" => ZkLoginEnv::Prod,
                             _ => return Err(anyhow!("Invalid network")),
                         };
-                        let aux_verify_data = VerifyParams::new(parsed, vec![], env, true);
+                        let aux_verify_data = VerifyParams::new(parsed, vec![], env, true, true);
 
                         let (serialized, res) = match IntentScope::try_from(intent_scope)
                             .map_err(|_| anyhow!("Invalid scope"))?

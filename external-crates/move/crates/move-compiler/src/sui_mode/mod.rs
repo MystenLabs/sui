@@ -41,6 +41,9 @@ pub const SUI_CLOCK_CREATE: Symbol = symbol!("create");
 pub const AUTHENTICATOR_STATE_MODULE_NAME: Symbol = symbol!("authenticator_state");
 pub const AUTHENTICATOR_STATE_TYPE_NAME: Symbol = symbol!("AuthenticatorState");
 pub const AUTHENTICATOR_STATE_CREATE: Symbol = symbol!("create");
+pub const RANDOMNESS_MODULE_NAME: Symbol = symbol!("random");
+pub const RANDOMNESS_STATE_TYPE_NAME: Symbol = symbol!("Random");
+pub const RANDOMNESS_STATE_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
@@ -77,13 +80,6 @@ pub const ID_LEAK_DIAG: DiagnosticInfo = custom(
     "invalid object construction",
 );
 
-pub const SCRIPT_DIAG: DiagnosticInfo = custom(
-    SUI_DIAG_PREFIX,
-    Severity::NonblockingError,
-    /* category */ TYPING,
-    /* code */ 1,
-    "scripts are not supported",
-);
 pub const ENTRY_FUN_SIGNATURE_DIAG: DiagnosticInfo = custom(
     SUI_DIAG_PREFIX,
     Severity::NonblockingError,

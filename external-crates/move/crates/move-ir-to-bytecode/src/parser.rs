@@ -36,20 +36,6 @@ fn verify_string(string: &str) -> Result<()> {
         })
 }
 
-/// Given the raw input of a file, creates a `ScriptOrModule` enum
-/// Fails with `Err(_)` if the text cannot be parsed`
-pub fn parse_script_or_module(s: &str) -> Result<ast::ScriptOrModule> {
-    verify_string(s)?;
-    syntax::parse_script_or_module_string(s).or_else(|e| handle_error(e, s))
-}
-
-/// Given the raw input of a file, creates a `Script` struct
-/// Fails with `Err(_)` if the text cannot be parsed
-pub fn parse_script(script_str: &str) -> Result<ast::Script> {
-    verify_string(script_str)?;
-    syntax::parse_script_string(script_str).or_else(|e| handle_error(e, script_str))
-}
-
 /// Given the raw input of a file, creates a single `ModuleDefinition` struct
 /// Fails with `Err(_)` if the text cannot be parsed
 pub fn parse_module(modules_str: &str) -> Result<ast::ModuleDefinition> {

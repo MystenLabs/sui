@@ -374,12 +374,14 @@ const CompressedSignature = bcs.enum('CompressedSignature', {
 	ED25519: bcs.fixedArray(64, bcs.u8()),
 	Secp256k1: bcs.fixedArray(64, bcs.u8()),
 	Secp256r1: bcs.fixedArray(64, bcs.u8()),
+	ZkLogin: bcs.vector(bcs.u8()),
 });
 
 const PublicKey = bcs.enum('PublicKey', {
 	ED25519: bcs.fixedArray(32, bcs.u8()),
 	Secp256k1: bcs.fixedArray(33, bcs.u8()),
 	Secp256r1: bcs.fixedArray(33, bcs.u8()),
+	ZkLogin: bcs.vector(bcs.u8()),
 });
 
 const MultiSigPkMap = bcs.struct('MultiSigPkMap', {

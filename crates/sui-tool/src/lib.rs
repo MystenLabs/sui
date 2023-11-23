@@ -10,6 +10,7 @@ use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::num::NonZeroUsize;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -56,6 +57,7 @@ use sui_types::messages_grpc::{
     TransactionStatus,
 };
 
+use sui_types::storage::{ReadStore, SharedInMemoryStore};
 use tracing::info;
 use typed_store::rocks::MetricConf;
 
@@ -1208,6 +1210,55 @@ pub async fn verify_archive(
         .await
 }
 
+pub async fn dump_checkpoints_from_archive(
+    remote_store_config: ObjectStoreConfig,
+    start_checkpoint: u64,
+    end_checkpoint: u64,
+    max_content_length: usize,
+) -> Result<()> {
+    let metrics = ArchiveReaderMetrics::new(&Registry::default());
+    let config = ArchiveReaderConfig {
+        remote_store_config,
+        download_concurrency: NonZeroUsize::new(1).unwrap(),
+        use_for_pruning_watermark: false,
+    };
+    let store = SharedInMemoryStore::default();
+    let archive_reader = ArchiveReader::new(config, &metrics)?;
+    archive_reader.sync_manifest_once().await?;
+    let checkpoint_counter = Arc::new(AtomicU64::new(0));
+    let txn_counter = Arc::new(AtomicU64::new(0));
+    archive_reader
+        .read(
+            store.clone(),
+            Range {
+                start: start_checkpoint,
+                end: end_checkpoint,
+            },
+            txn_counter,
+            checkpoint_counter,
+            false,
+        )
+        .await?;
+    for key in store
+        .inner()
+        .checkpoints()
+        .values()
+        .sorted_by(|a, b| a.sequence_number().cmp(&b.sequence_number))
+    {
+        let mut content = serde_json::to_string(
+            &store
+                .get_full_checkpoint_contents_by_sequence_number(key.sequence_number)?
+                .unwrap(),
+        )?;
+        content.truncate(max_content_length);
+        info!(
+            "{}:{}:{:?}",
+            key.sequence_number, key.content_digest, content
+        );
+    }
+    Ok(())
+}
+
 pub async fn verify_archive_by_checksum(
     remote_store_config: ObjectStoreConfig,
     concurrency: usize,
@@ -1320,6 +1371,7 @@ pub async fn state_sync_from_archive(
             start..u64::MAX,
             txn_counter,
             checkpoint_counter,
+            true,
         )
         .await?;
     let end = checkpoint_store

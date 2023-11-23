@@ -192,7 +192,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             context.extend_diags(diags)
         }
         C::Jump { .. } => (),
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
 

@@ -112,18 +112,6 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_script_custom(&mut self, _name: Symbol, script: &mut T::Script) -> bool {
-        let config = self.env.package_config(script.package_name);
-        if config.flavor == Flavor::Sui {
-            // TODO point to PTB docs?
-            let msg = "'scripts' are not supported on Sui. \
-                        Consider removing or refactoring into a 'module'";
-            self.env.add_diag(diag!(SCRIPT_DIAG, (script.loc, msg)));
-        }
-        // skip scripts
-        true
-    }
-
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
         let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
@@ -170,11 +158,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
 
     fn visit_function_custom(
         &mut self,
-        module: Option<ModuleIdent>,
+        module: ModuleIdent,
         name: FunctionName,
         fdef: &mut T::Function,
     ) -> bool {
-        debug_assert!(self.current_module == module);
+        debug_assert!(self.current_module.as_ref() == Some(&module));
         function(self, name, fdef);
         // skip since we have already visited the body
         true

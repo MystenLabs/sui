@@ -17,7 +17,7 @@ use std::{
 };
 use IR::Ability;
 
-/// Compilation context for a single compilation unit (module or script).
+/// Compilation context for a single compilation unit (module).
 /// Contains all of the dependencies actually used in the module
 pub struct Context<'a> {
     pub env: &'a mut CompilationEnv,
@@ -282,13 +282,9 @@ impl<'a> Context<'a> {
         IR::QualifiedStructIdent::new(mname, n)
     }
 
-    pub fn function_definition_name(
-        &self,
-        m: Option<&ModuleIdent>,
-        f: FunctionName,
-    ) -> IR::FunctionName {
+    pub fn function_definition_name(&self, m: &ModuleIdent, f: FunctionName) -> IR::FunctionName {
         assert!(
-            self.current_module == m,
+            self.current_module == Some(m),
             "ICE invalid function definition lookup"
         );
         Self::translate_function_name(f)
@@ -309,13 +305,9 @@ impl<'a> Context<'a> {
         (mname, n)
     }
 
-    pub fn constant_definition_name(
-        &self,
-        m: Option<&ModuleIdent>,
-        f: ConstantName,
-    ) -> IR::ConstantName {
+    pub fn constant_definition_name(&self, m: &ModuleIdent, f: ConstantName) -> IR::ConstantName {
         assert!(
-            self.current_module == m,
+            self.current_module == Some(m),
             "ICE invalid constant definition lookup"
         );
         Self::translate_constant_name(f)

@@ -19,15 +19,11 @@ use crate::{
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
     graphmap::DiGraphMap,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    mem,
-};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
 // Context
@@ -36,16 +32,10 @@ use std::{
 struct Context<'env> {
     env: &'env mut CompilationEnv,
     struct_declared_abilities: UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-    start: Option<Label>,
-    loop_begin: Option<Label>,
-    loop_end: Option<Label>,
-    next_label: Option<Label>,
     label_count: usize,
-    blocks: BasicBlocks,
-    block_ordering: BTreeMap<Label, usize>,
+    named_blocks: UniqueMap<Var, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
-    block_info: Vec<(Label, BlockInfo)>,
 }
 
 impl<'env> Context<'env> {
@@ -71,14 +61,8 @@ impl<'env> Context<'env> {
         Context {
             env,
             struct_declared_abilities,
-            next_label: None,
-            loop_begin: None,
-            loop_end: None,
-            start: None,
             label_count: 0,
-            blocks: BasicBlocks::new(),
-            block_ordering: BTreeMap::new(),
-            block_info: vec![],
+            named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
         }
     }
@@ -89,64 +73,44 @@ impl<'env> Context<'env> {
         Label(count)
     }
 
-    fn insert_block(&mut self, lbl: Label, basic_block: BasicBlock) {
-        assert!(self.block_ordering.insert(lbl, self.blocks.len()).is_none());
-        assert!(self.blocks.insert(lbl, basic_block).is_none());
-        let block_info = match self.loop_bounds.get(&lbl) {
-            None => BlockInfo::Other,
-            Some(info) => BlockInfo::LoopHead(*info),
-        };
-        self.block_info.push((lbl, block_info));
+    fn enter_named_block(&mut self, name: Var, is_loop_stmt: bool) -> (Label, Label) {
+        let start_label = self.new_label();
+        let end_label = self.new_label();
+        self.loop_bounds.insert(
+            start_label,
+            LoopInfo {
+                is_loop_stmt,
+                loop_end: G::LoopEnd::Target(end_label),
+            },
+        );
+        self.named_blocks
+            .add(name, (start_label, end_label))
+            .expect("ICE reused block name");
+        (start_label, end_label)
     }
 
-    // Returns the blocks inserted in insertion ordering
-    pub fn finish_blocks(&mut self) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
-        self.next_label = None;
-        let start = self.start.take();
-        let blocks = mem::take(&mut self.blocks);
-        let block_ordering = mem::take(&mut self.block_ordering);
-        let block_info = mem::take(&mut self.block_info);
-        self.loop_bounds = BTreeMap::new();
-        self.label_count = 0;
-        self.loop_begin = None;
-        self.loop_end = None;
+    fn exit_named_block(&mut self, name: &Var) {
+        self.named_blocks.remove(name);
+    }
 
-        // Blocks will eventually be ordered and outputted to bytecode the label. But labels are
-        // initially created depth first
-        // So the labels need to be remapped based on the insertion order of the block
-        // This preserves the original layout of the code as specified by the user (since code is
-        // finshed+inserted into the map in original code order)
-        let remapping = block_ordering
-            .into_iter()
-            .map(|(lbl, ordering)| (lbl, Label(ordering)))
-            .collect();
-        let (start, blocks) = G::remap_labels(&remapping, start.unwrap(), blocks);
-        let block_info = block_info
-            .into_iter()
-            .map(|(lbl, info)| {
-                let info = match info {
-                    BlockInfo::Other => BlockInfo::Other,
-                    BlockInfo::LoopHead(G::LoopInfo {
-                        is_loop_stmt,
-                        loop_end,
-                    }) => {
-                        let loop_end = match loop_end {
-                            G::LoopEnd::Unused => G::LoopEnd::Unused,
-                            G::LoopEnd::Target(end) if remapping.contains_key(&end) => {
-                                G::LoopEnd::Target(remapping[&end])
-                            }
-                            G::LoopEnd::Target(_end) => G::LoopEnd::Unused,
-                        };
-                        BlockInfo::LoopHead(G::LoopInfo {
-                            is_loop_stmt,
-                            loop_end,
-                        })
-                    }
-                };
-                (remapping[&lbl], info)
-            })
-            .collect();
-        (start, blocks, block_info)
+    fn named_block_start_label(&mut self, name: &Var) -> Label {
+        self.named_blocks
+            .get(name)
+            .expect("ICE named block with no entry")
+            .0
+    }
+
+    fn named_block_end_label(&mut self, name: &Var) -> Label {
+        self.named_blocks
+            .get(name)
+            .expect("ICE named block with no entry")
+            .1
+    }
+
+    fn clear_block_state(&mut self) {
+        assert!(self.named_blocks.is_empty());
+        self.label_count = 0;
+        self.loop_bounds = BTreeMap::new();
     }
 }
 
@@ -159,17 +123,13 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: H::Program,
 ) -> G::Program {
-    let H::Program {
-        modules: hmodules,
-        scripts: hscripts,
-    } = prog;
+    let H::Program { modules: hmodules } = prog;
 
     let mut context = Context::new(compilation_env, pre_compiled_lib, &hmodules);
 
     let modules = modules(&mut context, hmodules);
-    let scripts = scripts(&mut context, hscripts);
 
-    let program = G::Program { modules, scripts };
+    let program = G::Program { modules };
     visit_program(&mut context, &program);
     program
 }
@@ -202,8 +162,8 @@ fn module(
     } = mdef;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, Some(module_ident), hconstants);
-    let functions = hfunctions.map(|name, f| function(context, Some(module_ident), name, f));
+    let constants = constants(context, module_ident, hconstants);
+    let functions = hfunctions.map(|name, f| function(context, module_ident, name, f));
     context.env.pop_warning_filter_scope();
     (
         module_ident,
@@ -221,48 +181,13 @@ fn module(
     )
 }
 
-fn scripts(
-    context: &mut Context,
-    hscripts: BTreeMap<Symbol, H::Script>,
-) -> BTreeMap<Symbol, G::Script> {
-    hscripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, hscript: H::Script) -> G::Script {
-    let H::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        constants: hconstants,
-        function_name,
-        function: hfunction,
-    } = hscript;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = constants(context, None, hconstants);
-    let function = function(context, None, function_name, hfunction);
-    context.env.pop_warning_filter_scope();
-    G::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        constants,
-        function_name,
-        function,
-    }
-}
-
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
 
 fn constants(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     mut consts: UniqueMap<ConstantName, H::Constant>,
 ) -> UniqueMap<ConstantName, G::Constant> {
     // Traverse the constants and compute the dependency graph between constants: if one mentions
@@ -393,7 +318,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
                 dep_exp(set, lhs);
                 dep_exp(set, rhs)
             }
-            C::Break | C::Continue | C::Jump { .. } | C::JumpIf { .. } => (),
+            C::Break(_) | C::Continue(_) | C::Jump { .. } | C::JumpIf { .. } => (),
         }
     }
 
@@ -413,6 +338,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
             S::While {
                 cond: (cond_block, cond_exp),
                 block,
+                ..
             } => {
                 dep_block(set, cond_block);
                 dep_exp(set, cond_exp);
@@ -437,7 +363,7 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
 fn constant(
     context: &mut Context,
     constant_values: &mut UniqueMap<ConstantName, Value>,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: ConstantName,
     c: H::Constant,
 ) -> G::Constant {
@@ -491,18 +417,18 @@ const CANNOT_FOLD: &str =
 fn constant_(
     context: &mut Context,
     constant_values: &UniqueMap<ConstantName, Value>,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: ConstantName,
     full_loc: Loc,
     signature: H::BaseType,
     locals: UniqueMap<Var, H::SingleType>,
-    block: H::Block,
+    body: H::Block,
 ) -> Option<H::Exp> {
     use H::Command_ as C;
     const ICE_MSG: &str = "ICE invalid constant should have been blocked in typing";
-
-    initial_block(context, block);
-    let (start, mut blocks, block_info) = context.finish_blocks();
+    let blocks = block(context, body);
+    let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
+    context.clear_block_state();
 
     let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
     let (mut cfg, infinite_loop_starts, errors) = MutForwardCFG::new(start, &mut blocks, binfo);
@@ -601,7 +527,7 @@ pub(crate) fn move_value_from_value_(v_: Value_) -> MoveValue {
 
 fn function(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     f: H::Function,
 ) -> G::Function {
@@ -630,7 +556,7 @@ fn function(
 
 fn function_body(
     context: &mut Context,
-    module: Option<ModuleIdent>,
+    module: ModuleIdent,
     name: FunctionName,
     visibility: H::Visibility,
     signature: &H::FunctionSignature,
@@ -638,21 +564,16 @@ fn function_body(
 ) -> G::FunctionBody {
     use G::FunctionBody_ as GB;
     use H::FunctionBody_ as HB;
-    assert!(context.next_label.is_none());
-    assert!(context.start.is_none());
-    assert!(context.blocks.is_empty());
-    assert!(context.block_ordering.is_empty());
-    assert!(context.block_info.is_empty());
     assert!(context.loop_bounds.is_empty());
-    assert!(context.loop_begin.is_none());
-    assert!(context.loop_end.is_none());
+    assert!(context.named_blocks.is_empty());
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, body } => {
-            initial_block(context, body);
-            let (start, mut blocks, block_info) = context.finish_blocks();
-
+            let blocks = block(context, body);
+            let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
+            context.clear_block_state();
             let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
@@ -691,203 +612,227 @@ fn function_body(
 // Statements
 //**************************************************************************************************
 
-fn initial_block(context: &mut Context, blocks: H::Block) {
-    let start = context.new_label();
-    context.start = Some(start);
-    block(context, start, blocks)
+type BlockList = Vec<(Label, BasicBlock)>;
+
+fn block(context: &mut Context, stmts: H::Block) -> BlockList {
+    let (start_block, blocks) = block_(context, stmts);
+    [(context.new_label(), start_block)]
+        .into_iter()
+        .chain(blocks)
+        .collect()
 }
 
-fn block(context: &mut Context, mut cur_label: Label, blocks: H::Block) {
-    use H::Command_ as C;
+fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
+    let mut current_block: BasicBlock = VecDeque::new();
+    let mut blocks = Vec::new();
 
-    assert!(!blocks.is_empty());
-    let loc = blocks.back().unwrap().loc;
-    let mut basic_block = block_(context, &mut cur_label, blocks);
-
-    // return if we ended with did not end with a command
-    if basic_block.is_empty() {
-        return;
+    for stmt in stmts.into_iter().rev() {
+        let (new_current, new_blocks) = statement(context, stmt, current_block);
+        blocks = new_blocks.into_iter().chain(blocks.into_iter()).collect();
+        current_block = new_current;
     }
-
-    match context.next_label {
-        Some(next) if !basic_block.back().unwrap().value.is_terminal() => {
-            basic_block.push_back(sp(
-                loc,
-                C::Jump {
-                    target: next,
-                    from_user: false,
-                },
-            ));
-        }
-        _ => (),
-    }
-    context.insert_block(cur_label, basic_block);
+    (current_block, blocks)
 }
 
-fn block_(context: &mut Context, cur_label: &mut Label, blocks: H::Block) -> BasicBlock {
+fn finalize_blocks(
+    context: &mut Context,
+    blocks: BlockList,
+) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
+    // Given the in-order vector of blocks we'd like to emit, we do three things:
+    // 1. Generate an in-order mat from that list.
+    // 2. Generate block info for the blocks in order.
+    // 3. Discard the in-order vector in favor of a (remapped) BTreeMap for CFG.
+
+    let start_label = blocks[0].0;
+
+    let mut label_map: BTreeMap<Label, Label> = BTreeMap::new();
+    let mut label_counter = 0;
+    let mut next_label = || {
+        let label = Label(label_counter);
+        label_counter += 1;
+        label
+    };
+
+    for (lbl, _) in &blocks {
+        label_map.insert(*lbl, next_label());
+    }
+
+    let mut block_info: Vec<(Label, BlockInfo)> = vec![];
+    for (lbl, _) in &blocks {
+        let info = match context.loop_bounds.get(lbl) {
+            None => BlockInfo::Other,
+            Some(LoopInfo {
+                is_loop_stmt,
+                loop_end,
+            }) => {
+                let loop_end = match loop_end {
+                    G::LoopEnd::Target(end) if label_map.contains_key(end) => {
+                        G::LoopEnd::Target(label_map[end])
+                    }
+                    G::LoopEnd::Target(_) => G::LoopEnd::Unused,
+                    G::LoopEnd::Unused => G::LoopEnd::Unused,
+                };
+                BlockInfo::LoopHead(LoopInfo {
+                    is_loop_stmt: *is_loop_stmt,
+                    loop_end,
+                })
+            }
+        };
+        block_info.push((label_map[lbl], info));
+    }
+
+    let block_map: BasicBlocks = BTreeMap::from_iter(blocks);
+    let (out_label, out_blocks) = G::remap_labels(&label_map, start_label, block_map);
+    (out_label, out_blocks, block_info)
+}
+
+fn statement(
+    context: &mut Context,
+    sp!(sloc, stmt): H::Statement,
+    mut current_block: BasicBlock,
+) -> (BasicBlock, BlockList) {
     use H::{Command_ as C, Statement_ as S};
+    match stmt {
+        S::IfElse {
+            cond: test,
+            if_block,
+            else_block,
+        } => {
+            let true_label = context.new_label();
+            let false_label = context.new_label();
+            let phi_label = context.new_label();
 
-    assert!(!blocks.is_empty());
-    let mut basic_block = BasicBlock::new();
+            let test_block = VecDeque::from([sp(
+                sloc,
+                C::JumpIf {
+                    cond: *test,
+                    if_true: true_label,
+                    if_false: false_label,
+                },
+            )]);
 
-    macro_rules! finish_block {
-        (next_label: $next_label:expr) => {{
-            let lbl = mem::replace(cur_label, $next_label);
-            let bb = mem::take(&mut basic_block);
-            context.insert_block(lbl, bb);
-        }};
-    }
+            let (true_entry_block, true_blocks) = block_(
+                context,
+                with_last(if_block, make_jump(sloc, phi_label, false)),
+            );
+            let (false_entry_block, false_blocks) = block_(
+                context,
+                with_last(else_block, make_jump(sloc, phi_label, false)),
+            );
 
-    macro_rules! loop_block {
-        (begin: $begin:expr, end: $end:expr, body: $body:expr, $block:expr) => {{
-            let begin = $begin;
-            let old_begin = mem::replace(&mut context.loop_begin, Some(begin));
-            let old_end = mem::replace(&mut context.loop_end, Some($end));
-            let old_next = mem::replace(&mut context.next_label, Some(begin));
-            block(context, $body, $block);
-            context.next_label = old_next;
-            context.loop_end = old_end;
-            context.loop_begin = old_begin;
-        }};
-    }
+            let new_blocks = [(true_label, true_entry_block)]
+                .into_iter()
+                .chain(true_blocks)
+                .chain([(false_label, false_entry_block)])
+                .chain(false_blocks)
+                .chain([(phi_label, current_block)])
+                .collect::<BlockList>();
 
-    for sp!(loc, stmt_) in blocks {
-        match stmt_ {
-            S::Command(mut cmd) => {
-                command(context, &mut cmd);
-                let is_terminal = cmd.value.is_terminal();
-                basic_block.push_back(cmd);
-                if is_terminal {
-                    finish_block!(next_label: context.new_label());
-                }
-            }
-            S::IfElse {
-                cond,
-                if_block,
-                else_block,
-            } => {
-                let if_true = context.new_label();
-                let if_false = context.new_label();
-                let next_label = context.new_label();
+            (test_block, new_blocks)
+        }
+        // We could turn these into loops earlier and elide this case.
+        S::While {
+            name,
+            cond: (test_block, test),
+            block: body,
+        } => {
+            let (start_label, end_label) = context.enter_named_block(name, false);
+            let body_label = context.new_label();
 
-                // If cond
-                let jump_if = C::JumpIf {
-                    cond: *cond,
-                    if_true,
-                    if_false,
-                };
-                basic_block.push_back(sp(loc, jump_if));
-                finish_block!(next_label: next_label);
+            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
 
-                // If branches
-                let old_next = mem::replace(&mut context.next_label, Some(next_label));
-                block(context, if_true, if_block);
-                block(context, if_false, else_block);
-                context.next_label = old_next;
-            }
-            S::While {
-                cond: (hcond_block, cond),
-                block: loop_block,
-            } => {
-                let loop_cond = context.new_label();
-                let loop_body = context.new_label();
-                let loop_end = context.new_label();
-
-                context.loop_bounds.insert(
-                    loop_cond,
-                    LoopInfo {
-                        is_loop_stmt: false,
-                        loop_end: G::LoopEnd::Target(loop_end),
+            let (initial_test_block, test_blocks) = {
+                let test_jump = sp(
+                    sloc,
+                    C::JumpIf {
+                        cond: *test,
+                        if_true: body_label,
+                        if_false: end_label,
                     },
                 );
+                block_(context, with_last(test_block, test_jump))
+            };
 
-                // Jump to loop condition
-                basic_block.push_back(sp(
-                    loc,
-                    C::Jump {
-                        target: loop_cond,
-                        from_user: false,
-                    },
-                ));
-                finish_block!(next_label: loop_cond);
+            let (body_entry_block, body_blocks) = block_(
+                context,
+                with_last(body, make_jump(sloc, start_label, false)),
+            );
 
-                // Loop condition and case to jump into loop or end
-                if !hcond_block.is_empty() {
-                    assert!(basic_block.is_empty());
-                    basic_block = block_(context, cur_label, hcond_block);
-                }
-                let jump_if = C::JumpIf {
-                    cond: *cond,
-                    if_true: loop_body,
-                    if_false: loop_end,
-                };
-                basic_block.push_back(sp(loc, jump_if));
-                finish_block!(next_label: loop_end);
+            context.exit_named_block(&name);
 
-                // Loop body
-                loop_block!(begin: loop_cond, end: loop_end, body: loop_body, loop_block)
-            }
+            let new_blocks = [(start_label, initial_test_block)]
+                .into_iter()
+                .chain(test_blocks)
+                .chain([(body_label, body_entry_block)])
+                .chain(body_blocks)
+                .chain([(end_label, current_block)])
+                .collect::<BlockList>();
 
-            S::Loop {
-                block: loop_block, ..
-            } => {
-                let loop_body = context.new_label();
-                let loop_end = context.new_label();
-                assert!(cur_label.0 < loop_body.0);
-                assert!(loop_body.0 < loop_end.0);
-
-                context.loop_bounds.insert(
-                    loop_body,
-                    LoopInfo {
-                        is_loop_stmt: true,
-                        loop_end: G::LoopEnd::Target(loop_end),
-                    },
-                );
-
-                // Jump to loop
-                basic_block.push_back(sp(
-                    loc,
-                    C::Jump {
-                        target: loop_body,
-                        from_user: false,
-                    },
-                ));
-                finish_block!(next_label: loop_end);
-
-                // Loop body
-                loop_block!(begin: loop_body, end: loop_end, body: loop_body, loop_block)
-            }
+            (entry_block, new_blocks)
         }
-    }
+        S::Loop {
+            name,
+            block: body,
+            has_break: _,
+        } => {
+            let (start_label, end_label) = context.enter_named_block(name, true);
 
-    basic_block
-}
+            let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
 
-fn command(context: &Context, sp!(_, hc_): &mut H::Command) {
-    use H::Command_ as C;
-    match hc_ {
-        C::Assign(_, _)
-        | C::Mutate(_, _)
-        | C::Abort(_)
-        | C::Return { .. }
-        | C::IgnoreAndPop { .. } => {}
-        C::Continue => {
-            *hc_ = C::Jump {
-                target: context.loop_begin.unwrap(),
-                from_user: true,
-            }
+            let (body_entry_block, body_blocks) = block_(
+                context,
+                with_last(body, make_jump(sloc, start_label, false)),
+            );
+
+            context.exit_named_block(&name);
+
+            let new_blocks = [(start_label, body_entry_block)]
+                .into_iter()
+                .chain(body_blocks)
+                .chain([(end_label, current_block)])
+                .collect::<BlockList>();
+
+            (entry_block, new_blocks)
         }
-        C::Break => {
-            *hc_ = C::Jump {
-                target: context.loop_end.unwrap(),
-                from_user: true,
-            }
+        S::Command(sp!(cloc, C::Break(name))) => {
+            // Discard the current block because it's dead code.
+            let break_jump = make_jump(cloc, context.named_block_end_label(&name), true);
+            (VecDeque::from([break_jump]), vec![])
         }
-        C::Jump { .. } | C::JumpIf { .. } => {
-            panic!("ICE unexpected jump before translation to jumps")
+        S::Command(sp!(cloc, C::Continue(name))) => {
+            // Discard the current block because it's dead code.
+            let jump = make_jump(cloc, context.named_block_start_label(&name), true);
+            (VecDeque::from([jump]), vec![])
+        }
+        S::Command(cmd) if cmd.value.is_terminal() => {
+            // Discard the current block because it's dead code.
+            (VecDeque::from([cmd]), vec![])
+        }
+        S::Command(cmd) => {
+            current_block.push_front(cmd);
+            (current_block, vec![])
         }
     }
 }
+
+fn with_last(mut block: H::Block, sp!(loc, cmd): H::Command) -> H::Block {
+    match block.iter().last() {
+        Some(sp!(_, H::Statement_::Command(cmd))) if cmd.value.is_hlir_terminal() => block,
+        _ => {
+            let stmt = sp(loc, H::Statement_::Command(sp(loc, cmd)));
+            block.push_back(stmt);
+            block
+        }
+    }
+}
+
+fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
+    sp(loc, H::Command_::Jump { target, from_user })
+}
+
+//**************************************************************************************************
+// Visitors
+//**************************************************************************************************
 
 fn visit_program(context: &mut Context, prog: &G::Program) {
     if context.env.visitors().abs_int.is_empty() {
@@ -896,10 +841,6 @@ fn visit_program(context: &mut Context, prog: &G::Program) {
 
     for (mident, mdef) in prog.modules.key_cloned_iter() {
         visit_module(context, prog, mident, mdef)
-    }
-
-    for script in prog.scripts.values() {
-        visit_script(context, prog, script)
     }
 }
 
@@ -913,23 +854,15 @@ fn visit_module(
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
     for (name, fdef) in mdef.functions.key_cloned_iter() {
-        visit_function(context, prog, Some(mident), name, fdef)
+        visit_function(context, prog, mident, name, fdef)
     }
-    context.env.pop_warning_filter_scope();
-}
-
-fn visit_script(context: &mut Context, prog: &G::Program, script: &G::Script) {
-    context
-        .env
-        .add_warning_filter_scope(script.warning_filter.clone());
-    visit_function(context, prog, None, script.function_name, &script.function);
     context.env.pop_warning_filter_scope();
 }
 
 fn visit_function(
     context: &mut Context,
     prog: &G::Program,
-    mident: Option<ModuleIdent>,
+    mident: ModuleIdent,
     name: FunctionName,
     fdef: &G::Function,
 ) {

@@ -438,7 +438,7 @@ export class SuiClient {
 		if (transactionBlock instanceof Uint8Array) {
 			transactionBytes = transactionBlock;
 		} else {
-			transactionBlock.setSenderIfNotSet(await signer.getPublicKey().toSuiAddress());
+			transactionBlock.setSenderIfNotSet(signer.toSuiAddress());
 			transactionBytes = await transactionBlock.build({ client: this });
 		}
 

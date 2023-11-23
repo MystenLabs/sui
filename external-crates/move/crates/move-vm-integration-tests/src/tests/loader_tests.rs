@@ -401,7 +401,7 @@ fn get_relinker_tests_modules_with_deps<'s>(
     )
     .build_and_report()?;
 
-    expect_modules(units).collect()
+    Ok(expect_modules(units).collect())
 }
 
 #[test]

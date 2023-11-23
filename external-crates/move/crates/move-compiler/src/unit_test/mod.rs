@@ -86,16 +86,7 @@ impl TestPlan {
 
         let module_info = units
             .into_iter()
-            .filter_map(|unit| {
-                if let AnnotatedCompiledUnit::Module(annot_module) = unit {
-                    Some((
-                        annot_module.named_module.module.self_id(),
-                        annot_module.named_module,
-                    ))
-                } else {
-                    None
-                }
-            })
+            .map(|unit| (unit.named_module.module.self_id(), unit.named_module))
             .collect();
 
         Self {
@@ -152,7 +143,7 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
         }
         match location {
             Location::Undefined => write!(f, " in an unknown location"),
-            Location::Script => write!(f, " in the script"),
+            Location::Script => unreachable!(),
             Location::Module(id) => write!(f, " in the module {id}"),
         }
     }

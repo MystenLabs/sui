@@ -16,7 +16,7 @@ export class Configuration {
     private readonly configuration: vscode.WorkspaceConfiguration;
 
     constructor() {
-        this.configuration = vscode.workspace.getConfiguration('move-analyzer');
+        this.configuration = vscode.workspace.getConfiguration('move');
     }
 
     /** A string representation of the configured values, for logging purposes. */

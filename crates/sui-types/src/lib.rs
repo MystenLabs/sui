@@ -64,6 +64,7 @@ pub mod multisig_legacy;
 pub mod object;
 pub mod programmable_transaction_builder;
 pub mod quorum_driver_types;
+pub mod randomness_state;
 pub mod signature;
 pub mod storage;
 pub mod sui_serde;
@@ -113,6 +114,11 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub const SUI_AUTHENTICATOR_STATE_ADDRESS: AccountAddress = address_from_single_byte(7);
 pub const SUI_AUTHENTICATOR_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_AUTHENTICATOR_STATE_ADDRESS);
+
+/// 0x8: hardcode object ID for the singleton randomness state object.
+pub const SUI_RANDOMNESS_STATE_ADDRESS: AccountAddress = address_from_single_byte(8);
+pub const SUI_RANDOMNESS_STATE_OBJECT_ID: ObjectID =
+    ObjectID::from_address(SUI_RANDOMNESS_STATE_ADDRESS);
 
 /// Return `true` if `addr` is a special system package that can be upgraded at epoch boundaries.
 /// All new system package ID's must be added here.

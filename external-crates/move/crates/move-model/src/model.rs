@@ -32,6 +32,7 @@ use codespan_reporting::{
 use itertools::Itertools;
 #[allow(unused_imports)]
 use log::{info, warn};
+use move_ir_types::ast as IR;
 use num::{BigUint, One, ToPrimitive};
 use serde::{Deserialize, Serialize};
 
@@ -1802,6 +1803,10 @@ pub struct ModuleData {
 
 impl ModuleData {
     pub fn stub(name: ModuleName, id: ModuleId, module: CompiledModule) -> Self {
+        let ident = IR::ModuleIdent::new(
+            IR::ModuleName(module.name().as_str().into()),
+            *module.address(),
+        );
         ModuleData {
             name,
             id,
@@ -1815,7 +1820,7 @@ impl ModuleData {
             spec_vars: BTreeMap::new(),
             spec_funs: BTreeMap::new(),
             module_spec: Spec::default(),
-            source_map: SourceMap::new(MoveIrLoc::new(FileHash::empty(), 0, 0), None),
+            source_map: SourceMap::new(MoveIrLoc::new(FileHash::empty(), 0, 0), ident),
             loc: Loc::default(),
             attributes: Default::default(),
             spec_block_infos: vec![],

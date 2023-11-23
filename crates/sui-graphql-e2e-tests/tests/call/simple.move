@@ -31,6 +31,22 @@ module Test::M1 {
 
 //# view-object 2,0
 
+//# create-checkpoint 4
+
+//# view-checkpoint
+
+
+//# advance-epoch 6
+
+//# view-checkpoint
+
+//# run-graphql
+
+{
+  checkpoint {
+    sequenceNumber
+  }
+}
 //# create-checkpoint
 
 //# view-checkpoint
@@ -38,32 +54,75 @@ module Test::M1 {
 //# run-graphql
 
 {
-    chainIdentifier
+  checkpoint {
+    sequenceNumber
+  }
 }
+
+//# run-graphql --show-usage --show-headers --show-service-version
+
+{
+  checkpoint {
+    sequenceNumber
+  }
+}
+
+//# view-checkpoint
 
 //# advance-epoch
 
-//# view-checkpoint
+// Demonstrates using variables
+// If the variable ends in _opt, this is the optional variant
 
-//# run-graphql
-
+//# run-graphql --variables A
 {
-  checkpoint {
-    sequenceNumber
-    digest
-  }
-}
-//# create-checkpoint
-
-//# view-checkpoint
-
-//# run-graphql
-
-{
-  checkpoint {
-    sequenceNumber
-    digest
+  address(address: $A) {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
   }
 }
 
-//# view-checkpoint
+//# run-graphql --variables Test A obj_2_0
+{
+  address(address: $Test) {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+  second: address(address: $A) {
+    objectConnection{
+      edges {
+        node {
+          location
+          digest
+          kind
+        }
+      }
+    }
+  }
+
+  object(address: $obj_2_0) {
+    version
+    owner {
+      location
+    }
+  }
+
+}
+
+
+//# view-graphql-variables
+// List all the graphql variables

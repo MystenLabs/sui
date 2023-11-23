@@ -1,5 +1,5 @@
 // check: NEGATIVE_STACK_SIZE_WITHIN_BLOCK
-script {
+module 0x42::m {
 
 fun main() {
     abort

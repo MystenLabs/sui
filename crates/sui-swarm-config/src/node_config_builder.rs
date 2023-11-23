@@ -12,8 +12,8 @@ use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
-    DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, OverloadThresholdConfig,
+    StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol};
 use sui_config::p2p::{P2pConfig, SeedPeer};
@@ -33,6 +33,7 @@ pub struct ValidatorConfigBuilder {
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     force_unpruned_checkpoints: bool,
     jwk_fetch_interval: Option<Duration>,
+    overload_threshold_config: Option<OverloadThresholdConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -62,6 +63,11 @@ impl ValidatorConfigBuilder {
 
     pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
         self.jwk_fetch_interval = Some(i);
+        self
+    }
+
+    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
+        self.overload_threshold_config = Some(config);
         self
     }
 
@@ -171,7 +177,7 @@ impl ValidatorConfigBuilder {
                 .map(|i| i.as_secs())
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
-            overload_threshold_config: Default::default(),
+            overload_threshold_config: self.overload_threshold_config.unwrap_or_default(),
         }
     }
 

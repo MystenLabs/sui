@@ -28,6 +28,7 @@ use sui_json_rpc::api::JsonRpcMetrics;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::get_google_jwk_bytes;
+use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
@@ -568,7 +569,8 @@ impl SuiNode {
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
-            pruning_config.set_enable_pruning_tombstones(false);
+            // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
+            pruning_config.set_killswitch_tombstone_pruning(true);
         }
 
         let state = AuthorityState::new(
@@ -1562,11 +1564,15 @@ impl SuiNode {
         let authenticator_state_obj_initial_shared_version =
             get_authenticator_state_obj_initial_shared_version(&state.database)
                 .expect("read cannot fail");
+        let randomness_state_obj_initial_shared_version =
+            get_randomness_state_obj_initial_shared_version(&state.database)
+                .expect("read cannot fail");
 
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             authenticator_state_obj_initial_shared_version,
+            randomness_state_obj_initial_shared_version,
         );
 
         let new_epoch_store = self

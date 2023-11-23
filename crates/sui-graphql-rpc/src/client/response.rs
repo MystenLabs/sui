@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{Response, ServerError, Value};
+use axum::http::HeaderName;
 use hyper::HeaderMap;
 use reqwest::Response as ReqwestResponse;
 use serde_json::json;
@@ -69,6 +70,14 @@ impl GraphqlResponse {
 
     pub fn http_headers(&self) -> HeaderMap {
         self.headers.clone()
+    }
+
+    /// Returns the HTTP headers without the `Date` header.
+    /// The `Date` header is removed because it is not deterministic.
+    pub fn http_headers_without_date(&self) -> HeaderMap {
+        let mut headers = self.http_headers().clone();
+        headers.remove(HeaderName::from_static("date"));
+        headers
     }
 
     pub fn remote_address(&self) -> Option<SocketAddr> {

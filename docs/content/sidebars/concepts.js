@@ -209,6 +209,7 @@ const concepts = [
 			'concepts/sui-architecture/epochs',
 			'concepts/sui-architecture/protocol-upgrades',
 			'concepts/sui-architecture/data-management-things',
+			'concepts/sui-architecture/staking-rewards'
 		],
 	},
 	{
