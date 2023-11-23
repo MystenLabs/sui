@@ -40,8 +40,6 @@ impl MoveModule {
         self.parsed.bytecode().version
     }
 
-    // TODO: impl all fields
-
     async fn module_id(&self) -> MoveModuleId {
         // TODO: Rethink the need for MoveModuleId -- we probably don't need it (MoveModule should
         // expose access to its package).
@@ -240,12 +238,70 @@ impl MoveModule {
         self.function_impl(name).extend()
     }
 
-    // functionConnection(
-    //   first: Int,
-    //   after: String,
-    //   last: Int,
-    //   before: String,
-    // ): MoveFunctionConnection
+    /// Iterate through the signatures of functions defined in this module.
+    async fn function_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, MoveFunction>>> {
+        let default_page_size = ctx
+            .data::<ServiceConfig>()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .extend()?
+            .limits
+            .max_page_size;
+
+        // TODO: make cursor opaque.
+        // for now it same as function name
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+
+        let function_range = self.parsed.functions(after.as_deref(), before.as_deref());
+
+        let total = function_range.clone().count() as u64;
+        let (skip, take) = match (first, last) {
+            (Some(first), Some(last)) if last < first => (first - last, last),
+            (Some(first), _) => (0, first),
+            (None, Some(last)) if last < total => (total - last, last),
+            (None, _) => (0, default_page_size),
+        };
+
+        let mut connection = Connection::new(false, false);
+        for name in function_range.skip(skip as usize).take(take as usize) {
+            let Some(function) = self.function_impl(name.to_string()).extend()? else {
+                return Err(Error::Internal(format!(
+                    "Cannot deserialize function {name} in module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                )))
+                .extend();
+            };
+
+            connection.edges.push(Edge::new(name.to_string(), function));
+        }
+
+        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
+            self.parsed
+                .functions(None, Some(&fst.cursor))
+                .next()
+                .is_some()
+        });
+
+        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
+            self.parsed
+                .functions(Some(&lst.cursor), None)
+                .next()
+                .is_some()
+        });
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
+    }
 
     /// The Base64 encoded bcs serialization of the module.
     async fn bytes(&self) -> Option<Base64> {

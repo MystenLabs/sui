@@ -596,6 +596,35 @@ type MoveFunction {
 	return: [OpenMoveType!]
 }
 
+type MoveFunctionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveFunctionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveFunction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveFunctionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveFunction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type MoveFunctionTypeParameter {
 	constraints: [MoveAbility!]!
 }
@@ -624,6 +653,10 @@ type MoveModule {
 	Look-up the signature of a function defined in this module, by its name.
 	"""
 	function(name: String!): MoveFunction
+	"""
+	Iterate through the signatures of functions defined in this module.
+	"""
+	functionConnection(first: Int, after: String, last: Int, before: String): MoveFunctionConnection
 	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
