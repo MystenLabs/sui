@@ -16,11 +16,14 @@ import {
 	getFaucetHost,
 	requestSuiFromFaucetV0,
 } from '../../../src/faucet/index.js';
+import { GraphQLSuiClient } from '../../../src/graphql/client.js';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519/index.js';
 import { SUI_TYPE_ARG } from '../../../src/utils/index.js';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
+const DEFAULT_GRAPHQL_URL = import.meta.env.DEFAULT_GRAPHQL_URL ?? 'http:127.0.0.1:9125';
+
 const SUI_BIN = import.meta.env.VITE_SUI_BIN ?? 'cargo run --bin sui';
 
 export const DEFAULT_RECIPIENT =
@@ -33,10 +36,16 @@ export const DEFAULT_SEND_AMOUNT = 1000;
 export class TestToolbox {
 	keypair: Ed25519Keypair;
 	client: SuiClient;
+	graphQLClient: GraphQLSuiClient | null;
 
-	constructor(keypair: Ed25519Keypair, client: SuiClient) {
+	constructor(
+		keypair: Ed25519Keypair,
+		client: SuiClient,
+		graphQLClient: GraphQLSuiClient | null = null,
+	) {
 		this.keypair = keypair;
 		this.client = client;
+		this.graphQLClient = graphQLClient;
 	}
 
 	address() {
@@ -55,23 +64,41 @@ export class TestToolbox {
 	}
 }
 
-export function getClient(): SuiClient {
+export function getClient(url = DEFAULT_FULLNODE_URL): SuiClient {
 	return new SuiClient({
 		transport: new SuiHTTPTransport({
-			url: DEFAULT_FULLNODE_URL,
+			url,
 			WebSocketConstructor: WebSocket as never,
 		}),
 	});
 }
 
-export async function setup() {
-	const keypair = Ed25519Keypair.generate();
-	const address = keypair.getPublicKey().toSuiAddress();
-	return setupWithFundedAddress(keypair, address);
+export function getGraphQLClient(
+	graphqlURL = DEFAULT_GRAPHQL_URL,
+	rpcRrl = DEFAULT_FULLNODE_URL,
+): GraphQLSuiClient {
+	return new GraphQLSuiClient({
+		graphqlURL,
+		transport: new SuiHTTPTransport({
+			url: rpcRrl,
+			WebSocketConstructor: WebSocket as never,
+		}),
+	});
 }
 
-export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: string) {
-	const client = getClient();
+export async function setup(options: { graphQLURL?: string; rpcURL?: string } = {}) {
+	const keypair = Ed25519Keypair.generate();
+	const address = keypair.getPublicKey().toSuiAddress();
+	return setupWithFundedAddress(keypair, address, options);
+}
+
+export async function setupWithFundedAddress(
+	keypair: Ed25519Keypair,
+	address: string,
+	{ graphQLURL, rpcURL }: { graphQLURL?: string; rpcURL?: string } = {},
+) {
+	const client = getClient(rpcURL);
+	const graphQLClient = getGraphQLClient(graphQLURL);
 	await retry(() => requestSuiFromFaucetV0({ host: DEFAULT_FAUCET_URL, recipient: address }), {
 		backoff: 'EXPONENTIAL',
 		// overall timeout in 60 seconds
@@ -95,7 +122,7 @@ export async function setupWithFundedAddress(keypair: Ed25519Keypair, address: s
 			retryIf: () => true,
 		},
 	);
-	return new TestToolbox(keypair, client);
+	return new TestToolbox(keypair, client, graphQLClient);
 }
 
 export async function publishPackage(packagePath: string, toolbox?: TestToolbox) {

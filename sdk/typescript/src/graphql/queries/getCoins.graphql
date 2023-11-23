@@ -18,6 +18,7 @@ query getCoins($owner: SuiAddress!, $first: Int, $cursor: String, $type: String 
 						}
 					}
 					asObject {
+						coinObjectId: location
 						version
 						digest
 						previousTransactionBlock {

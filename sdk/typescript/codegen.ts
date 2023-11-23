@@ -12,11 +12,11 @@ const header = `
 const config: CodegenConfig = {
 	overwrite: true,
 	schema: '../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql',
-	documents: ['src/graphql/**/*.ts', 'src/graphql/**/*.graphql'],
+	documents: ['src/graphql/queries/*.graphql'],
 	ignoreNoDocuments: true,
 	generates: {
 		'src/graphql/generated.ts': {
-			hooks: { afterOneFileWrite: ['prettier --write'] },
+			// hooks: { afterOneFileWrite: ['prettier --write'] },
 			plugins: [
 				{
 					add: {

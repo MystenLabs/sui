@@ -5,7 +5,7 @@ query getBalance($owner: SuiAddress!, $type: String = "0x2::sui::SUI") {
 	address(address: $owner) {
 		balance(type: $type) {
 			coinType {
-				signature
+				repr
 			}
 			coinObjectCount
 			totalBalance

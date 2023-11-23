@@ -6,7 +6,7 @@ import { print } from 'graphql';
 import type { DocumentNode } from 'graphql';
 
 import { bcs } from '../bcs/index.js';
-import type { PaginationArguments } from '../client/client.js';
+import type { PaginationArguments, SuiClientOptions } from '../client/client.js';
 import { SuiClient } from '../client/client.js';
 import type {
 	AddressMetrics,
@@ -85,12 +85,14 @@ import type {
 	SubscribeTransactionParams,
 	TryGetPastObjectParams,
 } from '../client/types/params.js';
+import { normalizeStructTag, parseStructTag } from '../utils/sui-types.js';
 import type { Rpc_Transaction_FieldsFragment, TransactionBlockKindInput } from './generated.js';
 import {
 	GetAllBalancesDocument,
 	GetBalanceDocument,
 	GetChainIdentifierDocument,
 	GetCheckpointDocument,
+	GetCoinMetadataDocument,
 	GetCoinsDocument,
 	GetCurrentEpochDocument,
 	GetLatestCheckpointSequenceNumberDocument,
@@ -106,6 +108,7 @@ import {
 	GetReferenceGasPriceDocument,
 	GetStakesByIdsDocument,
 	GetStakesDocument,
+	GetTotalSupplyDocument,
 	GetTransactionBlockDocument,
 	MultiGetObjectsDocument,
 	MultiGetTransactionBlocksDocument,
@@ -152,10 +155,17 @@ export type GraphQLResponseErrors = Array<{
 }>;
 
 export class GraphQLSuiClient extends SuiClient {
+	#graphqlURL: string;
+
+	constructor({ graphqlURL, ...options }: SuiClientOptions & { graphqlURL: string }) {
+		super(options);
+		this.#graphqlURL = graphqlURL;
+	}
+
 	async graphqlQuery<Result = Record<string, unknown>, Variables = Record<string, unknown>>(
 		options: GraphQLQueryOptions<Result, Variables>,
 	): Promise<GraphQLQueryResult<Result>> {
-		const res = await fetch('https://graphql-beta.mainnet.sui.io', {
+		const res = await fetch(this.#graphqlURL, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -220,8 +230,10 @@ export class GraphQLSuiClient extends SuiClient {
 		return {
 			data: coins.map((coin) => ({
 				balance: coin.balance,
-				coinObjectId: 'TODO',
-				coinType: coin.asMoveObject?.contents?.type.repr!,
+				coinObjectId: coin.asMoveObject.asObject.coinObjectId,
+				coinType: normalizeStructTag(
+					parseStructTag(coin.asMoveObject?.contents?.type.repr!).typeParams[0],
+				),
 				digest: coin.asMoveObject?.asObject?.digest!,
 				previousTransaction: coin.asMoveObject?.asObject?.previousTransactionBlock?.digest!,
 				version: String(coin.asMoveObject?.asObject?.version!),
@@ -250,10 +262,10 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return {
-			coinType: balance.coinType?.signature,
+			coinType: balance.coinType?.repr!,
 			coinObjectCount: balance.coinObjectCount!,
 			totalBalance: balance.totalBalance,
-			lockedBalance: {}, // deprecated?
+			lockedBalance: {},
 		};
 	}
 	override async getAllBalances(input: GetAllBalancesParams): Promise<CoinBalance[]> {
@@ -268,21 +280,48 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return balances.map((balance) => ({
-			coinType: balance.coinType?.signature,
+			coinType: balance.coinType?.repr!,
 			coinObjectCount: balance.coinObjectCount!,
 			totalBalance: balance.totalBalance,
-			lockedBalance: {}, // deprecated?
+			lockedBalance: {},
 		}));
 	}
 
 	override async getCoinMetadata(input: GetCoinMetadataParams): Promise<CoinMetadata | null> {
-		void input;
-		throw new Error('Method not implemented.');
+		const metadata = await this.#graphqlQuery(
+			{
+				query: GetCoinMetadataDocument,
+				variables: {
+					coinType: input.coinType,
+				},
+			},
+			(data) => data.coinMetadata,
+		);
+
+		return {
+			decimals: metadata.decimals!,
+			name: metadata.name!,
+			symbol: metadata.symbol!,
+			description: metadata.description!,
+			iconUrl: metadata.iconUrl,
+			id: metadata.asMoveObject.asObject.location,
+		};
 	}
 
 	override async getTotalSupply(input: GetTotalSupplyParams): Promise<CoinSupply> {
-		void input;
-		throw new Error('Method not implemented.');
+		const metadata = await this.#graphqlQuery(
+			{
+				query: GetTotalSupplyDocument,
+				variables: {
+					coinType: input.coinType,
+				},
+			},
+			(data) => data.coinMetadata,
+		);
+
+		return {
+			value: (BigInt(metadata.supply!) * 10n ** BigInt(metadata.decimals!)).toString(),
+		};
 	}
 
 	override async getMoveFunctionArgTypes(
@@ -400,15 +439,35 @@ export class GraphQLSuiClient extends SuiClient {
 			nextCursor: pageInfo.endCursor,
 			data: objects.map((object) => ({
 				data: {
-					bcs: object.bcs,
-					content: object.asMoveObject?.contents?.json,
+					bcs: input.options?.showBcs
+						? {
+								dataType: 'moveObject',
+								bcsBytes: object.asMoveObject?.contents?.bcs,
+								hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
+								version: object.version as unknown as string, // RPC type is wrong here
+								type: object.asMoveObject?.contents?.type.repr!,
+						  }
+						: undefined,
+					content: {
+						dataType: 'moveObject',
+						fields: {
+							id: object.objectId,
+							...object.asMoveObject?.contents?.json,
+						}
+					},
 					digest: object.digest,
 					display: {}, // Not implemented yet
 					objectId: object.objectId,
-					owner: object.owner?.location, // TODO: might need formatting
+					owner: object.owner?.asObject
+						? {
+								ObjectOwner: object.owner.asObject.location,
+						  }
+						: {
+								AddressOwner: object.owner?.asAddress?.location,
+						  },
 					previousTransaction: object.previousTransactionBlock?.digest,
 					storageRebate: object.storageRebate,
-					type: object.asMoveObject?.contents?.type.signature,
+					type: object.asMoveObject?.contents?.type?.repr,
 					version: String(object.version),
 				},
 			})),
@@ -432,14 +491,35 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.object,
 		);
 
+		console.log(input.options);
 		return {
 			data: {
-				bcs: object.bcs,
-				content: object.asMoveObject?.contents?.json,
+				bcs: input.options?.showBcs
+					? {
+							dataType: 'moveObject',
+							bcsBytes: object.asMoveObject?.contents?.bcs,
+							hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
+							version: object.version as unknown as string, // RPC type is wrong here
+							type: object.asMoveObject?.contents?.type.repr!,
+					  }
+					: undefined,
+				content: {
+					dataType: 'moveObject',
+					fields: {
+						id: object
+						...object.asMoveObject?.contents?.json,
+					}
+				},
 				digest: object.digest,
 				display: {}, // Not implemented yet
 				objectId: object.objectId,
-				owner: object.owner?.location, // TODO: might need formatting
+				owner: object.owner?.asObject
+					? {
+							ObjectOwner: object.owner.asObject.location,
+					  }
+					: {
+							AddressOwner: object.owner?.asAddress?.location,
+					  },
 				previousTransaction: object.previousTransactionBlock?.digest,
 				storageRebate: object.storageRebate,
 				type: object.asMoveObject?.contents?.type.signature,
@@ -471,12 +551,32 @@ export class GraphQLSuiClient extends SuiClient {
 		return {
 			status: 'VersionFound',
 			details: {
-				bcs: object.bcs,
-				content: object.asMoveObject?.contents?.json,
+				bcs: input.options?.showBcs
+					? {
+							dataType: 'moveObject',
+							bcsBytes: object.asMoveObject?.contents?.bcs,
+							hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
+							version: object.version as unknown as string, // RPC type is wrong here
+							type: object.asMoveObject?.contents?.type.repr!,
+					  }
+					: undefined,
+				content: {
+					dataType: 'moveObject',
+					fields: {
+						id: object
+						...object.asMoveObject?.contents?.json,
+					}
+				},
 				digest: object.digest,
 				display: {}, // Not implemented yet
 				objectId: object.objectId,
-				owner: object.owner?.location, // TODO: might need formatting
+				owner: object.owner?.asObject
+					? {
+							ObjectOwner: object.owner.asObject.location,
+					  }
+					: {
+							AddressOwner: object.owner?.asAddress?.location,
+					  },
 				previousTransaction: object.previousTransactionBlock?.digest,
 				storageRebate: object.storageRebate,
 				type: object.asMoveObject?.contents?.type.signature,
@@ -505,12 +605,32 @@ export class GraphQLSuiClient extends SuiClient {
 
 		return objects.map((object) => ({
 			data: {
-				bcs: object.bcs,
-				content: object.asMoveObject?.contents?.json,
+				bcs: input.options?.showBcs
+					? {
+							dataType: 'moveObject',
+							bcsBytes: object.asMoveObject?.contents?.bcs,
+							hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
+							version: object.version as unknown as string, // RPC type is wrong here
+							type: object.asMoveObject?.contents?.type.repr!,
+					  }
+					: undefined,
+				content: {
+					dataType: 'moveObject',
+					fields: {
+						id: object
+						...object.asMoveObject?.contents?.json,
+					}
+				},
 				digest: object.digest,
 				display: {}, // Not implemented yet
 				objectId: object.objectId,
-				owner: object.owner?.location, // TODO: might need formatting
+				owner: object.owner?.asObject
+					? {
+							ObjectOwner: object.owner.asObject.location,
+					  }
+					: {
+							AddressOwner: object.owner?.asAddress?.location,
+					  },
 				previousTransaction: object.previousTransactionBlock?.digest,
 				storageRebate: object.storageRebate,
 				type: object.asMoveObject?.contents?.type.signature,
@@ -648,7 +768,7 @@ export class GraphQLSuiClient extends SuiClient {
 					owner: input.owner,
 				},
 			},
-			(data) => data.address?.stakeConnection?.nodes,
+			(data) => data.address?.stakedSuiConnection?.nodes,
 		);
 
 		// TODO: need to figure out mapping to groups
@@ -665,7 +785,9 @@ export class GraphQLSuiClient extends SuiClient {
 				},
 			},
 			(data) =>
-				data.objectConnection?.nodes.map((node) => node?.asMoveObject?.asStake!).filter(Boolean),
+				data.objectConnection?.nodes
+					.map((node) => node?.asMoveObject?.asStakedSui!)
+					.filter(Boolean),
 		);
 
 		// TODO: need to extract some details from contents
