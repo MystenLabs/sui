@@ -371,10 +371,6 @@ type Epoch {
 
 type Event {
 	"""
-	Package id and module name of Move module that the event was emitted in
-	"""
-	sendingModuleId: MoveModuleId
-	"""
 	Package, module, and type of the event
 	"""
 	eventType: MoveType
@@ -391,6 +387,10 @@ type Event {
 	Base64 encoded bcs bytes of the Move event
 	"""
 	bcs: Base64
+	"""
+	The Move module that the event was emitted in.
+	"""
+	sendingModule: MoveModule
 }
 
 type EventConnection {
@@ -634,8 +634,18 @@ Represents a module in Move, a library that defines struct types
 and functions that operate on these types.
 """
 type MoveModule {
+	"""
+	The package that this Move module was defined in
+	"""
+	package: MovePackage!
+	"""
+	The module's (unqualified) name.
+	"""
+	name: String!
+	"""
+	Format version of this module's bytecode.
+	"""
 	fileFormatVersion: Int!
-	moduleId: MoveModuleId!
 	"""
 	Modules that this module considers friends (these modules can access `public(friend)`
 	functions from this module).
@@ -694,14 +704,6 @@ type MoveModuleEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
-}
-
-type MoveModuleId {
-	name: String!
-	"""
-	The package that this Move module was defined in
-	"""
-	package: MovePackage!
 }
 
 type MoveObject {

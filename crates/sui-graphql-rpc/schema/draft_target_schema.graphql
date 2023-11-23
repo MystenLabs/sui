@@ -84,7 +84,7 @@ type Query {
     last: Int,
     before: String,
   ): CheckpointConnection
-  
+
   coinConnection(
     first: Int,
     after: String,
@@ -905,7 +905,7 @@ type BalanceChange {
 
 type Event {
   # Module that the event was emitted by
-  sendingModuleId: MoveModuleId
+  sendingModule: MoveModule
 
   # Type of the event being sent
   eventType: MoveType
@@ -997,11 +997,6 @@ type TypeOrigin {
   package: SuiAddress!
 }
 
-type MoveModuleId {
-  package: MovePackage!
-  name: String!
-}
-
 enum MoveAbility {
   COPY
   DROP
@@ -1025,9 +1020,10 @@ type MoveFunctionTypeParameter {
 }
 
 type MoveModule {
-  fileFormatVersion: Int!
+  package: SuiAddress!
+  name: String!
 
-  moduleId: MoveModuleId!
+  fileFormatVersion: Int!
 
   friendConnection(
     first: Int,
