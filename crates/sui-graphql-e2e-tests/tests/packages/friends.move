@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses pkg=0x0 --simulator
+//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
 
-//# publish
+//# publish --upgradeable --sender A
 
-module pkg::m0 { public fun f(): u64 { pkg::n::f() } }
-module pkg::m1 { public fun f(): u64 { pkg::n::f() } }
-module pkg::m2 { public fun f(): u64 { pkg::n::f() } }
+module P0::m0 { public fun f(): u64 { P0::n::f() } }
+module P0::m1 { public fun f(): u64 { P0::n::f() } }
+module P0::m2 { public fun f(): u64 { P0::n::f() } }
 
-module pkg::n {
-    friend pkg::m0;
-    friend pkg::m1;
-    friend pkg::m2;
+module P0::n {
+    friend P0::m0;
+    friend P0::m1;
+    friend P0::m2;
     public fun f(): u64 { 42 }
 }
 
@@ -93,6 +93,54 @@ fragment ModuleFriends on Object {
             suffixAll: friendConnection(before: "2", last: 2) {
                 nodes { moduleId { name } }
                 pageInfo { hasNextPage hasPreviousPage }
+            }
+        }
+    }
+}
+
+{
+    transactionBlockConnection(last: 1) {
+        nodes {
+            effects {
+                objectChanges {
+                    outputState {
+                        ...ModuleFriends
+                    }
+                }
+            }
+        }
+    }
+}
+
+//# upgrade --package P0 --upgrade-capability 1,1 --sender A
+
+module P0::m0 { public fun f(): u64 { P0::n::f() } }
+module P0::m1 { public fun f(): u64 { P0::n::f() } }
+module P0::m2 { public fun f(): u64 { P0::n::f() } }
+module P0::m3 { public fun f(): u64 { P0::n::f() } }
+
+module P0::n {
+    friend P0::m0;
+    friend P0::m1;
+    friend P0::m2;
+    friend P0::m3;
+
+    public fun f(): u64 { 42 }
+}
+
+//# create-checkpoint
+
+//# run-graphql
+
+# Get the names of all friend modules in the upgraded package.  One of
+# the modules (m3) is new in the upgraded package, so for this query
+# to work properly, the module needs to be aware of its storage ID,
+# and not its runtime ID.
+fragment ModuleFriends on Object {
+    asMovePackage {
+        module(name: "n") {
+            friendConnection {
+                nodes { moduleId { name } }
             }
         }
     }

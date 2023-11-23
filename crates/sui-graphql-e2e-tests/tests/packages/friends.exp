@@ -1,9 +1,12 @@
-processed 5 tasks
+processed 8 tasks
+
+init:
+A: object(0,0)
 
 task 1 'publish'. lines 6-17:
-created: object(1,0)
+created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5745600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 7379600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'create-checkpoint'. lines 19-19:
 Checkpoint created: 1
@@ -16,6 +19,11 @@ Response: {
         {
           "effects": {
             "objectChanges": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
               {
                 "outputState": {
                   "asMovePackage": null
@@ -111,6 +119,11 @@ Response: {
               },
               {
                 "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
                   "asMovePackage": {
                     "module": {
                       "prefix": {
@@ -174,6 +187,72 @@ Response: {
                           "hasNextPage": true,
                           "hasPreviousPage": false
                         }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5 'upgrade'. lines 115-129:
+created: object(5,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 8139600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6 'create-checkpoint'. lines 131-131:
+Checkpoint created: 2
+
+task 7 'run-graphql'. lines 133-161:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": {
+                    "module": {
+                      "friendConnection": {
+                        "nodes": [
+                          {
+                            "moduleId": {
+                              "name": "m0"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m1"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m2"
+                            }
+                          },
+                          {
+                            "moduleId": {
+                              "name": "m3"
+                            }
+                          }
+                        ]
                       }
                     }
                   }
