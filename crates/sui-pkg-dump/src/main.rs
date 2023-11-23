@@ -17,7 +17,7 @@ use sui_types::{base_types::SuiAddress, move_package::MovePackage};
     own sub-directory, named for its ID on-chain, containing two metadata files (linkage.json and \
     origins.json) as well as a file for every module it contains.  Each module file is named for \
     its module name, with a .mv suffix, and contains Move bytecode (suitable for passing into a \
-    debugger).",
+    disassembler).",
     rename_all = "kebab-case",
     author,
     version
