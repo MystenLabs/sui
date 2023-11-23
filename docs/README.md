@@ -12,7 +12,9 @@ In the same folder, use the following command to deploy the site to `localhost:3
 pnpm start
 ```
 
-The deploy watches for updates to files in the `content` folder (and site source files), updating the UI to match any saves you make. 
+> If you're running the site locally and getting an error saying that you don't have `open-rpc` specs, run `pnpm build` first. It will prepare the files and fix the issue.
+
+The deploy watches for updates to files in the `content` folder (and site source files), updating the UI to match any saves you make.
 
 You can also build the site locally using `pnpm build`. This builds the static site and places the files in `site\build`. The build fails on errors like bad internal links, displaying the cause of the error to the console.
 
@@ -20,7 +22,7 @@ Sui Foundation is not able to provide support for building the documentation sit
 
 ## Pull requests
 
-Sui uses Vercel to host its documentation site. Vercel builds a preview of the documentation for every pull request submitted to the Sui repo. You can find a link to this preview in the PR comment section from the Vercel bot. Click the **Visit Preview** link for the **sui-core** project to verify your changes behave as you expect.  
+Sui uses Vercel to host its documentation site. Vercel builds a preview of the documentation for every pull request submitted to the Sui repo. You can find a link to this preview in the PR comment section from the Vercel bot. Click the **Visit Preview** link for the **sui-core** project to verify your changes behave as you expect.
 
 
 ## Contributing

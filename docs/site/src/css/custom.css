@@ -58,7 +58,7 @@
   --sui-gray-100: #182435;
   --sui-link-color: #1068a6;
   --sui-link-color-dark: #057fd1;
-  --sui-link-color-light: #1f98e9;	
+  --sui-link-color-light: #1f98e9;
   --sui-ghost-white: #f8f8ff;
   --sui-ghost-dark: #282a36;
   --sui-white: 255 255 255;
@@ -82,3 +82,7 @@
   @apply bg-sui-ghost-white dark:bg-sui-ghost-dark rounded-lg;
 }
 
+/* Inverts the image in the stadards/closed-loop-token.mdx in dark mode. */
+[data-theme='dark'] img.balance-coin-token {
+  filter: invert(1);
+}
