@@ -657,12 +657,12 @@ pub enum Argument {
     /// One of the input objects or primitive values (from `ProgrammableTransactionBlock`
     /// inputs).
     ///
-    /// Indexing is zero-based, meaning that `Input(0u16)` refers to the input of the PTB's first
-    /// command, `Input(1u16)` to the second, and so on.
+    /// Indexing is zero-based, meaning that `Input(0u16)` refers to the fist input of the PTB,
+    /// `Input(1u16)` to the second, and so on.
     Input(u16),
     /// The result of another transaction (from `ProgrammableTransactionBlock` transactions).
     ///
-    /// As with inputs, indexing is zero-based: `Output(u16)` refers to the out of the first
+    /// As with inputs, indexing is zero-based: `Output(u16)` refers to the output of the first
     /// command, and so on.
     Result(u16),
     /// Like a `Result` but it accesses a nested result. Currently, the only usage
@@ -674,7 +674,7 @@ pub enum Argument {
     ///
     /// Indexing on either component of the tuple is zero based.
     /// For example, to refer to the second output of the fourth command in a PTB, use
-    /// `NestedResult(3u16, 1u16)`
+    /// `NestedResult(3u16, 1u16)`.
     NestedResult(u16, u16),
 }
 

@@ -1628,12 +1628,12 @@ pub enum SuiArgument {
     /// One of the input objects or primitive values (from `ProgrammableTransactionBlock`
     /// inputs).
     ///
-    /// Indexing is zero-based, meaning that `Input(0u16)` refers to the input of the PTB's first
-    /// command, `Input(1u16)` to the second, and so on.
+    /// Indexing is zero-based, meaning that `Input(0u16)` refers to the first PTB input command,
+    /// `Input(1u16)` to the second, and so on.
     Input(u16),
     /// The result of another transaction (from `ProgrammableTransactionBlock` transactions)
     ///
-    /// As with inputs, indexing is zero-based: `Output(u16)` refers to the out of the first
+    /// As with inputs, indexing is zero-based: `Result(u16)` refers to the out of the first
     /// command, and so on.
     Result(u16),
     /// Like a `Result` but it accesses a nested result. Currently, the only usage
