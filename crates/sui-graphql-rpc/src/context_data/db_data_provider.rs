@@ -582,7 +582,7 @@ impl PgManager {
         // TODO (wlmyng): even though we do not allow passing in both first and last,
         // per the cursor connection specs, if both are provided, from the response,
         // we need to take the first F from the left and then take the last L from the right.
-        Ok(first.or(last).unwrap_or(self.limits.max_page_size) as i64)
+        Ok(first.or(last).unwrap_or(self.limits.default_page_size) as i64)
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
