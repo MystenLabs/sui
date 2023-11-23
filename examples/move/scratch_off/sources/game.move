@@ -20,8 +20,6 @@ module scratch_off::game {
     use scratch_off::math;
 
     // --------------- Constants ---------------
-    const DEFAULT_TOTAL_ODDS: u64 = 10000;
-
     const EInvalidInputs: u64 = 0;
     const EInvalidBlsSig: u64 = 1;
     const ENoTicketsLeft: u64 = 2;
@@ -51,7 +49,7 @@ module scratch_off::game {
         prize_value: u64,
     }
     
-	struct ConvenienceStore<phantom Asset> has key {
+    struct ConvenienceStore<phantom Asset> has key {
         id: UID,
         creator: address,
         /// Total prize pool available.
@@ -68,10 +66,22 @@ module scratch_off::game {
         /// Total number of tickets issued
         tickets_issued: u64,
         public_key: vector<u8>,
-	}     
+    }     
 
     public fun total_tickets<Asset>(store: &ConvenienceStore<Asset>): u64 {
         store.winning_tickets_left + store.losing_tickets_left
+    }
+
+    public fun winning_tickets_left<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.winning_tickets_left
+    }
+
+    public fun losing_tickets_left<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.losing_tickets_left
+    }
+
+    public fun prize_pool_balance<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        balance::value(&store.prize_pool)
     }
 
     /// Initializes the store with all of the lottery tickets.
@@ -134,12 +144,13 @@ module scratch_off::game {
 
     /// Initializes a ticket and sends it to someone.
     /// TODO: decide how to do this besides sending a ticket
+    /// TODO: add capability to this
     public fun send_ticket<Asset>(
         player: address,
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-        assert!(store.winning_tickets_left > 0, ENoTicketsLeft);
+        assert!(store.tickets_issued < store.original_ticket_count, ENoTicketsLeft);
         store.tickets_issued = store.tickets_issued + 1;
         let ticket = Ticket {
             id: object::new(ctx),
@@ -253,4 +264,75 @@ module scratch_off::game {
     public fun ticket_exists<T>(store: &ConvenienceStore<T>, ticket_id: ID): bool {
         dof::exists_with_type<ID, Ticket>(&store.id, ticket_id)
     }
+
+    // Tests
+    #[test_only]
+    public fun finish_evaluation_for_testing<Asset>(
+        ticket_id: ID,
+        bls_sig: vector<u8>,
+        store: &mut ConvenienceStore<Asset>,
+        ctx: &mut TxContext
+    ) {
+        // get the game obj
+        if (!ticket_exists<Asset>(store, ticket_id)) return;
+        let Ticket {
+            id,
+            convenience_store_id: _,
+            player
+        } = dof::remove<ID, Ticket>(&mut store.id, ticket_id);
+
+        // verify BLS sig
+        // let msg_vec = object::uid_to_bytes(&id);
+        // assert!(
+        //     bls12381_min_pk_verify(
+        //         &bls_sig, &store.public_key, &msg_vec,
+        //     ),
+        //     EInvalidBlsSig
+        // );
+        object::delete(id);
+
+        // use the BLS to generate randomness
+        let hashed_beacon = blake2b256(&bls_sig);
+
+        let is_winner = math::should_draw_prize(
+            &hashed_beacon,
+            store.winning_tickets_left,
+            store.winning_tickets_left + store.losing_tickets_left
+        );
+
+        // If we have a winning ticket randomly draw a prize from the prize vector
+        if (is_winner) {
+            // Randomly pick a ticket from the prizes
+            let target_index = math::get_random_u64_in_range(&hashed_beacon, store.winning_tickets_left);
+            let current_index = 0;
+            // let current_prize = vector::pop_back(&mut store.winning_tickets);
+            let winning_tickets_index = 0;
+            // Identify the prize
+            while (current_index < target_index) {
+                let current_prize = vector::borrow(&store.winning_tickets, winning_tickets_index);
+                current_index = current_index + current_prize.ticket_amount;
+                winning_tickets_index = winning_tickets_index + 1;
+            };
+
+            // Update the ticket count in prizes and the total number
+            let prize = vector::borrow_mut(&mut store.winning_tickets, winning_tickets_index);
+            let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
+            prize.ticket_amount = prize.ticket_amount - 1;
+            store.winning_tickets_left = store.winning_tickets_left - 1;
+            transfer::public_transfer(prize_coin, player);
+
+            event::emit(DrawingResult<Asset> { 
+                ticket_id,
+                player: tx_context::sender(ctx),
+                amount_won: prize.prize_value,
+            });
+        } else {
+            store.losing_tickets_left = store.losing_tickets_left - 1;
+            event::emit(DrawingResult<Asset> { 
+                ticket_id,
+                player: tx_context::sender(ctx),
+                amount_won: 0,
+            });
+        };
+    }    
 }
