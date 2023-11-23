@@ -22,7 +22,7 @@ Specific domains that can benefit from a closed-loop token include:
 
 <img className="balance-coin-token" src={BalanceTokenCoin} />
 
-Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
+Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](#).
 
 ```move
 // defined in `sui::coin`
@@ -34,7 +34,7 @@ struct Token<phantom T> has key { id: UID, balance: Balance<T> }
 
 ## Compliance and Rules
 
-Closed Loop Token allows its creator to set up any rules for transfers, spending and conversions. These rules are specified per action in the [TokenPolicy](./closed-loop-token/token-policy.mdx). [Rules](./closed-loop-token/rules.mdx) are custom programmable restrictions which can be used to implement any request authorization / validation logic.
+Closed Loop Token allows its creator to set up any rules for transfers, spending and conversions. These rules are specified per action in the [TokenPolicy](#). [Rules](#) are custom programmable restrictions which can be used to implement any request authorization / validation logic.
 
 For example, a policy can set a limit on a transfer - X tokens per operation; or require a user to be verified before spending tokens; or allow spending tokens only on a specific service.
 

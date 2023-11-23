@@ -39,7 +39,6 @@ const standards = [
 			'standards/closed-loop-token/token-policy',
 			'standards/closed-loop-token/spending',
 			'standards/closed-loop-token/rules',
-			'standards/closed-loop-token/rule-config',
 			'standards/closed-loop-token/coin-token-comparison',
 		],
 	},
