@@ -66,7 +66,7 @@ pub struct Dependency {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ToolchainVersioning {
+pub struct ToolchainVersion {
     /// The Move compiler version used to compile this package.
     #[serde(rename = "compiler-version")]
     pub compiler_version: String,
@@ -110,10 +110,10 @@ impl Packages {
     }
 }
 
-impl ToolchainVersioning {
-    /// Read toolchain versioning info from the lock file. Returns successfully with None if
-    /// parsing the lock file succeeds but an entry for `[toolchain-versioning]` does not exist.
-    pub fn read(lock: &mut impl Read) -> Result<Option<ToolchainVersioning>> {
+impl ToolchainVersion {
+    /// Read toolchain version info from the lock file. Returns successfully with None if
+    /// parsing the lock file succeeds but an entry for `[toolchain-version]` does not exist.
+    pub fn read(lock: &mut impl Read) -> Result<Option<ToolchainVersion>> {
         let contents = {
             let mut buf = String::new();
             lock.read_to_string(&mut buf).context("Reading lock file")?;
@@ -122,13 +122,13 @@ impl ToolchainVersioning {
 
         #[derive(Deserialize)]
         struct TV {
-            #[serde(rename = "toolchain-versioning")]
-            toolchain_versioning: Option<ToolchainVersioning>,
+            #[serde(rename = "toolchain-version")]
+            toolchain_version: Option<ToolchainVersion>,
         }
         let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
             .context("Deserializing toolchain version")?;
 
-        Ok(value.toolchain_versioning)
+        Ok(value.toolchain_version)
     }
 }
 
@@ -185,12 +185,12 @@ pub fn update_compiler_toolchain(
     file.seek(SeekFrom::Start(0))?;
     let mut toml = toml_string.parse::<toml_edit::Document>()?;
     let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
-    let toolchain_versioning = toml::Value::try_from(ToolchainVersioning {
+    let toolchain_version = toml::Value::try_from(ToolchainVersion {
         compiler_version,
         edition,
         flavor,
     })?;
-    move_table["toolchain-versioning"] = to_toml_edit_value(&toolchain_versioning);
+    move_table["toolchain-version"] = to_toml_edit_value(&toolchain_version);
     write!(file, "{}", toml)?;
     file.flush()?;
     Ok(())
