@@ -11,8 +11,8 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
-use std::path::PathBuf;
 use std::sync::Arc;
+use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
@@ -68,14 +68,12 @@ impl BenchmarkContext {
         self.validator.clone()
     }
 
-    pub(crate) async fn publish_package(&mut self) -> ObjectRef {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.extend(["move_package"]);
+    pub(crate) async fn publish_package(&mut self, publish_data: PublishData) -> ObjectRef {
         let mut gas_objects = self.admin_account.gas_objects.deref().clone();
         let (package, updated_gas) = self
             .validator
             .publish_package(
-                path,
+                publish_data,
                 self.admin_account.sender,
                 &self.admin_account.keypair,
                 gas_objects[0],
