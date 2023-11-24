@@ -30,7 +30,8 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
@@ -291,6 +292,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_SYSTEM_STATE_OBJECT_ID,
             SUI_CLOCK_OBJECT_ID,
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+            SUI_RANDOMNESS_STATE_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains_key(&id) {
@@ -453,6 +455,13 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn loaded_runtime_objects(&self) -> BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata> {
+        // The loaded child objects, and the received objects, should be disjoint. If they are not,
+        // this is an error since it could lead to incorrect transaction dependency computations.
+        debug_assert!(self
+            .child_object_store
+            .cached_objects()
+            .keys()
+            .all(|id| !self.state.received.contains_key(id)));
         self.child_object_store
             .cached_objects()
             .iter()
