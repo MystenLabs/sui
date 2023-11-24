@@ -16,3 +16,4 @@ serde_json.workspace = true
 sui-indexer.workspace = true
 sui-types.workspace = true
 tokio.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
