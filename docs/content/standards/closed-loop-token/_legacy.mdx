@@ -1,0 +1,90 @@
+
+Here's an example of how a policy can be created (with `transfer` operation allowed):
+
+```js
+let tx = new TransactionBlock();
+let tokenType = '0x....::my_token::MY_TOKEN';
+let treasuryCapArg = tx.object('0x....');
+
+// for each TokenPolicy there's a TokenPolicyCap which allows managing it
+let [policy, policyCap] = tx.moveCall({
+    target: '0x2::token::new_policy',
+    arguments: [ treasuryCapArg ],
+    typeArguments: [ tokenType ],
+});
+
+// allow `transfer` operation; other operations are disabled
+tx.moveCall({
+    target: '0x2::token::allow',
+    arguments: [ policy, policyCap, tx.pure.string("transfer") ],
+    typeArguments: [ tokenType ]
+});
+
+tx.transferObjects([ policyCap ], tx.pure.address('0x...sender'));
+
+// policy must be shared with this function
+tx.moveCall({
+    target: '0x2::token::share_policy',
+    arguments: [ policy ],
+    typeArguments: [ tokenType ]
+});
+
+// submit the transaction
+// ...
+```
+
+Similarly to `allow` there's a `token::disallow` method which disables the action completely.
+
+## Rules
+
+TokenPolicy can specify custom conditions for each action. These conditions are called "Rules" and are typically implemented as separate Move modules. For most common scenario, a Rule module would contain:
+
+- the Rule type (eg "struct Denylist")
+- the verifying function (eg "verify\(\)") that "stamps" the ActionRequest
+
+Here's an example of a Rule module that denies transfers to a specific account:
+
+```move
+module examples::blank_rule {
+    use sui::token::{Self, TokenPolicy, ActionRequest};
+    use sui::tx_context::TxContext;
+
+    /// The type of the Rule, can be specified for any ActionRequest in a TokenPolicy
+    struct Blank has drop {}
+
+    /// The function to be called on action
+    public fun verify<T>(
+        self: &TokenPolicy<T>,
+        request: &mut ActionRequest<T>,
+        ctx: &mut TxContext
+    ) {
+        token::add_approval(Blank {}, request, ctx)
+    }
+}
+```
+
+A Rule can be enforced on any action by specifying it in the TokenPolicy:
+
+```js
+let tx = new TransactionBlock();
+let tokenPolicyArg = tx.object('0x...token_policy');
+let tokenPolicyCapArg = tx.object('0x...token_policy_cap');
+let tokenType = '0x....::my_token::MY_TOKEN';
+let ruleType = '0x....::blank_rule::Blank';
+
+tx.moveCall({
+    target: '0x2::token::add_rule_for_action',
+    arguments: [
+        tokenPolicyArg,
+        tokenPolicyCapArg,
+        tx.pure.string('transfer'),
+    ],
+    // Rule is added by its type (ruleType variable)
+    typeArguments: [ tokenType, ruleType ],
+})
+
+// submit the transaction
+// ...
+```
+
+Similarly, a Rule can be removed from an action using the `token::remove_rule_for_action` function.

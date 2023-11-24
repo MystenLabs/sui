@@ -2,98 +2,90 @@
 title: Token Policy
 ---
 
-`TokenPolicy` is a shared object which can be created by the Token owner using the TreasuryCap. Here's an example of how a policy can be created (with `transfer` operation allowed):
+`TokenPolicy` is a shared object which can be created by the Token owner using the `TreasuryCap`. Having a publicly available `TokenPolicy` would enable on-chain discovery of allowed actions and their conditions. This is useful for wallets and other services that want to provide a better user experience for token holders.
 
-```js
-let tx = new TransactionBlock();
-let tokenType = '0x....::my_token::MY_TOKEN';
-let treasuryCapArg = tx.object('0x....');
+## Create & Share
 
-// for each TokenPolicy there's a TokenPolicyCap which allows managing it
-let [policy, policyCap] = tx.moveCall({
-    target: '0x2::token::new_policy',
-    arguments: [ treasuryCapArg ],
-    typeArguments: [ tokenType ],
-});
-
-// allow `transfer` operation; other operations are disabled
-tx.moveCall({
-    target: '0x2::token::allow',
-    arguments: [ policy, policyCap, tx.pure.string("transfer") ],
-    typeArguments: [ tokenType ]
-});
-
-tx.transferObjects([ policyCap ], tx.pure.address('0x...sender'));
-
-// policy must be shared with this function
-tx.moveCall({
-    target: '0x2::token::share_policy',
-    arguments: [ policy ],
-    typeArguments: [ tokenType ]
-});
-
-// submit the transaction
-// ...
-```
-
-Similarly to `allow` there's a `token::disallow` method which disables the action completely.
-
-## Rules and Restrictions
-
-TokenPolicy can specify custom conditions for each action. These conditions are called "Rules" and are typically implemented as separate Move modules. For most common scenario, a Rule module would contain:
-
-- the Rule type (eg "struct Denylist")
-- the verifying function (eg "verify\(\)") that "stamps" the ActionRequest
-
-Here's an example of a Rule module that denies transfers to a specific account:
+A new TokenPolicy is created using the `token::new_policy` function. The function takes the `TreasuryCap` as an argument and returns a `TokenPolicy` object and a managing capability.
 
 ```move
-module examples::blank_rule {
-    use sui::token::{Self, TokenPolicy, ActionRequest};
-    use sui::tx_context::TxContext;
-
-    /// The type of the Rule, can be specified for any ActionRequest in a TokenPolicy
-    struct Blank has drop {}
-
-    /// The function to be called on action
-    public fun verify<T>(
-        self: &TokenPolicy<T>,
-        request: &mut ActionRequest<T>,
-        ctx: &mut TxContext
-    ) {
-        token::add_approval(Blank {}, request, ctx)
-    }
-}
+// module: sui::token
+public fun new_policy<T>(
+    treasury_cap: &TreasuryCap<T>,
+    ctx: &mut TxContext
+): (TokenPolicy<TokenType>, TokenPolicyCap<TokenType>);
 ```
 
-A Rule can be enforced on any action by specifying it in the TokenPolicy:
+> *The `TokenPolicy` object must be shared with the `token::share_policy` function*
 
-```js
-let tx = new TransactionBlock();
-let tokenPolicyArg = tx.object('0x...token_policy');
-let tokenPolicyCapArg = tx.object('0x...token_policy_cap');
-let tokenType = '0x....::my_token::MY_TOKEN';
-let ruleType = '0x....::blank_rule::Blank';
+## Allow & Disallow
 
-tx.moveCall({
-    target: '0x2::token::add_rule_for_action',
-    arguments: [
-        tokenPolicyArg,
-        tokenPolicyCapArg,
-        tx.pure.string('transfer'),
-    ],
-    // Rule is added by its type (ruleType variable)
-    typeArguments: [ tokenType, ruleType ],
-})
+To allow method without any conditions, use the `token::allow` function. The function takes a `TokenPolicy` and `TokenPolicyCap` as arguments. If allowed, the action can be confirmed in the `TokenPolicy` using the `token::confirm_request` function (see [ActionRequest](./action-request#confirming-with-tokenpolicy)).
 
-// submit the transaction
-// ...
+```move
+// module sui::token
+public fun allow<T>(
+    policy: &mut TokenPolicy<T>,
+    policy_cap: &TokenPolicyCap<T>,
+    action: String,
+    ctx: &mut TxContext
+);
 ```
 
-Similarly, a Rule can be removed from an action using the `token::remove_rule_for_action` function.
+> *Similarly, the `token::disallow` function can be used to completely disable an action; it takes the same arguments as `token::allow`.*
+
+## Adding Rules
+
+`TokenPolicy` can specify custom conditions for each action. These conditions are called "Rules" and are typically implemented as separate Move modules. The identifier of the Rule is its type.
+
+:::info
+Visit the [Rules](./rules.mdx) section for more information.
+:::
+
+Structure of the `TokenPolicy` is as follows (pseudo-code). Each action can have multiple Rules associated with it.
+
+```toml
+TokenPolicy
+  rules:
+    - action: "transfer"
+      rules:
+        - 0x0...::denylist::Denylist
+    - action: "to_coin"
+      rules:
+        - 0x0...::limiter::Limiter
+        - 0x0...::allowlist::Allowlist
+    ...
+```
+
+To add a Rule for an action, use the `token::add_rule_for_action` function. The function takes a `TokenPolicy` and `TokenPolicyCap` as arguments. The Rule must be specified by its type (eg `0x0...::denylist::Denylist`) and the Rule module must be imported in the TokenPolicy module.
 
 
-## Appendix A: TokenPolicy API
+```move
+// module: sui::token
+public fun add_rule_for_action<T, Rule: drop>(
+    policy: &mut TokenPolicy<T>,
+    policy_cap: &TokenPolicyCap<T>,
+    action: String,
+    ctx: &mut TxContext
+);
+```
+
+> *Signature for the reverse operation `token::remove_rule_for_action` is symmetrical to `token::add_rule_for_action`.*
+
+## Consume Spent Balance
+
+Spent balance can be consumed from the `TokenPolicy` using the `token::flush` function. It requires a `TreasuryCap`.
+
+```move
+// module sui::token
+public fun flush<T>(
+    policy: &mut TokenPolicy<T>,
+    treasury_cap: &TreasuryCap<T>,
+    ctx: &mut TxContext
+);
+```
+
+## Cheatsheet: TokenPolicy API
 
 | Function                    | Note                                                                 |
 |-----------------------------|----------------------------------------------------------------------|
@@ -104,3 +96,4 @@ Similarly, a Rule can be removed from an action using the `token::remove_rule_fo
 | remove_rule_for_action      | Remove a Rule for an action in the TokenPolicy                       |
 | confirm_request             | Confirm an ActionRequest with a TokenPolicy                          |
 | confirm_request_mut         | Similar to `confirm_request` but only works for "spend" action       |
+| flush                       | Flush the spent balance from the `TokenPolicy` (see [Spending](./spending.mdx)) |

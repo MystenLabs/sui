@@ -34,7 +34,7 @@ const standards = [
 			id: 'standards/closed-loop-token',
 		},
 		items: [
-			'standards/closed-loop-token/basics',
+			'standards/closed-loop-token/overview',
 			'standards/closed-loop-token/action-request',
 			'standards/closed-loop-token/token-policy',
 			'standards/closed-loop-token/spending',
