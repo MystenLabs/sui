@@ -80,7 +80,7 @@ Spent balance can be consumed from the `TokenPolicy` using the `token::flush` fu
 // module sui::token
 public fun flush<T>(
     policy: &mut TokenPolicy<T>,
-    treasury_cap: &TreasuryCap<T>,
+    treasury_cap: &mut TreasuryCap<T>,
     ctx: &mut TxContext
 );
 ```
