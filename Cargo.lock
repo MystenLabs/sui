@@ -5465,7 +5465,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=f5c98abb0ce8224e5b3a7937f91a838b523c676f#f5c98abb0ce8224e5b3a7937f91a838b523c676f"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=8b9afb00003232afafacd86feea97492c2d4029e#8b9afb00003232afafacd86feea97492c2d4029e"
 dependencies = [
  "memmap2 0.7.1",
  "serde",
@@ -6426,7 +6426,7 @@ dependencies = [
 [[package]]
 name = "mysticeti-core"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysticeti?rev=f5c98abb0ce8224e5b3a7937f91a838b523c676f#f5c98abb0ce8224e5b3a7937f91a838b523c676f"
+source = "git+https://github.com/MystenLabs/mysticeti?rev=8b9afb00003232afafacd86feea97492c2d4029e#8b9afb00003232afafacd86feea97492c2d4029e"
 dependencies = [
  "async-trait",
  "axum",
