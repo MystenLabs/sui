@@ -41,7 +41,7 @@ There are 3 ways to confirm an `ActionRequest`:
 
 1. With a `TreasuryCap` - token creator (or an application storing the TreasuryCap) can confirm any request by calling `token::confirm_with_treasury_cap` function. This method is useful for applications that store the TreasuryCap and implement custom logic; it also allows the Token creator to `mint` and `transfer` tokens bypassing the restrictions.
 2. With a [`TokenPolicy`](./token-policy.mdx) - token creator can create a shared `TokenPolicy` and set up allowed actions and requirements for each action. This way any application or a wallet would know which actions can be considered "public" and would be able to perform them.
-3. With a `TokenPolicyCap` - the capability managing the `TokenPolicy` can also be used to confirm requests. This can be useful for applications that have the `TreasuryCap` wrapped and inaccessable; and some admin action needs to be authorized by the Token creator.
+3. With a `TokenPolicyCap` - the capability managing the `TokenPolicy` can also be used to confirm requests. This can be useful for applications that have the `TreasuryCap` wrapped and inaccessible; and some admin action needs to be authorized by the Token creator.
 
 > *TokenPolicyCap cannot be used to confirm "spend" requests (see [Spending](./spending.mdx))*
 
