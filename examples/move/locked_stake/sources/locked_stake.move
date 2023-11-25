@@ -86,7 +86,7 @@ module locked_stake::locked_stake {
         sui_system: &mut SuiSystemState,
         staked_sui_id: ID,
         ctx: &mut TxContext
-    ) : u64 {
+    ): u64 {
         assert!(vec_map::contains(&ls.staked_sui, &staked_sui_id), EStakeObjectNonExistent);
         let (_, stake) = vec_map::remove(&mut ls.staked_sui, &staked_sui_id);
         let sui_balance = sui_system::request_withdraw_stake_non_entry(sui_system, stake, ctx);
