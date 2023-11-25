@@ -48,7 +48,7 @@ module scratch_off::game {
         ticket_amount: u64,
         prize_value: u64,
     }
-    
+
     struct ConvenienceStore<phantom Asset> has key {
         id: UID,
         creator: address,
@@ -137,7 +137,6 @@ module scratch_off::game {
             public_key,
         };
 
-        // Publically share the object
         transfer::share_object(new_store);
         coin
     }
@@ -211,10 +210,10 @@ module scratch_off::game {
         object::delete(id);
 
         // use the BLS to generate randomness
-        let hashed_beacon = blake2b256(&bls_sig);
+        let random_32b = blake2b256(&bls_sig);
 
         let is_winner = math::should_draw_prize(
-            &hashed_beacon,
+            &random_32b,
             store.winning_tickets_left,
             store.winning_tickets_left + store.losing_tickets_left
         );
@@ -222,7 +221,7 @@ module scratch_off::game {
         // If we have a winning ticket randomly draw a prize from the prize vector
         if (is_winner) {
             // Randomly pick a ticket from the prizes
-            let target_index = math::get_random_u64_in_range(&hashed_beacon, store.winning_tickets_left);
+            let target_index = math::get_random_u64_in_range(&random_32b, store.winning_tickets_left);
             let current_index = 0;
             // let current_prize = vector::pop_back(&mut store.winning_tickets);
             let winning_tickets_index = 0;
@@ -292,10 +291,10 @@ module scratch_off::game {
         object::delete(id);
 
         // use the BLS to generate randomness
-        let hashed_beacon = blake2b256(&bls_sig);
+        let random_32b = blake2b256(&bls_sig);
 
         let is_winner = math::should_draw_prize(
-            &hashed_beacon,
+            &random_32b,
             store.winning_tickets_left,
             store.winning_tickets_left + store.losing_tickets_left
         );
@@ -303,7 +302,7 @@ module scratch_off::game {
         // If we have a winning ticket randomly draw a prize from the prize vector
         if (is_winner) {
             // Randomly pick a ticket from the prizes
-            let target_index = math::get_random_u64_in_range(&hashed_beacon, store.winning_tickets_left);
+            let target_index = math::get_random_u64_in_range(&random_32b, store.winning_tickets_left);
             let current_index = 0;
             // let current_prize = vector::pop_back(&mut store.winning_tickets);
             let winning_tickets_index = 0;
