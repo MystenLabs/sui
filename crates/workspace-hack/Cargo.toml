@@ -425,6 +425,7 @@ move-bytecode-verifier = { path = "../../external-crates/move/crates/move-byteco
 move-bytecode-verifier-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v0 = { path = "../../external-crates/move/move-execution/v0/move-bytecode-verifier" }
 move-bytecode-verifier-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v2 = { path = "../../external-crates/move/move-execution/v2/crates/move-bytecode-verifier" }
 move-bytecode-viewer = { path = "../../external-crates/move/crates/move-bytecode-viewer" }
 move-cli = { path = "../../external-crates/move/crates/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/crates/move-command-line-common", default-features = false }
@@ -449,6 +450,7 @@ move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features
 move-stdlib-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-stdlib" }
 move-stdlib-v0 = { path = "../../external-crates/move/move-execution/v0/move-stdlib", default-features = false }
 move-stdlib-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-stdlib" }
+move-stdlib-v2 = { path = "../../external-crates/move/move-execution/v2/crates/move-stdlib" }
 move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/crates/move-transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/crates/move-unit-test", default-features = false }
@@ -458,6 +460,7 @@ move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", 
 move-vm-runtime-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime" }
 move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime" }
 move-vm-runtime-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
+move-vm-runtime-v2 = { path = "../../external-crates/move/move-execution/v2/crates/move-vm-runtime" }
 move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["tiered-gas"] }
 move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
 multer = { version = "2" }
@@ -1261,6 +1264,7 @@ move-bytecode-verifier = { path = "../../external-crates/move/crates/move-byteco
 move-bytecode-verifier-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier" }
 move-bytecode-verifier-v0 = { path = "../../external-crates/move/move-execution/v0/move-bytecode-verifier" }
 move-bytecode-verifier-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-bytecode-verifier" }
+move-bytecode-verifier-v2 = { path = "../../external-crates/move/move-execution/v2/crates/move-bytecode-verifier" }
 move-bytecode-viewer = { path = "../../external-crates/move/crates/move-bytecode-viewer" }
 move-cli = { path = "../../external-crates/move/crates/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/crates/move-command-line-common", default-features = false }
@@ -1286,6 +1290,7 @@ move-stdlib = { path = "../../external-crates/move/crates/move-stdlib", features
 move-stdlib-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-stdlib" }
 move-stdlib-v0 = { path = "../../external-crates/move/move-execution/v0/move-stdlib", default-features = false }
 move-stdlib-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-stdlib" }
+move-stdlib-v2 = { path = "../../external-crates/move/move-execution/v2/crates/move-stdlib" }
 move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/crates/move-transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/crates/move-unit-test", default-features = false }
@@ -1295,6 +1300,7 @@ move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", 
 move-vm-runtime-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime" }
 move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime" }
 move-vm-runtime-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
+move-vm-runtime-v2 = { path = "../../external-crates/move/move-execution/v2/crates/move-vm-runtime" }
 move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["tiered-gas"] }
 move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
 multer = { version = "2" }
