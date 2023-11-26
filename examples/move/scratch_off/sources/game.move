@@ -15,7 +15,7 @@ module scratch_off::game {
     use sui::dynamic_object_field as dof;
     use sui::transfer;
     use sui::event;
-    use sui::bls12381::bls12381_min_pk_verify;
+    use sui::bls12381::bls12381_min_sig_verify;
     use sui::hash::blake2b256;
     use scratch_off::math;
 
@@ -202,7 +202,7 @@ module scratch_off::game {
         // verify BLS sig
         let msg_vec = object::uid_to_bytes(&id);
         assert!(
-            bls12381_min_pk_verify(
+            bls12381_min_sig_verify(
                 &bls_sig, &store.public_key, &msg_vec,
             ),
             EInvalidBlsSig
@@ -283,7 +283,7 @@ module scratch_off::game {
         // verify BLS sig
         // let msg_vec = object::uid_to_bytes(&id);
         // assert!(
-        //     bls12381_min_pk_verify(
+        //     bls12381_min_sig_verify(
         //         &bls_sig, &store.public_key, &msg_vec,
         //     ),
         //     EInvalidBlsSig
