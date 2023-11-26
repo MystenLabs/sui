@@ -181,6 +181,21 @@ tx.moveCall({
 // ...
 ```
 
+## Approving Actions
+
+`ActionRequest`s can collect "approvals" - witness stamps from applications or [Rules](./rules.mdx). They carry the confirmation that a certain module or a rule has approved the action. This mechanic allows gating actions behind certain requirements.
+
+Signature for the `token::add_approval` function is as follows:
+
+```move
+// module: sui::token
+public fun add_approval<T, W: drop>(
+    _t: W, request: &mut ActionRequest<T>, _ctx: &mut TxContext
+);
+```
+
+> *Approvals are mostly used for [Rules](./rules.mdx). However, they can carry confirmations from any module.*
+
 ## Creating a Custom Request
 
 A new `ActionRequest` can be created by anyone using the `token::new_request` function. It can be used to create custom actions and rules, not necessarily related to the `Token` itself.
