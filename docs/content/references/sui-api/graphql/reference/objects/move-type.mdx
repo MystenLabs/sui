@@ -1,0 +1,86 @@
+---
+id: move-type
+title: MoveType
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Represents concrete types (no type parameters, no references)
+
+
+```graphql
+type MoveType {
+  repr: String!
+  signature: MoveTypeSignature!
+  layout: MoveTypeLayout!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveType.<b>repr</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Flat representation of the type signature, as a displayable string.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveType.<b>signature</b></code>](#)<Bullet />[`MoveTypeSignature!`](/references/sui-api/graphql/reference/scalars/move-type-signature) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Structured representation of the type signature.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveType.<b>layout</b></code>](#)<Bullet />[`MoveTypeLayout!`](/references/sui-api/graphql/reference/scalars/move-type-layout) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Structured representation of the "shape" of values that match this type.
+> 
+
+
+
+### Returned by
+
+[`type`](/references/sui-api/graphql/reference/queries/type)  <Badge class="badge badge--secondary" text="query"/>
+
+### Member Of
+
+[`Balance`](/references/sui-api/graphql/reference/objects/balance)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`BalanceChange`](/references/sui-api/graphql/reference/objects/balance-change)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Event`](/references/sui-api/graphql/reference/objects/event)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MakeMoveVecTransaction`](/references/sui-api/graphql/reference/objects/make-move-vec-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveCallTransaction`](/references/sui-api/graphql/reference/objects/move-call-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveValue`](/references/sui-api/graphql/reference/objects/move-value)  <Badge class="badge badge--secondary" text="object"/>
+

@@ -1,0 +1,249 @@
+---
+id: validator
+title: Validator
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type Validator {
+  address: Address!
+  credentials: ValidatorCredentials
+  nextEpochCredentials: ValidatorCredentials
+  name: String
+  description: String
+  imageUrl: String
+  projectUrl: String
+  operationCap: MoveObject
+  stakingPool: MoveObject
+  exchangeRates: MoveObject
+  exchangeRatesSize: Int
+  stakingPoolActivationEpoch: Int
+  stakingPoolSuiBalance: BigInt
+  rewardsPool: BigInt
+  poolTokenBalance: BigInt
+  pendingStake: BigInt
+  pendingTotalSuiWithdraw: BigInt
+  pendingPoolTokenWithdraw: BigInt
+  votingPower: Int
+  gasPrice: BigInt
+  commissionRate: Int
+  nextEpochStake: BigInt
+  nextEpochGasPrice: BigInt
+  nextEpochCommissionRate: Int
+  atRisk: Int
+  reportRecords: [Address!]
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>address</b></code>](#)<Bullet />[`Address!`](/references/sui-api/graphql/reference/objects/address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Validator's address.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>credentials</b></code>](#)<Bullet />[`ValidatorCredentials`](/references/sui-api/graphql/reference/objects/validator-credentials) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Validator's set of credentials.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>nextEpochCredentials</b></code>](#)<Bullet />[`ValidatorCredentials`](/references/sui-api/graphql/reference/objects/validator-credentials) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Validator's set of credentials for the next epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>name</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Validator's name.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>description</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Validator's description.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>imageUrl</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Validator's url containing their custom image.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>projectUrl</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Validator's homepage URL.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>operationCap</b></code>](#)<Bullet />[`MoveObject`](/references/sui-api/graphql/reference/objects/move-object) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The validator's current valid `Cap` object. Validators can delegate
+> the operation ability to another address. The address holding this `Cap` object
+> can then update the reference gas price and tallying rule on behalf of the validator.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>stakingPool</b></code>](#)<Bullet />[`MoveObject`](/references/sui-api/graphql/reference/objects/move-object) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The validator's current staking pool object, used to track the amount of stake
+> and to compound staking rewards.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>exchangeRates</b></code>](#)<Bullet />[`MoveObject`](/references/sui-api/graphql/reference/objects/move-object) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The validator's current exchange object. The exchange rate is used to determine
+> the amount of SUI tokens that each past SUI staker can withdraw in the future.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>exchangeRatesSize</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Number of exchange rates in the table.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>stakingPoolActivationEpoch</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The epoch at which this pool became active.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>stakingPoolSuiBalance</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The total number of SUI tokens in this pool.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>rewardsPool</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The epoch stake rewards will be added here at the end of each epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>poolTokenBalance</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Total number of pool tokens issued by the pool.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>pendingStake</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Pending stake amount for this epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>pendingTotalSuiWithdraw</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>pendingPoolTokenWithdraw</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>votingPower</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The voting power of this validator in basis points (e.g., 100 = 1% voting power).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>gasPrice</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The reference gas price for this epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>commissionRate</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The fee charged by the validator for staking services.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>nextEpochStake</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The total number of SUI tokens in this pool plus
+> the pending stake amount for this epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>nextEpochGasPrice</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The validator's gas price quote for the next epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>nextEpochCommissionRate</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The proposed next epoch fee for the validator's staking services.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>atRisk</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The number of epochs for which this validator has been below the
+> low stake threshold.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Validator.<b>reportRecords</b></code>](#)<Bullet />[`[Address!]`](/references/sui-api/graphql/reference/objects/address) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The addresses of other validators this validator has reported.
+> 
+
+
+
+### Member Of
+
+[`ValidatorSet`](/references/sui-api/graphql/reference/objects/validator-set)  <Badge class="badge badge--secondary" text="object"/>
+

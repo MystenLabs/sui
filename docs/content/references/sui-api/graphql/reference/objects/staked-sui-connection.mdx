@@ -1,0 +1,82 @@
+---
+id: staked-sui-connection
+title: StakedSuiConnection
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type StakedSuiConnection {
+  pageInfo: PageInfo!
+  edges: [StakedSuiEdge!]!
+  nodes: [StakedSui!]!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>StakedSuiConnection.<b>pageInfo</b></code>](#)<Bullet />[`PageInfo!`](/references/sui-api/graphql/reference/objects/page-info) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Information to aid in pagination.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>StakedSuiConnection.<b>edges</b></code>](#)<Bullet />[`[StakedSuiEdge!]!`](/references/sui-api/graphql/reference/objects/staked-sui-edge) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A list of edges.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>StakedSuiConnection.<b>nodes</b></code>](#)<Bullet />[`[StakedSui!]!`](/references/sui-api/graphql/reference/objects/staked-sui) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A list of nodes.
+> 
+
+
+
+### Member Of
+
+[`Address`](/references/sui-api/graphql/reference/objects/address)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectOwner`](/references/sui-api/graphql/reference/interfaces/object-owner)  <Badge class="badge badge--secondary" text="interface"/><Bullet />[`Owner`](/references/sui-api/graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/>
+

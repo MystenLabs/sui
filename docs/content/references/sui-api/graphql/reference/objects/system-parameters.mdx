@@ -1,0 +1,120 @@
+---
+id: system-parameters
+title: SystemParameters
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Details of the system that are decided during genesis.
+
+
+```graphql
+type SystemParameters {
+  durationMs: BigInt
+  stakeSubsidyStartEpoch: Int
+  minValidatorCount: Int
+  maxValidatorCount: Int
+  minValidatorJoiningStake: BigInt
+  validatorLowStakeThreshold: BigInt
+  validatorVeryLowStakeThreshold: BigInt
+  validatorLowStakeGracePeriod: BigInt
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>durationMs</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Target duration of an epoch, in milliseconds.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>stakeSubsidyStartEpoch</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The epoch at which stake subsidies start being paid out.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>minValidatorCount</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The minimum number of active validators that the system supports.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>maxValidatorCount</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The maximum number of active validators that the system supports.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>minValidatorJoiningStake</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Minimum stake needed to become a new validator.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>validatorLowStakeThreshold</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Validators with stake below this threshold will enter the grace period (see
+> `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>validatorVeryLowStakeThreshold</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Validators with stake below this threshold will be removed from the the active validator set
+> at the next epoch boundary, without a grace period.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SystemParameters.<b>validatorLowStakeGracePeriod</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The number of epochs that a validator has to recover from having less than
+> `validatorLowStakeThreshold` stake.
+> 
+
+
+
+### Member Of
+
+[`SuiSystemStateSummary`](/references/sui-api/graphql/reference/objects/sui-system-state-summary)  <Badge class="badge badge--secondary" text="object"/>
+

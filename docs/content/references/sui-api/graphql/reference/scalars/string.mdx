@@ -1,0 +1,62 @@
+---
+id: string
+title: String
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text.
+
+
+```graphql
+scalar String
+```
+
+
+
+
+
+
+### Returned by
+
+[`chainIdentifier`](/references/sui-api/graphql/reference/queries/chain-identifier)  <Badge class="badge badge--secondary" text="query"/>
+
+### Member Of
+
+[`ActiveJwk`](/references/sui-api/graphql/reference/objects/active-jwk)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ActiveJwkEdge`](/references/sui-api/graphql/reference/objects/active-jwk-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Address`](/references/sui-api/graphql/reference/objects/address)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`BalanceEdge`](/references/sui-api/graphql/reference/objects/balance-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Checkpoint`](/references/sui-api/graphql/reference/objects/checkpoint)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`checkpointConnection`](/references/sui-api/graphql/reference/queries/checkpoint-connection)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`CheckpointEdge`](/references/sui-api/graphql/reference/objects/checkpoint-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CheckpointId`](/references/sui-api/graphql/reference/inputs/checkpoint-id)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`coinConnection`](/references/sui-api/graphql/reference/queries/coin-connection)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`CoinEdge`](/references/sui-api/graphql/reference/objects/coin-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CoinMetadata`](/references/sui-api/graphql/reference/objects/coin-metadata)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`coinMetadata`](/references/sui-api/graphql/reference/queries/coin-metadata)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`CommitteeMember`](/references/sui-api/graphql/reference/objects/committee-member)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ConsensusCommitPrologueTransaction`](/references/sui-api/graphql/reference/objects/consensus-commit-prologue-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`deprecated`](/references/sui-api/graphql/reference/directives/deprecated)  <Badge class="badge badge--secondary" text="directive"/><Bullet />[`DynamicFieldEdge`](/references/sui-api/graphql/reference/objects/dynamic-field-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldName`](/references/sui-api/graphql/reference/inputs/dynamic-field-name)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`EndOfEpochTransactionKindEdge`](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction-kind-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`eventConnection`](/references/sui-api/graphql/reference/queries/event-connection)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`EventEdge`](/references/sui-api/graphql/reference/objects/event-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`EventFilter`](/references/sui-api/graphql/reference/inputs/event-filter)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`executeTransactionBlock`](/references/sui-api/graphql/reference/mutations/execute-transaction-block)  <Badge class="badge badge--secondary" text="mutation"/><Bullet />[`ExecutionResult`](/references/sui-api/graphql/reference/objects/execution-result)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveCallTransaction`](/references/sui-api/graphql/reference/objects/move-call-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveField`](/references/sui-api/graphql/reference/objects/move-field)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveFunction`](/references/sui-api/graphql/reference/objects/move-function)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveFunctionEdge`](/references/sui-api/graphql/reference/objects/move-function-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveModule`](/references/sui-api/graphql/reference/objects/move-module)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveModuleEdge`](/references/sui-api/graphql/reference/objects/move-module-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MovePackageEdge`](/references/sui-api/graphql/reference/objects/move-package-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveStruct`](/references/sui-api/graphql/reference/objects/move-struct)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveStructEdge`](/references/sui-api/graphql/reference/objects/move-struct-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveType`](/references/sui-api/graphql/reference/objects/move-type)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`objectConnection`](/references/sui-api/graphql/reference/queries/object-connection)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`ObjectEdge`](/references/sui-api/graphql/reference/objects/object-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectFilter`](/references/sui-api/graphql/reference/inputs/object-filter)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`ObjectOwner`](/references/sui-api/graphql/reference/interfaces/object-owner)  <Badge class="badge badge--secondary" text="interface"/><Bullet />[`OpenMoveType`](/references/sui-api/graphql/reference/objects/open-move-type)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`OwnedOrImmutable`](/references/sui-api/graphql/reference/objects/owned-or-immutable)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Owner`](/references/sui-api/graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`PageInfo`](/references/sui-api/graphql/reference/objects/page-info)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ProgrammableTransactionEdge`](/references/sui-api/graphql/reference/objects/programmable-transaction-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ProtocolConfigAttr`](/references/sui-api/graphql/reference/objects/protocol-config-attr)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ProtocolConfigFeatureFlag`](/references/sui-api/graphql/reference/objects/protocol-config-feature-flag)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Receiving`](/references/sui-api/graphql/reference/objects/receiving)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`resolveNameServiceAddress`](/references/sui-api/graphql/reference/queries/resolve-name-service-address)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`SharedObjectRead`](/references/sui-api/graphql/reference/objects/shared-object-read)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`specifiedBy`](/references/sui-api/graphql/reference/directives/specified-by)  <Badge class="badge badge--secondary" text="directive"/><Bullet />[`StakedSuiEdge`](/references/sui-api/graphql/reference/objects/staked-sui-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`transactionBlock`](/references/sui-api/graphql/reference/queries/transaction-block)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`transactionBlockConnection`](/references/sui-api/graphql/reference/queries/transaction-block-connection)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`TransactionBlockEdge`](/references/sui-api/graphql/reference/objects/transaction-block-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlockEffects`](/references/sui-api/graphql/reference/objects/transaction-block-effects)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlockFilter`](/references/sui-api/graphql/reference/inputs/transaction-block-filter)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`TransactionInputEdge`](/references/sui-api/graphql/reference/objects/transaction-input-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`type`](/references/sui-api/graphql/reference/queries/type)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`TypeOrigin`](/references/sui-api/graphql/reference/objects/type-origin)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Validator`](/references/sui-api/graphql/reference/objects/validator)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ValidatorCredentials`](/references/sui-api/graphql/reference/objects/validator-credentials)  <Badge class="badge badge--secondary" text="object"/>
+

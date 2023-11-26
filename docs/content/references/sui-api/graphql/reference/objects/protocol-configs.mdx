@@ -1,0 +1,118 @@
+---
+id: protocol-configs
+title: ProtocolConfigs
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Constants that control how the chain operates.
+
+These can only change during protocol upgrades which happen on epoch boundaries.
+
+
+```graphql
+type ProtocolConfigs {
+  protocolVersion: Int!
+  featureFlags: [ProtocolConfigFeatureFlag!]!
+  configs: [ProtocolConfigAttr!]!
+  config(
+    key: String!
+  ): ProtocolConfigAttr
+  featureFlag(
+    key: String!
+  ): ProtocolConfigFeatureFlag
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.<b>protocolVersion</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The protocol is not required to change on every epoch boundary, so the protocol version
+> tracks which change to the protocol these configs are from.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.<b>featureFlags</b></code>](#)<Bullet />[`[ProtocolConfigFeatureFlag!]!`](/references/sui-api/graphql/reference/objects/protocol-config-feature-flag) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> List all available feature flags and their values.  Feature flags are a form of boolean
+> configuration that are usually used to gate features while they are in development.  Once a
+> flag has been enabled, it is rare for it to be disabled.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.<b>configs</b></code>](#)<Bullet />[`[ProtocolConfigAttr!]!`](/references/sui-api/graphql/reference/objects/protocol-config-attr) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> List all available configurations and their values.  These configurations can take any value
+> (but they will all be represented in string form), and do not include feature flags.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.<b>config</b></code>](#)<Bullet />[`ProtocolConfigAttr`](/references/sui-api/graphql/reference/objects/protocol-config-attr) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Query for the value of the configuration with name `key`.
+> ##### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.config.<b>key</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.<b>featureFlag</b></code>](#)<Bullet />[`ProtocolConfigFeatureFlag`](/references/sui-api/graphql/reference/objects/protocol-config-feature-flag) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Query for the state of the feature flag with name `key`.
+> ##### [<code style={{ fontWeight: 'normal' }}>ProtocolConfigs.featureFlag.<b>key</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+
+
+### Returned by
+
+[`protocolConfig`](/references/sui-api/graphql/reference/queries/protocol-config)  <Badge class="badge badge--secondary" text="query"/>
+
+### Member Of
+
+[`Epoch`](/references/sui-api/graphql/reference/objects/epoch)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SuiSystemStateSummary`](/references/sui-api/graphql/reference/objects/sui-system-state-summary)  <Badge class="badge badge--secondary" text="object"/>
+

@@ -1,0 +1,89 @@
+---
+id: page-info
+title: PageInfo
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Information about pagination in a connection
+
+
+```graphql
+type PageInfo {
+  hasPreviousPage: Boolean!
+  hasNextPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>PageInfo.<b>hasPreviousPage</b></code>](#)<Bullet />[`Boolean!`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> When paginating backwards, are there more items?
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>PageInfo.<b>hasNextPage</b></code>](#)<Bullet />[`Boolean!`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> When paginating forwards, are there more items?
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>PageInfo.<b>startCursor</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> When paginating backwards, the cursor to continue.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>PageInfo.<b>endCursor</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> When paginating forwards, the cursor to continue.
+> 
+
+
+
+### Member Of
+
+[`ActiveJwkConnection`](/references/sui-api/graphql/reference/objects/active-jwk-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`BalanceConnection`](/references/sui-api/graphql/reference/objects/balance-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CheckpointConnection`](/references/sui-api/graphql/reference/objects/checkpoint-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CoinConnection`](/references/sui-api/graphql/reference/objects/coin-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldConnection`](/references/sui-api/graphql/reference/objects/dynamic-field-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`EndOfEpochTransactionKindConnection`](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction-kind-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`EventConnection`](/references/sui-api/graphql/reference/objects/event-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveFunctionConnection`](/references/sui-api/graphql/reference/objects/move-function-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveModuleConnection`](/references/sui-api/graphql/reference/objects/move-module-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MovePackageConnection`](/references/sui-api/graphql/reference/objects/move-package-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveStructConnection`](/references/sui-api/graphql/reference/objects/move-struct-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectConnection`](/references/sui-api/graphql/reference/objects/object-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ProgrammableTransactionConnection`](/references/sui-api/graphql/reference/objects/programmable-transaction-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`StakedSuiConnection`](/references/sui-api/graphql/reference/objects/staked-sui-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlockConnection`](/references/sui-api/graphql/reference/objects/transaction-block-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionInputConnection`](/references/sui-api/graphql/reference/objects/transaction-input-connection)  <Badge class="badge badge--secondary" text="object"/>
+

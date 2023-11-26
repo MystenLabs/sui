@@ -97,6 +97,38 @@ pub fn load_examples() -> anyhow::Result<Vec<ExampleQueryGroup>> {
     Ok(groups)
 }
 
+/// This generates a markdown page with all the examples, to be used in the docs site
+pub fn generate_examples_for_docs() -> anyhow::Result<String> {
+    let groups = load_examples()?;
+
+    let mut output = BufWriter::new(Vec::new());
+    let mut md = Markdown::new(&mut output);
+    md.write(
+        r#"---
+title: Examples
+description: Query examples for working with the Sui GraphQL RPC.
+---
+"#,
+    )?;
+    md.write("This page showcases a number of queries to interact with the network. These examples can also be found in the [repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples). You can use the [interactive online IDE](https://mainnet.sui.io/rpc/graphql) to run these examples.")?;
+    for (_, group) in groups.iter().enumerate() {
+        let group_name = regularize_string(&group.name);
+        md.write(group_name.heading(2))
+            .map_err(|e| anyhow::anyhow!(e))?;
+        for (_, query) in group.queries.iter().enumerate() {
+            let name = regularize_string(&query.name);
+            md.write(name.heading(3)).map_err(|e| anyhow::anyhow!(e))?;
+            let query = query.contents.lines().collect::<Vec<_>>().join("\n");
+            let content = format!("```graphql\n{}\n```", query);
+            md.write(content.as_str()).map_err(|e| anyhow::anyhow!(e))?;
+        }
+    }
+    let bytes = output.into_inner().map_err(|e| anyhow::anyhow!(e))?;
+    Ok(String::from_utf8(bytes)
+        .map_err(|e| anyhow::anyhow!(e))?
+        .replace('\\', ""))
+}
+
 pub fn generate_markdown() -> anyhow::Result<String> {
     let groups = load_examples()?;
 

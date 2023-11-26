@@ -1,0 +1,85 @@
+---
+id: shared-object-delete
+title: SharedObjectDelete
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+The transaction accepted a shared object as input, but it was deleted before the transaction
+executed.
+
+
+```graphql
+type SharedObjectDelete {
+  address: SuiAddress!
+  version: Int!
+  mutable: Boolean!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectDelete.<b>address</b></code>](#)<Bullet />[`SuiAddress!`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> ID of the shared object.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectDelete.<b>version</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The version of the shared object that was assigned to this transaction during by consensus,
+> during sequencing.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectDelete.<b>mutable</b></code>](#)<Bullet />[`Boolean!`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Whether this transaction intended to use this shared object mutably or not. See
+> `SharedInput.mutable` for further details.
+> 
+
+
+
+### Implemented By
+
+[`UnchangedSharedObject`](/references/sui-api/graphql/reference/unions/unchanged-shared-object)  <Badge class="badge badge--secondary" text="union"/>
+

@@ -1,0 +1,88 @@
+---
+id: end-of-epoch-transaction-kind
+title: EndOfEpochTransactionKind
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransactionKind.<b>ChangeEpochTransaction</b></code>](/references/sui-api/graphql/reference/objects/change-epoch-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A system transaction that updates epoch information on-chain (increments the current epoch).
+> Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
+> submitted by users, because validators will refuse to sign them.
+> 
+> This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransactionKind.<b>AuthenticatorStateCreateTransaction</b></code>](/references/sui-api/graphql/reference/objects/authenticator-state-create-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransactionKind.<b>AuthenticatorStateExpireTransaction</b></code>](/references/sui-api/graphql/reference/objects/authenticator-state-expire-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>EndOfEpochTransactionKind.<b>RandomnessStateCreateTransaction</b></code>](/references/sui-api/graphql/reference/objects/randomness-state-create-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> 
+> 
+
+
+
+### Member Of
+
+[`EndOfEpochTransactionKindConnection`](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction-kind-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`EndOfEpochTransactionKindEdge`](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction-kind-edge)  <Badge class="badge badge--secondary" text="object"/>
+

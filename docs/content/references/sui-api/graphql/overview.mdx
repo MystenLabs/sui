@@ -1,0 +1,72 @@
+---
+title: Overview
+description: An overview of the Sui GraphQL RPC service.
+draft: true
+---
+
+The ability to define precisely the data you want—and only the needed data—is a powerful advantage over traditional REST API endpoints. GraphQL lets you replace multiple REST requests with a single call to fetch the required data. Sui provides a GraphQL implementation to serve the data available on chain, and this topic describes how to get started, where to find query examples, and the current limitations.
+
+## Getting started
+
+You can access the Sui GraphQL RPC service in multiple ways. An [online interactive IDE](https://mainnet.sui.io/rpc/graphql) is available for you to familiarize yourself with the schema and available queries. 
+If you use the Sui TypeScript SDK, [Guidelines](./guides.mdx) provides a migration guide on how to use the updated TypeScript SDK that leverages the new GraphQL implementation. If you used to query the JSON RPC endpoints, you now have the option to query the new GraphQL endpoint in a similar fashion as before.
+
+### High level overview
+
+#### Top level queries
+In GraphQL, you retrieve data through queries in a JSON format. At the top level, there are a number of [queries](./reference/queries/address) that you can execute.
+
+#### Connections
+Coming soon
+
+#### Mutations (or how to build & execute transactions)
+Coming soon
+
+### Using Sui GraphQL RPC
+
+An interactive IDE with autocomplete support and built-in documentation is available: [Sui GraphQL](https://mainnet.sui.io/rpc/graphql). 
+Include the `query` information in the `data` parameter of the cURL call to query the endpoint using REST.
+
+:::info
+
+The `https://mainnet.sui.io/rpc/graphql/v1` endpoint is rate-limited to keep network throughput optimized.
+
+:::
+```shell
+# basic query
+curl -X POST https://mainnet.sui.io/rpc/graphql/v1 \
+     --header "Content-Type: application/json" \
+     --data '{
+          "query": "query { epoch { referenceGasPrice } }"
+     }'
+# query with variables
+curl -X POST https://mainnet.sui.io/rpc/graphql/v1 \
+     --header "Content-Type: application/json" \
+     --data '{
+          "query": "query ($epochID: Int!) { epoch(id: $epochID) { referenceGasPrice } }", "variables": { "epochID": 123 } 
+     }'
+```
+
+
+### Examples
+
+A list of query examples is available in the [Examples](./examples.mdx) page, which mirrors the source code examples in the [repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples). Any existing addresses/object IDs in these examples refer to `mainnet` data only.
+
+
+## Limits
+
+The GraphQL service employs several techniques to ensure against DDoS attacks and other ways to overload the server (such as making overly complex queries that require full DB scans). In particular, queries are rate-limited both at the number of attempts and on their complexity, such as the number of nodes and the depth of the query. Importantly, the payload size is also limited. 
+These limits can be retrieved by querying the `serviceConfig` type. An example of the available limits (at the time of this writing) follows:
+
+```graphql
+{
+  serviceConfig {
+    maxQueryDepth
+    maxQueryNodes
+    maxDbQueryCost
+    requestTimeoutMs
+    maxPageSize
+    maxQueryPayloadSize
+  }
+}
+```

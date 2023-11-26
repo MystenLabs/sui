@@ -1,0 +1,78 @@
+---
+id: dynamic-field
+title: DynamicField
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type DynamicField {
+  name: MoveValue
+  value: DynamicFieldValue
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>DynamicField.<b>name</b></code>](#)<Bullet />[`MoveValue`](/references/sui-api/graphql/reference/objects/move-value) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The string type, data, and serialized value of the DynamicField's 'name' field.
+> This field is used to uniquely identify a child of the parent object.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>DynamicField.<b>value</b></code>](#)<Bullet />[`DynamicFieldValue`](/references/sui-api/graphql/reference/unions/dynamic-field-value) <Badge class="badge badge--secondary" text="union"/> 
+> 
+> 
+> The actual data stored in the dynamic field.
+> The returned dynamic field is an object if its return type is MoveObject,
+> in which case it is also accessible off-chain via its address.
+> 
+
+
+
+### Member Of
+
+[`Address`](/references/sui-api/graphql/reference/objects/address)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldConnection`](/references/sui-api/graphql/reference/objects/dynamic-field-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldEdge`](/references/sui-api/graphql/reference/objects/dynamic-field-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectOwner`](/references/sui-api/graphql/reference/interfaces/object-owner)  <Badge class="badge badge--secondary" text="interface"/><Bullet />[`Owner`](/references/sui-api/graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/>
+

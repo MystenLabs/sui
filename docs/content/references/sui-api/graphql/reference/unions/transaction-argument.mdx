@@ -1,0 +1,79 @@
+---
+id: transaction-argument
+title: TransactionArgument
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+An argument to a programmable transaction command.
+
+
+```graphql
+union TransactionArgument = GasCoin | Input | Result
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionArgument.<b>GasCoin</b></code>](/references/sui-api/graphql/reference/objects/gas-coin) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be
+> used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionArgument.<b>Input</b></code>](/references/sui-api/graphql/reference/objects/input) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> One of the input objects or primitive values to the programmable transaction block.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionArgument.<b>Result</b></code>](/references/sui-api/graphql/reference/objects/result) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The result of another transaction command.
+> 
+
+
+
+### Member Of
+
+[`MakeMoveVecTransaction`](/references/sui-api/graphql/reference/objects/make-move-vec-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MergeCoinsTransaction`](/references/sui-api/graphql/reference/objects/merge-coins-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveCallTransaction`](/references/sui-api/graphql/reference/objects/move-call-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SplitCoinsTransaction`](/references/sui-api/graphql/reference/objects/split-coins-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransferObjectsTransaction`](/references/sui-api/graphql/reference/objects/transfer-objects-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`UpgradeTransaction`](/references/sui-api/graphql/reference/objects/upgrade-transaction)  <Badge class="badge badge--secondary" text="object"/>
+

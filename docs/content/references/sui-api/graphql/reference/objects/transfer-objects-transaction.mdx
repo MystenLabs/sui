@@ -1,0 +1,76 @@
+---
+id: transfer-objects-transaction
+title: TransferObjectsTransaction
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public
+transfer) and must not be previously immutable or shared.
+
+
+```graphql
+type TransferObjectsTransaction {
+  inputs: [TransactionArgument!]!
+  address: TransactionArgument!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>TransferObjectsTransaction.<b>inputs</b></code>](#)<Bullet />[`[TransactionArgument!]!`](/references/sui-api/graphql/reference/unions/transaction-argument) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="union"/> 
+> 
+> 
+> The objects to transfer.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransferObjectsTransaction.<b>address</b></code>](#)<Bullet />[`TransactionArgument!`](/references/sui-api/graphql/reference/unions/transaction-argument) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="union"/> 
+> 
+> 
+> The address to transfer to.
+> 
+
+
+
+### Implemented By
+
+[`ProgrammableTransaction`](/references/sui-api/graphql/reference/unions/programmable-transaction)  <Badge class="badge badge--secondary" text="union"/>
+

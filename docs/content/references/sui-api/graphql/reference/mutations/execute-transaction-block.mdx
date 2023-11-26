@@ -1,0 +1,88 @@
+---
+id: execute-transaction-block
+title: executeTransactionBlock
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Execute a transaction, committing its effects on chain.
+
+`txBytes` is a `TransactionData` struct that has been BCS-encoded
+and then Base64-encoded.
+`signatures` are a list of `flag || signature || pubkey` bytes,
+Base64-encoded.
+
+Waits until the transaction has been finalized on chain to return
+its transaction digest.  If the transaction could not be
+finalized, returns the errors that prevented it, instead.
+
+
+```graphql
+executeTransactionBlock(
+  txBytes: String!
+  signatures: [String!]!
+): ExecutionResult!
+```
+
+
+
+
+### Arguments
+
+#### [<code style={{ fontWeight: 'normal' }}>executeTransactionBlock.<b>txBytes</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>executeTransactionBlock.<b>signatures</b></code>](#)<Bullet />[`[String!]!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+### Type
+
+#### [`ExecutionResult`](/references/sui-api/graphql/reference/objects/execution-result) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> 
+> 
+
+
+

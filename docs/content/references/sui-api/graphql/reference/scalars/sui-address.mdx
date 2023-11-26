@@ -1,0 +1,58 @@
+---
+id: sui-address
+title: SuiAddress
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+String containing 32B hex-encoded address, with a leading "0x". Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+
+
+```graphql
+scalar SuiAddress
+```
+
+
+
+
+
+
+### Member Of
+
+[`Address`](/references/sui-api/graphql/reference/objects/address)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`address`](/references/sui-api/graphql/reference/queries/address)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`EventFilter`](/references/sui-api/graphql/reference/inputs/event-filter)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`Linkage`](/references/sui-api/graphql/reference/objects/linkage)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveCallTransaction`](/references/sui-api/graphql/reference/objects/move-call-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`object`](/references/sui-api/graphql/reference/queries/object)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`ObjectChange`](/references/sui-api/graphql/reference/objects/object-change)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectFilter`](/references/sui-api/graphql/reference/inputs/object-filter)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`ObjectKey`](/references/sui-api/graphql/reference/inputs/object-key)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`ObjectOwner`](/references/sui-api/graphql/reference/interfaces/object-owner)  <Badge class="badge badge--secondary" text="interface"/><Bullet />[`OwnedOrImmutable`](/references/sui-api/graphql/reference/objects/owned-or-immutable)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Owner`](/references/sui-api/graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`owner`](/references/sui-api/graphql/reference/queries/owner)  <Badge class="badge badge--secondary" text="query"/><Bullet />[`PublishTransaction`](/references/sui-api/graphql/reference/objects/publish-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Receiving`](/references/sui-api/graphql/reference/objects/receiving)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SharedInput`](/references/sui-api/graphql/reference/objects/shared-input)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SharedObjectDelete`](/references/sui-api/graphql/reference/objects/shared-object-delete)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SharedObjectRead`](/references/sui-api/graphql/reference/objects/shared-object-read)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlockFilter`](/references/sui-api/graphql/reference/inputs/transaction-block-filter)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`TypeOrigin`](/references/sui-api/graphql/reference/objects/type-origin)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`UpgradeTransaction`](/references/sui-api/graphql/reference/objects/upgrade-transaction)  <Badge class="badge badge--secondary" text="object"/>
+

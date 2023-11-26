@@ -1,0 +1,92 @@
+---
+id: gas-cost-summary
+title: GasCostSummary
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type GasCostSummary {
+  computationCost: BigInt
+  storageCost: BigInt
+  storageRebate: BigInt
+  nonRefundableStorageFee: BigInt
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>GasCostSummary.<b>computationCost</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Gas paid for executing this transaction (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>GasCostSummary.<b>storageCost</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Gas paid for the data stored on-chain by this transaction (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>GasCostSummary.<b>storageRebate</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Part of storage cost that can be reclaimed by cleaning up data created by this transaction
+> (when objects are deleted or an object is modified, which is treated as a deletion followed
+> by a creation) (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>GasCostSummary.<b>nonRefundableStorageFee</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Part of storage cost that is not reclaimed when data created by this transaction is cleaned
+> up (in MIST).
+> 
+
+
+
+### Member Of
+
+[`Checkpoint`](/references/sui-api/graphql/reference/objects/checkpoint)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`GasEffects`](/references/sui-api/graphql/reference/objects/gas-effects)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SafeMode`](/references/sui-api/graphql/reference/objects/safe-mode)  <Badge class="badge badge--secondary" text="object"/>
+

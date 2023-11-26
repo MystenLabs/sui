@@ -1,0 +1,77 @@
+---
+id: safe-mode
+title: SafeMode
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Information about whether epoch changes are using safe mode.
+
+
+```graphql
+type SafeMode {
+  enabled: Boolean
+  gasSummary: GasCostSummary
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>SafeMode.<b>enabled</b></code>](#)<Bullet />[`Boolean`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Whether safe mode was used for the last epoch change.  The system will retry a full epoch
+> change on every epoch boundary and automatically reset this flag if so.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SafeMode.<b>gasSummary</b></code>](#)<Bullet />[`GasCostSummary`](/references/sui-api/graphql/reference/objects/gas-cost-summary) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Accumulated fees for computation and cost that have not been added to the various reward
+> pools, because the full epoch change did not happen.
+> 
+
+
+
+### Member Of
+
+[`SuiSystemStateSummary`](/references/sui-api/graphql/reference/objects/sui-system-state-summary)  <Badge class="badge badge--secondary" text="object"/>
+

@@ -1,0 +1,68 @@
+---
+id: deprecated
+title: deprecated
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Marks an element of a GraphQL schema as no longer supported.
+
+
+```graphql
+directive @deprecated(
+  reason: String = "No longer supported"
+) on 
+  | FIELD_DEFINITION
+  | ARGUMENT_DEFINITION
+  | INPUT_FIELD_DEFINITION
+  | ENUM_VALUE
+```
+
+
+
+
+### Arguments
+
+#### [<code style={{ fontWeight: 'normal' }}>deprecated.<b>reason</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Explains why this element was deprecated, usually also including a suggestion for how to access supported similar data. Formatted using the Markdown syntax, as specified by [CommonMark](https://commonmark.org/).
+> 
+
+
+

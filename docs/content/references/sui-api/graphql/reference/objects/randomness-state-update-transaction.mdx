@@ -1,0 +1,89 @@
+---
+id: randomness-state-update-transaction
+title: RandomnessStateUpdateTransaction
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+System transaction to update the source of on-chain randomness.
+
+
+```graphql
+type RandomnessStateUpdateTransaction {
+  epoch: Epoch!
+  randomnessRound: Int!
+  randomBytes: Base64!
+  randomnessObjInitialSharedVersion: Int!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>RandomnessStateUpdateTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch!`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Epoch of the randomness state update transaction.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>RandomnessStateUpdateTransaction.<b>randomnessRound</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Randomness round of the update.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>RandomnessStateUpdateTransaction.<b>randomBytes</b></code>](#)<Bullet />[`Base64!`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Updated random bytes, encoded as Base64.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>RandomnessStateUpdateTransaction.<b>randomnessObjInitialSharedVersion</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The initial version the randomness object was shared at.
+> 
+
+
+
+### Implemented By
+
+[`TransactionBlockKind`](/references/sui-api/graphql/reference/unions/transaction-block-kind)  <Badge class="badge badge--secondary" text="union"/>
+

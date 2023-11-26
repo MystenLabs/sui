@@ -1,0 +1,387 @@
+---
+id: object
+title: Object
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type Object implements ObjectOwner {
+  version: Int!
+  digest: String!
+  storageRebate: BigInt
+  bcs: Base64
+  previousTransactionBlock: TransactionBlock
+  kind: ObjectKind
+  owner: Owner
+  asMoveObject: MoveObject
+  asMovePackage: MovePackage
+  address: SuiAddress!
+  objectConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    filter: ObjectFilter
+  ): ObjectConnection
+  balance(
+    type: String
+  ): Balance
+  balanceConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): BalanceConnection
+  coinConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+    type: String
+  ): CoinConnection
+  stakedSuiConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): StakedSuiConnection
+  defaultNameServiceName: String
+  dynamicField(
+    name: DynamicFieldName!
+  ): DynamicField
+  dynamicObjectField(
+    name: DynamicFieldName!
+  ): DynamicField
+  dynamicFieldConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): DynamicFieldConnection
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>version</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>digest</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>storageRebate</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The amount of SUI we would rebate if this object gets deleted or mutated.
+> This number is recalculated based on the present storage gas price.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>bcs</b></code>](#)<Bullet />[`Base64`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The Base64 encoded bcs serialization of the object's content.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>previousTransactionBlock</b></code>](#)<Bullet />[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The transaction block that created this version of the object.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>kind</b></code>](#)<Bullet />[`ObjectKind`](/references/sui-api/graphql/reference/enums/object-kind) <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> Objects can either be immutable, shared, owned by an address,
+> or are child objects (part of a dynamic field)
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>owner</b></code>](#)<Bullet />[`Owner`](/references/sui-api/graphql/reference/objects/owner) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The Address or Object that owns this Object.  Immutable and Shared Objects do not have
+> owners.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>asMoveObject</b></code>](#)<Bullet />[`MoveObject`](/references/sui-api/graphql/reference/objects/move-object) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Attempts to convert the object into a MoveObject
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>asMovePackage</b></code>](#)<Bullet />[`MovePackage`](/references/sui-api/graphql/reference/objects/move-package) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Attempts to convert the object into a MovePackage
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>address</b></code>](#)<Bullet />[`SuiAddress!`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The address of the object, named as such to avoid conflict with the address type.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>objectConnection</b></code>](#)<Bullet />[`ObjectConnection`](/references/sui-api/graphql/reference/objects/object-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The objects owned by this object
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.objectConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.objectConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.objectConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.objectConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.objectConnection.<b>filter</b></code>](#)<Bullet />[`ObjectFilter`](/references/sui-api/graphql/reference/inputs/object-filter) <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>balance</b></code>](#)<Bullet />[`Balance`](/references/sui-api/graphql/reference/objects/balance) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The balance of coin objects of a particular coin type owned by the object.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.balance.<b>type</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>balanceConnection</b></code>](#)<Bullet />[`BalanceConnection`](/references/sui-api/graphql/reference/objects/balance-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The balances of all coin types owned by the object. Coins of the same type are grouped together into one Balance.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.balanceConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.balanceConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.balanceConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.balanceConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>coinConnection</b></code>](#)<Bullet />[`CoinConnection`](/references/sui-api/graphql/reference/objects/coin-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The coin objects for the given address.
+> 
+> The type field is a string of the inner type of the coin by which to filter
+> (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.coinConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.coinConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.coinConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.coinConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.coinConnection.<b>type</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>stakedSuiConnection</b></code>](#)<Bullet />[`StakedSuiConnection`](/references/sui-api/graphql/reference/objects/staked-sui-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The `0x3::staking_pool::StakedSui` objects owned by the given object.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.stakedSuiConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.stakedSuiConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.stakedSuiConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.stakedSuiConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>defaultNameServiceName</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The domain that a user address has explicitly configured as their default domain
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>dynamicField</b></code>](#)<Bullet />[`DynamicField`](/references/sui-api/graphql/reference/objects/dynamic-field) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Access a dynamic field on an object using its name.
+> Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+> using their type, and their BCS contents, Base64 encoded.
+> Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.dynamicField.<b>name</b></code>](#)<Bullet />[`DynamicFieldName!`](/references/sui-api/graphql/reference/inputs/dynamic-field-name) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>dynamicObjectField</b></code>](#)<Bullet />[`DynamicField`](/references/sui-api/graphql/reference/objects/dynamic-field) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Access a dynamic object field on an object using its name.
+> Names are arbitrary Move values whose type have `copy`, `drop`, and `store`, and are specified
+> using their type, and their BCS contents, Base64 encoded.
+> The value of a dynamic object field can also be accessed off-chain directly via its address (e.g. using `Query.object`).
+> Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.dynamicObjectField.<b>name</b></code>](#)<Bullet />[`DynamicFieldName!`](/references/sui-api/graphql/reference/inputs/dynamic-field-name) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Object.<b>dynamicFieldConnection</b></code>](#)<Bullet />[`DynamicFieldConnection`](/references/sui-api/graphql/reference/objects/dynamic-field-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The dynamic fields on an object.
+> Dynamic fields on wrapped objects can be accessed by using the same API under the Owner type.
+> ##### [<code style={{ fontWeight: 'normal' }}>Object.dynamicFieldConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.dynamicFieldConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.dynamicFieldConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>Object.dynamicFieldConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+### Interfaces
+
+#### [`ObjectOwner`](/references/sui-api/graphql/reference/interfaces/object-owner) <Badge class="badge badge--secondary" text="interface"/> 
+> 
+> 
+> 
+> 
+
+
+
+### Returned by
+
+[`object`](/references/sui-api/graphql/reference/queries/object)  <Badge class="badge badge--secondary" text="query"/>
+
+### Member Of
+
+[`GasEffects`](/references/sui-api/graphql/reference/objects/gas-effects)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveObject`](/references/sui-api/graphql/reference/objects/move-object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MovePackage`](/references/sui-api/graphql/reference/objects/move-package)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectChange`](/references/sui-api/graphql/reference/objects/object-change)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectConnection`](/references/sui-api/graphql/reference/objects/object-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ObjectEdge`](/references/sui-api/graphql/reference/objects/object-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`OwnedOrImmutable`](/references/sui-api/graphql/reference/objects/owned-or-immutable)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Owner`](/references/sui-api/graphql/reference/objects/owner)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Receiving`](/references/sui-api/graphql/reference/objects/receiving)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`SharedObjectRead`](/references/sui-api/graphql/reference/objects/shared-object-read)  <Badge class="badge badge--secondary" text="object"/>
+

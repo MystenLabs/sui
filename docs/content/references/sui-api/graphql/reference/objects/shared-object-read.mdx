@@ -1,0 +1,90 @@
+---
+id: shared-object-read
+title: SharedObjectRead
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+The transaction accepted a shared object as input, but only to read it.
+
+
+```graphql
+type SharedObjectRead {
+  address: SuiAddress!
+  version: Int!
+  digest: String!
+  object: Object
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectRead.<b>address</b></code>](#)<Bullet />[`SuiAddress!`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> ID of the object being read.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectRead.<b>version</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Version of the object being read.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectRead.<b>digest</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 32-byte hash that identifies the object's contents at this version, encoded as a Base58
+> string.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SharedObjectRead.<b>object</b></code>](#)<Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The object at this version.  May not be available due to pruning.
+> 
+
+
+
+### Implemented By
+
+[`UnchangedSharedObject`](/references/sui-api/graphql/reference/unions/unchanged-shared-object)  <Badge class="badge badge--secondary" text="union"/>
+

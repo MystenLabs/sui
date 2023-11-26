@@ -1,0 +1,226 @@
+---
+id: move-module
+title: MoveModule
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Represents a module in Move, a library that defines struct types
+and functions that operate on these types.
+
+
+```graphql
+type MoveModule {
+  package: MovePackage!
+  name: String!
+  fileFormatVersion: Int!
+  friendConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): MoveModuleConnection!
+  struct(
+    name: String!
+  ): MoveStruct
+  structConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): MoveStructConnection
+  function(
+    name: String!
+  ): MoveFunction
+  functionConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): MoveFunctionConnection
+  bytes: Base64
+  disassembly: String
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>package</b></code>](#)<Bullet />[`MovePackage!`](/references/sui-api/graphql/reference/objects/move-package) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The package that this Move module was defined in
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>name</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The module's (unqualified) name.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>fileFormatVersion</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Format version of this module's bytecode.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>friendConnection</b></code>](#)<Bullet />[`MoveModuleConnection!`](/references/sui-api/graphql/reference/objects/move-module-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Modules that this module considers friends (these modules can access `public(friend)`
+> functions from this module).
+> ##### [<code style={{ fontWeight: 'normal' }}>MoveModule.friendConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.friendConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.friendConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.friendConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>struct</b></code>](#)<Bullet />[`MoveStruct`](/references/sui-api/graphql/reference/objects/move-struct) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Look-up the definition of a struct defined in this module, by its name.
+> ##### [<code style={{ fontWeight: 'normal' }}>MoveModule.struct.<b>name</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>structConnection</b></code>](#)<Bullet />[`MoveStructConnection`](/references/sui-api/graphql/reference/objects/move-struct-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Iterate through the structs defined in this module.
+> ##### [<code style={{ fontWeight: 'normal' }}>MoveModule.structConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.structConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.structConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.structConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>function</b></code>](#)<Bullet />[`MoveFunction`](/references/sui-api/graphql/reference/objects/move-function) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Look-up the signature of a function defined in this module, by its name.
+> ##### [<code style={{ fontWeight: 'normal' }}>MoveModule.function.<b>name</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>functionConnection</b></code>](#)<Bullet />[`MoveFunctionConnection`](/references/sui-api/graphql/reference/objects/move-function-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Iterate through the signatures of functions defined in this module.
+> ##### [<code style={{ fontWeight: 'normal' }}>MoveModule.functionConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.functionConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.functionConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>MoveModule.functionConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>bytes</b></code>](#)<Bullet />[`Base64`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The Base64 encoded bcs serialization of the module.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveModule.<b>disassembly</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Textual representation of the module's bytecode.
+> 
+
+
+
+### Member Of
+
+[`Event`](/references/sui-api/graphql/reference/objects/event)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveFunction`](/references/sui-api/graphql/reference/objects/move-function)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveModuleConnection`](/references/sui-api/graphql/reference/objects/move-module-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveModuleEdge`](/references/sui-api/graphql/reference/objects/move-module-edge)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MovePackage`](/references/sui-api/graphql/reference/objects/move-package)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveStruct`](/references/sui-api/graphql/reference/objects/move-struct)  <Badge class="badge badge--secondary" text="object"/>
+

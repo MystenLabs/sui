@@ -1,0 +1,99 @@
+---
+id: move-struct
+title: MoveStruct
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Description of a type, defined in a Move module.
+
+
+```graphql
+type MoveStruct {
+  module: MoveModule!
+  name: String!
+  abilities: [MoveAbility!]
+  typeParameters: [MoveStructTypeParameter!]
+  fields: [MoveField!]
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveStruct.<b>module</b></code>](#)<Bullet />[`MoveModule!`](/references/sui-api/graphql/reference/objects/move-module) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The module this struct was originally defined in.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveStruct.<b>name</b></code>](#)<Bullet />[`String!`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The struct's (unqualified) type name.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveStruct.<b>abilities</b></code>](#)<Bullet />[`[MoveAbility!]`](/references/sui-api/graphql/reference/enums/move-ability) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> Abilities this struct has.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveStruct.<b>typeParameters</b></code>](#)<Bullet />[`[MoveStructTypeParameter!]`](/references/sui-api/graphql/reference/objects/move-struct-type-parameter) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Constraints on the struct's formal type parameters.  Move bytecode does not name type
+> parameters, so when they are referenced (e.g. in field types) they are identified by their
+> index in this list.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveStruct.<b>fields</b></code>](#)<Bullet />[`[MoveField!]`](/references/sui-api/graphql/reference/objects/move-field) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The names and types of the struct's fields.  Field types reference type parameters, by their
+> index in the defining struct's `typeParameters` list.
+> 
+
+
+
+### Member Of
+
+[`MoveModule`](/references/sui-api/graphql/reference/objects/move-module)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveStructConnection`](/references/sui-api/graphql/reference/objects/move-struct-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveStructEdge`](/references/sui-api/graphql/reference/objects/move-struct-edge)  <Badge class="badge badge--secondary" text="object"/>
+

@@ -1,0 +1,84 @@
+---
+id: transaction-input
+title: TransactionInput
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+union TransactionInput = OwnedOrImmutable | SharedInput | Receiving | Pure
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionInput.<b>OwnedOrImmutable</b></code>](/references/sui-api/graphql/reference/objects/owned-or-immutable) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A Move object, either immutable, or owned mutable.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionInput.<b>SharedInput</b></code>](/references/sui-api/graphql/reference/objects/shared-input) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A Move object that's shared.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionInput.<b>Receiving</b></code>](/references/sui-api/graphql/reference/objects/receiving) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A Move object that can be received in this transaction.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionInput.<b>Pure</b></code>](/references/sui-api/graphql/reference/objects/pure) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> BCS encoded primitive value (not an object or Move struct).
+> 
+
+
+
+### Member Of
+
+[`TransactionInputConnection`](/references/sui-api/graphql/reference/objects/transaction-input-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionInputEdge`](/references/sui-api/graphql/reference/objects/transaction-input-edge)  <Badge class="badge badge--secondary" text="object"/>
+

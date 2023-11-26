@@ -1,0 +1,136 @@
+---
+id: sui-system-state-summary
+title: SuiSystemStateSummary
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Aspects that affect the running of the system that are managed by the validators either
+directly, or through system transactions.
+
+
+```graphql
+type SuiSystemStateSummary {
+  systemStateVersion: BigInt
+  referenceGasPrice: BigInt
+  systemParameters: SystemParameters
+  stakeSubsidy: StakeSubsidy
+  validatorSet: ValidatorSet
+  storageFund: StorageFund
+  safeMode: SafeMode
+  startTimestamp: DateTime
+  epoch: Epoch
+  protocolConfigs: ProtocolConfigs
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>systemStateVersion</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.  This
+> version changes whenever the fields contained in the system state object (held in a dynamic
+> field attached to `0x5`) change.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>referenceGasPrice</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The minimum gas price that a quorum of validators are guaranteed to sign a transaction for.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>systemParameters</b></code>](#)<Bullet />[`SystemParameters`](/references/sui-api/graphql/reference/objects/system-parameters) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Details of the system that are decided during genesis.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>stakeSubsidy</b></code>](#)<Bullet />[`StakeSubsidy`](/references/sui-api/graphql/reference/objects/stake-subsidy) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Parameters related to subsiding staking rewards
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>validatorSet</b></code>](#)<Bullet />[`ValidatorSet`](/references/sui-api/graphql/reference/objects/validator-set) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Details of the currently active validators and pending changes to that set.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>storageFund</b></code>](#)<Bullet />[`StorageFund`](/references/sui-api/graphql/reference/objects/storage-fund) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> SUI set aside to account for objects stored on-chain, at the start of the epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>safeMode</b></code>](#)<Bullet />[`SafeMode`](/references/sui-api/graphql/reference/objects/safe-mode) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Information about whether last epoch change used safe mode, which happens if the full epoch
+> change logic fails for some reason.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>startTimestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The start of the current epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>epoch</b></code>](#)<Bullet />[`Epoch`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The epoch for which this is the system state.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>SuiSystemStateSummary.<b>protocolConfigs</b></code>](#)<Bullet />[`ProtocolConfigs`](/references/sui-api/graphql/reference/objects/protocol-configs) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Configuration for how the chain operates that can change from epoch to epoch (due to a
+> protocol version upgrade).
+> 
+
+
+
+### Returned by
+
+[`latestSuiSystemState`](/references/sui-api/graphql/reference/queries/latest-sui-system-state)  <Badge class="badge badge--secondary" text="query"/>
+

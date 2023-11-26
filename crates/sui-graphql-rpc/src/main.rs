@@ -31,6 +31,19 @@ async fn main() {
                 );
             }
         }
+        Command::GenerateDocsExamples => {
+            let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            // we are looking to put examples content in
+            // sui/docs/content/references/sui-api/graphql/examples.mdx
+            let filename = "docs/content/references/sui-api/graphql/examples.mdx";
+            buf.pop();
+            buf.pop();
+            buf.push(filename);
+            let content = sui_graphql_rpc::examples::generate_examples_for_docs()
+                .expect("Generating examples markdown file for docs failed");
+            std::fs::write(buf, content).expect("Writing examples markdown failed");
+            println!("Generated the docs example.mdx file and copied it to {filename}.");
+        }
         Command::GenerateSchema { file } => {
             let out = schema_sdl_export();
             if let Some(file) = file {
@@ -43,7 +56,6 @@ async fn main() {
         Command::GenerateExamples { file } => {
             let new_content: String = sui_graphql_rpc::examples::generate_markdown()
                 .expect("Generating examples markdown failed");
-
             let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             buf.push("docs");
             buf.push("examples.md");

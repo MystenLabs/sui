@@ -1,0 +1,100 @@
+---
+id: stake-subsidy
+title: StakeSubsidy
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Parameters related to subsiding staking rewards
+
+
+```graphql
+type StakeSubsidy {
+  balance: BigInt
+  distributionCounter: Int
+  currentDistributionAmount: BigInt
+  periodLength: Int
+  decreaseRate: Int
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>StakeSubsidy.<b>balance</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over
+> time.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>StakeSubsidy.<b>distributionCounter</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Number of times stake subsidies have been distributed subsidies are distributed with other
+> staking rewards, at the end of the epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>StakeSubsidy.<b>currentDistributionAmount</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>StakeSubsidy.<b>periodLength</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Maximum number of stake subsidy distributions that occur with the same distribution amount
+> (before the amount is reduced).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>StakeSubsidy.<b>decreaseRate</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Percentage of the current distribution amount to deduct at the end of the current subsidy
+> period, expressed in basis points.
+> 
+
+
+
+### Member Of
+
+[`SuiSystemStateSummary`](/references/sui-api/graphql/reference/objects/sui-system-state-summary)  <Badge class="badge badge--secondary" text="object"/>
+

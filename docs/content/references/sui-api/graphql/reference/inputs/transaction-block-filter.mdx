@@ -1,0 +1,159 @@
+---
+id: transaction-block-filter
+title: TransactionBlockFilter
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+input TransactionBlockFilter {
+  package: SuiAddress
+  module: String
+  function: String
+  kind: TransactionBlockKindInput
+  afterCheckpoint: Int
+  atCheckpoint: Int
+  beforeCheckpoint: Int
+  signAddress: SuiAddress
+  sentAddress: SuiAddress
+  recvAddress: SuiAddress
+  paidAddress: SuiAddress
+  inputObject: SuiAddress
+  changedObject: SuiAddress
+  transactionIds: [String!]
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>package</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>module</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>function</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>kind</b></code>](#)<Bullet />[`TransactionBlockKindInput`](/references/sui-api/graphql/reference/enums/transaction-block-kind-input) <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>afterCheckpoint</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>atCheckpoint</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>beforeCheckpoint</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>signAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>sentAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>recvAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>paidAddress</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>inputObject</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>changedObject</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockFilter.<b>transactionIds</b></code>](#)<Bullet />[`[String!]`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+
+
+### Member Of
+
+[`transactionBlockConnection`](/references/sui-api/graphql/reference/queries/transaction-block-connection)  <Badge class="badge badge--secondary" text="query"/>
+

@@ -1,0 +1,151 @@
+---
+id: change-epoch-transaction
+title: ChangeEpochTransaction
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+A system transaction that updates epoch information on-chain (increments the current epoch).
+Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
+submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+
+
+```graphql
+type ChangeEpochTransaction {
+  epoch: Epoch!
+  protocolVersion: Int!
+  storageCharge: BigInt!
+  computationCharge: BigInt!
+  storageRebate: BigInt!
+  nonRefundableStorageFee: BigInt!
+  startTimestamp: DateTime
+  systemPackageConnection(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): MovePackageConnection!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>epoch</b></code>](#)<Bullet />[`Epoch!`](/references/sui-api/graphql/reference/objects/epoch) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The next (to become) epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>protocolVersion</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The protocol version in effect in the new epoch.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>storageCharge</b></code>](#)<Bullet />[`BigInt!`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The total amount of gas charged for storage during the previous epoch (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>computationCharge</b></code>](#)<Bullet />[`BigInt!`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The total amount of gas charged for computation during the previous epoch (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>storageRebate</b></code>](#)<Bullet />[`BigInt!`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The SUI returned to transaction senders for cleaning up objects (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>nonRefundableStorageFee</b></code>](#)<Bullet />[`BigInt!`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The total gas retained from storage fees, that will not be returned by storage rebates when
+> the relevant objects are cleaned up (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>startTimestamp</b></code>](#)<Bullet />[`DateTime`](/references/sui-api/graphql/reference/scalars/date-time) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Time at which the next epoch will start.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.<b>systemPackageConnection</b></code>](#)<Bullet />[`MovePackageConnection!`](/references/sui-api/graphql/reference/objects/move-package-connection) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> System packages (specifically framework and move stdlib) that are written before the new
+> epoch starts, to upgrade them on-chain. Validators write these packages out when running the
+> transaction.
+> ##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>ChangeEpochTransaction.systemPackageConnection.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+
+
+### Implemented By
+
+[`EndOfEpochTransactionKind`](/references/sui-api/graphql/reference/unions/end-of-epoch-transaction-kind)  <Badge class="badge badge--secondary" text="union"/><Bullet />[`TransactionBlockKind`](/references/sui-api/graphql/reference/unions/transaction-block-kind)  <Badge class="badge badge--secondary" text="union"/>
+

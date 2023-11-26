@@ -1,0 +1,58 @@
+---
+id: base-64
+title: Base64
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+scalar Base64
+```
+
+
+
+
+
+
+### Member Of
+
+[`Checkpoint`](/references/sui-api/graphql/reference/objects/checkpoint)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`DynamicFieldName`](/references/sui-api/graphql/reference/inputs/dynamic-field-name)  <Badge class="badge badge--secondary" text="input"/><Bullet />[`Event`](/references/sui-api/graphql/reference/objects/event)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveModule`](/references/sui-api/graphql/reference/objects/move-module)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MovePackage`](/references/sui-api/graphql/reference/objects/move-package)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`MoveValue`](/references/sui-api/graphql/reference/objects/move-value)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`PublishTransaction`](/references/sui-api/graphql/reference/objects/publish-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Pure`](/references/sui-api/graphql/reference/objects/pure)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`RandomnessStateUpdateTransaction`](/references/sui-api/graphql/reference/objects/randomness-state-update-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`TransactionBlockEffects`](/references/sui-api/graphql/reference/objects/transaction-block-effects)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`UpgradeTransaction`](/references/sui-api/graphql/reference/objects/upgrade-transaction)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ValidatorCredentials`](/references/sui-api/graphql/reference/objects/validator-credentials)  <Badge class="badge badge--secondary" text="object"/>
+

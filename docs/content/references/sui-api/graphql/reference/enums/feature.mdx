@@ -1,0 +1,105 @@
+---
+id: feature
+title: Feature
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Groups of features served by the RPC service.  The GraphQL Service can be configured to enable
+or disable these features.
+
+
+```graphql
+enum Feature {
+  ANALYTICS
+  COINS
+  DYNAMIC_FIELDS
+  NAME_SERVICE
+  SUBSCRIPTIONS
+  SYSTEM_STATE
+}
+```
+
+
+
+
+### Values
+
+#### [<code style={{ fontWeight: 'normal' }}>Feature.<b>ANALYTICS</b></code>](#)  
+> 
+> 
+> Statistics about how the network was running (TPS, top packages, APY, etc)
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Feature.<b>COINS</b></code>](#)  
+> 
+> 
+> Coin metadata, per-address coin and balance information.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Feature.<b>DYNAMIC_FIELDS</b></code>](#)  
+> 
+> 
+> Querying an object's dynamic fields.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Feature.<b>NAME_SERVICE</b></code>](#)  
+> 
+> 
+> SuiNS name and reverse name look-up.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Feature.<b>SUBSCRIPTIONS</b></code>](#)  
+> 
+> 
+> Transaction and Event subscriptions.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>Feature.<b>SYSTEM_STATE</b></code>](#)  
+> 
+> 
+> Information about the system that changes from epoch to epoch (protocol config, committee,
+> reference gas price).
+> 
+
+
+
+### Member Of
+
+[`ServiceConfig`](/references/sui-api/graphql/reference/objects/service-config)  <Badge class="badge badge--secondary" text="object"/>
+

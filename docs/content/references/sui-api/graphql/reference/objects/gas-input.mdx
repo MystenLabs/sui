@@ -1,0 +1,117 @@
+---
+id: gas-input
+title: GasInput
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type GasInput {
+  gasSponsor: Address
+  gasPayment(
+    first: Int
+    after: String
+    last: Int
+    before: String
+  ): ObjectConnection
+  gasPrice: BigInt
+  gasBudget: BigInt
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>GasInput.<b>gasSponsor</b></code>](#)<Bullet />[`Address`](/references/sui-api/graphql/reference/objects/address) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Address of the owner of the gas object(s) used
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>GasInput.<b>gasPayment</b></code>](#)<Bullet />[`ObjectConnection`](/references/sui-api/graphql/reference/objects/object-connection) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Objects used to pay for a transaction's execution and storage
+> ##### [<code style={{ fontWeight: 'normal' }}>GasInput.gasPayment.<b>first</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>GasInput.gasPayment.<b>after</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>GasInput.gasPayment.<b>last</b></code>](#)<Bullet />[`Int`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+##### [<code style={{ fontWeight: 'normal' }}>GasInput.gasPayment.<b>before</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>GasInput.<b>gasPrice</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> An unsigned integer specifying the number of native tokens per gas unit this transaction
+> will pay (in MIST).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>GasInput.<b>gasBudget</b></code>](#)<Bullet />[`BigInt`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The maximum number of gas units that can be expended by executing this transaction
+> 
+
+
+
+### Member Of
+
+[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block)  <Badge class="badge badge--secondary" text="object"/>
+

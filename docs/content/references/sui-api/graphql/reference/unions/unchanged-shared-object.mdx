@@ -1,0 +1,76 @@
+---
+id: unchanged-shared-object
+title: UnchangedSharedObject
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Details pertaining to shared objects that are referenced by but not changed by a transaction.
+This information is considered part of the effects, because although the transaction specifies
+the shared object as input, consensus must schedule it and pick the version that is actually
+used.
+
+
+```graphql
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>UnchangedSharedObject.<b>SharedObjectRead</b></code>](/references/sui-api/graphql/reference/objects/shared-object-read) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The transaction accepted a shared object as input, but only to read it.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>UnchangedSharedObject.<b>SharedObjectDelete</b></code>](/references/sui-api/graphql/reference/objects/shared-object-delete) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> The transaction accepted a shared object as input, but it was deleted before the transaction
+> executed.
+> 
+
+
+
+### Member Of
+
+[`TransactionBlockEffects`](/references/sui-api/graphql/reference/objects/transaction-block-effects)  <Badge class="badge badge--secondary" text="object"/>
+

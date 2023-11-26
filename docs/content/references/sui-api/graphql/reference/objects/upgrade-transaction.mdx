@@ -1,0 +1,89 @@
+---
+id: upgrade-transaction
+title: UpgradeTransaction
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+Upgrades a Move Package.
+
+
+```graphql
+type UpgradeTransaction {
+  modules: [Base64!]!
+  dependencies: [SuiAddress!]!
+  currentPackage: SuiAddress!
+  upgradeTicket: TransactionArgument!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>UpgradeTransaction.<b>modules</b></code>](#)<Bullet />[`[Base64!]!`](/references/sui-api/graphql/reference/scalars/base-64) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>UpgradeTransaction.<b>dependencies</b></code>](#)<Bullet />[`[SuiAddress!]!`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> IDs of the transitive dependencies of the package to be published.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>UpgradeTransaction.<b>currentPackage</b></code>](#)<Bullet />[`SuiAddress!`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> ID of the package being upgraded.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>UpgradeTransaction.<b>upgradeTicket</b></code>](#)<Bullet />[`TransactionArgument!`](/references/sui-api/graphql/reference/unions/transaction-argument) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="union"/> 
+> 
+> 
+> The `UpgradeTicket` authorizing the upgrade.
+> 
+
+
+
+### Implemented By
+
+[`ProgrammableTransaction`](/references/sui-api/graphql/reference/unions/programmable-transaction)  <Badge class="badge badge--secondary" text="union"/>
+

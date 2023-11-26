@@ -1,0 +1,110 @@
+---
+id: move-object
+title: MoveObject
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type MoveObject {
+  contents: MoveValue
+  hasPublicTransfer: Boolean
+  asObject: Object!
+  asCoin: Coin
+  asStakedSui: StakedSui
+  asCoinMetadata: CoinMetadata
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveObject.<b>contents</b></code>](#)<Bullet />[`MoveValue`](/references/sui-api/graphql/reference/objects/move-value) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Displays the contents of the MoveObject in a JSON string and through graphql types.  Also
+> provides the flat representation of the type signature, and the bcs of the corresponding
+> data
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveObject.<b>hasPublicTransfer</b></code>](#)<Bullet />[`Boolean`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Determines whether a tx can transfer this object
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveObject.<b>asObject</b></code>](#)<Bullet />[`Object!`](/references/sui-api/graphql/reference/objects/object) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Attempts to convert the Move object into an Object
+> This provides additional information such as version and digest on the top-level
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveObject.<b>asCoin</b></code>](#)<Bullet />[`Coin`](/references/sui-api/graphql/reference/objects/coin) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Attempts to convert the Move object into a `0x2::coin::Coin`.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveObject.<b>asStakedSui</b></code>](#)<Bullet />[`StakedSui`](/references/sui-api/graphql/reference/objects/staked-sui) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Attempts to convert the Move object into a `0x3::staking_pool::StakedSui`.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>MoveObject.<b>asCoinMetadata</b></code>](#)<Bullet />[`CoinMetadata`](/references/sui-api/graphql/reference/objects/coin-metadata) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Attempts to convert the Move object into a `0x2::coin::CoinMetadata`.
+> 
+
+
+
+### Member Of
+
+[`Coin`](/references/sui-api/graphql/reference/objects/coin)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`CoinMetadata`](/references/sui-api/graphql/reference/objects/coin-metadata)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Object`](/references/sui-api/graphql/reference/objects/object)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`StakedSui`](/references/sui-api/graphql/reference/objects/staked-sui)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`Validator`](/references/sui-api/graphql/reference/objects/validator)  <Badge class="badge badge--secondary" text="object"/>
+
+### Implemented By
+
+[`DynamicFieldValue`](/references/sui-api/graphql/reference/unions/dynamic-field-value)  <Badge class="badge badge--secondary" text="union"/>
+

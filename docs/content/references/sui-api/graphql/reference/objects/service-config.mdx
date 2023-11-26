@@ -1,0 +1,131 @@
+---
+id: service-config
+title: ServiceConfig
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+type ServiceConfig {
+  isEnabled(
+    feature: Feature!
+  ): Boolean!
+  enabledFeatures: [Feature!]!
+  maxQueryDepth: Int!
+  maxQueryNodes: Int!
+  maxDbQueryCost: BigInt!
+  defaultPageSize: Int!
+  maxPageSize: Int!
+  requestTimeoutMs: Int!
+  maxQueryPayloadSize: Int!
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>isEnabled</b></code>](#)<Bullet />[`Boolean!`](/references/sui-api/graphql/reference/scalars/boolean) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Check whether `feature` is enabled on this GraphQL service.
+> ##### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.isEnabled.<b>feature</b></code>](#)<Bullet />[`Feature!`](/references/sui-api/graphql/reference/enums/feature) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> 
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>enabledFeatures</b></code>](#)<Bullet />[`[Feature!]!`](/references/sui-api/graphql/reference/enums/feature) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="enum"/> 
+> 
+> 
+> List of all features that are enabled on this GraphQL service.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>maxQueryDepth</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The maximum depth a GraphQL query can be to be accepted by this service.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>maxQueryNodes</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> The maximum number of nodes (field names) the service will accept in a single query.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>maxDbQueryCost</b></code>](#)<Bullet />[`BigInt!`](/references/sui-api/graphql/reference/scalars/big-int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Maximum estimated cost of a database query used to serve a GraphQL request.  This is
+> measured in the same units that the database uses in EXPLAIN queries.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>defaultPageSize</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Default number of elements allowed on a single page of a connection.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>maxPageSize</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Maximum number of elements allowed on a single page of a connection.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>requestTimeoutMs</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Maximum time in milliseconds that will be spent to serve one request.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ServiceConfig.<b>maxQueryPayloadSize</b></code>](#)<Bullet />[`Int!`](/references/sui-api/graphql/reference/scalars/int) <Badge class="badge badge--secondary" text="non-null"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Maximum length of a query payload string.
+> 
+
+
+
+### Returned by
+
+[`serviceConfig`](/references/sui-api/graphql/reference/queries/service-config)  <Badge class="badge badge--secondary" text="query"/>
+

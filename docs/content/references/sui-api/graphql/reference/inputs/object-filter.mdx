@@ -1,0 +1,96 @@
+---
+id: object-filter
+title: ObjectFilter
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+input ObjectFilter {
+  type: String
+  owner: SuiAddress
+  objectIds: [SuiAddress!]
+  objectKeys: [ObjectKey!]
+}
+```
+
+
+
+
+### Fields
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectFilter.<b>type</b></code>](#)<Bullet />[`String`](/references/sui-api/graphql/reference/scalars/string) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> This field is used to specify the type of objects that should be included in the query
+> results.
+> 
+> Objects can be filtered by their type's package, package::module, or their fully qualified
+> type name.
+> 
+> Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
+> the full type name, such as `0x2::coin::Coin&#x003C;0x2::sui::SUI&#x003E;`.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectFilter.<b>owner</b></code>](#)<Bullet />[`SuiAddress`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Filter for live objects by their current owners.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectFilter.<b>objectIds</b></code>](#)<Bullet />[`[SuiAddress!]`](/references/sui-api/graphql/reference/scalars/sui-address) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="scalar"/> 
+> 
+> 
+> Filter for live objects by their IDs.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ObjectFilter.<b>objectKeys</b></code>](#)<Bullet />[`[ObjectKey!]`](/references/sui-api/graphql/reference/inputs/object-key) <Badge class="badge badge--secondary" text="list"/> <Badge class="badge badge--secondary" text="input"/> 
+> 
+> 
+> Filter for live or potentially historical objects by their ID and version.
+> 
+
+
+
+### Member Of
+
+[`objectConnection`](/references/sui-api/graphql/reference/queries/object-connection)  <Badge class="badge badge--secondary" text="query"/>
+

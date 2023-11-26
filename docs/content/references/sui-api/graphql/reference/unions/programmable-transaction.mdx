@@ -1,0 +1,104 @@
+---
+id: programmable-transaction
+title: ProgrammableTransaction
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+A single transaction, or command, in the programmable transaction block.
+
+
+```graphql
+union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>MoveCallTransaction</b></code>](/references/sui-api/graphql/reference/objects/move-call-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A call to either an entry or a public Move function.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>TransferObjectsTransaction</b></code>](/references/sui-api/graphql/reference/objects/transfer-objects-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public
+> transfer) and must not be previously immutable or shared.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>SplitCoinsTransaction</b></code>](/references/sui-api/graphql/reference/objects/split-coins-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as
+> many as there are amounts.)
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>MergeCoinsTransaction</b></code>](/references/sui-api/graphql/reference/objects/merge-coins-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Merges `coins` into the first `coin` (produces no results).
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>PublishTransaction</b></code>](/references/sui-api/graphql/reference/objects/publish-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Publishes a Move Package.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>UpgradeTransaction</b></code>](/references/sui-api/graphql/reference/objects/upgrade-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Upgrades a Move Package.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>ProgrammableTransaction.<b>MakeMoveVecTransaction</b></code>](/references/sui-api/graphql/reference/objects/make-move-vec-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> Create a vector (possibly empty).
+> 
+
+
+
+### Member Of
+
+[`ProgrammableTransactionConnection`](/references/sui-api/graphql/reference/objects/programmable-transaction-connection)  <Badge class="badge badge--secondary" text="object"/><Bullet />[`ProgrammableTransactionEdge`](/references/sui-api/graphql/reference/objects/programmable-transaction-edge)  <Badge class="badge badge--secondary" text="object"/>
+

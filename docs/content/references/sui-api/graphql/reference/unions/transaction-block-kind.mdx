@@ -1,0 +1,110 @@
+---
+id: transaction-block-kind
+title: TransactionBlockKind
+hide_table_of_contents: false
+---
+
+
+
+
+export const Bullet = () => <><span style={{ fontWeight: 'normal', fontSize: '.5em', color: 'var(--ifm-color-secondary-darkest)' }}>&nbsp;●&nbsp;</span></>
+
+export const SpecifiedBy = (props) => <>Specification<a className="link" style={{ fontSize:'1.5em', paddingLeft:'4px' }} target="_blank" href={props.url} title={'Specified by ' + props.url}>⎘</a></>
+
+export const Badge = (props) => <><span className={props.class}>{props.text}</span></>
+
+import { useState } from 'react';
+
+export const Details = ({ dataOpen, dataClose, children, startOpen = false }) => {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <details {...(open ? { open: true } : {})} className="details" style={{ border:'none', boxShadow:'none', background:'var(--ifm-background-color)' }}>
+      <summary
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((open) => !open);
+        }}
+        style={{ listStyle:'none' }}
+      >
+      {open ? dataOpen : dataClose}
+      </summary>
+      {open && children}
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+No description
+
+
+```graphql
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
+```
+
+
+
+
+### Possible types
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>ConsensusCommitPrologueTransaction</b></code>](/references/sui-api/graphql/reference/objects/consensus-commit-prologue-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> System transaction that runs at the beginning of a checkpoint, and is responsible for setting
+> the current value of the clock, based on the timestamp from consensus.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>GenesisTransaction</b></code>](/references/sui-api/graphql/reference/objects/genesis-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> System transaction that initializes the network and writes the initial set of objects on-chain.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>ChangeEpochTransaction</b></code>](/references/sui-api/graphql/reference/objects/change-epoch-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A system transaction that updates epoch information on-chain (increments the current epoch).
+> Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
+> submitted by users, because validators will refuse to sign them.
+> 
+> This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>ProgrammableTransactionBlock</b></code>](/references/sui-api/graphql/reference/objects/programmable-transaction-block) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> A user transaction that allows the interleaving of native commands (like transfer, split coins,
+> merge coins, etc) and move calls, executed atomically.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>AuthenticatorStateUpdateTransaction</b></code>](/references/sui-api/graphql/reference/objects/authenticator-state-update-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> System transaction for updating the on-chain state used by zkLogin.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>RandomnessStateUpdateTransaction</b></code>](/references/sui-api/graphql/reference/objects/randomness-state-update-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> System transaction to update the source of on-chain randomness.
+> 
+
+#### [<code style={{ fontWeight: 'normal' }}>TransactionBlockKind.<b>EndOfEpochTransaction</b></code>](/references/sui-api/graphql/reference/objects/end-of-epoch-transaction) <Badge class="badge badge--secondary" text="object"/> 
+> 
+> 
+> System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
+> at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
+> optional transactions to run at the end of the epoch.
+> 
+
+
+
+### Member Of
+
+[`TransactionBlock`](/references/sui-api/graphql/reference/objects/transaction-block)  <Badge class="badge badge--secondary" text="object"/>
+
