@@ -1643,22 +1643,18 @@ type TransactionBlockEdge {
 }
 
 type TransactionBlockEffects {
-	status: ExecutionStatus!
-	errors: String
+	transactionBlock: TransactionBlock!
+	status: ExecutionStatus
 	lamportVersion: Int
-	balanceChanges: [BalanceChange]
-	"""
-	UTC timestamp in milliseconds since epoch (1/1/1970)
-	representing the time when the checkpoint that contains
-	this transaction was created
-	"""
-	timestamp: DateTime
-	checkpoint: Checkpoint
-	dependencies: [TransactionBlock]
-	epoch: Epoch
+	errors: String
+	dependencies: [TransactionBlock!]
 	gasEffects: GasEffects
-	objectChanges: [ObjectChange]
-	transactionBlock: TransactionBlock
+	objectChanges: [ObjectChange!]
+	balanceChanges: [BalanceChange!]
+	timestamp: DateTime
+	epoch: Epoch
+	checkpoint: Checkpoint
+	bcs: Base64
 }
 
 input TransactionBlockFilter {

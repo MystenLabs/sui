@@ -67,7 +67,6 @@ use sui_json_rpc::{
 };
 use sui_json_rpc_types::{
     EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as RpcStakedSui,
-    SuiTransactionBlockEffects,
 };
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
@@ -77,7 +76,6 @@ use sui_types::{
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
-    effects::TransactionEffects,
     event::EventID,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
@@ -720,7 +718,7 @@ impl PgManager {
     pub(crate) async fn fetch_txs_by_digests(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Option<Vec<Option<TransactionBlock>>>, Error> {
+    ) -> Result<Option<Vec<TransactionBlock>>, Error> {
         let tx_block_filter = TransactionBlockFilter {
             package: None,
             module: None,
@@ -741,11 +739,15 @@ impl PgManager {
             .multi_get_txs(None, None, None, None, Some(tx_block_filter))
             .await?;
 
-        Ok(txs.map(|x| {
-            x.0.into_iter()
-                .map(|tx| TransactionBlock::try_from(tx).ok())
-                .collect::<Vec<_>>()
-        }))
+        let Some((txs, _)) = txs else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            txs.into_iter()
+                .map(TransactionBlock::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+        ))
     }
 
     pub(crate) async fn fetch_obj(
@@ -1546,28 +1548,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         };
 
         let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
-        let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects).map_err(|e| {
-            Error::Internal(format!(
-                "Can't convert raw_effects into TransactionEffects. Error: {e}",
-            ))
-        })?;
-
-        let balance_changes = tx.balance_changes;
-        let object_changes = tx.object_changes;
-        let timestamp = DateTime::from_ms(tx.timestamp_ms);
-        let effects = match SuiTransactionBlockEffects::try_from(effects) {
-            Ok(effects) => TransactionBlockEffects::from_stored_transaction(
-                balance_changes,
-                tx.checkpoint_sequence_number as u64,
-                object_changes,
-                &effects,
-                digest,
-                timestamp,
-            ),
-            Err(e) => Err(Error::Internal(format!(
-                "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
-            ))),
-        }?;
+        let effects = Some(TransactionBlockEffects::try_from(tx.clone())?);
 
         let epoch_id = match sender_signed_data.intent_message().value.expiration() {
             TransactionExpiration::None => None,
