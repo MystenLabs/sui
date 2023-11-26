@@ -4,6 +4,7 @@
 const concepts = [
 	'concepts',
 	'concepts/components',
+	'concepts/graphql-rpc',
 	{
 		type: 'category',
 		label: 'App Developers',

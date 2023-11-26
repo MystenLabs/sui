@@ -1,0 +1,188 @@
+---
+title: Sui GraphQL RPC
+description: Sui offers a GraphQL RPC service for interacting with the network
+draft: true
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+For an introduction to GraphQL, see [GitHub's Introduction to GraphQL](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
+
+## Getting Started
+
+The quickest way to access the Sui GraphQL service is through the online IDE that provides a complete toolbox for fetching data and executing transactions on the network. The online IDE provides 
+features such as auto-completion (use Ctrl-Space or just start typing), built-in documentation (click on the top-left icon), multi-tabs, and more. 
+
+The online IDE is available for [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql). 
+In the following section, you can find query examples that you can use direcetly in the IDE.
+
+:::info
+
+Both [mainnet](https://sui-mainnet.mystenlabs.com/graphql) and [testnet](https://sui-testnet.mystenlabs.com/graphql) services are rate-limited to keep network throughput optimized.
+
+:::
+
+For more details about concepts exposed in the rest of this page, please see the [GraphQL concepts](https://google.com) page.
+
+
+## Examples
+
+Many examples can also be found in the [repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples). For example, in that folder you can find examples on [transaction block effects](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/transaction_block_effects), [protocol configs](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/protocol_configs), [stake connection](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/stake_connection), and more. Each folder contains one or more examples that you can use in your queries.
+
+Any existing addresses/object IDs in these examples refer to `mainnet` data only.
+
+### Get a transaction block
+
+```graphql
+query {
+  transactionBlock(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+      }
+    }
+  }
+}
+```
+
+### Find all transactions that touched a given object
+
+Find all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a coin/stake/nft, and to trace the upgrade history of a package when the given object is a UpgradeCap.
+
+:::info
+
+Note that this example uses GraphQL [variables](/concepts/graphql-rpc.mdx#working-with-variables) and [pagination](/concepts/graphql-rpc.mdx#pagination). When using the online IDE, you need to pass the variables
+in the bottom window where it's written `Variables`.
+
+:::
+
+```graphql
+query ($objectID: SuiAddress!) {
+  transactionBlocks(filter: {changedObject: $objectID}) {
+    nodes {
+      sender {
+        address
+      }
+      digest
+      effects {
+        objectChanges {
+          address
+        }
+      }
+    }
+  }
+}
+```
+
+where the variables are:
+```json
+{
+  "objectID": "0x11c6ae8432156527fc2e12e05ac7db79f2e972510a823a4ef2e670f27ad7b52f"
+}
+```
+
+
+### Find the balance changes of all the transactions
+
+Find the balance changes of all the transactions where a certain address called certain Move functions. This is useful when someone wants to get their staking and unstaking history, since you stake/unstake by calling specific Move functions.
+
+:::info
+:::
+
+```graphql
+query ($address: SuiAddress!) {
+  stakeTxns: transactionBlocks(filter: {
+    package: "0x3"
+    module: "sui_system"
+    function: "request_add_stake"
+    signAddress: $address
+  }) {
+    nodes {
+      sender {
+        address
+      }
+      digest
+      effects {
+        balanceChanges {
+          owner {
+            address
+          }
+          amount
+        }
+      }
+    }
+  }
+  unstakeTxns: transactionBlocks(filter: {
+    package: "0x3"
+    module: "sui_system"
+    function: "request_withdraw_stake"
+    signAddress: $address
+  }) {
+    nodes {
+      sender {
+        address
+      }
+      digest
+      effects {
+        balanceChanges {
+          owner {
+            address
+          }
+          amount
+        }
+      }
+    }
+  }
+}
+```
+
+where address is 
+```json
+{
+  "address": "0xa9ad44383140a07cc9ea62d185c12c4d9ef9c6a8fd2f47e16316229815862d23"
+}
+```
+
+
+
+
+## Limits
+
+The Sui GraphQL RPC service is rate-limited on all available instances to keep network throughput optimized and to protect against excessive or abusive calls to the service. 
+
+### Rate limits
+Queries are rate-limited at the number of attempts per minute to ensure high availability of the service to all users.
+
+### Query limits
+
+In addition to rate limits, queries are also validated against a number of rules on their complexity, such as the number of nodes, the depth of the query, or their payload size.
+These limits can be retrieved by querying the `serviceConfig` field. An example of how to query for some of the available limits (at the time of this writing) follows:
+
+```graphql
+{
+  serviceConfig {
+    maxQueryDepth
+    maxQueryNodes
+    maxDbQueryCost
+    requestTimeoutMs
+    maxPageSize
+    maxQueryPayloadSize
+  }
+}
+```
+
+
