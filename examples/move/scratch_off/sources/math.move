@@ -3,12 +3,13 @@
 
 module scratch_off::math {
 
-    /// Hard coding this as 1 billion
-    const MODULO_FACTOR: u256 = 1_000_000_000;
+    /// Largest u64 integer
+    const MODULO_FACTOR: u256 = 18446744073709551615;
 
     public fun bytes_to_u256(random_32b: &vector<u8>): u256 {
         let output = 0;
         let bytes_length = 32;
+        assert!(std::vector::length(random_32b) == bytes_length, 0);
         let idx = 0;
         while (idx < bytes_length) {
             let current_byte = *std::vector::borrow(random_32b, idx);
@@ -20,12 +21,12 @@ module scratch_off::math {
 
     public fun get_random_u64(random_32b: &vector<u8>): u64 {
         let output = bytes_to_u256(random_32b);
-        (output as u64)
+        ((output % MODULO_FACTOR) as u64)
     }
 
     public fun get_random_u64_in_range(random_32b: &vector<u8>, max_range: u64): u64 {
         let output = bytes_to_u256(random_32b);
-        (output as u64) % max_range
+        ((output % MODULO_FACTOR) as u64) % max_range
     }
 
     /// Example inputs here are 
