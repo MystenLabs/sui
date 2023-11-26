@@ -350,7 +350,7 @@ Creates a Groth16 <code><a href="groth16.md#0x2_groth16_ProofPoints">ProofPoints
 ## Function `prepare_verifying_key`
 
 @param curve: What elliptic curve construction to use. See <code><a href="bls12381.md#0x2_bls12381">bls12381</a></code> and <code>bn254</code>.
-@param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
+@param verifying_key: An Arkworks canonical compressed serialization of a verifying key.
 
 Returns four vectors of bytes representing the four components of a prepared verifying key.
 This step computes one pairing e(P, Q), and binds the verification to one particular proof statement.

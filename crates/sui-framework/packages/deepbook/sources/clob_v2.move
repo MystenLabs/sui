@@ -1882,27 +1882,43 @@ module deepbook::clob_v2 {
     }
 
     // Methods for accessing pool data, used by the order_query package
-    public(friend) fun asks<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
+    public fun asks<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
         &pool.asks
     }
 
-    public(friend) fun bids<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
+    public fun bids<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
         &pool.bids
     }
 
-    public(friend) fun open_orders(tick_level: &TickLevel): &LinkedTable<u64, Order> {
+    public fun tick_size<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        pool.tick_size
+    }
+
+    public fun maker_rebate_rate<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        pool.maker_rebate_rate
+    }
+
+    public fun taker_fee_rate<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        pool.taker_fee_rate
+    }
+
+    public fun pool_size<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        critbit::size(&pool.asks) + critbit::size(&pool.bids)
+    }
+
+    public fun open_orders(tick_level: &TickLevel): &LinkedTable<u64, Order> {
         &tick_level.open_orders
     }
 
-    public(friend) fun order_id(order: &Order): u64 {
+    public fun order_id(order: &Order): u64 {
         order.order_id
     }
 
-    public(friend) fun tick_level(order: &Order): u64 {
+    public fun tick_level(order: &Order): u64 {
         order.price
     }
 
-    public(friend) fun expire_timestamp(order: &Order): u64 {
+    public fun expire_timestamp(order: &Order): u64 {
         order.expire_timestamp
     }
 

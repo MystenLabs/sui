@@ -89,7 +89,7 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
 
         match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => {
-                match object.data {
+                match object.into_inner().data {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
@@ -227,7 +227,7 @@ impl MoveUtilsServer for MoveUtils {
             let object_read = self.internal.get_object_read(package)?;
 
             let normalized = match object_read {
-                ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
+                ObjectRead::Exists(_obj_ref, object, _layout) => match object.into_inner().data {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format

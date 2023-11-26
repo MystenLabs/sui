@@ -230,26 +230,30 @@ pub async fn start_test_indexer_v2(
 }
 
 impl ExecutorCluster {
-    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, timeout: Duration) {
-        async fn inner(s: &ExecutorCluster, checkpoint: u64) {
-            let mut highest_checkpoint = s
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
+        let current_checkpoint = self
+            .indexer_store
+            .get_latest_tx_checkpoint_sequence_number()
+            .await
+            .unwrap()
+            .unwrap();
+
+        let checkpoint_diff = std::cmp::max(1, checkpoint.saturating_sub(current_checkpoint));
+        let timeout = base_timeout.mul_f64(checkpoint_diff as f64);
+
+        tokio::time::timeout(timeout, async {
+            while self
                 .indexer_store
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .unwrap()
-                .unwrap();
-            while highest_checkpoint < checkpoint {
+                .unwrap()
+                < checkpoint
+            {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                highest_checkpoint = s
-                    .indexer_store
-                    .get_latest_tx_checkpoint_sequence_number()
-                    .await
-                    .unwrap()
-                    .unwrap();
             }
-        }
-        tokio::time::timeout(timeout, inner(self, checkpoint))
-            .await
-            .expect("Timeout waiting for indexer to catchup to checkpoint");
+        })
+        .await
+        .expect("Timeout waiting for indexer to catchup to checkpoint");
     }
 }
