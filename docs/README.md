@@ -20,6 +20,8 @@ Next, use the following command to deploy a development preview of the site to `
 pnpm start
 ```
 
+> If you're running the site locally and getting an error saying that you don't have `open-rpc` specs, run `pnpm build` first. It will prepare the files and fix the issue.
+
 The deployment watches for updates to files in the `content` directory (and site source files), updating the UI to match any saves you make. 
 
 Once you've finished making changes, you should again run `pnpm build`. This builds the static site and places the files in `site\build`. This is important to run before submitting your changes for review, because a build will fail on errors like bad internal links, displaying the cause of the error to the console. The development preview ignores such errors to provide a more agile environment.
@@ -31,6 +33,7 @@ Sui Foundation is not able to provide support for building the documentation sit
 Sui uses Vercel to host its documentation site. Vercel builds a preview of the documentation for every pull request submitted to the Sui repo. You can find a link to this preview in the PR comment section from the Vercel bot. Click the **Visit Preview** link for the **sui-core** project to verify your changes behave as you expect.
 
 If you'd like to view the Vercel preview before your changes are ready for review, then [mark your PR as a draft](https://github.blog/2019-02-14-introducing-draft-pull-requests/).
+
 
 
 ## Contributing
