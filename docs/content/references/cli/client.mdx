@@ -36,6 +36,7 @@ Commands:
   pay-sui            	Pay SUI coins to recipients following following specified amounts, with input coins. Length of recipients must be the same as that of amounts. The input coins also
                          	include the coin for gas payment, so no extra gas coin is required
   publish            	Publish Move modules
+  profile-transaction   Profile the gas usage of a transaction. If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
   replay-transaction    Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
   replay-batch          Replay transactions listed in a file.
   split-coin         	Split a coin object into multiple coins

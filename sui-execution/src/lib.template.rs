@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // $GENERATED_MESSAGE
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
