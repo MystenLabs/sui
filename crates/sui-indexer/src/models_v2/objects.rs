@@ -353,10 +353,7 @@ mod tests {
         let stored_obj = StoredObject::from(indexed_obj);
 
         let sui_coin = SuiCoin::try_from(stored_obj).unwrap();
-        assert_eq!(
-            sui_coin.coin_type,
-            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-        );
+        assert_eq!(sui_coin.coin_type, "0x2::sui::SUI");
     }
 
     #[test]
