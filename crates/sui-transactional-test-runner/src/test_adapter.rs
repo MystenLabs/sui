@@ -961,7 +961,7 @@ impl<'a> SuiTestAdapter<'a> {
             .compiled_state
             .named_address_mapping
             .iter()
-            .map(|(name, addr)| (name.clone(), addr.to_string()));
+            .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
 
         let objects = self
             .object_enumeration
@@ -1665,11 +1665,19 @@ struct AccountSetup {
     pub accounts: BTreeMap<String, TestAccount>,
 }
 
-fn create_accounts_objects(
-    rng: &mut StdRng,
+/// Create the executor for a validator with a fullnode
+/// The issue with this executor is we cannot control the checkpoint
+/// and epoch creation process
+async fn init_val_fullnode_executor(
+    mut rng: StdRng,
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
-) -> AccountSetup {
+    protocol_config: &ProtocolConfig,
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
@@ -1678,7 +1686,7 @@ fn create_accounts_objects(
 
     // Closure to create accounts with gas objects of value `GAS_FOR_TESTING`
     let mut mk_account = || {
-        let (address, key_pair) = get_key_pair_from_rng(rng);
+        let (address, key_pair) = get_key_pair_from_rng(&mut rng);
         let obj = Object::with_id_owner_gas_for_testing(
             ObjectID::new(rng.gen()),
             address,
@@ -1704,33 +1712,24 @@ fn create_accounts_objects(
     // Make a default account with a gas object
     let default_account = mk_account();
 
-    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+    let executor = Box::new(create_val_fullnode_executor(protocol_config, &objects).await);
 
-    AccountSetup {
+    update_named_address_mapping(
+        &mut named_address_mapping,
+        &accounts,
+        additional_mapping,
+        &*executor,
+    )
+    .await;
+
+    let acc_setup = AccountSetup {
         default_account,
         named_address_mapping,
         objects,
         account_objects,
         accounts,
-    }
-}
-
-/// Create the executor for a validator with a fullnode
-/// The issue with this executor is we cannot control the checkpoint
-/// and epoch creation process
-async fn init_val_fullnode_executor(
-    mut rng: StdRng,
-    account_names: BTreeSet<String>,
-    additional_mapping: BTreeMap<String, NumericalAddress>,
-    protocol_config: &ProtocolConfig,
-) -> (
-    Box<dyn TransactionalAdapter>,
-    AccountSetup,
-    Option<ExecutorCluster>,
-) {
-    let acc_setup = create_accounts_objects(&mut rng, account_names, additional_mapping);
-    let executor = create_val_fullnode_executor(protocol_config, &acc_setup.objects).await;
-    (Box::new(executor), acc_setup, None)
+    };
+    (executor, acc_setup, None)
 }
 
 /// Create an executor using a simulator
@@ -1818,10 +1817,17 @@ async fn init_sim_executor(
     };
     objects.push(o.clone());
 
-    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+    let sim = Box::new(sim);
+    update_named_address_mapping(
+        &mut named_address_mapping,
+        &accounts,
+        additional_mapping,
+        &*sim,
+    )
+    .await;
 
     (
-        Box::new(sim),
+        sim,
         AccountSetup {
             default_account,
             named_address_mapping,
@@ -1833,20 +1839,32 @@ async fn init_sim_executor(
     )
 }
 
-fn update_named_address_mapping(
+async fn update_named_address_mapping(
     named_address_mapping: &mut BTreeMap<String, NumericalAddress>,
     accounts: &BTreeMap<String, TestAccount>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
+    trans_adapter: &dyn TransactionalAdapter,
 ) {
+    let active_val_addrs: BTreeMap<_, _> = trans_adapter
+        .get_active_validator_addresses()
+        .await
+        .expect("Failed to get validator addresses")
+        .iter()
+        .enumerate()
+        .map(|(idx, addr)| (format!("validator_{idx}"), *addr))
+        .collect();
+
     // For mappings where the address is specified, populate the named address mapping
-    let additional_mapping =
-        additional_mapping
-            .into_iter()
-            .chain(accounts.iter().map(|(n, test_account)| {
-                let addr =
-                    NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
-                (n.clone(), addr)
-            }));
+    let additional_mapping = additional_mapping
+        .into_iter()
+        .chain(accounts.iter().map(|(n, test_account)| {
+            let addr = NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
+            (n.clone(), addr)
+        }))
+        .chain(active_val_addrs.iter().map(|(n, addr)| {
+            let addr = NumericalAddress::new(addr.to_inner(), NumberFormat::Hex);
+            (n.clone(), addr)
+        }));
     // Extend the mappings of all named addresses with values
     for (name, addr) in additional_mapping {
         if named_address_mapping.contains_key(&name) || name == "sui" {
