@@ -327,7 +327,7 @@ fn top_level_address_(
         }
         P::LeadingNameAccess_::Name(name) => {
             if let Some(addr) = named_address_map.get(&name.value) {
-                make_address(context, name, loc, addr.clone())
+                make_address(context, name, loc, *addr)
             } else {
                 if name_res.is_ok() {
                     context.env.add_diag(address_without_value_error(
@@ -2033,11 +2033,16 @@ fn resolve_name_access_chain(
                 // the alias was defined. The name represents JUST the module name, though, so we do
                 // not change location of the address as we don't have this information.
                 // TODO maybe we should also keep the alias reference (or its location)?
-                let sp!(_, ModuleIdent_ { address, module: ModuleName(sp!(_, module))}) = mident;
-                let address = address;
+                let sp!(
+                    _,
+                    ModuleIdent_ {
+                        address,
+                        module: ModuleName(sp!(_, module))
+                    }
+                ) = mident;
                 let module = ModuleName(sp(name.loc, module));
                 ModuleIdent(name.loc, sp(name.loc, ModuleIdent_ { address, module }))
-            },
+            }
             Some(AliasEntry::Address(address)) => {
                 Address(name.loc, make_address(context, name, name.loc, address))
             }
