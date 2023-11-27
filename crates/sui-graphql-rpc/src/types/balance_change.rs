@@ -31,11 +31,7 @@ impl BalanceChange {
 
     /// The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
     async fn coin_type(&self) -> Option<MoveType> {
-        Some(MoveType::new(
-            self.stored
-                .coin_type
-                .to_canonical_string(/* with_prefix */ true),
-        ))
+        Some(MoveType::new(self.stored.coin_type.clone()))
     }
 
     /// The signed balance change.
