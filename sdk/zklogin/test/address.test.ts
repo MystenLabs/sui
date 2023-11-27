@@ -3,7 +3,12 @@
 
 import { expect, test } from 'vitest';
 
-import { jwtToAddress, MAX_HEADER_LEN_B64, MAX_PADDED_UNSIGNED_JWT_LEN } from '../src/address.js';
+import {
+	jwtToAddress,
+	lengthChecks,
+	MAX_HEADER_LEN_B64,
+	MAX_PADDED_UNSIGNED_JWT_LEN,
+} from '../src/address.js';
 
 test('a valid JWT should not throw an error', () => {
 	const jwt =
@@ -40,14 +45,14 @@ test('should return the same address for both google iss', () => {
 	expect(jwtToAddress(jwt1, '0')).toBe(jwtToAddress(jwt2, '0'));
 });
 
-test('if header is too long, should throw an error', () => {
+test('lengthChecks: if header is too long, should throw an error', () => {
 	const header = 'a'.repeat(MAX_HEADER_LEN_B64 + 1);
 	const jwt = `${header}.`;
-	expect(() => jwtToAddress(jwt, '0')).toThrow(`Header is too long`);
+	expect(() => lengthChecks(jwt)).toThrow(`Header is too long`);
 });
 
-test('if jwt is too long, should throw an error', () => {
+test('lengthChecks: if jwt is too long, should throw an error', () => {
 	// Note: It should also fail for lengths slightly smaller than MAX_PADDED_UNSIGNED_JWT_LEN due to the SHA2 padding.
 	const jwt = '.' + 'a'.repeat(MAX_PADDED_UNSIGNED_JWT_LEN);
-	expect(() => jwtToAddress(jwt, '0')).toThrow(`JWT is too long`);
+	expect(() => lengthChecks(jwt)).toThrow(`JWT is too long`);
 });

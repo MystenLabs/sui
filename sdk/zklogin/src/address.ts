@@ -9,10 +9,10 @@ import { genAddressSeed } from './utils.js';
 export const MAX_HEADER_LEN_B64 = 248;
 export const MAX_PADDED_UNSIGNED_JWT_LEN = 64 * 25;
 
-function lengthChecks(header: string, payload: string) {
+export function lengthChecks(jwt: string) {
+	const [header, payload] = jwt.split('.');
 	/// Is the header small enough
-	const header_len = header.length;
-	if (header_len > MAX_HEADER_LEN_B64) {
+	if (header.length > MAX_HEADER_LEN_B64) {
 		throw new Error(`Header is too long`);
 	}
 
@@ -31,8 +31,7 @@ function lengthChecks(header: string, payload: string) {
 }
 
 export function jwtToAddress(jwt: string, userSalt: string | bigint) {
-	const [header, payload] = jwt.split('.');
-	lengthChecks(header, payload);
+	lengthChecks(jwt);
 
 	const decodedJWT = decodeJwt(jwt);
 	if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
