@@ -364,6 +364,7 @@ module sui::kiosk {
     public fun list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ) {
+        assert!(price > 0, EIncorrectAmount);
         assert!(has_access(self, cap), ENotOwner);
         assert!(has_item_with_type<T>(self, id), EItemNotFound);
         assert!(!is_listed_exclusively(self, id), EListedExclusively);
