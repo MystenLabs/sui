@@ -42,7 +42,15 @@ fn zklogin_authenticator_jwk() {
         .collect();
 
     // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
-    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true, true);
+    let aux_verify_data = VerifyParams::new(
+        parsed.clone(),
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        Some(2),
+        true,
+    );
 
     let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
         .expect("Unable to open file");
@@ -68,14 +76,14 @@ fn zklogin_authenticator_jwk() {
             10,
             eph_sig,
         ));
-        let res = generic_sig.verify_authenticator(&msg, addr, Some(0), &aux_verify_data);
+        let res = generic_sig.verify_authenticator(&msg, addr, Some(8), &aux_verify_data);
         assert!(res.is_ok());
     }
 
     let res = legacy_authenticator.verify_authenticator(
         &legacy_intent_msg,
         legacy_user_address,
-        Some(0),
+        Some(10),
         &aux_verify_data,
     );
     // Verify passes for legacy address derivation.
@@ -86,18 +94,35 @@ fn zklogin_authenticator_jwk() {
         }
     );
 
-    let aux_verify_data =
-        VerifyParams::new(Default::default(), vec![], ZkLoginEnv::Test, true, true);
+    let aux_verify_data = VerifyParams::new(
+        Default::default(),
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        Some(2),
+        true,
+    );
     let res =
-        authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
+        authenticator.verify_authenticator(&intent_msg, user_address, Some(8), &aux_verify_data);
     assert!(res.is_err());
 
     // Epoch expired fails to verify.
-    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true, true);
+    let aux_verify_data = VerifyParams::new(
+        parsed.clone(),
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        Some(2),
+        true,
+    );
     assert!(authenticator
         .verify_authenticator(&intent_msg, user_address, Some(11), &aux_verify_data)
         .is_err());
-    let parsed: ImHashMap<JwkId, JWK> = parsed
+
+    let bad_parsed: ImHashMap<JwkId, JWK> = parsed
+        .clone()
         .into_iter()
         .map(|(jwk_id, v)| {
             (
@@ -108,9 +133,54 @@ fn zklogin_authenticator_jwk() {
         .collect();
 
     // Correct kid can no longer be found fails to verify.
-    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
+    let aux_verify_data = VerifyParams::new(
+        bad_parsed,
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        Some(2),
+        true,
+    );
+    assert!(authenticator
+        .verify_authenticator(&intent_msg, user_address, Some(8), &aux_verify_data)
+        .is_err());
+
+    // If sig.max_epoch (10) is set larger than current epoch (7) + upper bound (2), fails to verify.
+    assert!(authenticator
+        .verify_authenticator(&intent_msg, user_address, Some(7), &aux_verify_data)
+        .is_err());
+
+    // If sig.max_epoch (10) is set larger than current epoch (9) + upper bound (0), fails to verify.
+    let aux_verify_data = VerifyParams::new(
+        parsed.clone(),
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        Some(0),
+        false,
+    );
+    assert!(authenticator
+        .verify_authenticator(&intent_msg, user_address, Some(9), &aux_verify_data)
+        .is_err());
+
+    // If sig.max_epoch (10) == current epoch (10) + upper bound (0), verifies ok.
+    assert!(authenticator
+        .verify_authenticator(&intent_msg, user_address, Some(10), &aux_verify_data)
+        .is_ok());
+
+    // If upper bound set to None, max_epoch (10) larger than current epoch (0) by a lot, still verifies.
+    let aux_verify_data =
+        VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, None, false);
+
     assert!(authenticator
         .verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data)
+        .is_ok());
+
+    // If upper bound set to None, max_epoch (10) smaller than current epoch (11), fails to verify.
+    assert!(authenticator
+        .verify_authenticator(&intent_msg, user_address, Some(11), &aux_verify_data)
         .is_err());
 }
 
@@ -140,9 +210,10 @@ fn zklogin_sign_personal_message() {
         .collect();
 
     // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
-    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
+    let aux_verify_data =
+        VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, Some(2), true);
     let res =
-        authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
+        authenticator.verify_authenticator(&intent_msg, user_address, Some(9), &aux_verify_data);
     // Verify passes.
     assert!(res.is_ok());
 }

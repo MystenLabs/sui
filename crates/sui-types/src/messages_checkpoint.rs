@@ -166,7 +166,7 @@ impl Message for CheckpointSummary {
         Ok(())
     }
 
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+    fn verify_epoch(&self, epoch: EpochId, _: Option<u64>) -> SuiResult {
         fp_ensure!(
             self.epoch == epoch,
             SuiError::WrongEpoch {

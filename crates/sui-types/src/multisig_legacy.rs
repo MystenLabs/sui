@@ -89,7 +89,7 @@ impl AuthenticatorTrait for MultiSigLegacy {
     fn check_author(&self) -> bool {
         true
     }
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
+    fn verify_user_authenticator_epoch(&self, _: EpochId, _: Option<u64>) -> Result<(), SuiError> {
         Ok(())
     }
 

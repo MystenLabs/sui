@@ -106,7 +106,7 @@ pub trait Message {
 
     /// Verify that the message is from the correct epoch (e.g. for CertifiedCheckpointSummary
     /// we verify that the checkpoint is from the same epoch as the committee signatures).
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult;
+    fn verify_epoch(&self, epoch: EpochId, verify_max_epoch: Option<u64>) -> SuiResult;
 }
 
 /// A message type that has an internal authenticator, such as SenderSignedData
@@ -256,7 +256,7 @@ where
     where
         <T as Message>::DigestType: PartialEq,
     {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
+        self.data.verify_epoch(self.auth_sig().epoch, None)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }
@@ -271,7 +271,10 @@ where
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
+        self.data.verify_epoch(
+            self.auth_sig().epoch,
+            verify_params.zklogin_max_epoch_upper_bound,
+        )?;
         self.data.verify_message_signature(verify_params)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
@@ -294,7 +297,7 @@ where
     T: Message + UnauthenticatedMessage + Serialize,
 {
     pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
+        self.data.verify_epoch(self.auth_sig().epoch, None)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }
@@ -366,7 +369,10 @@ where
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
+        self.data.verify_epoch(
+            self.auth_sig().epoch,
+            verify_params.zklogin_max_epoch_upper_bound,
+        )?;
         self.data.verify_message_signature(verify_params)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
@@ -385,7 +391,8 @@ where
     where
         <T as Message>::DigestType: PartialEq,
     {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
+        // is this correct?
+        self.data.verify_epoch(self.auth_sig().epoch, None)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }
@@ -396,7 +403,8 @@ where
     T: Message + UnauthenticatedMessage + Serialize,
 {
     pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
+        // is this correct?
+        self.data.verify_epoch(self.auth_sig().epoch, None)?;
         self.auth_signature
             .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
     }

@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 32;
+const MAX_PROTOCOL_VERSION: u64 = 33;
 
 // Record history of protocol version allocations here:
 //
@@ -98,6 +98,9 @@ const MAX_PROTOCOL_VERSION: u64 = 32;
 //             Enable Narwhal CertificateV2 on mainnet
 //             Make critbit tree and order getters public in deepbook.
 //             Enable effects v2 on mainnet.
+//             Enable accepting Multisig containing zkLogin sig in devnet and testnet.
+// Version 33: Add config for upper bound on zklogin signature's max epoch.
+//             Accepts Google's other iss ("accounts.google.com" in addition to "https://accounts.google.com") in zkLogin signature.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -353,6 +356,14 @@ struct FeatureFlags {
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
     include_consensus_digest_in_prologue: bool,
+
+    // determine whether the upper bound (current epoch + zklogin_max_epoch_upper_bound) for the max_epoch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zklogin_max_epoch_upper_bound: Option<u64>,
+
+    // If true, the alternative iss ("accounts.google.com" in addition to "https://accounts.google.com") for Google is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_zklogin_google_alternative_iss: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1051,6 +1062,14 @@ impl ProtocolConfig {
         self.feature_flags.accept_zklogin_in_multisig
     }
 
+    pub fn accept_zklogin_google_alternative_iss(&self) -> bool {
+        self.feature_flags.accept_zklogin_google_alternative_iss
+    }
+
+    pub fn zklogin_max_epoch_upper_bound(&self) -> Option<u64> {
+        self.feature_flags.zklogin_max_epoch_upper_bound
+    }
+
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
@@ -1688,6 +1707,13 @@ impl ProtocolConfig {
                     cfg.feature_flags.narwhal_certificate_v2 = true;
 
                     cfg.feature_flags.enable_effects_v2 = true;
+                }
+                33 => {
+                    // set the upper bound to check zklogin signature's max_epoch field
+                    cfg.feature_flags.zklogin_max_epoch_upper_bound = Some(2);
+
+                    // enable the alternative iss ("accounts.google.com" in addition to "https://accounts.google.com") for Google is accepted
+                    cfg.feature_flags.accept_zklogin_google_alternative_iss = true;
                 }
                 // Use this template when making changes:
                 //

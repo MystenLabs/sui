@@ -957,7 +957,8 @@ fn multisig_zklogin_scenarios() {
         .into_iter()
         .collect();
 
-    let mut aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true);
+    let mut aux_verify_data =
+        VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, Some(2), true);
 
     // 1 zklogin sig verifies.
     let multisig = MultiSig::combine(vec![zklogin_sig.clone()], multisig_pk.clone()).unwrap();
@@ -1031,6 +1032,12 @@ fn multisig_zklogin_scenarios() {
         MultiSig::combine(vec![sig1, zklogin_sig.clone()], multisig_pk.clone()).unwrap();
     assert!(multisig_with_expired_zklogin_sig
         .verify_authenticator(intent_msg, multisig_addr, Some(11), &aux_verify_data)
+        .is_err());
+
+    // multisig with just zklogin authenticator max_epoch sets higher than upper bound fails.
+    aux_verify_data.zklogin_max_epoch_upper_bound = Some(2);
+    assert!(multisig_with_expired_zklogin_sig
+        .verify_authenticator(intent_msg, multisig_addr, Some(7), &aux_verify_data)
         .is_err());
 
     // multisig with combined single sig zklogin authenticator epoch expires fails.

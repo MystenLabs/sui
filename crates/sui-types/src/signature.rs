@@ -33,6 +33,8 @@ pub struct VerifyParams {
     pub zk_login_env: ZkLoginEnv,
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
+    pub zklogin_max_epoch_upper_bound: Option<u64>,
+    pub accept_zklogin_google_alternative_iss: bool,
 }
 
 impl VerifyParams {
@@ -42,6 +44,8 @@ impl VerifyParams {
         zk_login_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound: Option<u64>,
+        accept_zklogin_google_alternative_iss: bool,
     ) -> Self {
         Self {
             oidc_provider_jwks,
@@ -49,6 +53,8 @@ impl VerifyParams {
             zk_login_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
+            zklogin_max_epoch_upper_bound,
+            accept_zklogin_google_alternative_iss,
         }
     }
 }
@@ -57,7 +63,11 @@ impl VerifyParams {
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
     fn check_author(&self) -> bool;
-    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult;
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        zklogin_max_epoch_upper_bound: Option<u64>,
+    ) -> SuiResult;
 
     fn verify_claims<T>(
         &self,
@@ -80,7 +90,10 @@ pub trait AuthenticatorTrait {
         T: Serialize,
     {
         if let Some(epoch) = epoch {
-            self.verify_user_authenticator_epoch(epoch)?;
+            self.verify_user_authenticator_epoch(
+                epoch,
+                aux_verify_data.zklogin_max_epoch_upper_bound,
+            )?;
         }
         // when invoked from verify_authenticator, always check author.
         self.verify_claims(value, author, aux_verify_data, true)
@@ -288,7 +301,7 @@ impl AuthenticatorTrait for Signature {
     fn check_author(&self) -> bool {
         true
     }
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> SuiResult {
+    fn verify_user_authenticator_epoch(&self, _: EpochId, _: Option<u64>) -> SuiResult {
         Ok(())
     }
     fn verify_uncached_checks<T>(

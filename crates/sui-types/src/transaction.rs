@@ -2222,9 +2222,13 @@ impl Message for SenderSignedData {
         Ok(())
     }
 
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult {
+    fn verify_epoch(
+        &self,
+        epoch: EpochId,
+        zklogin_max_epoch_upper_bound: Option<u64>,
+    ) -> SuiResult {
         for sig in &self.inner().tx_signatures {
-            sig.verify_user_authenticator_epoch(epoch)?;
+            sig.verify_user_authenticator_epoch(epoch, zklogin_max_epoch_upper_bound)?;
         }
 
         Ok(())

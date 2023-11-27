@@ -121,6 +121,8 @@ async fn test_async_verifier() {
         ZkLoginEnv::Test,
         true,
         true,
+        Some(2),
+        true,
     ));
 
     let tasks: Vec<_> = (0..32)

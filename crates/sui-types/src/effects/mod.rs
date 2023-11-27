@@ -99,7 +99,7 @@ impl Message for TransactionEffects {
         Ok(())
     }
 
-    fn verify_epoch(&self, _: EpochId) -> SuiResult {
+    fn verify_epoch(&self, _: EpochId, _: Option<u64>) -> SuiResult {
         // Authorities are allowed to re-sign effects from prior epochs, so we do not verify the
         // epoch here.
         Ok(())
