@@ -16,6 +16,7 @@
     "sui-wallet-adapter-demo",
     "sponsored-transactions",
     "kiosk-demo",
-    "kiosk-cli"
+    "kiosk-cli",
+    "@mysten/sdk-docs"
   ]
 }
