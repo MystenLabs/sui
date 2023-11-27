@@ -38,6 +38,7 @@ pub fn poseidon_bn254(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
+
     // Load the cost parameters from the protocol config
     let cost_params = &context
         .extensions()
@@ -62,6 +63,17 @@ pub fn poseidon_bn254(
     // The input is a reference to a vector of vector<u8>'s
     let inputs = pop_arg!(args, VectorRef);
     let length = inputs.len(&Type::U256)?.value_as::<u64>()?;
+
+    // Charge the msg dependent costs
+    native_charge_gas_early_exit!(
+        context,
+        cost_params
+            .poseidon_bn254_data_cost_per_block
+            .ok_or_else(
+                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Gas cost for poseidon_bn254 not available".to_string())
+            )?.mul(length.into())
+    );
 
     let mut field_elements: Vec<Vec<u8>> = Vec::new();
     for _ in 0..length {
