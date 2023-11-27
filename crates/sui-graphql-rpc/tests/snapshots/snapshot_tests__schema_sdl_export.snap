@@ -794,7 +794,7 @@ type Object implements ObjectOwner {
 	The coin objects for the given address.
 	
 	The type field is a string of the inner type of the coin by which to filter
-	(e.g. `0x2::sui::SUI`).  If no type is provided, it will default to `0x2::sui::SUI`.
+	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
@@ -908,7 +908,7 @@ type Owner implements ObjectOwner {
 	The coin objects for the given address or object.
 	
 	The type field is a string of the inner type of the coin by which to filter
-	(e.g. `0x2::sui::SUI`).  If no type is provided, it will default to `0x2::sui::SUI`.
+	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	"""
@@ -1032,7 +1032,7 @@ type Query {
 	The coin objects that exist in the network.
 	
 	The type field is a string of the inner type of the coin by which to filter
-	(e.g. `0x2::sui::SUI`).  If no type is provided, it will default to `0x2::sui::SUI`.
+	(e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
 	"""
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
