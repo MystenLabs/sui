@@ -511,9 +511,24 @@ enum Feature {
 
 
 type GasCostSummary {
+	"""
+	Gas paid for executing this transaction.
+	"""
 	computationCost: BigInt
+	"""
+	Gas paid for the data stored on-chain by this transaction.
+	"""
 	storageCost: BigInt
+	"""
+	Part of storage cost that can be reclaimed by cleaning up data created by this transaction
+	(when objects are deleted or an object is modified, whch is treated as a deletion followed
+	by a creation).
+	"""
 	storageRebate: BigInt
+	"""
+	Part of storage cost that is not reclaimed when data created by this transaction is cleaned
+	up.
+	"""
 	nonRefundableStorageFee: BigInt
 }
 
@@ -1647,17 +1662,52 @@ type TransactionBlockEdge {
 }
 
 type TransactionBlockEffects {
+	"""
+	The transaction that ran to produce these effects.
+	"""
 	transactionBlock: TransactionBlock!
+	"""
+	Whether the transaction executed successfully or not.
+	"""
 	status: ExecutionStatus
+	"""
+	The latest version of all objects that have been created or modified by this transaction,
+	immediately following this transaction.  A system transaction that does not modify or create
+	objects will not have a lamport version.
+	"""
 	lamportVersion: Int
+	"""
+	The reason for a transaction failure, if it did fail.
+	"""
 	errors: String
+	"""
+	Transactions whose outputs this transaction depends upon.
+	"""
 	dependencies: [TransactionBlock!]
+	"""
+	Effects to the gas object.
+	"""
 	gasEffects: GasEffects
+	"""
+	The effect this transaction had on objects on-chain.
+	"""
 	objectChanges: [ObjectChange!]
 	balanceChanges: [BalanceChange!]
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
 	timestamp: DateTime
+	"""
+	The epoch this transaction was finalized in.
+	"""
 	epoch: Epoch
+	"""
+	The checkpoint this transaction was finalized in.
+	"""
 	checkpoint: Checkpoint
+	"""
+	Base64 encoded bcs serialization of the on-chain transaction effects.
+	"""
 	bcs: Base64
 }
 

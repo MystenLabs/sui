@@ -52,6 +52,7 @@ pub(crate) struct ObjectChange {
 
 #[Object]
 impl TransactionBlockEffects {
+    /// The transaction that ran to produce these effects.
     async fn transaction_block(&self, ctx: &Context<'_>) -> Result<TransactionBlock> {
         let digest = self.native.transaction_digest().to_string();
         ctx.data_unchecked::<PgManager>()
@@ -66,6 +67,7 @@ impl TransactionBlockEffects {
             .extend()
     }
 
+    /// Whether the transaction executed successfully or not.
     async fn status(&self) -> Option<ExecutionStatus> {
         Some(match self.native.status() {
             NativeExecutionStatus::Success => ExecutionStatus::Success,
@@ -73,6 +75,9 @@ impl TransactionBlockEffects {
         })
     }
 
+    /// The latest version of all objects that have been created or modified by this transaction,
+    /// immediately following this transaction.  A system transaction that does not modify or create
+    /// objects will not have a lamport version.
     async fn lamport_version(&self) -> Option<u64> {
         if let Some(((_id, version, _digest), _owner)) = self.native.created().first() {
             Some(version.value())
@@ -85,6 +90,7 @@ impl TransactionBlockEffects {
         }
     }
 
+    /// The reason for a transaction failure, if it did fail.
     async fn errors(&self) -> Option<String> {
         match self.native.status() {
             NativeExecutionStatus::Success => None,
@@ -112,6 +118,7 @@ impl TransactionBlockEffects {
         }
     }
 
+    /// Transactions whose outputs this transaction depends upon.
     async fn dependencies(&self, ctx: &Context<'_>) -> Result<Option<Vec<TransactionBlock>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_txs_by_digests(self.native.dependencies())
@@ -119,12 +126,14 @@ impl TransactionBlockEffects {
             .extend()
     }
 
+    /// Effects to the gas object.
     async fn gas_effects(&self) -> Option<GasEffects> {
         Some(GasEffects::from(&self.native))
     }
 
     // TODO object_reads
 
+    /// The effect this transaction had on objects on-chain.
     async fn object_changes(&self, ctx: &Context<'_>) -> Result<Option<Vec<ObjectChange>>> {
         let mut changes = vec![];
 
@@ -147,10 +156,12 @@ impl TransactionBlockEffects {
         Ok(Some(changes))
     }
 
+    /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     async fn timestamp(&self) -> Option<DateTime> {
         DateTime::from_ms(self.stored.timestamp_ms)
     }
 
+    /// The epoch this transaction was finalized in.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         Ok(Some(
             ctx.data_unchecked::<PgManager>()
@@ -160,6 +171,7 @@ impl TransactionBlockEffects {
         ))
     }
 
+    /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
         let checkpoint = self.stored.checkpoint_sequence_number as u64;
         ctx.data_unchecked::<PgManager>()
@@ -170,6 +182,7 @@ impl TransactionBlockEffects {
 
     // TODO: event_connection: EventConnection
 
+    /// Base64 encoded bcs serialization of the on-chain transaction effects.
     async fn bcs(&self) -> Option<Base64> {
         Some(Base64::from(&self.stored.raw_effects))
     }
