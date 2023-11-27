@@ -110,7 +110,7 @@ macro_rules! serialize_or_execute {
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
-    /// Default address used for commands when none specified
+    /// Default address used for commands when none are specified
     #[clap(name = "active-address")]
     ActiveAddress,
     /// Default environment used for commands when none specified
