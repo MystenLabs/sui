@@ -124,7 +124,7 @@ impl ValidatorConfigBuilder {
             ..Default::default()
         };
 
-        let mut pruning_config = AuthorityStorePruningConfig::validator_config();
+        let mut pruning_config = AuthorityStorePruningConfig::default();
         if self.force_unpruned_checkpoints {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         }
@@ -387,7 +387,7 @@ impl FullnodeConfigBuilder {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
-            authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            authority_store_pruning_config: AuthorityStorePruningConfig::default(),
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),

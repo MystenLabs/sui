@@ -537,20 +537,25 @@ impl Default for CheckpointExecutorConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct AuthorityStorePruningConfig {
     /// number of the latest epoch dbs to retain
+    #[serde(default = "default_num_latest_epoch_dbs_to_retain")]
     pub num_latest_epoch_dbs_to_retain: usize,
     /// time interval used by the pruner to determine whether there are any epoch DBs to remove
+    #[serde(default = "default_epoch_db_pruning_period_secs")]
     pub epoch_db_pruning_period_secs: u64,
     /// number of epochs to keep the latest version of objects for.
     /// Note that a zero value corresponds to an aggressive pruner.
     /// This mode is experimental and needs to be used with caution.
     /// Use `u64::MAX` to disable the pruner for the objects.
+    #[serde(default)]
     pub num_epochs_to_retain: u64,
     /// pruner's runtime interval used for aggressive mode
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pruning_run_delay_seconds: Option<u64>,
     /// maximum number of checkpoints in the pruning batch. Can be adjusted to increase performance
+    #[serde(default = "default_max_checkpoints_in_batch")]
     pub max_checkpoints_in_batch: usize,
     /// maximum number of transaction in the pruning batch
+    #[serde(default = "default_max_transactions_in_batch")]
     pub max_transactions_in_batch: usize,
     /// enables periodic background compaction for old SST files whose last modified time is
     /// older than `periodic_compaction_threshold_days` days.
@@ -565,61 +570,39 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
 }
 
+fn default_num_latest_epoch_dbs_to_retain() -> usize {
+    3
+}
+
+fn default_epoch_db_pruning_period_secs() -> u64 {
+    3600
+}
+
+fn default_max_transactions_in_batch() -> usize {
+    1000
+}
+
+fn default_max_checkpoints_in_batch() -> usize {
+    10
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
-        // TODO: Remove this after aggressive pruning is enabled by default
-        let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
-        let pruning_run_delay_seconds = if cfg!(msim) { Some(5) } else { None };
         Self {
-            num_latest_epoch_dbs_to_retain: usize::MAX,
-            epoch_db_pruning_period_secs: u64::MAX,
-            num_epochs_to_retain,
-            pruning_run_delay_seconds,
-            max_checkpoints_in_batch: 10,
-            max_transactions_in_batch: 1000,
+            num_latest_epoch_dbs_to_retain: default_num_latest_epoch_dbs_to_retain(),
+            epoch_db_pruning_period_secs: default_epoch_db_pruning_period_secs(),
+            num_epochs_to_retain: 0,
+            pruning_run_delay_seconds: if cfg!(msim) { Some(2) } else { None },
+            max_checkpoints_in_batch: default_max_checkpoints_in_batch(),
+            max_transactions_in_batch: default_max_transactions_in_batch(),
             periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints: None,
+            num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
         }
     }
 }
 
 impl AuthorityStorePruningConfig {
-    pub fn validator_config() -> Self {
-        // TODO: Remove this after aggressive pruning is enabled by default
-        let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
-        let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
-        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
-        Self {
-            num_latest_epoch_dbs_to_retain: 3,
-            epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain,
-            pruning_run_delay_seconds,
-            max_checkpoints_in_batch: 10,
-            max_transactions_in_batch: 1000,
-            periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints,
-            killswitch_tombstone_pruning: false,
-        }
-    }
-    pub fn fullnode_config() -> Self {
-        // TODO: Remove this after aggressive pruning is enabled by default
-        let num_epochs_to_retain = if cfg!(msim) { 0 } else { 2 };
-        let pruning_run_delay_seconds = if cfg!(msim) { Some(2) } else { None };
-        let num_epochs_to_retain_for_checkpoints = if cfg!(msim) { Some(2) } else { None };
-        Self {
-            num_latest_epoch_dbs_to_retain: 3,
-            epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain,
-            pruning_run_delay_seconds,
-            max_checkpoints_in_batch: 10,
-            max_transactions_in_batch: 1000,
-            periodic_compaction_threshold_days: None,
-            num_epochs_to_retain_for_checkpoints,
-            killswitch_tombstone_pruning: false,
-        }
-    }
-
     pub fn set_num_epochs_to_retain_for_checkpoints(&mut self, num_epochs_to_retain: Option<u64>) {
         self.num_epochs_to_retain_for_checkpoints = num_epochs_to_retain;
     }
