@@ -113,7 +113,7 @@ pub enum SuiClientCommands {
     /// Default address used for commands when none are specified
     #[clap(name = "active-address")]
     ActiveAddress,
-    /// Default environment used for commands when none specified
+    /// Default environment used for commands when none are specified
     #[clap(name = "active-env")]
     ActiveEnv,
     /// Obtain the Addresses managed by the client.
