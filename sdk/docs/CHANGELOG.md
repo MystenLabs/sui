@@ -1,5 +1,12 @@
 # @mysten/sdk-docs
 
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [47b137d03]
+  - @mysten/dapp-kit@0.10.0
+
 ## 1.0.8
 
 ### Patch Changes

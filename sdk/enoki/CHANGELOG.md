@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.0.4
+
+### Patch Changes
+
+- 732fdbb5b: Make enoki flow session observable. Expose state parameter on useAuthCallback.
+
 ## 0.0.3
 
 ### Patch Changes
