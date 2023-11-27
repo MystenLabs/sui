@@ -63,9 +63,7 @@ export class EnokiFlow {
 	#encryptionKey: string;
 	#store: SyncStore;
 
-	#zkLoginSessionInitialized: boolean;
-	#zkLoginSession: ZkLoginSession | null;
-
+	$zkLoginSession: WritableAtom<{ initialized: boolean; value: ZkLoginSession | null }>;
 	$zkLoginState: WritableAtom<ZkLoginState>;
 
 	constructor(config: EnokiFlowConfig) {
@@ -89,9 +87,7 @@ export class EnokiFlow {
 		}
 
 		this.$zkLoginState = atom(storedState || {});
-
-		this.#zkLoginSessionInitialized = false;
-		this.#zkLoginSession = null;
+		this.$zkLoginSession = atom({ initialized: false, value: null });
 
 		onSet(this.$zkLoginState, ({ newValue }) => {
 			this.#store.set(this.#storageKeys.STATE, JSON.stringify(newValue));
@@ -215,12 +211,12 @@ export class EnokiFlow {
 			this.#store.delete(this.#storageKeys.SESSION);
 		}
 
-		this.#zkLoginSession = newValue;
+		this.$zkLoginSession.set({ initialized: true, value: newValue });
 	}
 
 	async getSession() {
-		if (this.#zkLoginSessionInitialized) {
-			return this.#zkLoginSession;
+		if (this.$zkLoginSession.get().initialized) {
+			return this.$zkLoginSession.get().value;
 		}
 
 		try {
@@ -236,13 +232,13 @@ export class EnokiFlow {
 			if (state?.expiresAt && Date.now() > state.expiresAt) {
 				await this.logout();
 			} else {
-				this.#zkLoginSession = state;
+				this.$zkLoginSession.set({ initialized: true, value: state });
 			}
-
-			return this.#zkLoginSession;
-		} finally {
-			this.#zkLoginSessionInitialized = true;
+		} catch {
+			this.$zkLoginSession.set({ initialized: true, value: null });
 		}
+
+		return this.$zkLoginSession.get().value;
 	}
 
 	async logout() {
