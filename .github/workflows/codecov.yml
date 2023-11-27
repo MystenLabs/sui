@@ -34,6 +34,7 @@ jobs:
         with:
           crate: grcov
           locked: true
+
       - name: Build
         uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # pin@v1
         with:
@@ -41,13 +42,29 @@ jobs:
         env:
           RUSTFLAGS: '-Cinstrument-coverage'
           RUSTDOCFLAGS: '-Cinstrument-coverage'
+      
+      - name: Install Taiki-e
+        uses: taiki-e/install-action@nextest
+      
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+
+      - name: Install python dependencies
+        run: |
+          pip install pyopenssl --upgrade
+          if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi          
+
       - name: Run tests
         env:
           RUSTFLAGS: '-Cinstrument-coverage'
           RUSTDOCFLAGS: '-Cinstrument-coverage'
           LLVM_PROFILE_FILE: 'codecov-instrumentation-%p-%m.profraw'
         run: cargo test
+
       - name: Run grcov
         run: grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore '../**' --ignore '/*' -o coverage.lcov
+
       - name: Upload to codecov.io
         uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # pin@v3
