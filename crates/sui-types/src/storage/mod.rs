@@ -193,16 +193,14 @@ pub trait Storage {
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
 #[derive(Clone, Debug)]
-pub struct PackageObjectArc {
-    package_object: Arc<Object>,
+pub struct PackageObject {
+    package_object: Object,
 }
 
-impl PackageObjectArc {
+impl PackageObject {
     pub fn new(package_object: Object) -> Self {
         assert!(package_object.is_package());
-        Self {
-            package_object: Arc::new(package_object),
-        }
+        Self { package_object }
     }
 
     pub fn object(&self) -> &Object {
@@ -214,30 +212,30 @@ impl PackageObjectArc {
     }
 }
 
-impl From<PackageObjectArc> for Arc<Object> {
-    fn from(package_object_arc: PackageObjectArc) -> Self {
+impl From<PackageObject> for Object {
+    fn from(package_object_arc: PackageObject) -> Self {
         package_object_arc.package_object
     }
 }
 
 pub trait BackingPackageStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>>;
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>>;
 }
 
 impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
@@ -245,7 +243,7 @@ impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
 pub fn load_package_object_from_object_store(
     store: &impl ObjectStore,
     package_id: &ObjectID,
-) -> SuiResult<Option<PackageObjectArc>> {
+) -> SuiResult<Option<PackageObject>> {
     let package = store.get_object(package_id)?;
     if let Some(obj) = &package {
         fp_ensure!(
@@ -255,7 +253,7 @@ pub fn load_package_object_from_object_store(
             }
         );
     }
-    Ok(package.map(PackageObjectArc::new))
+    Ok(package.map(PackageObject::new))
 }
 
 /// Returns Ok(<package object for each package id in `package_ids`>) if all package IDs in
@@ -264,7 +262,7 @@ pub fn load_package_object_from_object_store(
 pub fn get_package_objects<'a>(
     store: &impl BackingPackageStore,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
-) -> SuiResult<PackageFetchResults<PackageObjectArc>> {
+) -> SuiResult<PackageFetchResults<PackageObject>> {
     let packages: Vec<Result<_, _>> = package_ids
         .into_iter()
         .map(|id| match store.get_package_object(id) {

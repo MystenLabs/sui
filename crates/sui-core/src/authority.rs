@@ -146,6 +146,10 @@ use crate::transaction_manager::TransactionManager;
 pub mod authority_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/transaction_tests.rs"]
+pub mod transaction_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/batch_transaction_tests.rs"]
 mod batch_transaction_tests;
 
@@ -2164,6 +2168,7 @@ impl AuthorityState {
             checkpoint_store.clone(),
             store.objects_lock_table.clone(),
             pruning_config,
+            epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
             indirect_objects_threshold,
@@ -3139,6 +3144,13 @@ impl AuthorityState {
             })
     }
 
+    #[cfg(msim)]
+    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        self.database
+            .perpetual_tables
+            .get_highest_pruned_checkpoint()
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_summary_by_sequence_number(
         &self,
@@ -3983,6 +3995,25 @@ impl AuthorityState {
         Some(tx)
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn create_randomness_state_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().random_beacon() {
+            info!("randomness state transactions not enabled");
+            return None;
+        }
+
+        if epoch_store.randomness_state_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_randomness_state_create();
+        info!("Creating RandomnessStateCreate tx");
+        Some(tx)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -4004,6 +4035,9 @@ impl AuthorityState {
         let mut txns = Vec::new();
 
         if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_randomness_state_tx(epoch_store) {
             txns.push(tx);
         }
 
@@ -4620,7 +4654,7 @@ impl NodeStateDump {
             input_objects: inner_temporary_store
                 .input_objects
                 .values()
-                .map(|o| (**o).clone())
+                .map(|o| (*o).clone())
                 .collect(),
             computed_effects: effects.clone(),
             expected_effects_digest,

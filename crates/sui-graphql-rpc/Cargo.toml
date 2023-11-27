@@ -22,6 +22,8 @@ hex.workspace = true
 hyper.workspace = true
 lru.workspace = true
 move-binary-format.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
 markdown-gen.workspace = true
 mysten-metrics.workspace = true
 move-core-types.workspace = true
@@ -63,10 +65,10 @@ sui-package-resolver.workspace = true
 expect-test.workspace = true
 hyper.workspace = true
 insta.workspace = true
-move-compiler.workspace = true
 serde_json.workspace = true
-sui-move-build.workspace = true
 tower.workspace = true
 
 [features]
+default = ["pg_backend"]
 pg_integration = []
+pg_backend = []

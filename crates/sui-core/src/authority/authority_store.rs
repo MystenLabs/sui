@@ -26,7 +26,7 @@ use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
     get_module, BackingPackageStore, ChildObjectResolver, InputKey, MarkerValue, ObjectKey,
-    ObjectStore, PackageObjectArc,
+    ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -169,6 +169,7 @@ impl AuthorityStore {
                 genesis.sui_system_object().into_epoch_start_state(),
                 *genesis.checkpoint().digest(),
                 genesis.authenticator_state_obj_initial_shared_version(),
+                genesis.randomness_state_obj_initial_shared_version(),
             );
             perpetual_tables
                 .set_epoch_start_configuration(&epoch_start_configuration)
@@ -859,7 +860,7 @@ impl AuthorityStore {
                 ref_and_objects.iter().map(|(oref, o)| {
                     (
                         ObjectKey::from(oref),
-                        get_store_object_pair((**o).clone(), self.indirect_objects_threshold).0,
+                        get_store_object_pair((*o).clone(), self.indirect_objects_threshold).0,
                     )
                 }),
             )?
@@ -867,7 +868,7 @@ impl AuthorityStore {
                 &self.perpetual_tables.indirect_move_objects,
                 ref_and_objects.iter().filter_map(|(_, o)| {
                     let StoreObjectPair(_, indirect_object) =
-                        get_store_object_pair((**o).clone(), self.indirect_objects_threshold);
+                        get_store_object_pair((*o).clone(), self.indirect_objects_threshold);
                     indirect_object.map(|obj| (obj.inner().digest(), obj))
                 }),
             )?;
@@ -1992,10 +1993,23 @@ impl AuthorityStore {
         info!("Removing all versions of object: {:?}", entries);
         self.perpetual_tables.objects.multi_remove(entries).unwrap();
     }
+
+    // Counts the number of versions exist in object store for `object_id`. This includes tombstone.
+    #[cfg(msim)]
+    pub fn count_object_versions(&self, object_id: ObjectID) -> usize {
+        self.perpetual_tables
+            .objects
+            .iter_with_bounds(
+                Some(ObjectKey(object_id, VersionNumber::MIN)),
+                Some(ObjectKey(object_id, VersionNumber::MAX)),
+            )
+            .collect::<Vec<_>>()
+            .len()
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.package_cache.get_package_object(package_id, self)
     }
 }

@@ -77,7 +77,7 @@ module sui::groth16 {
     }
 
     /// @param curve: What elliptic curve construction to use. See `bls12381` and `bn254`.
-    /// @param veriyfing_key: An Arkworks canonical compressed serialization of a verifying key.
+    /// @param verifying_key: An Arkworks canonical compressed serialization of a verifying key.
     ///
     /// Returns four vectors of bytes representing the four components of a prepared verifying key.
     /// This step computes one pairing e(P, Q), and binds the verification to one particular proof statement.

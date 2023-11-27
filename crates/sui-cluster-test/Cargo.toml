@@ -21,6 +21,8 @@ uuid.workspace = true
 prometheus.workspace = true
 fastcrypto.workspace = true
 shared-crypto.workspace = true
+derivative.workspace = true
+regex.workspace = true
 
 sui-indexer.workspace = true
 sui-faucet.workspace = true

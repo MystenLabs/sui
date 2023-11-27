@@ -118,6 +118,12 @@ module deepbook::clob_test {
         );
     }
 
+    #[test] fun test_list_open_orders_empty() {
+        let _ = test_list_open_orders_empty_(
+            scenario()
+        );
+    }
+
     #[test] fun get_best_price() {
         let _ = get_market_price_(
             scenario()
@@ -611,6 +617,45 @@ module deepbook::clob_test {
                 &mut open_orders_cmp,
                 clob::test_construct_order(0, CLIENT_ID_ALICE, 10 * FLOAT_SCALING, 10000, 10000, false, account_cap_user)
             );
+            assert!(open_orders == open_orders_cmp, 0);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        end(test)
+    }
+
+        fun test_list_open_orders_empty_(test: Scenario): TransactionEffects {
+        let (alice, _) = people();
+        let owner = @0xF;
+        // setup pool and custodian
+        next_tx(&mut test, owner);
+        {
+            clob::setup_test(5000000, 2500000, &mut test, owner);
+        };
+        next_tx(&mut test, alice);
+        {
+            mint_account_cap_transfer(alice, test::ctx(&mut test));
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = account_owner(&account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
+            let alice_deposit_WSUI: u64 = 10000;
+            let alice_deposit_USDC: u64 = 10000;
+            custodian::test_increase_user_available_balance<SUI>(base_custodian, account_cap_user, alice_deposit_WSUI);
+            custodian::test_increase_user_available_balance<USD>(quote_custodian, account_cap_user, alice_deposit_USDC);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        // test list_open_orders
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let open_orders = list_open_orders(&pool, &account_cap);
+            let open_orders_cmp = vector::empty<Order>();
             assert!(open_orders == open_orders_cmp, 0);
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap);

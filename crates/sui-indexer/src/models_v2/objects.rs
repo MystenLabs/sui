@@ -304,7 +304,7 @@ mod tests {
         coin::Coin,
         digests::TransactionDigest,
         gas_coin::{GasCoin, GAS},
-        object::{Data, MoveObject, Owner},
+        object::{Data, MoveObject, ObjectInner, Owner},
         Identifier, TypeTag,
     };
 
@@ -373,12 +373,13 @@ mod tests {
 
         let owner = AccountAddress::from_hex_literal("0x1").unwrap();
 
-        let object = Object {
+        let object = ObjectInner {
             owner: Owner::AddressOwner(owner.into()),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
-        };
+        }
+        .into();
 
         let indexed_obj = IndexedObject::from_object(1, object, None);
 

@@ -3,9 +3,10 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    download_db_snapshot, download_formal_snapshot, get_object, get_transaction_block,
-    make_clients, restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
-    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, get_object,
+    get_transaction_block, make_clients, restore_from_db_checkpoint, state_sync_from_archive,
+    verify_archive, verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput,
+    VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::env;
@@ -152,6 +153,18 @@ pub enum ToolCommand {
         object_store_config: ObjectStoreConfig,
         #[arg(default_value_t = 5)]
         download_concurrency: usize,
+    },
+
+    /// Tool to print archive contents in checkpoint range
+    #[command(name = "dump-archive")]
+    DumpArchiveByChecksum {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[arg(default_value_t = 0)]
+        start: u64,
+        end: u64,
+        #[arg(default_value_t = 80)]
+        max_content_length: usize,
     },
 
     #[command(name = "dump-validators")]
@@ -703,6 +716,15 @@ impl ToolCommand {
                 download_concurrency,
             } => {
                 verify_archive_by_checksum(object_store_config, download_concurrency).await?;
+            }
+            ToolCommand::DumpArchiveByChecksum {
+                object_store_config,
+                start,
+                end,
+                max_content_length,
+            } => {
+                dump_checkpoints_from_archive(object_store_config, start, end, max_content_length)
+                    .await?;
             }
             ToolCommand::SignTransaction {
                 genesis,

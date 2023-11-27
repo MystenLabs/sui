@@ -47,8 +47,9 @@ struct Args {
     graphql_host: String,
 
     /// Port to start the GraphQl server on
-    #[clap(long, default_value = "8000")]
-    graphql_port: u16,
+    /// Explicitly setting this enables the server
+    #[clap(long)]
+    graphql_port: Option<u16>,
 
     /// Port to start the Indexer RPC server on
     #[clap(long, default_value = "9124")]
@@ -66,6 +67,14 @@ struct Args {
     /// DB name for the Indexer Postgres DB
     #[clap(long, default_value = "sui_indexer")]
     pg_db_name: String,
+
+    /// DB username for the Indexer Postgres DB
+    #[clap(long, default_value = "postgres")]
+    pg_user: String,
+
+    /// DB password for the Indexer Postgres DB
+    #[clap(long, default_value = "postgrespw")]
+    pg_password: String,
 
     /// The duration for epochs (defaults to one minute)
     #[clap(long, default_value = "60000")]
@@ -100,6 +109,8 @@ async fn main() -> Result<()> {
         pg_port,
         pg_host,
         pg_db_name,
+        pg_user,
+        pg_password,
         epoch_duration_ms,
         faucet_port,
         with_indexer,
@@ -114,18 +125,27 @@ async fn main() -> Result<()> {
         Some(epoch_duration_ms)
     };
 
+    if graphql_port.is_none() {
+        println!("Graphql port not provided. Graphql service will not run.")
+    }
+    if !with_indexer {
+        println!("`with_indexer` flag unset. Indexer service will not run.")
+    } else if !use_indexer_v2 {
+        println!("`with_indexer` flag unset. Indexer service will run unmaintained indexer.")
+    }
+
     let cluster_config = ClusterTestOpt {
         env: Env::NewLocal,
         fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
         indexer_address: with_indexer.then_some(format!("127.0.0.1:{}", indexer_rpc_port)),
-        pg_address: with_indexer.then_some(format!(
-            "postgres://postgres@{pg_host}:{pg_port}/{pg_db_name}"
+        pg_address: Some(format!(
+            "postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}"
         )),
-        faucet_address: None,
+        faucet_address: Some(format!("127.0.0.1:{}", faucet_port)),
         epoch_duration_ms,
         use_indexer_experimental_methods,
         config_dir,
-        graphql_address: Some(format!("{}:{}", graphql_host, graphql_port)),
+        graphql_address: graphql_port.map(|p| format!("{}:{}", graphql_host, p)),
         use_indexer_v2,
     };
 

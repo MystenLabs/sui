@@ -39,7 +39,7 @@ This creates a new, empty Move package in a new `move/counter` directory with a 
 
 Add your Move code under `sources` by creating a new `counter.move` file:
 
-```rust
+```move
 module counter::counter {
     use sui::transfer;
     use sui::object::{Self, UID};
@@ -78,7 +78,7 @@ Now that you have your Move code, you need to publish it. The Client App with Su
 
 First, update the Sui dependency in Move.toml by changing the `rev` from `framework/testnet` to `framework/devnet`.
 
-```rust
+```toml
 ...
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/devnet" }
@@ -103,7 +103,7 @@ Now, publish your Move code with the following command:
 sui client publish --gas-budget 10000000 counter
 ```
 
-:::info 
+:::info
 
 See [Sui Client CLI](/references/cli/client.mdx) for more information about `client` commands in the Sui CLI.
 

@@ -163,7 +163,6 @@ const guides = [
 			'guides/operator/genesis',
 			'guides/operator/validator-committee',
 			'guides/operator/validator-tasks',
-			'guides/operator/staking-rewards',
 			'guides/operator/node-tools',
 			'guides/operator/formal-snapshot',
 			'guides/operator/exchange-integration',

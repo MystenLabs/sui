@@ -1051,7 +1051,7 @@ module sui_system::validator_set {
 
     /// Given the current list of active validators, the total stake and total reward,
     /// calculate the amount of reward each validator should get, without taking into
-    /// account the tallyig rule results.
+    /// account the tallying rule results.
     /// Returns the unadjusted amounts of staking reward and storage fund reward for each validator.
     fun compute_unadjusted_reward_distribution(
         validators: &vector<Validator>,

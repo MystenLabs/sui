@@ -62,6 +62,10 @@ impl ZkLoginAuthenticator {
     pub fn get_iss(&self) -> &str {
         self.inputs.get_iss()
     }
+
+    pub fn user_signature_mut_for_testing(&mut self) -> &mut Signature {
+        &mut self.user_signature
+    }
 }
 
 /// Necessary trait for [struct SenderSignedData].

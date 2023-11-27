@@ -137,6 +137,19 @@ describe('Transaction Builders', () => {
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
+	it('Move Shared Object Call by Value', async () => {
+		const tx = new TransactionBlock();
+		tx.moveCall({
+			target: `${packageId}::serializer_tests::value`,
+			arguments: [tx.object(sharedObjectId)],
+		});
+		tx.moveCall({
+			target: `${packageId}::serializer_tests::delete_value`,
+			arguments: [tx.object(sharedObjectId)],
+		});
+		await validateTransaction(toolbox.client, toolbox.keypair, tx);
+	});
+
 	it('immutable clock', async () => {
 		const tx = new TransactionBlock();
 		tx.moveCall({

@@ -30,7 +30,7 @@ use sui_types::error::{ExecutionError, SuiObjectResponseError, UserInputError, U
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
-use sui_types::object::{Data, MoveObject, Object, ObjectRead, Owner};
+use sui_types::object::{Data, MoveObject, Object, ObjectInner, ObjectRead, Owner};
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 use sui_types::sui_serde::SuiStructTag;
@@ -512,6 +512,8 @@ impl
             None
         };
 
+        let o = o.into_inner();
+
         let content: Option<SuiParsedData> = if show_content {
             let data = match o.data {
                 Data::Move(m) => {
@@ -638,7 +640,7 @@ impl TryInto<Object> for SuiObjectData {
                 "BCS data is required to convert SuiObjectData to Object"
             ))?,
         };
-        Ok(Object {
+        Ok(ObjectInner {
             data,
             owner: self
                 .owner
@@ -649,7 +651,8 @@ impl TryInto<Object> for SuiObjectData {
             storage_rebate: self.storage_rebate.ok_or_else(|| {
                 anyhow!("storage_rebate is required to convert SuiObjectData to Object")
             })?,
-        })
+        }
+        .into())
     }
 }
 
@@ -818,7 +821,7 @@ impl SuiParsedData {
         match object_read {
             ObjectRead::NotExists(id) => Err(anyhow::anyhow!("Object {} does not exist", id)),
             ObjectRead::Exists(_object_ref, o, layout) => {
-                let data = match o.data {
+                let data = match o.into_inner().data {
                     Data::Move(m) => {
                         let layout = layout.ok_or_else(|| {
                             anyhow!("Layout is required to convert Move object to json")

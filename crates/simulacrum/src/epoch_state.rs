@@ -74,6 +74,10 @@ impl EpochState {
         &self.committee
     }
 
+    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.epoch_start_state
+    }
+
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_config().version
     }

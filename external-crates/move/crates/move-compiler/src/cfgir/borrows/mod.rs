@@ -184,7 +184,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             context.borrow_state.abort()
         }
         C::Jump { .. } => (),
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
 

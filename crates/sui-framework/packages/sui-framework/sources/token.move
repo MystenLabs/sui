@@ -131,7 +131,7 @@ module sui::token {
     ///
     /// `TreasuryCap` guarantees full ownership over the currency, and is unique,
     /// hence it is safe to use it for authorization.
-    public fun new<T>(
+    public fun new_policy<T>(
         _treasury_cap: &TreasuryCap<T>, ctx: &mut TxContext
     ): (TokenPolicy<T>, TokenPolicyCap<T>) {
         let policy = TokenPolicy {

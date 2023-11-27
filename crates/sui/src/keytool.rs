@@ -8,6 +8,8 @@ use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
+use fastcrypto::secp256k1::Secp256k1KeyPair;
+use fastcrypto::secp256r1::Secp256r1KeyPair;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::utils::{get_oidc_url, get_token_exchange_url};
 use fastcrypto_zkp::bn254::zk_login::{fetch_jwks, OIDCProvider};
@@ -50,7 +52,6 @@ use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
 use tracing::info;
-
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -507,21 +508,27 @@ impl KeyToolCommand {
             } => {
                 // check if input is a private key -- should start with 0x
                 if input_string.starts_with("0x") {
-                    let bytes = Hex::decode(&input_string).map_err(|_| {
+                    let bytes: Vec<u8> = Hex::decode(&input_string).map_err(|_| {
                         anyhow!("Private key is malformed. Importing private key failed.")
                     })?;
-                    match key_scheme {
-                            SignatureScheme::ED25519 => {
-                                let kp = Ed25519KeyPair::from_bytes(&bytes).map_err(|_| anyhow!("Cannot decode ed25519 keypair from the private key. Importing private key failed."))?;
-                                let skp = SuiKeyPair::Ed25519(kp);
-                                let key = Key::from(&skp);
-                                keystore.add_key(skp)?;
-                                CommandOutput::Import(key)
-                            }
-                            _ => return Err(anyhow!(
-                                "Only ed25519 signature scheme is supported for importing private keys at the moment."
-                            ))
+                    let skp = match key_scheme {
+                        SignatureScheme::ED25519 => {
+                            let kp = Ed25519KeyPair::from_bytes(&bytes)?;
+                            SuiKeyPair::Ed25519(kp)
                         }
+                        SignatureScheme::Secp256k1 => {
+                            let kp = Secp256k1KeyPair::from_bytes(&bytes)?;
+                            SuiKeyPair::Secp256k1(kp)
+                        }
+                        SignatureScheme::Secp256r1 => {
+                            let kp = Secp256r1KeyPair::from_bytes(&bytes)?;
+                            SuiKeyPair::Secp256r1(kp)
+                        }
+                        _ => return Err(anyhow!("Unsupported scheme")),
+                    };
+                    let key = Key::from(&skp);
+                    keystore.add_key(skp)?;
+                    CommandOutput::Import(key)
                 } else {
                     let sui_address = keystore.import_from_mnemonic(
                         &input_string,

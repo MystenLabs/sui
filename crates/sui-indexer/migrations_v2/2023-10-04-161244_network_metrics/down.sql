@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS network_metrics;
+DROP TABLE IF EXISTS epoch_peak_tps;

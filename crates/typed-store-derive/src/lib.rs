@@ -600,6 +600,15 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     (stringify!(#field_names).to_owned(), (stringify!(#key_names).to_owned(), stringify!(#value_names).to_owned())),
                 )*].into_iter().collect()
             }
+
+            /// Try catch up with primary for all tables. This can be a slow operation
+            /// Tables must be opened in read only mode using `open_tables_read_only`
+            pub fn try_catch_up_with_primary_all(&self) -> eyre::Result<()> {
+                #(
+                    typed_store::traits::Map::try_catch_up_with_primary(&self.#field_names)?;
+                )*
+                Ok(())
+            }
         }
 
         impl <

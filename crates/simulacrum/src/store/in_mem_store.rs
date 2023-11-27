@@ -6,7 +6,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
-use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObjectArc};
+use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObject};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -226,7 +226,7 @@ impl BackingPackageStore for InMemoryStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<PackageObjectArc>> {
+    ) -> sui_types::error::SuiResult<Option<PackageObject>> {
         load_package_object_from_object_store(self, package_id)
     }
 }

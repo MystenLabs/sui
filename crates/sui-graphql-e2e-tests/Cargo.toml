@@ -21,7 +21,9 @@ harness = false
 workspace-hack.workspace = true
 
 [features]
+default = ["pg_backend"]
 pg_integration = []
+pg_backend = []
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true

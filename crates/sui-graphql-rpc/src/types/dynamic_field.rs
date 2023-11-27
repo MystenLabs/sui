@@ -31,12 +31,17 @@ pub(crate) enum DynamicFieldValue {
 
 #[derive(InputObject)] // used as input object
 pub(crate) struct DynamicFieldName {
+    /// The string type of the DynamicField's 'name' field.
+    /// A string representation of a Move primitive like 'u64', or a struct type like '0x2::kiosk::Listing'
     pub type_: String,
+    /// The Base64 encoded bcs serialization of the DynamicField's 'name' field.
     pub bcs: Base64,
 }
 
 #[Object]
 impl DynamicField {
+    /// The string type, data, and serialized value of the DynamicField's 'name' field.
+    /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
         let resolver: &Resolver<PackageCache> = ctx
             .data()
@@ -78,6 +83,9 @@ impl DynamicField {
         )))
     }
 
+    /// The actual data stored in the dynamic field.
+    /// The returned dynamic field is an object if its return type is MoveObject,
+    /// in which case it is also accessible off-chain via its address.
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             let obj = ctx

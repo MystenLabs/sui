@@ -319,13 +319,17 @@ impl RegistryService {
 }
 
 /// Create a metric that measures the uptime from when this metric was constructed.
-/// The metric is labeled with the provided 'version' label (this should generally be of the
-/// format: 'semver-gitrevision') and the provided 'chain_identifier' label.
+/// The metric is labeled with:
+/// - 'process': the process type, differentiating between validator and fullnode
+/// - 'version': binary version, generally be of the format: 'semver-gitrevision'
+/// - 'chain_identifier': the identifier of the network which this process is part of
 pub fn uptime_metric(
+    process: &str,
     version: &'static str,
     chain_identifier: &str,
 ) -> Box<dyn prometheus::core::Collector> {
     let opts = prometheus::opts!("uptime", "uptime of the node service in seconds")
+        .variable_label("process")
         .variable_label("version")
         .variable_label("chain_identifier");
 
@@ -335,7 +339,7 @@ pub fn uptime_metric(
         opts,
         prometheus_closure_metric::ValueType::Counter,
         uptime,
-        &[version, chain_identifier],
+        &[process, version, chain_identifier],
     )
     .unwrap();
 

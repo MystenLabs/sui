@@ -9,9 +9,9 @@ Shared objects require the `key` ability.
 
 ## Example
 
-The following example creates a shop to sell digital donuts. Everyone needs access to the shop to purchase donuts from it, so the example creates the shop as a shared object using `sui::transfer::share_object`. 
+The following example creates a shop to sell digital donuts. Everyone needs access to the shop to purchase donuts from it, so the example creates the shop as a shared object using `sui::transfer::share_object`.
 
-```rust
+```move
 module examples::donuts {
     use sui::transfer;
     use sui::sui::SUI;
@@ -52,7 +52,7 @@ module examples::donuts {
     }
 
     /// Entry function available to everyone who owns a Coin.
-    public entry fun buy_donut(
+    public fun buy_donut(
         shop: &mut DonutShop, payment: &mut Coin<SUI>, ctx: &mut TxContext
     ) {
         assert!(coin::value(payment) >= shop.price, ENotEnough);
@@ -70,14 +70,14 @@ module examples::donuts {
     }
 
     /// Consume donut and get nothing...
-    public entry fun eat_donut(d: Donut) {
+    public fun eat_donut(d: Donut) {
         let Donut { id } = d;
         object::delete(id);
     }
 
     /// Take coin from `DonutShop` and transfer it to tx sender.
     /// Requires authorization with `ShopOwnerCap`.
-    public entry fun collect_profits(
+    public fun collect_profits(
         _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext
     ) {
         let amount = balance::value(&shop.balance);

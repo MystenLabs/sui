@@ -31,6 +31,10 @@ pub struct IndexerMetrics {
     pub latest_fullnode_checkpoint_sequence_number: IntGauge,
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
+    // analytical
+    pub latest_move_call_metrics_tx_seq: IntGauge,
+    pub latest_address_metrics_tx_seq: IntGauge,
+    pub latest_network_metrics_cp_seq: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub fullnode_checkpoint_data_download_latency: Histogram,
@@ -169,6 +173,21 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            latest_move_call_metrics_tx_seq: register_int_gauge_with_registry!(
+                "latest_move_call_metrics_tx_seq",
+                "Latest move call metrics tx seq",
+                registry,
+            ).unwrap(),
+            latest_address_metrics_tx_seq: register_int_gauge_with_registry!(
+                "latest_address_metrics_tx_seq",
+                "Latest address metrics tx seq",
+                registry,
+            ).unwrap(),
+            latest_network_metrics_cp_seq: register_int_gauge_with_registry!(
+                "latest_network_metrics_cp_seq",
+                "Latest network metrics cp seq",
+                registry,
+            ).unwrap(),
             fullnode_checkpoint_data_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_data_download_latency",
                 "Time spent in downloading checkpoint and transation for a new checkpoint from the Full Node",

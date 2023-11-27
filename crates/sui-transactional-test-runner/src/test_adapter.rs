@@ -44,6 +44,7 @@ use std::{
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::serve_executor;
 use sui_graphql_rpc::test_infra::cluster::ExecutorCluster;
@@ -133,6 +134,7 @@ pub(crate) struct StagedPackage {
     pub(crate) digest: Vec<u8>,
 }
 
+#[derive(Debug)]
 struct TestAccount {
     address: SuiAddress,
     key_pair: AccountKeyPair,
@@ -474,10 +476,24 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ViewGraphqlVariables => {
+                let variables = self.graphql_variables();
+                let mut res = vec![];
+                for (name, value) in variables {
+                    res.push(format!(
+                        "Name: {}\nType: {}\nValue: {}",
+                        name,
+                        value.ty,
+                        serde_json::to_string_pretty(&value.value).unwrap()
+                    ));
+                }
+                Ok(Some(res.join("\n\n")))
+            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
                 show_service_version,
+                variables,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
@@ -487,9 +503,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(10))
                     .await;
 
+                let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
                     .graphql_client
-                    .execute_to_graphql(contents.trim().to_owned(), show_usage, vec![], vec![])
+                    .execute_to_graphql(
+                        contents.trim().to_owned(),
+                        show_usage,
+                        used_variables,
+                        vec![],
+                    )
                     .await?;
 
                 let mut output = vec![];
@@ -510,13 +532,17 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .get_verified_checkpoint_by_sequence_number(latest_chk)?;
                 Ok(Some(format!("{}", chk.data())))
             }
-            SuiSubcommand::CreateCheckpoint => {
-                self.executor.create_checkpoint().await?;
+            SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
+                for _ in 0..count.unwrap_or(1) {
+                    self.executor.create_checkpoint().await?;
+                }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch => {
-                self.executor.advance_epoch().await?;
+            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand { count }) => {
+                for _ in 0..count.unwrap_or(1) {
+                    self.executor.advance_epoch().await?;
+                }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor
@@ -927,6 +953,67 @@ impl<'a> SuiTestAdapter<'a> {
 
     pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
         self.executor
+    }
+
+    fn graphql_variables(&self) -> BTreeMap<String, GraphqlQueryVariable> {
+        let mut variables = BTreeMap::new();
+        let named_addrs = self
+            .compiled_state
+            .named_address_mapping
+            .iter()
+            .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
+
+        let objects = self
+            .object_enumeration
+            .iter()
+            .filter_map(|(oid, fid)| match fid {
+                FakeID::Known(_) => None,
+                FakeID::Enumerated(x, y) => Some((format!("obj_{x}_{y}"), oid.to_string())),
+            });
+
+        for (name, addr) in named_addrs.chain(objects) {
+            let addr = addr.to_string();
+
+            // Required variant
+            variables.insert(
+                name.to_owned(),
+                GraphqlQueryVariable {
+                    name: name.to_string(),
+                    value: serde_json::json!(addr),
+                    ty: "SuiAddress!".to_string(),
+                },
+            );
+            // Optional variant
+            let name = name.to_string() + "_opt";
+            variables.insert(
+                name.clone(),
+                GraphqlQueryVariable {
+                    name: name.to_string(),
+                    value: serde_json::json!(addr),
+                    ty: "SuiAddress".to_string(),
+                },
+            );
+        }
+        variables
+    }
+    fn resolve_graphql_variables(
+        &self,
+        declared: &[String],
+    ) -> anyhow::Result<Vec<GraphqlQueryVariable>> {
+        let variables = self.graphql_variables();
+        let mut res = vec![];
+        for decl in declared {
+            if let Some(var) = variables.get(decl) {
+                res.push(var.clone());
+            } else {
+                return Err(anyhow!(
+                    "Unknown variable: {}\nAllowed variable mappings are are {:#?}",
+                    decl,
+                    variables
+                ));
+            }
+        }
+        Ok(res)
     }
 
     async fn upgrade_package(
@@ -1578,11 +1665,19 @@ struct AccountSetup {
     pub accounts: BTreeMap<String, TestAccount>,
 }
 
-fn create_accounts_objects(
-    rng: &mut StdRng,
+/// Create the executor for a validator with a fullnode
+/// The issue with this executor is we cannot control the checkpoint
+/// and epoch creation process
+async fn init_val_fullnode_executor(
+    mut rng: StdRng,
     account_names: BTreeSet<String>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
-) -> AccountSetup {
+    protocol_config: &ProtocolConfig,
+) -> (
+    Box<dyn TransactionalAdapter>,
+    AccountSetup,
+    Option<ExecutorCluster>,
+) {
     // Initial list of named addresses with specified values
     let mut named_address_mapping = NAMED_ADDRESSES.clone();
     let mut account_objects = BTreeMap::new();
@@ -1591,7 +1686,7 @@ fn create_accounts_objects(
 
     // Closure to create accounts with gas objects of value `GAS_FOR_TESTING`
     let mut mk_account = || {
-        let (address, key_pair) = get_key_pair_from_rng(rng);
+        let (address, key_pair) = get_key_pair_from_rng(&mut rng);
         let obj = Object::with_id_owner_gas_for_testing(
             ObjectID::new(rng.gen()),
             address,
@@ -1617,33 +1712,24 @@ fn create_accounts_objects(
     // Make a default account with a gas object
     let default_account = mk_account();
 
-    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+    let executor = Box::new(create_val_fullnode_executor(protocol_config, &objects).await);
 
-    AccountSetup {
+    update_named_address_mapping(
+        &mut named_address_mapping,
+        &accounts,
+        additional_mapping,
+        &*executor,
+    )
+    .await;
+
+    let acc_setup = AccountSetup {
         default_account,
         named_address_mapping,
         objects,
         account_objects,
         accounts,
-    }
-}
-
-/// Create the executor for a validator with a fullnode
-/// The issue with this executor is we cannot control the checkpoint
-/// and epoch creation process
-async fn init_val_fullnode_executor(
-    mut rng: StdRng,
-    account_names: BTreeSet<String>,
-    additional_mapping: BTreeMap<String, NumericalAddress>,
-    protocol_config: &ProtocolConfig,
-) -> (
-    Box<dyn TransactionalAdapter>,
-    AccountSetup,
-    Option<ExecutorCluster>,
-) {
-    let acc_setup = create_accounts_objects(&mut rng, account_names, additional_mapping);
-    let executor = create_val_fullnode_executor(protocol_config, &acc_setup.objects).await;
-    (Box::new(executor), acc_setup, None)
+    };
+    (executor, acc_setup, None)
 }
 
 /// Create an executor using a simulator
@@ -1731,10 +1817,17 @@ async fn init_sim_executor(
     };
     objects.push(o.clone());
 
-    update_named_address_mapping(&mut named_address_mapping, &accounts, additional_mapping);
+    let sim = Box::new(sim);
+    update_named_address_mapping(
+        &mut named_address_mapping,
+        &accounts,
+        additional_mapping,
+        &*sim,
+    )
+    .await;
 
     (
-        Box::new(sim),
+        sim,
         AccountSetup {
             default_account,
             named_address_mapping,
@@ -1746,20 +1839,32 @@ async fn init_sim_executor(
     )
 }
 
-fn update_named_address_mapping(
+async fn update_named_address_mapping(
     named_address_mapping: &mut BTreeMap<String, NumericalAddress>,
     accounts: &BTreeMap<String, TestAccount>,
     additional_mapping: BTreeMap<String, NumericalAddress>,
+    trans_adapter: &dyn TransactionalAdapter,
 ) {
+    let active_val_addrs: BTreeMap<_, _> = trans_adapter
+        .get_active_validator_addresses()
+        .await
+        .expect("Failed to get validator addresses")
+        .iter()
+        .enumerate()
+        .map(|(idx, addr)| (format!("validator_{idx}"), *addr))
+        .collect();
+
     // For mappings where the address is specified, populate the named address mapping
-    let additional_mapping =
-        additional_mapping
-            .into_iter()
-            .chain(accounts.iter().map(|(n, test_account)| {
-                let addr =
-                    NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
-                (n.clone(), addr)
-            }));
+    let additional_mapping = additional_mapping
+        .into_iter()
+        .chain(accounts.iter().map(|(n, test_account)| {
+            let addr = NumericalAddress::new(test_account.address.to_inner(), NumberFormat::Hex);
+            (n.clone(), addr)
+        }))
+        .chain(active_val_addrs.iter().map(|(n, addr)| {
+            let addr = NumericalAddress::new(addr.to_inner(), NumberFormat::Hex);
+            (n.clone(), addr)
+        }));
     // Extend the mappings of all named addresses with values
     for (name, addr) in additional_mapping {
         if named_address_mapping.contains_key(&name) || name == "sui" {

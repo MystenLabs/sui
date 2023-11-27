@@ -405,7 +405,9 @@ impl TransactionBuilder {
                     self.get_object_arg(
                         id,
                         &mut objects,
-                        matches!(expected_type, SignatureToken::MutableReference(_)),
+                        // Is mutable if passed by mutable reference or by value
+                        matches!(expected_type, SignatureToken::MutableReference(_))
+                            || !expected_type.is_reference(),
                         &view,
                         &expected_type,
                     )

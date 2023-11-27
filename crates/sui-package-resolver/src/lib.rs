@@ -196,27 +196,27 @@ struct StructDef {
 
     /// Serialized representation of fields (names and deserialized signatures). Signatures refer to
     /// packages at their runtime IDs (not their storage ID or defining ID).
-    fields: Vec<(String, OpenSignature)>,
+    fields: Vec<(String, OpenSignatureBody)>,
 }
 
 /// Fully qualified struct identifier.  Uses copy-on-write strings so that when it is used as a key
 /// to a map, an instance can be created to query the map without having to allocate strings on the
 /// heap.
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
-struct StructRef<'m, 'n> {
-    package: AccountAddress,
-    module: Cow<'m, str>,
-    name: Cow<'n, str>,
+pub struct StructRef<'m, 'n> {
+    pub package: AccountAddress,
+    pub module: Cow<'m, str>,
+    pub name: Cow<'n, str>,
 }
 
 /// A `StructRef` that owns its strings.
-type StructKey = StructRef<'static, 'static>;
+pub type StructKey = StructRef<'static, 'static>;
 
 /// Deserialized representation of a type signature that could appear as a field type for a struct.
 /// Signatures refer to structs at their runtime IDs and can contain references to free type
 /// parameters but will not contain reference types.
 #[derive(Clone, Debug)]
-enum OpenSignature {
+pub enum OpenSignatureBody {
     Address,
     Bool,
     U8,
@@ -225,8 +225,8 @@ enum OpenSignature {
     U64,
     U128,
     U256,
-    Vector(Box<OpenSignature>),
-    Struct(StructKey, Vec<OpenSignature>),
+    Vector(Box<OpenSignatureBody>),
+    Struct(StructKey, Vec<OpenSignatureBody>),
     TypeParameter(u16),
 }
 
@@ -323,7 +323,7 @@ impl Package {
                 .map(|f| {
                     Ok((
                         module.bytecode.identifier_at(f.name).to_string(),
-                        OpenSignature::read(&f.signature.0, &module.bytecode)?,
+                        OpenSignatureBody::read(&f.signature.0, &module.bytecode)?,
                     ))
                 })
                 .collect::<Result<_>>()?,
@@ -384,9 +384,9 @@ impl Module {
     }
 }
 
-impl OpenSignature {
+impl OpenSignatureBody {
     fn read(sig: &SignatureToken, bytecode: &CompiledModule) -> Result<Self> {
-        use OpenSignature as O;
+        use OpenSignatureBody as O;
         use SignatureToken as S;
 
         Ok(match sig {
@@ -403,14 +403,14 @@ impl OpenSignature {
             S::U256 => O::U256,
             S::TypeParameter(ix) => O::TypeParameter(*ix),
 
-            S::Vector(sig) => O::Vector(Box::new(OpenSignature::read(sig, bytecode)?)),
+            S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
             S::Struct(ix) => O::Struct(StructKey::read(*ix, bytecode), vec![]),
             S::StructInstantiation(ix, params) => O::Struct(
                 StructKey::read(*ix, bytecode),
                 params
                     .iter()
-                    .map(|sig| OpenSignature::read(sig, bytecode))
+                    .map(|sig| OpenSignatureBody::read(sig, bytecode))
                     .collect::<Result<_>>()?,
             ),
         })
@@ -418,7 +418,7 @@ impl OpenSignature {
 }
 
 impl<'m, 'n> StructRef<'m, 'n> {
-    fn as_key(&self) -> StructKey {
+    pub fn as_key(&self) -> StructKey {
         StructKey {
             package: self.package,
             module: self.module.to_string().into(),
@@ -509,11 +509,11 @@ impl ResolutionContext {
     // into storage IDs.
     async fn add_signature<T: PackageStore + ?Sized>(
         &mut self,
-        sig: OpenSignature,
+        sig: OpenSignatureBody,
         store: &T,
         context: &Package,
     ) -> Result<()> {
-        use OpenSignature as O;
+        use OpenSignatureBody as O;
 
         let mut frontier = vec![sig];
         while let Some(sig) = frontier.pop() {
@@ -642,11 +642,11 @@ impl ResolutionContext {
     /// parameters which are substituted when a type parameter is encountered.
     fn resolve_signature(
         &self,
-        sig: &OpenSignature,
+        sig: &OpenSignatureBody,
         param_layouts: &Vec<MoveTypeLayout>,
     ) -> Result<MoveTypeLayout> {
         use MoveTypeLayout as L;
-        use OpenSignature as O;
+        use OpenSignatureBody as O;
 
         Ok(match sig {
             O::Address => L::Address,
