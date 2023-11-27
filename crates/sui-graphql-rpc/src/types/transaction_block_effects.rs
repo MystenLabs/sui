@@ -44,7 +44,7 @@ pub(crate) struct BalanceChange {
 
 #[derive(Clone, SimpleObject)]
 pub(crate) struct ObjectChange {
-    pub input_state: Option<Object>,
+    // TODO: input_state (waiting for object history)
     pub output_state: Option<Object>,
     pub id_created: Option<bool>,
     pub id_deleted: Option<bool>,
@@ -232,12 +232,7 @@ impl ObjectChange {
     async fn from(object_change: IndexedObjectChange, ctx: &Context<'_>) -> Result<Self, Error> {
         match object_change {
             IndexedObjectChange::Created {
-                sender: _,
-                owner: _,
-                object_type: _,
-                object_id,
-                version,
-                digest: _,
+                object_id, version, ..
             } => {
                 let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
                     Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
@@ -247,7 +242,6 @@ impl ObjectChange {
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
                 Ok(Self {
-                    input_state: None,
                     output_state,
                     id_created: Some(true),
                     id_deleted: None,
@@ -257,8 +251,7 @@ impl ObjectChange {
             IndexedObjectChange::Published {
                 package_id,
                 version,
-                digest: _,
-                modules: _,
+                ..
             } => {
                 let sui_address =
                     SuiAddress::from_bytes(package_id.into_bytes()).map_err(|_| {
@@ -269,19 +262,13 @@ impl ObjectChange {
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
                 Ok(Self {
-                    input_state: None,
                     output_state,
                     id_created: Some(true),
                     id_deleted: None,
                 })
             }
             IndexedObjectChange::Transferred {
-                sender: _,
-                recipient: _,
-                object_type: _,
-                object_id,
-                version,
-                digest: _,
+                object_id, version, ..
             } => {
                 let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
                     Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
@@ -295,64 +282,13 @@ impl ObjectChange {
                     .await?;
 
                 Ok(Self {
-                    input_state: output_state.clone(),
                     output_state,
                     id_created: None,
                     id_deleted: None,
                 })
             }
             IndexedObjectChange::Mutated {
-                sender: _,
-                owner: _,
-                object_type: _,
-                object_id,
-                version,
-                previous_version,
-                digest: _,
-            } => {
-                let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
-                    Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
-                })?;
-                let input_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(previous_version.value()))
-                    .await?;
-                let output_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(version.value()))
-                    .await?;
-                Ok(Self {
-                    input_state,
-                    output_state,
-                    id_created: None,
-                    id_deleted: None,
-                })
-            }
-            IndexedObjectChange::Deleted {
-                sender: _,
-                object_type: _,
-                object_id,
-                version,
-            } => {
-                let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
-                    Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
-                })?;
-                let input_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(version.value()))
-                    .await?;
-                Ok(Self {
-                    input_state,
-                    output_state: None,
-                    id_created: None,
-                    id_deleted: Some(true),
-                })
-            }
-            IndexedObjectChange::Wrapped {
-                sender: _,
-                object_type: _,
-                object_id,
-                version,
+                object_id, version, ..
             } => {
                 let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
                     Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
@@ -362,12 +298,21 @@ impl ObjectChange {
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
                 Ok(Self {
-                    input_state: None,
                     output_state,
                     id_created: None,
                     id_deleted: None,
                 })
             }
+            IndexedObjectChange::Deleted { .. } => Ok(Self {
+                output_state: None,
+                id_created: None,
+                id_deleted: Some(true),
+            }),
+            IndexedObjectChange::Wrapped { .. } => Ok(Self {
+                output_state: None,
+                id_created: None,
+                id_deleted: None,
+            }),
         }
     }
 }

@@ -59,7 +59,6 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState { location digest }
                 }
 
@@ -148,7 +147,6 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState { location digest }
                 }
 
@@ -228,7 +226,6 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState {
                         location
                         digest
@@ -309,7 +306,6 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState { location digest }
                 }
 

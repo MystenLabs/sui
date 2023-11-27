@@ -44,7 +44,6 @@
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState { location digest }
                 }
 
@@ -117,7 +116,6 @@
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState { location digest }
                 }
 
@@ -191,7 +189,6 @@
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState { location digest }
                 }
 
