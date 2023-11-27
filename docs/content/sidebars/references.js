@@ -82,6 +82,7 @@ const references = [
 			},
 		],
 	},
+	'references/sui-glossary',
 	{
 		type: 'category',
 		label: 'Contribute',
