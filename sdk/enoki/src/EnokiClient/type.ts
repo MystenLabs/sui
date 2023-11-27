@@ -40,3 +40,17 @@ export interface CreateZkLoginZkpApiInput {
 	maxEpoch: number;
 }
 export interface CreateZkLoginZkpApiResponse extends ZkLoginSignatureInputs {}
+
+export interface CreateSponsoredTransactionBlockApiInput {
+	network?: 'mainnet' | 'testnet';
+	jwt: string;
+	transactionBlockKindBytes: string;
+}
+
+export interface CreateSponsoredTransactionBlockApiResponse {
+	bytes: string;
+	signature: string;
+	digest: string;
+	expireAtTime: number;
+	expireAfterEpoch: number;
+}

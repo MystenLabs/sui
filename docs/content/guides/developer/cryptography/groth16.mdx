@@ -14,7 +14,7 @@ Groth16 requires a trusted setup for each circuit to generate the verification k
 
 ## Usage
 
-The following example demonstrates how to create a Groth16 proof from a statement written in Circom and then verify it using the Sui Move API. The API currently supports up to eight public inputs. 
+The following example demonstrates how to create a Groth16 proof from a statement written in Circom and then verify it using the Sui Move API. The API currently supports up to eight public inputs.
 
 ### Create circuit
 
@@ -36,7 +36,7 @@ component main = Main();
 ```
 We use the [Poseidon hash function](https://www.poseidon-hash.info) which is a ZK-friendly hash function. Assuming that the [circom compiler has been installed](https://docs.circom.io/getting-started/installation/), the above circuit is compiled using the following command:
 ```shell
-circom main.circom --r1cs --wasm 
+circom main.circom --r1cs --wasm
 ```
 This outputs the constraints in R1CS format and the circuit in Wasm format.
 
@@ -88,7 +88,7 @@ The proof shows that an input (7) which, when hashed with the Poseidon hash func
 
 The API in Sui for verifying a proof expects a special processed verification key, where only a subset of the values are used. Ideally, computation for this prepared verification key happens only once per circuit. You can perform this processing using the `sui::groth16::prepare_verifying_key` method of the Sui Move API with a serialization of the `params.vk` value used previously.
 
-The output of the `prepare_verifying_key` function is a vector with four byte arrays, which corresponds to the `vk_gamma_abc_g1_bytes`, `alpha_g1_beta_g2_bytes`, `gamma_g2_neg_pc_bytes`, `delta_g2_neg_pc_bytes`. 
+The output of the `prepare_verifying_key` function is a vector with four byte arrays, which corresponds to the `vk_gamma_abc_g1_bytes`, `alpha_g1_beta_g2_bytes`, `gamma_g2_neg_pc_bytes`, `delta_g2_neg_pc_bytes`.
 
 To verify a proof, you also need two more inputs, `proof_inputs_bytes` and `proof_points_bytes`, which contain the public inputs and the proof respectively. These are serializations of the `inputs` and `proof` values from the previous example, which you can compute in Rust as follows:
 
@@ -114,7 +114,7 @@ module test::groth16_test {
         is_verified: bool,
     }
 
-    public entry fun verify_proof(vk: vector<u8>, public_inputs_bytes: vector<u8>, proof_points_bytes: vector<u8>) {
+    public fun verify_proof(vk: vector<u8>, public_inputs_bytes: vector<u8>, proof_points_bytes: vector<u8>) {
         let pvk = groth16::prepare_verifying_key(&groth16::bn254(), &vk);
         let public_inputs = groth16::public_proof_inputs_from_bytes(public_inputs_bytes);
         let proof_points = groth16::proof_points_from_bytes(proof_points_bytes);

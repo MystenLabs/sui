@@ -74,7 +74,7 @@ fn optimize_cmd(
         }
 
         C::Jump { .. } => false,
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     })
 }
 

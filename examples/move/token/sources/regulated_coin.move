@@ -46,7 +46,7 @@ module examples::regulated_coin {
     // a single / set of PTBs.
     fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
         let treasury_cap = create_currency(otw, ctx);
-        let (policy, cap) = token::new(&treasury_cap, ctx);
+        let (policy, cap) = token::new_policy(&treasury_cap, ctx);
 
         set_rules(&mut policy, &cap, ctx);
 

@@ -57,11 +57,7 @@ const references = [
 				label: 'Sui TypeScript SDK Site',
 				href: 'https://sui-typescript-docs.vercel.app/typescript',
 			},
-			{
-				type: 'link',
-				label: 'Sui Rust SDK GitHub',
-				href: 'https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk',
-			}
+			'references/rust-sdk',
 		],
 	},
 	{

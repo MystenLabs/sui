@@ -500,6 +500,16 @@ impl SuiClient {
     pub fn transaction_builder(&self) -> &TransactionBuilder {
         &self.transaction_builder
     }
+
+    /// Returns a reference to the underlying http client.
+    pub fn http(&self) -> &HttpClient {
+        &self.api.http
+    }
+
+    /// Returns a reference to the underlying WebSocket client, if any.
+    pub fn ws(&self) -> Option<&WsClient> {
+        self.api.ws.as_ref()
+    }
 }
 
 #[async_trait]

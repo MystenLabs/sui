@@ -42,6 +42,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
         query
     }
+    fn get_obj_by_type(object_type: String) -> objects::BoxedQuery<'static, Pg> {
+        objects::dsl::objects
+            .filter(objects::dsl::object_type.eq(object_type))
+            .limit(1) // Fetches for a single object and as such has a limit of 1
+            .into_boxed()
+    }
     fn get_epoch(epoch_id: i64) -> epochs::BoxedQuery<'static, Pg> {
         epochs::dsl::epochs
             .filter(epochs::dsl::epoch.eq(epoch_id))
@@ -212,7 +218,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         cursor: Option<Vec<u8>>,
         descending_order: bool,
         limit: i64,
-        address: Vec<u8>,
+        address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, Pg> {
         let mut query = objects::dsl::objects.into_boxed();
@@ -230,10 +236,13 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         }
         query = query.limit(limit + 1);
 
-        query = query
-            .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16)) // Leverage index on objects table
-            .filter(objects::dsl::coin_type.eq(coin_type));
+        if let Some(address) = address {
+            query = query
+                .filter(objects::dsl::owner_id.eq(address))
+                // Leverage index on objects table
+                .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16));
+        }
+        query = query.filter(objects::dsl::coin_type.eq(coin_type));
 
         query
     }

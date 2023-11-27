@@ -11,7 +11,7 @@ When we create a pool in DeepBook, we need to specify the BaseAsset, QuoteAsset,
 
 **Function signature for `create_pool` in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[registry]` Object ID refers to the pool registry
@@ -101,7 +101,7 @@ Before placing a limit order, traders need to host a custodian account with asse
 
 **Function signature for `create_account` in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 /// 0. `[ctx]` Information about the current transaction.
@@ -149,7 +149,7 @@ Traders could deposit base/quote assets to their custodian account, so they coul
 
 **Function signature for deposit base asset in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 /// 0. `[pool]` Object ID refers to the pool containing the trading pair
@@ -203,7 +203,7 @@ public depositBase(
 
 **Function signature for `deposit_quote` in contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 /// 0. `[pool]` Object ID refers to the pool containing the trading pair
@@ -261,7 +261,7 @@ Ensure you have a custodian account with enough base/quote assets to trade. You 
 
 **Function signature for placing limit order in Move contract**
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
@@ -344,7 +344,7 @@ Placing a market order does not require a custodian account. The remaining order
 
 Function signature for placing market order in Move contract:
 
-```rust
+```move
 /// Parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
@@ -458,7 +458,7 @@ Cancel a limit order placed onto the CLOB. Abort if order_id is invalid or if th
 
 **Function signature for canceling single order in Move contract.**
 
-```rust
+```move
 /// parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
@@ -516,7 +516,7 @@ Cancel all limit orders under a certain account capacity
 
 **Function signature for canceling single order in Move contract.**
 
-```rust
+```move
 /// parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
@@ -568,7 +568,7 @@ For example, if we have the following order_id to price mapping, {0: 100., 1: 20
 
 **Function signature for batch cancel order.**
 
-```rust
+```move
 /// parameters expected by this func
 ///
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair

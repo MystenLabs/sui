@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::Limits,
+    config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
     types::{
         address::{Address, AddressTransactionBlockRelationship},
@@ -11,10 +11,11 @@ use crate::{
         big_int::BigInt,
         checkpoint::Checkpoint,
         coin::Coin,
+        coin_metadata::CoinMetadata,
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
-        dynamic_field::DynamicField,
+        dynamic_field::{DynamicField, DynamicFieldName},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
@@ -60,7 +61,7 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::{
-    coin_api::parse_to_type_tag,
+    coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
 use sui_json_rpc_types::{
@@ -71,26 +72,28 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     base_types::{MoveObjectType, ObjectID},
+    coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
     effects::TransactionEffects,
     event::EventID,
-    gas_coin::GAS,
+    gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
+    object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
-    Identifier,
+    Identifier, TypeTag,
 };
 
-use super::{db_backend::GenericQueryBuilder, DEFAULT_PAGE_SIZE};
+use super::db_backend::GenericQueryBuilder;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
@@ -119,6 +122,8 @@ pub enum DbValidationError {
     InvalidOwnerType,
     #[error("Query cost exceeded - cost: {0}, limit: {1}")]
     QueryCostExceeded(u64, u64),
+    #[error("Page size exceeded - requested: {0}, limit: {1}")]
+    PageSizeExceeded(u64, u64),
 }
 
 pub(crate) struct PgManager {
@@ -133,8 +138,15 @@ impl PgManager {
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
     pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
+        Self::reader_with_config(db_url, DEFAULT_SERVER_DB_POOL_SIZE)
+    }
+
+    pub(crate) fn reader_with_config(
+        db_url: impl Into<String>,
+        pool_size: u32,
+    ) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
-        config.set_pool_size(3);
+        config.set_pool_size(pool_size);
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
@@ -157,6 +169,14 @@ impl PgManager {
     ) -> Result<Option<StoredObject>, Error> {
         self.run_query_async_with_cost(
             move || Ok(QueryBuilder::get_obj(address.clone(), version)),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
+        )
+        .await
+    }
+
+    async fn get_obj_by_type(&self, object_type: String) -> Result<Option<StoredObject>, Error> {
+        self.run_query_async_with_cost(
+            move || Ok(QueryBuilder::get_obj_by_type(object_type.clone())),
             |query| move |conn| query.get_result::<StoredObject>(conn).optional(),
         )
         .await
@@ -214,22 +234,26 @@ impl PgManager {
         Ok(ChainIdentifier::from(digest))
     }
 
+    /// Fetches the coins owned by the address and filters them by the given coin type.
+    /// If no address is given, it fetches all available coin objects matching the coin type.
     async fn multi_get_coins(
         &self,
-        address: Vec<u8>,
+        address: Option<Vec<u8>>,
         coin_type: String,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
-
+        let coin_type = parse_to_type_tag(Some(coin_type))
+            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
+            .to_canonical_string(/* with_prefix */ true);
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
                 move || {
@@ -303,12 +327,13 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_tx_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+
         let mut after_tx_seq_num: Option<i64> = None;
         let mut before_tx_seq_num: Option<i64> = None;
         if let Some(filter) = &filter {
@@ -383,12 +408,12 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
@@ -425,12 +450,12 @@ impl PgManager {
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let query = move || {
             QueryBuilder::multi_get_objs(
@@ -531,6 +556,33 @@ impl PgManager {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn validate_page_limit(
+        &self,
+        first: Option<u64>,
+        last: Option<u64>,
+    ) -> Result<i64, Error> {
+        if let Some(f) = first {
+            if f > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(f, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        if let Some(l) = last {
+            if l > self.limits.max_page_size {
+                return Err(
+                    DbValidationError::PageSizeExceeded(l, self.limits.max_page_size).into(),
+                );
+            }
+        }
+
+        // TODO (wlmyng): even though we do not allow passing in both first and last,
+        // per the cursor connection specs, if both are provided, from the response,
+        // we need to take the first F from the left and then take the last L from the right.
+        Ok(first.or(last).unwrap_or(self.limits.default_page_size) as i64)
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
@@ -829,13 +881,8 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type_tag = parse_to_type_tag(coin_type);
-        if coin_type_tag.is_err() {
-            // The provided `coin_type` cannot be parsed to a type tag so return None here.
-            return Ok(None);
-        }
-        let coin_type = coin_type_tag
-            .unwrap()
+        let coin_type = parse_to_type_tag(coin_type)
+            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
             .to_canonical_string(/* with_prefix */ true);
         let result = self.get_balance(address, coin_type).await?;
 
@@ -893,16 +940,19 @@ impl PgManager {
         }
     }
 
+    /// Fetches all coins owned by the given address that match the given coin type.
+    /// If no address is given, then it will fetch all coin objects of the given type.
+    /// If no coin type is provided, it will use the default gas coin (SUI).
     pub(crate) async fn fetch_coins(
         &self,
-        address: SuiAddress,
+        address: Option<SuiAddress>,
         coin_type: Option<String>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>, Error> {
-        let address = address.into_vec();
+        let address = address.map(|addr| addr.into_vec());
         let coin_type = coin_type.unwrap_or_else(|| {
             GAS::type_().to_canonical_string(/* with_prefix */ true)
         });
@@ -1181,7 +1231,7 @@ impl PgManager {
         };
 
         let descending_order = before.is_some();
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as usize;
+        let limit = self.validate_page_limit(first, last)? as usize;
         let cursor = after
             .or(before)
             .map(|c| self.parse_event_cursor(c))
@@ -1275,8 +1325,106 @@ impl PgManager {
                 },
             ));
         }
-
         Ok(Some(connection))
+    }
+
+    pub(crate) async fn fetch_dynamic_field(
+        &self,
+        address: SuiAddress,
+        name: DynamicFieldName,
+        kind: DynamicFieldType,
+    ) -> Result<Option<DynamicField>, Error> {
+        let name_bcs_value = &name.bcs.0;
+        let parent_object_id =
+            ObjectID::from_bytes(address.as_slice()).map_err(|e| Error::Client(e.to_string()))?;
+        let mut type_tag =
+            TypeTag::from_str(&name.type_).map_err(|e| Error::Client(e.to_string()))?;
+
+        if kind == DynamicFieldType::DynamicObject {
+            let dynamic_object_field_struct =
+                sui_types::dynamic_field::DynamicFieldInfo::dynamic_object_field_wrapper(type_tag);
+            type_tag = TypeTag::Struct(Box::new(dynamic_object_field_struct));
+        }
+
+        let id = sui_types::dynamic_field::derive_dynamic_field_id(
+            parent_object_id,
+            &type_tag,
+            name_bcs_value,
+        )
+        .map_err(|e| Error::Internal(format!("Deriving dynamic field id cannot fail: {e}")))?;
+
+        let stored_obj = self.get_obj(id.to_vec(), None).await?;
+        if let Some(stored_object) = stored_obj {
+            let df_object_id = stored_object.df_object_id.as_ref().ok_or_else(|| {
+                Error::Internal("Dynamic field does not have df_object_id".to_string())
+            })?;
+            let df_object_id =
+                SuiAddress::from_bytes(df_object_id).map_err(|e| Error::Internal(e.to_string()))?;
+            return Ok(Some(DynamicField {
+                stored_object,
+                df_object_id,
+                df_kind: kind,
+            }));
+        }
+        Ok(None)
+    }
+    pub(crate) async fn fetch_coin_metadata(
+        &self,
+        coin_type: String,
+    ) -> Result<Option<CoinMetadata>, Error> {
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+
+        let coin_metadata_type =
+            NativeCoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
+
+        let Some(coin_metadata) = self.get_obj_by_type(coin_metadata_type).await? else {
+            return Ok(None);
+        };
+
+        let object = Object::try_from(coin_metadata)?;
+        let move_object = MoveObject::try_from(&object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not an object.",
+                object.address,
+            ))
+        })?;
+
+        let coin_metadata_object = CoinMetadata::try_from(&move_object).map_err(|_| {
+            Error::Internal(format!(
+                "Expected {} to be coin metadata, but it is not.",
+                object.address,
+            ))
+        })?;
+
+        Ok(Some(coin_metadata_object))
+    }
+
+    pub(crate) async fn fetch_total_supply(&self, coin_type: String) -> Result<Option<u64>, Error> {
+        let coin_struct =
+            parse_to_struct_tag(&coin_type).map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+
+        let supply = if GAS::is_gas(&coin_struct) {
+            TOTAL_SUPPLY_SUI
+        } else {
+            let treasury_cap_type =
+                TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
+
+            let Some(treasury_cap) = self.get_obj_by_type(treasury_cap_type).await? else {
+                return Ok(None);
+            };
+
+            let native_object = NativeObject::try_from(treasury_cap)?;
+            let object_id = native_object.id();
+            let treasury_cap_object = TreasuryCap::try_from(native_object).map_err(|e| {
+                Error::Internal(format!(
+                    "Error while deserializing treasury cap object {object_id}: {e}"
+                ))
+            })?;
+            treasury_cap_object.total_supply.value
+        };
+
+        Ok(Some(supply))
     }
 }
 

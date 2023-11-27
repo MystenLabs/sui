@@ -97,7 +97,7 @@ async fn main() -> Result<(), IndexerError> {
             return IndexerV2::start_reader(&indexer_config, &registry, db_url).await;
         } else if indexer_config.analytical_worker {
             let store = PgIndexerAnalyticalStore::new(blocking_cp);
-            return IndexerV2::start_analytical_worker(store).await;
+            return IndexerV2::start_analytical_worker(store, indexer_metrics.clone()).await;
         } else {
             panic!("No worker is specified");
         }

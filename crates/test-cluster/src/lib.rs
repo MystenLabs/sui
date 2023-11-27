@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_config::node::DBCheckpointConfig;
+use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -654,6 +654,7 @@ pub struct TestClusterBuilder {
     jwk_fetch_interval: Option<Duration>,
     config_dir: Option<PathBuf>,
     default_jwks: bool,
+    overload_threshold_config: Option<OverloadThresholdConfig>,
 }
 
 impl TestClusterBuilder {
@@ -673,6 +674,7 @@ impl TestClusterBuilder {
             jwk_fetch_interval: None,
             config_dir: None,
             default_jwks: false,
+            overload_threshold_config: None,
         }
     }
 
@@ -811,6 +813,12 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
+        assert!(self.network_config.is_none());
+        self.overload_threshold_config = Some(config);
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
@@ -899,6 +907,10 @@ impl TestClusterBuilder {
 
         if let Some(network_config) = self.network_config.take() {
             builder = builder.with_network_config(network_config);
+        }
+
+        if let Some(overload_threshold_config) = self.overload_threshold_config.take() {
+            builder = builder.with_overload_threshold_config(overload_threshold_config);
         }
 
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {

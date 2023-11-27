@@ -268,6 +268,7 @@ impl Cluster for LocalNewCluster {
                 options.pg_address.clone(),
                 None,
                 None,
+                None,
             );
 
             start_graphql_server(graphql_connection_config.clone()).await;

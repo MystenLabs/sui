@@ -65,7 +65,7 @@ use sui_types::{
 };
 use sui_types::{
     randomness_state::get_randomness_state_obj_initial_shared_version,
-    storage::{get_module, PackageObjectArc},
+    storage::{get_module, PackageObject},
 };
 use tracing::{error, info, warn};
 
@@ -1725,7 +1725,7 @@ impl LocalExec {
 impl BackingPackageStore for LocalExec {
     /// In this case we might need to download a dependency package which was not present in the
     /// modified at versions list because packages are immutable
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         fn inner(self_: &LocalExec, package_id: &ObjectID) -> SuiResult<Option<Object>> {
             // If package not present fetch it from the network
             self_
@@ -1741,7 +1741,7 @@ impl BackingPackageStore for LocalExec {
                 package_id: *package_id,
                 result: res.clone(),
             });
-        res.map(|o| o.map(PackageObjectArc::new))
+        res.map(|o| o.map(PackageObject::new))
     }
 }
 

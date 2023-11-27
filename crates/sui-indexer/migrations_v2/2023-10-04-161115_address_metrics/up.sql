@@ -27,3 +27,4 @@ CREATE TABLE address_metrics
     cumulative_active_addresses BIGINT  NOT NULL,
     daily_active_addresses      BIGINT  NOT NULL
 );
+CREATE INDEX address_metrics_epoch_idx ON address_metrics (epoch);

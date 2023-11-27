@@ -13,7 +13,7 @@ use tempfile::NamedTempFile;
 use toml::value::Value;
 use toml_edit::{Item::Value as EItem, Value as EValue};
 
-use crate::BuildConfig;
+use move_compiler::editions::{Edition, Flavor};
 
 use super::LockFile;
 
@@ -66,13 +66,13 @@ pub struct Dependency {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CompilerToolchain {
+pub struct ToolchainVersion {
     /// The Move compiler version used to compile this package.
     #[serde(rename = "compiler-version")]
     pub compiler_version: String,
-    /// The Move compiler flags used to compile this package.
-    #[serde(rename = "compiler-flags")]
-    pub compiler_flags: BuildConfig,
+    /// The Move compiler configuration used to compile this package.
+    pub edition: Edition,
+    pub flavor: Flavor,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -107,6 +107,28 @@ impl Packages {
             toml::de::from_str::<Schema<Packages>>(&contents).context("Deserializing packages")?;
 
         Ok((packages, read_header(&contents)?))
+    }
+}
+
+impl ToolchainVersion {
+    /// Read toolchain version info from the lock file. Returns successfully with None if
+    /// parsing the lock file succeeds but an entry for `[toolchain-version]` does not exist.
+    pub fn read(lock: &mut impl Read) -> Result<Option<ToolchainVersion>> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+
+        #[derive(Deserialize)]
+        struct TV {
+            #[serde(rename = "toolchain-version")]
+            toolchain_version: Option<ToolchainVersion>,
+        }
+        let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
+            .context("Deserializing toolchain version")?;
+
+        Ok(value.toolchain_version)
     }
 }
 
@@ -155,17 +177,20 @@ pub(crate) fn write_prologue(
 pub fn update_compiler_toolchain(
     file: &mut LockFile,
     compiler_version: String,
-    build_config: &BuildConfig,
+    edition: Edition,
+    flavor: Flavor,
 ) -> Result<()> {
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
     file.seek(SeekFrom::Start(0))?;
     let mut toml = toml_string.parse::<toml_edit::Document>()?;
     let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
-    move_table["compiler-version"] = toml_edit::value(compiler_version);
-    let compiler_flags = toml::Value::try_from(build_config)?;
-    let compiler_flags = to_toml_edit_value(&compiler_flags);
-    move_table["compiler-flags"] = compiler_flags;
+    let toolchain_version = toml::Value::try_from(ToolchainVersion {
+        compiler_version,
+        edition,
+        flavor,
+    })?;
+    move_table["toolchain-version"] = to_toml_edit_value(&toolchain_version);
     write!(file, "{}", toml)?;
     file.flush()?;
     Ok(())

@@ -85,7 +85,7 @@ module examples::gem {
         );
 
         // create a `TokenPolicy` for GEMs
-        let (policy, cap) = token::new(&treasury_cap, ctx);
+        let (policy, cap) = token::new_policy(&treasury_cap, ctx);
 
         token::allow(&mut policy, &cap, buy_action(), ctx);
         token::allow(&mut policy, &cap, token::spend_action(), ctx);

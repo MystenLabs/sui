@@ -3,10 +3,11 @@
 
 import { Text } from '_app/shared/text';
 import {
-	SocialFacebook24 as FacebookLogo,
-	SocialGoogle24 as GoogleLogo,
-	SocialMicrosoft24 as MicrosoftLogo,
-	SocialTwitch24 as TwitchLogo,
+	SocialFacebook24,
+	SocialGoogle24,
+	SocialKakao24,
+	SocialMicrosoft24,
+	SocialTwitch24,
 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { forwardRef, type FunctionComponent, type Ref, type SVGProps } from 'react';
@@ -23,6 +24,7 @@ const styles = cva(
 				google: 'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
 				facebook: 'bg-facebook border-none text-white',
 				twitch: 'bg-twitch border-none text-white',
+				kakao: 'bg-kakao border-none text-black/85',
 			},
 		},
 	},
@@ -42,20 +44,24 @@ const socialSignInProviderInfo: Record<
 	{ icon: FunctionComponent<SVGProps<SVGSVGElement>>; label: string }
 > = {
 	microsoft: {
-		icon: MicrosoftLogo,
+		icon: SocialMicrosoft24,
 		label: 'Sign in with Microsoft',
 	},
 	google: {
-		icon: GoogleLogo,
+		icon: SocialGoogle24,
 		label: 'Sign in with Google',
 	},
 	facebook: {
-		icon: FacebookLogo,
+		icon: SocialFacebook24,
 		label: 'Sign in with Facebook',
 	},
 	twitch: {
-		icon: TwitchLogo,
+		icon: SocialTwitch24,
 		label: 'Sign in with Twitch',
+	},
+	kakao: {
+		icon: SocialKakao24,
+		label: 'Sign in with Kakao',
 	},
 };
 

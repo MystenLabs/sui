@@ -1,0 +1,9 @@
+[package]
+name = "sod"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+
+[addresses]
+sod =  "0x0"

@@ -104,7 +104,7 @@ impl TransactionInputLoader {
 
             input_results[index] = Some(ObjectReadResult {
                 input_object_kind: input_object_kinds[index],
-                object: ObjectReadResultKind::Object(Arc::new(object)),
+                object: ObjectReadResultKind::Object(object),
             });
         }
 

@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { ExecuteTransactionBlockParams, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { fromB64 } from '@mysten/sui.js/utils';
+import type { TransactionBlock } from '@mysten/sui.js/transactions';
+import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 import { decodeJwt } from 'jose';
 import type { WritableAtom } from 'nanostores';
@@ -49,12 +51,13 @@ export interface ZkLoginSession {
 
 export type AuthProvider = 'google' | 'facebook' | 'twitch';
 
-const STORAGE_KEYS = {
-	STATE: '@enoki/flow/state',
-	SESSION: '@enoki/flow/session',
-};
+const createStorageKeys = (apiKey: string) => ({
+	STATE: `@enoki/flow/state/${apiKey}`,
+	SESSION: `@enoki/flow/session/${apiKey}`,
+});
 
 export class EnokiFlow {
+	#storageKeys: { STATE: string; SESSION: string };
 	#enokiClient: EnokiClient;
 	#encryption: Encryption;
 	#encryptionKey: string;
@@ -73,10 +76,11 @@ export class EnokiFlow {
 		this.#encryptionKey = config.apiKey;
 		this.#encryption = config.encryption ?? createDefaultEncryption();
 		this.#store = config.store ?? createSessionStorage();
+		this.#storageKeys = createStorageKeys(config.apiKey);
 
 		let storedState = null;
 		try {
-			const rawStoredValue = this.#store.get(STORAGE_KEYS.STATE);
+			const rawStoredValue = this.#store.get(this.#storageKeys.STATE);
 			if (rawStoredValue) {
 				storedState = JSON.parse(rawStoredValue);
 			}
@@ -90,7 +94,7 @@ export class EnokiFlow {
 		this.#zkLoginSession = null;
 
 		onSet(this.$zkLoginState, ({ newValue }) => {
-			this.#store.set(STORAGE_KEYS.STATE, JSON.stringify(newValue));
+			this.#store.set(this.#storageKeys.STATE, JSON.stringify(newValue));
 		});
 	}
 
@@ -206,9 +210,9 @@ export class EnokiFlow {
 				JSON.stringify(newValue),
 			);
 
-			this.#store.set(STORAGE_KEYS.SESSION, storedValue);
+			this.#store.set(this.#storageKeys.SESSION, storedValue);
 		} else {
-			this.#store.delete(STORAGE_KEYS.SESSION);
+			this.#store.delete(this.#storageKeys.SESSION);
 		}
 
 		this.#zkLoginSession = newValue;
@@ -220,7 +224,7 @@ export class EnokiFlow {
 		}
 
 		try {
-			const storedValue = this.#store.get(STORAGE_KEYS.SESSION);
+			const storedValue = this.#store.get(this.#storageKeys.SESSION);
 			if (!storedValue) return null;
 
 			const state: ZkLoginSession = JSON.parse(
@@ -243,7 +247,7 @@ export class EnokiFlow {
 
 	async logout() {
 		this.$zkLoginState.set({});
-		this.#store.delete(STORAGE_KEYS.STATE);
+		this.#store.delete(this.#storageKeys.STATE);
 
 		await this.#setSession(null);
 	}
@@ -283,10 +287,10 @@ export class EnokiFlow {
 	}
 
 	async getKeypair() {
-		const zkp = await this.getSession();
-
 		// Get the proof, so that we ensure it exists in state:
 		await this.getProof();
+
+		const zkp = await this.getSession();
 
 		// Check to see if we have the essentials for a keypair:
 		const { address } = this.$zkLoginState.get();
@@ -303,6 +307,47 @@ export class EnokiFlow {
 			maxEpoch: zkp.maxEpoch,
 			proof: zkp.proof,
 			ephemeralKeypair: Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair)),
+		});
+	}
+
+	async sponsorAndExecuteTransactionBlock({
+		network,
+		transactionBlock,
+		client,
+		...options
+	}: {
+		network?: 'mainnet' | 'testnet';
+		transactionBlock: TransactionBlock;
+		client: SuiClient;
+	} & Omit<ExecuteTransactionBlockParams, 'signature' | 'transactionBlock'>) {
+		const session = await this.getSession();
+		const keypair = await this.getKeypair();
+
+		const transactionBlockKindBytes = await transactionBlock.build({
+			onlyTransactionKind: true,
+			client,
+			// Theses limits will get verified during the final transaction construction, so we can safely ignore them here:
+			limits: {
+				maxGasObjects: Infinity,
+				maxPureArgumentSize: Infinity,
+				maxTxGas: Infinity,
+				maxTxSizeBytes: Infinity,
+			},
+		});
+
+		const { bytes, signature: sponsorSignature } =
+			await this.#enokiClient.createSponsoredTransactionBlock({
+				jwt: session!.jwt!,
+				network,
+				transactionBlockKindBytes: toB64(transactionBlockKindBytes),
+			});
+
+		const userSignature = await keypair.signTransactionBlock(fromB64(bytes));
+
+		return client.executeTransactionBlock({
+			transactionBlock: bytes,
+			signature: [userSignature.signature, sponsorSignature],
+			...options,
 		});
 	}
 }

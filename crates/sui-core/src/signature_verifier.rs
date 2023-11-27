@@ -17,7 +17,6 @@ use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
-use sui_types::signature::GenericSignature;
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
@@ -135,14 +134,17 @@ impl SignatureVerifier {
             committee,
             certificate_cache: VerifiedDigestCache::new(
                 metrics.certificate_signatures_cache_hits.clone(),
+                metrics.certificate_signatures_cache_misses.clone(),
                 metrics.certificate_signatures_cache_evictions.clone(),
             ),
             signed_data_cache: VerifiedDigestCache::new(
                 metrics.signed_data_cache_hits.clone(),
+                metrics.signed_data_cache_misses.clone(),
                 metrics.signed_data_cache_evictions.clone(),
             ),
             zklogin_inputs_cache: VerifiedDigestCache::new(
                 metrics.zklogin_inputs_cache_hits.clone(),
+                metrics.zklogin_inputs_cache_misses.clone(),
                 metrics.zklogin_inputs_cache_evictions.clone(),
             ),
             jwks: Default::default(),
@@ -359,34 +361,28 @@ impl SignatureVerifier {
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
                 );
-                signed_tx
-                    .tx_signatures()
-                    .iter()
-                    .try_for_each(|sig| match sig {
-                        // If a zkLogin signature is found, check cache first. If it is in
-                        // the cache, just verifies for uncached checks, otherwise verifies
-                        // the entire zkLogin signature.
-                        GenericSignature::ZkLoginAuthenticator(z) => {
-                            self.zklogin_inputs_cache.is_verified(
-                                z.hash_inputs(),
-                                || signed_tx.verify_message_signature(&verify_params),
-                                || signed_tx.verify_uncached_checks(&verify_params),
-                            )
-                        }
-                        _ => signed_tx.verify_message_signature(&verify_params),
-                    })
+                signed_tx.verify_message_signature(&verify_params)
             },
             || Ok(()),
         )
+    }
+
+    pub fn clear_signature_cache(&self) {
+        self.certificate_cache.clear();
+        self.signed_data_cache.clear();
+        self.zklogin_inputs_cache.clear();
     }
 }
 
 pub struct SignatureVerifierMetrics {
     pub certificate_signatures_cache_hits: IntCounter,
+    pub certificate_signatures_cache_misses: IntCounter,
     pub certificate_signatures_cache_evictions: IntCounter,
     pub signed_data_cache_hits: IntCounter,
+    pub signed_data_cache_misses: IntCounter,
     pub signed_data_cache_evictions: IntCounter,
     pub zklogin_inputs_cache_hits: IntCounter,
+    pub zklogin_inputs_cache_misses: IntCounter,
     pub zklogin_inputs_cache_evictions: IntCounter,
     timeouts: IntCounter,
     full_batches: IntCounter,
@@ -404,6 +400,12 @@ impl SignatureVerifierMetrics {
                 registry
             )
             .unwrap(),
+            certificate_signatures_cache_misses: register_int_counter_with_registry!(
+                "certificate_signatures_cache_misses",
+                "Number of certificates which missed the signature cache",
+                registry
+            )
+            .unwrap(),
             certificate_signatures_cache_evictions: register_int_counter_with_registry!(
                 "certificate_signatures_cache_evictions",
                 "Number of times we evict a pre-existing key were known to be verified because of signature cache.",
@@ -415,7 +417,13 @@ impl SignatureVerifierMetrics {
                 "Number of signed data which were known to be verified because of signature cache.",
                 registry
             )
-                .unwrap(),
+            .unwrap(),
+            signed_data_cache_misses: register_int_counter_with_registry!(
+                "signed_data_cache_misses",
+                "Number of signed data which missed the signature cache.",
+                registry
+            )
+            .unwrap(),
             signed_data_cache_evictions: register_int_counter_with_registry!(
                 "signed_data_cache_evictions",
                 "Number of times we evict a pre-existing signed data were known to be verified because of signature cache.",
@@ -425,6 +433,12 @@ impl SignatureVerifierMetrics {
                 zklogin_inputs_cache_hits: register_int_counter_with_registry!(
                     "zklogin_inputs_cache_hits",
                     "Number of zklogin signature which were known to be partially verified because of zklogin inputs cache.",
+                    registry
+                )
+                .unwrap(),
+                zklogin_inputs_cache_misses: register_int_counter_with_registry!(
+                    "zklogin_inputs_cache_misses",
+                    "Number of zklogin signatures which missed the zklogin inputs cache.",
                     registry
                 )
                 .unwrap(),
@@ -541,16 +555,22 @@ const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
 pub struct VerifiedDigestCache<D> {
     inner: RwLock<LruCache<D, ()>>,
     cache_hits_counter: IntCounter,
+    cache_misses_counter: IntCounter,
     cache_evictions_counter: IntCounter,
 }
 
 impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
-    pub fn new(cache_hits_counter: IntCounter, cache_evictions_counter: IntCounter) -> Self {
+    pub fn new(
+        cache_hits_counter: IntCounter,
+        cache_misses_counter: IntCounter,
+        cache_evictions_counter: IntCounter,
+    ) -> Self {
         Self {
             inner: RwLock::new(LruCache::new(
                 std::num::NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
             )),
             cache_hits_counter,
+            cache_misses_counter,
             cache_evictions_counter,
         }
     }
@@ -561,6 +581,7 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
             self.cache_hits_counter.inc();
             true
         } else {
+            self.cache_misses_counter.inc();
             false
         }
     }
@@ -598,5 +619,10 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
             uncached_checks()?;
         }
         Ok(())
+    }
+
+    pub fn clear(&self) {
+        let mut inner = self.inner.write();
+        inner.clear();
     }
 }

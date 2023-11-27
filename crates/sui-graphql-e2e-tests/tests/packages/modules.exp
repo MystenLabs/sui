@@ -1,0 +1,266 @@
+processed 6 tasks
+
+task 1 'publish'. lines 6-31:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 33-33:
+Checkpoint created: 1
+
+task 3 'run-graphql'. lines 35-68:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "location": "0x168e8bf1317ef81399ea9fabee9e217067a257731903b45ca4915c8d049b3940",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81",
+                  "asMovePackage": {
+                    "module": {
+                      "moduleId": {
+                        "name": "m",
+                        "package": {
+                          "asObject": {
+                            "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81"
+                          }
+                        }
+                      },
+                      "fileFormatVersion": 6,
+                      "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZS+Gvnqe/W2z1yKaxIcZHbAghOomG2YTX3WHPdHAmyyBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+                      "disassembly": "// Move bytecode v6\nmodule 2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\n\n\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n}"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 4 'run-graphql'. lines 70-102:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "location": "0x168e8bf1317ef81399ea9fabee9e217067a257731903b45ca4915c8d049b3940",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81",
+                  "asMovePackage": {
+                    "all": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "m"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "o"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": false,
+                        "hasPreviousPage": false
+                      }
+                    },
+                    "after": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "o"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": false,
+                        "hasPreviousPage": true
+                      }
+                    },
+                    "before": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "m"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": true,
+                        "hasPreviousPage": false
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5 'run-graphql'. lines 104-139:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": [
+              {
+                "outputState": {
+                  "location": "0x168e8bf1317ef81399ea9fabee9e217067a257731903b45ca4915c8d049b3940",
+                  "asMovePackage": null
+                }
+              },
+              {
+                "outputState": {
+                  "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81",
+                  "asMovePackage": {
+                    "prefix": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": true,
+                        "hasPreviousPage": true
+                      }
+                    },
+                    "prefixAll": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "o"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": false,
+                        "hasPreviousPage": true
+                      }
+                    },
+                    "prefixExcess": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "o"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": false,
+                        "hasPreviousPage": true
+                      }
+                    },
+                    "suffix": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": true,
+                        "hasPreviousPage": true
+                      }
+                    },
+                    "suffixAll": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "m"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": true,
+                        "hasPreviousPage": false
+                      }
+                    },
+                    "suffixExcess": {
+                      "nodes": [
+                        {
+                          "moduleId": {
+                            "name": "m"
+                          }
+                        },
+                        {
+                          "moduleId": {
+                            "name": "n"
+                          }
+                        }
+                      ],
+                      "pageInfo": {
+                        "hasNextPage": true,
+                        "hasPreviousPage": false
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

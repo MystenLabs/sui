@@ -6,7 +6,7 @@ Sui indexer is an off-fullnode service to serve data from Sui protocol, includin
 
 ## Steps to run locally
 ### Prerequisites
-- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgres@version` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc: 
+- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgresql@version` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc:
 ```sh
 export LDFLAGS="-L/opt/homebrew/opt/postgresql@15/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@15/include"
@@ -17,6 +17,13 @@ export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"
 - install Diesel CLI with `cargo install diesel_cli --no-default-features --features postgres`, refer to [Diesel Getting Started guide](https://diesel.rs/guides/getting-started) for more details
 - [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.
 
+### Start the Postgres Service
+
+Postgres must run as a service in the background for other tools to communicate with.  If it was installed using homebrew, it can be started as a service with:
+
+``` sh
+brew services start postgresql@version
+```
 
 ### Local Development(Recommended)
 

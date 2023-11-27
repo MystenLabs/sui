@@ -22,6 +22,7 @@ enum DebugCommand {
     Breakpoint(String),
     DeleteBreakpoint(String),
     PrintBreakpoints,
+    Help,
 }
 
 impl DebugCommand {
@@ -33,6 +34,7 @@ impl DebugCommand {
             Self::Breakpoint(_) => "breakpoint ",
             Self::DeleteBreakpoint(_) => "delete ",
             Self::PrintBreakpoints => "breakpoints",
+            Self::Help => "help",
         }
     }
 
@@ -44,6 +46,7 @@ impl DebugCommand {
             Self::Breakpoint("".to_string()),
             Self::DeleteBreakpoint("".to_string()),
             Self::PrintBreakpoints,
+            Self::Help,
         ]
     }
 }
@@ -71,6 +74,9 @@ impl FromStr for DebugCommand {
         if s.starts_with(PrintBreakpoints.debug_string()) {
             return Ok(PrintBreakpoints);
         }
+        if s.starts_with(Help.debug_string()) {
+            return Ok(Help);
+        }
         Err(format!(
             "Unrecognized command: {}\nAvailable commands: {}",
             s,
@@ -97,6 +103,21 @@ impl DebugContext {
         }
     }
 
+    fn delete_breakpoint_at_index(&mut self, breakpoint: &str) {
+        let index = breakpoint
+            .strip_prefix("at_index")
+            .unwrap()
+            .trim()
+            .parse::<usize>()
+            .unwrap();
+        self.breakpoints = self
+            .breakpoints
+            .iter()
+            .enumerate()
+            .filter_map(|(i, bp)| if i != index { Some(bp.clone()) } else { None })
+            .collect();
+    }
+
     pub(crate) fn debug_loop(
         &mut self,
         function_desc: &Function,
@@ -107,22 +128,20 @@ impl DebugContext {
         interp: &Interpreter,
     ) {
         let instr_string = format!("{:?}", instr);
-        let function_string = function_desc.pretty_string();
-        let breakpoint_hit = self.breakpoints.contains(&function_string)
-            || self
-                .breakpoints
-                .iter()
-                .any(|bp| instr_string[..].starts_with(bp.as_str()));
-
-        if self.should_take_input || breakpoint_hit {
-            self.should_take_input = true;
-            if breakpoint_hit {
-                let bp_match = self
-                    .breakpoints
+        let function_string = function_desc.pretty_short_string();
+        let breakpoint_hit = self
+            .breakpoints
+            .get(&function_string)
+            .or_else(|| {
+                self.breakpoints
                     .iter()
-                    .find(|bp| instr_string.starts_with(bp.as_str()))
-                    .unwrap()
-                    .clone();
+                    .find(|bp| instr_string[..].starts_with(bp.as_str()))
+            })
+            .or_else(|| self.breakpoints.get(&pc.to_string()));
+
+        if self.should_take_input || breakpoint_hit.is_some() {
+            self.should_take_input = true;
+            if let Some(bp_match) = breakpoint_hit {
                 println!(
                     "Breakpoint {} hit with instruction {}",
                     bp_match, instr_string
@@ -152,7 +171,11 @@ impl DebugContext {
                                 self.breakpoints.insert(breakpoint.to_string());
                             }
                             DebugCommand::DeleteBreakpoint(breakpoint) => {
-                                self.breakpoints.remove(&breakpoint);
+                                if breakpoint.starts_with("at_index") {
+                                    self.delete_breakpoint_at_index(&breakpoint);
+                                } else {
+                                    self.breakpoints.remove(&breakpoint);
+                                }
                             }
                             DebugCommand::PrintBreakpoints => self
                                 .breakpoints
@@ -181,6 +204,22 @@ impl DebugContext {
                                 } else {
                                     println!("            (none)");
                                 }
+                            }
+                            DebugCommand::Help => {
+                                println!(
+                                    "Available commands:\n\
+                                    \tstack: print the current state of the call and value stacks\n\
+                                    \tstep: step forward one instruction\n\
+                                    \tcontinue: continue execution until the next breakpoint\n\
+                                    \tbreakpoint <string>:\n\
+                                    \t\t1. set a breakpoint at the given bytecode instruction that starts with <string>, e.g., Call or CallGeneric\n\
+                                    \t\t2. set a breakpoint at the function that matches <string>, e.g., 0x2::vector::pop_back\n\
+                                    \t\t3. set a breakpoint at the given code offset, e.g., 10 will stop execution if a code offset of 10 is encountered\n\
+                                    \tbreakpoints: print all set breakpoints\n\
+                                    \tdelete at_index <int>: delete the breakpoint at index <int> in the set breakpoints\n\
+                                    \tdelete <string>: delete the breakpoint matching <string>\n\
+                                    \thelp: print this help message"
+                                );
                             }
                         },
                     },
