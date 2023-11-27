@@ -336,6 +336,27 @@ module sui::kiosk {
         dof::remove(&mut self.id, Item { id })
     }
 
+    /// Take a locked item from the Kiosk and issue a `TransferRequest` for it.
+    /// The `TransferRequest` has `amount` equal to `0`.
+    ///
+    /// The procedure is identical to listing for 0 and purchasing.
+    public fun take_locked<T: key + store>(
+        self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
+    ): (T, TransferRequest<T>) {
+        assert!(has_access(self, cap), ENotOwner);
+        assert!(is_locked(self, id), EItemLocked);
+        assert!(has_item(self, id), EItemNotFound);
+        assert!(!is_listed_exclusively(self, id), EListedExclusively);
+
+        self.item_count = self.item_count - 1;
+        df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
+        df::remove_if_exists<Lock, bool>(&mut self.id, Lock { id });
+
+        let item = dof::remove(&mut self.id, Item { id });
+
+        (item, transfer_policy::new_request(id, 0, object::id(self)))
+    }
+
     // === Trading functionality: List and Purchase ===
 
     /// List the item by setting a price and making it available for purchase.
