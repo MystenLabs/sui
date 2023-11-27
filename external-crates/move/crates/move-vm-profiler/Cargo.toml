@@ -10,7 +10,6 @@ edition = "2021"
 serde.workspace = true
 serde_json.workspace = true
 once_cell.workspace = true
-sui-tool = { workspace = true, features = ["gas-profiler"] }
 
 move-vm-config.workspace = true
 

@@ -22,7 +22,7 @@ pub struct VMConfig {
     pub check_no_extraneous_bytes_during_deserialization: bool,
     // Configs for profiling VM
     #[cfg(feature = "gas-profiler")]
-    pub profiler_config: VMProfilerConfig,
+    pub profiler_config: Option<VMProfilerConfig>,
     // When this flag is set to true, errors from the VM will be augmented with execution state
     // (stacktrace etc.)
     pub error_execution_state: bool,
@@ -37,7 +37,7 @@ impl Default for VMConfig {
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: false,
             #[cfg(feature = "gas-profiler")]
-            profiler_config: VMProfilerConfig::default(),
+            profiler_config: None,
             error_execution_state: true,
         }
     }
@@ -63,12 +63,9 @@ impl Default for VMRuntimeLimitsConfig {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "gas-profiler")]
 #[derive(Clone, Debug)]
 pub struct VMProfilerConfig {
-    pub enabled: bool,
-    /// Base path for files
-    pub base_path: std::path::PathBuf,
     /// User configured full path override
     pub full_path: Option<std::path::PathBuf>,
     /// Whether or not to track bytecode instructions
@@ -81,8 +78,6 @@ pub struct VMProfilerConfig {
 impl std::default::Default for VMProfilerConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            base_path: std::path::PathBuf::from("."),
             full_path: None,
             track_bytecode_instructions: false,
             use_long_function_name: false,

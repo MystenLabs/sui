@@ -28,7 +28,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     use move_vm_profiler::GasProfiler;
     use move_vm_runtime::native_extensions::NativeContextExtensions;
     use move_vm_runtime::{
@@ -36,7 +36,7 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::data_store::DataStore;
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "gas-profiler")]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
     use move_vm_types::values::GlobalValue;
@@ -197,7 +197,7 @@ mod checked {
             );
 
             // Set the profiler if in debug mode
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "gas-profiler")]
             {
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =

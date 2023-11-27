@@ -647,7 +647,7 @@ pub enum SuiClientCommands {
         address_override: Option<ObjectID>,
     },
 
-    /// Profile the gas usage of a transaction. Outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
+    /// Profile the gas usage of a transaction. If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
     #[clap(name = "profile-transaction")]
     ProfileTransaction {
         /// The digest of the transaction to replay
@@ -655,8 +655,8 @@ pub enum SuiClientCommands {
         tx_digest: String,
 
         /// If specified, overrides the filepath of the output profile, for example -- /temp/my_profile.json
-        #[clap(name = "profile_output_filepath")]
-        profile_output_filepath: Option<PathBuf>,
+        #[clap(name = "profile_output")]
+        profile_output: Option<PathBuf>,
     },
 
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
@@ -712,15 +712,15 @@ impl SuiClientCommands {
         let ret = Ok(match self {
             SuiClientCommands::ProfileTransaction {
                 tx_digest,
-                profile_output_filepath,
+                profile_output,
             } => {
                 let cmd = ReplayToolCommand::ProfileTransaction {
                     tx_digest,
                     show_effects: false,
                     diag: false,
-                    executor_version_override: None,
-                    protocol_version_override: None,
-                    profile_output_filepath_override: profile_output_filepath,
+                    executor_version: None,
+                    protocol_version: None,
+                    profile_output,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
@@ -737,8 +737,8 @@ impl SuiClientCommands {
                     tx_digest,
                     show_effects: true,
                     diag: false,
-                    executor_version_override: None,
-                    protocol_version_override: None,
+                    executor_version: None,
+                    protocol_version: None,
                 };
 
                 let rpc = context.config.get_active_env()?.rpc.clone();

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(feature = "gas-profiler")]
-use move_vm_config::runtime::VMProfilerConfig;
+use move_vm_config::runtime::{VMProfilerConfig, DEFAULT_PROFILE_OUTPUT_PATH};
 #[cfg(feature = "gas-profiler")]
 use once_cell::sync::Lazy;
 #[cfg(feature = "gas-profiler")]
@@ -70,7 +70,7 @@ pub struct GasProfiler {
     #[serde(skip)]
     pub start_gas: u64,
     #[serde(skip)]
-    pub config: VMProfilerConfig,
+    pub config: Option<VMProfilerConfig>,
     #[serde(skip)]
     finished: bool,
 }
@@ -83,7 +83,7 @@ impl GasProfiler {
 
     const TOP_LEVEL_FRAME_NAME: &'static str = "root";
 
-    pub fn init(config: &VMProfilerConfig, name: String, start_gas: u64) -> Self {
+    pub fn init(config: &Option<VMProfilerConfig>, name: String, start_gas: u64) -> Self {
         let mut prof = GasProfiler {
             exporter: "speedscope@1.15.2".to_string(),
             name: name.clone(),
@@ -154,7 +154,7 @@ impl GasProfiler {
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
-        if !(self.config.enabled || *PROFILER_ENABLED) || self.start_gas == 0 {
+        if !(self.config.is_some() || *PROFILER_ENABLED) || self.start_gas == 0 {
             return;
         }
 
@@ -169,7 +169,7 @@ impl GasProfiler {
     }
 
     pub fn close_frame(&mut self, frame_name: String, metadata: String, gas_end: u64) {
-        if !(self.config.enabled || *PROFILER_ENABLED) || self.start_gas == 0 {
+        if !(self.config.is_some() || *PROFILER_ENABLED) || self.start_gas == 0 {
             return;
         }
         let frame_idx = self.add_frame(metadata.clone(), frame_name, metadata);
@@ -184,11 +184,11 @@ impl GasProfiler {
     }
 
     pub fn to_file(&self) {
-        if !(self.config.enabled || *PROFILER_ENABLED) || !self.is_metered() {
+        if !(self.config.is_some() || *PROFILER_ENABLED) || !self.is_metered() {
             return;
         }
 
-        let mut p = self.config.base_path.clone();
+        let mut p = (*DEFAULT_PROFILE_OUTPUT_PATH.clone()).to_path_buf();
         if let Some(f) = &self.config.full_path {
             p = f.clone();
         } else {

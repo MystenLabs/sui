@@ -14,9 +14,10 @@ mod checked {
     use move_bytecode_verifier::meter::Meter;
     use move_bytecode_verifier::verify_module_with_config_metered;
     use move_core_types::account_address::AccountAddress;
-    use move_vm_config::runtime::VMProfilerConfig;
+    #[cfg(feature = "gas-profiler")]
+    use move_vm_config::runtime::{VMProfilerConfig, DEFAULT_PROFILE_OUTPUT_PATH};
     use move_vm_config::{
-        runtime::{VMConfig, VMRuntimeLimitsConfig, DEFAULT_PROFILE_OUTPUT_PATH},
+        runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
     };
     use move_vm_runtime::{
@@ -87,8 +88,22 @@ mod checked {
     pub fn new_move_vm(
         natives: NativeFunctionTable,
         protocol_config: &ProtocolConfig,
-        enable_profiler: Option<PathBuf>,
+        _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
+        #[cfg(feature = "gas-profiler")]
+        let vm_profiler_config = match _enable_profiler {
+            None => None,
+            Some => VMProfilerConfig {
+                full_path: _enable_profiler.filter(|p| {
+                    !matches!(
+                        p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
+                        Some(std::cmp::Ordering::Equal)
+                    )
+                }),
+                track_bytecode_instructions: false,
+                use_long_function_name: false,
+            },
+        };
         MoveVM::new_with_config(
             natives,
             VMConfig {
@@ -109,22 +124,7 @@ mod checked {
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,
                 #[cfg(feature = "gas-profiler")]
-                profiler_config: VMProfilerConfig {
-                    enabled: enable_profiler.is_some(),
-                    base_path: (*match enable_profiler {
-                        Some(ref p) => p.clone().to_path_buf(),
-                        None => std::path::PathBuf::from("."),
-                    })
-                    .to_owned(),
-                    full_path: enable_profiler.filter(|p| {
-                        !matches!(
-                            p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
-                            Some(std::cmp::Ordering::Equal)
-                        )
-                    }),
-                    track_bytecode_instructions: false,
-                    use_long_function_name: false,
-                },
+                profiler_config: vm_profiler_config,
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)

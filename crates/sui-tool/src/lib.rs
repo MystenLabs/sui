@@ -67,10 +67,6 @@ pub mod commands;
 pub mod db_tool;
 pub mod pkg_dump;
 
-#[cfg(feature = "enable-gas-profiler")]
-extern crate move-vm-profiler;
-
-
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
     genesis: Option<PathBuf>,
