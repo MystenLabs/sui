@@ -1,0 +1,29 @@
+processed 5 tasks
+
+task 1 'publish'. lines 6-12:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 14-15:
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::bang (function index 0) at offset 1, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("bang") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("P0::m::bang at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 1)] }), command: Some(0) } }
+
+task 3 'create-checkpoint'. lines 17-17:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 19-31:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Move Runtime Abort. Location: 9c2718c66ae46ab0923bc19f94e1cfbb19dd493316a9734976329e0da7a052d6::m::bang (function index 0) at offset 1, Abort Code: 42 in 1st command."
+          }
+        }
+      ]
+    }
+  }
+}
