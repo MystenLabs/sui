@@ -928,6 +928,7 @@ fn multisig_zklogin_scenarios() {
         ));
     }
     let inputs = kps_and_zklogin_inputs[0].1.clone();
+
     // pk consistent with the one in make_zklogin_tx
     let pk2 = PublicKey::ZkLogin(
         ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, DEFAULT_ADDRESS_SEED)
@@ -986,7 +987,7 @@ fn multisig_zklogin_scenarios() {
         .verify_authenticator(intent_msg, zklogin_addr, Some(10), &aux_verify_data)
         .is_err());
 
-    // zkLogin sig + traditional sig combined verifies.
+    // zkLogin sig + traditional sig combined verifies. see consistency test in /sdk/typescript/test/e2e/multisig.test.ts
     let multisig_2 =
         MultiSig::combine(vec![sig1.clone(), zklogin_sig.clone()], multisig_pk.clone()).unwrap();
     let generic_sig = GenericSignature::MultiSig(multisig_2.clone());
@@ -1054,13 +1055,15 @@ fn multisig_zklogin_scenarios() {
     let multisig = GenericSignature::MultiSig(
         MultiSig::combine(zklogin_sigs.clone(), multisig_pk.clone()).unwrap(),
     );
-    let serialized = multisig.as_ref();
-    let deserialized = GenericSignature::from_bytes(serialized).unwrap();
-    assert_eq!(deserialized, multisig);
 
     assert!(multisig
         .verify_authenticator(&msg, multisig_address, Some(10), &aux_verify_data)
         .is_ok());
+
+    // test consistent serde.
+    let serialized = multisig.as_ref();
+    let deserialized = GenericSignature::from_bytes(serialized).unwrap();
+    assert_eq!(deserialized, multisig);
 
     // test 10 out of 10 multisig with 9 zklogin authenticators fails.
     zklogin_sigs.remove(0);

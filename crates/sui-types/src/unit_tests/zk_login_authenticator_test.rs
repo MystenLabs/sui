@@ -60,7 +60,7 @@ fn zklogin_authenticator_jwk() {
         let addr = (&pk_zklogin).into();
         let tx_data = make_transaction_data(addr);
         let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
-        let eph_sig = Signature::new_secure(&msg, &kp).into();
+        let eph_sig = Signature::new_secure(&msg, &kp);
         let zklogin_inputs =
             ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
         let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
