@@ -8,6 +8,10 @@ import type {
 } from '@mysten/wallet-standard';
 import { getWallets, isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard';
 
+function isNotEnokiWallet(wallet: Wallet) {
+	return !('enoki:' in wallet.features);
+}
+
 export function getRegisteredWallets<AdditionalFeatures extends Wallet['features']>(
 	preferredWallets: string[],
 	requiredFeatures?: (keyof AdditionalFeatures)[],
@@ -17,7 +21,7 @@ export function getRegisteredWallets<AdditionalFeatures extends Wallet['features
 
 	const suiWallets = wallets.filter(
 		(wallet): wallet is WalletWithFeatures<MinimallyRequiredFeatures & AdditionalFeatures> =>
-			isWalletWithRequiredFeatureSet(wallet, requiredFeatures),
+			isNotEnokiWallet(wallet) && isWalletWithRequiredFeatureSet(wallet, requiredFeatures),
 	);
 
 	return [
