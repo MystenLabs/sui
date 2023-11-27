@@ -56,10 +56,22 @@ type Balance {
 	totalBalance: BigInt
 }
 
+"""
+Effects to the balance (sum of coin values per coin type) owned by an address or object.
+"""
 type BalanceChange {
+	"""
+	The address or object whose balance has changed.
+	"""
 	owner: Owner
-	amount: BigInt
+	"""
+	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
+	"""
 	coinType: MoveType
+	"""
+	The signed balance change.
+	"""
+	amount: BigInt
 }
 
 type BalanceConnection {
@@ -1687,6 +1699,10 @@ type TransactionBlockEffects {
 	The effect this transaction had on objects on-chain.
 	"""
 	objectChanges: [ObjectChange!]
+	"""
+	The effect this transaction had on the balances (sum of coin values per coin type) of
+	addresses and objects.
+	"""
 	balanceChanges: [BalanceChange!]
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.

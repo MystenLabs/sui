@@ -3,6 +3,7 @@
 
 pub(crate) mod address;
 pub(crate) mod balance;
+pub(crate) mod balance_change;
 pub(crate) mod base64;
 pub(crate) mod big_int;
 pub(crate) mod checkpoint;
