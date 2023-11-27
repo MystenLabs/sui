@@ -56,6 +56,9 @@ runs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash
+    - name: Build explorer
+      run: pnpm turbo --filter=sui-explorer build
+      shell: bash
     - name: Install Playwright Browsers
       run: pnpm explorer playwright install --with-deps chromium
       shell: bash
