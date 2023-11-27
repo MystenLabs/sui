@@ -195,6 +195,8 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 52
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
+poseidon_bn254_cost_per_block: 10
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
