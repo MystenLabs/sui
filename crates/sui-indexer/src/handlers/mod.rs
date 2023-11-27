@@ -36,7 +36,7 @@ pub struct TransactionObjectChangesToCommit {
     pub deleted_objects: Vec<ObjectRef>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EpochToCommit {
     pub last_epoch: Option<IndexedEpochInfo>,
     pub new_epoch: IndexedEpochInfo,

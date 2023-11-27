@@ -17,7 +17,7 @@ use crate::store::IndexerStoreV2;
 use crate::types_v2::IndexerResult;
 use crate::IndexerConfig;
 
-use super::CheckpointDataToCommit;
+use super::{CheckpointDataToCommit, EpochToCommit};
 
 pub async fn start_tx_checkpoint_commit_task<S>(
     state: S,
@@ -41,8 +41,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         .ready_chunks(checkpoint_commit_batch_size);
 
     while let Some(indexed_checkpoint_batch) = stream.next().await {
-        // TODO: don't batch checkpoints across epoch boundary (for partitioning management)
-        // impossible but as a safety check
         if indexed_checkpoint_batch.is_empty() {
             continue;
         }
@@ -54,7 +52,34 @@ pub async fn start_tx_checkpoint_commit_task<S>(
             );
             continue;
         }
-        commit_checkpoints(&state, indexed_checkpoint_batch, &metrics, &commit_notifier).await;
+
+        // split the batch into smaller batches per epoch to handle partitioning
+        let mut indexed_checkpoint_batch_per_epoch = vec![];
+        for indexed_checkpoint in indexed_checkpoint_batch {
+            let epoch = indexed_checkpoint.epoch.clone();
+            indexed_checkpoint_batch_per_epoch.push(indexed_checkpoint);
+            if epoch.is_some() {
+                commit_checkpoints(
+                    &state,
+                    indexed_checkpoint_batch_per_epoch,
+                    epoch,
+                    &metrics,
+                    &commit_notifier,
+                )
+                .await;
+                indexed_checkpoint_batch_per_epoch = vec![];
+            }
+        }
+        if !indexed_checkpoint_batch_per_epoch.is_empty() {
+            commit_checkpoints(
+                &state,
+                indexed_checkpoint_batch_per_epoch,
+                None,
+                &metrics,
+                &commit_notifier,
+            )
+            .await;
+        }
     }
 }
 
@@ -66,6 +91,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
 async fn commit_checkpoints<S>(
     state: &S,
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
+    epoch: Option<EpochToCommit>,
     metrics: &IndexerMetrics,
     commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
 ) where
@@ -78,7 +104,6 @@ async fn commit_checkpoints<S>(
     let mut display_updates_batch = BTreeMap::new();
     let mut object_changes_batch = vec![];
     let mut packages_batch = vec![];
-    let mut epochs_batch = vec![];
 
     for indexed_checkpoint in indexed_checkpoint_batch {
         let CheckpointDataToCommit {
@@ -89,7 +114,7 @@ async fn commit_checkpoints<S>(
             display_updates,
             object_changes,
             packages,
-            epoch,
+            epoch: _,
         } = indexed_checkpoint;
         checkpoint_batch.push(checkpoint);
         tx_batch.push(transactions);
@@ -98,9 +123,6 @@ async fn commit_checkpoints<S>(
         display_updates_batch.extend(display_updates.into_iter());
         object_changes_batch.push(object_changes);
         packages_batch.push(packages);
-        if let Some(epoch) = epoch {
-            epochs_batch.push(epoch);
-        }
     }
 
     let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
@@ -113,29 +135,31 @@ async fn commit_checkpoints<S>(
     let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
     let checkpoint_num = checkpoint_batch.len();
     let tx_count = tx_batch.len();
-    let epochs_count = epochs_batch.len();
 
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
-        futures::future::join_all(vec![
+        let mut persist_tasks = vec![
             state.persist_transactions(tx_batch),
             state.persist_tx_indices(tx_indices_batch),
             state.persist_events(events_batch),
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
             state.persist_objects(object_changes_batch),
-            state.persist_epoch(epochs_batch),
-        ])
-        .await
-        .into_iter()
-        .map(|res| {
-            if res.is_err() {
-                error!("Failed to persist data with error: {:?}", res);
-            }
-            res
-        })
-        .collect::<IndexerResult<Vec<_>>>()
-        .expect("Persisting data into DB should not fail.");
+        ];
+        if let Some(epoch_data) = epoch.clone() {
+            persist_tasks.push(state.persist_epoch(epoch_data));
+        }
+        futures::future::join_all(persist_tasks)
+            .await
+            .into_iter()
+            .map(|res| {
+                if res.is_err() {
+                    error!("Failed to persist data with error: {:?}", res);
+                }
+                res
+            })
+            .collect::<IndexerResult<Vec<_>>>()
+            .expect("Persisting data into DB should not fail.");
     }
 
     state
@@ -150,6 +174,18 @@ async fn commit_checkpoints<S>(
         .expect("Persisting data into DB should not fail.");
     let elapsed = guard.stop_and_record();
 
+    // handle partitioning on epoch boundary
+    if let Some(epoch_data) = epoch {
+        state
+            .advance_epoch(epoch_data)
+            .await
+            .tap_err(|e| {
+                error!("Failed to advance epoch with error: {}", e.to_string());
+            })
+            .expect("Persisting data into DB should not fail.");
+        metrics.total_epoch_committed.inc();
+    }
+
     commit_notifier
         .send(Some(last_checkpoint_seq))
         .expect("Commit watcher should not be closed");
@@ -162,7 +198,6 @@ async fn commit_checkpoints<S>(
         .total_tx_checkpoint_committed
         .inc_by(checkpoint_num as u64);
     metrics.total_transaction_committed.inc_by(tx_count as u64);
-    metrics.total_epoch_committed.inc_by(epochs_count as u64);
     info!(
         elapsed,
         "Checkpoint {}-{} committed with {} transactions.",
