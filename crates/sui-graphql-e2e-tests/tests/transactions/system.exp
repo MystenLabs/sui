@@ -283,7 +283,7 @@ Response: {
           "effects": {
             "status": "SUCCESS",
             "errors": null,
-            "lamportVersion": null,
+            "lamportVersion": 2,
             "dependencies": [
               {
                 "digest": "nPziN1DZGukFSvJ1e1AP5kJWCfjYgSTriRXB2i6BSZm"
