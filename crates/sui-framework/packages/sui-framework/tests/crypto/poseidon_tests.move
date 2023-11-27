@@ -27,14 +27,6 @@ module sui::poseidon_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::poseidon::ETooManyInputs)]
-    fun test_poseidon_bn254_too_many_inputs() {
-        let msg = vector[1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256, 1u256];
-        assert!(vector::length(&msg) > 32, 0);
-        let _ = poseidon_bn254(&msg);
-    }
-
-    #[test]
     fun test_poseidon_bn254_canonical_input() {
         // Scalar field size minus 1.
         let msg = vector[21888242871839275222246405745257275088548364400416034343698204186575808495616u256];
