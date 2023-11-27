@@ -206,13 +206,13 @@ pub enum SuiClientCommands {
 
     /// Merge two coin objects into one coin
     MergeCoin {
-        /// Coin to merge into, in 20 bytes Hex string
+        /// The address of the coin to merge into.
         #[clap(long)]
         primary_coin: ObjectID,
-        /// Coin to be merged, in 20 bytes Hex string
+        /// The address of the coin to be merged.
         #[clap(long)]
         coin_to_merge: ObjectID,
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// ID of the gas object for gas payment, which is a 32 bytes address.
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
         gas: Option<ObjectID>,
