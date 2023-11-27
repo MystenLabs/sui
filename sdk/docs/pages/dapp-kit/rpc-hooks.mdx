@@ -40,11 +40,11 @@ function MyComponent() {
 
 ## `useSuiClientQueries`
 
-In certain scenarios, You can utilize `useSuiClientQueries` for data retrieval. Also, this hook is a
-wrapper around the [useQueries](https://tanstack.com/query/latest/docs/react/reference/useQueries)
+You can fetch a variable numer of Sui RPC queries using the `useSuiClientQueries` hook. This hook is
+a wrapper around the [useQueries](https://tanstack.com/query/latest/docs/react/reference/useQueries)
 hook from @tanstack/react-query.
 
-`queries` value is an array with query option objects identical to the `useSuiClientQuery` hook
+`queries` value is an array with query option objects identical to the `useSuiClientQuery` hook.
 
 `combine` is an optional parameter. You can use this to combine the results of the queries into a
 single value. The result will be structurally shared to be as referentially stable as possible.
