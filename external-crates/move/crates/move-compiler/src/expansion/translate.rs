@@ -2021,10 +2021,23 @@ fn resolve_name_access_chain(
 
     fn resolve_name(context: &mut Context, name: Name) -> AccessChainResult {
         match context.aliases.get(&name) {
-            Some(AliasEntry::Member(mident, mem)) => {
-                ModuleAccess(name.loc, EN::ModuleAccess(mident, mem))
+            Some(AliasEntry::Member(mident, sp!(_, mem))) => {
+                // We are preserving the name's original location, rather than referring to where
+                // the alias was defined. The name represents JUST the member name, though, so we do
+                // not change location of the module as we don't have this information.
+                // TODO maybe we should also keep the alias reference (or its location)?
+                ModuleAccess(name.loc, EN::ModuleAccess(mident, sp(name.loc, mem)))
             }
-            Some(AliasEntry::Module(mident)) => ModuleIdent(name.loc, mident),
+            Some(AliasEntry::Module(mident)) => {
+                // We are preserving the name's original location, rather than referring to where
+                // the alias was defined. The name represents JUST the module name, though, so we do
+                // not change location of the address as we don't have this information.
+                // TODO maybe we should also keep the alias reference (or its location)?
+                let sp!(_, ModuleIdent_ { address, module: ModuleName(sp!(_, module))}) = mident;
+                let address = address;
+                let module = ModuleName(sp(name.loc, module));
+                ModuleIdent(name.loc, sp(name.loc, ModuleIdent_ { address, module }))
+            },
             Some(AliasEntry::Address(address)) => {
                 Address(name.loc, make_address(context, name, name.loc, address))
             }

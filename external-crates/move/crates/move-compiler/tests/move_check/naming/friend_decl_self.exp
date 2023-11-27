@@ -1,10 +1,11 @@
 error[E02011]: invalid 'friend' declaration
   ┌─ tests/move_check/naming/friend_decl_self.move:3:5
   │
-2 │ module M {
-  │        - Cannot declare the module itself as a friend
 3 │     friend Self;
-  │     ^^^^^^^^^^^^ Invalid friend declaration
+  │     ^^^^^^^^^^^^
+  │     │      │
+  │     │      Cannot declare the module itself as a friend
+  │     Invalid friend declaration
 
 error[E02011]: invalid 'friend' declaration
   ┌─ tests/move_check/naming/friend_decl_self.move:9:5
