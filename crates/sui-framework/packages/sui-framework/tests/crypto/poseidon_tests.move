@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::poseidon_tests {
-    use std::vector;
     use sui::poseidon::poseidon_bn254;
 
     #[test]
