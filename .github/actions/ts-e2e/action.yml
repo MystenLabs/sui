@@ -60,7 +60,7 @@ runs:
       run: pnpm turbo --filter=sui-explorer build
       shell: bash
     - name: Install Playwright Browsers
-      run: pnpm explorer playwright install --with-deps chromium
+      run: pnpm --filter sui-explorer playwright install --with-deps chromium
       shell: bash
 
     - name: Set env
@@ -70,11 +70,11 @@ runs:
       shell: bash
 
     - name: Run TS SDK e2e tests
-      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js test:e2e'
       shell: bash
 
     - name: Run Explorer e2e tests
-      run: pnpm explorer playwright test
+      run: pnpm --filter sui-explorer playwright test
       shell: bash
 
     - uses: actions/upload-artifact@v3
