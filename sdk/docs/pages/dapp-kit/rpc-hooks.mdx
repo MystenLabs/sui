@@ -53,7 +53,7 @@ single value. The result will be structurally shared to be as referentially stab
 import { useSuiClientQueries } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isSuccess, isLoading, isError } = useSuiClientQueries({
+	const { data, isPending, isError } = useSuiClientQueries({
 		queries: [
 			{
 				method: 'getAllBalances',
@@ -74,7 +74,7 @@ function MyComponent() {
 			return {
 				data: result.map((res) => res.data),
 				isSuccess: result.every((res) => res.isSuccess),
-				isLoading: result.some((res) => res.isLoading),
+				isPending: result.some((res) => res.isPending),
 				isError: result.some((res) => res.isError),
 			};
 		},
