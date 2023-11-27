@@ -16,6 +16,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+use std::ops::Mul;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
 
@@ -38,7 +39,6 @@ pub fn poseidon_bn254(
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-
     // Load the cost parameters from the protocol config
     let cost_params = &context
         .extensions()
@@ -72,7 +72,8 @@ pub fn poseidon_bn254(
             .ok_or_else(
                 || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Gas cost for poseidon_bn254 not available".to_string())
-            )?.mul(length.into())
+            )?
+            .mul(length.into())
     );
 
     let mut field_elements: Vec<Vec<u8>> = Vec::new();
