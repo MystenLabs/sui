@@ -18,10 +18,6 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
-pub const TOO_MANY_INPUTS: u64 = 1;
-
-/// The maximal number of inputs the BN254 Poseidon hash function can handle.
-pub const MAX_INPUTS: u64 = 32;
 
 #[derive(Clone)]
 pub struct PoseidonBN254CostParams {
@@ -66,10 +62,6 @@ pub fn poseidon_bn254(
     // The input is a reference to a vector of vector<u8>'s
     let inputs = pop_arg!(args, VectorRef);
     let length = inputs.len(&Type::U256)?.value_as::<u64>()?;
-
-    if length > MAX_INPUTS {
-        return Ok(NativeResult::err(context.gas_used(), TOO_MANY_INPUTS));
-    }
 
     let mut field_elements: Vec<Vec<u8>> = Vec::new();
     for _ in 0..length {
