@@ -247,8 +247,7 @@ impl<T: BenchmarkType> MeasurementsCollection<T> {
             .iter()
             .filter_map(|x| x.last())
             .map(|x| x.tps(&duration))
-            .max()
-            .unwrap_or_default()
+            .sum()
     }
 
     /// Aggregate the average latency of multiple data points by taking the average.
