@@ -736,6 +736,7 @@ impl SuiClientCommands {
                         with_unpublished_dependencies,
                         skip_dependency_verification,
                         !no_lint,
+                        None, // use latest version of Move
                     )
                     .await?;
 
@@ -839,6 +840,7 @@ impl SuiClientCommands {
                     with_unpublished_dependencies,
                     skip_dependency_verification,
                     !no_lint,
+                    None, // use latest version of Move
                 )
                 .await?;
 
@@ -869,17 +871,23 @@ impl SuiClientCommands {
                 let registry = &Registry::new();
                 let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
 
-                let package = compile_package_simple(build_config, package_path)?;
+                let package = compile_package_simple(
+                    build_config,
+                    package_path,
+                    protocol_config.execution_version_as_option(),
+                )?;
                 let modules: Vec<_> = package.get_modules().cloned().collect();
 
-                let mut verifier =
-                    sui_execution::verifier(&protocol_config, true, &bytecode_verifier_metrics);
+                let config = sui_execution::verifier_config(&protocol_config, true);
+                let execution_version = protocol_config.execution_version_as_option().unwrap_or(0);
+                let mut verifier = sui_execution::verifier(execution_version, config);
                 let overrides = VerifierOverrides::new(None, None);
                 println!("Running bytecode verifier for {} modules", modules.len());
                 let verifier_values = verifier.meter_compiled_modules_with_overrides(
                     &modules,
                     &protocol_config,
                     &overrides,
+                    &bytecode_verifier_metrics,
                 )?;
                 SuiClientCommandResult::VerifyBytecodeMeter {
                     max_module_ticks: verifier_values
@@ -1323,6 +1331,7 @@ impl SuiClientCommands {
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                     lint: false,
+                    version: None,
                 }
                 .build(package_path)?;
 
@@ -1357,12 +1366,14 @@ impl SuiClientCommands {
 fn compile_package_simple(
     build_config: MoveBuildConfig,
     package_path: PathBuf,
+    version: Option<u64>,
 ) -> Result<CompiledPackage, anyhow::Error> {
     let config = BuildConfig {
         config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
         lint: false,
+        version,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
 
@@ -1372,6 +1383,7 @@ fn compile_package_simple(
         false,
         false,
         false,
+        version,
     )?)
 }
 
@@ -1382,6 +1394,7 @@ async fn compile_package(
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
     lint: bool,
+    version: Option<u64>,
 ) -> Result<
     (
         PackageDependencies,
@@ -1399,6 +1412,7 @@ async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
         lint,
+        version,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);
@@ -1412,6 +1426,7 @@ async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
         lint,
+        version,
     )?;
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {

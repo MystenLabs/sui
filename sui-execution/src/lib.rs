@@ -5,8 +5,9 @@
 
 use std::sync::Arc;
 
+use move_vm_config::verifier::VerifierConfig;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{error::SuiResult, metrics::BytecodeVerifierMetrics};
+use sui_types::error::SuiResult;
 
 pub use executor::Executor;
 pub use verifier::Verifier;
@@ -22,6 +23,8 @@ mod v1;
 #[cfg(test)]
 mod tests;
 
+pub const CURRENT: u64 = 2;
+pub const LATEST: u64 = 2;
 pub const NEXT_VM: u64 = u64::MAX;
 pub fn executor(
     protocol_config: &ProtocolConfig,
@@ -58,17 +61,23 @@ pub fn executor(
     })
 }
 
-pub fn verifier<'m>(
-    protocol_config: &ProtocolConfig,
-    is_metered: bool,
-    metrics: &'m Arc<BytecodeVerifierMetrics>,
-) -> Box<dyn Verifier + 'm> {
+pub fn verifier(execution_version: u64, verifier_config: VerifierConfig) -> Box<dyn Verifier> {
+    match execution_version {
+        0 => Box::new(v0::Verifier::new(verifier_config)),
+        1 => Box::new(v1::Verifier::new(verifier_config)),
+        2 => Box::new(latest::Verifier::new(verifier_config)),
+        NEXT_VM => Box::new(next_vm::Verifier::new(verifier_config)),
+        v => panic!("Unsupported execution version {v}"),
+    }
+}
+
+pub fn verifier_config(protocol_config: &ProtocolConfig, is_metered: bool) -> VerifierConfig {
     let version = protocol_config.execution_version_as_option().unwrap_or(0);
     match version {
-        0 => Box::new(v0::Verifier::new(protocol_config, is_metered, metrics)),
-        1 => Box::new(v1::Verifier::new(protocol_config, is_metered, metrics)),
-        2 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
-        NEXT_VM => Box::new(next_vm::Verifier::new(protocol_config, is_metered, metrics)),
+        0 => v0::Verifier::verifier_config(protocol_config, is_metered),
+        1 => v1::Verifier::verifier_config(protocol_config, is_metered),
+        2 => latest::Verifier::verifier_config(protocol_config, is_metered),
+        NEXT_VM => next_vm::Verifier::verifier_config(protocol_config, is_metered),
         v => panic!("Unsupported execution version {v}"),
     }
 }

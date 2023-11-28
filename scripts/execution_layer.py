@@ -467,6 +467,22 @@ def generate_lib(output_file: TextIO):
     template_path = Path() / "sui-execution" / "src" / "lib.template.rs"
     cuts = discover_cuts()
 
+    # get the latest version avaialable and use it for
+    # CURRENT and LATEST versions.
+    # The current/latest is determined by looking at consecutive versions
+    # starting from 0.
+    # When the first gap is found the search stops
+    latest_ver = -1
+    for (version, _, _) in cuts:
+        try:
+            ver = int(version)
+        except ValueError:
+            ver = -1
+        if latest_ver + 1 == ver:
+            latest_ver = ver
+        else:
+            break
+
     with open(template_path, mode="r") as template_file:
         template = template_file.read()
 
@@ -480,8 +496,12 @@ def generate_lib(output_file: TextIO):
         elif var == "MOD_CUTS":
             return "".join(sorted(f"{spc}mod {cut};" for (_, _, cut) in cuts))
         elif var == "FEATURE_CONSTS":
-            return "".join(
-                f"{spc}pub const {feature}: u64 = {version};"
+            current_consts = (
+                f"{spc}pub const CURRENT: u64 = {latest_ver};\n"
+                f"pub const LATEST: u64 = {latest_ver};\n"
+            )
+            return current_consts + "".join(
+                f"pub const {feature}: u64 = {version};"
                 for (version, feature, _) in cuts
                 if feature is not None
             )
@@ -498,9 +518,15 @@ def generate_lib(output_file: TextIO):
                 for (version, feature, cut) in cuts
             )
         elif var == "VERIFIER_CUTS":
-            call = "Verifier::new(protocol_config, is_metered, metrics)"
+            call = "Verifier::new(verifier_config)"
             return "\n".join(
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
+                for (version, feature, cut) in cuts
+            )
+        elif var == "VERIFIER_CONFIG_CUTS":
+            call = "Verifier::verifier_config(protocol_config, is_metered)"
+            return "\n".join(
+                f"{spc}{feature or version} => {cut}::{call},"
                 for (version, feature, cut) in cuts
             )
         else:

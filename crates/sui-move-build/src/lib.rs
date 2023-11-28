@@ -42,6 +42,7 @@ use move_package::{
     resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
 };
 use move_symbol_pool::Symbol;
+use move_vm_config::verifier::VerifierConfig;
 use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
@@ -50,7 +51,6 @@ use sui_types::{
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
-use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
     coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
@@ -87,6 +87,8 @@ pub struct BuildConfig {
     pub print_diags_to_stderr: bool,
     /// If true, run linters
     pub lint: bool,
+    /// If `Some(version)`, use the given version of Move
+    pub version: Option<u64>,
 }
 
 impl BuildConfig {
@@ -186,6 +188,7 @@ impl BuildConfig {
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
         let lint = self.lint;
+        let version = self.version;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -195,6 +198,7 @@ impl BuildConfig {
             run_bytecode_verifier,
             print_diags_to_stderr,
             lint,
+            version,
         )
     }
 
@@ -231,6 +235,7 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
     lint: bool,
+    version: Option<u64>, // None means current production version
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
@@ -251,13 +256,15 @@ pub fn build_from_resolution_graph(
     };
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
+        let config = VerifierConfig::default();
+        let version = version.unwrap_or(sui_execution::CURRENT);
+        let verifier = sui_execution::verifier(version, config);
         for m in compiled_modules.iter_modules() {
-            move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
-                SuiError::ModuleVerificationFailure {
+            verifier
+                .verify_module_unmetered(m, &fn_info)
+                .map_err(|err| SuiError::ModuleVerificationFailure {
                     error: err.to_string(),
-                }
-            })?;
-            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info)?;
+                })?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
@@ -573,6 +580,7 @@ impl Default for BuildConfig {
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
             lint: false,
+            version: None,
         }
     }
 }

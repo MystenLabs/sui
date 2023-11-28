@@ -137,6 +137,7 @@ fn build_packages_with_move_config(
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
         lint: false,
+        version: None,
     }
     .build(sui_framework_path)
     .unwrap();
@@ -145,6 +146,7 @@ fn build_packages_with_move_config(
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
         lint: false,
+        version: None,
     }
     .build(sui_system_path)
     .unwrap();
@@ -153,6 +155,7 @@ fn build_packages_with_move_config(
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
         lint: false,
+        version: None,
     }
     .build(deepbook_path)
     .unwrap();
