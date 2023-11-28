@@ -1,5 +1,11 @@
 # @mysten/dapp-kit
 
+## 0.10.1
+
+### Patch Changes
+
+- 367779ea2: Improve the reliability of the `useAutoConnectWallet` hook.
+
 ## 0.10.0
 
 ### Minor Changes
