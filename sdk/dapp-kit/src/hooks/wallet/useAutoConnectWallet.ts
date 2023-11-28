@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useQuery } from '@tanstack/react-query';
+import { useLayoutEffect, useState } from 'react';
 
 import { useConnectWallet } from './useConnectWallet.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
@@ -14,14 +15,19 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
 	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
 	const wallets = useWallets();
-	const { isDisconnected } = useCurrentWallet();
+	const { isConnected } = useCurrentWallet();
+
+	const [clientOnly, setClientOnly] = useState(false);
+	useLayoutEffect(() => {
+		setClientOnly(true);
+	}, []);
 
 	const { data, isError } = useQuery({
 		queryKey: [
 			'@mysten/dapp-kit',
 			'autoconnect',
 			{
-				isDisconnected,
+				isConnected,
 				autoConnectEnabled,
 				lastConnectedWalletName,
 				lastConnectedAccountAddress,
@@ -33,7 +39,7 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 				return 'disabled';
 			}
 
-			if (!lastConnectedWalletName || !lastConnectedAccountAddress || !isDisconnected) {
+			if (!lastConnectedWalletName || !lastConnectedAccountAddress || isConnected) {
 				return 'attempted';
 			}
 
@@ -52,6 +58,7 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 		persister: undefined,
 		gcTime: 0,
 		staleTime: 0,
+		networkMode: 'always',
 		retry: false,
 		retryOnMount: false,
 		refetchInterval: false,
@@ -63,6 +70,11 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 
 	if (!autoConnectEnabled) {
 		return 'disabled';
+	}
+
+	// We always initialize with "idle" so that in SSR environments, we guarantee that the initial render states always agree:
+	if (!clientOnly) {
+		return 'idle';
 	}
 
 	if (!lastConnectedWalletName) {

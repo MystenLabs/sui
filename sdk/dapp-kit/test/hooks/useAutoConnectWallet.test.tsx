@@ -4,7 +4,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useAutoConnectWallet } from '../../src/hooks/wallet/useAutoConnectWallet.js';
-import { useConnectWallet } from '../../src/index.js';
+import { useConnectWallet, useCurrentWallet } from '../../src/index.js';
 import { createMockAccount } from '../mocks/mockAccount.js';
 import { suiFeatures } from '../mocks/mockFeatures.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
@@ -56,16 +56,28 @@ describe('useAutoConnectWallet', () => {
 
 		const { promise, resolve } = withResolvers();
 		mockWallet.mocks.connect.mockImplementation(async () => {
-			console.log('Waiting to connect');
 			return promise;
 		});
 
 		// Render our component tree again and auto-connect to our previously connected wallet account.
-		const { result: updatedResult } = renderHook(() => useAutoConnectWallet(), { wrapper });
-		expect(updatedResult.current).toBe('idle');
+		const { result: updatedResult } = renderHook(
+			() => ({ autoConnect: useAutoConnectWallet(), wallet: useCurrentWallet() }),
+			{ wrapper },
+		);
+
+		// Expect the initial state to be idle:
+		expect(updatedResult.current.autoConnect).toBe('idle');
+
+		// Wait for the status to flip to connecting:
+		await waitFor(() => expect(updatedResult.current.wallet.isConnecting).toBe(true));
+		// The state should still be idle while the connection is in progress:
+		expect(updatedResult.current.autoConnect).toBe('idle');
+
 		resolve({ accounts: mockWallet.accounts });
 
-		await waitFor(() => expect(updatedResult.current).toBe('attempted'));
+		// Now that the connection has completed, the state should be "attempted":
+		await waitFor(() => expect(updatedResult.current.autoConnect).toBe('attempted'));
+		expect(updatedResult.current.wallet.isConnected).toBe(true);
 
 		act(() => unregister());
 	});
