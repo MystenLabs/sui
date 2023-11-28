@@ -5,7 +5,7 @@ language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
 
 # How to Install
 
-1. Open a new window in any Visual Studio Code application version 1.55.2 or greater.
+1. Open a new window in any Visual Studio Code application version 1.61.0 or greater.
 2. Open the command palette (`⇧⌘P` on macOS, or use the menu item *View > Command Palette...*) and
    type **Extensions: Install Extensions**. This will open a panel named *Extensions* in the
    sidebar of your Visual Studio Code window.
@@ -13,7 +13,33 @@ language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
    should appear as one of the option in the list below the search bar. Click **Install**.
 4. Open any file that ends in `.move`.
 
+Installation of the extension will also install a platform-specific pre-built move-analyzer binary in
+the `~/.sui/bin` directory. The move-analyzer binary is responsible for the advanced features of this
+VSCode extension (e.g., go to definition, type on hover). Please see the [Troubleshooting][#troubleshooting]
+section for situations when the pre-built move-analyzer binary is not available for your platform.
+
 # Troubleshooting
+
+## What if pre-built move-analyzer binary is not available for my platform?
+
+The `move-analyzer` language server is a Rust program which you can install manually provided
+that you have Rust development already [installed](https://www.rust-lang.org/tools/install).
+This can be done in two steps:
+
+1. Invoke `cargo install --git https://github.com/MystenLabs/sui move-analyzer` to install the
+`move-analyzer` language server in your Cargo binary directory. On Linux, this is usually
+usually `~/.cargo/bin`.
+2. Copy the move-analyzer binary to `~/.sui/bin` which is its default location.
+
+## What if I want to use a move-analyzer binary in a different location?
+
+If your `move-analyzer` binary is in a different location than the default one (`~/.sui/bib`),
+you may have the extension look for the binary at this new location by using the the VSCode's
+settings (`⌘,` on macOS, or use the menu item *Code > Preferences > Settings*). Search for the
+`move.server.path` setting, set it to the new location of the `move-analyzer` binary, and restart
+VSCode.
+
+## What if everything else fails?
 
 Check [Sui Developer Forum](https://forums.sui.io/c/technical-support) to see if the problem
 has already been reported and, if not, report it there.
