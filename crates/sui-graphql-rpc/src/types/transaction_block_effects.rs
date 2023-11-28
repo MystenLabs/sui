@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
-use sui_indexer::{models_v2::transactions::StoredTransaction, types_v2::IndexedObjectChange};
+use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
@@ -12,7 +12,7 @@ use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
     balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
-    epoch::Epoch, gas::GasEffects, object::Object, sui_address::SuiAddress,
+    epoch::Epoch, gas::GasEffects, object_change::ObjectChange,
     transaction_block::TransactionBlock,
 };
 
@@ -30,14 +30,6 @@ pub(crate) struct TransactionBlockEffects {
 pub enum ExecutionStatus {
     Success,
     Failure,
-}
-
-#[derive(Clone, SimpleObject)]
-pub(crate) struct ObjectChange {
-    // TODO: input_state (waiting for object history)
-    pub output_state: Option<Object>,
-    pub id_created: Option<bool>,
-    pub id_deleted: Option<bool>,
 }
 
 #[Object]
@@ -124,18 +116,10 @@ impl TransactionBlockEffects {
     // TODO object_reads
 
     /// The effect this transaction had on objects on-chain.
-    async fn object_changes(&self, ctx: &Context<'_>) -> Result<Option<Vec<ObjectChange>>> {
-        let mut changes = vec![];
-
-        for bcs in self.stored.object_changes.iter().flatten() {
-            let object_change: IndexedObjectChange = bcs::from_bytes(bcs)
-                .map_err(|_| {
-                    Error::Internal(
-                        "Cannot convert bcs bytes into IndexedObjectChange object".to_string(),
-                    )
-                })
-                .extend()?;
-            changes.push(ObjectChange::from(object_change, ctx).await.extend()?);
+    async fn object_changes(&self) -> Result<Option<Vec<ObjectChange>>> {
+        let mut changes = Vec::with_capacity(self.stored.object_changes.len());
+        for change in self.stored.object_changes.iter().flatten() {
+            changes.push(ObjectChange::read(change).extend()?);
         }
 
         Ok(Some(changes))
@@ -145,8 +129,7 @@ impl TransactionBlockEffects {
     /// addresses and objects.
     async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
         let mut changes = Vec::with_capacity(self.stored.balance_changes.len());
-        for change in &self.stored.balance_changes {
-            let Some(change) = change else { continue };
+        for change in self.stored.balance_changes.iter().flatten() {
             changes.push(BalanceChange::read(change).extend()?);
         }
 
@@ -182,97 +165,6 @@ impl TransactionBlockEffects {
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
     async fn bcs(&self) -> Option<Base64> {
         Some(Base64::from(&self.stored.raw_effects))
-    }
-}
-
-// TODO this should be replaced together with the whole TXBLOCKEFFECTS once the indexer has this stuff implemented
-// see effects_v2.rs in indexer
-impl ObjectChange {
-    async fn from(object_change: IndexedObjectChange, ctx: &Context<'_>) -> Result<Self, Error> {
-        match object_change {
-            IndexedObjectChange::Created {
-                object_id, version, ..
-            } => {
-                let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
-                    Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
-                })?;
-                let output_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(version.value()))
-                    .await?;
-                Ok(Self {
-                    output_state,
-                    id_created: Some(true),
-                    id_deleted: None,
-                })
-            }
-
-            IndexedObjectChange::Published {
-                package_id,
-                version,
-                ..
-            } => {
-                let sui_address =
-                    SuiAddress::from_bytes(package_id.into_bytes()).map_err(|_| {
-                        Error::Internal("Cannot decode a SuiAddress from package_id".to_string())
-                    })?;
-                let output_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(version.value()))
-                    .await?;
-                Ok(Self {
-                    output_state,
-                    id_created: Some(true),
-                    id_deleted: None,
-                })
-            }
-            IndexedObjectChange::Transferred {
-                object_id, version, ..
-            } => {
-                let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
-                    Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
-                })?;
-                // TODO
-                // I assume the output is a different object as it probably has a different
-                // owner (the recipient) + the version + digest are different
-                let output_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(version.value()))
-                    .await?;
-
-                Ok(Self {
-                    output_state,
-                    id_created: None,
-                    id_deleted: None,
-                })
-            }
-            IndexedObjectChange::Mutated {
-                object_id, version, ..
-            } => {
-                let sui_address = SuiAddress::from_bytes(object_id.into_bytes()).map_err(|_| {
-                    Error::Internal("Cannot decode a SuiAddress from object_id".to_string())
-                })?;
-                let output_state = ctx
-                    .data_unchecked::<PgManager>()
-                    .fetch_obj(sui_address, Some(version.value()))
-                    .await?;
-                Ok(Self {
-                    output_state,
-                    id_created: None,
-                    id_deleted: None,
-                })
-            }
-            IndexedObjectChange::Deleted { .. } => Ok(Self {
-                output_state: None,
-                id_created: None,
-                id_deleted: Some(true),
-            }),
-            IndexedObjectChange::Wrapped { .. } => Ok(Self {
-                output_state: None,
-                id_created: None,
-                id_deleted: None,
-            }),
-        }
     }
 }
 

@@ -28,6 +28,7 @@ pub(crate) mod move_type;
 pub(crate) mod move_value;
 pub(crate) mod name_service;
 pub(crate) mod object;
+pub(crate) mod object_change;
 pub(crate) mod open_move_type;
 pub(crate) mod owner;
 pub(crate) mod protocol_config;
