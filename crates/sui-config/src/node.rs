@@ -415,6 +415,11 @@ pub struct CheckpointExecutorConfig {
     /// If unspecified, this will default to `10`.
     #[serde(default = "default_local_execution_timeout_sec")]
     pub local_execution_timeout_sec: u64,
+
+    /// Optional directory used for data ingestion pipeline
+    /// When specified, each executed checkpoint will be saved in a local directory for post processing
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_ingestion_dir: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -529,6 +534,7 @@ impl Default for CheckpointExecutorConfig {
         Self {
             checkpoint_execution_max_concurrency: default_checkpoint_execution_max_concurrency(),
             local_execution_timeout_sec: default_local_execution_timeout_sec(),
+            data_ingestion_dir: None,
         }
     }
 }

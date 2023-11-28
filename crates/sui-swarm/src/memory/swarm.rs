@@ -45,6 +45,7 @@ pub struct SwarmBuilder<R = OsRng> {
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
     overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl SwarmBuilder {
@@ -66,6 +67,7 @@ impl SwarmBuilder {
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
             overload_threshold_config: None,
+            data_ingestion_dir: None,
         }
     }
 }
@@ -89,6 +91,7 @@ impl<R> SwarmBuilder<R> {
             jwk_fetch_interval: self.jwk_fetch_interval,
             num_unpruned_validators: self.num_unpruned_validators,
             overload_threshold_config: self.overload_threshold_config,
+            data_ingestion_dir: self.data_ingestion_dir,
         }
     }
 
@@ -219,6 +222,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
+        self
+    }
+
     fn get_or_init_genesis_config(&mut self) -> &mut GenesisConfig {
         if self.genesis_config.is_none() {
             assert!(self.network_config.is_none());
@@ -256,6 +264,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             if let Some(overload_threshold_config) = self.overload_threshold_config {
                 config_builder =
                     config_builder.with_overload_threshold_config(overload_threshold_config);
+            }
+
+            if let Some(path) = self.data_ingestion_dir {
+                config_builder = config_builder.with_data_ingestion_dir(path);
             }
 
             config_builder
