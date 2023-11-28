@@ -1,14 +1,15 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use bytes::BytesMut;
+use bytes::Bytes;
 use clap::*;
 use eyre::Context;
-use futures::{future::join_all, StreamExt};
-use narwhal_node::metrics::BenchMetrics;
+use futures::future::join_all;
+use narwhal_node::metrics::NarwhalBenchMetrics;
 use prometheus::Registry;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::{
     net::TcpStream,
@@ -79,7 +80,7 @@ async fn main() -> Result<(), eyre::Report> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
-    let metrics = BenchMetrics::new(&registry);
+    let metrics = NarwhalBenchMetrics::new(&registry);
 
     let target = app.addr;
     let size = app.size;
@@ -124,99 +125,138 @@ struct Client {
     rate: u64,
     nodes: Vec<Url>,
     duration: Option<Duration>,
-    metrics: BenchMetrics,
+    metrics: NarwhalBenchMetrics,
 }
 
 impl Client {
-    const TARGET_BATCH_INTERVAL: Duration = Duration::from_millis(100);
-
     pub async fn send(&self) -> Result<(), eyre::Report> {
-        // The transaction size must be at least 16 bytes to ensure all txs are different.
-        if self.size < 16 {
+        // The transaction size must be at least 100 bytes to ensure all txs are different.
+        if self.size < 100 {
             return Err(eyre::Report::msg(
-                "Transaction size must be at least 16 bytes",
+                "Transaction size must be at least 100 bytes",
             ));
         }
 
-        let transactions_per_100ms = (self.rate + 9) / 10;
+        let mut handles = Vec::new();
 
-        let mut counter = 0;
-        let mut rng = StdRng::seed_from_u64(self.target.port().unwrap() as u64);
-        let mut random: u64 = rng.gen(); // 8 bytes
-        let interval = interval(Self::TARGET_BATCH_INTERVAL);
-        tokio::pin!(interval);
+        let num_parallel_tasks = 10;
+        let rate_per_task = self.rate / num_parallel_tasks;
+        let target_tx_interval: Duration = Duration::from_millis(1000 / rate_per_task);
+        info!(
+            "Distributing transactions across {num_parallel_tasks} parallel tasks, with  \
+            each task sending approximately {rate_per_task} transactions. Each task  \
+            sends 1 transaction every {target_tx_interval:#?} to achieve a rate of {} tx/sec",
+            self.rate
+        );
 
         let start_time = Instant::now();
-        let end_time = self.duration.map(|d| Instant::now() + d);
+        let metrics = Arc::new(self.metrics.clone());
 
-        // Connect to the mempool.
-        let mut client = TransactionsClient::connect(self.target.as_str().to_owned())
-            .await
-            .context(format!("failed to connect to {}", self.target))?;
-
-        // Submit all transactions.
-        info!("Sending transactions...");
-        loop {
-            interval.as_mut().tick().await;
-
-            if let Some(end) = end_time {
-                if Instant::now() > end {
-                    break;
-                }
-            }
-
-            let time_from_start = start_time.elapsed();
-            if let Some(delta) = time_from_start
-                .as_secs()
-                .checked_sub(self.metrics.benchmark_duration.get())
-            {
-                self.metrics.benchmark_duration.inc_by(delta);
-            }
-
+        for i in 0..num_parallel_tasks {
+            // Connect to the mempool.
+            let mut client = TransactionsClient::connect(self.target.as_str().to_owned())
+                .await
+                .context(format!("failed to connect to {}", self.target))?;
+            let metrics_clone = metrics.clone();
+            let task_id = i;
+            let client_id = self.target.port().unwrap() as u64;
             let size = self.size;
-            let timestamp = (timestamp_utc().as_millis() as u64).to_le_bytes();
-            random += counter;
-            let stream = tokio_stream::iter(0..transactions_per_100ms).map(move |x| {
-                random += x + 1;
 
-                let mut transaction = BytesMut::with_capacity(size);
-                let zeros = vec![0u8; size - 8 - 8]; // 8 bytes timestamp + 8 bytes random
-                transaction.extend_from_slice(&timestamp); // 8 bytes
-                transaction.extend_from_slice(&random.to_le_bytes()); // 8 bytes
-                transaction.extend_from_slice(&zeros[..]);
+            let handle = tokio::spawn(async move {
+                let interval = interval(target_tx_interval);
+                tokio::pin!(interval);
+                let mut rng = StdRng::seed_from_u64(client_id);
+                let mut random: u64 = rng.gen(); // 8 bytes
+                let mut counter = 0;
 
-                TransactionProto {
-                    transaction: transaction.into(),
+                loop {
+                    interval.as_mut().tick().await;
+
+                    let timestamp = (timestamp_utc().as_millis() as u64).to_le_bytes();
+                    counter += 1;
+                    random += counter * task_id;
+
+                    let mut transaction = vec![0u8; size];
+                    transaction[0..8].copy_from_slice(&client_id.to_le_bytes()); // 8 bytes
+                    transaction[8..16].copy_from_slice(&timestamp); // 8 bytes
+                    transaction[16..24].copy_from_slice(&random.to_le_bytes()); // 8 bytes
+
+                    let tx_proto = TransactionProto {
+                        transaction: Bytes::from(transaction),
+                    };
+
+                    let now = Instant::now();
+
+                    metrics_clone.narwhal_client_num_submitted.inc();
+
+                    if let Err(e) = client.submit_transaction(tx_proto).await {
+                        warn!("Failed to send transaction: {e}");
+                        metrics_clone.narwhal_client_num_error.inc();
+                    } else {
+                        metrics_clone.narwhal_client_num_success.inc();
+                        // TODO: properly compute the latency from submission to consensus output and successful commits
+                        // record client latencies per transaction
+                        let latency_s = now.elapsed().as_secs_f64();
+                        let latency_squared_s = latency_s.powf(2.0);
+                        metrics_clone.narwhal_client_latency_s.observe(latency_s);
+                        metrics_clone
+                            .narwhal_client_latency_squared_s
+                            .inc_by(latency_squared_s);
+                    }
                 }
             });
+            handles.push(handle);
+        }
 
-            counter += transactions_per_100ms;
+        let monitoring_interval = Duration::from_secs(1);
 
-            let now = Instant::now();
+        let metrics_clone = metrics.clone();
+        let end_time = self.duration.map(|d| Instant::now() + d);
 
-            let recorded_count = self.metrics.num_submitted.get();
-            self.metrics.num_submitted.inc_by(transactions_per_100ms);
+        // Spawn a monitoring task
+        let monitor_handle = tokio::spawn(async move {
+            let monitor_interval = interval(monitoring_interval);
+            tokio::pin!(monitor_interval);
 
-            if let Err(e) = client.submit_transaction_stream(stream).await {
-                warn!("Failed to send transaction: {e}");
-                self.metrics.num_error.inc_by(transactions_per_100ms);
-            } else {
-                let latency_s = now.elapsed().as_secs_f64();
-                let latency_squared_s = latency_s.powf(2.0);
-                for _ in 0..transactions_per_100ms {
-                    // record client latencies per transaction
-                    self.metrics.latency_s.observe(latency_s);
-                    self.metrics.latency_squared_s.inc_by(latency_squared_s);
+            loop {
+                monitor_interval.as_mut().tick().await;
+
+                if let Some(end) = end_time {
+                    if Instant::now() > end {
+                        break;
+                    }
                 }
 
-                self.metrics.num_success.inc_by(transactions_per_100ms);
+                let time_from_start = start_time.elapsed();
+                metrics_clone
+                    .narwhal_benchmark_duration
+                    .set(time_from_start.as_secs() as i64);
 
+                // Log the metrics
+                let benchmark_duration = metrics_clone.narwhal_benchmark_duration.get();
+                let total_submitted = metrics_clone.narwhal_client_num_submitted.get();
+                let total_success = metrics_clone.narwhal_client_num_success.get();
+                let total_error = metrics_clone.narwhal_client_num_error.get();
                 info!(
-                    "Submmitted {counter} total transactions at rate ~ {} tx/s",
-                    counter / time_from_start.as_secs().max(1)
+                    "{}s Elapsed, Total Submitted: {}, Total Success: {}, Total Error: {}, Rate {} tx/sec",
+                    benchmark_duration,
+                    total_submitted,
+                    total_success,
+                    total_error,
+                    total_submitted / time_from_start.as_secs().max(1)
                 );
             }
+        });
+
+        tokio::select! {
+            _ = monitor_handle => {
+                info!("Monitoring task completed. Ending benchmark.");
+            }
+            _ = join_all(handles) => {
+                info!("All transaction-sending tasks completed.");
+            }
         }
+
         Ok(())
     }
 

@@ -6,7 +6,8 @@ use mysten_metrics::{metrics, spawn_logged_monitored_task};
 use mysten_network::multiaddr::Multiaddr;
 use prometheus::{
     register_counter_with_registry, register_histogram_with_registry,
-    register_int_counter_with_registry, Counter, Histogram, IntCounter, Registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Counter, Histogram,
+    IntCounter, IntGauge, Registry,
 };
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
@@ -15,55 +16,56 @@ const METRICS_ROUTE: &str = "/metrics";
 const PRIMARY_METRICS_PREFIX: &str = "narwhal_primary";
 const WORKER_METRICS_PREFIX: &str = "narwhal_worker";
 
-pub struct BenchMetrics {
-    pub benchmark_duration: IntCounter,
-    pub num_success: IntCounter,
-    pub num_error: IntCounter,
-    pub num_submitted: IntCounter,
-    pub latency_s: Histogram,
-    pub latency_squared_s: Counter,
+#[derive(Clone)]
+pub struct NarwhalBenchMetrics {
+    pub narwhal_benchmark_duration: IntGauge,
+    pub narwhal_client_num_success: IntCounter,
+    pub narwhal_client_num_error: IntCounter,
+    pub narwhal_client_num_submitted: IntCounter,
+    pub narwhal_client_latency_s: Histogram,
+    pub narwhal_client_latency_squared_s: Counter,
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
-impl BenchMetrics {
+impl NarwhalBenchMetrics {
     pub fn new(registry: &Registry) -> Self {
-        BenchMetrics {
-            benchmark_duration: register_int_counter_with_registry!(
-                "benchmark_duration",
+        NarwhalBenchMetrics {
+            narwhal_benchmark_duration: register_int_gauge_with_registry!(
+                "narwhal_benchmark_duration",
                 "Duration of the benchmark",
                 registry,
             )
             .unwrap(),
-            num_success: register_int_counter_with_registry!(
-                "num_success",
+            narwhal_client_num_success: register_int_counter_with_registry!(
+                "narwhal_client_num_success",
                 "Total number of transaction success",
                 registry,
             )
             .unwrap(),
-            num_error: register_int_counter_with_registry!(
-                "num_error",
+            narwhal_client_num_error: register_int_counter_with_registry!(
+                "narwhal_client_num_error",
                 "Total number of transaction errors",
                 registry,
             )
             .unwrap(),
-            num_submitted: register_int_counter_with_registry!(
-                "num_submitted",
+            narwhal_client_num_submitted: register_int_counter_with_registry!(
+                "narwhal_client_num_submitted",
                 "Total number of transaction submitted to narwhal",
                 registry,
             )
             .unwrap(),
-            latency_s: register_histogram_with_registry!(
-                "latency_s",
+            narwhal_client_latency_s: register_histogram_with_registry!(
+                "narwhal_client_latency_s",
                 "Total time in seconds to return a response",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
-            latency_squared_s: register_counter_with_registry!(
-                "latency_squared_s",
+            narwhal_client_latency_squared_s: register_counter_with_registry!(
+                "narwhal_client_latency_squared_s",
                 "Square of total time in seconds to return a response",
                 registry,
             )

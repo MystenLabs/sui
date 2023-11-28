@@ -46,11 +46,12 @@ use sui_types::{
 };
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
-#[cfg(feature = "benchmark")]
-use tracing::subscriber::set_global_default;
+// TODO: remove when old benchmark code is removed
+// #[cfg(feature = "benchmark")]
+// use tracing::subscriber::set_global_default;
+// #[cfg(feature = "benchmark")]
+// use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use tracing::{info, warn};
-#[cfg(feature = "benchmark")]
-use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use worker::TrivialTransactionValidator;
 
 #[derive(Parser)]
@@ -277,7 +278,7 @@ fn benchmark_genesis(
     base_port: usize,
 ) -> Result<()> {
     tracing::info!("Generating benchmark genesis files");
-    fs::create_dir_all(&working_directory).wrap_err(format!(
+    fs::create_dir_all(working_directory).wrap_err(format!(
         "Failed to create directory '{}'",
         working_directory.display()
     ))?;
@@ -350,7 +351,7 @@ fn benchmark_genesis(
     tracing::info!("Generated committee file: {}", committee_path.display());
 
     committee
-        .export(&committee_path.as_path().as_os_str().to_str().unwrap())
+        .export(committee_path.as_path().as_os_str().to_str().unwrap())
         .expect("Failed to export committee file");
 
     // Generate workers keys
@@ -390,15 +391,10 @@ fn benchmark_genesis(
 
             let worker_info = WorkerInfo {
                 name: worker_network_key,
-                transactions: Multiaddr::try_from(format!(
-                    "/ip4/{}/tcp/{}/http",
-                    ip.to_string(),
-                    worker_base_port
-                ))
-                .unwrap(),
+                transactions: Multiaddr::try_from(format!("/ip4/{ip}/tcp/{worker_base_port}/http"))
+                    .unwrap(),
                 worker_address: Multiaddr::try_from(format!(
-                    "/ip4/{}/udp/{}",
-                    ip.to_string(),
+                    "/ip4/{ip}/udp/{}",
                     worker_base_port + 1
                 ))
                 .unwrap(),
@@ -413,7 +409,7 @@ fn benchmark_genesis(
     }
 
     worker_cache
-        .export(&workers_path.as_path().as_os_str().to_str().unwrap())
+        .export(workers_path.as_path().as_os_str().to_str().unwrap())
         .expect("Failed to export workers file");
 
     // Generate node parameters config
@@ -430,7 +426,7 @@ fn benchmark_genesis(
         ..Default::default()
     };
     parameters
-        .export(&parameters_path.as_path().as_os_str().to_str().unwrap())
+        .export(parameters_path.as_path().as_os_str().to_str().unwrap())
         .expect("Failed to export parameters file");
     tracing::info!(
         "Generated (public) parameters file: {}",

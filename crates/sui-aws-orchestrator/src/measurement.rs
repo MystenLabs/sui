@@ -96,7 +96,7 @@ impl Measurement {
             .iter()
             .find(|x| x.metric == M::BENCHMARK_DURATION)
             .map(|x| match x.value {
-                prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
+                prometheus_parse::Value::Gauge(value) => Duration::from_secs(value as u64),
                 _ => panic!("Unexpected scraped value"),
             })
             .unwrap_or_default();

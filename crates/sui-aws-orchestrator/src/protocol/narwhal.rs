@@ -65,7 +65,7 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
     }
 
     fn db_directories(&self) -> Vec<PathBuf> {
-        let consensus_db = [&self.working_dir, &format!("db-*").into()]
+        let consensus_db = [&self.working_dir, &"db-*".to_string().into()]
             .iter()
             .collect();
 
@@ -133,14 +133,14 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
                 let worker_keys: PathBuf = [&working_dir, &format!("worker-{i}-key.json").into()]
                     .iter()
                     .collect();
-                let committee: PathBuf = [&working_dir, &format!("committee.json").into()]
+                let committee: PathBuf = [&working_dir, &"committee.json".to_string().into()]
                     .iter()
                     .collect();
-                let workers: PathBuf = [&working_dir, &format!("workers.json").into()]
+                let workers: PathBuf = [&working_dir, &"workers.json".to_string().into()]
                     .iter()
                     .collect();
                 let store: PathBuf = [&working_dir, &format!("db-{i}").into()].iter().collect();
-                let parameters: PathBuf = [&working_dir, &format!("parameters.json").into()]
+                let parameters: PathBuf = [&working_dir, &"parameters.json".to_string().into()]
                     .iter()
                     .collect();
 
@@ -231,11 +231,11 @@ impl NarwhalProtocol {
 }
 
 impl ProtocolMetrics for NarwhalProtocol {
-    const BENCHMARK_DURATION: &'static str = "benchmark_duration";
-    const TOTAL_TRANSACTIONS: &'static str = "latency_s_count";
-    const LATENCY_BUCKETS: &'static str = "latency_s";
-    const LATENCY_SUM: &'static str = "latency_s_sum";
-    const LATENCY_SQUARED_SUM: &'static str = "latency_squared_s";
+    const BENCHMARK_DURATION: &'static str = "narwhal_benchmark_duration";
+    const TOTAL_TRANSACTIONS: &'static str = "narwhal_client_latency_s_count";
+    const LATENCY_BUCKETS: &'static str = "narwhal_client_latency_s";
+    const LATENCY_SUM: &'static str = "narwhal_client_latency_s_sum";
+    const LATENCY_SQUARED_SUM: &'static str = "narwhal_client_latency_squared_s";
 
     fn nodes_metrics_path<I>(&self, instances: I) -> Vec<(Instance, String)>
     where

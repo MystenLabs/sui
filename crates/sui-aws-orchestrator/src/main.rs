@@ -29,7 +29,10 @@ pub mod settings;
 pub mod ssh;
 pub mod testbed;
 
-/// NOTE: Link these types to the correct protocol.
+/// NOTE: Link these types to the correct protocol. Either Sui or Narwhal.
+// use protocol::sui::{SuiBenchmarkType, SuiProtocol};
+// type Protocol = SuiProtocol;
+// type BenchmarkType = SuiBenchmarkType;
 type Protocol = NarwhalProtocol;
 type BenchmarkType = NarwhalBenchmarkType;
 
