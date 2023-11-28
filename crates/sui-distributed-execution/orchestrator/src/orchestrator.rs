@@ -406,6 +406,7 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         let id = "configure";
         let all: Vec<_> = clients.into_iter().chain(nodes).collect();
+        display::status(format!("{} instances", all.len()));
         let command = self
             .protocol_commands
             .genesis_command(all.iter(), parameters);
@@ -459,6 +460,8 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
 
         // Select the instances to run.
         let (_, nodes, _) = self.select_instances(parameters)?;
+
+        display::status(format!("{} nodes", nodes.len()));
 
         // Boot one node per instance.
         let monitor = self.boot_nodes(nodes, parameters).await?;
