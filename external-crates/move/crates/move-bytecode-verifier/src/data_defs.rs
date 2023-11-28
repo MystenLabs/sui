@@ -2,65 +2,84 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! This module provides a checker for verifying that struct definitions in a module are not
+//! This module provides a checker for verifying that data definitions in a module are not
 //! recursive. Since the module dependency graph is acylic by construction, applying this checker to
 //! each module in isolation guarantees that there is no structural recursion globally.
 use move_binary_format::{
     access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, SignatureToken, StructDefinitionIndex, StructHandleIndex, TableIndex,
+        CompiledModule, DatatypeHandleIndex, EnumDefinitionIndex, SignatureToken,
+        StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
-    views::StructDefinitionView,
+    views::{EnumDefinitionView, StructDefinitionView},
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 use petgraph::{algo::toposort, graphmap::DiGraphMap};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub struct RecursiveStructDefChecker<'a> {
+pub struct RecursiveDataDefChecker<'a> {
     module: &'a CompiledModule,
 }
 
-impl<'a> RecursiveStructDefChecker<'a> {
+impl<'a> RecursiveDataDefChecker<'a> {
     pub fn verify_module(module: &'a CompiledModule) -> VMResult<()> {
         Self::verify_module_impl(module).map_err(|e| e.finish(Location::Module(module.self_id())))
     }
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
         let checker = Self { module };
-        let graph = StructDefGraphBuilder::new(checker.module).build()?;
+        let graph = DataDefGraphBuilder::new(checker.module).build()?;
 
         // toposort is iterative while petgraph::algo::is_cyclic_directed is recursive. Prefer
         // the iterative solution here as this code may be dealing with untrusted data.
         match toposort(&graph, None) {
             Ok(_) => Ok(()),
-            Err(cycle) => Err(verification_error(
-                StatusCode::RECURSIVE_STRUCT_DEFINITION,
-                IndexKind::StructDefinition,
-                cycle.node_id().into_index() as TableIndex,
-            )),
+            Err(cycle) => match cycle.node_id() {
+                DataIndex::Struct(idx) => Err(verification_error(
+                    StatusCode::RECURSIVE_STRUCT_DEFINITION,
+                    IndexKind::StructDefinition,
+                    idx,
+                )),
+                DataIndex::Enum(idx) => Err(verification_error(
+                    StatusCode::RECURSIVE_ENUM_DEFINITION,
+                    IndexKind::EnumDefinition,
+                    idx,
+                )),
+            },
         }
     }
 }
 
-/// Given a module, build a graph of struct definitions. This is useful when figuring out whether
-/// the struct definitions in module form a cycle.
-struct StructDefGraphBuilder<'a> {
-    module: &'a CompiledModule,
-    /// Used to follow field definitions' signatures' struct handles to their struct definitions.
-    handle_to_def: BTreeMap<StructHandleIndex, StructDefinitionIndex>,
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+enum DataIndex {
+    Struct(TableIndex),
+    Enum(TableIndex),
 }
 
-impl<'a> StructDefGraphBuilder<'a> {
+/// Given a module, build a graph of data definitions. This is useful when figuring out whether
+/// the data definitions in the module form a cycle.
+struct DataDefGraphBuilder<'a> {
+    module: &'a CompiledModule,
+    /// Used to follow field definitions' signatures' data handles to their data definitions.
+    handle_to_def: BTreeMap<DatatypeHandleIndex, DataIndex>,
+}
+
+impl<'a> DataDefGraphBuilder<'a> {
     fn new(module: &'a CompiledModule) -> Self {
         let mut handle_to_def = BTreeMap::new();
-        // the mapping from struct definitions to struct handles is already checked to be 1-1 by
+        // the mapping from data definitions to data handles is already checked to be 1-1 by
         // DuplicationChecker
         for (idx, struct_def) in module.struct_defs().iter().enumerate() {
             let sh_idx = struct_def.struct_handle;
-            handle_to_def.insert(sh_idx, StructDefinitionIndex(idx as TableIndex));
+            handle_to_def.insert(sh_idx, DataIndex::Struct(idx as TableIndex));
+        }
+
+        for (idx, enum_def) in module.enum_defs().iter().enumerate() {
+            let sh_idx = enum_def.enum_handle;
+            handle_to_def.insert(sh_idx, DataIndex::Enum(idx as TableIndex));
         }
 
         Self {
@@ -69,11 +88,16 @@ impl<'a> StructDefGraphBuilder<'a> {
         }
     }
 
-    fn build(self) -> PartialVMResult<DiGraphMap<StructDefinitionIndex, ()>> {
+    fn build(self) -> PartialVMResult<DiGraphMap<DataIndex, ()>> {
         let mut neighbors = BTreeMap::new();
         for idx in 0..self.module.struct_defs().len() {
             let sd_idx = StructDefinitionIndex::new(idx as TableIndex);
             self.add_struct_defs(&mut neighbors, sd_idx)?
+        }
+
+        for idx in 0..self.module.enum_defs().len() {
+            let sd_idx = EnumDefinitionIndex::new(idx as TableIndex);
+            self.add_enum_defs(&mut neighbors, sd_idx)?
         }
 
         let edges = neighbors
@@ -84,7 +108,7 @@ impl<'a> StructDefGraphBuilder<'a> {
 
     fn add_struct_defs(
         &self,
-        neighbors: &mut BTreeMap<StructDefinitionIndex, BTreeSet<StructDefinitionIndex>>,
+        neighbors: &mut BTreeMap<DataIndex, BTreeSet<DataIndex>>,
         idx: StructDefinitionIndex,
     ) -> PartialVMResult<()> {
         let struct_def = self.module.struct_def_at(idx);
@@ -92,15 +116,36 @@ impl<'a> StructDefGraphBuilder<'a> {
         // The fields iterator is an option in the case of native structs. Flatten makes an empty
         // iterator for that case
         for field in struct_def.fields().into_iter().flatten() {
-            self.add_signature_token(neighbors, idx, field.signature_token())?
+            self.add_signature_token(
+                neighbors,
+                DataIndex::Struct(idx.into_index() as TableIndex),
+                field.signature_token(),
+            )?
+        }
+        Ok(())
+    }
+
+    fn add_enum_defs(
+        &self,
+        neighbors: &mut BTreeMap<DataIndex, BTreeSet<DataIndex>>,
+        idx: EnumDefinitionIndex,
+    ) -> PartialVMResult<()> {
+        let enum_def = self.module.enum_def_at(idx);
+        let enum_def = EnumDefinitionView::new(self.module, enum_def);
+        for field in enum_def.all_fields() {
+            self.add_signature_token(
+                neighbors,
+                DataIndex::Enum(idx.into_index() as TableIndex),
+                field.signature_token(),
+            )?
         }
         Ok(())
     }
 
     fn add_signature_token(
         &self,
-        neighbors: &mut BTreeMap<StructDefinitionIndex, BTreeSet<StructDefinitionIndex>>,
-        cur_idx: StructDefinitionIndex,
+        neighbors: &mut BTreeMap<DataIndex, BTreeSet<DataIndex>>,
+        cur_idx: DataIndex,
         token: &SignatureToken,
     ) -> PartialVMResult<()> {
         use SignatureToken as T;
@@ -122,20 +167,14 @@ impl<'a> StructDefGraphBuilder<'a> {
                 )
             }
             T::Vector(inner) => self.add_signature_token(neighbors, cur_idx, inner)?,
-            T::Struct(sh_idx) => {
-                if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
-                    neighbors
-                        .entry(cur_idx)
-                        .or_default()
-                        .insert(*struct_def_idx);
+            T::Datatype(sh_idx) => {
+                if let Some(data_def_idx) = self.handle_to_def.get(sh_idx) {
+                    neighbors.entry(cur_idx).or_default().insert(*data_def_idx);
                 }
             }
-            T::StructInstantiation(sh_idx, inners) => {
-                if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
-                    neighbors
-                        .entry(cur_idx)
-                        .or_default()
-                        .insert(*struct_def_idx);
+            T::DatatypeInstantiation(sh_idx, inners) => {
+                if let Some(data_def_idx) = self.handle_to_def.get(sh_idx) {
+                    neighbors.entry(cur_idx).or_default().insert(*data_def_idx);
                 }
                 for t in inners {
                     self.add_signature_token(neighbors, cur_idx, t)?

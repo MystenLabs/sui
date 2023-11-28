@@ -170,10 +170,12 @@ fn load_identifier_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Ide
     )?))
 }
 
-fn load_struct_handle_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<StructHandleIndex> {
-    Ok(StructHandleIndex(read_uleb_internal(
+fn load_datatype_handle_index(
+    cursor: &mut VersionedCursor,
+) -> BinaryLoaderResult<DatatypeHandleIndex> {
+    Ok(DatatypeHandleIndex(read_uleb_internal(
         cursor,
-        STRUCT_HANDLE_INDEX_MAX,
+        DATATYPE_HANDLE_INDEX_MAX,
     )?))
 }
 
@@ -192,6 +194,31 @@ fn load_struct_def_index(
     Ok(StructDefinitionIndex(read_uleb_internal(
         cursor,
         STRUCT_DEF_INDEX_MAX,
+    )?))
+}
+
+fn load_enum_def_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<EnumDefinitionIndex> {
+    Ok(EnumDefinitionIndex(read_uleb_internal(
+        cursor,
+        ENUM_DEF_INDEX_MAX,
+    )?))
+}
+
+fn load_variant_handle_index(
+    cursor: &mut VersionedCursor,
+) -> BinaryLoaderResult<VariantHandleIndex> {
+    Ok(VariantHandleIndex(read_uleb_internal(
+        cursor,
+        VARIANT_HANDLE_INDEX_MAX,
+    )?))
+}
+
+fn load_variant_instantiation_handle_index(
+    cursor: &mut VersionedCursor,
+) -> BinaryLoaderResult<VariantInstantiationHandleIndex> {
+    Ok(VariantInstantiationHandleIndex(read_uleb_internal(
+        cursor,
+        VARIANT_INSTANTIATION_HANDLE_INDEX_MAX,
     )?))
 }
 
@@ -238,6 +265,15 @@ fn load_struct_def_inst_index(
     )?))
 }
 
+fn load_enum_def_inst_index(
+    cursor: &mut VersionedCursor,
+) -> BinaryLoaderResult<EnumDefInstantiationIndex> {
+    Ok(EnumDefInstantiationIndex(read_uleb_internal(
+        cursor,
+        ENUM_DEF_INST_INDEX_MAX,
+    )?))
+}
+
 fn load_constant_pool_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<ConstantPoolIndex> {
     Ok(ConstantPoolIndex(read_uleb_internal(
         cursor,
@@ -259,6 +295,26 @@ fn load_acquires_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> 
 
 fn load_field_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
     read_uleb_internal(cursor, FIELD_COUNT_MAX)
+}
+
+fn load_variant_tag(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
+    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
+}
+
+fn load_variant_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
+    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
+}
+
+fn load_jump_table_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
+    read_uleb_internal(cursor, JUMP_TABLE_INDEX_MAX)
+}
+
+fn load_jump_table_index(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
+    read_uleb_internal(cursor, JUMP_TABLE_INDEX_MAX)
+}
+
+fn load_jump_table_branch_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
+    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
 }
 
 fn load_type_parameter_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<usize> {
@@ -455,7 +511,7 @@ fn check_tables(tables: &mut Vec<Table>, binary_len: usize) -> BinaryLoaderResul
 
 trait CommonTables {
     fn get_module_handles(&mut self) -> &mut Vec<ModuleHandle>;
-    fn get_struct_handles(&mut self) -> &mut Vec<StructHandle>;
+    fn get_datatype_handles(&mut self) -> &mut Vec<DatatypeHandle>;
     fn get_function_handles(&mut self) -> &mut Vec<FunctionHandle>;
     fn get_function_instantiations(&mut self) -> &mut Vec<FunctionInstantiation>;
     fn get_signatures(&mut self) -> &mut SignaturePool;
@@ -470,8 +526,8 @@ impl CommonTables for CompiledScript {
         &mut self.module_handles
     }
 
-    fn get_struct_handles(&mut self) -> &mut Vec<StructHandle> {
-        &mut self.struct_handles
+    fn get_datatype_handles(&mut self) -> &mut Vec<DatatypeHandle> {
+        &mut self.datatype_handles
     }
 
     fn get_function_handles(&mut self) -> &mut Vec<FunctionHandle> {
@@ -508,8 +564,8 @@ impl CommonTables for CompiledModule {
         &mut self.module_handles
     }
 
-    fn get_struct_handles(&mut self) -> &mut Vec<StructHandle> {
-        &mut self.struct_handles
+    fn get_datatype_handles(&mut self) -> &mut Vec<DatatypeHandle> {
+        &mut self.datatype_handles
     }
 
     fn get_function_handles(&mut self) -> &mut Vec<FunctionHandle> {
@@ -574,8 +630,8 @@ fn build_common_tables(
             TableType::MODULE_HANDLES => {
                 load_module_handles(binary, table, common.get_module_handles())?;
             }
-            TableType::STRUCT_HANDLES => {
-                load_struct_handles(binary, table, common.get_struct_handles())?;
+            TableType::DATATYPE_HANDLES => {
+                load_datatype_handles(binary, table, common.get_datatype_handles())?;
             }
             TableType::FUNCTION_HANDLES => {
                 load_function_handles(binary, table, common.get_function_handles())?;
@@ -611,6 +667,18 @@ fn build_common_tables(
             | TableType::STRUCT_DEF_INST
             | TableType::FIELD_HANDLE
             | TableType::FIELD_INST => continue,
+            TableType::ENUM_DEFS
+            | TableType::ENUM_DEF_INST
+            | TableType::VARIANT_HANDLES
+            | TableType::VARIANT_INST_HANDLES => {
+                if binary.version() < VERSION_7 {
+                    return Err(PartialVMError::new(StatusCode::MALFORMED).with_message(
+                        "Enum declarations not supported in bytecode versions less than 7"
+                            .to_string(),
+                    ));
+                }
+                continue;
+            }
             TableType::FRIEND_DECLS => {
                 // friend declarations do not exist before VERSION_2
                 if binary.version() < VERSION_2 {
@@ -633,6 +701,12 @@ fn build_module_tables(
 ) -> BinaryLoaderResult<()> {
     for table in tables {
         match table.kind {
+            TableType::ENUM_DEFS => {
+                load_enum_defs(binary, table, &mut module.enum_defs)?;
+            }
+            TableType::ENUM_DEF_INST => {
+                load_enum_instantiations(binary, table, &mut module.enum_def_instantiations)?;
+            }
             TableType::STRUCT_DEFS => {
                 load_struct_defs(binary, table, &mut module.struct_defs)?;
             }
@@ -651,8 +725,18 @@ fn build_module_tables(
             TableType::FRIEND_DECLS => {
                 load_module_handles(binary, table, &mut module.friend_decls)?;
             }
+            TableType::VARIANT_HANDLES => {
+                load_variant_handles(binary, table, &mut module.variant_handles)?;
+            }
+            TableType::VARIANT_INST_HANDLES => {
+                load_variant_instantiation_handles(
+                    binary,
+                    table,
+                    &mut module.variant_instantiation_handles,
+                )?;
+            }
             TableType::MODULE_HANDLES
-            | TableType::STRUCT_HANDLES
+            | TableType::DATATYPE_HANDLES
             | TableType::FUNCTION_HANDLES
             | TableType::FUNCTION_INST
             | TableType::IDENTIFIERS
@@ -676,7 +760,7 @@ fn build_script_tables(
     for table in tables {
         match table.kind {
             TableType::MODULE_HANDLES
-            | TableType::STRUCT_HANDLES
+            | TableType::DATATYPE_HANDLES
             | TableType::FUNCTION_HANDLES
             | TableType::FUNCTION_INST
             | TableType::SIGNATURES
@@ -691,7 +775,11 @@ fn build_script_tables(
             | TableType::FUNCTION_DEFS
             | TableType::FIELD_INST
             | TableType::FIELD_HANDLE
-            | TableType::FRIEND_DECLS => {
+            | TableType::FRIEND_DECLS
+            | TableType::ENUM_DEFS
+            | TableType::ENUM_DEF_INST
+            | TableType::VARIANT_HANDLES
+            | TableType::VARIANT_INST_HANDLES => {
                 return Err(PartialVMError::new(StatusCode::MALFORMED)
                     .with_message("Bad table in Script".to_string()));
             }
@@ -717,11 +805,11 @@ fn load_module_handles(
     Ok(())
 }
 
-/// Builds the `StructHandle` table.
-fn load_struct_handles(
+/// Builds the `DatatypeHandle` table.
+fn load_datatype_handles(
     binary: &VersionedBinary,
     table: &Table,
-    struct_handles: &mut Vec<StructHandle>,
+    datatype_handles: &mut Vec<DatatypeHandle>,
 ) -> BinaryLoaderResult<()> {
     let start = table.offset as usize;
     let end = start + table.count as usize;
@@ -729,9 +817,9 @@ fn load_struct_handles(
     while cursor.position() < table.count as u64 {
         let module = load_module_handle_index(&mut cursor)?;
         let name = load_identifier_index(&mut cursor)?;
-        let abilities = load_ability_set(&mut cursor, AbilitySetPosition::StructHandle)?;
+        let abilities = load_ability_set(&mut cursor, AbilitySetPosition::DatatypeHandle)?;
         let type_parameters = load_struct_type_parameters(&mut cursor)?;
-        struct_handles.push(StructHandle {
+        datatype_handles.push(DatatypeHandle {
             module,
             name,
             abilities,
@@ -783,6 +871,30 @@ fn load_struct_instantiations(
         let def = load_struct_def_index(&mut cursor)?;
         let type_parameters = load_signature_index(&mut cursor)?;
         struct_insts.push(StructDefInstantiation {
+            def,
+            type_parameters,
+        });
+    }
+    Ok(())
+}
+
+/// Builds the `EnumInstantiation` table.
+fn load_enum_instantiations(
+    binary: &VersionedBinary,
+    table: &Table,
+    enum_insts: &mut Vec<EnumDefInstantiation>,
+) -> BinaryLoaderResult<()> {
+    if table.count > 0 {
+        check_cursor_version_enum_compatible(binary.version())?
+    }
+    let start = table.offset as usize;
+    let end = start + table.count as usize;
+    let mut cursor = binary.new_cursor(start, end);
+
+    while cursor.position() < table.count as u64 {
+        let def = load_enum_def_index(&mut cursor)?;
+        let type_parameters = load_signature_index(&mut cursor)?;
+        enum_insts.push(EnumDefInstantiation {
             def,
             type_parameters,
         });
@@ -988,7 +1100,7 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
         Reference,
         MutableReference,
         StructInst {
-            sh_idx: StructHandleIndex,
+            sh_idx: DatatypeHandleIndex,
             arity: usize,
             ty_args: Vec<SignatureToken>,
         },
@@ -1009,7 +1121,7 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 } => {
                     ty_args.push(tok);
                     if ty_args.len() >= arity {
-                        T::Saturated(SignatureToken::StructInstantiation(sh_idx, ty_args))
+                        T::Saturated(SignatureToken::DatatypeInstantiation(sh_idx, ty_args))
                     } else {
                         T::StructInst {
                             sh_idx,
@@ -1063,12 +1175,12 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
                 S::VECTOR => T::Vector,
                 S::REFERENCE => T::Reference,
                 S::MUTABLE_REFERENCE => T::MutableReference,
-                S::STRUCT => {
-                    let sh_idx = load_struct_handle_index(cursor)?;
-                    T::Saturated(SignatureToken::Struct(sh_idx))
+                S::DATATYPE_ => {
+                    let sh_idx = load_datatype_handle_index(cursor)?;
+                    T::Saturated(SignatureToken::Datatype(sh_idx))
                 }
-                S::STRUCT_INST => {
-                    let sh_idx = load_struct_handle_index(cursor)?;
+                S::DATATYPE_INST => {
+                    let sh_idx = load_datatype_handle_index(cursor)?;
                     let arity = load_type_parameter_count(cursor)?;
                     if arity == 0 {
                         return Err(PartialVMError::new(StatusCode::MALFORMED)
@@ -1116,8 +1228,8 @@ fn load_signature_token(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Sign
 #[derive(Copy, Clone)]
 enum AbilitySetPosition {
     FunctionTypeParameters,
-    StructTypeParameters,
-    StructHandle,
+    DatatypeTyParameters,
+    DatatypeHandle,
 }
 
 fn load_ability_set(
@@ -1149,7 +1261,7 @@ fn load_ability_set(
             }
         };
         match pos {
-            AbilitySetPosition::StructHandle => {
+            AbilitySetPosition::DatatypeHandle => {
                 Ok(match DeprecatedNominalResourceFlag::from_u8(byte)? {
                     DeprecatedNominalResourceFlag::NOMINAL_RESOURCE => {
                         AbilitySet::EMPTY | Ability::Store | Ability::Key
@@ -1160,16 +1272,16 @@ fn load_ability_set(
                 })
             }
             AbilitySetPosition::FunctionTypeParameters
-            | AbilitySetPosition::StructTypeParameters => {
+            | AbilitySetPosition::DatatypeTyParameters => {
                 let set = match DeprecatedKind::from_u8(byte)? {
                     DeprecatedKind::ALL => AbilitySet::EMPTY,
                     DeprecatedKind::COPYABLE => AbilitySet::EMPTY | Ability::Copy | Ability::Drop,
                     DeprecatedKind::RESOURCE => AbilitySet::EMPTY | Ability::Key,
                 };
                 Ok(match pos {
-                    AbilitySetPosition::StructHandle => unreachable!(),
+                    AbilitySetPosition::DatatypeHandle => unreachable!(),
                     AbilitySetPosition::FunctionTypeParameters => set | Ability::Store,
-                    AbilitySetPosition::StructTypeParameters => set,
+                    AbilitySetPosition::DatatypeTyParameters => set,
                 })
             }
         }
@@ -1198,7 +1310,7 @@ fn load_ability_sets(
 
 fn load_struct_type_parameters(
     cursor: &mut VersionedCursor,
-) -> BinaryLoaderResult<Vec<StructTypeParameter>> {
+) -> BinaryLoaderResult<Vec<DatatypeTyParameter>> {
     let len = load_type_parameter_count(cursor)?;
     let mut type_params = Vec::with_capacity(len);
     for _ in 0..len {
@@ -1209,15 +1321,15 @@ fn load_struct_type_parameters(
 
 fn load_struct_type_parameter(
     cursor: &mut VersionedCursor,
-) -> BinaryLoaderResult<StructTypeParameter> {
-    let constraints = load_ability_set(cursor, AbilitySetPosition::StructTypeParameters)?;
+) -> BinaryLoaderResult<DatatypeTyParameter> {
+    let constraints = load_ability_set(cursor, AbilitySetPosition::DatatypeTyParameters)?;
     let is_phantom = if cursor.version() < VERSION_3 {
         false
     } else {
         let byte: u8 = read_uleb_internal(cursor, 1)?;
         byte != 0
     };
-    Ok(StructTypeParameter {
+    Ok(DatatypeTyParameter {
         constraints,
         is_phantom,
     })
@@ -1233,7 +1345,7 @@ fn load_struct_defs(
     let end = start + table.count as usize;
     let mut cursor = binary.new_cursor(start, end);
     while cursor.position() < u64::from(table.count) {
-        let struct_handle = load_struct_handle_index(&mut cursor)?;
+        let datatype_handle = load_datatype_handle_index(&mut cursor)?;
         let field_information_flag = match cursor.read_u8() {
             Ok(byte) => SerializedNativeStructFlag::from_u8(byte)?,
             Err(_) => {
@@ -1249,7 +1361,7 @@ fn load_struct_defs(
             }
         };
         struct_defs.push(StructDefinition {
-            struct_handle,
+            struct_handle: datatype_handle,
             field_information,
         });
     }
@@ -1271,6 +1383,58 @@ fn load_field_def(cursor: &mut VersionedCursor) -> BinaryLoaderResult<FieldDefin
     Ok(FieldDefinition {
         name,
         signature: TypeSignature(signature),
+    })
+}
+
+/// Builds the `EnumDefinition` table.
+fn load_enum_defs(
+    binary: &VersionedBinary,
+    table: &Table,
+    enum_defs: &mut Vec<EnumDefinition>,
+) -> BinaryLoaderResult<()> {
+    if table.count > 0 {
+        check_cursor_version_enum_compatible(binary.version())?
+    }
+    let start = table.offset as usize;
+    let end = start + table.count as usize;
+    let mut cursor = binary.new_cursor(start, end);
+    while cursor.position() < u64::from(table.count) {
+        let enum_handle = load_datatype_handle_index(&mut cursor)?;
+        let field_information_flag = match cursor.read_u8() {
+            Ok(byte) => SerializedEnumFlag::from_u8(byte)?,
+            Err(_) => {
+                return Err(PartialVMError::new(StatusCode::MALFORMED)
+                    .with_message("Invalid field info in enum".to_string()))
+            }
+        };
+        let variants = match field_information_flag {
+            SerializedEnumFlag::DECLARED => load_variant_defs(&mut cursor)?,
+        };
+        enum_defs.push(EnumDefinition {
+            enum_handle,
+            variants,
+        });
+    }
+    Ok(())
+}
+
+fn load_variant_defs(cursor: &mut VersionedCursor) -> BinaryLoaderResult<Vec<VariantDefinition>> {
+    let mut variants = Vec::new();
+    let variant_count = load_variant_count(cursor)?;
+    for _ in 0..variant_count {
+        variants.push(load_variant_def(cursor)?);
+    }
+    Ok(variants)
+}
+
+fn load_variant_def(cursor: &mut VersionedCursor) -> BinaryLoaderResult<VariantDefinition> {
+    let enum_def = load_enum_def_index(cursor)?;
+    let variant_name = load_identifier_index(cursor)?;
+    let fields = load_field_defs(cursor)?;
+    Ok(VariantDefinition {
+        enum_def,
+        variant_name,
+        fields,
     })
 }
 
@@ -1330,6 +1494,50 @@ fn load_field_instantiations(
             handle,
             type_parameters,
         });
+    }
+    Ok(())
+}
+
+fn load_variant_handles(
+    binary: &VersionedBinary,
+    table: &Table,
+    variant_handles: &mut Vec<VariantHandle>,
+) -> BinaryLoaderResult<()> {
+    if table.count > 0 {
+        check_cursor_version_enum_compatible(binary.version())?
+    }
+    let start = table.offset as usize;
+    let end = start + table.count as usize;
+    let mut cursor = binary.new_cursor(start, end);
+    loop {
+        if cursor.position() == u64::from(table.count) {
+            break;
+        }
+        let enum_def = load_enum_def_index(&mut cursor)?;
+        let variant = load_variant_tag(&mut cursor)?;
+        variant_handles.push(VariantHandle { enum_def, variant });
+    }
+    Ok(())
+}
+
+fn load_variant_instantiation_handles(
+    binary: &VersionedBinary,
+    table: &Table,
+    variant_instantiation_handles: &mut Vec<VariantInstantiationHandle>,
+) -> BinaryLoaderResult<()> {
+    if table.count > 0 {
+        check_cursor_version_enum_compatible(binary.version())?
+    }
+    let start = table.offset as usize;
+    let end = start + table.count as usize;
+    let mut cursor = binary.new_cursor(start, end);
+    loop {
+        if cursor.position() == u64::from(table.count) {
+            break;
+        }
+        let enum_def = load_enum_def_inst_index(&mut cursor)?;
+        let variant = load_variant_tag(&mut cursor)?;
+        variant_instantiation_handles.push(VariantInstantiationHandle { enum_def, variant });
     }
     Ok(())
 }
@@ -1428,10 +1636,63 @@ fn load_code_unit(cursor: &mut VersionedCursor) -> BinaryLoaderResult<CodeUnit> 
     let mut code_unit = CodeUnit {
         locals,
         code: vec![],
+        jump_tables: vec![],
     };
 
     load_code(cursor, &mut code_unit.code)?;
+    load_jump_tables(cursor, &mut code_unit.jump_tables)?;
     Ok(code_unit)
+}
+
+fn load_jump_tables(
+    cursor: &mut VersionedCursor,
+    jump_tables: &mut Vec<VariantJumpTable>,
+) -> BinaryLoaderResult<()> {
+    if cursor.version() < VERSION_7 {
+        return Ok(());
+    }
+    let count = load_jump_table_count(cursor)?;
+    for _ in 0..count {
+        let jt = load_jump_table(cursor)?;
+        jump_tables.push(jt);
+    }
+    Ok(())
+}
+
+fn load_jump_table(cursor: &mut VersionedCursor) -> BinaryLoaderResult<VariantJumpTable> {
+    let head_enum = load_enum_def_index(cursor)?;
+    let branches = load_jump_table_branch_count(cursor)?;
+    let Ok(byte) = cursor.read_u8() else {
+        return Err(PartialVMError::new(StatusCode::MALFORMED)
+            .with_message("Invalid jump table type".to_string()));
+    };
+    let jump_table = match SerializedJumpTableFlag::from_u8(byte)? {
+        SerializedJumpTableFlag::FULL => {
+            let mut jump_table = vec![];
+            for _ in 0..branches {
+                let code_offset = load_bytecode_index(cursor)?;
+                jump_table.push(code_offset);
+            }
+            JumpTableInner::Full(jump_table)
+        }
+    };
+    Ok(VariantJumpTable {
+        head_enum,
+        jump_table,
+    })
+}
+
+fn check_cursor_version_enum_compatible(cursor_version: u32) -> BinaryLoaderResult<()> {
+    if cursor_version < VERSION_7 {
+        Err(
+            PartialVMError::new(StatusCode::MALFORMED).with_message(format!(
+                "enums not supported in bytecode version {}",
+                cursor_version
+            )),
+        )
+    } else {
+        Ok(())
+    }
 }
 
 /// Deserializes a code stream (`Bytecode`s).
@@ -1582,6 +1843,51 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             Opcodes::CAST_U16 => Bytecode::CastU16,
             Opcodes::CAST_U32 => Bytecode::CastU32,
             Opcodes::CAST_U256 => Bytecode::CastU256,
+            Opcodes::PACK_VARIANT => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_handle_index(cursor)?;
+                Bytecode::PackVariant(handle)
+            }
+            Opcodes::PACK_VARIANT_GENERIC => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_instantiation_handle_index(cursor)?;
+                Bytecode::PackVariantGeneric(handle)
+            }
+            Opcodes::UNPACK_VARIANT => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_handle_index(cursor)?;
+                Bytecode::UnpackVariant(handle)
+            }
+            Opcodes::UNPACK_VARIANT_IMM_REF => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_handle_index(cursor)?;
+                Bytecode::UnpackVariantImmRef(handle)
+            }
+            Opcodes::UNPACK_VARIANT_MUT_REF => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_handle_index(cursor)?;
+                Bytecode::UnpackVariantMutRef(handle)
+            }
+            Opcodes::UNPACK_VARIANT_GENERIC => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_instantiation_handle_index(cursor)?;
+                Bytecode::UnpackVariantGeneric(handle)
+            }
+            Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_instantiation_handle_index(cursor)?;
+                Bytecode::UnpackVariantGenericImmRef(handle)
+            }
+            Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let handle = load_variant_instantiation_handle_index(cursor)?;
+                Bytecode::UnpackVariantGenericMutRef(handle)
+            }
+            Opcodes::VARIANT_SWITCH => {
+                check_cursor_version_enum_compatible(cursor.version())?;
+                let jti = load_jump_table_index(cursor)?;
+                Bytecode::VariantSwitch(VariantJumpTableIndex(jti))
+            }
             // ******** DEPRECATED BYTECODES ********
             Opcodes::EXISTS_DEPRECATED => {
                 Bytecode::ExistsDeprecated(load_struct_def_index(cursor)?)
@@ -1623,7 +1929,7 @@ impl TableType {
     fn from_u8(value: u8) -> BinaryLoaderResult<TableType> {
         match value {
             0x1 => Ok(TableType::MODULE_HANDLES),
-            0x2 => Ok(TableType::STRUCT_HANDLES),
+            0x2 => Ok(TableType::DATATYPE_HANDLES),
             0x3 => Ok(TableType::FUNCTION_HANDLES),
             0x4 => Ok(TableType::FUNCTION_INST),
             0x5 => Ok(TableType::SIGNATURES),
@@ -1637,6 +1943,10 @@ impl TableType {
             0xE => Ok(TableType::FIELD_INST),
             0xF => Ok(TableType::FRIEND_DECLS),
             0x10 => Ok(TableType::METADATA),
+            0x11 => Ok(TableType::ENUM_DEFS),
+            0x12 => Ok(TableType::ENUM_DEF_INST),
+            0x13 => Ok(TableType::VARIANT_HANDLES),
+            0x14 => Ok(TableType::VARIANT_INST_HANDLES),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_TABLE_TYPE)),
         }
     }
@@ -1652,10 +1962,10 @@ impl SerializedType {
             0x5 => Ok(SerializedType::ADDRESS),
             0x6 => Ok(SerializedType::REFERENCE),
             0x7 => Ok(SerializedType::MUTABLE_REFERENCE),
-            0x8 => Ok(SerializedType::STRUCT),
+            0x8 => Ok(SerializedType::DATATYPE_),
             0x9 => Ok(SerializedType::TYPE_PARAMETER),
             0xA => Ok(SerializedType::VECTOR),
-            0xB => Ok(SerializedType::STRUCT_INST),
+            0xB => Ok(SerializedType::DATATYPE_INST),
             0xC => Ok(SerializedType::SIGNER),
             0xD => Ok(SerializedType::U16),
             0xE => Ok(SerializedType::U32),
@@ -1709,6 +2019,24 @@ impl SerializedNativeStructFlag {
             0x1 => Ok(SerializedNativeStructFlag::NATIVE),
             0x2 => Ok(SerializedNativeStructFlag::DECLARED),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_NATIVE_STRUCT_FLAG)),
+        }
+    }
+}
+
+impl SerializedEnumFlag {
+    fn from_u8(value: u8) -> BinaryLoaderResult<SerializedEnumFlag> {
+        match value {
+            0x1 => Ok(SerializedEnumFlag::DECLARED),
+            _ => Err(PartialVMError::new(StatusCode::UNKNOWN_ENUM_FLAG)),
+        }
+    }
+}
+
+impl SerializedJumpTableFlag {
+    fn from_u8(value: u8) -> BinaryLoaderResult<SerializedJumpTableFlag> {
+        match value {
+            0x1 => Ok(SerializedJumpTableFlag::FULL),
+            _ => Err(PartialVMError::new(StatusCode::UNKNOWN_JUMP_TABLE_FLAG)),
         }
     }
 }
@@ -1793,6 +2121,15 @@ impl Opcodes {
             0x4B => Ok(Opcodes::CAST_U16),
             0x4C => Ok(Opcodes::CAST_U32),
             0x4D => Ok(Opcodes::CAST_U256),
+            0x4E => Ok(Opcodes::PACK_VARIANT),
+            0x4F => Ok(Opcodes::PACK_VARIANT_GENERIC),
+            0x50 => Ok(Opcodes::UNPACK_VARIANT),
+            0x51 => Ok(Opcodes::UNPACK_VARIANT_IMM_REF),
+            0x52 => Ok(Opcodes::UNPACK_VARIANT_MUT_REF),
+            0x53 => Ok(Opcodes::UNPACK_VARIANT_GENERIC),
+            0x54 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF),
+            0x55 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF),
+            0x56 => Ok(Opcodes::VARIANT_SWITCH),
             _ => Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE)),
         }
     }

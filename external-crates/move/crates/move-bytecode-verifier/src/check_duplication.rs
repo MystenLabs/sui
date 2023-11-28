@@ -13,9 +13,9 @@ use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, Constant, FunctionHandle, FunctionHandleIndex,
-        FunctionInstantiation, ModuleHandle, Signature, StructFieldInformation, StructHandle,
-        StructHandleIndex, TableIndex,
+        CompiledModule, CompiledScript, Constant, DatatypeHandle, DatatypeHandleIndex,
+        FunctionHandle, FunctionHandleIndex, FunctionInstantiation, ModuleHandle, Signature,
+        StructFieldInformation, TableIndex,
     },
     IndexKind,
 };
@@ -40,7 +40,7 @@ impl<'a> DuplicationChecker<'a> {
         Self::check_signatures(module.signatures())?;
         Self::check_module_handles(module.module_handles())?;
         Self::check_module_handles(module.friend_decls())?;
-        Self::check_struct_handles(module.struct_handles())?;
+        Self::check_datatype_handles(module.datatype_handles())?;
         Self::check_function_handles(module.function_handles())?;
         Self::check_function_instantiations(module.function_instantiations())?;
 
@@ -49,7 +49,9 @@ impl<'a> DuplicationChecker<'a> {
         checker.check_field_instantiations()?;
         checker.check_function_defintions()?;
         checker.check_struct_definitions()?;
-        checker.check_struct_instantiations()
+        checker.check_struct_instantiations()?;
+        checker.check_enum_definitions()?;
+        checker.check_enum_instantiations()
     }
 
     pub fn verify_script(module: &'a CompiledScript) -> VMResult<()> {
@@ -62,7 +64,7 @@ impl<'a> DuplicationChecker<'a> {
         Self::check_constants(script.constant_pool())?;
         Self::check_signatures(script.signatures())?;
         Self::check_module_handles(script.module_handles())?;
-        Self::check_struct_handles(script.struct_handles())?;
+        Self::check_datatype_handles(script.datatype_handles())?;
         Self::check_function_handles(script.function_handles())?;
         Self::check_function_instantiations(script.function_instantiations())
     }
@@ -122,12 +124,12 @@ impl<'a> DuplicationChecker<'a> {
         }
     }
 
-    // StructHandles - module and name define uniqueness
-    fn check_struct_handles(struct_handles: &[StructHandle]) -> PartialVMResult<()> {
-        match Self::first_duplicate_element(struct_handles.iter().map(|x| (x.module, x.name))) {
+    // DatatypeHandles - module and name define uniqueness
+    fn check_datatype_handles(datatype_handles: &[DatatypeHandle]) -> PartialVMResult<()> {
+        match Self::first_duplicate_element(datatype_handles.iter().map(|x| (x.module, x.name))) {
             Some(idx) => Err(verification_error(
                 StatusCode::DUPLICATE_ELEMENT,
-                IndexKind::StructHandle,
+                IndexKind::DatatypeHandle,
                 idx,
             )),
             None => Ok(()),
@@ -185,6 +187,17 @@ impl<'a> DuplicationChecker<'a> {
         }
     }
 
+    fn check_enum_instantiations(&self) -> PartialVMResult<()> {
+        match Self::first_duplicate_element(self.module.enum_instantiations()) {
+            Some(idx) => Err(verification_error(
+                StatusCode::DUPLICATE_ELEMENT,
+                IndexKind::EnumDefInstantiation,
+                idx,
+            )),
+            None => Ok(()),
+        }
+    }
+
     fn check_field_instantiations(&self) -> PartialVMResult<()> {
         if let Some(idx) = Self::first_duplicate_element(self.module.field_instantiations()) {
             return Err(verification_error(
@@ -196,8 +209,8 @@ impl<'a> DuplicationChecker<'a> {
         Ok(())
     }
 
-    fn check_struct_definitions(&self) -> PartialVMResult<()> {
-        // StructDefinition - contained StructHandle defines uniqueness
+    fn check_struct_definitions(&self) -> PartialVMResult<HashSet<DatatypeHandleIndex>> {
+        // StructDefinition - contained DatatypeHandle defines uniqueness
         if let Some(idx) =
             Self::first_duplicate_element(self.module.struct_defs().iter().map(|x| x.struct_handle))
         {
@@ -230,7 +243,7 @@ impl<'a> DuplicationChecker<'a> {
         }
         // Check that each struct definition is pointing to the self module
         if let Some(idx) = self.module.struct_defs().iter().position(|x| {
-            self.module.struct_handle_at(x.struct_handle).module != self.module.self_handle_idx()
+            self.module.datatype_handle_at(x.struct_handle).module != self.module.self_handle_idx()
         }) {
             return Err(verification_error(
                 StatusCode::INVALID_MODULE_HANDLE,
@@ -239,20 +252,111 @@ impl<'a> DuplicationChecker<'a> {
             ));
         }
         // Check that each struct handle in self module is implemented (has a declaration)
-        let implemented_struct_handles: HashSet<StructHandleIndex> = self
+        let implemented_datatype_handles: HashSet<DatatypeHandleIndex> = self
             .module
             .struct_defs()
             .iter()
             .map(|x| x.struct_handle)
+            .chain(self.module.enum_defs().iter().map(|x| x.enum_handle))
             .collect();
-        if let Some(idx) = (0..self.module.struct_handles().len()).position(|x| {
-            let y = StructHandleIndex::new(x as u16);
-            self.module.struct_handle_at(y).module == self.module.self_handle_idx()
-                && !implemented_struct_handles.contains(&y)
+        if let Some(idx) = (0..self.module.datatype_handles().len()).position(|x| {
+            let y = DatatypeHandleIndex::new(x as u16);
+            self.module.datatype_handle_at(y).module == self.module.self_handle_idx()
+                && !implemented_datatype_handles.contains(&y)
         }) {
             return Err(verification_error(
                 StatusCode::UNIMPLEMENTED_HANDLE,
-                IndexKind::StructHandle,
+                IndexKind::DatatypeHandle,
+                idx as TableIndex,
+            ));
+        }
+        Ok(implemented_datatype_handles)
+    }
+
+    fn check_enum_definitions(&self) -> PartialVMResult<()> {
+        // EnumDefinition - contained DatatypeHandle defines uniqueness
+        // NB: We check uniqueness across both enum and struct handles at this point to make sure
+        // data definitions are not duplicated across struct and enums.
+        if let Some(idx) = Self::first_duplicate_element(
+            self.module
+                .struct_defs()
+                .iter()
+                .map(|x| x.struct_handle)
+                .chain(self.module.enum_defs().iter().map(|x| x.enum_handle)),
+        ) {
+            return Err(verification_error(
+                StatusCode::DUPLICATE_ELEMENT,
+                IndexKind::EnumDefinition,
+                idx,
+            ));
+        }
+        // Variant names in enums must be unique
+        // Field names in each variant must be unique
+        for (enum_idx, enum_def) in self.module.enum_defs().iter().enumerate() {
+            let variants = &enum_def.variants;
+            if variants.is_empty() {
+                return Err(verification_error(
+                    StatusCode::ZERO_SIZED_ENUM,
+                    IndexKind::EnumDefinition,
+                    enum_idx as TableIndex,
+                ));
+            }
+            if let Some(idx) =
+                Self::first_duplicate_element(variants.iter().map(|x| x.variant_name))
+            {
+                return Err(verification_error(
+                    StatusCode::DUPLICATE_ELEMENT,
+                    IndexKind::EnumDefinition,
+                    enum_idx as TableIndex,
+                )
+                .at_index(IndexKind::VariantTag, idx as TableIndex));
+            }
+
+            // NB: we allow zero-sized variants: since we require non-empty enums we always have a
+            // tag and therefore a variant with no fields is still non-zero sized whereas a struct
+            // with zero fields is zero-sized.
+            for (tag, variant) in variants.iter().enumerate() {
+                if let Some(idx) =
+                    Self::first_duplicate_element(variant.fields.iter().map(|x| x.name))
+                {
+                    return Err(verification_error(
+                        StatusCode::DUPLICATE_ELEMENT,
+                        IndexKind::FieldDefinition,
+                        idx,
+                    )
+                    .at_index(IndexKind::VariantTag, tag as TableIndex)
+                    .at_index(IndexKind::EnumDefinition, enum_idx as TableIndex));
+                }
+            }
+        }
+        // Check that each enum definition is pointing to the self module
+        if let Some(idx) = self.module.enum_defs().iter().position(|x| {
+            self.module.datatype_handle_at(x.enum_handle).module != self.module.self_handle_idx()
+        }) {
+            return Err(verification_error(
+                StatusCode::INVALID_MODULE_HANDLE,
+                IndexKind::EnumDefinition,
+                idx as TableIndex,
+            ));
+        }
+        // Check that each enum handle in self module is implemented (has a declaration)
+        // To also track enum handles, we pass in the set of enum handles that are implemented
+        // and fill this set out with those as well.
+        let implemented_datatype_handles: HashSet<DatatypeHandleIndex> = self
+            .module
+            .enum_defs()
+            .iter()
+            .map(|x| x.enum_handle)
+            .chain(self.module.struct_defs().iter().map(|x| x.struct_handle))
+            .collect();
+        if let Some(idx) = (0..self.module.datatype_handles().len()).position(|x| {
+            let y = DatatypeHandleIndex::new(x as u16);
+            self.module.datatype_handle_at(y).module == self.module.self_handle_idx()
+                && !implemented_datatype_handles.contains(&y)
+        }) {
+            return Err(verification_error(
+                StatusCode::UNIMPLEMENTED_HANDLE,
+                IndexKind::DatatypeHandle,
                 idx as TableIndex,
             ));
         }
