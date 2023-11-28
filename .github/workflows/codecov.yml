@@ -6,6 +6,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   diff:
     runs-on: [ubuntu-latest]
@@ -24,47 +28,23 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     strategy:
       fail-fast: true
+    env:
+      CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v3 # pin@v3
-      - run: rustup component add llvm-tools-preview
-      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-      # 'librocksdb-sys' src directory which is managed by cargo
-      - name: Install grcov, and cache the binary
-        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8 # pin@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup update stable
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
         with:
-          crate: grcov
-          locked: true
-
-      - name: Build
-        uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # pin@v1
-        with:
-          command: build
-        env:
-          RUSTFLAGS: '-Cinstrument-coverage'
-          RUSTDOCFLAGS: '-Cinstrument-coverage'
-      
-      - name: Install Taiki-e
-        uses: taiki-e/install-action@nextest
-      
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 256
-
-      - name: Install python dependencies
-        run: |
-          pip install pyopenssl --upgrade
-          if [ -f narwhal/benchmark/requirements.txt ]; then pip install -r narwhal/benchmark/requirements.txt; fi          
-
-      - name: Run tests
-        env:
-          RUSTFLAGS: '-Cinstrument-coverage'
-          RUSTDOCFLAGS: '-Cinstrument-coverage'
-          LLVM_PROFILE_FILE: 'codecov-instrumentation-%p-%m.profraw'
-        run: cargo test
-
-      - name: Run grcov
-        run: grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore '../**' --ignore '/*' -o coverage.lcov
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # pin@v3
+          files: lcov.info
+          fail_ci_if_error: true
