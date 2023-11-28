@@ -33,9 +33,9 @@ pub(crate) struct Epoch {
     pub total_checkpoints: Option<BigInt>,
     /// The total amount of gas fees (in MIST) that were paid in this epoch.
     pub total_gas_fees: Option<BigInt>,
-    /// The total number of stake rewards that were generated in this epoch.
+    /// The total MIST rewarded as stake.
     pub total_stake_rewards: Option<BigInt>,
-    /// The total number of stake subsidies in this epoch.
+    /// The amount added to total gas fees to make up the total stake rewards.
     pub total_stake_subsidies: Option<BigInt>,
     /// The storage fund available in this epoch.
     /// This fund is used to redistribute storage fees from past transactions
@@ -44,9 +44,9 @@ pub(crate) struct Epoch {
     /// The difference between the fund inflow and outflow, representing
     /// the net amount of storage fees accumulated in this epoch.
     pub net_inflow: Option<BigInt>,
-    /// The amount of storage fees paid for transactions executed during the epoch.
+    /// The storage fees paid for transactions executed during the epoch.
     pub fund_inflow: Option<BigInt>,
-    /// The amount of storage fee rebates paid to users
+    /// The storage fee rebates paid to users
     /// who deleted the data associated with past transactions.
     pub fund_outflow: Option<BigInt>,
 }

@@ -364,11 +364,11 @@ type Epoch {
 	"""
 	totalGasFees: BigInt
 	"""
-	The total number of stake rewards that were generated in this epoch.
+	The total MIST rewarded as stake.
 	"""
 	totalStakeRewards: BigInt
 	"""
-	The total number of stake subsidies in this epoch.
+	The amount added to total gas fees to make up the total stake rewards.
 	"""
 	totalStakeSubsidies: BigInt
 	"""
@@ -383,11 +383,11 @@ type Epoch {
 	"""
 	netInflow: BigInt
 	"""
-	The amount of storage fees paid for transactions executed during the epoch.
+	The storage fees paid for transactions executed during the epoch.
 	"""
 	fundInflow: BigInt
 	"""
-	The amount of storage fee rebates paid to users
+	The storage fee rebates paid to users
 	who deleted the data associated with past transactions.
 	"""
 	fundOutflow: BigInt

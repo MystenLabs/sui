@@ -113,5 +113,8 @@ mod tests {
             BigInt::from(U256::from_str("12345678901234567890123456789012345678901").unwrap()),
             BigInt("12345678901234567890123456789012345678901".to_string())
         );
+
+        assert_eq!(BigInt::from(1000i64 - 1200i64), BigInt("-200".to_string()));
+        assert_eq!(BigInt::from(-1200i64), BigInt("-1200".to_string()));
     }
 }

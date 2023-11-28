@@ -22,16 +22,16 @@
 // check the epoch metrics
 //# run-graphql
 {
-	epoch(id: 2) {
-		validatorSet {
-			totalStake
-		}
-		totalGasFees
-		totalStakeRewards
-		totalStakeSubsidies
-		fundSize
-		fundInflow
-		fundOutflow
-		netInflow
-	}
+  epoch(id: 2) {
+    validatorSet {
+      totalStake
+    }
+    totalGasFees
+    totalStakeRewards
+    totalStakeSubsidies
+    fundSize
+    fundInflow
+    fundOutflow
+    netInflow
+  }
 }
