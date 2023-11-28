@@ -346,9 +346,12 @@ impl AuthorityStore {
         let data = self
             .perpetual_tables
             .events
-            .range_iter((*event_digest, 0)..=(*event_digest, usize::MAX))
-            .map(|(_, e)| e)
-            .collect::<Vec<_>>();
+            .safe_range_iter((*event_digest, 0)..=(*event_digest, usize::MAX))
+            .map(|result| match result {
+                Ok(r) => Ok(r.1),
+                Err(e) => Err(e),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(data.is_empty().not().then_some(TransactionEvents { data }))
     }
 

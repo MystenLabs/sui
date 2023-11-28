@@ -302,6 +302,10 @@ where
         .build()
     }
 
+    fn safe_range_iter(&'a self, _range: impl RangeBounds<K>) -> Self::SafeIterator {
+        unimplemented!("umplemented API");
+    }
+
     fn keys(&'a self) -> Self::Keys {
         TestDBKeysBuilder {
             rows: self.rows.read().unwrap(),
