@@ -25,6 +25,7 @@ use move_binary_format::{
     file_format::{
         Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, IdentifierIndex,
         SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
+        VariantDefinition,
     },
     safe_assert, safe_unwrap, safe_unwrap_err,
 };
@@ -120,7 +121,7 @@ fn num_fields(struct_def: &StructDefinition) -> usize {
     }
 }
 
-fn pack(
+fn pack_struct(
     verifier: &mut ReferenceSafetyAnalysis,
     struct_def: &StructDefinition,
 ) -> PartialVMResult<()> {
@@ -132,13 +133,35 @@ fn pack(
     Ok(())
 }
 
-fn unpack(
+fn unpack_struct(
     verifier: &mut ReferenceSafetyAnalysis,
     struct_def: &StructDefinition,
 ) -> PartialVMResult<()> {
     safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
     // TODO maybe call state.value_for
     verifier.push_n(AbstractValue::NonReference, num_fields(struct_def) as u64)?;
+    Ok(())
+}
+
+fn pack_enum_variant(
+    verifier: &mut ReferenceSafetyAnalysis,
+    variant_def: &VariantDefinition,
+) -> PartialVMResult<()> {
+    for _ in 0..variant_def.fields.len() {
+        safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value())
+    }
+    // TODO maybe call state.value_for
+    verifier.push(AbstractValue::NonReference)?;
+    Ok(())
+}
+
+fn unpack_enum_variant(
+    verifier: &mut ReferenceSafetyAnalysis,
+    variant_def: &VariantDefinition,
+) -> PartialVMResult<()> {
+    safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
+    // TODO maybe call state.value_for
+    verifier.push_n(AbstractValue::NonReference, variant_def.fields.len() as u64)?;
     Ok(())
 }
 
@@ -356,21 +379,21 @@ fn execute_inner(
 
         Bytecode::Pack(idx) => {
             let struct_def = verifier.resolver.struct_def_at(*idx)?;
-            pack(verifier, struct_def)?
+            pack_struct(verifier, struct_def)?
         }
         Bytecode::PackGeneric(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
-            pack(verifier, struct_def)?
+            pack_struct(verifier, struct_def)?
         }
         Bytecode::Unpack(idx) => {
             let struct_def = verifier.resolver.struct_def_at(*idx)?;
-            unpack(verifier, struct_def)?
+            unpack_struct(verifier, struct_def)?
         }
         Bytecode::UnpackGeneric(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
-            unpack(verifier, struct_def)?
+            unpack_struct(verifier, struct_def)?
         }
 
         Bytecode::VecPack(idx, num) => {
@@ -430,6 +453,67 @@ fn execute_inner(
             let vec_ref = safe_unwrap_err!(verifier.stack.pop());
             state.vector_op(offset, vec_ref, true)?;
         }
+        Bytecode::PackVariant(eidx, vtag) => {
+            let variant_def = verifier.resolver.variant_def_at(*eidx, *vtag)?;
+            pack_enum_variant(verifier, variant_def)?
+        }
+        Bytecode::PackVariantGeneric(edii, vtag) => {
+            let enum_def_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let variant_def = verifier.resolver.variant_def_at(enum_def_inst.def, *vtag)?;
+            pack_enum_variant(verifier, variant_def)?
+        }
+        Bytecode::UnpackVariant(eidx, vtag) => {
+            let variant_def = verifier.resolver.variant_def_at(*eidx, *vtag)?;
+            unpack_enum_variant(verifier, variant_def)?
+        }
+        Bytecode::UnpackVariantGeneric(edii, vtag) => {
+            let enum_def_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let variant_def = verifier.resolver.variant_def_at(enum_def_inst.def, *vtag)?;
+            unpack_enum_variant(verifier, variant_def)?
+        }
+        Bytecode::UnpackVariantImmRef(eidx, vtag) => {
+            let variant_def = verifier.resolver.variant_def_at(*eidx, *vtag)?;
+            let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
+            for val in state
+                .unpack_enum_variant_ref(offset, *vtag, variant_def, false, id)?
+                .into_iter()
+            {
+                verifier.push(val)?
+            }
+        }
+        Bytecode::UnpackVariantMutRef(eidx, vtag) => {
+            let variant_def = verifier.resolver.variant_def_at(*eidx, *vtag)?;
+            let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
+            for val in state
+                .unpack_enum_variant_ref(offset, *vtag, variant_def, true, id)?
+                .into_iter()
+            {
+                verifier.push(val)?
+            }
+        }
+        Bytecode::UnpackVariantGenericImmRef(edii, vtag) => {
+            let enum_def_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let variant_def = verifier.resolver.variant_def_at(enum_def_inst.def, *vtag)?;
+            let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
+            for val in state
+                .unpack_enum_variant_ref(offset, *vtag, variant_def, false, id)?
+                .into_iter()
+            {
+                verifier.push(val)?
+            }
+        }
+        Bytecode::UnpackVariantGenericMutRef(edii, vtag) => {
+            let enum_def_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let variant_def = verifier.resolver.variant_def_at(enum_def_inst.def, *vtag)?;
+            let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
+            for val in state
+                .unpack_enum_variant_ref(offset, *vtag, variant_def, true, id)?
+                .into_iter()
+            {
+                verifier.push(val)?
+            }
+        }
+        Bytecode::VariantSwitch(_) => state.release_value(safe_unwrap_err!(verifier.stack.pop())),
     };
     Ok(())
 }

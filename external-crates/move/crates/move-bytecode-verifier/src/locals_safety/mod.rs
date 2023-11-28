@@ -159,7 +159,16 @@ fn execute_inner(
         | Bytecode::VecPushBack(_)
         | Bytecode::VecPopBack(_)
         | Bytecode::VecUnpack(..)
-        | Bytecode::VecSwap(_) => (),
+        | Bytecode::VecSwap(_)
+        | Bytecode::PackVariant(_, _)
+        | Bytecode::PackVariantGeneric(_, _)
+        | Bytecode::UnpackVariant(_, _)
+        | Bytecode::UnpackVariantImmRef(_, _)
+        | Bytecode::UnpackVariantMutRef(_, _)
+        | Bytecode::UnpackVariantGeneric(_, _)
+        | Bytecode::UnpackVariantGenericImmRef(_, _)
+        | Bytecode::UnpackVariantGenericMutRef(_, _)
+        | Bytecode::VariantSwitch(_) => (),
     };
     Ok(())
 }

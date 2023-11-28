@@ -14,9 +14,10 @@ use move_binary_format::{
     control_flow_graph::ControlFlowGraph,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, FieldHandleIndex, FunctionDefinitionIndex,
-        FunctionHandle, LocalIndex, Signature, SignatureToken, SignatureToken as ST,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
+        AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, EnumDefinition, FieldHandleIndex,
+        FunctionDefinitionIndex, FunctionHandle, LocalIndex, Signature, SignatureToken,
+        SignatureToken as ST, StructDefinition, StructDefinitionIndex, StructFieldInformation,
+        VariantDefinition, VariantJumpTable,
     },
     safe_unwrap_err,
 };
@@ -140,9 +141,55 @@ pub(crate) fn verify<'a>(
 
     for block_id in function_view.cfg().blocks() {
         for offset in function_view.cfg().instr_indexes(block_id) {
-            let instr = &verifier.function_view.code().code[offset as usize];
-            verify_instr(verifier, instr, offset, meter)?
+            let code = &verifier.function_view.code();
+            let instr = &code.code[offset as usize];
+            let jump_tables = &code.jump_tables;
+            verify_instr(verifier, instr, jump_tables, offset, meter)?
         }
+    }
+
+    Ok(())
+}
+
+// Verifies:
+// * Top of stack is an immutable reference
+// * The type pointed to by the reference is the same as enum definition expected in as the "head
+//   constructor" for the jump table. This is important for exhaustivity.
+// * The variant tags in the jump table are both unique, and complete for the specified enum.
+fn variant_switch(
+    verifier: &mut TypeSafetyChecker,
+    offset: CodeOffset,
+    jump_table: &VariantJumpTable,
+) -> PartialVMResult<()> {
+    let operand = safe_unwrap_err!(verifier.stack.pop());
+
+    // Check: immutable reference
+    if !operand.is_reference() && !operand.is_mutable_reference() {
+        return Err(verifier.error(StatusCode::ENUM_SWITCH_BAD_OPERAND, offset));
+    }
+
+    // Check: type is a reference
+    let inner_type = match operand {
+        ST::Reference(inner) => inner,
+        _ => return Err(verifier.error(StatusCode::ENUM_SWITCH_BAD_OPERAND, offset)),
+    };
+
+    // Check: The type of the reference is the same as the enum definition expected in
+    // the jump table.
+    let enum_def = match *inner_type {
+        SignatureToken::Datatype(handle) | SignatureToken::DatatypeInstantiation(handle, _) => {
+            let enum_def = verifier.resolver.enum_def_at(jump_table.head_enum)?;
+            if handle != enum_def.enum_handle {
+                return Err(verifier.error(StatusCode::ENUM_TYPE_MISMATCH, offset));
+            }
+            enum_def
+        }
+        _ => return Err(verifier.error(StatusCode::ENUM_TYPE_MISMATCH, offset)),
+    };
+
+    // Cardinality check is sufficient to guarantee exhaustivity.
+    if jump_table.jump_table.len() != enum_def.variants.len() {
+        return Err(verifier.error(StatusCode::PARTIAL_ENUM_SWITCH, offset));
     }
 
     Ok(())
@@ -298,7 +345,7 @@ fn type_fields_signature(
     }
 }
 
-fn pack(
+fn pack_struct(
     verifier: &mut TypeSafetyChecker,
     meter: &mut impl Meter,
     offset: CodeOffset,
@@ -318,7 +365,7 @@ fn pack(
     Ok(())
 }
 
-fn unpack(
+fn unpack_struct(
     verifier: &mut TypeSafetyChecker,
     meter: &mut impl Meter,
     offset: CodeOffset,
@@ -336,6 +383,99 @@ fn unpack(
 
     let field_sig = type_fields_signature(verifier, meter, offset, struct_def, type_args)?;
     for sig in field_sig.0 {
+        verifier.push(meter, sig)?
+    }
+    Ok(())
+}
+
+fn pack_enum_variant(
+    verifier: &mut TypeSafetyChecker,
+    meter: &mut impl Meter,
+    offset: CodeOffset,
+    enum_def: &EnumDefinition,
+    variant_def: &VariantDefinition,
+    type_args: &Signature,
+) -> PartialVMResult<()> {
+    let enum_type = materialize_type(enum_def.enum_handle, type_args);
+    let field_sig = variant_def
+        .fields
+        .iter()
+        .map(|field_def| instantiate(&field_def.signature.0, type_args));
+    for sig in field_sig.rev() {
+        let arg = safe_unwrap_err!(verifier.stack.pop());
+        if arg != sig {
+            return Err(verifier.error(StatusCode::PACK_TYPE_MISMATCH_ERROR, offset));
+        }
+    }
+
+    verifier.push(meter, enum_type)?;
+    Ok(())
+}
+
+fn unpack_enum_variant_by_value(
+    verifier: &mut TypeSafetyChecker,
+    meter: &mut impl Meter,
+    offset: CodeOffset,
+    enum_def: &EnumDefinition,
+    variant_def: &VariantDefinition,
+    type_args: &Signature,
+) -> PartialVMResult<()> {
+    let enum_type = materialize_type(enum_def.enum_handle, type_args);
+
+    // Pop an abstract value from the stack and check if its type is equal to the one
+    // declared.
+    let arg = safe_unwrap_err!(verifier.stack.pop());
+    if arg != enum_type {
+        return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset));
+    }
+
+    let field_sig = variant_def
+        .fields
+        .iter()
+        .map(|field_def| instantiate(&field_def.signature.0, type_args));
+    for sig in field_sig {
+        verifier.push(meter, sig)?
+    }
+    Ok(())
+}
+
+fn unpack_enum_variant_by_ref(
+    verifier: &mut TypeSafetyChecker,
+    meter: &mut impl Meter,
+    offset: CodeOffset,
+    mut_: bool,
+    enum_def: &EnumDefinition,
+    variant_def: &VariantDefinition,
+    type_args: &Signature,
+) -> PartialVMResult<()> {
+    let enum_type = materialize_type(enum_def.enum_handle, type_args);
+
+    // Pop an abstract value from the stack and check if its type is equal to the one
+    // declared.
+    let arg = safe_unwrap_err!(verifier.stack.pop());
+
+    // If unpacking the enum mutably the value must be a mutable reference.
+    // If unpacking the enum immutably the value must be an immutable reference.
+    let inner = match arg {
+        ST::Reference(inner) if !mut_ => inner,
+        ST::MutableReference(inner) if mut_ => inner,
+        _ => return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset)),
+    };
+
+    if *inner != enum_type {
+        return Err(verifier.error(StatusCode::UNPACK_TYPE_MISMATCH_ERROR, offset));
+    }
+
+    let field_sig = variant_def
+        .fields
+        .iter()
+        .map(|field_def| instantiate(&field_def.signature.0, type_args));
+    for sig in field_sig {
+        let sig = if mut_ {
+            ST::MutableReference(Box::new(sig))
+        } else {
+            ST::Reference(Box::new(sig))
+        };
         verifier.push(meter, sig)?
     }
     Ok(())
@@ -450,6 +590,7 @@ fn borrow_vector_element(
 fn verify_instr(
     verifier: &mut TypeSafetyChecker,
     bytecode: &Bytecode,
+    jump_tables: &[VariantJumpTable],
     offset: CodeOffset,
     meter: &mut impl Meter,
 ) -> PartialVMResult<()> {
@@ -610,7 +751,7 @@ fn verify_instr(
 
         Bytecode::Pack(idx) => {
             let struct_definition = verifier.resolver.struct_def_at(*idx)?;
-            pack(
+            pack_struct(
                 verifier,
                 meter,
                 offset,
@@ -624,12 +765,12 @@ fn verify_instr(
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
-            pack(verifier, meter, offset, struct_def, type_args)?
+            pack_struct(verifier, meter, offset, struct_def, type_args)?
         }
 
         Bytecode::Unpack(idx) => {
             let struct_definition = verifier.resolver.struct_def_at(*idx)?;
-            unpack(
+            unpack_struct(
                 verifier,
                 meter,
                 offset,
@@ -643,7 +784,7 @@ fn verify_instr(
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_args.0)?;
-            unpack(verifier, meter, offset, struct_def, type_args)?
+            unpack_struct(verifier, meter, offset, struct_def, type_args)?
         }
 
         Bytecode::ReadRef => {
@@ -932,6 +1073,104 @@ fn verify_instr(
             }
             verifier.push(meter, ST::U256)?;
         }
+        Bytecode::PackVariant(eidx, vtag) => {
+            let enum_def = verifier.resolver.enum_def_at(*eidx)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            pack_enum_variant(
+                verifier,
+                meter,
+                offset,
+                enum_def,
+                variant_def,
+                &Signature(vec![]),
+            )?
+        }
+        Bytecode::PackVariantGeneric(edii, vtag) => {
+            let enum_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let type_args = verifier.resolver.signature_at(enum_inst.type_parameters);
+            let enum_def = verifier.resolver.enum_def_at(enum_inst.def)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            pack_enum_variant(verifier, meter, offset, enum_def, variant_def, type_args)?
+        }
+        Bytecode::UnpackVariant(eidx, vtag) => {
+            let enum_def = verifier.resolver.enum_def_at(*eidx)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            unpack_enum_variant_by_value(
+                verifier,
+                meter,
+                offset,
+                enum_def,
+                variant_def,
+                &Signature(vec![]),
+            )?
+        }
+        Bytecode::UnpackVariantGeneric(edii, vtag) => {
+            let enum_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let type_args = verifier.resolver.signature_at(enum_inst.type_parameters);
+            let enum_def = verifier.resolver.enum_def_at(enum_inst.def)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            unpack_enum_variant_by_value(verifier, meter, offset, enum_def, variant_def, type_args)?
+        }
+        Bytecode::UnpackVariantImmRef(eidx, vtag) => {
+            let enum_def = verifier.resolver.enum_def_at(*eidx)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            unpack_enum_variant_by_ref(
+                verifier,
+                meter,
+                offset,
+                /* mut_ */ false,
+                enum_def,
+                variant_def,
+                &Signature(vec![]),
+            )?
+        }
+        Bytecode::UnpackVariantMutRef(eidx, vtag) => {
+            let enum_def = verifier.resolver.enum_def_at(*eidx)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            unpack_enum_variant_by_ref(
+                verifier,
+                meter,
+                offset,
+                /* mut_ */ true,
+                enum_def,
+                variant_def,
+                &Signature(vec![]),
+            )?
+        }
+        Bytecode::UnpackVariantGenericImmRef(edii, vtag) => {
+            let enum_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let type_args = verifier.resolver.signature_at(enum_inst.type_parameters);
+            let enum_def = verifier.resolver.enum_def_at(enum_inst.def)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            unpack_enum_variant_by_ref(
+                verifier,
+                meter,
+                offset,
+                /* mut_ */ false,
+                enum_def,
+                variant_def,
+                type_args,
+            )?
+        }
+        Bytecode::UnpackVariantGenericMutRef(edii, vtag) => {
+            let enum_inst = verifier.resolver.enum_instantiation_at(*edii)?;
+            let type_args = verifier.resolver.signature_at(enum_inst.type_parameters);
+            let enum_def = verifier.resolver.enum_def_at(enum_inst.def)?;
+            let variant_def = &enum_def.variants[*vtag as usize];
+            unpack_enum_variant_by_ref(
+                verifier,
+                meter,
+                offset,
+                /* mut_ */ true,
+                enum_def,
+                variant_def,
+                type_args,
+            )?
+        }
+        Bytecode::VariantSwitch(jti) => {
+            let jt = &jump_tables[jti.0 as usize];
+            variant_switch(verifier, offset, jt)?
+        }
     };
     Ok(())
 }
@@ -940,11 +1179,11 @@ fn verify_instr(
 // Helpers functions for types
 //
 
-fn materialize_type(struct_handle: StructHandleIndex, type_args: &Signature) -> SignatureToken {
+fn materialize_type(struct_handle: DatatypeHandleIndex, type_args: &Signature) -> SignatureToken {
     if type_args.is_empty() {
-        ST::Struct(struct_handle)
+        ST::Datatype(struct_handle)
     } else {
-        ST::StructInstantiation(struct_handle, type_args.0.clone())
+        ST::DatatypeInstantiation(struct_handle, type_args.0.clone())
     }
 }
 
@@ -966,8 +1205,8 @@ fn instantiate(token: &SignatureToken, subst: &Signature) -> SignatureToken {
         Address => Address,
         Signer => Signer,
         Vector(ty) => Vector(Box::new(instantiate(ty, subst))),
-        Struct(idx) => Struct(*idx),
-        StructInstantiation(idx, struct_type_args) => StructInstantiation(
+        Datatype(idx) => Datatype(*idx),
+        DatatypeInstantiation(idx, struct_type_args) => DatatypeInstantiation(
             *idx,
             struct_type_args
                 .iter()

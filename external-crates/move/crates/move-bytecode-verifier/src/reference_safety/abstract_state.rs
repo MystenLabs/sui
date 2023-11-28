@@ -11,8 +11,9 @@ use move_binary_format::{
     binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        CodeOffset, FieldHandleIndex, FunctionDefinitionIndex, LocalIndex, Signature,
-        SignatureToken, StructDefinitionIndex,
+        CodeOffset, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinitionIndex, LocalIndex,
+        MemberCount, Signature, SignatureToken, StructDefinitionIndex, VariantDefinition,
+        VariantTag,
     },
     safe_unwrap,
 };
@@ -58,7 +59,8 @@ impl AbstractValue {
 enum Label {
     Local(LocalIndex),
     Global(StructDefinitionIndex),
-    Field(FieldHandleIndex),
+    StructField(FieldHandleIndex),
+    VariantField(EnumDefinitionIndex, VariantTag, MemberCount),
 }
 
 // Needed for debugging with the borrow graph
@@ -67,7 +69,10 @@ impl std::fmt::Display for Label {
         match self {
             Label::Local(i) => write!(f, "local#{}", i),
             Label::Global(i) => write!(f, "resource@{}", i),
-            Label::Field(i) => write!(f, "field#{}", i),
+            Label::StructField(i) => write!(f, "struct_field#{}", i),
+            Label::VariantField(eidx, tag, field_idx) => {
+                write!(f, "variant_field#{}#{}#{}", eidx, tag, field_idx)
+            }
         }
     }
 }
@@ -174,7 +179,7 @@ impl AbstractState {
 
     fn add_field_borrow(&mut self, parent: RefID, field: FieldHandleIndex, child: RefID) {
         self.borrow_graph
-            .add_strong_field_borrow((), parent, Label::Field(field), child)
+            .add_strong_field_borrow((), parent, Label::StructField(field), child)
     }
 
     fn add_local_borrow(&mut self, local: LocalIndex, id: RefID) {
@@ -185,6 +190,22 @@ impl AbstractState {
     fn add_resource_borrow(&mut self, resource: StructDefinitionIndex, id: RefID) {
         self.borrow_graph
             .add_weak_field_borrow((), self.frame_root(), Label::Global(resource), id)
+    }
+
+    fn add_variant_field_borrow(
+        &mut self,
+        parent: RefID,
+        variant_tag: VariantTag,
+        variant_def: &VariantDefinition,
+        field_index: MemberCount,
+        child_id: RefID,
+    ) {
+        self.borrow_graph.add_strong_field_borrow(
+            (),
+            parent,
+            Label::VariantField(variant_def.enum_def, variant_tag, field_index),
+            child_id,
+        )
     }
 
     /// removes `id` from borrow graph
@@ -250,7 +271,7 @@ impl AbstractState {
     /// - Immutable references are not freezable by the typing rules
     fn is_freezable(&self, id: RefID, at_field_opt: Option<FieldHandleIndex>) -> bool {
         assert!(self.borrow_graph.is_mutable(id));
-        !self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::Field))
+        !self.has_consistent_mutable_borrows(id, at_field_opt.map(Label::StructField))
     }
 
     /// checks if `id` is readable
@@ -450,6 +471,40 @@ impl AbstractState {
         self.add_field_borrow(id, field, field_borrow_id);
         self.release(id);
         Ok(AbstractValue::Reference(field_borrow_id))
+    }
+
+    pub fn unpack_enum_variant_ref(
+        &mut self,
+        offset: CodeOffset,
+        variant_tag: VariantTag,
+        variant_def: &VariantDefinition,
+        mut_: bool,
+        id: RefID,
+    ) -> PartialVMResult<Vec<AbstractValue>> {
+        // Any field borrows will be factored out, so don't check in the mutable case
+        if mut_ && self.has_full_borrows(id) {
+            return Err(self.error(StatusCode::VARIANT_FIELDS_ALREADY_BORROWED_MUTABLE, offset));
+        }
+
+        let field_borrows = variant_def
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let field_borrow_id = self.new_ref(mut_);
+                self.add_variant_field_borrow(
+                    id,
+                    variant_tag,
+                    variant_def,
+                    i as MemberCount,
+                    field_borrow_id,
+                );
+                AbstractValue::Reference(field_borrow_id)
+            })
+            .collect();
+
+        self.release(id);
+        Ok(field_borrows)
     }
 
     pub fn borrow_global(

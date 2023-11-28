@@ -11,8 +11,9 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, FieldHandleIndex,
-        FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex, TableIndex,
+        Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, DatatypeHandleIndex,
+        EnumDefinitionIndex, FieldHandleIndex, FunctionDefinitionIndex, FunctionHandleIndex,
+        StructDefinitionIndex, TableIndex,
     },
 };
 use move_core_types::vm_status::StatusCode;
@@ -84,53 +85,53 @@ impl<'a> InstructionConsistency<'a> {
                     self.check_function_op(offset, func_inst.handle, /* generic */ true)?;
                 }
                 Pack(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 PackGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 Unpack(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 UnpackGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 MutBorrowGlobal(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 MutBorrowGlobalGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 ImmBorrowGlobal(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 ImmBorrowGlobalGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 Exists(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 ExistsGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 MoveFrom(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 MoveFromGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 MoveTo(idx) => {
-                    self.check_type_op(offset, *idx, /* generic */ false)?;
+                    self.check_struct_type_op(offset, *idx, /* generic */ false)?;
                 }
                 MoveToGeneric(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                    self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
+                    self.check_struct_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
                 VecPack(_, num) | VecUnpack(_, num) => {
                     if *num > u16::MAX as u64 {
@@ -148,7 +149,21 @@ impl<'a> InstructionConsistency<'a> {
                 | WriteRef | Add | Sub | Mul | Mod | Div | BitOr | BitAnd | Xor | Shl | Shr
                 | Or | And | Not | Eq | Neq | Lt | Gt | Le | Ge | CopyLoc(_) | MoveLoc(_)
                 | StLoc(_) | MutBorrowLoc(_) | ImmBorrowLoc(_) | VecLen(_) | VecImmBorrow(_)
-                | VecMutBorrow(_) | VecPushBack(_) | VecPopBack(_) | VecSwap(_) | Abort | Nop => (),
+                | VecMutBorrow(_) | VecPushBack(_) | VecPopBack(_) | VecSwap(_) | Abort | Nop
+                | VariantSwitch(_) => (),
+                PackVariant(eidx, _)
+                | UnpackVariant(eidx, _)
+                | UnpackVariantImmRef(eidx, _)
+                | UnpackVariantMutRef(eidx, _) => {
+                    self.check_enum_type_op(offset, *eidx, /* generic */ false)?;
+                }
+                PackVariantGeneric(edii, _)
+                | UnpackVariantGeneric(edii, _)
+                | UnpackVariantGenericImmRef(edii, _)
+                | UnpackVariantGenericMutRef(edii, _) => {
+                    let enum_inst = self.resolver.enum_instantiation_at(*edii)?;
+                    self.check_enum_type_op(offset, enum_inst.def, /* generic */ true)?;
+                }
             }
         }
         Ok(())
@@ -167,22 +182,41 @@ impl<'a> InstructionConsistency<'a> {
         generic: bool,
     ) -> PartialVMResult<()> {
         let field_handle = self.resolver.field_handle_at(field_handle_index)?;
-        self.check_type_op(offset, field_handle.owner, generic)
+        self.check_struct_type_op(offset, field_handle.owner, generic)
     }
 
     fn current_function(&self) -> FunctionDefinitionIndex {
         self.current_function.unwrap_or(FunctionDefinitionIndex(0))
     }
 
-    fn check_type_op(
+    fn check_struct_type_op(
         &self,
         offset: usize,
         struct_def_index: StructDefinitionIndex,
         generic: bool,
     ) -> PartialVMResult<()> {
         let struct_def = self.resolver.struct_def_at(struct_def_index)?;
-        let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
-        if struct_handle.type_parameters.is_empty() == generic {
+        self.check_type_op_(offset, struct_def.struct_handle, generic)
+    }
+
+    fn check_enum_type_op(
+        &self,
+        offset: usize,
+        enum_def_index: EnumDefinitionIndex,
+        generic: bool,
+    ) -> PartialVMResult<()> {
+        let enum_def = self.resolver.enum_def_at(enum_def_index)?;
+        self.check_type_op_(offset, enum_def.enum_handle, generic)
+    }
+
+    fn check_type_op_(
+        &self,
+        offset: usize,
+        datatype_handle_index: DatatypeHandleIndex,
+        generic: bool,
+    ) -> PartialVMResult<()> {
+        let datatype_handle = self.resolver.datatype_handle_at(datatype_handle_index);
+        if datatype_handle.type_parameters.is_empty() == generic {
             return Err(
                 PartialVMError::new(StatusCode::GENERIC_MEMBER_OPCODE_MISMATCH)
                     .at_code_offset(self.current_function(), offset as CodeOffset),

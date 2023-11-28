@@ -31,7 +31,7 @@ impl<'a> LimitsVerifier<'a> {
         };
         limit_check.verify_constants(config)?;
         limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
+        limit_check.verify_datatype_handles(config)?;
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
@@ -49,16 +49,16 @@ impl<'a> LimitsVerifier<'a> {
             resolver: BinaryIndexedView::Script(script),
         };
         limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
+        limit_check.verify_datatype_handles(config)?;
         limit_check.verify_type_nodes(config)
     }
 
-    fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
+    fn verify_datatype_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(limit) = config.max_generic_instantiation_length {
-            for (idx, struct_handle) in self.resolver.struct_handles().iter().enumerate() {
+            for (idx, struct_handle) in self.resolver.datatype_handles().iter().enumerate() {
                 if struct_handle.type_parameters.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
-                        .at_index(IndexKind::StructHandle, idx as u16));
+                        .at_index(IndexKind::DatatypeHandle, idx as u16));
                 }
             }
         }
@@ -107,6 +107,14 @@ impl<'a> LimitsVerifier<'a> {
                 }
             }
         }
+        if let Some(edefs) = self.resolver.enum_defs() {
+            for field in edefs
+                .iter()
+                .flat_map(|e| e.variants.iter().flat_map(|v| &v.fields))
+            {
+                self.verify_type_node(config, &field.signature.0)?
+            }
+        }
         Ok(())
     }
 
@@ -125,7 +133,7 @@ impl<'a> LimitsVerifier<'a> {
                 // Notice that the preorder traversal will iterate all type instantiations, so we
                 // why we can ignore them below.
                 match t {
-                    SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
+                    SignatureToken::Datatype(..) | SignatureToken::DatatypeInstantiation(..) => {
                         size += STRUCT_SIZE_WEIGHT
                     }
                     SignatureToken::TypeParameter(..) => size += PARAM_SIZE_WEIGHT,
@@ -149,20 +157,57 @@ impl<'a> LimitsVerifier<'a> {
                 }
             }
         }
-        if let Some(defs) = self.resolver.struct_defs() {
-            if let Some(max_struct_definitions) = config.max_struct_definitions {
-                if defs.len() > max_struct_definitions {
+        if self.resolver.struct_defs().is_some() || self.resolver.enum_defs().is_some() {
+            if let Some(max_data_definitions) = config.max_data_definitions {
+                let defs_len = self
+                    .resolver
+                    .struct_defs()
+                    .map(|s| s.len())
+                    .unwrap_or_default()
+                    + self
+                        .resolver
+                        .enum_defs()
+                        .map(|e| e.len())
+                        .unwrap_or_default();
+                if defs_len > max_data_definitions {
                     return Err(PartialVMError::new(
                         StatusCode::MAX_STRUCT_DEFINITIONS_REACHED,
                     ));
                 }
             }
+
             if let Some(max_fields_in_struct) = config.max_fields_in_struct {
-                for def in defs {
-                    match &def.field_information {
-                        StructFieldInformation::Native => (),
-                        StructFieldInformation::Declared(fields) => {
-                            if fields.len() > max_fields_in_struct {
+                if let Some(defs) = self.resolver.struct_defs() {
+                    for def in defs {
+                        match &def.field_information {
+                            StructFieldInformation::Native => (),
+                            StructFieldInformation::Declared(fields) => {
+                                if fields.len() > max_fields_in_struct {
+                                    return Err(PartialVMError::new(
+                                        StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 1. Total number of fields in the enum is less than the number of fields allowed
+                //    in a struct.
+                // 2. Total number of variants in the enum is less than the number of variants allowed in an enum.
+                if let Some(defs) = self.resolver.enum_defs() {
+                    let mut num_fields = 0;
+                    for def in defs {
+                        if config
+                            .max_variants_in_enum
+                            .map(|max| def.variants.len() <= max as usize)
+                            .unwrap_or(true)
+                        {
+                            return Err(PartialVMError::new(StatusCode::MAX_VARIANTS_REACHED));
+                        }
+                        for variant in &def.variants {
+                            num_fields += variant.fields.len();
+                            if num_fields > max_fields_in_struct {
                                 return Err(PartialVMError::new(
                                     StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
                                 ));

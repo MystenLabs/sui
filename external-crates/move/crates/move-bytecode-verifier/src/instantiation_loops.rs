@@ -143,13 +143,13 @@ impl<'a> InstantiationLoopChecker<'a> {
 
         fn rec(type_params: &mut HashSet<TypeParameterIndex>, ty: &SignatureToken) {
             match ty {
-                Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Signer | Struct(_) => (),
+                Bool | Address | U8 | U16 | U32 | U64 | U128 | U256 | Signer | Datatype(_) => {}
                 TypeParameter(idx) => {
                     type_params.insert(*idx);
                 }
                 Vector(ty) => rec(type_params, ty),
                 Reference(ty) | MutableReference(ty) => rec(type_params, ty),
-                StructInstantiation(_, tys) => {
+                DatatypeInstantiation(_, tys) => {
                     for ty in tys {
                         rec(type_params, ty);
                     }

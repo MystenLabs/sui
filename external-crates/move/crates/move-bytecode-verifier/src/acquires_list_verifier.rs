@@ -73,7 +73,7 @@ impl<'a> AcquiresVerifier<'a> {
             }
 
             let struct_def = safe_unwrap!(module.struct_defs().get(annotation.0 as usize));
-            let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
             if !struct_handle.abilities.has_key() {
                 return Err(PartialVMError::new(StatusCode::INVALID_ACQUIRES_ANNOTATION));
             }
@@ -171,7 +171,16 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::VecPushBack(_)
             | Bytecode::VecPopBack(_)
             | Bytecode::VecUnpack(..)
-            | Bytecode::VecSwap(_) => Ok(()),
+            | Bytecode::VecSwap(_)
+            | Bytecode::PackVariant(_, _)
+            | Bytecode::PackVariantGeneric(_, _)
+            | Bytecode::UnpackVariant(_, _)
+            | Bytecode::UnpackVariantImmRef(_, _)
+            | Bytecode::UnpackVariantMutRef(_, _)
+            | Bytecode::UnpackVariantGeneric(_, _)
+            | Bytecode::UnpackVariantGenericImmRef(_, _)
+            | Bytecode::UnpackVariantGenericMutRef(_, _)
+            | Bytecode::VariantSwitch(_) => Ok(()),
         }
     }
 
