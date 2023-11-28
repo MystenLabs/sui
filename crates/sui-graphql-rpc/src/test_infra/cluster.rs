@@ -4,7 +4,7 @@
 use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
 use crate::config::ServerConfig;
-use crate::server::simple_server::start_example_server;
+use crate::server::graphiql_server::start_graphiql_server;
 use mysten_metrics::init_metrics;
 use std::env;
 use std::net::SocketAddr;
@@ -135,7 +135,7 @@ pub async fn start_graphql_server(graphql_connection_config: ConnectionConfig) -
 
     // Starts graphql server
     tokio::spawn(async move {
-        start_example_server(&server_config).await.unwrap();
+        start_graphiql_server(&server_config).await.unwrap();
     })
 }
 
