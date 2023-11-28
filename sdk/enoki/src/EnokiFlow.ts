@@ -8,7 +8,7 @@ import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 import { decodeJwt } from 'jose';
 import type { WritableAtom } from 'nanostores';
-import { atom, onSet } from 'nanostores';
+import { atom, onMount, onSet } from 'nanostores';
 
 import type { Encryption } from './encryption.js';
 import { createDefaultEncryption } from './encryption.js';
@@ -88,6 +88,11 @@ export class EnokiFlow {
 
 		this.$zkLoginState = atom(storedState || {});
 		this.$zkLoginSession = atom({ initialized: false, value: null });
+
+		// Hydrate the session on mount:
+		onMount(this.$zkLoginSession, () => {
+			this.getSession();
+		});
 
 		onSet(this.$zkLoginState, ({ newValue }) => {
 			this.#store.set(this.#storageKeys.STATE, JSON.stringify(newValue));
