@@ -363,6 +363,9 @@ pub trait TransactionEffectsAPI {
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
 
+    /// The version assigned to all output objects (apart from packages).
+    fn lamport_version(&self) -> SequenceNumber;
+
     /// Metadata of objects prior to modification. This includes any object that exists in the
     /// store prior to this transaction and is modified in this transaction.
     /// It includes objects that are mutated, wrapped and deleted.

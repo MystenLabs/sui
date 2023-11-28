@@ -163,7 +163,7 @@ Response: {
           "effects": {
             "status": "SUCCESS",
             "errors": null,
-            "lamportVersion": 2,
+            "lamportVersion": 3,
             "dependencies": [
               {
                 "digest": "C5AEGK7kAtcPQotXhpzmgaAZFyTu5GtnkmcfNXFAubXk"

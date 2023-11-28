@@ -1694,11 +1694,10 @@ type TransactionBlockEffects {
 	"""
 	status: ExecutionStatus
 	"""
-	The latest version of all objects that have been created or modified by this transaction,
-	immediately following this transaction.  A system transaction that does not modify or create
-	objects will not have a lamport version.
+	The latest version of all objects (apart from packages) that have been created or modified
+	by this transaction, immediately following this transaction.
 	"""
-	lamportVersion: Int
+	lamportVersion: Int!
 	"""
 	The reason for a transaction failure, if it did fail.
 	"""

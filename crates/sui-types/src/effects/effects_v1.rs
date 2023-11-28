@@ -107,6 +107,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
         self.modified_at_versions.clone()
     }
+
+    fn lamport_version(&self) -> SequenceNumber {
+        SequenceNumber::lamport_increment(self.modified_at_versions.iter().map(|(_, v)| *v))
+    }
+
     fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)> {
         unimplemented!("Only supposed by v2 and above");
     }
