@@ -573,14 +573,13 @@ addCityWeather();
 - It defines a constant `NUMBER_OF_CITIES`, which is the number of cities to be added to the weather oracle in each batch.
 - It defines an async function `addCityWeather`, which does the following:
     - It gets an array of cities from the `getCities` function.
-    - It gets an array of 1000 geonameids from the `get1000Geonameids` function.
+    - It gets an array of 1,000 geonameids from the `get1000Geonameids` function.
     - It gets an array of weather oracle dynamic fields from the `getWeatherOracleDynamicFields` function, which contains the geonameids of the existing cities in the weather oracle.
     - It initializes a counter and a transaction block object.
     - It loops through the cities array and checks if the city's geonameid is not in the weather oracle dynamic fields array and is in the 1000 geonameids array.
     - If the condition is met, it adds a moveCall to the transaction block, which calls the add_city method of the weather oracle contract with the city's information, such as geonameid, asciiname, country, latitude, and longitude.
     - It increments the counter and checks if it reaches the `NUMBER_OF_CITIES`. If so, it calls another async function signAndExecuteTransactionBlock with the transaction block as an argument, which signs and executes the transaction block on the blockchain and logs the result. It then resets the counter and the transaction block.
     - After the loop ends, it calls the signAndExecuteTransactionBlock function again with the remaining transaction block.
-- It calls the `addCityWeather` function.
 
 Awesome, you have learned how to initialize the `WeatherOracle` shared object. The next step is to learn how to update them every 10 minutes with the latest weather data from the OpenWeatherMap API.
 
