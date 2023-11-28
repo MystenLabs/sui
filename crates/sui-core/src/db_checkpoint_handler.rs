@@ -157,15 +157,17 @@ impl DBCheckpointHandler {
         loop {
             tokio::select! {
                 _now = interval.tick() => {
-                    if let Ok(epochs) = find_missing_epochs_dirs(self.output_object_store.as_ref().unwrap(), SUCCESS_MARKER).await {
-                        self.metrics.first_missing_db_checkpoint_epoch.set(epochs.first().cloned().unwrap_or(0) as i64);
-                        if let Err(err) = self.upload_db_checkpoints_to_object_store(epochs).await {
-                            error!("Failed to upload db checkpoint to remote store with err: {:?}", err);
+                    match find_missing_epochs_dirs(self.output_object_store.as_ref().unwrap(), SUCCESS_MARKER).await {
+                        Ok(epochs) => {
+                            self.metrics.first_missing_db_checkpoint_epoch.set(epochs.first().cloned().unwrap_or(0) as i64);
+                            if let Err(err) = self.upload_db_checkpoints_to_object_store(epochs).await {
+                                error!("Failed to upload db checkpoint to remote store with err: {:?}", err);
+                            }
                         }
-                    } else {
-                        error!("Failed to find missing db checkpoints in remote store");
+                        Err(err) => {
+                            error!("Failed to find missing db checkpoints in remote store: {:?}", err);
+                        }
                     }
-
                 },
                  _ = recv.recv() => break,
             }
