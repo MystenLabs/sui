@@ -5,7 +5,7 @@
 You can get started quickly by running the following command:
 
 ```bash
-pnpm create @mysten/create-dapp
+pnpm create @mysten/dapp
 ```
 
 This will prompt you through creating a new dApp project. It will ask you for the name/directory and
