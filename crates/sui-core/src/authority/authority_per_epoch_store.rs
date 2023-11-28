@@ -29,8 +29,10 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
-    TransactionDataAPI, VerifiedCertificate, VerifiedSignedTransaction,
+    TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
+    VerifiedSignedTransaction,
 };
+use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::{
@@ -64,7 +66,7 @@ use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ConsensusTransactionOrdering, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
@@ -419,6 +421,9 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions: DBMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>,
+
+    /// Records the round numbers for which we have written randomness.
+    randomness_rounds_written: DBMap<u64, ()>,
 }
 
 // DeferralKey requires both the round to which the tx should be deferred (so that we can
@@ -1328,11 +1333,33 @@ impl AuthorityPerEpochStore {
         Ok(txns)
     }
 
-    // Placeholder implementation
-    fn should_defer(&self, _cert: &VerifiedExecutableTransaction) -> Option<DeferralKey> {
-        // placeholder constructions to silence lints
-        let _ = DeferralKey::new_for_randomness_round(0, 0);
+    fn should_defer(
+        &self,
+        cert: &VerifiedExecutableTransaction,
+        deferred_tx_digests: &HashSet<TransactionDigest>,
+        last_randomness_round: u64,
+    ) -> Option<DeferralKey> {
+        // Defer transaction if it depends on Random object.
+        if cert
+            .shared_input_objects()
+            .find(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
+            .is_some()
+        {
+            // Don't re-defer randomness-using tx.
+            if deferred_tx_digests.contains(cert.digest()) {
+                return None;
+            }
+            return Some(DeferralKey::new_for_randomness_round(
+                // Deferral by two rounds guarantees that the transaction will not depend on
+                // randomness that was revealed at the time it was sequenced.
+                last_randomness_round + 2,
+                last_randomness_round,
+            ));
+        }
+
+        // placeholder construction to silence lints
         let _ = DeferralKey::new_for_consensus_round(0, 0);
+
         None
     }
 
@@ -1400,6 +1427,10 @@ impl AuthorityPerEpochStore {
 
     pub fn pending_consensus_certificates(&self) -> HashSet<TransactionDigest> {
         self.pending_consensus_certificates.lock().clone()
+    }
+
+    pub fn deferred_transactions_empty(&self) -> bool {
+        self.tables.deferred_transactions.is_empty()
     }
 
     /// Stores a list of pending certificates to be executed.
@@ -2036,25 +2067,58 @@ impl AuthorityPerEpochStore {
 
         let mut batch = self.db_batch();
 
-        sequenced_transactions.extend(
-            self.load_deferred_transactions_for_consensus_round(&mut batch, commit_round)?
-                .into_iter(),
-        );
-
-        // TODO: This is a no-op until we start using random round transactions
-        let placeholder_random_round = u64::MAX - 1;
-        sequenced_transactions.extend(
-            self.load_deferred_transactions_for_randomness_round(
+        // Load transactions deferred from prevous commits.
+        let mut last_randomness_round_written = self.last_randomness_round_written()?;
+        let deferred_tx: Vec<VerifiedSequencedConsensusTransaction> = self
+            .load_deferred_transactions_for_consensus_round(&mut batch, commit_round)?
+            .into_iter()
+            .chain(self.load_deferred_transactions_for_randomness_round(
                 &mut batch,
-                placeholder_random_round,
-            )?
-            .into_iter(),
-        );
+                last_randomness_round_written,
+            )?)
+            .collect();
+        let deferred_tx_digests: HashSet<_> = deferred_tx
+            .iter()
+            .map(|tx| match tx.0.transaction.key() {
+                SequencedConsensusTransactionKey::External(
+                    ConsensusTransactionKey::Certificate(digest),
+                ) => digest,
+                _ => panic!("deferred transaction was not a user certificate: {tx:?}"),
+            })
+            .collect();
+        sequenced_transactions.extend(deferred_tx.into_iter());
 
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),
         );
+
+        // Pre-process transactions to find the most recent randomness round included in the commit.
+        for tx in sequenced_transactions.iter() {
+            match &tx.0.transaction {
+                SequencedConsensusTransactionKind::System(tx) => {
+                    if let TransactionKind::RandomnessStateUpdate(rsu) =
+                        tx.data().intent_message().value.kind()
+                    {
+                        last_randomness_round_written =
+                            std::cmp::max(last_randomness_round_written, rsu.randomness_round);
+                    }
+                }
+                SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                    tracking_id: _,
+                    kind: ConsensusTransactionKind::UserTransaction(_),
+                }) => {
+                    if self.protocol_config().consensus_transaction_ordering()
+                        == ConsensusTransactionOrdering::ByGasPrice
+                    {
+                        // Gas-price ordering puts user tx last, so we can break once we reach
+                        // them.
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
 
         let (transactions_to_schedule, notifications, lock_and_final_round) = self
             .process_consensus_transactions(
@@ -2063,6 +2127,8 @@ impl AuthorityPerEpochStore {
                 &end_of_publish_transactions,
                 checkpoint_service,
                 object_store,
+                deferred_tx_digests,
+                last_randomness_round_written,
             )
             .await?;
         self.record_consensus_commit_stats(&mut batch, consensus_stats)?;
@@ -2176,6 +2242,8 @@ impl AuthorityPerEpochStore {
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
         object_store: impl ObjectStore,
+        deferred_tx_digests: HashSet<TransactionDigest>,
+        last_randomness_round: u64,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
@@ -2222,6 +2290,8 @@ impl AuthorityPerEpochStore {
                     &mut shared_input_next_versions,
                     tx,
                     checkpoint_service,
+                    &deferred_tx_digests,
+                    last_randomness_round,
                 )
                 .await?
             {
@@ -2346,6 +2416,8 @@ impl AuthorityPerEpochStore {
         shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
+        deferred_tx_digests: &HashSet<TransactionDigest>,
+        last_randomness_round: u64,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -2398,11 +2470,12 @@ impl AuthorityPerEpochStore {
                     return Ok(ConsensusCertificateResult::Ignored);
                 }
 
-                if let Some(deferral_key) = self.should_defer(&certificate) {
+                if let Some(deferral_key) =
+                    self.should_defer(&certificate, deferred_tx_digests, last_randomness_round)
+                {
                     debug!(
-                        "Deferring consensus certificate for transaction {:?} until {:?}",
+                        "Deferring consensus certificate for transaction {:?} until {deferral_key:?}",
                         certificate.digest(),
-                        deferral_key
                     );
                     return Ok(ConsensusCertificateResult::Defered(deferral_key));
                 }
@@ -2491,6 +2564,13 @@ impl AuthorityPerEpochStore {
                 panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
+                if let TransactionKind::RandomnessStateUpdate(rsu) =
+                    &system_transaction.data().intent_message().value.kind()
+                {
+                    batch
+                        .insert_batch(&self.tables.randomness_rounds_written, [(rsu.round, ())])?;
+                }
+
                 if !self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
@@ -2792,6 +2872,16 @@ impl AuthorityPerEpochStore {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             self.signature_verifier.insert_jwk(jwk_id, jwk);
         }
+    }
+
+    pub fn last_randomness_round_written(&self) -> SuiResult<u64> {
+        Ok(self
+            .tables
+            .randomness_rounds_written
+            .unbounded_iter()
+            .skip_to_last()
+            .next()
+            .map_or(0, |(round, _)| round))
     }
 
     pub fn clear_signature_cache(&self) {
