@@ -12354,21 +12354,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-pkg-dump"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "clap",
- "diesel",
- "serde_json",
- "sui-indexer",
- "sui-types",
- "tokio",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-proc-macros"
 version = "0.7.0"
 dependencies = [
@@ -12972,6 +12957,7 @@ dependencies = [
  "colored",
  "comfy-table",
  "const-str",
+ "diesel",
  "eyre",
  "fastcrypto",
  "futures",
@@ -12994,6 +12980,7 @@ dependencies = [
  "sui-archival",
  "sui-config",
  "sui-core",
+ "sui-indexer",
  "sui-network",
  "sui-protocol-config",
  "sui-replay",

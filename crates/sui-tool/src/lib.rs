@@ -63,6 +63,7 @@ use typed_store::rocks::MetricConf;
 
 pub mod commands;
 pub mod db_tool;
+pub mod pkg_dump;
 
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
@@ -922,7 +923,7 @@ pub async fn download_formal_snapshot(
     } else {
         eprintln!(
             "WARNING: Skipping snapshot verification! \
-            This is highly discouraged unless you fully trust the source of this snapshot and its contents. 
+            This is highly discouraged unless you fully trust the source of this snapshot and its contents.
             If this was unintentional, rerun with `--verify` set to `true`"
         );
     }

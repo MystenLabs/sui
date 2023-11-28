@@ -6,7 +6,7 @@ use crate::{
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, get_object,
     get_transaction_block, make_clients, restore_from_db_checkpoint, state_sync_from_archive,
     verify_archive, verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput,
-    VerboseObjectOutput,
+    VerboseObjectOutput, pkg_dump,
 };
 use anyhow::Result;
 use std::env;
@@ -181,6 +181,22 @@ pub enum ToolCommand {
         end: u64,
         #[arg(default_value_t = 80)]
         max_content_length: usize,
+    },
+
+    /// Download all packages to the local filesystem from an indexer database. Each package gets
+    /// its own sub-directory, named for its ID on-chain, containing two metadata files
+    /// (linkage.json and origins.json) as well as a file for every module it contains. Each module
+    /// file is named for its module name, with a .mv suffix, and contains Move bytecode (suitable
+    /// for passing into a disassembler).
+    #[command(name = "dump-packages")]
+    DumpPackages {
+        /// Connection information for the Indexer's Postgres DB.
+        #[clap(long, short)]
+        db_url: String,
+
+        /// Path to a non-existent directory that can be created and filled with package information.
+        #[clap(long, short)]
+        output_dir: PathBuf,
     },
 
     #[command(name = "dump-validators")]
@@ -420,6 +436,9 @@ impl ToolCommand {
                     Some(c) => execute_db_tool_command(path, c).await?,
                     None => print_db_all_tables(path)?,
                 }
+            }
+            ToolCommand::DumpPackages { db_url, output_dir } => {
+                pkg_dump::dump(db_url, output_dir).await?;
             }
             ToolCommand::DumpValidators { genesis, concise } => {
                 let genesis = Genesis::load(genesis).unwrap();

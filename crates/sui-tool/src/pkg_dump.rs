@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context, Result};
-use clap::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection, RunQueryDsl,
@@ -17,35 +16,9 @@ use diesel::{
 use sui_indexer::{models_v2::packages::StoredPackage, schema_v2::packages};
 use sui_types::{base_types::SuiAddress, move_package::MovePackage};
 
-#[derive(Parser)]
-#[clap(
-    name = "sui-pkg-dump",
-    about = "\
-    Download all packages to the local filesystem from an indexer database.  Each package gets its \
-    own sub-directory, named for its ID on-chain, containing two metadata files (linkage.json and \
-    origins.json) as well as a file for every module it contains.  Each module file is named for \
-    its module name, with a .mv suffix, and contains Move bytecode (suitable for passing into a \
-    disassembler).",
-    rename_all = "kebab-case",
-    author,
-    version
-)]
-struct Args {
-    /// Connection information for the Indexer's Postgres DB.
-    #[clap(long, short)]
-    db_url: String,
-
-    /// Path to a non-existent directory that can be created and filled with package information.
-    #[clap(long, short)]
-    output_dir: PathBuf,
-}
-
 type PgPool = Pool<ConnectionManager<PgConnection>>;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let Args { db_url, output_dir } = Args::parse();
-
+pub(crate) async fn dump(db_url: String, output_dir: PathBuf) -> Result<()> {
     ensure_output_directory(&output_dir)?;
 
     let conn = ConnectionManager::<PgConnection>::new(db_url);
