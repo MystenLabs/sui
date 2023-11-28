@@ -105,7 +105,7 @@ enum Operation {
     /// Generate a parameters files.
     Genesis {
         /// The list of ip addresses of the all validators.
-        #[clap(long, value_name = "ADDR", value_delimiter = ' ', num_args(4..))]
+        #[clap(long, value_name = "ADDR", value_delimiter = ' ', num_args(2..))]
         ips: Vec<IpAddr>,
         /// Number of sequence workers.
         #[clap(long, default_value_t = 1)]
@@ -147,20 +147,12 @@ async fn main() {
             working_directory,
         } => {
             tracing::info!("Generating benchmark genesis files");
-            println!(
-                "Generating benchmark genesis files, number of ips: {}",
-                ips.len()
-            );
             fs::create_dir_all(&working_directory).expect(&format!(
                 "Failed to create directory '{}'",
                 working_directory.display()
             ));
             let path = working_directory.join(GlobalConfig::DEFAULT_CONFIG_NAME);
-            println!("Generating configs.json at {}", path.display());
-            let config = GlobalConfig::new_for_benchmark(ips, sequence_workers);
-            println!("config: {:?}", config);
-            config.export(path);
-            sleep(Duration::from_secs(60));
+            GlobalConfig::new_for_benchmark(ips, sequence_workers).export(path);
             tracing::info!("Generated configs.json");
         }
     }
