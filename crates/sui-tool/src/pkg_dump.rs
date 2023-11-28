@@ -36,7 +36,7 @@ pub(crate) async fn dump(db_url: String, output_dir: PathBuf) -> Result<()> {
     let mut progress = 0;
     for (i, pkg) in pkgs.into_iter().enumerate() {
         let pct = (100 * i) / total;
-        if pct % 5 == 0  && pct > progress {
+        if pct % 5 == 0 && pct > progress {
             info!("Dumping packages ({total}): {pct: >3}%");
             progress = pct;
         }

@@ -4,9 +4,9 @@
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, get_object,
-    get_transaction_block, make_clients, restore_from_db_checkpoint, state_sync_from_archive,
-    verify_archive, verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput,
-    VerboseObjectOutput, pkg_dump,
+    get_transaction_block, make_clients, pkg_dump, restore_from_db_checkpoint,
+    state_sync_from_archive, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::env;
@@ -442,7 +442,11 @@ impl ToolCommand {
                     None => print_db_all_tables(path)?,
                 }
             }
-            ToolCommand::DumpPackages { db_url, output_dir, verbose } => {
+            ToolCommand::DumpPackages {
+                db_url,
+                output_dir,
+                verbose,
+            } => {
                 if !verbose {
                     tracing_handle
                         .update_log("off")
