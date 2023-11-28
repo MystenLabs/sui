@@ -21,18 +21,14 @@ use move_compiler::{
         codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
     },
-    hlir::ast::{
-        BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_, Type, Type_,
-        Var,
-    },
-    parser::ast::Ability_,
+    hlir::ast::{Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     shared::{CompilationEnv, Identifier},
 };
 use std::collections::BTreeMap;
 
 use super::{
-    LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX, PUBLIC_SHARE_FUN, SHARE_FUN,
-    SUI_PKG_NAME, TRANSFER_MOD_NAME,
+    is_obj_type, LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    PUBLIC_SHARE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
 const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
@@ -157,7 +153,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
         Some(match &return_ty.value {
             Type_::Unit => vec![],
             Type_::Single(t) => {
-                let v = if is_obj_type(t) {
+                let v = if is_obj_type(t, false /* wrappable */) {
                     Value::NotFreshObj(t.loc)
                 } else {
                     Value::Other
@@ -167,7 +163,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
             Type_::Multiple(types) => types
                 .iter()
                 .map(|t| {
-                    if is_obj_type(t) {
+                    if is_obj_type(t, false /* wrappable */) {
                         Value::NotFreshObj(t.loc)
                     } else {
                         Value::Other
@@ -204,20 +200,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
 
 fn is_obj(sp!(_, l_): &LValue) -> bool {
     if let LValue_::Var(_, st) = l_ {
-        return is_obj_type(st);
-    }
-    false
-}
-
-fn is_obj_type(sp!(_, st_): &SingleType) -> bool {
-    let sp!(_, bt_) = match st_ {
-        SingleType_::Base(v) => v,
-        SingleType_::Ref(_, v) => v,
-    };
-    if let BaseType_::Apply(abilities, _, _) = bt_ {
-        if abilities.has_ability_(Ability_::Key) {
-            return true;
-        }
+        return is_obj_type(st, false /* wrappable */);
     }
     false
 }
@@ -227,7 +210,7 @@ impl SimpleDomain for State {
 
     fn new(context: &CFGContext, mut locals: BTreeMap<Var, LocalState<Value>>) -> Self {
         for (v, st) in &context.signature.parameters {
-            if is_obj_type(st) {
+            if is_obj_type(st, false /* wrappable */) {
                 let local_state = locals.get_mut(v).unwrap();
                 if let LocalState::Available(loc, _) = local_state {
                     *local_state = LocalState::Available(*loc, Value::NotFreshObj(*loc));

@@ -27,7 +27,7 @@ use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 use super::{
-    LinterDiagCategory, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    is_obj_type, LinterDiagCategory, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
     PUBLIC_TRANSFER_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
@@ -135,21 +135,23 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
             .any(|(addr, module, fun)| f.is(addr, module, fun))
         {
             if let Value::SenderAddress(sender_addr_loc) = args[1] {
-                let msg = format!(
-                    "Transfer of an object to transaction sender address in function {}",
-                    self.fn_name
-                );
-                let uid_msg =
-                    "Returning an object from a function, allows a caller to use the object \
+                if is_wrappable_obj_type(&f.arguments[0].ty) {
+                    let msg = format!(
+                        "Transfer of an object to transaction sender address in function {}",
+                        self.fn_name
+                    );
+                    let uid_msg =
+                        "Returning an object from a function, allows a caller to use the object \
                                and enables composability via programmable transactions.";
-                let mut d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
-                if sender_addr_loc != INVALID_LOC {
-                    d.add_secondary_label((
-                        sender_addr_loc,
-                        "Transaction sender address coming from here",
-                    ));
+                    let mut d = diag!(SELF_TRANSFER_DIAG, (*loc, msg), (self.fn_ret_loc, uid_msg));
+                    if sender_addr_loc != INVALID_LOC {
+                        d.add_secondary_label((
+                            sender_addr_loc,
+                            "Transaction sender address coming from here",
+                        ));
+                    }
+                    context.add_diag(d);
                 }
-                context.add_diag(d);
             }
             return Some(vec![]);
         }
@@ -162,6 +164,13 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
             Type_::Multiple(types) => vec![Value::Other; types.len()],
         })
     }
+}
+
+pub fn is_wrappable_obj_type(sp!(_, t): &Type) -> bool {
+    if let Type_::Single(st) = t {
+        return is_obj_type(st, true /* wrappable */);
+    }
+    false
 }
 
 impl SimpleDomain for State {

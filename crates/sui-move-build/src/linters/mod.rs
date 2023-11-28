@@ -1,7 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_compiler::{diagnostics::codes::WarningFilter, expansion::ast as E, naming::ast as N};
+use move_compiler::{
+    diagnostics::codes::WarningFilter,
+    expansion::ast as E,
+    hlir::ast::{BaseType_, SingleType, SingleType_},
+    naming::ast as N,
+    parser::ast::Ability_,
+};
 use move_ir_types::location::Loc;
 
 pub mod coin_field;
@@ -127,4 +133,22 @@ pub fn base_type(t: &N::Type) -> Option<&N::Type> {
         T::Apply(_, _, _) | T::Param(_) => Some(t),
         T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
     }
+}
+
+/// Returns true if a given type represents an object (or a wrappable object if the argument is set
+/// to true).
+pub fn is_obj_type(sp!(_, st_): &SingleType, wrappable: bool) -> bool {
+    let sp!(_, bt_) = match st_ {
+        SingleType_::Base(v) => v,
+        SingleType_::Ref(_, v) => v,
+    };
+    if let BaseType_::Apply(abilities, _, _) = bt_ {
+        if abilities.has_ability_(Ability_::Key) {
+            if wrappable {
+                return abilities.has_ability_(Ability_::Store);
+            }
+            return true;
+        }
+    }
+    false
 }
