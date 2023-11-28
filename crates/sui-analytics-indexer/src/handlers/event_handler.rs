@@ -7,7 +7,7 @@ use fastcrypto::encoding::{Base64, Encoding};
 use std::path::Path;
 
 use crate::handlers::{get_move_struct, AnalyticsHandler};
-use crate::package_store::LocalDBPackageStore;
+use crate::package_store::{LocalDBPackageStore, PackageCache};
 use crate::tables::EventEntry;
 use crate::FileType;
 use sui_indexer::framework::Handler;
@@ -20,7 +20,8 @@ use sui_types::event::Event;
 
 pub struct EventHandler {
     events: Vec<EventEntry>,
-    resolver: Resolver<LocalDBPackageStore>,
+    package_store: LocalDBPackageStore,
+    resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -36,7 +37,7 @@ impl Handler for EventHandler {
         } = checkpoint_data;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.resolver.package_store().update(object)?;
+                self.package_store.update(object)?;
             }
             if let Some(events) = &checkpoint_transaction.events {
                 self.process_events(
@@ -68,10 +69,11 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 
 impl EventHandler {
     pub fn new(store_path: &Path, rest_uri: &str) -> Self {
-        let store = LocalDBPackageStore::new(&store_path.join("event"), rest_uri);
+        let package_store = LocalDBPackageStore::new(&store_path.join("event"), rest_uri);
         EventHandler {
             events: vec![],
-            resolver: Resolver::new(store),
+            package_store: package_store.clone(),
+            resolver: Resolver::new(PackageCache::new(package_store)),
         }
     }
     async fn process_events(
