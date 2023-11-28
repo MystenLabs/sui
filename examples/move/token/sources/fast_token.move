@@ -100,9 +100,9 @@ module examples::fast_token {
     ): TreasuryCap<T> {
         let (treasury_cap, metadata) = coin::create_currency(
             otw, 6,
-            b"SMPL",
-            b"Simple Token",
-            b"Token that showcases denylist",
+            b"FST",
+            b"Fast Token",
+            b"Token that showcases immutable policy with denylist and epoch rules",
             option::none(),
             ctx
         );
