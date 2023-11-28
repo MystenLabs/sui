@@ -29,8 +29,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
-    TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
-    VerifiedSignedTransaction,
+    TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedSignedTransaction,
 };
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -1342,8 +1341,7 @@ impl AuthorityPerEpochStore {
         // Defer transaction if it depends on Random object.
         if cert
             .shared_input_objects()
-            .find(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
-            .is_some()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
         {
             // Don't re-defer randomness-using tx.
             if deferred_tx_digests.contains(cert.digest()) {
