@@ -20,9 +20,9 @@ fn sig_to_ty(sig: &SignatureToken) -> Option<MoveTypeLayout> {
         SignatureToken::Vector(v) => Some(MoveTypeLayout::Vector(Box::new(sig_to_ty(v.as_ref())?))),
         SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_)
-        | SignatureToken::Struct(_)
+        | SignatureToken::Datatype(_)
         | SignatureToken::TypeParameter(_)
-        | SignatureToken::StructInstantiation(_, _) => None,
+        | SignatureToken::DatatypeInstantiation(_, _) => None,
     }
 }
 
@@ -38,6 +38,7 @@ fn ty_to_sig(ty: &MoveTypeLayout) -> Option<SignatureToken> {
         MoveTypeLayout::U256 => Some(SignatureToken::U256),
         MoveTypeLayout::Vector(v) => Some(SignatureToken::Vector(Box::new(ty_to_sig(v.as_ref())?))),
         MoveTypeLayout::Struct(_) => None,
+        MoveTypeLayout::Enum(_) => None,
         MoveTypeLayout::Bool => Some(SignatureToken::Bool),
     }
 }

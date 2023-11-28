@@ -199,6 +199,8 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
         let function_inst_len = self.module.function_instantiations.len();
         let field_inst_len = self.module.field_instantiations.len();
         let signature_pool_len = self.module.signatures.len();
+        let variant_handle_len = self.module.variant_handles.len();
+        let variant_inst_len = self.module.variant_instantiation_handles.len();
 
         mutations
             .iter()
