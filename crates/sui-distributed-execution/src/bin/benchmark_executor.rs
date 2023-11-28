@@ -1,6 +1,7 @@
 use clap::*;
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr};
+use std::thread::sleep;
 use std::time::Duration;
 use std::{fs, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
@@ -146,12 +147,20 @@ async fn main() {
             working_directory,
         } => {
             tracing::info!("Generating benchmark genesis files");
+            println!(
+                "Generating benchmark genesis files, number of ips: {}",
+                ips.len()
+            );
             fs::create_dir_all(&working_directory).expect(&format!(
                 "Failed to create directory '{}'",
                 working_directory.display()
             ));
             let path = working_directory.join(GlobalConfig::DEFAULT_CONFIG_NAME);
-            GlobalConfig::new_for_benchmark(ips, sequence_workers).export(path);
+            println!("Generating configs.json at {}", path.display());
+            let config = GlobalConfig::new_for_benchmark(ips, sequence_workers);
+            println!("config: {:?}", config);
+            config.export(path);
+            sleep(Duration::from_secs(60));
             tracing::info!("Generated configs.json");
         }
     }
