@@ -2452,9 +2452,9 @@ dependencies = [
 
 [[package]]
 name = "const-str"
-version = "0.5.3"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5bc011a04793b8ce7bca0efd59e3697c2061760df6efbb8c895e8a81548db67"
+checksum = "aca749d3d3f5b87a0d6100509879f9cf486ab510803a4a4e1001da1ff61c2bd6"
 
 [[package]]
 name = "constant_time_eq"
@@ -12258,9 +12258,11 @@ dependencies = [
  "clap",
  "colored",
  "comfy-table",
+ "const-str",
  "eyre",
  "fastcrypto",
  "futures",
+ "git-version",
  "hex",
  "indicatif",
  "itertools",
