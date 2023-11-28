@@ -4,6 +4,10 @@
 pub mod abi;
 pub mod error;
 pub mod eth_client;
+pub mod eth_syncer;
 pub mod handler;
 pub mod server;
 pub mod sui_client;
+
+#[cfg(test)]
+pub(crate) mod eth_mock_provider;

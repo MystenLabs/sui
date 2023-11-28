@@ -8,7 +8,7 @@ use axum::Json;
 
 // TODO: reconfig?
 pub struct BridgeRequestHandler {
-    _eth_client: EthClient,
+    _eth_client: EthClient<ethers::providers::Http>,
     _sui_client: SuiClient,
 }
 
