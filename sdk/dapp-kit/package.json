@@ -69,12 +69,13 @@
 		"@types/testing-library__jest-dom": "^5.14.9",
 		"@vanilla-extract/esbuild-plugin": "^2.3.0",
 		"@vanilla-extract/vite-plugin": "^3.9.0",
-		"happy-dom": "^10.5.1",
+		"jsdom": "^23.0.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"size-limit": "^8.2.6",
 		"tsx": "^3.12.7",
 		"typescript": "^5.1.6",
+		"vite": "^4.4.4",
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {
