@@ -88,6 +88,7 @@ members = [
     "crates/sui-archival",
     "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
+    "crates/sui-bridge",
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
