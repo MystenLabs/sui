@@ -1,6 +1,58 @@
 ---
 title: Sending Transactions
-draft: true
 ---
 
-Content coming soon
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem'; 
+
+### Overview
+In Sui, a transaction is more than a basic record of the flow of assets. Transactions in Sui represent calls to specific functionality (e.g., calling a smart contract function) that execute on inputs to define the result of the transaction.
+Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or an encoded value (for example, an encoded string used as an argument to a Move call). 
+Once a transaction is constructed, usually through using [Programmable Transaction Blocks](https://docs.sui.io/guides/developer/sui-101/building-ptb), the user signs the transaction and submits it to be executed on-chain.
+
+### Workflow
+
+The following high-level process describes the overall workflow for constructing and executing a transaction on-chain:
+* The user finds the ObjectID of the gas coin object to be used to pay for gas. If there is no gas coin object, then the user should first use the [splitCoin](https://docs.sui.io/guides/developer/sui-101/building-ptb#available-transactions) transaction to create a gas coin object, that can be done in the next step.
+* The user constructs the transaction data. This is usually done by using [Programmable Transaction Blocks](./building-ptb).
+* The user signs the transaction to generate a [Signature](../../../../concepts/cryptography/transaction-auth/signatures#user-signature).
+* The user submits the transaction to be executed on-chain.
+
+
+### Examples
+
+Here are a few examples on how to transfer SUI in a transaction in different environments and SDKs.
+
+<Tabs groupId="examples-sending-transaction">
+
+
+<TabItem value="rust-sdk" label="Rust SDK">
+
+Check this example from the Sui Rust SDK [repository](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/programmable_transactions_api.rs).
+
+</TabItem>
+
+<TabItem value="ts-sdk" label="TS SDK">
+
+Check this example from the Sui TS SDK [repository](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#transfer-sui).
+
+</TabItem>
+<TabItem value="cli" label="Sui CLI">
+
+Get the gas coin object id of the active address. This is the coin from which 1000 MIST is transferred to another address.
+```shell
+sui client gas
+```
+
+Transfer 1000 MIST to another address.
+
+```shell
+sui client transfer-sui \
+--to 0x7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e \
+--sui-coin-object-id 0x00c2e916775ce4ae3e75fe14d63f296e7c32cacf7ae540125e7c922b87d6bf60 \
+--gas-budget 100000000 --amount 1000
+```
+
+</TabItem>
+
+</Tabs>
