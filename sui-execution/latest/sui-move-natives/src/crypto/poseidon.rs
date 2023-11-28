@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::NativesCostTable;
-use fastcrypto_zkp::bn254::poseidon::hash_to_bytes;
+use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::u256::U256;
@@ -85,7 +85,7 @@ pub fn poseidon_bn254(
         field_elements.push(value.to_le_bytes().to_vec());
     }
 
-    match hash_to_bytes(&field_elements) {
+    match poseidon_bytes(&field_elements) {
         Ok(hash) => {
             let result = U256::from_le_bytes(&hash);
             Ok(NativeResult::ok(
