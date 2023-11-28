@@ -82,7 +82,7 @@ sui-storage.workspace = true
 sui-types.workspace = true
 workspace-hack.workspace = true
 zeroize.workspace = true
-mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "9ebb8f30082d5a95ab98dad6d73a44ad40c164c2" }
+mysticeti-core = { git = "https://github.com/MystenLabs/mysticeti", rev = "b7b24d8167148e4554359aaed439728372cd1d5f" }
 
 [dev-dependencies]
 clap.workspace = true
