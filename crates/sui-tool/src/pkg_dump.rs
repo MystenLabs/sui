@@ -15,6 +15,7 @@ use diesel::{
 };
 use sui_indexer::{models_v2::packages::StoredPackage, schema_v2::packages};
 use sui_types::{base_types::SuiAddress, move_package::MovePackage};
+use tracing::info;
 
 type PgPool = Pool<ConnectionManager<PgConnection>>;
 
@@ -28,12 +29,24 @@ pub(crate) async fn dump(db_url: String, output_dir: PathBuf) -> Result<()> {
         .build(conn)
         .context("Failed to create connection pool.")?;
 
-    for pkg in query_packages(&pool)? {
+    info!("Querying Indexer...");
+    let pkgs = query_packages(&pool)?;
+    let total = pkgs.len();
+
+    let mut progress = 0;
+    for (i, pkg) in pkgs.into_iter().enumerate() {
+        let pct = (100 * i) / total;
+        if pct % 5 == 0  && pct > progress {
+            info!("Dumping packages ({total}): {pct: >3}%");
+            progress = pct;
+        }
+
         let id = SuiAddress::from_bytes(&pkg.package_id).context("Parsing package ID")?;
         dump_package(&output_dir, id, &pkg.move_package)
             .with_context(|| format!("Dumping package: {id}"))?;
     }
 
+    info!("Dumping packages ({total}): 100%, Done.");
     Ok(())
 }
 

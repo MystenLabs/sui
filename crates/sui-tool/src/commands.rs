@@ -197,6 +197,11 @@ pub enum ToolCommand {
         /// Path to a non-existent directory that can be created and filled with package information.
         #[clap(long, short)]
         output_dir: PathBuf,
+
+        /// If false (default), log level will be overridden to "off", and output will be reduced to
+        /// necessary status information.
+        #[clap(short, long = "verbose")]
+        verbose: bool,
     },
 
     #[command(name = "dump-validators")]
@@ -437,7 +442,13 @@ impl ToolCommand {
                     None => print_db_all_tables(path)?,
                 }
             }
-            ToolCommand::DumpPackages { db_url, output_dir } => {
+            ToolCommand::DumpPackages { db_url, output_dir, verbose } => {
+                if !verbose {
+                    tracing_handle
+                        .update_log("off")
+                        .expect("Failed to update log level");
+                }
+
                 pkg_dump::dump(db_url, output_dir).await?;
             }
             ToolCommand::DumpValidators { genesis, concise } => {
