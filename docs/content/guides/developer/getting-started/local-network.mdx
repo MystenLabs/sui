@@ -222,7 +222,7 @@ Before you start the Sui Wallet app, update its default environment to point to 
 Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
 ```bash
-pnpm wallet start
+pnpm wallet dev
 ```
 
 ### Add local Sui Wallet to Chrome
@@ -244,7 +244,7 @@ Use the TypeScript SDK to add example data to your network.
 Run the following command from the `sui` root folder:
 
 ```bash
-pnpm sdk test:e2e
+pnpm --filter @mysten/sui.js test:e2e
 ```
 
 For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
