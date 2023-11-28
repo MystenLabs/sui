@@ -14,9 +14,11 @@ language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
 4. Open any file that ends in `.move`.
 
 Installation of the extension will also install a platform-specific pre-built move-analyzer binary in
-the `~/.sui/bin` directory. The move-analyzer binary is responsible for the advanced features of this
-VSCode extension (e.g., go to definition, type on hover). Please see the [Troubleshooting][#troubleshooting]
-section for situations when the pre-built move-analyzer binary is not available for your platform.
+the `~/.sui/bin` directory, overwriting the existing binary if it already exists. The move-analyzer 
+binary is responsible for the advanced features of this VSCode extension (e.g., go to definition,
+type on hover). Please see the [Troubleshooting][#troubleshooting] section for situations when 
+the pre-built move-analyzer binary is not available for your platform or if you want to use move-analyzer
+binary stored in a different location.
 
 # Troubleshooting
 
