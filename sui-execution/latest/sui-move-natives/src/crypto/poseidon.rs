@@ -8,6 +8,7 @@ use move_core_types::u256::U256;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::natives::function::PartialVMError;
+use move_vm_types::values::{Reference, VMValueCast};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -76,12 +77,13 @@ pub fn poseidon_bn254(
             .mul(length.into())
     );
 
+    // Read the input vector and convert each element to a field element in le representation
     let mut field_elements: Vec<Vec<u8>> = Vec::new();
-    for _ in 0..length {
-        let input = inputs.pop(&Type::U256)?.value_as::<U256>()?;
-        field_elements.push(input.to_le_bytes().to_vec());
+    for i in 0..length {
+        let reference: Reference = inputs.borrow_elem(i as usize, &Type::U256)?.cast()?;
+        let value = reference.read_ref()?.value_as::<U256>()?;
+        field_elements.push(value.to_le_bytes().to_vec());
     }
-    field_elements.reverse();
 
     match hash_to_bytes(&field_elements) {
         Ok(hash) => {
