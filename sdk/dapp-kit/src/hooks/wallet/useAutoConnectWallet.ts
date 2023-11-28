@@ -77,6 +77,10 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 		return 'idle';
 	}
 
+	if (isConnected) {
+		return 'attempted';
+	}
+
 	if (!lastConnectedWalletName) {
 		return 'attempted';
 	}
