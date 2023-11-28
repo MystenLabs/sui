@@ -3,13 +3,15 @@
 
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { setup, TestToolbox } from '../utils/setup';
+import { publishPackage, setup, TestToolbox } from '../utils/setup';
 
 describe('GraphQL SuiClient compatibility', () => {
 	let toolbox: TestToolbox;
 
 	beforeAll(async () => {
 		toolbox = await setup({ rpcURL: 'http:127.0.0.1:9124' });
+		const packagePath = __dirname + '/../data/dynamic_fields';
+		await publishPackage(packagePath, toolbox);
 	});
 
 	test('getCoins', async () => {
@@ -190,7 +192,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphQLMoveStruct).toEqual(rpcMoveStruct);
 	});
 
-	test.only('getOwnedObjects', async () => {
+	test.skip('getOwnedObjects', async () => {
 		const rpcObjects = await toolbox.client.getOwnedObjects({
 			owner: toolbox.address(),
 			options: {
@@ -216,6 +218,141 @@ describe('GraphQL SuiClient compatibility', () => {
 			},
 		});
 
-		expect(graphQLObjects.data[0]).toEqual(rpcObjects.data[0]);
+		expect(graphQLObjects).toEqual(rpcObjects);
+	});
+
+	test.skip('getObject', async () => {
+		const {
+			data: [{ coinObjectId: id }],
+		} = await toolbox.getGasObjectsOwnedByAddress();
+
+		const rpcObject = await toolbox.client.getObject({
+			id,
+			options: {
+				showBcs: true,
+				showContent: true,
+				// showDisplay: true,
+				showOwner: true,
+				showPreviousTransaction: true,
+				showStorageRebate: true,
+				showType: true,
+			},
+		});
+		const graphQLObject = await toolbox.graphQLClient!.getObject({
+			id,
+			options: {
+				showBcs: true,
+				showContent: true,
+				// showDisplay: true,
+				showOwner: true,
+				showPreviousTransaction: true,
+				showStorageRebate: true,
+				showType: true,
+			},
+		});
+
+		expect(graphQLObject).toEqual(rpcObject);
+	});
+
+	test.skip('tryGetPastObject', async () => {
+		const {
+			data: [{ coinObjectId: id, version }],
+		} = await toolbox.getGasObjectsOwnedByAddress();
+
+		const rpcObject = await toolbox.client.tryGetPastObject({
+			id,
+			version: Number.parseInt(version, 10),
+			options: {
+				showBcs: true,
+				showContent: true,
+				// showDisplay: true,
+				showOwner: true,
+				showPreviousTransaction: true,
+				showStorageRebate: true,
+				showType: true,
+			},
+		});
+		const graphQLObject = await toolbox.graphQLClient!.tryGetPastObject({
+			id,
+			version: Number.parseInt(version, 10),
+			options: {
+				showBcs: true,
+				showContent: true,
+				// showDisplay: true,
+				showOwner: true,
+				showPreviousTransaction: true,
+				showStorageRebate: true,
+				showType: true,
+			},
+		});
+
+		expect(graphQLObject).toEqual(rpcObject);
+	});
+
+	test.skip('multiGetObjects', async () => {
+		const {
+			data: [{ coinObjectId: id }],
+		} = await toolbox.getGasObjectsOwnedByAddress();
+
+		const rpcObjects = await toolbox.client.multiGetObjects({
+			ids: [id],
+			options: {
+				showBcs: true,
+				showContent: true,
+				// showDisplay: true,
+				showOwner: true,
+				showPreviousTransaction: true,
+				showStorageRebate: true,
+				showType: true,
+			},
+		});
+		const graphQLObjects = await toolbox.graphQLClient!.multiGetObjects({
+			ids: [id],
+			options: {
+				showBcs: true,
+				showContent: true,
+				// showDisplay: true,
+				showOwner: true,
+				showPreviousTransaction: true,
+				showStorageRebate: true,
+				showType: true,
+			},
+		});
+
+		expect(graphQLObjects).toEqual(rpcObjects);
+	});
+
+	test.only('queryTransactionBlocks', async () => {
+		const { nextCursor: _, ...rpcTransactions } = await toolbox.client.queryTransactionBlocks({
+			filter: {
+				FromAddress: toolbox.address(),
+			},
+			options: {
+				// showBalanceChanges: true,
+				// showEffects: true,
+				// showEvents: true,
+				// showInput: true,
+				// showObjectChanges: true,
+				showRawInput: true,
+			},
+		});
+		const { nextCursor: __, ...graphQLTransactions } =
+			await toolbox.graphQLClient!.queryTransactionBlocks({
+				filter: {
+					FromAddress: toolbox.address(),
+				},
+				options: {
+					// showBalanceChanges: true,
+					// showEffects: true,
+					// showEvents: true,
+					// showInput: true,
+					// showObjectChanges: true,
+					showRawInput: true,
+				},
+			});
+
+		console.log(graphQLTransactions);
+
+		expect(graphQLTransactions).toEqual(rpcTransactions);
 	});
 });

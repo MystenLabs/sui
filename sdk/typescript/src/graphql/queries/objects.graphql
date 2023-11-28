@@ -92,20 +92,27 @@ fragment RPC_OBJECT_FIELDS on Object {
 	asMoveObject @include(if: $showType) {
 		contents {
 			type {
-				signature
+				repr
 			}
 		}
 	}
 	asMoveObject @include(if: $showContent) {
+		hasPublicTransfer
 		contents {
-			json
+			data
+			type {
+				repr
+				layout
+				signature
+			}
 		}
 	}
 	asMoveObject @include(if: $showBcs) {
 		hasPublicTransfer
 		contents {
+			bcs
 			type {
-				signature
+				repr
 			}
 		}
 	}

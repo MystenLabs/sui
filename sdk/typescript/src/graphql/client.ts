@@ -31,6 +31,8 @@ import type {
 	DevInspectResults,
 	DryRunTransactionBlockResponse,
 	ExecutionStatus,
+	MoveStruct,
+	MoveValue,
 	ObjectRead,
 	PaginatedCoins,
 	PaginatedEvents,
@@ -46,6 +48,7 @@ import type {
 	SuiObjectResponse,
 	SuiSystemStateSummary,
 	SuiTransactionBlockResponse,
+	SuiTransactionBlockResponseOptions,
 	TransactionEffects,
 	ValidatorsApy,
 } from '../client/types/generated.js';
@@ -85,8 +88,12 @@ import type {
 	SubscribeTransactionParams,
 	TryGetPastObjectParams,
 } from '../client/types/params.js';
-import { normalizeStructTag, parseStructTag } from '../utils/sui-types.js';
-import type { Rpc_Transaction_FieldsFragment, TransactionBlockKindInput } from './generated.js';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '../utils/sui-types.js';
+import type {
+	Rpc_Object_FieldsFragment,
+	Rpc_Transaction_FieldsFragment,
+	TransactionBlockKindInput,
+} from './generated.js';
 import {
 	GetAllBalancesDocument,
 	GetBalanceDocument,
@@ -438,38 +445,7 @@ export class GraphQLSuiClient extends SuiClient {
 			hasNextPage: pageInfo.hasNextPage,
 			nextCursor: pageInfo.endCursor,
 			data: objects.map((object) => ({
-				data: {
-					bcs: input.options?.showBcs
-						? {
-								dataType: 'moveObject',
-								bcsBytes: object.asMoveObject?.contents?.bcs,
-								hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
-								version: object.version as unknown as string, // RPC type is wrong here
-								type: object.asMoveObject?.contents?.type.repr!,
-						  }
-						: undefined,
-					content: {
-						dataType: 'moveObject',
-						fields: {
-							id: object.objectId,
-							...object.asMoveObject?.contents?.json,
-						}
-					},
-					digest: object.digest,
-					display: {}, // Not implemented yet
-					objectId: object.objectId,
-					owner: object.owner?.asObject
-						? {
-								ObjectOwner: object.owner.asObject.location,
-						  }
-						: {
-								AddressOwner: object.owner?.asAddress?.location,
-						  },
-					previousTransaction: object.previousTransactionBlock?.digest,
-					storageRebate: object.storageRebate,
-					type: object.asMoveObject?.contents?.type?.repr,
-					version: String(object.version),
-				},
+				data: mapGraphQLObjectToRpcObject(object, input.options ?? {}),
 			})),
 		};
 	}
@@ -491,40 +467,8 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.object,
 		);
 
-		console.log(input.options);
 		return {
-			data: {
-				bcs: input.options?.showBcs
-					? {
-							dataType: 'moveObject',
-							bcsBytes: object.asMoveObject?.contents?.bcs,
-							hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
-							version: object.version as unknown as string, // RPC type is wrong here
-							type: object.asMoveObject?.contents?.type.repr!,
-					  }
-					: undefined,
-				content: {
-					dataType: 'moveObject',
-					fields: {
-						id: object
-						...object.asMoveObject?.contents?.json,
-					}
-				},
-				digest: object.digest,
-				display: {}, // Not implemented yet
-				objectId: object.objectId,
-				owner: object.owner?.asObject
-					? {
-							ObjectOwner: object.owner.asObject.location,
-					  }
-					: {
-							AddressOwner: object.owner?.asAddress?.location,
-					  },
-				previousTransaction: object.previousTransactionBlock?.digest,
-				storageRebate: object.storageRebate,
-				type: object.asMoveObject?.contents?.type.signature,
-				version: String(object.version),
-			},
+			data: mapGraphQLObjectToRpcObject(object, input.options ?? {}),
 		};
 	}
 
@@ -550,38 +494,7 @@ export class GraphQLSuiClient extends SuiClient {
 
 		return {
 			status: 'VersionFound',
-			details: {
-				bcs: input.options?.showBcs
-					? {
-							dataType: 'moveObject',
-							bcsBytes: object.asMoveObject?.contents?.bcs,
-							hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
-							version: object.version as unknown as string, // RPC type is wrong here
-							type: object.asMoveObject?.contents?.type.repr!,
-					  }
-					: undefined,
-				content: {
-					dataType: 'moveObject',
-					fields: {
-						id: object
-						...object.asMoveObject?.contents?.json,
-					}
-				},
-				digest: object.digest,
-				display: {}, // Not implemented yet
-				objectId: object.objectId,
-				owner: object.owner?.asObject
-					? {
-							ObjectOwner: object.owner.asObject.location,
-					  }
-					: {
-							AddressOwner: object.owner?.asAddress?.location,
-					  },
-				previousTransaction: object.previousTransactionBlock?.digest,
-				storageRebate: object.storageRebate,
-				type: object.asMoveObject?.contents?.type.signature,
-				version: String(object.version),
-			},
+			details: mapGraphQLObjectToRpcObject(object, input.options ?? {}),
 		};
 	}
 
@@ -604,38 +517,7 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return objects.map((object) => ({
-			data: {
-				bcs: input.options?.showBcs
-					? {
-							dataType: 'moveObject',
-							bcsBytes: object.asMoveObject?.contents?.bcs,
-							hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
-							version: object.version as unknown as string, // RPC type is wrong here
-							type: object.asMoveObject?.contents?.type.repr!,
-					  }
-					: undefined,
-				content: {
-					dataType: 'moveObject',
-					fields: {
-						id: object
-						...object.asMoveObject?.contents?.json,
-					}
-				},
-				digest: object.digest,
-				display: {}, // Not implemented yet
-				objectId: object.objectId,
-				owner: object.owner?.asObject
-					? {
-							ObjectOwner: object.owner.asObject.location,
-					  }
-					: {
-							AddressOwner: object.owner?.asAddress?.location,
-					  },
-				previousTransaction: object.previousTransactionBlock?.digest,
-				storageRebate: object.storageRebate,
-				type: object.asMoveObject?.contents?.type.signature,
-				version: String(object.version),
-			},
+			data: mapGraphQLObjectToRpcObject(object, input.options ?? {}),
 		}));
 	}
 
@@ -1173,21 +1055,64 @@ class GraphQLResponseError extends Error {
 	}
 }
 
+function mapGraphQLObjectToRpcObject(
+	object: Rpc_Object_FieldsFragment,
+	options: { showBcs?: boolean | null } = {},
+) {
+	return {
+		bcs: options?.showBcs
+			? {
+					dataType: 'moveObject' as const,
+					bcsBytes: object.asMoveObject?.contents?.bcs,
+					hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
+					version: object.version as unknown as string, // RPC type is wrong here
+					type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
+			  }
+			: undefined,
+		content: {
+			dataType: 'moveObject' as const,
+			fields: moveDataToRpcContent(
+				object.asMoveObject?.contents?.data!,
+				object.asMoveObject?.contents?.type.layout!,
+			) as MoveStruct,
+			hasPublicTransfer: object.asMoveObject?.hasPublicTransfer!,
+			type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
+		},
+		digest: object.digest,
+		// display: {}, // Not implemented yet
+		objectId: object.objectId,
+		owner: object.owner?.asObject
+			? {
+					ObjectOwner: object.owner.asObject.location,
+			  }
+			: {
+					AddressOwner: object.owner?.asAddress?.location,
+			  },
+		previousTransaction: object.previousTransactionBlock?.digest,
+		storageRebate: object.storageRebate,
+		type: toShortTypeString(object.asMoveObject?.contents?.type.repr!),
+		version: String(object.version),
+	};
+}
+
 function mapGraphQLTransactionBlockToRpcTransactionBlock(
 	transactionBlock: Rpc_Transaction_FieldsFragment,
-	options?: { showInput?: boolean } | null,
+	options?: SuiTransactionBlockResponseOptions | null,
 ) {
 	return {
 		balanceChanges: transactionBlock.effects?.balanceChanges?.map((balanceChange) => ({
 			amount: balanceChange?.amount,
-			coinType: 'TODO', // TODO
-			owner: balanceChange?.owner?.location,
+			coinType: toShortTypeString(balanceChange?.coinType?.repr),
+			owner: {
+				AddressOwner: balanceChange?.owner?.location,
+			},
 		})),
-		// checkpoint: transactionBlock.checkpoint.digest, TODO
+		checkpoint: transactionBlock.effects?.checkpoint?.sequenceNumber.toString(),
+		timestampMs: new Date(transactionBlock.effects?.timestamp).getTime().toString(),
 		// confirmedLocalExecution: TODO
 		digest: transactionBlock.digest,
-		effects: transactionBlock.effects && {
-			created: transactionBlock.effects.objectChanges
+		effects: options?.showEffects && {
+			created: transactionBlock.effects?.objectChanges
 				?.filter((change) => change?.idCreated === true)
 				.map((change) => ({
 					owner: change?.outputState?.owner?.location, // TODO: fix formatting,
@@ -1197,16 +1122,16 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 						objectId: change?.outputState?.objectId,
 					},
 				})),
-			deleted: transactionBlock.effects.objectChanges
+			deleted: transactionBlock.effects?.objectChanges
 				?.filter((change) => change?.idDeleted === true)
 				.map((change) => ({
 					digest: change?.inputState?.digest!,
 					version: String(change?.inputState?.version),
 					objectId: change?.inputState?.objectId,
 				})),
-			dependencies: transactionBlock.effects.dependencies?.map((dep) => dep?.digest!),
+			dependencies: transactionBlock.effects?.dependencies?.map((dep) => dep?.digest!),
 			eventsDigest: transactionBlock.digest, // TODO check this is the correct digest
-			executedEpoch: String(transactionBlock.effects.executedEpoch?.epochId),
+			executedEpoch: String(transactionBlock.effects?.executedEpoch?.epochId),
 			gasObject: {
 				owner: {
 					ObjectOwner: 'TODO',
@@ -1218,18 +1143,18 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 				},
 			},
 			gasUsed: {
-				computationCost: transactionBlock.effects.gasEffects?.gasSummary?.computationCost,
+				computationCost: transactionBlock.effects?.gasEffects?.gasSummary?.computationCost,
 				nonRefundableStorageFee:
-					transactionBlock.effects.gasEffects?.gasSummary?.nonRefundableStorageFee,
-				storageCost: transactionBlock.effects.gasEffects?.gasSummary?.storageCost,
-				storageRebate: transactionBlock.effects.gasEffects?.gasSummary?.storageRebate,
+					transactionBlock.effects?.gasEffects?.gasSummary?.nonRefundableStorageFee,
+				storageCost: transactionBlock.effects?.gasEffects?.gasSummary?.storageCost,
+				storageRebate: transactionBlock.effects?.gasEffects?.gasSummary?.storageRebate,
 			},
 			messageVersion: 'v1' as const,
-			modifiedAtVersions: transactionBlock.effects.objectChanges?.map((change) => ({
+			modifiedAtVersions: transactionBlock.effects?.objectChanges?.map((change) => ({
 				objectId: change?.inputState?.objectId,
 				sequenceNumber: String(change?.inputState?.version), // TODO confirm this is correct
 			})),
-			mutated: transactionBlock.effects.objectChanges
+			mutated: transactionBlock.effects?.objectChanges
 				?.filter((change) => !change?.idCreated && !change?.idDeleted)
 				?.map((change) => ({
 					owner: change?.outputState?.owner?.location, // TODO: fix formatting,
@@ -1241,19 +1166,103 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 				})),
 
 			sharedObjects: [], // TODO
-			status: { status: transactionBlock.effects.status!.toLowerCase() } as ExecutionStatus,
+			status: { status: transactionBlock.effects?.status?.toLowerCase() } as ExecutionStatus,
 			transactionDigest: transactionBlock.digest,
 			unwrapped: [], // TODO
 			unwrappedThenDeleted: [], // TODO
 			wrapped: [], // TODO
 		},
 		errors: [], // TODO
-		events: [], // TODO
+		events: options?.showEvents ?? [], // TODO
 		rawTransaction: transactionBlock.rawTransaction,
-		// timestampMs: transactionBlock.timestampMs // TODO
 		transaction:
 			options?.showInput &&
 			transactionBlock.rawTransaction &&
 			bcs.SenderSignedData.parse(transactionBlock.rawTransaction),
 	};
+}
+
+type MoveData =
+	| { Address: number[] }
+	| { UID: number[] }
+	| { Bool: boolean }
+	| { Number: string }
+	| { String: string }
+	| { Vector: MoveData[] }
+	| { Option: MoveData | null }
+	| { Struct: [{ name: string; value: MoveData }] };
+
+type MoveTypeLayout =
+	| 'address'
+	| 'bool'
+	| 'u8'
+	| 'u16'
+	| 'u32'
+	| 'u64'
+	| 'u128'
+	| 'u256'
+	| { vector: MoveTypeLayout }
+	| {
+			struct: { name: string; layout: MoveTypeLayout }[];
+	  };
+
+function moveDataToRpcContent(data: MoveData, layout: MoveTypeLayout): MoveValue {
+	if ('Address' in data) {
+		return normalizeSuiAddress(
+			data.Address.map((byte) => byte.toString(16).padStart(2, '0')).join(''),
+		);
+	}
+
+	if ('UID' in data) {
+		return {
+			id: normalizeSuiAddress(data.UID.map((byte) => byte.toString(16).padStart(2, '0')).join('')),
+		};
+	}
+
+	if ('Bool' in data) {
+		return data.Bool;
+	}
+
+	if ('Number' in data) {
+		return layout === 'u64' || layout === 'u128' || layout === 'u256'
+			? String(data.Number)
+			: Number.parseInt(data.Number, 10);
+	}
+
+	if ('String' in data) {
+		return data.String;
+	}
+
+	if ('Vector' in data) {
+		if (typeof layout !== 'object' || !('vector' in layout)) {
+			throw new Error(`Invalid layout for data: ${JSON.stringify(data)}}`);
+		}
+		const itemLayout = layout.vector;
+		return data.Vector.map((item) => moveDataToRpcContent(item, itemLayout));
+	}
+
+	if ('Option' in data) {
+		return data.Option && moveDataToRpcContent(data.Option, layout);
+	}
+
+	if ('Struct' in data) {
+		const result: MoveStruct = {};
+
+		if (typeof layout !== 'object' || !('struct' in layout)) {
+			throw new Error(`Invalid layout for data: ${JSON.stringify(data)}}`);
+		}
+
+		data.Struct.forEach((item, index) => {
+			const { name, layout: itemLayout } = layout.struct[index];
+			result[name] = moveDataToRpcContent(item.value, itemLayout);
+		});
+
+		return result;
+	}
+
+	throw new Error('Invalid move data');
+}
+
+function toShortTypeString<T extends string | null | undefined>(type?: T): T {
+	return type?.replace(/0x0+/g, '0x') as T;
 }

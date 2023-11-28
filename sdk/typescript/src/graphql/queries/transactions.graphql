@@ -78,17 +78,20 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 	# - valueType for Pure inputs
 	# - requires a lot of re-structuring
 	rawTransaction: bcs @include(if: $showRawInput)
+
 	signatures {
 		base64Sig
 	}
 	effects {
 		# eventsConnection {... }
 		checkpoint {
-			digest
 			sequenceNumber
 		}
+		timestamp
 		balanceChanges @include(if: $showBalanceChanges) {
-			# missing coinType
+			coinType {
+				repr
+			}
 			owner {
 				location
 			}
