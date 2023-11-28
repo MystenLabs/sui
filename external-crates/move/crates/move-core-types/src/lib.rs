@@ -28,6 +28,8 @@ pub mod u256;
 mod unit_tests;
 pub mod vm_status;
 
+pub const MAX_VARIANT_COUNT: u64 = 127;
+
 pub(crate) fn fmt_list<T: fmt::Display>(
     f: &mut fmt::Formatter<'_>,
     begin: &str,

@@ -6,46 +6,49 @@ use std::collections::BTreeSet;
 
 use crate::{
     errors::{PartialVMError, PartialVMResult},
-    file_format::{AbilitySet, StructTypeParameter, Visibility},
+    file_format::{AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
     normalized::Module,
 };
 use move_core_types::vm_status::StatusCode;
 
-/// The result of a linking and layout compatibility check. Here is what the different combinations. NOTE that if `check_struct_layout` is false, type safety over a series of upgrades cannot be guaranteed.
+/// The result of a linking and layout compatibility check. Here is what the different combinations. NOTE that if `check_datatype_layout` is false, type safety over a series of upgrades cannot be guaranteed.
 /// mean:
-/// `{ check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: true, check_private_entry_linking: true }`: fully backward compatible
-/// `{ check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: true, check_private_entry_linking: false }`: Backwards compatible, private entry function signatures can change
-/// `{ check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: true }`: Backward compatible, exclude the friend module declare and friend functions
-/// `{ check_struct_and_pub_function_linking: true, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: false }`: Backward compatible, exclude the friend module declarations, friend functions, and private and friend entry function
-/// `{ check_struct_and_pub_function_linking: false, check_struct_layout: true, check_friend_linking: false, check_private_entry_linking: _ }`: Dependent modules that reference functions or types in this module may not link. However, fixing, recompiling, and redeploying all dependent modules will work--no data migration needed.
-/// `{ check_struct_and_pub_function_linking: true, check_struct_layout: false, check_friend_linking: true, check_private_entry_linking: _ }`: Attempting to read structs published by this module will now fail at runtime. However, dependent modules will continue to link. Requires data migration, but no changes to dependent modules.
-/// `{ check_struct_and_pub_function_linking: false, check_struct_layout: false, check_friend_linking: false, check_private_entry_linking: _ }`: Everything is broken. Need both a data migration and changes to dependent modules.
+/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: true }`: fully backward compatible
+/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: true, check_private_entry_linking: false }`: Backwards compatible, private entry function signatures can change
+/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: true }`: Backward compatible, exclude the friend module declare and friend functions
+/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: false }`: Backward compatible, exclude the friend module declarations, friend functions, and private and friend entry function
+/// `{ check_datatype_and_pub_function_linking: false, check_datatype_layout: true, check_friend_linking: false, check_private_entry_linking: _ }`: Dependent modules that reference functions or types in this module may not link. However, fixing, recompiling, and redeploying all dependent modules will work--no data migration needed.
+/// `{ check_datatype_and_pub_function_linking: true, check_datatype_layout: false, check_friend_linking: true, check_private_entry_linking: _ }`: Attempting to read structs published by this module will now fail at runtime. However, dependent modules will continue to link. Requires data migration, but no changes to dependent modules.
+/// `{ check_datatype_and_pub_function_linking: false, check_datatype_layout: false, check_friend_linking: false, check_private_entry_linking: _ }`: Everything is broken. Need both a data migration and changes to dependent modules.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct Compatibility {
     /// if false, do not ensure the dependent modules that reference public functions or structs in this module can link
-    pub check_struct_and_pub_function_linking: bool,
+    pub check_datatype_and_pub_function_linking: bool,
     /// if false, do not ensure the struct layout capability
-    pub check_struct_layout: bool,
-    /// if false, treat `friend` as `private` when `check_struct_and_pub_function_linking`.
+    pub check_datatype_layout: bool,
+    /// if false, treat `friend` as `private` when `check_datatype_and_pub_function_linking`.
     pub check_friend_linking: bool,
-    /// if false, treat `entry` as `private` when `check_struct_and_pub_function_linking`.
+    /// if false, treat `entry` as `private` when `check_datatype_and_pub_function_linking`.
     pub check_private_entry_linking: bool,
     /// The set of abilities that cannot be added to an already exisiting type.
     pub disallowed_new_abilities: AbilitySet,
     /// Don't allow generic type parameters in structs to change their abilities or constraints.
-    pub disallow_change_struct_type_params: bool,
+    pub disallow_change_datatype_type_params: bool,
+    /// Don't allow adding new variants at the end of an enum.
+    pub disallow_new_variants: bool,
 }
 
 impl Default for Compatibility {
     fn default() -> Self {
         Self {
-            check_struct_and_pub_function_linking: true,
-            check_struct_layout: true,
+            check_datatype_and_pub_function_linking: true,
+            check_datatype_layout: true,
             check_friend_linking: true,
             check_private_entry_linking: true,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_struct_type_params: true,
+            disallow_change_datatype_type_params: true,
+            disallow_new_variants: true,
         }
     }
 }
@@ -57,12 +60,13 @@ impl Compatibility {
 
     pub fn no_check() -> Self {
         Self {
-            check_struct_and_pub_function_linking: false,
-            check_struct_layout: false,
+            check_datatype_and_pub_function_linking: false,
+            check_datatype_layout: false,
             check_friend_linking: false,
             check_private_entry_linking: false,
             disallowed_new_abilities: AbilitySet::EMPTY,
-            disallow_change_struct_type_params: false,
+            disallow_change_datatype_type_params: false,
+            disallow_new_variants: false,
         }
     }
 
@@ -72,14 +76,15 @@ impl Compatibility {
 
     /// Check compatibility for `new_module` relative to old module `old_module`.
     pub fn check(&self, old_module: &Module, new_module: &Module) -> PartialVMResult<()> {
-        let mut struct_and_function_linking = true;
-        let mut struct_layout = true;
+        let mut datatype_and_function_linking = true;
+        let mut datatype_layout = true;
         let mut friend_linking = true;
         let mut entry_linking = true;
+        let mut no_new_variants = true;
 
         // module's name and address are unchanged
         if old_module.address != new_module.address || old_module.name != new_module.name {
-            struct_and_function_linking = false;
+            datatype_and_function_linking = false;
         }
 
         // old module's structs are a subset of the new module's structs
@@ -88,21 +93,21 @@ impl Compatibility {
                 // Struct not present in new . Existing modules that depend on this struct will fail to link with the new version of the module.
                 // Also, struct layout cannot be guaranteed transitively, because after
                 // removing the struct, it could be re-added later with a different layout.
-                struct_and_function_linking = false;
-                struct_layout = false;
+                datatype_and_function_linking = false;
+                datatype_layout = false;
                 break;
             };
 
-            if !struct_abilities_compatible(
+            if !datatype_abilities_compatible(
                 self.disallowed_new_abilities,
                 old_struct.abilities,
                 new_struct.abilities,
-            ) || !struct_type_parameters_compatible(
-                self.disallow_change_struct_type_params,
+            ) || !datatype_type_parameters_compatible(
+                self.disallow_change_datatype_type_params,
                 &old_struct.type_parameters,
                 &new_struct.type_parameters,
             ) {
-                struct_and_function_linking = false;
+                datatype_and_function_linking = false;
             }
             if new_struct.fields != old_struct.fields {
                 // Fields changed. Code in this module will fail at runtime if it tries to
@@ -111,7 +116,62 @@ impl Compatibility {
                 // choose that changing the name (but not position or type) of a field is
                 // compatible. The VM does not care about the name of a field
                 // (it's purely informational), but clients presumably do.
-                struct_layout = false
+                datatype_layout = false
+            }
+        }
+
+        for (name, old_enum) in &old_module.enums {
+            let Some(new_enum) = new_module.enums.get(name) else {
+                // Struct not present in new . Existing modules that depend on this enum will fail to link with the new version of the module.
+                // Also, enum layout cannot be guaranteed transitively, because after
+                // removing the enum, it could be re-added later with a different layout.
+                datatype_and_function_linking = false;
+                datatype_layout = false;
+                break;
+            };
+
+            if !datatype_abilities_compatible(
+                self.disallowed_new_abilities,
+                old_enum.abilities,
+                new_enum.abilities,
+            ) || !datatype_type_parameters_compatible(
+                self.disallow_change_datatype_type_params,
+                &old_enum.type_parameters,
+                &new_enum.type_parameters,
+            ) {
+                datatype_and_function_linking = false;
+            }
+
+            if new_enum.variants.len() > old_enum.variants.len() {
+                no_new_variants = false;
+            }
+
+            if new_enum.variants.len() < old_enum.variants.len() {
+                datatype_layout = false;
+            }
+
+            for (tag, old_variant) in old_enum.variants.iter().enumerate() {
+                let Some(new_variant) = new_enum.variants.get(tag) else {
+                    datatype_layout = false;
+                    continue;
+                };
+                if new_variant.name != old_variant.name {
+                    // TODO: Variant renamed. This is a stricter definition than required.
+                    // We could in principle choose that changing the name (but not position or
+                    // type) of a variant is compatible. The VM does not care about the name of a
+                    // variant if it's non-public (it's purely informational), but clients
+                    // presumably would.
+                    datatype_layout = false;
+                }
+                if new_variant.fields != old_variant.fields {
+                    // Fields changed. Code in this module will fail at runtime if it tries to
+                    // read a previously published enum value
+                    // TODO: this is a stricter definition than required. We could in principle
+                    // choose that changing the name (but not position or type) of a field is
+                    // compatible. The VM does not care about the name of a field
+                    // (it's purely informational), but clients presumably do.
+                    datatype_layout = false
+                }
             }
         }
 
@@ -134,7 +194,7 @@ impl Compatibility {
                 if old_func.visibility == Visibility::Friend {
                     friend_linking = false;
                 } else if old_func.visibility != Visibility::Private {
-                    struct_and_function_linking = false;
+                    datatype_and_function_linking = false;
                 } else if old_func.is_entry && self.check_private_entry_linking {
                     // This must be a private entry function. So set the link breakage if we're
                     // checking for that.
@@ -146,7 +206,7 @@ impl Compatibility {
             // Check visibility compatibility
             match (old_func.visibility, new_func.visibility) {
                 (Visibility::Public, Visibility::Private | Visibility::Friend) => {
-                    struct_and_function_linking = false
+                    datatype_and_function_linking = false
                 }
                 (Visibility::Friend, Visibility::Private) => friend_linking = false,
                 _ => (),
@@ -173,7 +233,7 @@ impl Compatibility {
             {
                 match old_func.visibility {
                     Visibility::Friend => friend_linking = false,
-                    Visibility::Public => struct_and_function_linking = false,
+                    Visibility::Public => datatype_and_function_linking = false,
                     Visibility::Private => (),
                 }
 
@@ -194,12 +254,12 @@ impl Compatibility {
             friend_linking = false;
         }
 
-        if self.check_struct_and_pub_function_linking && !struct_and_function_linking {
+        if self.check_datatype_and_pub_function_linking && !datatype_and_function_linking {
             return Err(PartialVMError::new(
                 StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
             ));
         }
-        if self.check_struct_layout && !struct_layout {
+        if self.check_datatype_layout && !datatype_layout {
             return Err(PartialVMError::new(
                 StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
             ));
@@ -214,7 +274,11 @@ impl Compatibility {
                 StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
             ));
         }
-
+        if self.disallow_new_variants && !no_new_variants {
+            return Err(PartialVMError::new(
+                StatusCode::BACKWARD_INCOMPATIBLE_MODULE_UPDATE,
+            ));
+        }
         Ok(())
     }
 }
@@ -222,7 +286,7 @@ impl Compatibility {
 // When upgrading, the new abilities must be a superset of the old abilities.
 // Adding an ability is fine as long as it's not in the disallowed_new_abilities,
 // but removing an ability could cause existing usages to fail.
-fn struct_abilities_compatible(
+fn datatype_abilities_compatible(
     disallowed_new_abilities: AbilitySet,
     old_abilities: AbilitySet,
     new_abilities: AbilitySet,
@@ -252,10 +316,10 @@ fn fun_type_parameters_compatible(
         )
 }
 
-fn struct_type_parameters_compatible(
+fn datatype_type_parameters_compatible(
     disallow_changing_generic_abilities: bool,
-    old_type_parameters: &[StructTypeParameter],
-    new_type_parameters: &[StructTypeParameter],
+    old_type_parameters: &[DatatypeTyParameter],
+    new_type_parameters: &[DatatypeTyParameter],
 ) -> bool {
     old_type_parameters.len() == new_type_parameters.len()
         && old_type_parameters.iter().zip(new_type_parameters).all(
@@ -292,8 +356,8 @@ fn type_parameter_constraints_compatible(
 // relaxes the requirements for clients.
 fn type_parameter_phantom_decl_compatible(
     disallow_changing_generic_abilities: bool,
-    old_type_parameter: &StructTypeParameter,
-    new_type_parameter: &StructTypeParameter,
+    old_type_parameter: &DatatypeTyParameter,
+    new_type_parameter: &DatatypeTyParameter,
 ) -> bool {
     if disallow_changing_generic_abilities {
         // phantom/non-phantom cannot change from one version to the next.
@@ -333,6 +397,7 @@ impl InclusionCheck {
         // of the tables are the exact same except for constants.
         if (self == &Self::Equal)
             && (old_module.structs.len() != new_module.structs.len()
+                || old_module.enums.len() != new_module.enums.len()
                 || old_module.functions.len() != new_module.functions.len()
                 || old_module.friends.len() != new_module.friends.len())
         {
@@ -343,6 +408,41 @@ impl InclusionCheck {
         for (name, old_struct) in &old_module.structs {
             match new_module.structs.get(name) {
                 Some(new_struct) if old_struct == new_struct => (),
+                _ => {
+                    return err;
+                }
+            };
+        }
+
+        // Enum checks
+        for (name, old_enum) in &old_module.enums {
+            match new_module.enums.get(name) {
+                Some(new_enum) => {
+                    if old_enum.abilities != new_enum.abilities {
+                        return err;
+                    }
+                    if old_enum.type_parameters != new_enum.type_parameters {
+                        return err;
+                    }
+                    if old_enum.variants.len() > new_enum.variants.len() {
+                        return err;
+                    }
+                    if self == &Self::Equal && old_enum.variants.len() != new_enum.variants.len() {
+                        return err;
+                    }
+                    // NB: we are using the fact that the variants are sorted by tag, that we've
+                    // already ensured that the old variants are >= new variants, and the fact
+                    // that zip will truncate the second iterator if there are extra there to allow
+                    // adding new variants to enums in `Self::Subset` compatibility mode.
+                    if !old_enum
+                        .variants
+                        .iter()
+                        .zip(new_enum.variants.iter())
+                        .all(|(old, new)| old == new)
+                    {
+                        return err;
+                    }
+                }
                 _ => {
                     return err;
                 }

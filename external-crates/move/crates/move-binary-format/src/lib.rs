@@ -33,7 +33,7 @@ pub use file_format::CompiledModule;
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum IndexKind {
     ModuleHandle,
-    StructHandle,
+    DatatypeHandle,
     FunctionHandle,
     FieldHandle,
     FriendDeclaration,
@@ -51,6 +51,10 @@ pub enum IndexKind {
     CodeDefinition,
     TypeParameter,
     MemberCount,
+    EnumDefinition,
+    EnumDefInstantiation,
+    VariantJumpTable,
+    VariantTag,
 }
 
 impl IndexKind {
@@ -60,7 +64,7 @@ impl IndexKind {
         // XXX ensure this list stays up to date!
         &[
             ModuleHandle,
-            StructHandle,
+            DatatypeHandle,
             FunctionHandle,
             FieldHandle,
             FriendDeclaration,
@@ -77,6 +81,10 @@ impl IndexKind {
             CodeDefinition,
             TypeParameter,
             MemberCount,
+            EnumDefinition,
+            EnumDefInstantiation,
+            VariantJumpTable,
+            VariantTag,
         ]
     }
 }
@@ -87,7 +95,7 @@ impl fmt::Display for IndexKind {
 
         let desc = match self {
             ModuleHandle => "module handle",
-            StructHandle => "struct handle",
+            DatatypeHandle => "declared type handle",
             FunctionHandle => "function handle",
             FieldHandle => "field handle",
             FriendDeclaration => "friend declaration",
@@ -105,6 +113,10 @@ impl fmt::Display for IndexKind {
             CodeDefinition => "code definition pool",
             TypeParameter => "type parameter",
             MemberCount => "field offset",
+            EnumDefinition => "enum definition",
+            EnumDefInstantiation => "enum instantiation",
+            VariantJumpTable => "jump table",
+            VariantTag => "variant tag",
         };
 
         f.write_str(desc)

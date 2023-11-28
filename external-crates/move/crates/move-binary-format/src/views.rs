@@ -62,14 +62,14 @@ impl<'a, T: ModuleAccess> ModuleView<'a, T> {
             .map(move |module_handle| ModuleHandleView::new(module, module_handle))
     }
 
-    pub fn struct_handles(
+    pub fn datatype_handles(
         &self,
-    ) -> impl DoubleEndedIterator<Item = StructHandleView<'a, T>> + Send {
+    ) -> impl DoubleEndedIterator<Item = DatatypeHandleView<'a, T>> + Send {
         let module = self.module;
         module
-            .struct_handles()
+            .datatype_handles()
             .iter()
-            .map(move |struct_handle| StructHandleView::new(module, struct_handle))
+            .map(move |struct_handle| DatatypeHandleView::new(module, struct_handle))
     }
 
     pub fn function_handles(
@@ -199,20 +199,20 @@ impl<'a, T: ModuleAccess> ModuleHandleView<'a, T> {
     }
 }
 
-pub struct StructHandleView<'a, T> {
+pub struct DatatypeHandleView<'a, T> {
     module: &'a T,
-    struct_handle: &'a StructHandle,
+    struct_handle: &'a DatatypeHandle,
 }
 
-impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
-    pub fn new(module: &'a T, struct_handle: &'a StructHandle) -> Self {
+impl<'a, T: ModuleAccess> DatatypeHandleView<'a, T> {
+    pub fn new(module: &'a T, struct_handle: &'a DatatypeHandle) -> Self {
         Self {
             module,
             struct_handle,
         }
     }
 
-    pub fn handle(&self) -> &StructHandle {
+    pub fn handle(&self) -> &DatatypeHandle {
         self.struct_handle
     }
 
@@ -220,7 +220,7 @@ impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
         self.struct_handle.abilities
     }
 
-    pub fn type_parameters(&self) -> &Vec<StructTypeParameter> {
+    pub fn type_parameters(&self) -> &Vec<DatatypeTyParameter> {
         &self.struct_handle.type_parameters
     }
 
@@ -236,14 +236,14 @@ impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
         self.module.module_id_for_handle(self.module_handle())
     }
 
-    /// Return the StructHandleIndex of this handle in the module's struct handle table
-    pub fn handle_idx(&self) -> StructHandleIndex {
-        for (idx, handle) in self.module.struct_handles().iter().enumerate() {
+    /// Return the DatatypeHandleIndex of this handle in the module's struct handle table
+    pub fn handle_idx(&self) -> DatatypeHandleIndex {
+        for (idx, handle) in self.module.datatype_handles().iter().enumerate() {
             if handle == self.handle() {
-                return StructHandleIndex::new(idx as u16);
+                return DatatypeHandleIndex::new(idx as u16);
             }
         }
-        unreachable!("Cannot resolve StructHandle {:?} in module {:?}. This should never happen in a well-formed `StructHandleView`. Perhaps this handle came from a different module?", self.handle(), self.module().name())
+        unreachable!("Cannot resolve DatatypeHandle {:?} in module {:?}. This should never happen in a well-formed `DatatypeHandleView`. Perhaps this handle came from a different module?", self.handle(), self.module().name())
     }
 }
 
@@ -332,13 +332,13 @@ impl<'a, T: ModuleAccess> FunctionHandleView<'a, T> {
 pub struct StructDefinitionView<'a, T> {
     module: &'a T,
     struct_def: &'a StructDefinition,
-    struct_handle_view: StructHandleView<'a, T>,
+    struct_handle_view: DatatypeHandleView<'a, T>,
 }
 
 impl<'a, T: ModuleAccess> StructDefinitionView<'a, T> {
     pub fn new(module: &'a T, struct_def: &'a StructDefinition) -> Self {
-        let struct_handle = module.struct_handle_at(struct_def.struct_handle);
-        let struct_handle_view = StructHandleView::new(module, struct_handle);
+        let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
+        let struct_handle_view = DatatypeHandleView::new(module, struct_handle);
         Self {
             module,
             struct_def,
@@ -357,7 +357,7 @@ impl<'a, T: ModuleAccess> StructDefinitionView<'a, T> {
         }
     }
 
-    pub fn type_parameters(&self) -> &Vec<StructTypeParameter> {
+    pub fn type_parameters(&self) -> &Vec<DatatypeTyParameter> {
         self.struct_handle_view.type_parameters()
     }
 
@@ -404,6 +404,75 @@ impl<'a, T: ModuleAccess> FieldDefinitionView<'a, T> {
 
     pub fn signature_token_view(&self) -> SignatureTokenView<'a, T> {
         SignatureTokenView::new(self.module, self.signature_token())
+    }
+}
+
+pub struct EnumDefinitionView<'a, T> {
+    module: &'a T,
+    enum_def: &'a EnumDefinition,
+    enum_handle_view: DatatypeHandleView<'a, T>,
+}
+
+impl<'a, T: ModuleAccess> EnumDefinitionView<'a, T> {
+    pub fn new(module: &'a T, enum_def: &'a EnumDefinition) -> Self {
+        let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
+        let enum_handle_view = DatatypeHandleView::new(module, enum_handle);
+        Self {
+            module,
+            enum_def,
+            enum_handle_view,
+        }
+    }
+
+    pub fn abilities(&self) -> AbilitySet {
+        self.enum_handle_view.abilities()
+    }
+
+    pub fn type_parameters(&self) -> &Vec<DatatypeTyParameter> {
+        self.enum_handle_view.type_parameters()
+    }
+
+    pub fn variants(&self) -> impl DoubleEndedIterator<Item = VariantDefinitionView<'a, T>> + Send {
+        let module = self.module;
+        self.enum_def
+            .variants
+            .iter()
+            .map(|variant| VariantDefinitionView::new(module, variant))
+    }
+
+    /// Return the flattened fields of all variants of the enum
+    pub fn all_fields(&self) -> impl DoubleEndedIterator<Item = FieldDefinitionView<'a, T>> + Send {
+        self.variants().flat_map(|variant| variant.fields())
+    }
+
+    pub fn name(&self) -> &'a IdentStr {
+        self.enum_handle_view.name()
+    }
+}
+
+pub struct VariantDefinitionView<'a, T> {
+    module: &'a T,
+    variant_def: &'a VariantDefinition,
+}
+
+impl<'a, T: ModuleAccess> VariantDefinitionView<'a, T> {
+    pub fn new(module: &'a T, variant_def: &'a VariantDefinition) -> Self {
+        Self {
+            module,
+            variant_def,
+        }
+    }
+
+    pub fn fields(&self) -> impl DoubleEndedIterator<Item = FieldDefinitionView<'a, T>> + Send {
+        let module = self.module;
+        self.variant_def
+            .fields
+            .iter()
+            .map(|field_def| FieldDefinitionView::new(module, field_def))
+    }
+
+    pub fn name(&self) -> &'a IdentStr {
+        self.module.identifier_at(self.variant_def.variant_name)
     }
 }
 
@@ -722,7 +791,7 @@ impl<'a, T: ModuleAccess> ViewInternals for ModuleView<'a, T> {
 }
 
 impl_view_internals!(ModuleHandleView, ModuleHandle, module_handle);
-impl_view_internals!(StructHandleView, StructHandle, struct_handle);
+impl_view_internals!(DatatypeHandleView, DatatypeHandle, struct_handle);
 impl_view_internals!(FunctionHandleView, FunctionHandle, function_handle);
 impl_view_internals!(StructDefinitionView, StructDefinition, struct_def);
 impl_view_internals!(FunctionDefinitionView, FunctionDefinition, function_def);

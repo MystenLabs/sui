@@ -8,12 +8,13 @@ use crate::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, AddressIdentifierIndex, CodeUnit, CompiledScript, Constant, ConstantPoolIndex,
-        FieldHandle, FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex,
-        FunctionDefinition, FunctionDefinitionIndex, FunctionHandle, FunctionHandleIndex,
-        FunctionInstantiation, FunctionInstantiationIndex, IdentifierIndex, ModuleHandle,
-        ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, StructDefInstantiation,
-        StructDefInstantiationIndex, StructDefinition, StructDefinitionIndex, StructHandle,
-        StructHandleIndex,
+        DatatypeHandle, DatatypeHandleIndex, EnumDefInstantiation, EnumDefInstantiationIndex,
+        EnumDefinition, EnumDefinitionIndex, FieldHandle, FieldHandleIndex, FieldInstantiation,
+        FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex, FunctionHandle,
+        FunctionHandleIndex, FunctionInstantiation, FunctionInstantiationIndex, IdentifierIndex,
+        ModuleHandle, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
+        StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
+        StructDefinitionIndex, VariantDefinition, VariantTag,
     },
     CompiledModule,
 };
@@ -42,10 +43,10 @@ impl<'a> BinaryIndexedView<'a> {
         }
     }
 
-    pub fn struct_handles(&self) -> &[StructHandle] {
+    pub fn datatype_handles(&self) -> &[DatatypeHandle] {
         match self {
-            BinaryIndexedView::Module(module) => module.struct_handles(),
-            BinaryIndexedView::Script(script) => script.struct_handles(),
+            BinaryIndexedView::Module(module) => module.datatype_handles(),
+            BinaryIndexedView::Script(script) => script.datatype_handles(),
         }
     }
 
@@ -119,10 +120,10 @@ impl<'a> BinaryIndexedView<'a> {
         }
     }
 
-    pub fn struct_handle_at(&self, idx: StructHandleIndex) -> &StructHandle {
+    pub fn datatype_handle_at(&self, idx: DatatypeHandleIndex) -> &DatatypeHandle {
         match self {
-            BinaryIndexedView::Module(module) => module.struct_handle_at(idx),
-            BinaryIndexedView::Script(script) => script.struct_handle_at(idx),
+            BinaryIndexedView::Module(module) => module.datatype_handle_at(idx),
+            BinaryIndexedView::Script(script) => script.datatype_handle_at(idx),
         }
     }
 
@@ -180,12 +181,31 @@ impl<'a> BinaryIndexedView<'a> {
         }
     }
 
+    pub fn enum_instantiations(&self) -> Option<&[EnumDefInstantiation]> {
+        match self {
+            BinaryIndexedView::Module(module) => Some(module.enum_instantiations()),
+            BinaryIndexedView::Script(_) => None,
+        }
+    }
+
     pub fn struct_instantiation_at(
         &self,
         idx: StructDefInstantiationIndex,
     ) -> PartialVMResult<&StructDefInstantiation> {
         match self {
             BinaryIndexedView::Module(module) => Ok(module.struct_instantiation_at(idx)),
+            BinaryIndexedView::Script(_) => {
+                Err(PartialVMError::new(StatusCode::INVALID_OPERATION_IN_SCRIPT))
+            }
+        }
+    }
+
+    pub fn enum_instantiation_at(
+        &self,
+        idx: EnumDefInstantiationIndex,
+    ) -> PartialVMResult<&EnumDefInstantiation> {
+        match self {
+            BinaryIndexedView::Module(module) => Ok(module.enum_instantiation_at(idx)),
             BinaryIndexedView::Script(_) => {
                 Err(PartialVMError::new(StatusCode::INVALID_OPERATION_IN_SCRIPT))
             }
@@ -218,9 +238,40 @@ impl<'a> BinaryIndexedView<'a> {
         }
     }
 
+    pub fn enum_defs(&self) -> Option<&[EnumDefinition]> {
+        match self {
+            BinaryIndexedView::Module(module) => Some(module.enum_defs()),
+            BinaryIndexedView::Script(_) => None,
+        }
+    }
+
     pub fn struct_def_at(&self, idx: StructDefinitionIndex) -> PartialVMResult<&StructDefinition> {
         match self {
             BinaryIndexedView::Module(module) => Ok(module.struct_def_at(idx)),
+            BinaryIndexedView::Script(_) => {
+                Err(PartialVMError::new(StatusCode::INVALID_OPERATION_IN_SCRIPT))
+            }
+        }
+    }
+
+    pub fn enum_def_at(&self, idx: EnumDefinitionIndex) -> PartialVMResult<&EnumDefinition> {
+        match self {
+            BinaryIndexedView::Module(module) => Ok(module.enum_def_at(idx)),
+            BinaryIndexedView::Script(_) => {
+                Err(PartialVMError::new(StatusCode::INVALID_OPERATION_IN_SCRIPT))
+            }
+        }
+    }
+
+    pub fn variant_def_at(
+        &self,
+        idx: EnumDefinitionIndex,
+        variant_tag: VariantTag,
+    ) -> PartialVMResult<&VariantDefinition> {
+        match self {
+            BinaryIndexedView::Module(module) => {
+                Ok(&module.enum_def_at(idx).variants[variant_tag as usize])
+            }
             BinaryIndexedView::Script(_) => {
                 Err(PartialVMError::new(StatusCode::INVALID_OPERATION_IN_SCRIPT))
             }
@@ -267,12 +318,12 @@ impl<'a> BinaryIndexedView<'a> {
                 vec![false],
                 vec![self.abilities(ty, constraints)?],
             ),
-            Struct(idx) => {
-                let sh = self.struct_handle_at(*idx);
+            Datatype(idx) => {
+                let sh = self.datatype_handle_at(*idx);
                 Ok(sh.abilities)
             }
-            StructInstantiation(idx, type_args) => {
-                let sh = self.struct_handle_at(*idx);
+            DatatypeInstantiation(idx, type_args) => {
+                let sh = self.datatype_handle_at(*idx);
                 let declared_abilities = sh.abilities;
                 let type_arguments = type_args
                     .iter()

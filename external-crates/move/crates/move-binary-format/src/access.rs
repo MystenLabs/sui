@@ -42,7 +42,13 @@ pub trait ModuleAccess: Sync {
 
     fn struct_name(&self, idx: StructDefinitionIndex) -> &IdentStr {
         let struct_def = self.struct_def_at(idx);
-        let handle = self.struct_handle_at(struct_def.struct_handle);
+        let handle = self.datatype_handle_at(struct_def.struct_handle);
+        self.identifier_at(handle.name)
+    }
+
+    fn enum_name(&self, idx: EnumDefinitionIndex) -> &IdentStr {
+        let enum_def = self.enum_def_at(idx);
+        let handle = self.datatype_handle_at(enum_def.enum_handle);
         self.identifier_at(handle.name)
     }
 
@@ -53,8 +59,8 @@ pub trait ModuleAccess: Sync {
         handle
     }
 
-    fn struct_handle_at(&self, idx: StructHandleIndex) -> &StructHandle {
-        let handle = &self.as_module().struct_handles[idx.into_index()];
+    fn datatype_handle_at(&self, idx: DatatypeHandleIndex) -> &DatatypeHandle {
+        let handle = &self.as_module().datatype_handles[idx.into_index()];
         debug_assert!(handle.module.into_index() < self.as_module().module_handles.len()); // invariant
         handle
     }
@@ -74,6 +80,10 @@ pub trait ModuleAccess: Sync {
 
     fn struct_instantiation_at(&self, idx: StructDefInstantiationIndex) -> &StructDefInstantiation {
         &self.as_module().struct_def_instantiations[idx.into_index()]
+    }
+
+    fn enum_instantiation_at(&self, idx: EnumDefInstantiationIndex) -> &EnumDefInstantiation {
+        &self.as_module().enum_def_instantiations[idx.into_index()]
     }
 
     fn function_instantiation_at(&self, idx: FunctionInstantiationIndex) -> &FunctionInstantiation {
@@ -104,6 +114,10 @@ pub trait ModuleAccess: Sync {
         &self.as_module().struct_defs[idx.into_index()]
     }
 
+    fn enum_def_at(&self, idx: EnumDefinitionIndex) -> &EnumDefinition {
+        &self.as_module().enum_defs[idx.into_index()]
+    }
+
     fn function_def_at(&self, idx: FunctionDefinitionIndex) -> &FunctionDefinition {
         let result = &self.as_module().function_defs[idx.into_index()];
         debug_assert!(result.function.into_index() < self.function_handles().len()); // invariant
@@ -118,8 +132,8 @@ pub trait ModuleAccess: Sync {
         &self.as_module().module_handles
     }
 
-    fn struct_handles(&self) -> &[StructHandle] {
-        &self.as_module().struct_handles
+    fn datatype_handles(&self) -> &[DatatypeHandle] {
+        &self.as_module().datatype_handles
     }
 
     fn function_handles(&self) -> &[FunctionHandle] {
@@ -132,6 +146,10 @@ pub trait ModuleAccess: Sync {
 
     fn struct_instantiations(&self) -> &[StructDefInstantiation] {
         &self.as_module().struct_def_instantiations
+    }
+
+    fn enum_instantiations(&self) -> &[EnumDefInstantiation] {
+        &self.as_module().enum_def_instantiations
     }
 
     fn function_instantiations(&self) -> &[FunctionInstantiation] {
@@ -160,6 +178,10 @@ pub trait ModuleAccess: Sync {
 
     fn struct_defs(&self) -> &[StructDefinition] {
         &self.as_module().struct_defs
+    }
+
+    fn enum_defs(&self) -> &[EnumDefinition] {
+        &self.as_module().enum_defs
     }
 
     fn function_defs(&self) -> &[FunctionDefinition] {
@@ -198,13 +220,24 @@ pub trait ModuleAccess: Sync {
             .collect()
     }
 
-    fn find_struct_def(&self, idx: StructHandleIndex) -> Option<&StructDefinition> {
+    fn find_struct_def(&self, idx: DatatypeHandleIndex) -> Option<&StructDefinition> {
         self.struct_defs().iter().find(|d| d.struct_handle == idx)
+    }
+
+    fn find_enum_def(&self, idx: DatatypeHandleIndex) -> Option<&EnumDefinition> {
+        self.enum_defs().iter().find(|d| d.enum_handle == idx)
     }
 
     fn find_struct_def_by_name(&self, name: &IdentStr) -> Option<&StructDefinition> {
         self.struct_defs().iter().find(|def| {
-            let handle = self.struct_handle_at(def.struct_handle);
+            let handle = self.datatype_handle_at(def.struct_handle);
+            name == self.identifier_at(handle.name)
+        })
+    }
+
+    fn find_enum_def_by_name(&self, name: &IdentStr) -> Option<&EnumDefinition> {
+        self.enum_defs().iter().find(|def| {
+            let handle = self.datatype_handle_at(def.enum_handle);
             name == self.identifier_at(handle.name)
         })
     }
@@ -221,8 +254,8 @@ pub trait ScriptAccess: Sync {
         &self.as_script().module_handles[idx.into_index()]
     }
 
-    fn struct_handle_at(&self, idx: StructHandleIndex) -> &StructHandle {
-        &self.as_script().struct_handles[idx.into_index()]
+    fn datatype_handle_at(&self, idx: DatatypeHandleIndex) -> &DatatypeHandle {
+        &self.as_script().datatype_handles[idx.into_index()]
     }
 
     fn function_handle_at(&self, idx: FunctionHandleIndex) -> &FunctionHandle {
@@ -253,8 +286,8 @@ pub trait ScriptAccess: Sync {
         &self.as_script().module_handles
     }
 
-    fn struct_handles(&self) -> &[StructHandle] {
-        &self.as_script().struct_handles
+    fn datatype_handles(&self) -> &[DatatypeHandle] {
+        &self.as_script().datatype_handles
     }
 
     fn function_handles(&self) -> &[FunctionHandle] {

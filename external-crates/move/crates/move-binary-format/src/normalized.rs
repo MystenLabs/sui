@@ -5,12 +5,13 @@
 use crate::{
     access::ModuleAccess,
     file_format::{
-        AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, FieldDefinition,
+        AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, DatatypeTyParameter,
+        EnumDefInstantiation, EnumDefInstantiationIndex, EnumDefinition, FieldDefinition,
         FieldHandle, FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex,
         FunctionDefinition, FunctionHandle, FunctionHandleIndex, FunctionInstantiation, LocalIndex,
         SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructTypeParameter,
-        TypeParameterIndex, Visibility,
+        StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
+        VariantDefinition, VariantJumpTable as FFVariantJumpTable, VariantTag, Visibility,
     },
 };
 use move_core_types::{
@@ -71,14 +72,14 @@ pub enum Type {
 /// metadata that it is ignored by the VM. The reason: names are important to clients. We would
 /// want a change from `Account { bal: u64, seq: u64 }` to `Account { seq: u64, bal: u64 }` to be
 /// marked as incompatible. Not safe to compare without an enclosing `Struct`.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Field {
     pub name: Identifier,
     pub type_: Type,
 }
 
 /// Normalized version of a `Constant`.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Constant {
     pub type_: Type,
     pub data: Vec<u8>,
@@ -86,16 +87,16 @@ pub struct Constant {
 
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Struct {
     pub abilities: AbilitySet,
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub type_parameters: Vec<DatatypeTyParameter>,
     pub fields: Vec<Field>,
 }
 
 /// Normalized version of a `FunctionDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Function {
     pub visibility: Visibility,
     pub is_entry: bool,
@@ -105,10 +106,35 @@ pub struct Function {
     pub code: Vec<Bytecode>,
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct FieldRef {
     pub struct_name: Identifier,
     pub field_index: u16,
+}
+
+/// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
+/// `ModuleId` or `Module`.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Enum {
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTyParameter>,
+    pub variants: Vec<Variant>,
+}
+
+/// Normalized version of a `VariantDefinition`. Not safe to compare without an associated
+/// `ModuleId` or `Module`.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Variant {
+    pub name: Identifier,
+    pub fields: Vec<Field>,
+}
+
+/// Normalized version of a `VariantJumpTable`. Not safe to compare without an associated
+/// `ModuleId` or `Module`.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct VariantJumpTable {
+    pub enum_name: Identifier,
+    pub jump_table: Vec<CodeOffset>,
 }
 
 // Functions can reference external modules. We don't track the exact type parameters and the like
@@ -120,14 +146,14 @@ pub struct FieldRef {
 //   - The callee is in the same package as this call, in which case the callee couldn't have changed; or
 //   - The callee was in a different package and therefore public, and therefore the API of that
 //   function must not have changed by compatibility rules.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct FunctionRef {
     pub module_id: ModuleId,
     pub function_ident: Identifier,
 }
 
 /// Normalized representation of bytecode.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Bytecode {
     Pop,
     Ret,
@@ -206,6 +232,15 @@ pub enum Bytecode {
     CastU16,
     CastU32,
     CastU256,
+    PackVariant(Identifier, VariantTag),
+    PackVariantGeneric((Identifier, Vec<Type>), VariantTag),
+    UnpackVariant(Identifier, VariantTag),
+    UnpackVariantImmRef(Identifier, VariantTag),
+    UnpackVariantMutRef(Identifier, VariantTag),
+    UnpackVariantGeneric((Identifier, Vec<Type>), VariantTag),
+    UnpackVariantGenericImmRef((Identifier, Vec<Type>), VariantTag),
+    UnpackVariantGenericMutRef((Identifier, Vec<Type>), VariantTag),
+    VariantSwitch(VariantJumpTable),
 }
 
 impl Constant {
@@ -219,7 +254,7 @@ impl Constant {
 
 /// Normalized version of a `CompiledModule`: its address, name, struct declarations, and public
 /// function declarations.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Module {
     pub file_format_version: u32,
     pub address: AccountAddress,
@@ -227,6 +262,7 @@ pub struct Module {
     pub dependencies: Vec<ModuleId>,
     pub friends: Vec<ModuleId>,
     pub structs: BTreeMap<Identifier, Struct>,
+    pub enums: BTreeMap<Identifier, Enum>,
     pub functions: BTreeMap<Identifier, Function>,
     pub constants: Vec<Constant>,
 }
@@ -238,6 +274,7 @@ impl Module {
     pub fn new(m: &CompiledModule) -> Self {
         let friends = m.immediate_friends();
         let structs = m.struct_defs().iter().map(|d| Struct::new(m, d)).collect();
+        let enums = m.enum_defs().iter().map(|d| Enum::new(m, d)).collect();
         let dependencies = m.immediate_dependencies();
         let constants = m
             .constant_pool()
@@ -255,6 +292,7 @@ impl Module {
             name: m.name().to_owned(),
             friends,
             structs,
+            enums,
             functions,
             dependencies,
             constants,
@@ -271,8 +309,8 @@ impl Type {
     pub fn new(m: &CompiledModule, s: &SignatureToken) -> Self {
         use SignatureToken::*;
         match s {
-            Struct(shi) => {
-                let s_handle = m.struct_handle_at(*shi);
+            Datatype(shi) => {
+                let s_handle = m.datatype_handle_at(*shi);
                 assert!(s_handle.type_parameters.is_empty(), "A struct with N type parameters should be encoded as StructModuleInstantiation with type_arguments = [TypeParameter(1), ..., TypeParameter(N)]");
                 let m_handle = m.module_handle_at(s_handle.module);
                 Type::Struct {
@@ -282,8 +320,8 @@ impl Type {
                     type_arguments: Vec::new(),
                 }
             }
-            StructInstantiation(shi, type_actuals) => {
-                let s_handle = m.struct_handle_at(*shi);
+            DatatypeInstantiation(shi, type_actuals) => {
+                let s_handle = m.datatype_handle_at(*shi);
                 let m_handle = m.module_handle_at(s_handle.module);
                 Type::Struct {
                     address: *m.address_identifier_at(m_handle.address),
@@ -420,7 +458,7 @@ impl Struct {
     /// Create a `Struct` for `StructDefinition` `def` in module `m`. Panics if `def` is a
     /// a native struct definition.
     pub fn new(m: &CompiledModule, def: &StructDefinition) -> (Identifier, Self) {
-        let handle = m.struct_handle_at(def.struct_handle);
+        let handle = m.datatype_handle_at(def.struct_handle);
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
                 // Pretend for compatibility checking no fields
@@ -459,11 +497,10 @@ impl Function {
             .map(|code| {
                 code.code
                     .iter()
-                    .map(|bytecode| Bytecode::new(m, bytecode))
+                    .map(|bytecode| Bytecode::new(m, bytecode, &code.jump_tables))
                     .collect()
             })
             .unwrap_or_default();
-
         let f = Function {
             visibility: def.visibility,
             is_entry: def.is_entry,
@@ -547,7 +584,11 @@ impl FunctionRef {
 }
 
 impl Bytecode {
-    pub fn new(m: &CompiledModule, bytecode: &FBytecode) -> Self {
+    pub fn new(
+        m: &CompiledModule,
+        bytecode: &FBytecode,
+        jump_tables: &[FFVariantJumpTable],
+    ) -> Self {
         use Bytecode as B;
         use FBytecode as FB;
         match bytecode {
@@ -646,6 +687,75 @@ impl Bytecode {
             FB::VecPopBack(sig_idx) => B::VecPopBack(signature_to_single_type(m, sig_idx)),
             FB::VecUnpack(sig_idx, len) => B::VecUnpack(signature_to_single_type(m, sig_idx), *len),
             FB::VecSwap(sig_idx) => B::VecSwap(signature_to_single_type(m, sig_idx)),
+            FB::PackVariant(eidx, tag) => B::PackVariant(m.enum_name(*eidx).to_owned(), *tag),
+            FB::PackVariantGeneric(edii, tag) => {
+                B::PackVariantGeneric(enum_instantiation(m, edii), *tag)
+            }
+            FB::UnpackVariant(eidx, tag) => B::UnpackVariant(m.enum_name(*eidx).to_owned(), *tag),
+            FB::UnpackVariantGeneric(edii, tag) => {
+                B::UnpackVariantGeneric(enum_instantiation(m, edii), *tag)
+            }
+            FB::UnpackVariantImmRef(eidx, tag) => {
+                B::UnpackVariantImmRef(m.enum_name(*eidx).to_owned(), *tag)
+            }
+            FB::UnpackVariantGenericImmRef(edii, tag) => {
+                B::UnpackVariantGenericImmRef(enum_instantiation(m, edii), *tag)
+            }
+            FB::UnpackVariantMutRef(eidx, tag) => {
+                B::UnpackVariantMutRef(m.enum_name(*eidx).to_owned(), *tag)
+            }
+            FB::UnpackVariantGenericMutRef(edii, tag) => {
+                B::UnpackVariantGenericMutRef(enum_instantiation(m, edii), *tag)
+            }
+            FB::VariantSwitch(jti) => B::VariantSwitch(VariantJumpTable::new(
+                m,
+                jump_tables
+                    .get(jti.0 as usize)
+                    .expect("Invariant violation: invalid jump table index"),
+            )),
+        }
+    }
+}
+
+impl VariantJumpTable {
+    pub fn new(m: &CompiledModule, jt: &FFVariantJumpTable) -> Self {
+        let e_def = m.enum_def_at(jt.head_enum);
+        let e_handle = m.datatype_handle_at(e_def.enum_handle);
+        let enum_name = m.identifier_at(e_handle.name).to_owned();
+        Self {
+            enum_name,
+            jump_table: jt.jump_table.clone(),
+        }
+    }
+}
+
+impl Enum {
+    pub fn new(m: &CompiledModule, def: &EnumDefinition) -> (Identifier, Self) {
+        let handle = m.datatype_handle_at(def.enum_handle);
+        let name = m.identifier_at(handle.name).to_owned();
+        let variants = def
+            .variants
+            .iter()
+            .map(|v| Variant::new(m, v))
+            .collect::<Vec<_>>();
+        let e = Enum {
+            abilities: handle.abilities,
+            type_parameters: handle.type_parameters.clone(),
+            variants,
+        };
+        (name, e)
+    }
+}
+
+impl Variant {
+    pub fn new(m: &CompiledModule, v: &VariantDefinition) -> Self {
+        Self {
+            name: m.identifier_at(v.variant_name).to_owned(),
+            fields: v
+                .fields
+                .iter()
+                .map(|f| Field::new(m, f))
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -702,6 +812,24 @@ fn struct_instantiation(
         type_parameters,
     } = m.struct_instantiation_at(*si_idx);
     let (name, _) = Struct::new(m, m.struct_def_at(*def));
+    let types = m
+        .signature_at(*type_parameters)
+        .0
+        .iter()
+        .map(|tok| Type::new(m, tok))
+        .collect();
+    (name, types)
+}
+
+fn enum_instantiation(
+    m: &CompiledModule,
+    si_idx: &EnumDefInstantiationIndex,
+) -> (Identifier, Vec<Type>) {
+    let EnumDefInstantiation {
+        def,
+        type_parameters,
+    } = m.enum_instantiation_at(*si_idx);
+    let (name, _) = Enum::new(m, m.enum_def_at(*def));
     let types = m
         .signature_at(*type_parameters)
         .0

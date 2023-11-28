@@ -10,9 +10,10 @@ use crate::{
     },
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, Constant,
-        FieldHandle, FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandle, FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
-        StructDefInstantiation, StructDefinition, StructFieldInformation, StructHandle, TableIndex,
+        DatatypeHandle, EnumDefInstantiation, EnumDefinition, FieldHandle, FieldInstantiation,
+        FunctionDefinition, FunctionDefinitionIndex, FunctionHandle, FunctionInstantiation,
+        LocalIndex, ModuleHandle, Signature, SignatureToken, StructDefInstantiation,
+        StructDefinition, StructFieldInformation, TableIndex, VariantJumpTable,
     },
     internals::ModuleIndex,
     IndexKind,
@@ -82,7 +83,7 @@ impl<'a> BoundsChecker<'a> {
         self.check_constants()?;
         self.check_module_handles()?;
         self.check_self_module_handle()?;
-        self.check_struct_handles()?;
+        self.check_datatype_handles()?;
         self.check_function_handles()?;
         self.check_field_handles()?;
         self.check_friend_decls()?;
@@ -90,7 +91,10 @@ impl<'a> BoundsChecker<'a> {
         self.check_function_instantiations()?;
         self.check_field_instantiations()?;
         self.check_struct_defs()?;
-        self.check_function_defs()
+        self.check_function_defs()?;
+        self.check_enum_defs()?;
+        self.check_enum_instantiations()?;
+        Ok(())
     }
 
     fn check_signatures(&self) -> PartialVMResult<()> {
@@ -114,9 +118,9 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
-    fn check_struct_handles(&self) -> PartialVMResult<()> {
-        for struct_handle in self.view.struct_handles() {
-            self.check_struct_handle(struct_handle)?
+    fn check_datatype_handles(&self) -> PartialVMResult<()> {
+        for struct_handle in self.view.datatype_handles() {
+            self.check_datatype_handle(struct_handle)?
         }
         Ok(())
     }
@@ -149,6 +153,13 @@ impl<'a> BoundsChecker<'a> {
         Ok(())
     }
 
+    fn check_enum_instantiations(&self) -> PartialVMResult<()> {
+        for enum_instantiation in self.view.enum_instantiations().into_iter().flatten() {
+            self.check_enum_instantiation(enum_instantiation)?
+        }
+        Ok(())
+    }
+
     fn check_function_instantiations(&self) -> PartialVMResult<()> {
         for function_instantiation in self.view.function_instantiations() {
             self.check_function_instantiation(function_instantiation)?
@@ -166,6 +177,13 @@ impl<'a> BoundsChecker<'a> {
     fn check_struct_defs(&self) -> PartialVMResult<()> {
         for struct_def in self.view.struct_defs().into_iter().flatten() {
             self.check_struct_def(struct_def)?
+        }
+        Ok(())
+    }
+
+    fn check_enum_defs(&self) -> PartialVMResult<()> {
+        for enum_def in self.view.enum_defs().into_iter().flatten() {
+            self.check_enum_def(enum_def)?
         }
         Ok(())
     }
@@ -192,9 +210,9 @@ impl<'a> BoundsChecker<'a> {
         }
     }
 
-    fn check_struct_handle(&self, struct_handle: &StructHandle) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.module_handles(), struct_handle.module)?;
-        check_bounds_impl(self.view.identifiers(), struct_handle.name)
+    fn check_datatype_handle(&self, datatype_handle: &DatatypeHandle) -> PartialVMResult<()> {
+        check_bounds_impl(self.view.module_handles(), datatype_handle.module)?;
+        check_bounds_impl(self.view.identifiers(), datatype_handle.name)
     }
 
     fn check_function_handle(&self, function_handle: &FunctionHandle) -> PartialVMResult<()> {
@@ -257,6 +275,14 @@ impl<'a> BoundsChecker<'a> {
         check_bounds_impl(self.view.signatures(), struct_instantiation.type_parameters)
     }
 
+    fn check_enum_instantiation(
+        &self,
+        enum_instantiation: &EnumDefInstantiation,
+    ) -> PartialVMResult<()> {
+        check_bounds_impl_opt(&self.view.enum_defs(), enum_instantiation.def)?;
+        check_bounds_impl(self.view.signatures(), enum_instantiation.type_parameters)
+    }
+
     fn check_function_instantiation(
         &self,
         function_instantiation: &FunctionInstantiation,
@@ -288,16 +314,47 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_struct_def(&self, struct_def: &StructDefinition) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.struct_handles(), struct_def.struct_handle)?;
+        check_bounds_impl(self.view.datatype_handles(), struct_def.struct_handle)?;
         // check signature (type) and type parameter for the field type
         if let StructFieldInformation::Declared(fields) = &struct_def.field_information {
             let type_param_count = self
                 .view
-                .struct_handles()
+                .datatype_handles()
                 .get(struct_def.struct_handle.into_index())
                 .map_or(0, |sh| sh.type_parameters.len());
             // field signatures are inlined
             for field in fields {
+                check_bounds_impl(self.view.identifiers(), field.name)?;
+                self.check_type(&field.signature.0)?;
+                self.check_type_parameter(&field.signature.0, type_param_count)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_enum_def(&self, enum_def: &EnumDefinition) -> PartialVMResult<()> {
+        check_bounds_impl(self.view.datatype_handles(), enum_def.enum_handle)?;
+        let type_param_count = self
+            .view
+            .datatype_handles()
+            .get(enum_def.enum_handle.into_index())
+            .map_or(0, |eh| eh.type_parameters.len());
+        for variant_def in &enum_def.variants {
+            check_bounds_impl(self.view.identifiers(), variant_def.variant_name)?;
+            match self.view.enum_defs() {
+                None => {
+                    return Err(verification_error(
+                        StatusCode::INDEX_OUT_OF_BOUNDS,
+                        IndexKind::EnumDefinition,
+                        0 as TableIndex,
+                    ));
+                }
+                Some(enum_defs) => {
+                    check_bounds_impl(enum_defs, variant_def.enum_def)?;
+                }
+            }
+
+            for field in &variant_def.fields {
                 check_bounds_impl(self.view.identifiers(), field.name)?;
                 self.check_type(&field.signature.0)?;
                 self.check_type_parameter(&field.signature.0, type_param_count)?;
@@ -533,6 +590,132 @@ impl<'a> BoundsChecker<'a> {
                 | LdTrue | LdFalse | ReadRef | WriteRef | Add | Sub | Mul | Mod | Div | BitOr
                 | BitAnd | Xor | Shl | Shr | Or | And | Not | Eq | Neq | Lt | Gt | Le | Ge
                 | Abort | Nop => (),
+                PackVariant(edi, vt)
+                | UnpackVariant(edi, vt)
+                | UnpackVariantImmRef(edi, vt)
+                | UnpackVariantMutRef(edi, vt) => {
+                    self.check_code_unit_bounds_impl_opt(
+                        &self.view.enum_defs(),
+                        *edi,
+                        bytecode_offset,
+                    )?;
+                    self.view.enum_defs().map_or(Ok(()), |enum_defs| {
+                        let (is_index_valid, variant_count) = enum_defs
+                            .get(edi.into_index())
+                            .map(|enum_def| {
+                                (
+                                    (*vt as usize) < enum_def.variants.len(),
+                                    enum_def.variants.len(),
+                                )
+                            })
+                            .unwrap_or((false, 0));
+                        if !is_index_valid {
+                            return Err(self.offset_out_of_bounds(
+                                StatusCode::INDEX_OUT_OF_BOUNDS,
+                                IndexKind::MemberCount,
+                                *vt as usize,
+                                variant_count,
+                                bytecode_offset as CodeOffset,
+                            ));
+                        }
+                        Ok(())
+                    })?;
+                }
+                PackVariantGeneric(edii, vt)
+                | UnpackVariantGeneric(edii, vt)
+                | UnpackVariantGenericImmRef(edii, vt)
+                | UnpackVariantGenericMutRef(edii, vt) => {
+                    self.check_code_unit_bounds_impl_opt(
+                        &self.view.enum_instantiations(),
+                        *edii,
+                        bytecode_offset,
+                    )?;
+                    if let Some(enum_inst) = self
+                        .view
+                        .enum_instantiations()
+                        .and_then(|s| s.get(edii.into_index()))
+                    {
+                        // Check that the variant index is in bounds
+                        self.view.enum_defs().map_or(Ok(()), |enum_defs| {
+                            let (is_index_valid, variant_count) = enum_defs
+                                .get(enum_inst.def.into_index())
+                                .map(|enum_def| {
+                                    (
+                                        (*vt as usize) < enum_def.variants.len(),
+                                        enum_def.variants.len(),
+                                    )
+                                })
+                                .unwrap_or((false, 0));
+                            if !is_index_valid {
+                                return Err(self.offset_out_of_bounds(
+                                    StatusCode::INDEX_OUT_OF_BOUNDS,
+                                    IndexKind::MemberCount,
+                                    *vt as usize,
+                                    variant_count,
+                                    bytecode_offset as CodeOffset,
+                                ));
+                            }
+                            Ok(())
+                        })?;
+                        // check type parameters in type operations are bound to the function type parameters
+                        let Some(sig) = self
+                            .view
+                            .signatures()
+                            .get(enum_inst.type_parameters.into_index())
+                        else {
+                            return Err(self.offset_out_of_bounds(
+                                StatusCode::INDEX_OUT_OF_BOUNDS,
+                                IndexKind::Signature,
+                                enum_inst.type_parameters.into_index(),
+                                self.view.signatures().len(),
+                                bytecode_offset as CodeOffset,
+                            ));
+                        };
+
+                        for ty in &sig.0 {
+                            self.check_type_parameter(ty, type_param_count)?
+                        }
+                    }
+                }
+                VariantSwitch(jti) => {
+                    self.check_code_unit_bounds_impl(
+                        &code_unit.jump_tables,
+                        *jti,
+                        bytecode_offset,
+                    )?;
+                }
+            }
+        }
+
+        for VariantJumpTable {
+            head_enum,
+            jump_table,
+        } in code_unit.jump_tables.iter()
+        {
+            check_bounds_impl_opt(&self.view.enum_defs(), *head_enum)?;
+            let Some(enum_defs) = self.view.enum_defs() else {
+                break;
+            };
+            let num_variants = enum_defs[head_enum.into_index()].variants.len();
+            let code_len = code_unit.code.len();
+            let jt_len = jump_table.len();
+            if jt_len > num_variants {
+                return Err(bounds_error(
+                    StatusCode::INDEX_OUT_OF_BOUNDS,
+                    IndexKind::VariantTag,
+                    jt_len as TableIndex,
+                    num_variants,
+                ));
+            }
+            for offset in jump_table.iter() {
+                if *offset as usize >= code_len {
+                    return Err(bounds_error(
+                        StatusCode::INDEX_OUT_OF_BOUNDS,
+                        IndexKind::CodeDefinition,
+                        *offset,
+                        code_len,
+                    ));
+                }
             }
         }
         Ok(())
@@ -545,9 +728,9 @@ impl<'a> BoundsChecker<'a> {
             match ty {
                 Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | TypeParameter(_)
                 | Reference(_) | MutableReference(_) | Vector(_) => (),
-                Struct(idx) => {
-                    check_bounds_impl(self.view.struct_handles(), *idx)?;
-                    if let Some(sh) = self.view.struct_handles().get(idx.into_index()) {
+                Datatype(idx) => {
+                    check_bounds_impl(self.view.datatype_handles(), *idx)?;
+                    if let Some(sh) = self.view.datatype_handles().get(idx.into_index()) {
                         if !sh.type_parameters.is_empty() {
                             return Err(PartialVMError::new(
                                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -559,9 +742,9 @@ impl<'a> BoundsChecker<'a> {
                         }
                     }
                 }
-                StructInstantiation(idx, type_params) => {
-                    check_bounds_impl(self.view.struct_handles(), *idx)?;
-                    if let Some(sh) = self.view.struct_handles().get(idx.into_index()) {
+                DatatypeInstantiation(idx, type_params) => {
+                    check_bounds_impl(self.view.datatype_handles(), *idx)?;
+                    if let Some(sh) = self.view.datatype_handles().get(idx.into_index()) {
                         if sh.type_parameters.len() != type_params.len() {
                             return Err(PartialVMError::new(
                                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -608,11 +791,11 @@ impl<'a> BoundsChecker<'a> {
                 | U256
                 | Address
                 | Signer
-                | Struct(_)
+                | Datatype(_)
                 | Reference(_)
                 | MutableReference(_)
                 | Vector(_)
-                | StructInstantiation(_, _) => (),
+                | DatatypeInstantiation(_, _) => (),
             }
         }
         Ok(())

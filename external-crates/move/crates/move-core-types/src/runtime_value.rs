@@ -2,7 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{account_address::AccountAddress, annotated_value as A, fmt_list, u256};
+use crate::{
+    account_address::AccountAddress, annotated_value as A, fmt_list, u256, MAX_VARIANT_COUNT,
+};
 use anyhow::{anyhow, Result as AResult};
 use move_proc_macros::test_variant_order;
 use serde::{
@@ -25,6 +27,12 @@ pub const MOVE_STRUCT_FIELDS: &str = "fields";
 pub struct MoveStruct(pub Vec<MoveValue>);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MoveVariant {
+    pub tag: u16,
+    pub fields: Vec<MoveValue>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MoveValue {
     U8(u8),
     U64(u64),
@@ -38,10 +46,29 @@ pub enum MoveValue {
     U16(u16),
     U32(u32),
     U256(u256::U256),
+    Variant(MoveVariant),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveStructLayout(pub Vec<MoveTypeLayout>);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveEnumLayout(pub Vec<Vec<MoveTypeLayout>>);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MoveDatatypeLayout {
+    Struct(MoveStructLayout),
+    Enum(MoveEnumLayout),
+}
+
+impl MoveDatatypeLayout {
+    pub fn into_layout(self) -> MoveTypeLayout {
+        match self {
+            MoveDatatypeLayout::Struct(layout) => MoveTypeLayout::Struct(layout),
+            MoveDatatypeLayout::Enum(layout) => MoveTypeLayout::Enum(layout),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[test_variant_order(src/unit_tests/staged_enum_variant_order/move_type_layout.yaml)]
@@ -70,6 +97,8 @@ pub enum MoveTypeLayout {
     U32,
     #[serde(rename(serialize = "u256", deserialize = "u256"))]
     U256,
+    #[serde(rename(serialize = "enum", deserialize = "enum"))]
+    Enum(MoveEnumLayout),
 }
 
 impl MoveValue {
@@ -114,6 +143,9 @@ impl MoveValue {
         match (self, layout) {
             (MoveValue::Struct(s), A::MoveTypeLayout::Struct(l)) => {
                 A::MoveValue::Struct(s.decorate(l))
+            }
+            (MoveValue::Variant(s), A::MoveTypeLayout::Enum(l)) => {
+                A::MoveValue::Variant(s.decorate(l))
             }
             (MoveValue::Vector(vals), A::MoveTypeLayout::Vector(t)) => {
                 A::MoveValue::Vector(vals.into_iter().map(|v| v.decorate(t)).collect())
@@ -175,6 +207,43 @@ impl MoveStruct {
     }
 }
 
+impl MoveVariant {
+    pub fn new(tag: u16, fields: Vec<MoveValue>) -> Self {
+        Self { tag, fields }
+    }
+
+    pub fn simple_deserialize(blob: &[u8], ty: &MoveEnumLayout) -> AResult<Self> {
+        Ok(bcs::from_bytes_seed(ty, blob)?)
+    }
+
+    pub fn decorate(self, layout: &A::MoveEnumLayout) -> A::MoveVariant {
+        let MoveVariant { tag, fields } = self;
+        let A::MoveEnumLayout { type_, variants } = layout;
+        let ((v_name, _), v_layout) = variants
+            .iter()
+            .find(|((_, v_tag), _)| *v_tag == tag)
+            .unwrap();
+        A::MoveVariant {
+            type_: type_.clone(),
+            tag,
+            fields: fields
+                .into_iter()
+                .zip(v_layout)
+                .map(|(v, l)| (l.name.clone(), v.decorate(&l.layout)))
+                .collect(),
+            variant_name: v_name.clone(),
+        }
+    }
+
+    pub fn fields(&self) -> &[MoveValue] {
+        &self.fields
+    }
+
+    pub fn into_fields(self) -> Vec<MoveValue> {
+        self.fields
+    }
+}
+
 impl MoveStructLayout {
     pub fn new(types: Vec<MoveTypeLayout>) -> Self {
         Self(types)
@@ -210,6 +279,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
                 AccountAddress::deserialize(deserializer).map(MoveValue::Signer)
             }
             MoveTypeLayout::Struct(ty) => Ok(MoveValue::Struct(ty.deserialize(deserializer)?)),
+            MoveTypeLayout::Enum(ty) => Ok(MoveValue::Variant(ty.deserialize(deserializer)?)),
             MoveTypeLayout::Vector(layout) => Ok(MoveValue::Vector(
                 deserializer.deserialize_seq(VectorElementVisitor(layout))?,
             )),
@@ -276,10 +346,71 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveStructLayout {
     }
 }
 
+impl<'d> serde::de::DeserializeSeed<'d> for &MoveEnumLayout {
+    type Value = MoveVariant;
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_tuple(2, EnumFieldVisitor(&self.0))
+    }
+}
+
+struct EnumFieldVisitor<'a>(&'a Vec<Vec<MoveTypeLayout>>);
+
+impl<'d, 'a> serde::de::Visitor<'d> for EnumFieldVisitor<'a> {
+    type Value = MoveVariant;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("Enum")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'d>,
+    {
+        let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
+            Some(MoveValue::U8(tag)) if tag as u64 <= MAX_VARIANT_COUNT => tag as u16,
+            Some(MoveValue::U8(tag)) => return Err(A::Error::invalid_length(tag as usize, &self)),
+            Some(val) => {
+                return Err(A::Error::invalid_type(
+                    serde::de::Unexpected::Other(&format!("{val:?}")),
+                    &self,
+                ))
+            }
+            None => return Err(A::Error::invalid_length(0, &self)),
+        };
+
+        let Some(variant_layout) = self.0.get(tag as usize) else {
+            return Err(A::Error::invalid_length(tag as usize, &self));
+        };
+
+        let Some(fields) = seq.next_element_seed(&MoveVariantFieldLayout(variant_layout))? else {
+            return Err(A::Error::invalid_length(1, &self));
+        };
+
+        Ok(MoveVariant { tag, fields })
+    }
+}
+
+struct MoveVariantFieldLayout<'a>(&'a [MoveTypeLayout]);
+
+impl<'d, 'a> serde::de::DeserializeSeed<'d> for &MoveVariantFieldLayout<'a> {
+    type Value = Vec<MoveValue>;
+
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
+        deserializer.deserialize_tuple(self.0.len(), StructFieldVisitor(self.0))
+    }
+}
+
 impl serde::Serialize for MoveValue {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             MoveValue::Struct(s) => s.serialize(serializer),
+            MoveValue::Variant(v) => v.serialize(serializer),
             MoveValue::Bool(b) => serializer.serialize_bool(*b),
             MoveValue::U8(i) => serializer.serialize_u8(*i),
             MoveValue::U16(i) => serializer.serialize_u16(*i),
@@ -310,6 +441,42 @@ impl serde::Serialize for MoveStruct {
     }
 }
 
+impl serde::Serialize for MoveVariant {
+    // Serialize a variant as:  (tag, [fields...])
+    // Since we restrict tags to be less than or equal to 127, the tag will always be a single byte
+    // in uleb encoding and we don't actually need to uleb encode it, but we can at a later date if
+    // we want/need to.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let tag = if self.tag as u64 > MAX_VARIANT_COUNT {
+            return Err(serde::ser::Error::custom(format!(
+                "Variant tag {} is greater than the maximum allowed value of {}",
+                self.tag, MAX_VARIANT_COUNT
+            )));
+        } else {
+            self.tag as u8
+        };
+
+        let mut t = serializer.serialize_tuple(2)?;
+
+        t.serialize_element(&tag)?;
+        t.serialize_element(&MoveFields(&self.fields))?;
+
+        t.end()
+    }
+}
+
+struct MoveFields<'a>(&'a [MoveValue]);
+
+impl<'a> serde::Serialize for MoveFields<'a> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut t = serializer.serialize_tuple(self.0.len())?;
+        for v in self.0.iter() {
+            t.serialize_element(v)?;
+        }
+        t.end()
+    }
+}
+
 impl fmt::Display for MoveTypeLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         use MoveTypeLayout::*;
@@ -327,6 +494,8 @@ impl fmt::Display for MoveTypeLayout {
             Vector(typ) => write!(f, "vector<{typ}>"),
             Struct(s) if f.alternate() => write!(f, "{s:#}"),
             Struct(s) => write!(f, "{s}"),
+            Enum(e) if f.alternate() => write!(f, "{e:#}"),
+            Enum(e) => write!(f, "{e}"),
         }
     }
 }
@@ -359,6 +528,20 @@ impl fmt::Display for MoveStructLayout {
     }
 }
 
+impl fmt::Display for MoveEnumLayout {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        write!(f, "enum ")?;
+        for (tag, variant) in self.0.iter().enumerate() {
+            write!(f, "variant_tag: {} {{ ", tag)?;
+            for (i, l) in variant.iter().enumerate() {
+                write!(f, "{}: {}, ", i, l)?
+            }
+            write!(f, " }} ")?;
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for MoveValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -374,6 +557,7 @@ impl fmt::Display for MoveValue {
             MoveValue::Signer(a) => write!(f, "signer({})", a.to_hex_literal()),
             MoveValue::Vector(v) => fmt_list(f, "vector[", v, "]"),
             MoveValue::Struct(s) => fmt::Display::fmt(s, f),
+            MoveValue::Variant(v) => fmt::Display::fmt(v, f),
         }
     }
 }
@@ -381,5 +565,16 @@ impl fmt::Display for MoveValue {
 impl fmt::Display for MoveStruct {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt_list(f, "struct[", &self.0, "]")
+    }
+}
+
+impl fmt::Display for MoveVariant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt_list(
+            f,
+            &format!("variant(tag = {})[", self.tag),
+            &self.fields,
+            "]",
+        )
     }
 }

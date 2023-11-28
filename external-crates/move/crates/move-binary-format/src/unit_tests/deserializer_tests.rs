@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    file_format::{basic_test_module, CompiledModule, CompiledScript},
+    file_format::{
+        basic_test_module, basic_test_module_with_enum, Bytecode, CodeUnit, CompiledModule,
+        CompiledScript, SignatureIndex, VariantJumpTableIndex,
+    },
     file_format_common::*,
 };
 use move_core_types::{metadata::Metadata, vm_status::StatusCode};
@@ -367,4 +370,51 @@ fn no_metadata() {
         v
     };
     test(&test2);
+}
+
+#[test]
+fn enum_version_lie() {
+    let test = |bytes, expected_status| {
+        let status_code = CompiledModule::deserialize_with_config(
+            bytes,
+            VERSION_MAX,
+            /*check_no_extraneous_bytes*/ true,
+        )
+        .unwrap_err()
+        .major_status();
+        assert_eq!(status_code, expected_status);
+    };
+
+    // With enums and an invalid version bytecode version
+    let module = basic_test_module_with_enum();
+    let mut test_mut = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+
+    // Manually manipulate the version in the binary to the wrong version
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        test_mut[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&test_mut, StatusCode::MALFORMED);
+
+    let mut module = basic_test_module();
+    module.function_defs[0].code = Some(CodeUnit {
+        locals: SignatureIndex::new(0),
+        code: vec![
+            Bytecode::VariantSwitch(VariantJumpTableIndex::new(0)),
+            Bytecode::Ret,
+        ],
+        jump_tables: vec![],
+    });
+    let mut m_bytes = {
+        let mut v = vec![];
+        module.serialize(&mut v).unwrap();
+        v
+    };
+    for (i, b) in VERSION_6.to_le_bytes().iter().enumerate() {
+        m_bytes[i + BinaryConstants::MOVE_MAGIC_SIZE] = *b;
+    }
+    test(&m_bytes, StatusCode::MALFORMED);
 }
