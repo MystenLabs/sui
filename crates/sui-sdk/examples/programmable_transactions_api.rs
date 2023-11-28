@@ -42,7 +42,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
     let coin = coins.data.into_iter().next().unwrap();
 
-    // programmable transactions allows the user to bundle a number of actions into one transaction
+    // programmable transactions allows the user to bundle a number of commands into one transaction
     let mut ptb = ProgrammableTransactionBuilder::new();
 
     // 2) split coin
