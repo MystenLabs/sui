@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.0.6
+
+### Patch Changes
+
+- 0eb6fa61b: Hydrate the session on mount
+
 ## 0.0.5
 
 ### Patch Changes
