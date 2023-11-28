@@ -93,6 +93,7 @@ allow = [
     "CC0-1.0",
     "0BSD",
     "LicenseRef-ring",
+    "Unlicense",
     "BSL-1.0",
     "Unicode-DFS-2016",
     #"Apache-2.0 WITH LLVM-exception",
