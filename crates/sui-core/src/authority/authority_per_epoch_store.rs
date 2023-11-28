@@ -65,7 +65,7 @@ use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, ConsensusTransactionOrdering, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::{
@@ -2065,8 +2065,20 @@ impl AuthorityPerEpochStore {
 
         let mut batch = self.db_batch();
 
-        // Load transactions deferred from prevous commits.
+        // Pre-process transactions to find the most recent randomness round included in the commit.
         let mut last_randomness_round_written = self.last_randomness_round_written()?;
+        for tx in sequenced_transactions.iter() {
+            if let SequencedConsensusTransactionKind::System(tx) = &tx.0.transaction {
+                if let TransactionKind::RandomnessStateUpdate(rsu) =
+                    tx.data().intent_message().value.kind()
+                {
+                    last_randomness_round_written =
+                        std::cmp::max(last_randomness_round_written, rsu.randomness_round);
+                }
+            }
+        }
+
+        // Load transactions deferred from prevous commits.
         let deferred_tx: Vec<VerifiedSequencedConsensusTransaction> = self
             .load_deferred_transactions_for_consensus_round(&mut batch, commit_round)?
             .into_iter()
@@ -2090,33 +2102,6 @@ impl AuthorityPerEpochStore {
             &mut sequenced_transactions,
             self.protocol_config.consensus_transaction_ordering(),
         );
-
-        // Pre-process transactions to find the most recent randomness round included in the commit.
-        for tx in sequenced_transactions.iter() {
-            match &tx.0.transaction {
-                SequencedConsensusTransactionKind::System(tx) => {
-                    if let TransactionKind::RandomnessStateUpdate(rsu) =
-                        tx.data().intent_message().value.kind()
-                    {
-                        last_randomness_round_written =
-                            std::cmp::max(last_randomness_round_written, rsu.randomness_round);
-                    }
-                }
-                SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                    tracking_id: _,
-                    kind: ConsensusTransactionKind::UserTransaction(_),
-                }) => {
-                    if self.protocol_config().consensus_transaction_ordering()
-                        == ConsensusTransactionOrdering::ByGasPrice
-                    {
-                        // Gas-price ordering puts user tx last, so we can break once we reach
-                        // them.
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
 
         let (transactions_to_schedule, notifications, lock_and_final_round) = self
             .process_consensus_transactions(
