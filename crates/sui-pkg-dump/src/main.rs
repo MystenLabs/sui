@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use clap::*;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
@@ -46,11 +46,7 @@ type PgPool = Pool<ConnectionManager<PgConnection>>;
 async fn main() -> Result<()> {
     let Args { db_url, output_dir } = Args::parse();
 
-    if !is_valid_output(&output_dir) {
-        bail!("Output directory already exists: {}", output_dir.display())
-    } else {
-        fs::create_dir_all(&output_dir).context("Making output directory")?;
-    }
+    ensure_output_directory(&output_dir)?;
 
     let conn = ConnectionManager::<PgConnection>::new(db_url);
     let pool = Pool::builder()
@@ -59,7 +55,6 @@ async fn main() -> Result<()> {
         .build(conn)
         .context("Failed to create connection pool.")?;
 
-    println!("Dumping packages...");
     for pkg in query_packages(&pool)? {
         let id = SuiAddress::from_bytes(&pkg.package_id).context("Parsing package ID")?;
         dump_package(&output_dir, id, &pkg.move_package)
@@ -69,10 +64,34 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// A non-existent or empty directory is a valid output directory
-fn is_valid_output(path: impl Into<PathBuf>) -> bool {
+/// Ensure the output directory exists, either because it already exists as an empty, writable
+/// directory, or by creating a new directory.
+fn ensure_output_directory(path: impl Into<PathBuf>) -> Result<()> {
     let path: PathBuf = path.into();
-    !path.exists() || path.is_dir() && path.read_dir().is_ok_and(|mut d| d.next().is_none())
+    if path.exists() {
+        ensure!(
+            path.is_dir(),
+            "Output path is not a directory: {}",
+            path.display()
+        );
+        ensure!(
+            path.read_dir().is_ok_and(|mut d| d.next().is_none()),
+            "Output directory is not empty: {}",
+            path.display(),
+        );
+
+        let metadata = fs::metadata(&path).context("Getting metadata for output path")?;
+
+        ensure!(
+            !metadata.permissions().readonly(),
+            "Output directory is not writable: {}",
+            path.display()
+        )
+    } else {
+        fs::create_dir_all(&path).context("Making output directory")?;
+    }
+
+    Ok(())
 }
 
 fn query_packages(pool: &PgPool) -> Result<Vec<StoredPackage>> {
