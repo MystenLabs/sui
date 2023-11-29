@@ -15,7 +15,7 @@ use regex::Regex;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{AbilitySet, Constant, FunctionDefinitionIndex, StructDefinitionIndex},
-    views::{FunctionHandleView, StructHandleView},
+    views::{DatatypeHandleView, FunctionHandleView},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
@@ -3145,8 +3145,8 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             .filter_map(|idx| {
                 let def_idx = StructDefinitionIndex(idx as u16);
                 let handle_idx = module.struct_def_at(def_idx).struct_handle;
-                let handle = module.struct_handle_at(handle_idx);
-                let view = StructHandleView::new(&module, handle);
+                let handle = module.datatype_handle_at(handle_idx);
+                let view = DatatypeHandleView::new(&module, handle);
                 let name = self.symbol_pool().make(view.name().as_str());
                 if let Some(entry) = self
                     .parent

@@ -1323,6 +1323,15 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     None,
                 ))
             }
+            MoveBytecode::PackVariant(_, _)
+            | MoveBytecode::PackVariantGeneric(_, _)
+            | MoveBytecode::UnpackVariant(_, _)
+            | MoveBytecode::UnpackVariantImmRef(_, _)
+            | MoveBytecode::UnpackVariantMutRef(_, _)
+            | MoveBytecode::UnpackVariantGeneric(_, _)
+            | MoveBytecode::UnpackVariantGenericImmRef(_, _)
+            | MoveBytecode::UnpackVariantGenericMutRef(_, _)
+            | MoveBytecode::VariantSwitch(_) => unimplemented!(),
         }
     }
 

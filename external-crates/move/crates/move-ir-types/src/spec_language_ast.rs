@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    ast::{BinOp, CopyableVal_, Field_, QualifiedStructIdent, Type},
+    ast::{BinOp, CopyableVal_, Field_, QualifiedDatatypeIdent, Type},
     location::*,
 };
 use move_core_types::account_address::AccountAddress;
@@ -25,7 +25,7 @@ pub enum StorageLocation {
     Formal(Symbol),
     /// A resource of type `type_` stored in global storage at `address`
     GlobalResource {
-        type_: QualifiedStructIdent,
+        type_: QualifiedDatatypeIdent,
         type_actuals: Vec<Type>,
         address: Box<StorageLocation>,
     },
@@ -50,7 +50,7 @@ pub enum SpecExp {
     StorageLocation(StorageLocation),
     /// Lifting the Move exists operator to a storage location
     GlobalExists {
-        type_: QualifiedStructIdent,
+        type_: QualifiedDatatypeIdent,
         type_actuals: Vec<Type>,
         address: StorageLocation,
     },

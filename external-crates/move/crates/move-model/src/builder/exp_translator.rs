@@ -2020,7 +2020,18 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             | (Type::Error, MoveValue::Vector(_))
             | (Type::Error, MoveValue::Struct(_))
             | (Type::Var(_), MoveValue::Vector(_))
-            | (Type::Var(_), MoveValue::Struct(_)) => {
+            | (Type::Var(_), MoveValue::Struct(_))
+            | (Type::Primitive(_), MoveValue::Variant(_))
+            | (Type::Tuple(_), MoveValue::Variant(_))
+            | (Type::Vector(_), MoveValue::Variant(_))
+            | (Type::Struct(_, _, _), MoveValue::Variant(_))
+            | (Type::TypeParameter(_), MoveValue::Variant(_))
+            | (Type::Reference(_, _), MoveValue::Variant(_))
+            | (Type::Fun(_, _), MoveValue::Variant(_))
+            | (Type::TypeDomain(_), MoveValue::Variant(_))
+            | (Type::ResourceDomain(_, _, _), MoveValue::Variant(_))
+            | (Type::Error, MoveValue::Variant(_))
+            | (Type::Var(_), MoveValue::Variant(_)) => {
                 self.error(
                     loc,
                     &format!("Not yet supported constant value: {:?}", value),

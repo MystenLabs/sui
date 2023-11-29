@@ -107,6 +107,8 @@ pub enum Tok {
     LSquare,
     RSquare,
     PeriodPeriod,
+    Enum,
+    VariantSwitch,
 }
 
 impl Tok {
@@ -477,6 +479,8 @@ fn get_name_token(name: &str) -> Tok {
         "succeeds_if" => Tok::SucceedsIf,
         "synthetic" => Tok::Synthetic,
         "true" => Tok::True,
+        "enum" => Tok::Enum,
+        "variant_switch" => Tok::VariantSwitch,
         _ => Tok::NameValue,
     }
 }
