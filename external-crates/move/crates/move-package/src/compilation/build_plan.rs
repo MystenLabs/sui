@@ -14,7 +14,10 @@ use move_compiler::{
 };
 use std::{collections::BTreeSet, io::Write, path::Path};
 
-use super::package_layout::CompiledPackageLayout;
+use super::{
+    compiled_package::{DependencyInfo, ModuleFormat},
+    package_layout::CompiledPackageLayout,
+};
 
 #[derive(Debug, Clone)]
 pub struct BuildPlan {
@@ -96,17 +99,21 @@ impl BuildPlan {
                     dep_source_paths = dep_package.get_bytecodes().unwrap();
                     source_available = false;
                 }
-                (
-                    package_name,
-                    immediate_dependencies_names.contains(&package_name),
-                    dep_source_paths,
-                    &dep_package.resolved_table,
-                    dep_package.compiler_config(
+                DependencyInfo {
+                    name: package_name,
+                    is_immediate: immediate_dependencies_names.contains(&package_name),
+                    source_paths: dep_source_paths,
+                    address_mapping: &dep_package.resolved_table,
+                    compiler_config: dep_package.compiler_config(
                         /* is_dependency */ true,
                         &self.resolution_graph.build_options,
                     ),
-                    source_available,
-                )
+                    module_format: if source_available {
+                        ModuleFormat::Source
+                    } else {
+                        ModuleFormat::Bytecode
+                    },
+                }
             })
             .collect();
 

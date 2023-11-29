@@ -11,6 +11,8 @@ use itertools::Itertools;
 use move_compiler::shared::PackagePaths;
 use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
 
+use super::compiled_package::{DependencyInfo, ModuleFormat};
+
 #[derive(Debug, Clone)]
 pub struct ModelBuilder {
     resolution_graph: ResolvedGraph,
@@ -43,6 +45,8 @@ impl ModelBuilder {
         // Targets are all files in the root package
         let root_name = self.resolution_graph.root_package();
         let root_package = self.resolution_graph.get_package(root_name).clone();
+        let immediate_dependencies_names =
+            root_package.immediate_dependencies(&self.resolution_graph);
         let deps_source_info = self
             .resolution_graph
             .package_table
@@ -60,16 +64,21 @@ impl ModelBuilder {
                     dep_source_paths = pkg.get_bytecodes().unwrap();
                     source_available = false;
                 }
-                Some(Ok((
-                    *nm,
-                    dep_source_paths,
-                    &pkg.resolved_table,
-                    pkg.compiler_config(
+                Some(Ok(DependencyInfo {
+                    name: *nm,
+                    is_immediate: immediate_dependencies_names.contains(nm),
+                    source_paths: dep_source_paths,
+                    address_mapping: &pkg.resolved_table,
+                    compiler_config: pkg.compiler_config(
                         /* is_dependency */ true,
                         &self.resolution_graph.build_options,
                     ),
-                    source_available,
-                )))
+                    module_format: if source_available {
+                        ModuleFormat::Source
+                    } else {
+                        ModuleFormat::Bytecode
+                    },
+                }))
             })
             .collect::<Result<Vec<_>>>()?;
 
