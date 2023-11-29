@@ -1,4 +1,4 @@
-processed 8 tasks
+processed 10 tasks
 
 init:
 A: object(0,0)
@@ -247,6 +247,312 @@ Response: {
           }
         }
       ]
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 134-166:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "all": {
+            "nodes": [
+              {
+                "name": "consensus_commit_prologue",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  },
+                  {
+                    "repr": "u64"
+                  },
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "timestamp_ms",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  }
+                ],
+                "return": [
+                  {
+                    "repr": "u64"
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          },
+          "after": {
+            "nodes": [
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "timestamp_ms",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  }
+                ],
+                "return": [
+                  {
+                    "repr": "u64"
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "before": {
+            "nodes": [
+              {
+                "name": "consensus_commit_prologue",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  },
+                  {
+                    "repr": "u64"
+                  },
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 9 'run-graphql'. lines 168-236:
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "prefix": {
+            "nodes": [
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixAll": {
+            "nodes": [
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "timestamp_ms",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  }
+                ],
+                "return": [
+                  {
+                    "repr": "u64"
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixExcess": {
+            "nodes": [
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "timestamp_ms",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  }
+                ],
+                "return": [
+                  {
+                    "repr": "u64"
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "suffix": {
+            "nodes": [
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "suffixAll": {
+            "nodes": [
+              {
+                "name": "consensus_commit_prologue",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  },
+                  {
+                    "repr": "u64"
+                  },
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          },
+          "suffixExcess": {
+            "nodes": [
+              {
+                "name": "consensus_commit_prologue",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&mut 0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                  },
+                  {
+                    "repr": "u64"
+                  },
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              },
+              {
+                "name": "create",
+                "typeParameters": [],
+                "parameters": [
+                  {
+                    "repr": "&0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
+                  }
+                ],
+                "return": []
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
     }
   }
 }
