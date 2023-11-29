@@ -12,7 +12,8 @@ use move_binary_format::{
     file_format::{
         Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
-        StructDefInstantiationIndex, StructDefinitionIndex,
+        StructDefInstantiationIndex, StructDefinitionIndex, VariantHandleIndex,
+        VariantInstantiationHandleIndex, VariantJumpTableIndex,
     },
     file_format_common::{instruction_key, Opcodes},
 };
@@ -618,6 +619,39 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (CastU16, GasCost::new(0, 0)),
         (CastU32, GasCost::new(0, 0)),
         (CastU256, GasCost::new(0, 0)),
+        (PackVariant(VariantHandleIndex::new(0)), GasCost::new(0, 0)),
+        (
+            PackVariantGeneric(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariant(VariantHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantImmRef(VariantHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantMutRef(VariantHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantGeneric(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantGenericImmRef(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantGenericMutRef(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            VariantSwitch(VariantJumpTableIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
     ]
 }
 
@@ -760,6 +794,39 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (CastU16, GasCost::new(2, 1)),
         (CastU32, GasCost::new(2, 1)),
         (CastU256, GasCost::new(2, 1)),
+        (PackVariant(VariantHandleIndex::new(0)), GasCost::new(2, 1)),
+        (
+            PackVariantGeneric(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariant(VariantHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantImmRef(VariantHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantMutRef(VariantHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantGeneric(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantGenericImmRef(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantGenericMutRef(VariantInstantiationHandleIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
+        (
+            VariantSwitch(VariantJumpTableIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
     ]
 }
 

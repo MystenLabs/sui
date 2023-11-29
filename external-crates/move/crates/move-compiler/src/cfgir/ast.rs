@@ -274,6 +274,7 @@ impl AstDebug for MoveValue {
                 w.write("]");
             }
             V::Struct(_) => panic!("ICE struct constants not supported"),
+            V::Variant(_) => panic!("ICE enum constants not supported"),
             V::Signer(_) => panic!("ICE signer constants not supported"),
         }
     }

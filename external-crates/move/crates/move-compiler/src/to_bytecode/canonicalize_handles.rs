@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{
-        Bytecode, CodeUnit, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
-        IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken, StructDefinition,
-        StructDefinitionIndex, StructFieldInformation, StructHandleIndex, TableIndex,
+        Bytecode, CodeUnit, DatatypeHandleIndex, FunctionDefinition, FunctionDefinitionIndex,
+        FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken,
+        StructDefinition, StructDefinitionIndex, StructFieldInformation, TableIndex,
     },
     internals::ModuleIndex,
     CompiledModule,
@@ -84,7 +84,7 @@ pub fn in_module(
         remap!(IdentifierIndex, fun.name, identifiers);
     }
 
-    for struct_ in &mut module.struct_handles {
+    for struct_ in &mut module.datatype_handles {
         remap!(IdentifierIndex, struct_.name, identifiers);
     }
 
@@ -131,7 +131,7 @@ pub fn in_module(
         remap!(ModuleHandleIndex, fun.module, modules);
     }
 
-    for struct_ in &mut module.struct_handles {
+    for struct_ in &mut module.datatype_handles {
         remap!(ModuleHandleIndex, struct_.module, modules);
     }
 
@@ -140,10 +140,10 @@ pub fn in_module(
 
     // 3 (a). Choose ordering for struct handles.
     let struct_defs = struct_definition_order(&module.struct_defs);
-    let structs = permutation(&module.struct_handles, |ix, handle| {
+    let structs = permutation(&module.datatype_handles, |ix, handle| {
         if handle.module == module.self_handle_idx() {
             // Order structs from this module first, and in definition order
-            let Some(def_position) = struct_defs.get(&StructHandleIndex(ix)) else {
+            let Some(def_position) = struct_defs.get(&DatatypeHandleIndex(ix)) else {
                 panic!("ICE struct handle from module without definition: {handle:?}");
             };
             ReferenceKey::Internal(def_position.0)
@@ -159,7 +159,7 @@ pub fn in_module(
 
     // 3 (b). Update references to struct handles.
     for def in &mut module.struct_defs {
-        remap!(StructHandleIndex, def.struct_handle, structs);
+        remap!(DatatypeHandleIndex, def.struct_handle, structs);
         if let StructFieldInformation::Declared(fields) = &mut def.field_information {
             for field in fields {
                 remap_signature_token(&mut field.signature.0, &structs);
@@ -174,7 +174,7 @@ pub fn in_module(
     }
 
     // 3 (c). Update ordering for struct handles.
-    apply_permutation(&mut module.struct_handles, structs);
+    apply_permutation(&mut module.datatype_handles, structs);
 
     // 4 (a). Choose ordering for function handles.
     let function_defs = function_definition_order(&module.function_defs);
@@ -233,7 +233,7 @@ pub fn in_module(
 /// defined in a module can be arranged in definition order.
 fn struct_definition_order(
     defs: &[StructDefinition],
-) -> HashMap<StructHandleIndex, StructDefinitionIndex> {
+) -> HashMap<DatatypeHandleIndex, StructDefinitionIndex> {
     defs.iter()
         .enumerate()
         .map(|(ix, def)| (def.struct_handle, StructDefinitionIndex(ix as TableIndex)))
@@ -251,7 +251,7 @@ fn function_definition_order(
         .collect()
 }
 
-/// Update references to `StructHandle`s within signatures according to the permutation defined by
+/// Update references to `DatatypeHandle`s within signatures according to the permutation defined by
 /// `structs`.
 fn remap_signature_token(token: &mut SignatureToken, structs: &[TableIndex]) {
     use SignatureToken as T;
@@ -271,10 +271,10 @@ fn remap_signature_token(token: &mut SignatureToken, structs: &[TableIndex]) {
             remap_signature_token(token, structs)
         }
 
-        T::Struct(handle) => remap!(StructHandleIndex, *handle, structs),
+        T::Datatype(handle) => remap!(DatatypeHandleIndex, *handle, structs),
 
-        T::StructInstantiation(handle, tokens) => {
-            remap!(StructHandleIndex, *handle, structs);
+        T::DatatypeInstantiation(handle, tokens) => {
+            remap!(DatatypeHandleIndex, *handle, structs);
             for token in tokens {
                 remap_signature_token(token, structs)
             }

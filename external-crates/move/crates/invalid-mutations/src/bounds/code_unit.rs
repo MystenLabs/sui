@@ -5,10 +5,11 @@
 use move_binary_format::{
     errors::{offset_out_of_bounds, PartialVMError},
     file_format::{
-        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionDefinitionIndex, FunctionHandleIndex,
-        FunctionInstantiationIndex, LocalIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, TableIndex,
+        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex,
+        FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
+        FunctionHandleIndex, FunctionInstantiationIndex, LocalIndex, SignatureIndex,
+        StructDefInstantiationIndex, StructDefinitionIndex, TableIndex, VariantHandleIndex,
+        VariantInstantiationHandleIndex, VariantJumpTableIndex,
     },
     internals::ModuleIndex,
     IndexKind,
@@ -182,6 +183,7 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
         let code = func_def.code.as_mut().unwrap();
         let locals_len = self.module.signatures[func_handle.parameters.into_index()].len()
             + self.module.signatures[code.locals.into_index()].len();
+        let jump_table_len = code.jump_tables.len();
         let code = &mut code.code;
         let code_len = code.len();
 
@@ -397,6 +399,78 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                         SignatureIndex,
                         VecSwap
                     ),
+                    PackVariant(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        PackVariant
+                    },
+                    PackVariantGeneric(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                       PackVariantGeneric
+                    },
+                    UnpackVariant(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        UnpackVariant
+                    },
+                    UnpackVariantImmRef(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        UnpackVariantImmRef
+                    },
+                    UnpackVariantMutRef(_) => new_bytecode! {
+                        variant_handle_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantHandleIndex,
+                        UnpackVariantMutRef
+                    },
+                    UnpackVariantGeneric(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                       UnpackVariantGeneric
+                    },
+                    UnpackVariantGenericImmRef(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                        UnpackVariantGenericImmRef
+                    },
+                    UnpackVariantGenericMutRef(_) => new_bytecode! {
+                        variant_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantInstantiationHandleIndex,
+                        UnpackVariantGenericMutRef
+                    },
+                    VariantSwitch(_) => new_bytecode! {
+                        jump_table_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantJumpTableIndex,
+                        VariantSwitch
+                    },
 
                     // List out the other options explicitly so there's a compile error if a new
                     // bytecode gets added.
@@ -459,7 +533,16 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | VecPushBack(_)
         | VecPopBack(_)
         | VecUnpack(..)
-        | VecSwap(_) => true,
+        | VecSwap(_)
+        | PackVariant(_)
+        | PackVariantGeneric(_)
+        | UnpackVariant(_)
+        | UnpackVariantImmRef(_)
+        | UnpackVariantMutRef(_)
+        | UnpackVariantGeneric(_)
+        | UnpackVariantGenericImmRef(_)
+        | UnpackVariantGenericMutRef(_)
+        | VariantSwitch(_) => true,
         // Deprecated bytecodes
         ExistsDeprecated(_)
         | ExistsGenericDeprecated(_)
@@ -471,6 +554,7 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | MoveFromGenericDeprecated(_)
         | MoveToDeprecated(_)
         | MoveToGenericDeprecated(_) => false,
+
         // List out the other options explicitly so there's a compile error if a new
         // bytecode gets added.
         FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_) | LdU128(_)
