@@ -32,7 +32,7 @@ The following represents the template the `init` function defines:
 {
     "name": "{name}",
     "link": "https://sui-heroes.io/hero/{id}",
-    "image_url": "ipfs://{img_url}",
+    "image_url": "ipfs://{image_url}",
     "description": "A true Hero of the Sui ecosystem!",
     "project_url": "https://sui-heroes.io",
     "creator": "Unknown Sui Fan"
@@ -47,7 +47,7 @@ The following represents the template the `init` function defines:
 module examples::my_hero {
     use sui::tx_context::{sender, TxContext};
     use std::string::{utf8, String};
-    use sui::transfer::transfer;
+    use sui::transfer;
     use sui::object::{Self, UID};
 
     // The creator bundle: these two packages often go together.
@@ -58,7 +58,7 @@ module examples::my_hero {
     struct Hero has key, store {
         id: UID,
         name: String,
-        img_url: String,
+        image_url: String,
     }
 
     /// One-Time-Witness for the module.
@@ -86,8 +86,8 @@ module examples::my_hero {
             utf8(b"{name}"),
             // For `link` one can build a URL using an `id` property
             utf8(b"https://sui-heroes.io/hero/{id}"),
-            // For `image_url` use an IPFS template + `img_url` property.
-            utf8(b"ipfs://{img_url}"),
+            // For `image_url` use an IPFS template + `image_url` property.
+            utf8(b"ipfs://{image_url}"),
             // Description is static for all `Hero` objects.
             utf8(b"A true Hero of the Sui ecosystem!"),
             // Project URL is usually static
@@ -107,14 +107,14 @@ module examples::my_hero {
         // Commit first version of `Display` to apply changes.
         display::update_version(&mut display);
 
-        transfer(publisher, sender(ctx));
-        transfer(display, sender(ctx));
+        transfer::public_transfer(publisher, sender(ctx));
+        transfer::public_transfer(display, sender(ctx));
     }
 
     /// Anyone can mint their `Hero`!
-    public fun mint(name: String, img_url: String, ctx: &mut TxContext): Hero {
+    public fun mint(name: String, image_url: String, ctx: &mut TxContext): Hero {
         let id = object::new(ctx);
-        Hero { id, name, img_url }
+        Hero { id, name, image_url }
     }
 }
 ```
