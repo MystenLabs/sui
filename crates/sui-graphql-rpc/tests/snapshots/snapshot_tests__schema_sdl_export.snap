@@ -562,6 +562,49 @@ type MoveField {
 }
 
 """
+Signature of a function, defined in a Move module.
+"""
+type MoveFunction {
+	"""
+	The module this function was defined in.
+	"""
+	module: MoveModule!
+	"""
+	The function's (unqualified) name.
+	"""
+	name: String!
+	"""
+	The function's visibility: `public`, `public(friend)`, or `private`.
+	"""
+	visibility: MoveVisibility
+	"""
+	Whether the function has the `entry` modifier or not.
+	"""
+	isEntry: Boolean
+	"""
+	Constraints on the function's formal type parameters.  Move bytecode does not name type
+	parameters, so when they are referenced (e.g. in parameter and return types) they are
+	identified by their index in this list.
+	"""
+	typeParameters: [MoveFunctionTypeParameter!]
+	"""
+	The function's parameter types.  These types can reference type parameters introduce by this
+	function (see `typeParameters`).
+	"""
+	parameters: [OpenMoveType!]
+	"""
+	The function's return types.  There can be multiple because functions in Move can return
+	multiple values.  These types can reference type parameters introduced by this function (see
+	`typeParameters`).
+	"""
+	return: [OpenMoveType!]
+}
+
+type MoveFunctionTypeParameter {
+	constraints: [MoveAbility!]!
+}
+
+"""
 Represents a module in Move, a library that defines struct types
 and functions that operate on these types.
 """
@@ -581,6 +624,10 @@ type MoveModule {
 	Iterate through the structs defined in this module.
 	"""
 	structConnection(first: Int, after: String, last: Int, before: String): MoveStructConnection
+	"""
+	Look-up the signature of a function defined in this module, by its name.
+	"""
+	function(name: String!): MoveFunction
 	"""
 	The Base64 encoded bcs serialization of the module.
 	"""
@@ -818,6 +865,12 @@ type MoveValue {
 	known by the client.
 	"""
 	json: JSON!
+}
+
+enum MoveVisibility {
+	PUBLIC
+	PRIVATE
+	FRIEND
 }
 
 type Object implements ObjectOwner {

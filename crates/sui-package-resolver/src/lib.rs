@@ -250,8 +250,8 @@ pub enum Reference {
 #[allow(dead_code)] // TODO: Remove when integrated
 #[derive(Clone, Debug)]
 pub struct OpenSignature {
-    ref_: Option<Reference>,
-    body: OpenSignatureBody,
+    pub ref_: Option<Reference>,
+    pub body: OpenSignatureBody,
 }
 
 /// Deserialized representation of a type signature that could appear as a field type for a struct.

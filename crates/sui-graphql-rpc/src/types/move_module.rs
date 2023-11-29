@@ -13,6 +13,7 @@ use crate::context_data::db_data_provider::{validate_cursor_pagination, PgManage
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
+use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
@@ -234,7 +235,11 @@ impl MoveModule {
         }
     }
 
-    // function(name: String!): MoveFunction
+    /// Look-up the signature of a function defined in this module, by its name.
+    async fn function(&self, name: String) -> Result<Option<MoveFunction>> {
+        self.function_impl(name).extend()
+    }
+
     // functionConnection(
     //   first: Int,
     //   after: String,
@@ -281,14 +286,28 @@ impl MoveModuleId {
 
 impl MoveModule {
     fn struct_impl(&self, name: String) -> Result<Option<MoveStruct>, Error> {
-        use sui_package_resolver::error::Error as E;
         let def = match self.parsed.struct_def(&name) {
             Ok(Some(def)) => def,
-            Ok(None) | Err(E::StructNotFound(_, _, _)) => return Ok(None),
+            Ok(None) => return Ok(None),
             Err(e) => return Err(Error::Internal(e.to_string())),
         };
 
         Ok(Some(MoveStruct::new(
+            self.parsed.name().to_string(),
+            name,
+            def,
+        )))
+    }
+
+    fn function_impl(&self, name: String) -> Result<Option<MoveFunction>, Error> {
+        let def = match self.parsed.function_def(&name) {
+            Ok(Some(def)) => def,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(Error::Internal(e.to_string())),
+        };
+
+        Ok(Some(MoveFunction::new(
+            self.storage_id,
             self.parsed.name().to_string(),
             name,
             def,

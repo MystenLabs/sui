@@ -4,9 +4,9 @@
 use std::fmt;
 
 use async_graphql::*;
-use move_binary_format::file_format::Ability;
+use move_binary_format::file_format::{Ability, AbilitySet, Visibility};
 use serde::{Deserialize, Serialize};
-use sui_package_resolver::OpenSignatureBody;
+use sui_package_resolver::{OpenSignature, OpenSignatureBody, Reference};
 
 pub(crate) struct OpenMoveType {
     signature: OpenMoveTypeSignature,
@@ -107,10 +107,27 @@ impl OpenMoveType {
     }
 }
 
+impl From<OpenSignature> for OpenMoveType {
+    fn from(signature: OpenSignature) -> Self {
+        OpenMoveType {
+            signature: signature.into(),
+        }
+    }
+}
+
 impl From<OpenSignatureBody> for OpenMoveType {
     fn from(signature: OpenSignatureBody) -> Self {
         OpenMoveType {
             signature: signature.into(),
+        }
+    }
+}
+
+impl From<OpenSignature> for OpenMoveTypeSignature {
+    fn from(signature: OpenSignature) -> Self {
+        OpenMoveTypeSignature {
+            ref_: signature.ref_.map(OpenMoveTypeReference::from),
+            body: signature.body.into(),
         }
     }
 }
@@ -153,6 +170,18 @@ impl From<OpenSignatureBody> for OpenMoveTypeSignatureBody {
     }
 }
 
+impl From<Reference> for OpenMoveTypeReference {
+    fn from(ref_: Reference) -> Self {
+        use OpenMoveTypeReference as M;
+        use Reference as R;
+
+        match ref_ {
+            R::Immutable => M::Immutable,
+            R::Mutable => M::Mutable,
+        }
+    }
+}
+
 impl From<Ability> for MoveAbility {
     fn from(ability: Ability) -> Self {
         use Ability as A;
@@ -163,6 +192,19 @@ impl From<Ability> for MoveAbility {
             A::Drop => M::Drop,
             A::Store => M::Store,
             A::Key => M::Key,
+        }
+    }
+}
+
+impl From<Visibility> for MoveVisibility {
+    fn from(visibility: Visibility) -> Self {
+        use MoveVisibility as M;
+        use Visibility as V;
+
+        match visibility {
+            V::Private => M::Private,
+            V::Public => M::Public,
+            V::Friend => M::Friend,
         }
     }
 }
@@ -221,6 +263,11 @@ impl fmt::Display for OpenMoveTypeSignatureBody {
             }
         }
     }
+}
+
+/// Convert an `AbilitySet` from the binary format into a vector of `MoveAbility` (a GraphQL type).
+pub(crate) fn abilities(set: AbilitySet) -> Vec<MoveAbility> {
+    set.into_iter().map(MoveAbility::from).collect()
 }
 
 #[cfg(test)]
