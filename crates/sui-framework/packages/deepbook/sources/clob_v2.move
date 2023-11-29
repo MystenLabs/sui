@@ -1700,6 +1700,14 @@ module deepbook::clob_v2 {
         of_event
     }
 
+    public fun of_event_info<BaseAsset, QuoteAsset>(
+        of: &OrderFilled<BaseAsset, QuoteAsset>
+    ) : ( ID, u64, u64, u64, bool, address, address, u64, u64, u64, u64, u64, u64) {
+        (of.pool_id, of.order_id, of.taker_client_order_id, of.maker_client_order_id, of.is_bid, of.taker_address,
+        of.maker_address, of.original_quantity, of.base_asset_quantity_filled, of.base_asset_quantity_remaining,
+        of.price, of.taker_commission, of.maker_rebates)
+    }
+
     /// Cancel and opening order.
     /// Abort if order_id is invalid or if the order is not submitted by the transaction sender.
     public fun cancel_order<BaseAsset, QuoteAsset>(
