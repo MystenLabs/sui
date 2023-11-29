@@ -1656,7 +1656,10 @@ impl ProtocolConfig {
                     }
                 }
                 32 => {
-                    cfg.feature_flags.accept_zklogin_in_multisig = true;
+                    // enable zklogin in multisig in devnet and testnet
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.accept_zklogin_in_multisig = true;
+                    }
                     // enable receiving objects in devnet and testnet
                     if chain != Chain::Mainnet {
                         cfg.transfer_receive_object_cost_base = Some(52);

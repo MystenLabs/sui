@@ -27,11 +27,18 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair as KeypairTraits;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use serde::Deserialize;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 
-pub const TEST_CLIENT_ID: &str =
-    "575519204237-msop9ep45u2uo98hapqmngv8d84qdc8k.apps.googleusercontent.com";
+#[derive(Deserialize)]
+pub struct TestData {
+    pub zklogin_inputs: String,
+    pub kp: String,
+    pub pk_bigint: String,
+    pub randomness: String,
+    pub address_seed: String,
+}
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<AuthorityKeyPair>, Committee)
 where
@@ -82,7 +89,7 @@ pub fn create_fake_transaction() -> Transaction {
     to_sender_signed_transaction(data, &sender_key)
 }
 
-fn make_transaction_data(sender: SuiAddress) -> TransactionData {
+pub fn make_transaction_data(sender: SuiAddress) -> TransactionData {
     let object = Object::immutable_with_id_for_testing(ObjectID::random_from_rng(
         &mut StdRng::from_seed([0; 32]),
     ));

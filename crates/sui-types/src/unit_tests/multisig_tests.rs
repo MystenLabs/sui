@@ -5,13 +5,18 @@ use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use crate::{
     base_types::SuiAddress,
     crypto::{
-        get_key_pair, get_key_pair_from_rng, DefaultHash, Ed25519SuiSignature, PublicKey,
-        Signature, SuiKeyPair, SuiSignatureInner, ZkLoginPublicIdentifier,
+        get_key_pair, get_key_pair_from_rng, CompressedSignature, DefaultHash, Ed25519SuiSignature,
+        PublicKey, Signature, SuiKeyPair, SuiSignatureInner, ZkLoginAuthenticatorAsBytes,
+        ZkLoginPublicIdentifier,
     },
     multisig::{as_indices, MultiSig, MAX_SIGNER_IN_MULTISIG},
     multisig_legacy::{bitmap_to_u16, MultiSigLegacy, MultiSigPublicKeyLegacy},
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
-    utils::{keys, make_zklogin_tx, DEFAULT_ADDRESS_SEED, SHORT_ADDRESS_SEED},
+    utils::{
+        keys, make_transaction_data, make_zklogin_tx, TestData, DEFAULT_ADDRESS_SEED,
+        SHORT_ADDRESS_SEED,
+    },
+    zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::{
@@ -19,9 +24,9 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     hash::HashFunction,
     secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey},
-    traits::ToFromBytes,
+    traits::{EncodeDecodeBase64, ToFromBytes},
 };
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
@@ -901,6 +906,29 @@ fn multisig_zklogin_scenarios() {
     let skp: SuiKeyPair = SuiKeyPair::Ed25519(kp);
     let pk1 = skp.public();
 
+    // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
+    let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
+        .expect("Unable to open file");
+    let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
+    let mut pks = vec![];
+    let mut kps_and_zklogin_inputs = vec![];
+    for test in test_datum {
+        let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
+        let pk_zklogin = PublicKey::ZkLogin(
+            ZkLoginPublicIdentifier::new(
+                &OIDCProvider::Twitch.get_config().iss,
+                &test.address_seed,
+            )
+            .unwrap(),
+        );
+        pks.push(pk_zklogin);
+        kps_and_zklogin_inputs.push((
+            kp,
+            ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap(),
+        ));
+    }
+    let inputs = kps_and_zklogin_inputs[0].1.clone();
+
     // pk consistent with the one in make_zklogin_tx
     let pk2 = PublicKey::ZkLogin(
         ZkLoginPublicIdentifier::new(&OIDCProvider::Twitch.get_config().iss, DEFAULT_ADDRESS_SEED)
@@ -936,14 +964,9 @@ fn multisig_zklogin_scenarios() {
     let binding = GenericSignature::MultiSig(multisig);
     let bytes = binding.as_ref();
     let generic_sig = GenericSignature::from_bytes(bytes).unwrap();
-    match generic_sig {
-        GenericSignature::MultiSig(multisig) => {
-            let res =
-                multisig.verify_authenticator(intent_msg, multisig_addr, Some(9), &aux_verify_data);
-            assert!(res.is_ok())
-        }
-        _ => panic!("unexpected signature type"),
-    }
+    let res =
+        generic_sig.verify_authenticator(intent_msg, multisig_addr, Some(9), &aux_verify_data);
+    assert!(res.is_ok());
 
     // use zklogin address instead of multisig address fails.
     let zklogin_addr = SuiAddress::try_from(&zklogin_sig).unwrap();
@@ -958,13 +981,15 @@ fn multisig_zklogin_scenarios() {
     assert!(multisig1
         .verify_authenticator(intent_msg, multisig_addr, Some(10), &aux_verify_data)
         .is_ok());
+
     // use zklogin address instead of multisig address fails.
     assert!(multisig1
         .verify_authenticator(intent_msg, zklogin_addr, Some(10), &aux_verify_data)
         .is_err());
 
-    // zkLogin sig + traditional sig combined verifies.
-    let multisig_2 = MultiSig::combine(vec![sig1, zklogin_sig], multisig_pk).unwrap();
+    // zkLogin sig + traditional sig combined verifies. see consistency test in /sdk/typescript/test/e2e/multisig.test.ts
+    let multisig_2 =
+        MultiSig::combine(vec![sig1.clone(), zklogin_sig.clone()], multisig_pk.clone()).unwrap();
     let generic_sig = GenericSignature::MultiSig(multisig_2.clone());
     assert_eq!(Base64::encode(generic_sig.as_ref()), "AwIAcAEsWrZtlsE3AdGUKJAPag8Tu6HPfMW7gEemeneO9fmNGiJP/rDZu/tL75lr8A22eFDx9K2G1DL4v8XlmuTtCgOaBwUDTTE3MzE4MDg5MTI1OTUyNDIxNzM2MzQyMjYzNzE3OTMyNzE5NDM3NzE3ODQ0MjgyNDEwMTg3OTU3OTg0NzUxOTM5OTQyODk4MjUxMjUwTTExMzczOTY2NjQ1NDY5MTIyNTgyMDc0MDgyMjk1OTg1Mzg4MjU4ODQwNjgxNjE4MjY4NTkzOTc2Njk3MzI1ODkyMjgwOTE1NjgxMjA3ATEDAkw1OTM5ODcxMTQ3MzQ4ODM0OTk3MzYxNzIwMTIyMjM4OTgwMTc3MTUyMzAzMjc0MzExMDQ3MjQ5OTA1OTQyMzg0OTE1NzY4NjkwODk1TDQ1MzM1NjgyNzExMzQ3ODUyNzg3MzEyMzQ1NzAzNjE0ODI2NTE5OTY3NDA3OTE4ODgyODU4NjQ5NjY4ODQwMzI3MTcwNDk4MTE3MDgCTTEwNTY0Mzg3Mjg1MDcxNTU1NDY5NzUzOTkwNjYxNDEwODQwMTE4NjM1OTI1NDY2NTk3MDM3MDE4MDU4NzcwMDQxMzQ3NTE4NDYxMzY4TTEyNTk3MzIzNTQ3Mjc3NTc5MTQ0Njk4NDk2MzcyMjQyNjE1MzY4MDg1ODAxMzEzMzQzMTU1NzM1NTExMzMwMDAzODg0NzY3OTU3ODU0AgExATADTTE1NzkxNTg5NDcyNTU2ODI2MjYzMjMxNjQ0NzI4ODczMzM3NjI5MDE1MjY5OTg0Njk5NDA0MDczNjIzNjAzMzUyNTM3Njc4ODEzMTcxTDQ1NDc4NjY0OTkyNDg4ODE0NDk2NzYxNjExNTgwMjQ3NDgwNjA0ODUzNzMyNTAwMjk0MjM5MDQxMTMwMTc0MjI1MzkwMzcxNjI1MjcBMTF3aWFYTnpJam9pYUhSMGNITTZMeTlwWkM1MGQybDBZMmd1ZEhZdmIyRjFkR2d5SWl3AjJleUpoYkdjaU9pSlNVekkxTmlJc0luUjVjQ0k2SWtwWFZDSXNJbXRwWkNJNklqRWlmUU0yMDc5NDc4ODU1OTYyMDY2OTU5NjIwNjQ1NzAyMjk2NjE3Njk4NjY4ODcyNzg3NjEyODIyMzYyODExMzkxNjM4MDkyNzUwMjczNzkxMQoAAAAAAAAAYQAR6ZEOSb8am6giraofTNFOXN6N5etgegC1TsTKup7HNMtyZWPBn9WaDwPe+naJustyRgVE7K8umsX6h3Fa7UQMucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgADAAIADX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13UBAzwbaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyLflu6Eag/zG3tLd5CtZRYx9p1t34RovVSn/+uHFiYfcBAQA=".to_string());
     assert_eq!(
@@ -974,6 +999,79 @@ fn multisig_zklogin_scenarios() {
     let res =
         multisig_2.verify_authenticator(intent_msg, multisig_addr, Some(10), &aux_verify_data);
     assert!(res.is_ok());
+
+    // multisig with invalid zklogin authenticator bytes fails.
+    let multisig_bad_zklogin_bytes = MultiSig::new(
+        vec![CompressedSignature::ZkLogin(ZkLoginAuthenticatorAsBytes(
+            vec![1],
+        ))],
+        1,
+        multisig_pk.clone(),
+    );
+    assert!(multisig_bad_zklogin_bytes
+        .verify_authenticator(intent_msg, multisig_addr, Some(10), &aux_verify_data)
+        .is_err());
+
+    // multisig with a bad zklogin authenticator with incorrect ephemeral sig bytes fails.
+    let wrong_authenticator =
+        ZkLoginAuthenticator::new(inputs, 10, Signature::new_secure(intent_msg, &skp));
+    let multisig_bad_zklogin_bytes = MultiSig::new(
+        vec![CompressedSignature::ZkLogin(ZkLoginAuthenticatorAsBytes(
+            wrong_authenticator.as_bytes().to_vec(),
+        ))],
+        1,
+        multisig_pk.clone(),
+    );
+    assert!(multisig_bad_zklogin_bytes
+        .verify_authenticator(intent_msg, multisig_addr, Some(10), &aux_verify_data)
+        .is_err());
+
+    // multisig with just zklogin authenticator epoch expires fails.
+    let multisig_with_expired_zklogin_sig =
+        MultiSig::combine(vec![sig1, zklogin_sig.clone()], multisig_pk.clone()).unwrap();
+    assert!(multisig_with_expired_zklogin_sig
+        .verify_authenticator(intent_msg, multisig_addr, Some(11), &aux_verify_data)
+        .is_err());
+
+    // multisig with combined single sig zklogin authenticator epoch expires fails.
+    let multisig_with_expired_zklogin_sig_2 =
+        MultiSig::combine(vec![zklogin_sig], multisig_pk).unwrap();
+    assert!(multisig_with_expired_zklogin_sig_2
+        .verify_authenticator(intent_msg, multisig_addr, Some(11), &aux_verify_data)
+        .is_err());
+
+    // test 10 out of 10 multisig with 10 zklogin authenticators verifies.
+    let multisig_pk = MultiSigPublicKey::new(pks, vec![1; 10], 10).unwrap();
+    let multisig_address = SuiAddress::from(&multisig_pk);
+    let tx_data = make_transaction_data(multisig_address);
+    let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
+    let mut zklogin_sigs = vec![];
+    for (kp, inputs) in kps_and_zklogin_inputs {
+        let eph_sig = Signature::new_secure(&msg, &kp);
+        let zklogin_sig =
+            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
+        zklogin_sigs.push(zklogin_sig);
+    }
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(zklogin_sigs.clone(), multisig_pk.clone()).unwrap(),
+    );
+
+    assert!(multisig
+        .verify_authenticator(&msg, multisig_address, Some(10), &aux_verify_data)
+        .is_ok());
+
+    // test consistent serde.
+    let serialized = multisig.as_ref();
+    let deserialized = GenericSignature::from_bytes(serialized).unwrap();
+    assert_eq!(deserialized, multisig);
+
+    // test 10 out of 10 multisig with 9 zklogin authenticators fails.
+    zklogin_sigs.remove(0);
+    let multisig =
+        GenericSignature::MultiSig(MultiSig::combine(zklogin_sigs, multisig_pk).unwrap());
+    assert!(multisig
+        .verify_authenticator(&msg, multisig_address, Some(10), &aux_verify_data)
+        .is_err());
 
     // use zklogin sig in multisig when protocol config is set to false fails.
     aux_verify_data.accept_zklogin_in_multisig = false;

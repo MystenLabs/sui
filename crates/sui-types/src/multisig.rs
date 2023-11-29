@@ -81,7 +81,7 @@ impl AuthenticatorTrait for MultiSig {
     }
     fn verify_user_authenticator_epoch(&self, epoch_id: EpochId) -> Result<(), SuiError> {
         // If there is any zkLogin signatures, filter and check epoch for each.
-        self.get_zklogin_sigs()
+        self.get_zklogin_sigs()?
             .iter()
             .try_for_each(|s| s.verify_user_authenticator_epoch(epoch_id))
     }
@@ -121,7 +121,7 @@ impl AuthenticatorTrait for MultiSig {
             });
         }
 
-        if !self.get_zklogin_sigs().is_empty() && !verify_params.accept_zklogin_in_multisig {
+        if !self.get_zklogin_sigs()?.is_empty() && !verify_params.accept_zklogin_in_multisig {
             return Err(SuiError::InvalidSignature {
                 error: "zkLogin sig not supported inside multisig".to_string(),
             });
@@ -182,12 +182,14 @@ impl AuthenticatorTrait for MultiSig {
                         })?,
                     )
                 }
-                CompressedSignature::ZkLogin(GenericSignature::ZkLoginAuthenticator(z)) => {
-                    // Author is verified checked against multisig pk, do not verify author within zkLogin authenticator.
-                    z.verify_claims(value, author, verify_params, self.check_author())
+                CompressedSignature::ZkLogin(z) => {
+                    let authenticator = ZkLoginAuthenticator::from_bytes(&z.0)
+                        .map_err(|_| SuiError::InvalidAuthenticator)?;
+                    // Author is already verified against multisig pk, do not verify author within zkLogin authenticator where self.check_author() is evaluated to false for multisig.
+                    authenticator
+                        .verify_claims(value, author, verify_params, self.check_author())
                         .map_err(|_| FastCryptoError::InvalidSignature)
                 }
-                _ => Err(FastCryptoError::InvalidSignature),
             };
             if res.is_ok() {
                 weight_sum += *weight as u16;
@@ -291,22 +293,6 @@ impl MultiSig {
             return Err(FastCryptoError::InvalidInput);
         }
         self.multisig_pk.validate()?;
-        let sigs = std::mem::take(&mut self.sigs);
-        let mut new_sigs = Vec::with_capacity(sigs.len());
-
-        for s in sigs {
-            match s {
-                CompressedSignature::ZkLogin(mut s) => match s {
-                    GenericSignature::ZkLoginAuthenticator(ref mut z) => {
-                        z.inputs.init()?;
-                        new_sigs.push(CompressedSignature::ZkLogin(s));
-                    }
-                    _ => return Err(FastCryptoError::InvalidInput),
-                },
-                _ => new_sigs.push(s),
-            }
-        }
-        self.sigs = new_sigs;
         Ok(self.to_owned())
     }
 
@@ -318,16 +304,21 @@ impl MultiSig {
         &self.sigs
     }
 
-    pub fn get_zklogin_sigs(&self) -> Vec<ZkLoginAuthenticator> {
-        self.sigs
+    pub fn get_zklogin_sigs(&self) -> Result<Vec<ZkLoginAuthenticator>, SuiError> {
+        let authenticator_as_bytes: Vec<_> = self
+            .sigs
             .iter()
             .filter_map(|s| match s {
-                CompressedSignature::ZkLogin(GenericSignature::ZkLoginAuthenticator(z)) => {
-                    Some(z.to_owned())
-                }
+                CompressedSignature::ZkLogin(z) => Some(z),
                 _ => None,
             })
-            .collect::<Vec<ZkLoginAuthenticator>>()
+            .collect();
+        authenticator_as_bytes
+            .iter()
+            .map(|z| {
+                ZkLoginAuthenticator::from_bytes(&z.0).map_err(|_| SuiError::InvalidAuthenticator)
+            })
+            .collect()
     }
 
     pub fn get_indices(&self) -> Result<Vec<u8>, SuiError> {
@@ -344,8 +335,7 @@ impl ToFromBytes for MultiSig {
         }
         let mut multisig: MultiSig =
             bcs::from_bytes(&bytes[1..]).map_err(|_| FastCryptoError::InvalidSignature)?;
-        let initialized = multisig.init_and_validate()?;
-        Ok(initialized)
+        multisig.init_and_validate()
     }
 }
 

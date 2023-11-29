@@ -5511,7 +5511,7 @@
             ],
             "properties": {
               "ZkLogin": {
-                "$ref": "#/components/schemas/GenericSignature"
+                "$ref": "#/components/schemas/ZkLoginAuthenticatorAsBytes"
               }
             },
             "additionalProperties": false
@@ -10710,6 +10710,9 @@
             "$ref": "#/components/schemas/Signature"
           }
         }
+      },
+      "ZkLoginAuthenticatorAsBytes": {
+        "$ref": "#/components/schemas/Base64"
       },
       "ZkLoginInputs": {
         "description": "All inputs required for the zk login proof verification and other public inputs.",
