@@ -24,7 +24,6 @@ use move_compiler::{
     parser::ast::Ability_,
     shared::CompilationEnv,
 };
-use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 use super::{
@@ -52,7 +51,6 @@ const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
 pub struct SelfTransferVerifier;
 
 pub struct SelfTransferVerifierAI {
-    fn_name: Symbol,
     fn_ret_loc: Loc,
 }
 
@@ -97,7 +95,6 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
             return None;
         }
         Some(SelfTransferVerifierAI {
-            fn_name: name.value,
             fn_ret_loc: context.signature.return_type.loc,
         })
     }
