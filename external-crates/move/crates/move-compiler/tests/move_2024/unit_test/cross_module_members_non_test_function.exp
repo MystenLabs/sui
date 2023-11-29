@@ -1,0 +1,22 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:4:5
+  │
+4 │     struct Foo has drop {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+
+error[E03004]: unbound type
+   ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:23:23
+   │
+23 │     public fun bad(): Foo {
+   │                       ^^^ Unbound type 'Foo' in current scope
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:24:9
+   │
+24 │         A::build_foo()
+   │         ^^^^^^^^^^^^ Unexpected module identifier. A module identifier is not a valid expression
+   │
+   = The fully-qualified name is '@A::build_foo'
+

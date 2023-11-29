@@ -1,8 +1,8 @@
-error[E03006]: unexpected name in this position
+error[E03002]: unbound module
   ┌─ tests/sui_mode/one_time_witness/init_unbound_type.move:2:20
   │
 2 │     fun init(_ctx: who::TxContext) {}
-  │                    ^^^ Could not resolve the name 'who'
+  │                    ^^^ Unbound module alias 'who'
 
 error[E03004]: unbound type
   ┌─ tests/sui_mode/one_time_witness/init_unbound_type.move:7:17

@@ -1,6 +1,6 @@
-error[E03006]: unexpected name in this position
+error[E03005]: unbound unscoped name
   ┌─ tests/move_check/naming/standalone_mname.move:3:17
   │
 3 │         let m = M; m;
-  │                 ^ Unexpected address identifier. An address identifier is not a valid expression
+  │                 ^ Unbound constant 'M'
 

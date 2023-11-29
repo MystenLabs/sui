@@ -1,0 +1,8 @@
+error[E01003]: invalid modifier
+  ┌─ tests/move_2024/unit_test/cross_module_members_non_test_function.move:4:5
+  │
+4 │     struct Foo has drop {}
+  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
+  │
+  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
+

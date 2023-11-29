@@ -1,16 +1,10 @@
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_check/expansion/assign_non_simple_name.move:7:23
-  │
-6 │     use 0x42::X;
-  │               - Alias previously defined here
-7 │     use 0x42::X::S as X;
-  │                       ^ Duplicate module member or alias 'X'. Top level names in a namespace must be unique
-
-error[E03006]: unexpected name in this position
+error[E01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:16:9
    │
 16 │         X::S = ();
-   │         ^ Expected a module or address in this position, not a module member
+   │         ^^^^ Unexpected assignment of module access without fields
+   │
+   = If you are trying to unpack a struct, try adding fields, e.g.'X::S {}'
 
 error[E01009]: invalid assignment
    ┌─ tests/move_check/expansion/assign_non_simple_name.move:17:9

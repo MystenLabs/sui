@@ -1,9 +1,9 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/global_access_pack.move:3:9
+  ┌─ tests/move_check/parser/global_access_pack.move:3:13
   │
 3 │         ::S { }
-  │         ^^
-  │         │
-  │         Unexpected '::'
-  │         Expected an expression term
+  │             ^ Expected '::' after an address in a module access chain
+  │
+  = Access chains that start with '::' must be one of the following forms: 
+      '::<address>::<module>', '::<address>::<module>::<member>
 

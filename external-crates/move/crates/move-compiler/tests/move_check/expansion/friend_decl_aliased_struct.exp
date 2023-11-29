@@ -1,6 +1,6 @@
-error[E03006]: unexpected name in this position
+error[E03002]: unbound module
   ┌─ tests/move_check/expansion/friend_decl_aliased_struct.move:8:12
   │
 8 │     friend A;
-  │            ^ Unexpected module member identifier. A module member identifier is not a valid module
+  │            ^ Unbound module alias 'A'
 

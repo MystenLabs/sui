@@ -10,23 +10,26 @@ use crate::{
 use move_ir_types::location::*;
 use std::fmt;
 
+#[derive(Clone, Debug)]
+pub struct AliasSet {
+    pub modules: UniqueSet<Name>,
+    pub members: UniqueSet<Name>,
+}
+
+#[derive(Clone)]
+pub struct AliasMapBuilder {
+    pub modules: UniqueMap<Name, (ModuleIdent, /* is_implicit */ bool)>,
+    pub members: UniqueMap<Name, ((ModuleIdent, Name), /* is_implicit */ bool)>,
+    pub addresses: UniqueMap<Name, (NumericalAddress, /* is_implicit */ bool)>,
+    all_aliases_unique: bool,
+}
+
 #[derive(Clone)]
 pub enum AliasEntry {
     Address(NumericalAddress),
     Module(ModuleIdent),
     Member(ModuleIdent, Name),
     TypeParam,
-}
-
-#[derive(Clone)]
-pub struct AliasMapBuilder {
-    aliases: UniqueMap<Name, (AliasEntry, /* is_implicit */ bool)>,
-}
-
-#[derive(Clone, Debug)]
-pub struct AliasSet {
-    pub modules: UniqueSet<Name>,
-    pub members: UniqueSet<Name>,
 }
 
 pub struct AliasMap {
@@ -63,38 +66,97 @@ impl AliasSet {
 }
 
 impl AliasMapBuilder {
-    pub fn new() -> Self {
+    /// Create a new AliasMapBuilder. If the all_unique flag is set, names must be unique across
+    /// members, modules, and addresses; if it is not, they must only be unique within their
+    /// respective kind. This allows us to reuse the builder for both Move 2024 alias resolution
+    /// and legacy alias resolution.
+    pub fn new(all_aliases_unique: bool) -> Self {
         Self {
-            aliases: UniqueMap::new(),
+            modules: UniqueMap::new(),
+            members: UniqueMap::new(),
+            addresses: UniqueMap::new(),
+            all_aliases_unique,
         }
     }
 
-    fn ensure_no_alias(&mut self, alias: &Name) -> Result<(), Loc> {
-        let loc = self.aliases.get_loc(alias).cloned();
-        match self.aliases.remove(alias) {
+    pub fn is_empty(&self) -> bool {
+        let Self {
+            modules,
+            members,
+            addresses,
+            ..
+        } = self;
+        modules.is_empty() && members.is_empty() && addresses.is_empty()
+    }
+
+    fn ensure_all_unique(&mut self, alias: &Name) -> Result<(), Loc> {
+        if self.members.get_loc(alias).is_some() {
+            self.remove_member_alias_(alias)
+        } else if self.modules.get_loc(alias).is_some() {
+            self.remove_module_alias_(alias)
+        } else if self.addresses.get_loc(alias).is_some() {
+            self.remove_address_alias_(alias)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn remove_module_alias_(&mut self, alias: &Name) -> Result<(), Loc> {
+        let loc = self.modules.get_loc(alias).cloned();
+        match self.modules.remove(alias) {
             None => Ok(()),
             Some(_) => Err(loc.unwrap()),
         }
     }
 
-    fn add_member(&mut self, alias: Name, entry: AliasEntry, is_implicit: bool) -> Result<(), Loc> {
-        let result = self.ensure_no_alias(&alias);
-        self.aliases
-            .add(alias, (entry, /* is_implicit */ is_implicit))
-            .unwrap();
-        result
+    fn remove_member_alias_(&mut self, alias: &Name) -> Result<(), Loc> {
+        let loc = self.members.get_loc(alias).cloned();
+        match self.members.remove(alias) {
+            None => Ok(()),
+            Some(_) => Err(loc.unwrap()),
+        }
     }
 
-    /// Adds a address alias to the map.
-    /// Errors if one already bound for that alias
-    pub fn add_address_alias(&mut self, alias: Name, address: NumericalAddress) -> Result<(), Loc> {
-        self.add_member(alias, AliasEntry::Address(address), false)
+    fn remove_address_alias_(&mut self, alias: &Name) -> Result<(), Loc> {
+        let loc = self.addresses.get_loc(alias).cloned();
+        match self.addresses.remove(alias) {
+            None => Ok(()),
+            Some(_) => Err(loc.unwrap()),
+        }
+    }
+
+    fn remove_module_alias(&mut self, alias: &Name) -> Result<(), Loc> {
+        if self.all_aliases_unique {
+            self.ensure_all_unique(alias)
+        } else {
+            self.remove_module_alias_(alias)
+        }
+    }
+
+    fn remove_member_alias(&mut self, alias: &Name) -> Result<(), Loc> {
+        if self.all_aliases_unique {
+            self.ensure_all_unique(alias)
+        } else {
+            self.remove_member_alias_(alias)
+        }
+    }
+
+    fn remove_address_alias(&mut self, alias: &Name) -> Result<(), Loc> {
+        if self.all_aliases_unique {
+            self.ensure_all_unique(alias)
+        } else {
+            self.remove_address_alias_(alias)
+        }
     }
 
     /// Adds a module alias to the map.
     /// Errors if one already bound for that alias
     pub fn add_module_alias(&mut self, alias: Name, ident: ModuleIdent) -> Result<(), Loc> {
-        self.add_member(alias, AliasEntry::Module(ident), false)
+        let result = self.remove_module_alias_(&alias);
+        self.modules
+            .add(alias, (ident, /* is_implicit */ false))
+            .unwrap();
+        result
     }
 
     /// Adds a member alias to the map.
@@ -105,18 +167,21 @@ impl AliasMapBuilder {
         ident: ModuleIdent,
         member: Name,
     ) -> Result<(), Loc> {
-        self.add_member(alias, AliasEntry::Member(ident, member), false)
+        let result = self.remove_member_alias(&alias);
+        self.members
+            .add(alias, ((ident, member), /* is_implicit */ false))
+            .unwrap();
+        result
     }
 
-    /// Adds a address alias to the map.
+    /// Adds an address alias to the map.
     /// Errors if one already bound for that alias
-    #[allow(unused)]
-    pub fn add_implicit_address_alias(
-        &mut self,
-        alias: Name,
-        address: NumericalAddress,
-    ) -> Result<(), Loc> {
-        self.add_member(alias, AliasEntry::Address(address), true)
+    pub fn add_address_alias(&mut self, alias: Name, address: NumericalAddress) -> Result<(), Loc> {
+        let result = self.remove_address_alias(&alias);
+        self.addresses
+            .add(alias, (address, /* is_implicit */ false))
+            .unwrap();
+        result
     }
 
     /// Same as `add_module_alias` but it does not update the scope, and as such it will not be
@@ -126,7 +191,11 @@ impl AliasMapBuilder {
         alias: Name,
         ident: ModuleIdent,
     ) -> Result<(), Loc> {
-        self.add_member(alias, AliasEntry::Module(ident), true)
+        let result = self.remove_module_alias(&alias);
+        self.modules
+            .add(alias, (ident, /* is_implicit */ true))
+            .unwrap();
+        result
     }
 
     /// Same as `add_member_alias` but it does not update the scope, and as such it will not be
@@ -137,7 +206,11 @@ impl AliasMapBuilder {
         ident: ModuleIdent,
         member: Name,
     ) -> Result<(), Loc> {
-        self.add_member(alias, AliasEntry::Member(ident, member), true)
+        let result = self.remove_member_alias_(&alias);
+        self.members
+            .add(alias, ((ident, member), /* is_implicit */ true))
+            .unwrap();
+        result
     }
 }
 
@@ -166,10 +239,24 @@ impl AliasMap {
     }
 
     /// Pushes a new scope, adding all of the new items to it (shadowing the outer one).
+    /// Returns any name collisions that occur between addresses, members, and modules in the map
+    /// builder.
     pub fn push_alias_scope(&mut self, new_aliases: AliasMapBuilder) {
         let mut new_map = UniqueMap::new();
-        for (alias, (entry, is_implicit)) in new_aliases.aliases {
-            new_map.add(alias, (entry, is_implicit)).unwrap();
+        for (alias, ((mident, name), is_implicit)) in new_aliases.members {
+            new_map
+                .add(alias, (AliasEntry::Member(mident, name), is_implicit))
+                .unwrap();
+        }
+        for (alias, (entry, is_implicit)) in new_aliases.modules {
+            new_map
+                .add(alias, (AliasEntry::Module(entry), is_implicit))
+                .unwrap();
+        }
+        for (alias, (entry, is_implicit)) in new_aliases.addresses {
+            new_map
+                .add(alias, (AliasEntry::Address(entry), is_implicit))
+                .unwrap();
         }
         let previous = std::mem::replace(
             self,
@@ -191,7 +278,14 @@ impl AliasMap {
         for tparam in tparams {
             let _ = aliases.add(*tparam, (AliasEntry::TypeParam, true));
         }
-        self.push_alias_scope(AliasMapBuilder { aliases })
+        let previous = std::mem::replace(
+            self,
+            Self {
+                aliases,
+                previous: None,
+            },
+        );
+        self.previous = Some(Box::new(previous));
     }
 
     /// Resets the alias map to the previous scope, and returns the set of unused aliases
@@ -242,11 +336,18 @@ impl fmt::Debug for AliasEntry {
 
 impl fmt::Debug for AliasMapBuilder {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Map(aliases: [")?;
-        for (_, key, (target, is_implicit)) in &self.aliases {
+        write!(f, "Map(members: [")?;
+        for (_, key, (target, is_implicit)) in &self.members {
             write!(f, "{} => {:?} <{}>, ", key, target, is_implicit)?;
         }
-        write!(f, "], unused: [")?;
+        write!(f, ", modules: [")?;
+        for (_, key, (target, is_implicit)) in &self.modules {
+            write!(f, "{} => {:?} <{}>, ", key, target, is_implicit)?;
+        }
+        write!(f, ", addresses: [")?;
+        for (_, key, (target, is_implicit)) in &self.addresses {
+            write!(f, "{} => {:?} <{}>, ", key, target, is_implicit)?;
+        }
         write!(f, "])")
     }
 }
