@@ -127,6 +127,9 @@ pub struct Function {
 #[derive(PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord)]
 pub struct Var(pub Name);
 
+#[derive(PartialEq, Eq, Debug, Clone, Copy, PartialOrd, Ord)]
+pub struct BlockLabel(pub Name);
+
 //**************************************************************************************************
 // Types
 //**************************************************************************************************
@@ -179,14 +182,18 @@ pub enum Statement_ {
         else_block: Block,
     },
     While {
-        name: Var,
+        name: BlockLabel,
         cond: (Block, Box<Exp>),
         block: Block,
     },
     Loop {
-        name: Var,
+        name: BlockLabel,
         block: Block,
         has_break: bool,
+    },
+    NamedBlock {
+        name: BlockLabel,
+        block: Block,
     },
 }
 pub type Statement = Spanned<Statement_>;
@@ -214,8 +221,8 @@ pub enum Command_ {
         from_user: bool,
         exp: Exp,
     },
-    Break(Var),
-    Continue(Var),
+    Break(BlockLabel),
+    Continue(BlockLabel),
     IgnoreAndPop {
         pop_num: usize,
         exp: Exp,
@@ -717,6 +724,23 @@ impl TName for Var {
     }
 }
 
+impl TName for BlockLabel {
+    type Key = Symbol;
+    type Loc = Loc;
+
+    fn drop_loc(self) -> (Loc, Symbol) {
+        (self.0.loc, self.0.value)
+    }
+
+    fn add_loc(loc: Loc, value: Symbol) -> BlockLabel {
+        BlockLabel(sp(loc, value))
+    }
+
+    fn borrow(&self) -> (&Loc, &Symbol) {
+        (&self.0.loc, &self.0.value)
+    }
+}
+
 impl ModuleCall {
     pub fn is(
         &self,
@@ -946,6 +970,12 @@ impl AstDebug for Var {
     }
 }
 
+impl AstDebug for BlockLabel {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write(&format!("'{}", self.0))
+    }
+}
+
 impl AstDebug for (ConstantName, &Constant) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (
@@ -1087,11 +1117,12 @@ impl AstDebug for Statement_ {
                 w.block(|w| else_block.ast_debug(w));
             }
             S::While { name, cond, block } => {
-                w.write("while@");
-                name.ast_debug(w);
+                w.write("while ");
                 w.write(" (");
                 cond.ast_debug(w);
-                w.write(")");
+                w.write(") ");
+                name.ast_debug(w);
+                w.write(":");
                 w.block(|w| block.ast_debug(w))
             }
             S::Loop {
@@ -1103,9 +1134,14 @@ impl AstDebug for Statement_ {
                 if *has_break {
                     w.write("#has_break");
                 }
-                w.write("@");
                 name.ast_debug(w);
-                w.write(" ");
+                w.write(": ");
+                w.block(|w| block.ast_debug(w))
+            }
+            S::NamedBlock { name, block } => {
+                w.write("loop");
+                name.ast_debug(w);
+                w.write(": ");
                 w.block(|w| block.ast_debug(w))
             }
         }

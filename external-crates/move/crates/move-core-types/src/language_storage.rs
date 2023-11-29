@@ -327,7 +327,10 @@ impl ModuleId {
             }
         }
 
-        IdDisplay { id: self, with_prefix }
+        IdDisplay {
+            id: self,
+            with_prefix,
+        }
     }
 }
 
@@ -398,7 +401,8 @@ impl From<StructTag> for TypeTag {
 mod tests {
     use super::{ModuleId, TypeTag};
     use crate::{
-        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag, ident_str,
+        account_address::AccountAddress, ident_str, identifier::Identifier,
+        language_storage::StructTag,
     };
     use std::mem;
 

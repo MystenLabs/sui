@@ -243,6 +243,9 @@ pub struct Var_ {
 }
 pub type Var = Spanned<Var_>;
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+pub struct BlockLabel(pub Var);
+
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum LValue_ {
@@ -293,8 +296,9 @@ pub enum Exp_ {
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Var, Box<Exp>, Box<Exp>),
-    Loop(Var, Box<Exp>),
+    While(Box<Exp>, BlockLabel, Box<Exp>),
+    Loop(BlockLabel, Box<Exp>),
+    NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
 
     Assign(LValueList, Box<Exp>),
@@ -303,8 +307,8 @@ pub enum Exp_ {
 
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Give(Var, Box<Exp>),
-    Continue(Var),
+    Give(BlockLabel, Box<Exp>),
+    Continue(BlockLabel),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
@@ -666,6 +670,11 @@ impl Type_ {
     }
 }
 
+impl Exp_ {
+    // base symbol to used when making names forunnamed loops
+    pub const LOOP_NAME_SYMBOL: Symbol = symbol!("loop");
+}
+
 impl Value_ {
     pub fn type_(&self, loc: Loc) -> Option<Type> {
         use Value_::*;
@@ -964,6 +973,19 @@ impl AstDebug for Var_ {
     }
 }
 
+impl AstDebug for BlockLabel {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Var_ { name, id, color } = self.0.value;
+        w.write(&format!("'{name}"));
+        if id != 0 {
+            w.write(&format!("#{id}"));
+        }
+        if color != 0 {
+            w.write(&format!("#{color}"));
+        }
+    }
+}
+
 impl AstDebug for Vec<TParam> {
     fn ast_debug(&self, w: &mut AstWriter) {
         if !self.is_empty() {
@@ -1219,19 +1241,25 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(name, b, e) => {
-                w.write("while @");
-                name.ast_debug(w);
+            E::While(b, name, e) => {
+                w.write("while ");
                 w.write(" (");
                 b.ast_debug(w);
-                w.write(")");
+                w.write(") ");
+                name.ast_debug(w);
+                w.write(": ");
                 e.ast_debug(w);
             }
             E::Loop(name, e) => {
-                w.write("loop @");
+                w.write("loop ");
                 name.ast_debug(w);
-                w.write(" ");
+                w.write(": ");
                 e.ast_debug(w);
+            }
+            E::NamedBlock(name, seq) => {
+                name.ast_debug(w);
+                w.write(": ");
+                seq.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
             E::ExpList(es) => {

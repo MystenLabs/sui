@@ -7,8 +7,9 @@ use crate::{
     diagnostics::{codes::NameResolution, Diagnostic},
     expansion::ast::{AbilitySet, AttributeName_, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
-        self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
-        TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
+        self as N, BlockLabel, BuiltinTypeName_, ResolvedUseFuns, StructDefinition,
+        StructTypeParameter, TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind,
+        Var,
     },
     parser::ast::{
         Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
@@ -71,7 +72,7 @@ pub struct Context<'env> {
     pub subst: Subst,
     pub constraints: Constraints,
 
-    named_block_map: BTreeMap<Var, Type>,
+    named_block_map: BTreeMap<BlockLabel, Type>,
 
     /// collects all friends that should be added over the course of 'public(package)' calls
     /// structured as (defining module, new friend, location) where `new friend` is usually the
@@ -401,7 +402,7 @@ impl<'env> Context<'env> {
     }
 
     // pass in a location for a better error location
-    pub fn named_block_type(&mut self, name: Var, loc: Loc) -> Type {
+    pub fn named_block_type(&mut self, name: BlockLabel, loc: Loc) -> Type {
         if let Some(ty) = self.named_block_map.get(&name) {
             ty.clone()
         } else {
@@ -411,7 +412,7 @@ impl<'env> Context<'env> {
         }
     }
 
-    pub fn named_block_type_opt(&self, name: Var) -> Option<Type> {
+    pub fn named_block_type_opt(&self, name: BlockLabel) -> Option<Type> {
         self.named_block_map.get(&name).cloned()
     }
 }

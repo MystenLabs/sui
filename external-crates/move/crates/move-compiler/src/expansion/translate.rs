@@ -12,8 +12,8 @@ use crate::{
         byte_string, hex_string,
     },
     parser::ast::{
-        self as P, Ability, ConstantName, Field, FieldBindings, FunctionName, ModuleName,
-        Mutability, StructName, Var,
+        self as P, Ability, BlockLabel, ConstantName, Field, FieldBindings, FunctionName,
+        ModuleName, Mutability, StructName, Var,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -2175,8 +2175,15 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             };
             EE::IfElse(eb, et, ef)
         }
-        PE::While(pb, ploop) => EE::While(exp(context, *pb), exp(context, *ploop)),
-        PE::Loop(ploop) => EE::Loop(exp(context, *ploop)),
+        PE::While(pb, ploop) => {
+            let (name, body) = maybe_named_loop(context, loc, *ploop);
+            EE::While(exp(context, *pb), name, body)
+        }
+        PE::Loop(ploop) => {
+            let (name, body) = maybe_named_loop(context, loc, *ploop);
+            EE::Loop(name, body)
+        }
+        PE::NamedBlock(name, seq) => EE::NamedBlock(name, sequence(context, loc, seq)),
         PE::Block(seq) => EE::Block(sequence(context, loc, seq)),
         PE::Lambda(pbs, pe) => {
             if !context.in_spec_context {
@@ -2239,22 +2246,22 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 Some(LValue::FieldMutate(edotted)) => EE::FieldMutate(edotted, er),
             }
         }
-        PE::Return(pe_opt) => {
-            let ev = match pe_opt {
-                None => Box::new(sp(loc, EE::Unit { trailing: false })),
-                Some(pe) => exp(context, *pe),
-            };
-            EE::Return(ev)
-        }
         PE::Abort(pe) => EE::Abort(exp(context, *pe)),
-        PE::Break(pe_opt) => {
+        PE::Return(name_opt, pe_opt) => {
             let ev = match pe_opt {
                 None => Box::new(sp(loc, EE::Unit { trailing: false })),
                 Some(pe) => exp(context, *pe),
             };
-            EE::Break(ev)
+            EE::Return(name_opt, ev)
         }
-        PE::Continue => EE::Continue,
+        PE::Break(name_opt, pe_opt) => {
+            let ev = match pe_opt {
+                None => Box::new(sp(loc, EE::Unit { trailing: false })),
+                Some(pe) => exp(context, *pe),
+            };
+            EE::Break(name_opt, ev)
+        }
+        PE::Continue(name) => EE::Continue(name),
         PE::Dereference(pe) => EE::Dereference(exp(context, *pe)),
         PE::UnaryExp(op, pe) => EE::UnaryExp(op, exp(context, *pe)),
         PE::BinopExp(pl, op, pr) => {
@@ -2328,6 +2335,23 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
         PE::UnresolvedError => panic!("ICE error should have been thrown"),
     };
     sp(loc, e_)
+}
+
+// If the expression is a named block, hand back the name and a normal block. Otherwise, just
+// process the expression. This is used to lift names for loop and while to the appropriate form.
+fn maybe_named_loop(
+    context: &mut Context,
+    loc: Loc,
+    body: P::Exp,
+) -> (Option<BlockLabel>, Box<E::Exp>) {
+    if let P::Exp_::NamedBlock(name, seq) = body.value {
+        (
+            Some(name),
+            Box::new(sp(loc, E::Exp_::Block(sequence(context, loc, seq)))),
+        )
+    } else {
+        (None, exp(context, body))
+    }
 }
 
 fn exp_dotted(context: &mut Context, sp!(loc, pdotted_): P::Exp) -> Option<E::ExpDotted> {
@@ -2715,7 +2739,6 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
     use E::Exp_ as EE;
     match e_ {
         EE::Value(_)
-        | EE::Continue
         | EE::UnresolvedError
         | EE::Name(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _)
         | EE::Unit { .. } => (),
@@ -2738,12 +2761,19 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
             unbound_names_exp(unbound, et);
             unbound_names_exp(unbound, econd)
         }
-        EE::While(econd, eloop) => {
+        EE::While(econd, name, eloop) => {
             unbound_names_exp(unbound, eloop);
+            name.map(|name| unbound_names_labeled(unbound, &name));
             unbound_names_exp(unbound, econd)
         }
-        EE::Loop(eloop) => unbound_names_exp(unbound, eloop),
-
+        EE::Loop(name, eloop) => {
+            unbound_names_exp(unbound, eloop);
+            name.map(|name| unbound_names_labeled(unbound, &name));
+        }
+        EE::NamedBlock(name, seq) => {
+            unbound_names_sequence(unbound, seq);
+            unbound_names_labeled(unbound, name);
+        }
         EE::Block(seq) => unbound_names_sequence(unbound, seq),
         EE::Lambda(ls, er) => {
             unbound_names_exp(unbound, er);
@@ -2766,12 +2796,17 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
             // remove anything in `ls`
             unbound_names_assigns(unbound, ls);
         }
-        EE::Return(e)
-        | EE::Abort(e)
+        EE::Return(name, e) | EE::Break(name, e) => {
+            unbound_names_exp(unbound, e);
+            name.map(|name| unbound_names_label_use(unbound, &name));
+        }
+        EE::Continue(name) => {
+            name.map(|name| unbound_names_label_use(unbound, &name));
+        }
+        EE::Abort(e)
         | EE::Dereference(e)
         | EE::UnaryExp(_, e)
         | EE::Borrow(_, e)
-        | EE::Break(e)
         | EE::Cast(e, _)
         | EE::Annotate(e, _) => unbound_names_exp(unbound, e),
         EE::FieldMutate(ed, er) => {
@@ -2885,6 +2920,14 @@ fn unbound_names_dotted(unbound: &mut BTreeSet<Name>, sp!(_, edot_): &E::ExpDott
         ED::Exp(e) => unbound_names_exp(unbound, e),
         ED::Dot(d, _) => unbound_names_dotted(unbound, d),
     }
+}
+
+fn unbound_names_label_use(unbound: &mut BTreeSet<Name>, label: &P::BlockLabel) {
+    unbound.insert(label.0);
+}
+
+fn unbound_names_labeled(unbound: &mut BTreeSet<Name>, label: &P::BlockLabel) {
+    unbound.remove(&label.0);
 }
 
 //**************************************************************************************************

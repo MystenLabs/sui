@@ -14,7 +14,7 @@ use crate::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
         ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
-    naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_, Var},
+    naming::ast::{self as N, BlockLabel, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
@@ -442,7 +442,7 @@ mod check_valid_constant {
                 exp(context, ef);
                 "'if' expressions are"
             }
-            E::While(_, eb, eloop) => {
+            E::While(eb, _, eloop) => {
                 exp(context, eb);
                 exp(context, eloop);
                 "'while' expressions are"
@@ -450,6 +450,10 @@ mod check_valid_constant {
             E::Loop { body: eloop, .. } => {
                 exp(context, eloop);
                 "'loop' expressions are"
+            }
+            E::NamedBlock(_, seq) => {
+                sequence(context, seq);
+                "named 'block' expressions are"
             }
             E::Assign(_assigns, _tys, er) => {
                 exp(context, er);
@@ -1298,7 +1302,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             );
             (ty, TE::IfElse(eb, et, ef))
         }
-        NE::While(name, nb, nloop) => {
+        NE::While(nb, name, nloop) => {
             let eb = exp(context, nb);
             let bloc = eb.exp.loc;
             subtype(
@@ -1309,7 +1313,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 Type_::bool(bloc),
             );
             let (_has_break, ty, body) = loop_body(context, eloc, name, false, nloop);
-            (sp(eloc, ty.value), TE::While(name, eb, body))
+            (sp(eloc, ty.value), TE::While(eb, name, body))
         }
         NE::Loop(name, nloop) => {
             let (has_break, ty, body) = loop_body(context, eloc, name, true, nloop);
@@ -1319,6 +1323,22 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 body,
             };
             (sp(eloc, ty.value), eloop)
+        }
+        NE::NamedBlock(name, body) => {
+            let seq = sequence(context, body);
+            let seq_ty = sequence_type(&seq).clone();
+            let final_type = if let Some(local_return_type) = context.named_block_type_opt(name) {
+                join(
+                    context,
+                    eloc,
+                    || "Invalid named block",
+                    seq_ty,
+                    local_return_type,
+                )
+            } else {
+                seq_ty
+            };
+            (sp(eloc, final_type.value), TE::NamedBlock(name, seq))
         }
         NE::Block(nseq) => {
             let seq = sequence(context, nseq);
@@ -1537,7 +1557,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 fn loop_body(
     context: &mut Context,
     eloc: Loc,
-    name: Var,
+    name: BlockLabel,
     is_loop: bool,
     nloop: Box<N::Exp>,
 ) -> (bool, Type, Box<T::Exp>) {

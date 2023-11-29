@@ -223,6 +223,7 @@ codes!(
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
         PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
+        InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -257,6 +258,7 @@ codes!(
         InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
         InvalidImmVariableUsage:
             { msg: "invalid usage of immutable variable", severity: NonblockingError },
+        InvalidControlFlow: { msg: "invalid control flow", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

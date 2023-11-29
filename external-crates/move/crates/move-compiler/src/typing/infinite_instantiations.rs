@@ -233,11 +233,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        E::While(_, eb, eloop) => {
+        E::While(eb, _, eloop) => {
             exp(context, eb);
             exp(context, eloop);
         }
         E::Loop { body: eloop, .. } => exp(context, eloop),
+        E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
         E::Assign(_, _, er) => exp(context, er),
 
