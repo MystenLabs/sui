@@ -244,7 +244,7 @@ module deepbook::clob_v2 {
         creation_fee: Balance<SUI>,
         // Deprecated.
         base_asset_trading_fees: Balance<BaseAsset>,
-        // Stores the trading fees paid in `QuoteAsset`. These funds are not accessible.
+        // Stores the trading fees paid in `QuoteAsset`. These funds are not accessible in the V1 of the Pools, but V2 Pools are accessible.
         quote_asset_trading_fees: Balance<QuoteAsset>,
     }
 
@@ -856,7 +856,8 @@ module deepbook::clob_v2 {
                     let filled_base_quantity =
                         if (taker_base_quantity_remaining > maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
-
+                    // Note that if a user creates a pool that allows orders that are too small, this will fail since we cannot have a filled
+                    // quote quantity of 0.
                     let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
 
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
@@ -981,9 +982,14 @@ module deepbook::clob_v2 {
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
                     let (is_round_down, maker_quote_quantity) = clob_math::unsafe_mul_round(maker_order.quantity, maker_order.price);
-                    // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
+                    // If a bit is rounded down, the pool will take this as a fee.
                     if (is_round_down) {
-                        maker_quote_quantity = maker_quote_quantity + 1;
+                        let rounded_down_quantity = custodian::decrease_user_locked_balance<QuoteAsset>(
+                            &mut pool.quote_custodian,
+                            maker_order.owner,
+                            1
+                        );                            
+                        balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
                     };
 
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
@@ -1002,8 +1008,16 @@ module deepbook::clob_v2 {
                     let filled_base_quantity =
                         if (taker_base_quantity_remaining >= maker_base_quantity) { maker_base_quantity }
                         else { taker_base_quantity_remaining };
-
-                    let filled_quote_quantity = clob_math::mul(filled_base_quantity, maker_order.price);
+                    // If a bit is rounded down, the pool will take this as a fee.
+                    let (is_round_down, filled_quote_quantity) = clob_math::unsafe_mul_round(filled_base_quantity, maker_order.price);
+                    if (is_round_down) {
+                        let rounded_down_quantity = custodian::decrease_user_locked_balance<QuoteAsset>(
+                            &mut pool.quote_custodian,
+                            maker_order.owner,
+                            1
+                        );                            
+                        balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
+                    };
 
                     // if maker_rebate = 0 due to underflow, maker will not receive a rebate
                     let maker_rebate = clob_math::unsafe_mul(filled_quote_quantity, pool.maker_rebate_rate);
@@ -1121,7 +1135,7 @@ module deepbook::clob_v2 {
         // the unfilled quantity will be cancelled.
         // Market ask order follows similar procedure.
         // The difference is that market ask order is matched against the open bid orders.
-        // We start with the bid PriceLeve with the highest price by calling max_leaf on the bids Critbit Tree.
+        // We start with the bid PriceLevel with the highest price by calling max_leaf on the bids Critbit Tree.
         // The inner loop for iterating over the open orders in ascending orders of order id is the same as above.
         // Then iterate over the price levels in descending order until the market order is completely filled.
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
@@ -1454,11 +1468,7 @@ module deepbook::clob_v2 {
             owner
         );
         if (is_bid) {
-            let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
-            // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
-            if (is_round_down) {
-                balance_locked = balance_locked + 1;
-            };
+            let (_, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
             custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
         } else {
             custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
@@ -1510,11 +1520,7 @@ module deepbook::clob_v2 {
                 owner
             );
             if (is_bid) {
-                let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
-                // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
-                if (is_round_down) {
-                    balance_locked = balance_locked + 1;
-                };
+                let (_, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
@@ -1590,11 +1596,7 @@ module deepbook::clob_v2 {
                 owner
             );
             if (is_bid) {
-                let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
-                // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
-                if (is_round_down) {
-                    balance_locked = balance_locked + 1;
-                };
+                let (_is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
@@ -1663,11 +1665,7 @@ module deepbook::clob_v2 {
             let order = remove_order(open_orders, usr_open_orders, tick_index, order_id, owner);
             assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
             if (is_bid) {
-                let (is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
-                // make sure when we cancel we unlock the extra bit so we can fully unlock the amount for our users
-                if (is_round_down) {
-                    balance_locked = balance_locked + 1;
-                };
+                let (_is_round_down, balance_locked) = clob_math::unsafe_mul_round(order.quantity, order.price);
                 custodian::unlock_balance(&mut pool.quote_custodian, owner, balance_locked);
             } else {
                 custodian::unlock_balance(&mut pool.base_custodian, owner, order.quantity);
@@ -2924,10 +2922,7 @@ module deepbook::clob_v2 {
         while (option::is_some(curr)) {
             let order_id = *option::borrow(curr);
             let order = get_order_status<BaseAsset, QuoteAsset>(pool, order_id, account_cap);
-            let (is_round_down, total_balance) = clob_math::unsafe_mul_round(order.price, order.quantity);
-            if (is_round_down) {
-                total_balance = total_balance + 1;
-            };
+            let (_is_round_down, total_balance) = clob_math::unsafe_mul_round(order.price, order.quantity);
             if (order.is_bid) {
                 quote_asset_amount = quote_asset_amount + total_balance;
             } else {
