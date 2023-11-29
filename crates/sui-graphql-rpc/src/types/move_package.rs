@@ -108,6 +108,7 @@ impl MovePackage {
             connection.edges.push(Edge::new(
                 name.clone(),
                 MoveModule {
+                    storage_id: self.super_.address,
                     native: native.clone(),
                     parsed: parsed.clone(),
                 },
@@ -201,6 +202,7 @@ impl MovePackage {
             self.parsed_package()?.module(name),
         ) {
             (Some(native), Ok(parsed)) => Ok(Some(MoveModule {
+                storage_id: self.super_.address,
                 native: native.clone(),
                 parsed: parsed.clone(),
             })),

@@ -18,7 +18,7 @@ use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {
-    // TODO: Add storag ID of package (bytecode always contains runtime ID)
+    pub storage_id: SuiAddress,
     pub native: Vec<u8>,
     pub parsed: ParsedMoveModule,
 }
@@ -44,10 +44,9 @@ impl MoveModule {
     async fn module_id(&self) -> MoveModuleId {
         // TODO: Rethink the need for MoveModuleId -- we probably don't need it (MoveModule should
         // expose access to its package).
-        let self_id = self.parsed.bytecode().self_id();
         MoveModuleId {
-            package: SuiAddress::from(*self_id.address()),
-            name: self_id.name().to_string(),
+            package: self.storage_id,
+            name: self.parsed.name().to_string(),
         }
     }
 
@@ -112,16 +111,16 @@ impl MoveModule {
         connection.has_previous_page = 0 < lo;
         connection.has_next_page = hi < total;
 
-        let self_id = bytecode.self_id();
+        let runtime_id = *bytecode.self_id().address();
         let Some(package) = ctx
             .data_unchecked::<PgManager>()
-            .fetch_move_package(SuiAddress::from(*self_id.address()), None)
+            .fetch_move_package(self.storage_id, None)
             .await
             .extend()?
         else {
             return Err(Error::Internal(format!(
                 "Failed to load package for module: {}",
-                self_id.to_canonical_display(/* with_prefix */ true),
+                self.storage_id,
             ))
             .extend());
         };
@@ -138,10 +137,10 @@ impl MoveModule {
             let friend_pkg = bytecode.address_identifier_at(decl.address);
             let friend_mod = bytecode.identifier_at(decl.name);
 
-            if friend_pkg != self_id.address() {
+            if friend_pkg != &runtime_id {
                 return Err(Error::Internal(format!(
                     "Friend module of {} from a different package: {}::{}",
-                    self_id.to_canonical_display(/* with_prefix */ true),
+                    runtime_id.to_canonical_display(/* with_prefix */ true),
                     friend_pkg.to_canonical_display(/* with_prefix */ true),
                     friend_mod,
                 ))
@@ -150,8 +149,9 @@ impl MoveModule {
 
             let Some(friend) = package.module_impl(friend_mod.as_str()).extend()? else {
                 return Err(Error::Internal(format!(
-                    "Failed to load friend module of {}: {}",
-                    self_id.to_canonical_display(/* with_prefix */ true),
+                    "Failed to load friend module of {}::{}: {}",
+                    self.storage_id,
+                    self.parsed.name(),
                     friend_mod,
                 ))
                 .extend());
@@ -204,12 +204,7 @@ impl MoveModule {
             let Some(struct_) = self.struct_impl(name.to_string()).extend()? else {
                 return Err(Error::Internal(format!(
                     "Cannot deserialize struct {name} in module {}::{}",
-                    // TODO: Replace with storage ID
-                    self.parsed
-                        .bytecode()
-                        .self_id()
-                        .address()
-                        .to_canonical_display(/* with_prefix */ true),
+                    self.storage_id,
                     self.parsed.name(),
                 )))
                 .extend();
