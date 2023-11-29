@@ -38,8 +38,8 @@ usually `~/.cargo/bin`.
 If your `move-analyzer` binary is in a different location than the default one (`~/.sui/bib`),
 you may have the extension look for the binary at this new location by using the the VSCode's
 settings (`⌘,` on macOS, or use the menu item *Code > Preferences > Settings*). Search for the
-`move.server.path` setting, set it to the new location of the `move-analyzer` binary, and restart
-VSCode.
+`move.server.path` workspace setting, set it to the new location of the `move-analyzer` binary,
+and restart VSCode.
 
 ## What if everything else fails?
 
