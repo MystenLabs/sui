@@ -5,10 +5,10 @@
 use move_binary_format::{
     errors::{offset_out_of_bounds, PartialVMError},
     file_format::{
-        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionDefinitionIndex, FunctionHandleIndex,
-        FunctionInstantiationIndex, LocalIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, TableIndex,
+        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, EnumDefInstantiationIndex,
+        EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionDefinitionIndex,
+        FunctionHandleIndex, FunctionInstantiationIndex, LocalIndex, SignatureIndex,
+        StructDefInstantiationIndex, StructDefinitionIndex, TableIndex, VariantJumpTableIndex,
     },
     internals::ModuleIndex,
     IndexKind,
@@ -102,6 +102,24 @@ macro_rules! struct_bytecode {
     }};
 }
 
+macro_rules! enum_bytecode {
+    ($dst_len: expr, $fidx:expr, $bcidx: expr, $offset: expr, $idx_type: ident, $bytecode_ident: tt, $tag: expr) => {{
+        let dst_len = $dst_len;
+        let new_idx = dst_len + $offset;
+        (
+            $bytecode_ident($idx_type::new(new_idx as TableIndex), $tag),
+            offset_out_of_bounds(
+                StatusCode::INDEX_OUT_OF_BOUNDS,
+                $idx_type::KIND,
+                new_idx,
+                dst_len,
+                $fidx,
+                $bcidx as CodeOffset,
+            ),
+        )
+    }};
+}
+
 macro_rules! code_bytecode {
     ($code_len: expr, $fidx:expr, $bcidx: expr, $offset: expr, $bytecode_ident: tt) => {{
         let code_len = $code_len;
@@ -182,6 +200,7 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
         let code = func_def.code.as_mut().unwrap();
         let locals_len = self.module.signatures[func_handle.parameters.into_index()].len()
             + self.module.signatures[code.locals.into_index()].len();
+        let jump_table_len = code.jump_tables.len();
         let code = &mut code.code;
         let code_len = code.len();
 
@@ -196,6 +215,8 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
         let field_handle_len = self.module.field_handles.len();
         let struct_defs_len = self.module.struct_defs.len();
         let struct_inst_len = self.module.struct_def_instantiations.len();
+        let enum_defs_len = self.module.enum_defs.len();
+        let enum_inst_len = self.module.enum_def_instantiations.len();
         let function_inst_len = self.module.function_instantiations.len();
         let field_inst_len = self.module.field_instantiations.len();
         let signature_pool_len = self.module.signatures.len();
@@ -475,6 +496,86 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                         SignatureIndex,
                         VecSwap
                     ),
+                    PackVariant(_, tag) => enum_bytecode! {
+                        enum_defs_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefinitionIndex,
+                        PackVariant,
+                        tag
+                    },
+                    PackVariantGeneric(_, tag) => enum_bytecode! {
+                        enum_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefInstantiationIndex,
+                        PackVariantGeneric,
+                        tag
+                    },
+                    UnpackVariant(_, tag) => enum_bytecode! {
+                        enum_defs_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefinitionIndex,
+                        UnpackVariant,
+                        tag
+                    },
+                    UnpackVariantImmRef(_, tag) => enum_bytecode! {
+                        enum_defs_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefinitionIndex,
+                        UnpackVariantImmRef,
+                        tag
+                    },
+                    UnpackVariantMutRef(_, tag) => enum_bytecode! {
+                        enum_defs_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefinitionIndex,
+                        UnpackVariantImmRef,
+                        tag
+                    },
+                    UnpackVariantGeneric(_, tag) => enum_bytecode! {
+                        enum_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefInstantiationIndex,
+                        UnpackVariantGeneric,
+                        tag
+                    },
+                    UnpackVariantGenericImmRef(_, tag) => enum_bytecode! {
+                        enum_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefInstantiationIndex,
+                        UnpackVariantGenericImmRef,
+                        tag
+                    },
+                    UnpackVariantGenericMutRef(_, tag) => enum_bytecode! {
+                        enum_inst_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        EnumDefInstantiationIndex,
+                        UnpackVariantGenericMutRef,
+                        tag
+                    },
+                    VariantSwitch(_) => new_bytecode! {
+                        jump_table_len,
+                        current_fdef,
+                        bytecode_idx,
+                        offset,
+                        VariantJumpTableIndex,
+                        VariantSwitch
+                    },
 
                     // List out the other options explicitly so there's a compile error if a new
                     // bytecode gets added.
@@ -535,7 +636,16 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | VecPushBack(_)
         | VecPopBack(_)
         | VecUnpack(..)
-        | VecSwap(_) => true,
+        | VecSwap(_)
+        | PackVariant(_, _)
+        | PackVariantGeneric(_, _)
+        | UnpackVariant(_, _)
+        | UnpackVariantImmRef(_, _)
+        | UnpackVariantMutRef(_, _)
+        | UnpackVariantGeneric(_, _)
+        | UnpackVariantGenericImmRef(_, _)
+        | UnpackVariantGenericMutRef(_, _)
+        | VariantSwitch(_) => true,
 
         // List out the other options explicitly so there's a compile error if a new
         // bytecode gets added.

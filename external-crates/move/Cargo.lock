@@ -2402,6 +2402,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
+ "move-ir-to-bytecode",
  "move-stdlib",
  "move-vm-config",
  "move-vm-profiler",

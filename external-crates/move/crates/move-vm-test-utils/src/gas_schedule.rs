@@ -10,9 +10,9 @@
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
-        FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
-        StructDefInstantiationIndex, StructDefinitionIndex,
+        Bytecode, ConstantPoolIndex, EnumDefInstantiationIndex, EnumDefinitionIndex,
+        FieldHandleIndex, FieldInstantiationIndex, FunctionHandleIndex, FunctionInstantiationIndex,
+        SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex, VariantJumpTableIndex,
     },
     file_format_common::{instruction_key, Opcodes},
 };
@@ -713,6 +713,42 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (CastU16, GasCost::new(0, 0)),
         (CastU32, GasCost::new(0, 0)),
         (CastU256, GasCost::new(0, 0)),
+        (
+            PackVariant(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            PackVariantGeneric(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariant(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantImmRef(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantMutRef(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantGeneric(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantGenericImmRef(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            UnpackVariantGenericMutRef(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(0, 0),
+        ),
+        (
+            VariantSwitch(VariantJumpTableIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
     ]
 }
 
@@ -855,6 +891,42 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (CastU16, GasCost::new(2, 1)),
         (CastU32, GasCost::new(2, 1)),
         (CastU256, GasCost::new(2, 1)),
+        (
+            PackVariant(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            PackVariantGeneric(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariant(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantImmRef(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantMutRef(EnumDefinitionIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantGeneric(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantGenericImmRef(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            UnpackVariantGenericMutRef(EnumDefInstantiationIndex::new(0), 0),
+            GasCost::new(2, 1),
+        ),
+        (
+            VariantSwitch(VariantJumpTableIndex::new(0)),
+            GasCost::new(2, 1),
+        ),
     ]
 }
 

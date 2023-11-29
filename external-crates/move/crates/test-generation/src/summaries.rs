@@ -617,5 +617,14 @@ pub fn instruction_summary(instruction: Bytecode, exact: bool) -> Summary {
         | Bytecode::VecPopBack(_)
         | Bytecode::VecUnpack(..)
         | Bytecode::VecSwap(_) => unimplemented!("Vector bytecode not supported yet"),
+        Bytecode::PackVariant(_, _)
+        | Bytecode::PackVariantGeneric(_, _)
+        | Bytecode::UnpackVariant(_, _)
+        | Bytecode::UnpackVariantImmRef(_, _)
+        | Bytecode::UnpackVariantMutRef(_, _)
+        | Bytecode::UnpackVariantGeneric(_, _)
+        | Bytecode::UnpackVariantGenericImmRef(_, _)
+        | Bytecode::UnpackVariantGenericMutRef(_, _)
+        | Bytecode::VariantSwitch(_) => unimplemented!("Variant bytecode not supported yet"),
     }
 }

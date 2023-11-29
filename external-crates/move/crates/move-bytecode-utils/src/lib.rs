@@ -10,7 +10,7 @@ use crate::dependency_graph::DependencyGraph;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
-    file_format::{CompiledModule, SignatureToken, StructHandleIndex},
+    file_format::{CompiledModule, DatatypeHandleIndex, SignatureToken},
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
@@ -103,9 +103,9 @@ impl<'a> Modules<'a> {
 
 pub fn resolve_struct<'a>(
     view: &'a BinaryIndexedView,
-    sidx: StructHandleIndex,
+    sidx: DatatypeHandleIndex,
 ) -> (&'a AccountAddress, &'a IdentStr, &'a IdentStr) {
-    let shandle = view.struct_handle_at(sidx);
+    let shandle = view.datatype_handle_at(sidx);
     let mhandle = view.module_handle_at(shandle.module);
     let address = view.address_identifier_at(mhandle.address);
     let module_name = view.identifier_at(mhandle.name);
@@ -133,8 +133,8 @@ pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> S
         }
         SignatureToken::TypeParameter(i) => format!("T{}", i),
 
-        SignatureToken::Struct(idx) => format_signature_token_struct(view, *idx, &[]),
-        SignatureToken::StructInstantiation(idx, ty_args) => {
+        SignatureToken::Datatype(idx) => format_signature_token_struct(view, *idx, &[]),
+        SignatureToken::DatatypeInstantiation(idx, ty_args) => {
             format_signature_token_struct(view, *idx, ty_args)
         }
     }
@@ -142,7 +142,7 @@ pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> S
 
 pub fn format_signature_token_struct(
     view: &BinaryIndexedView,
-    sidx: StructHandleIndex,
+    sidx: DatatypeHandleIndex,
     ty_args: &[SignatureToken],
 ) -> String {
     let (address, module_name, struct_name) = resolve_struct(view, sidx);
