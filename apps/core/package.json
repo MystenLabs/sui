@@ -17,7 +17,7 @@
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
-		"test": "turbo --filter @mysten/core^... build && vitest run",
+		"test": "vitest run",
 		"test:watch": "vitest"
 	},
 	"dependencies": {
