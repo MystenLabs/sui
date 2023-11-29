@@ -112,7 +112,8 @@ module examples::my_hero {
     }
 
     /// Anyone can mint their `Hero`!
-    public fun mint(name: String, image_url: String, ctx: &mut TxContext): Hero { 
+    public fun mint(name: String, image_url: String, ctx: &mut TxContext): Hero {
+        let id = object::new(ctx);
         Hero { id, name, image_url }
     }
 }
