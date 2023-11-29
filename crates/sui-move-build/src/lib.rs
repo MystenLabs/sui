@@ -184,23 +184,17 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        let lint = self.lint;
-        let print_diags_to_stderr = self.print_diags_to_stderr;
-        let run_bytecode_verifier = self.run_bytecode_verifier;
-        let resolution_graph = self.resolution_graph(&path)?;
-        build_from_resolution_graph(
-            path,
-            resolution_graph,
-            run_bytecode_verifier,
-            print_diags_to_stderr,
-            lint,
-        )
-    }
-
-    pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
+    pub fn build(mut self, path: PathBuf) -> SuiResult<CompiledPackage> {
         use move_compiler::editions::Flavor;
 
+        // I want to do this here but two things:
+        // (1) can't access lock file logic in crate
+        // (2) holding the lock from here could be bad (do i need to hold the lock -- I can just take and release before end of function)
+        // Detect flavor / compiler things in Move.lock.
+        // (1) If exists, check for Move.toml config override.
+        //    (a) if Move.toml sets it, continue, use that (get_or_insert).
+        //    (b) if Move.toml does not set it, use Move.toml.
+        // (2) If not exist, use get_or_insert
         let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
         if flavor != &Flavor::Sui {
             return Err(SuiError::ModuleBuildFailure {
@@ -212,6 +206,24 @@ impl BuildConfig {
             });
         }
 
+        let lint = self.lint;
+        let print_diags_to_stderr = self.print_diags_to_stderr;
+        let run_bytecode_verifier = self.run_bytecode_verifier;
+        let resolution_graph = self.resolution_graph(&path)?;
+        let result = build_from_resolution_graph(
+            path,
+            resolution_graph,
+            run_bytecode_verifier,
+            print_diags_to_stderr,
+            lint,
+        );
+
+        // update_lock_file_toolchain_version
+
+        result
+    }
+
+    pub fn resolution_graph(self, path: &Path) -> SuiResult<ResolvedGraph> {
         if self.print_diags_to_stderr {
             self.config
                 .resolution_graph_for_package(path, &mut std::io::stderr())

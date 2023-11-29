@@ -10,8 +10,9 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::*;
+use colored::Colorize;
 use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor},
@@ -24,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
 use std::{
     collections::BTreeMap,
+    fs::File,
     io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
@@ -163,6 +165,21 @@ impl BuildConfig {
         path: &Path,
         writer: &mut W,
     ) -> Result<ResolvedGraph> {
+        if let Some(lock_path) = &self.lock_file {
+            // XXX: should I use SourcePackageLayout?
+            let mut lock_path = File::open(lock_path)?;
+            let compiler_version = lock_file::schema::ToolchainVersion::read(&mut lock_path)
+                .map_err(|e| anyhow!("Move.lock: {:?}", e))?;
+            if let Some(compiler_version) = &compiler_version {
+                println!(
+                    "{} {}",
+                    "USING TOOLCHAIN VERSION".bold().green(),
+                    toml::ser::to_string(compiler_version).unwrap()
+                );
+            } else {
+                println!("{} {}", "TOOLCHAIN VERSION".bold().green(), "<default>");
+            };
+        }
         if self.test_mode {
             self.dev_mode = true;
         }
@@ -170,6 +187,7 @@ impl BuildConfig {
         let manifest_string =
             std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+
         let _mutx = PackageLock::lock(); // held until function returns
 
         let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
