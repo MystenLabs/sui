@@ -25,7 +25,7 @@ If the user wants to use a specific gas coin, the user should first find the gas
 
 ### Examples
 
-Here are a few examples on how to transfer SUI in a transaction in different environments and SDKs.
+Here is an example on how to transfer SUI in a transaction using the CLI, Rust SDK, and TS SDK.
 
 <Tabs groupId="examples-sending-transaction">
 
@@ -36,26 +36,161 @@ Get the gas coin object id of the active address. This is the coin from which 10
 sui client gas
 ```
 
+If you want to extract just the address and have [`jq`](https://jqlang.github.io/jq/) installed, then use:
+```shell
+sui client gas --json | jq -r '.[] | .gasCoinId'
+```
+
 Transfer 1000 MIST to another address.
 
 ```shell
 sui client transfer-sui \
 --to <SUI_ADDRESS> \
 --sui-coin-object-id <GAS_COIN_ID> \
---gas-budget 50000000 --amount 1000
+--gas-budget 5000000 --amount 1000
 ```
 
 </TabItem>
 
 <TabItem value="rust-sdk" label="Rust SDK">
 
-Check this example from the Sui Rust SDK [repository](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/programmable_transactions_api.rs).
+This example is borrowed from the Sui Rust SDK [repository](https://github.com/MystenLabs/sui/blob/main/crates/sui-sdk/examples/programmable_transactions_api.rs).
+
+```rust
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+mod utils;
+use shared_crypto::intent::Intent;
+use sui_config::{sui_config_dir, SUI_KEYSTORE_FILENAME};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_sdk::{
+    rpc_types::SuiTransactionBlockResponseOptions,
+    types::{
+        programmable_transaction_builder::ProgrammableTransactionBuilder,
+        quorum_driver_types::ExecuteTransactionRequestType,
+        transaction::{Argument, Command, Transaction, TransactionData},
+    },
+};
+use utils::setup_for_write;
+
+// This example shows how to use programmable transactions to chain multiple
+// transactions into one transaction block. Specifically, the example retrieves two addresses
+// from the local wallet, and then
+// 1) finds a coin from the active address that has Sui,
+// 2) splits the coin into one coin of 1000 MIST and the rest,
+// 3  transfers the split coin to second Sui address,
+// 4) signs the transaction,
+// 5) executes it.
+// For some of these actions it prints some output.
+// Finally, at the end of the program it prints the number of coins for the
+// Sui address that received the coin.
+// If you run this program several times, you should see the number of coins
+// for the recipient address increases.
+
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    // 1) get the Sui client, the sender and recipient that we will use
+    // for the transaction, and find the coin we use as gas
+    let (sui, sender, recipient) = setup_for_write().await?;
+
+    // we need to find the coin we will use as gas
+    let coins = sui
+        .coin_read_api()
+        .get_coins(sender, None, None, None)
+        .await?;
+    let coin = coins.data.into_iter().next().unwrap();
+
+    // programmable transactions allows the user to chain multiple transactions
+    let mut ptb = ProgrammableTransactionBuilder::new();
+
+    // 2) split coin
+    // the amount we want in the new coin, 1000 MIST
+    let split_coint_amount = ptb.pure(1000u64)?; // note that we need to specify the u64 type
+    ptb.command(Command::SplitCoins(
+        Argument::GasCoin,
+        vec![split_coint_amount],
+    ));
+
+    // 3) transfer the new coin to a different address
+    let argument_address = ptb.pure(recipient)?;
+    ptb.command(Command::TransferObjects(
+        vec![Argument::Result(0)],
+        argument_address,
+    ));
+
+    // finish building the transaction block by calling finish on the ptb
+    let builder = ptb.finish();
+
+    let gas_budget = 5_000_000;
+    let gas_price = sui.read_api().get_reference_gas_price().await?;
+    // create the transaction data that will be sent to the network
+    let tx_data = TransactionData::new_programmable(
+        sender,
+        vec![coin.object_ref()],
+        builder,
+        gas_budget,
+        gas_price,
+    );
+
+    // 4) sign transaction
+    let keystore = FileBasedKeystore::new(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
+    let signature = keystore.sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+
+    // 5) execute the transaction
+    print!("Executing the transaction...");
+    let transaction_response = sui
+        .quorum_driver_api()
+        .execute_transaction_block(
+            Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]),
+            SuiTransactionBlockResponseOptions::full_content(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+    print!("done\n Transaction information: ");
+    println!("{:?}", transaction_response);
+
+    let coins = sui
+        .coin_read_api()
+        .get_coins(recipient, None, None, None)
+        .await?;
+
+    println!(
+        "After the transfer, the recipient address {recipient} has {} coins",
+        coins.data.len()
+    );
+    Ok(())
+}
+	
+```
+
 
 </TabItem>
 
 <TabItem value="ts-sdk" label="TS SDK">
 
-Check this example from the Sui TS SDK [repository](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#transfer-sui).
+This example is borrowed from the Sui TS SDK [repository](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#transfer-sui).
+
+```js
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+
+// Generate a new Ed25519 Keypair
+const keypair = new Ed25519Keypair();
+const client = new SuiClient({
+	url: getFullnodeUrl('testnet'),
+});
+
+const tx = new TransactionBlock();
+const [coin] = tx.splitCoins(tx.gas, [1000]);
+tx.transferObjects([coin], keypair.getPublicKey().toSuiAddress());
+const result = await client.signAndExecuteTransactionBlock({
+	signer: keypair,
+	transactionBlock: tx,
+});
+console.log({ result });
+```
 
 </TabItem>
 
