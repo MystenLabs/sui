@@ -24,7 +24,7 @@ use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
-    loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
 };
 use std::{borrow::Borrow, sync::Arc};
 
@@ -220,17 +220,17 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         Ok(instantiation)
     }
 
-    /// Load a struct by its name to get the global index that it is referenced by within the
+    /// Load a declared type by its name to get the global index that it is referenced by within the
     /// loader, and the loaded struct information.  This operation also ensures the defining module
     /// is loaded from the data store and will fail if the type does not exist in that module.
-    pub fn load_struct(
+    pub fn load_datatype(
         &self,
         module_id: &ModuleId,
         struct_name: &IdentStr,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.runtime
             .loader()
-            .load_struct_by_name(struct_name, module_id, &self.data_cache)
+            .load_type_by_name(struct_name, module_id, &self.data_cache)
     }
 
     pub fn load_type(&self, type_tag: &TypeTag) -> VMResult<Type> {
@@ -275,8 +275,8 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
 
     /// Fetch a struct type from cache, if the index is in bounds
     /// Helpful when paired with load_type, or any other API that returns 'Type'
-    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
-        self.runtime.loader().get_struct_type(index)
+    pub fn get_type(&self, index: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
+        self.runtime.loader().get_type(index)
     }
 
     /// Gets the abilities for this type, at it's particular instantiation

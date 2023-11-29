@@ -12,10 +12,12 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
+        AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex,
+        EnumDefInstantiationIndex, EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex,
+        FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         FunctionInstantiationIndex, SignatureIndex, SignatureToken, StructDefInstantiationIndex,
         StructDefinitionIndex, StructFieldInformation, TableIndex, TypeParameterIndex,
+        VariantJumpTable, VariantTag,
     },
     IndexKind,
 };
@@ -32,7 +34,10 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
-    loaded_data::runtime_types::{CachedStructIndex, DepthFormula, StructType, Type},
+    loaded_data::runtime_types::{
+        CachedDatatype, CachedTypeIndex, Datatype, DepthFormula, EnumType, StructType, Type,
+        VariantType,
+    },
 };
 use parking_lot::RwLock;
 use std::{
@@ -49,6 +54,12 @@ use tracing::error;
 struct BinaryCache<K, V> {
     id_map: HashMap<K, usize>,
     binaries: Vec<Arc<V>>,
+}
+
+#[derive(Debug)]
+enum FieldTypeInfo {
+    Struct(Vec<Type>),
+    Enum(Vec<VariantType>),
 }
 
 impl<K, V> BinaryCache<K, V>
@@ -107,7 +118,7 @@ pub struct ModuleCache {
     loaded_modules: BinaryCache<(AccountAddress, ModuleId), LoadedModule>,
 
     /// Global cache of loaded structs, shared among all modules.
-    structs: BinaryCache<(ModuleId, Identifier), StructType>,
+    types: BinaryCache<(ModuleId, Identifier), CachedDatatype>,
     /// Global list of loaded functions, shared among all modules.
     functions: Vec<Arc<Function>>,
 }
@@ -125,7 +136,7 @@ impl ModuleCache {
             compiled_modules: BinaryCache::new(),
             verified_dependencies: BTreeSet::new(),
             loaded_modules: BinaryCache::new(),
-            structs: BinaryCache::new(),
+            types: BinaryCache::new(),
             functions: vec![],
         }
     }
@@ -157,9 +168,9 @@ impl ModuleCache {
         Arc::clone(&self.functions[idx])
     }
 
-    // Retrieve a struct by index
-    fn struct_at(&self, idx: CachedStructIndex) -> Arc<StructType> {
-        Arc::clone(&self.structs.binaries[idx.0])
+    // Retrieve a declared type by index
+    fn type_at(&self, idx: CachedTypeIndex) -> Arc<CachedDatatype> {
+        Arc::clone(&self.types.binaries[idx.0])
     }
 
     //
@@ -222,11 +233,11 @@ impl ModuleCache {
         // Add new structs and collect their field signatures
         let mut field_signatures = vec![];
         for (idx, struct_def) in module.struct_defs().iter().enumerate() {
-            let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
             let name = module.identifier_at(struct_handle.name);
             let struct_key = (runtime_id.clone(), name.to_owned());
 
-            if self.structs.contains(&struct_key) {
+            if self.types.contains(&struct_key) {
                 continue;
             }
 
@@ -240,18 +251,20 @@ impl ModuleCache {
 
             let defining_id = data_store.defining_module(&runtime_id, name)?;
 
-            self.structs.insert(
+            self.types.insert(
                 struct_key,
-                StructType {
-                    fields: vec![],
-                    field_names,
+                CachedDatatype {
                     abilities: struct_handle.abilities,
                     type_parameters: struct_handle.type_parameters.clone(),
                     name: name.to_owned(),
                     defining_id,
                     runtime_id: runtime_id.clone(),
-                    struct_def: StructDefinitionIndex(idx as u16),
                     depth: None,
+                    datatype_info: Datatype::Struct(StructType {
+                        fields: vec![],
+                        field_names,
+                        struct_def: StructDefinitionIndex(idx as u16),
+                    }),
                 },
             )?;
 
@@ -263,51 +276,121 @@ impl ModuleCache {
             field_signatures.push(signatures)
         }
 
+        let mut variant_defs = vec![];
+        for (idx, enum_def) in module.enum_defs().iter().enumerate() {
+            let enum_handle = module.datatype_handle_at(enum_def.enum_handle);
+            let name = module.identifier_at(enum_handle.name);
+            let enum_key = (runtime_id.clone(), name.to_owned());
+
+            if self.types.contains(&enum_key) {
+                continue;
+            }
+
+            let variant_info: Vec<_> = enum_def
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(variant_tag, variant_def)| {
+                    (variant_tag, &variant_def.variant_name, &variant_def.fields)
+                })
+                .collect();
+
+            variant_defs.push((idx, variant_info));
+
+            let defining_id = data_store.defining_module(&runtime_id, name)?;
+            self.types.insert(
+                enum_key,
+                CachedDatatype {
+                    abilities: enum_handle.abilities,
+                    type_parameters: enum_handle.type_parameters.clone(),
+                    name: name.to_owned(),
+                    defining_id,
+                    runtime_id: runtime_id.clone(),
+                    depth: None,
+                    datatype_info: Datatype::Enum(EnumType {
+                        variants: vec![],
+                        enum_def: EnumDefinitionIndex(idx as u16),
+                    }),
+                },
+            )?;
+        }
+
         // Convert field signatures into types after adding all structs because field types might
-        // refer to structs in the same module.
+        // refer to other datatypes in the same module.
         let mut field_types = vec![];
         for signature in field_signatures {
             let tys: Vec<_> = signature
                 .iter()
                 .map(|tok| self.make_type(module_view, tok))
                 .collect::<PartialVMResult<_>>()?;
-            field_types.push(tys);
+            field_types.push(FieldTypeInfo::Struct(tys));
+        }
+
+        for (enum_def_idx, infos) in variant_defs.into_iter() {
+            let mut variant_fields = vec![];
+            for (tag, name_idx, field_defs) in infos.iter() {
+                let mut fields = vec![];
+                let mut field_names = vec![];
+                for field in field_defs.iter() {
+                    fields.push(self.make_type(module_view, &field.signature.0)?);
+                    field_names.push(module.identifier_at(field.name).to_owned());
+                }
+                variant_fields.push(VariantType {
+                    fields,
+                    field_names,
+                    enum_def: EnumDefinitionIndex(enum_def_idx as u16),
+                    variant_tag: *tag as u16,
+                    variant_name: module.identifier_at(**name_idx).to_owned(),
+                })
+            }
+
+            field_types.push(FieldTypeInfo::Enum(variant_fields));
         }
 
         let field_types_len = field_types.len();
 
-        // Add the field types to the newly added structs, processing them in reverse, to line them
-        // up with the structs we added at the end of the global cache.
-        for (fields, struct_type) in field_types
+        // Add the field types to the newly added structs and enums, processing them in reverse, to line them
+        // up with the structs and enums we added at the end of the global cache.
+        for (field_info, cached_type) in field_types
             .into_iter()
             .rev()
-            .zip(self.structs.binaries.iter_mut().rev())
+            .zip(self.types.binaries.iter_mut().rev())
         {
-            match Arc::get_mut(struct_type) {
-                Some(struct_type) => struct_type.fields = fields,
+            match Arc::get_mut(cached_type) {
+                Some(ref mut x) => match (&mut x.datatype_info, field_info) {
+                    (Datatype::Enum(ref mut enum_type), FieldTypeInfo::Enum(field_info)) => {
+                        enum_type.variants = field_info;
+                    }
+                    (Datatype::Struct(ref mut struct_type), FieldTypeInfo::Struct(field_info)) => {
+                        struct_type.fields = field_info;
+                    }
+                    _ => {
+                        return Err(
+                                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                                .with_message("Type mismatch when loading type into module cache -- enum and structs out of synch".to_owned()),
+                                );
+                    }
+                },
                 None => {
-                    // we have pending references to the `Arc` which is impossible,
-                    // given the code that adds the `Arc` is above and no reference to
-                    // it should exist.
-                    // So in the spirit of not crashing we just rewrite the entire `Arc`
-                    // over and log the issue.
-                    error!("Arc<StructType> cannot have any live reference while publishing");
-                    let mut struct_copy = (**struct_type).clone();
-                    struct_copy.fields = fields;
-                    *struct_type = Arc::new(struct_copy);
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(
+                                "Unable to populate cached type in module cache".to_owned(),
+                            ),
+                    );
                 }
             }
         }
 
         let mut depth_cache = BTreeMap::new();
-        for struct_type in self.structs.binaries.iter().rev().take(field_types_len) {
-            self.calculate_depth_of_struct(struct_type, &mut depth_cache)?;
+        for datatype in self.types.binaries.iter().rev().take(field_types_len) {
+            self.calculate_depth_of_datatype(datatype, &mut depth_cache)?;
         }
 
         debug_assert!(depth_cache.len() == field_types_len);
         for (cache_idx, depth) in depth_cache {
-            match Arc::get_mut(self.structs.binaries.get_mut(cache_idx.0).unwrap()) {
-                Some(struct_type) => struct_type.depth = Some(depth),
+            match Arc::get_mut(self.types.binaries.get_mut(cache_idx.0).unwrap()) {
+                Some(datatype) => datatype.depth = Some(depth),
                 None => {
                     // we have pending references to the `Arc` which is impossible,
                     // given the code that adds the `Arc` is above and no reference to
@@ -315,7 +398,7 @@ impl ModuleCache {
                     // So in the spirit of not crashing we log the issue and move on leaving the
                     // structs depth as `None` -- if we try to access it later we will treat this
                     // as too deep.
-                    error!("Arc<StructType> cannot have any live reference while publishing");
+                    error!("Arc<Datatype> cannot have any live reference while publishing");
                 }
             }
         }
@@ -353,43 +436,43 @@ impl ModuleCache {
             SignatureToken::MutableReference(inner_tok) => {
                 Type::MutableReference(Box::new(self.make_type(module, inner_tok)?))
             }
-            SignatureToken::Struct(sh_idx) => {
-                let struct_handle = module.struct_handle_at(*sh_idx);
+            SignatureToken::Datatype(sh_idx) => {
+                let struct_handle = module.datatype_handle_at(*sh_idx);
                 let struct_name = module.identifier_at(struct_handle.name);
                 let module_handle = module.module_handle_at(struct_handle.module);
                 let runtime_id = ModuleId::new(
                     *module.address_identifier_at(module_handle.address),
                     module.identifier_at(module_handle.name).to_owned(),
                 );
-                let def_idx = self.resolve_struct_by_name(struct_name, &runtime_id)?.0;
-                Type::Struct(def_idx)
+                let def_idx = self.resolve_type_by_name(struct_name, &runtime_id)?.0;
+                Type::Datatype(def_idx)
             }
-            SignatureToken::StructInstantiation(sh_idx, tys) => {
+            SignatureToken::DatatypeInstantiation(sh_idx, tys) => {
                 let type_parameters: Vec<_> = tys
                     .iter()
                     .map(|tok| self.make_type(module, tok))
                     .collect::<PartialVMResult<_>>()?;
-                let struct_handle = module.struct_handle_at(*sh_idx);
+                let struct_handle = module.datatype_handle_at(*sh_idx);
                 let struct_name = module.identifier_at(struct_handle.name);
                 let module_handle = module.module_handle_at(struct_handle.module);
                 let runtime_id = ModuleId::new(
                     *module.address_identifier_at(module_handle.address),
                     module.identifier_at(module_handle.name).to_owned(),
                 );
-                let def_idx = self.resolve_struct_by_name(struct_name, &runtime_id)?.0;
-                Type::StructInstantiation(def_idx, type_parameters)
+                let def_idx = self.resolve_type_by_name(struct_name, &runtime_id)?.0;
+                Type::DatatypeInstantiation(def_idx, type_parameters)
             }
         };
         Ok(res)
     }
 
-    fn calculate_depth_of_struct(
+    fn calculate_depth_of_datatype(
         &self,
-        struct_type: &StructType,
-        depth_cache: &mut BTreeMap<CachedStructIndex, DepthFormula>,
+        struct_type: &CachedDatatype,
+        depth_cache: &mut BTreeMap<CachedTypeIndex, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         let def_idx = self
-            .resolve_struct_by_name(&struct_type.name, &struct_type.runtime_id)?
+            .resolve_type_by_name(&struct_type.name, &struct_type.runtime_id)?
             .0;
 
         // If we've already computed this structs depth, no more work remains to be done.
@@ -400,11 +483,19 @@ impl ModuleCache {
             return Ok(form.clone());
         }
 
-        let formulas = struct_type
-            .fields
-            .iter()
-            .map(|field_type| self.calculate_depth_of_type(field_type, depth_cache))
-            .collect::<PartialVMResult<Vec<_>>>()?;
+        let formulas = match &struct_type.datatype_info {
+            Datatype::Enum(enum_type) => enum_type
+                .variants
+                .iter()
+                .flat_map(|variant_type| variant_type.fields.iter())
+                .map(|field_type| self.calculate_depth_of_type(field_type, depth_cache))
+                .collect::<PartialVMResult<Vec<_>>>()?,
+            Datatype::Struct(struct_type) => struct_type
+                .fields
+                .iter()
+                .map(|field_type| self.calculate_depth_of_type(field_type, depth_cache))
+                .collect::<PartialVMResult<Vec<_>>>()?,
+        };
         let mut formula = DepthFormula::normalize(formulas);
         // add 1 for the struct itself
         formula.add(1);
@@ -421,7 +512,7 @@ impl ModuleCache {
     fn calculate_depth_of_type(
         &self,
         ty: &Type,
-        depth_cache: &mut BTreeMap<CachedStructIndex, DepthFormula>,
+        depth_cache: &mut BTreeMap<CachedTypeIndex, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         Ok(match ty {
             Type::Bool
@@ -441,14 +532,14 @@ impl ModuleCache {
                 inner
             }
             Type::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
-            Type::Struct(cache_idx) => {
-                let struct_type = self.struct_at(*cache_idx);
-                let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
+            Type::Datatype(cache_idx) => {
+                let struct_type = self.type_at(*cache_idx);
+                let struct_formula = self.calculate_depth_of_datatype(&struct_type, depth_cache)?;
                 debug_assert!(struct_formula.terms.is_empty());
                 struct_formula
             }
-            Type::StructInstantiation(cache_idx, ty_args) => {
-                let struct_type = self.struct_at(*cache_idx);
+            Type::DatatypeInstantiation(cache_idx, ty_args) => {
+                let struct_type = self.type_at(*cache_idx);
                 let ty_arg_map = ty_args
                     .iter()
                     .enumerate()
@@ -457,7 +548,7 @@ impl ModuleCache {
                         Ok((var, self.calculate_depth_of_type(ty, depth_cache)?))
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
+                let struct_formula = self.calculate_depth_of_datatype(&struct_type, depth_cache)?;
 
                 struct_formula.subst(ty_arg_map)?
             }
@@ -466,16 +557,16 @@ impl ModuleCache {
 
     // Given a ModuleId::struct_name, retrieve the `StructType` and the index associated.
     // Return and error if the type has not been loaded
-    fn resolve_struct_by_name(
+    fn resolve_type_by_name(
         &self,
         struct_name: &IdentStr,
         runtime_id: &ModuleId,
-    ) -> PartialVMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> PartialVMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         match self
-            .structs
+            .types
             .get_with_idx(&(runtime_id.clone(), struct_name.to_owned()))
         {
-            Some((idx, struct_)) => Ok((CachedStructIndex(idx), Arc::clone(struct_))),
+            Some((idx, struct_)) => Ok((CachedTypeIndex(idx), Arc::clone(struct_))),
             None => Err(PartialVMError::new(StatusCode::TYPE_RESOLUTION_FAILURE)
                 .with_message(format!("Cannot find {runtime_id}::{struct_name} in cache",))),
         }
@@ -507,7 +598,7 @@ impl ModuleCache {
     /// Return the current high watermark of structs and functions in the cache.
     fn cursor(&self) -> CacheCursor {
         CacheCursor {
-            last_struct: self.structs.len(),
+            last_struct: self.types.len(),
             last_function: self.functions.len(),
         }
     }
@@ -522,13 +613,13 @@ impl ModuleCache {
         }: CacheCursor,
     ) {
         // Remove entries from `structs.id_map` corresponding to the newly added structs.
-        for (idx, struct_) in self.structs.binaries.iter().enumerate().rev() {
+        for (idx, struct_) in self.types.binaries.iter().enumerate().rev() {
             if idx < last_struct {
                 break;
             }
 
             let key = (struct_.runtime_id.clone(), struct_.name.clone());
-            match self.structs.id_map.remove(&key) {
+            match self.types.id_map.remove(&key) {
                 Some(jdx) if jdx == idx => {
                     continue;
                 }
@@ -543,7 +634,7 @@ impl ModuleCache {
             }
         }
 
-        self.structs.binaries.truncate(last_struct);
+        self.types.binaries.truncate(last_struct);
         self.functions.truncate(last_function);
     }
 }
@@ -778,17 +869,17 @@ impl Loader {
     // Helpers for loading and verification
     //
 
-    pub(crate) fn load_struct_by_name(
+    pub(crate) fn load_type_by_name(
         &self,
         name: &IdentStr,
         runtime_id: &ModuleId,
         data_store: &impl DataStore,
-    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+    ) -> VMResult<(CachedTypeIndex, Arc<CachedDatatype>)> {
         self.load_module(runtime_id, data_store)?;
         self.module_cache
             .read()
             // Should work if the type exists, because module was loaded above.
-            .resolve_struct_by_name(name, runtime_id)
+            .resolve_type_by_name(name, runtime_id)
             .map_err(|e| e.finish(Location::Undefined))
     }
 
@@ -811,9 +902,9 @@ impl Loader {
             TypeTag::Struct(struct_tag) => {
                 let runtime_id = ModuleId::new(struct_tag.address, struct_tag.module.clone());
                 let (idx, struct_type) =
-                    self.load_struct_by_name(&struct_tag.name, &runtime_id, data_store)?;
+                    self.load_type_by_name(&struct_tag.name, &runtime_id, data_store)?;
                 if struct_type.type_parameters.is_empty() && struct_tag.type_params.is_empty() {
-                    Type::Struct(idx)
+                    Type::Datatype(idx)
                 } else {
                     let mut type_params = vec![];
                     for ty_param in &struct_tag.type_params {
@@ -821,7 +912,7 @@ impl Loader {
                     }
                     self.verify_ty_args(struct_type.type_param_constraints(), &type_params)
                         .map_err(|e| e.finish(Location::Undefined))?;
-                    Type::StructInstantiation(idx, type_params)
+                    Type::DatatypeInstantiation(idx, type_params)
                 }
             }
         })
@@ -1099,7 +1190,7 @@ impl Loader {
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
         // This prevents constructing larger and lager types via struct instantiation.
-        if let Type::StructInstantiation(_, struct_inst) = ty {
+        if let Type::DatatypeInstantiation(_, struct_inst) = ty {
             let mut sum_nodes = 1u64;
             for ty in ty_args.iter().chain(struct_inst.iter()) {
                 sum_nodes = sum_nodes.saturating_add(self.count_type_nodes(ty));
@@ -1155,10 +1246,10 @@ impl Loader {
         (compiled, loaded)
     }
 
-    pub(crate) fn get_struct_type(&self, idx: CachedStructIndex) -> Option<Arc<StructType>> {
+    pub(crate) fn get_type(&self, idx: CachedTypeIndex) -> Option<Arc<CachedDatatype>> {
         self.module_cache
             .read()
-            .structs
+            .types
             .binaries
             .get(idx.0)
             .map(Arc::clone)
@@ -1188,9 +1279,9 @@ impl Loader {
                 vec![false],
                 vec![self.abilities(ty)?],
             ),
-            Type::Struct(idx) => Ok(self.module_cache.read().struct_at(*idx).abilities),
-            Type::StructInstantiation(idx, type_args) => {
-                let struct_type = self.module_cache.read().struct_at(*idx);
+            Type::Datatype(idx) => Ok(self.module_cache.read().type_at(*idx).abilities),
+            Type::DatatypeInstantiation(idx, type_args) => {
+                let struct_type = self.module_cache.read().type_at(*idx);
                 let declared_phantom_parameters = struct_type
                     .type_parameters
                     .iter()
@@ -1290,32 +1381,53 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn get_struct_type(&self, idx: StructDefinitionIndex) -> Type {
         let struct_def = self.binary.loaded.struct_at(idx);
-        Type::Struct(struct_def)
+        Type::Datatype(struct_def)
     }
 
-    pub(crate) fn instantiate_generic_type(
+    pub(crate) fn get_enum_type(&self, idx: EnumDefinitionIndex) -> Type {
+        let enum_def = self.binary.loaded.enum_at(idx);
+        Type::Datatype(enum_def)
+    }
+
+    pub(crate) fn instantiate_struct_type(
         &self,
         idx: StructDefInstantiationIndex,
         ty_args: &[Type],
     ) -> PartialVMResult<Type> {
         let struct_inst = self.binary.loaded.struct_instantiation_at(idx.0);
+        self.instantiate_type_common(struct_inst.def, &struct_inst.instantiation, ty_args)
+    }
 
+    pub(crate) fn instantiate_enum_type(
+        &self,
+        idx: EnumDefInstantiationIndex,
+        ty_args: &[Type],
+    ) -> PartialVMResult<Type> {
+        let enum_inst = self.binary.loaded.enum_instantiation_at(idx.0);
+        self.instantiate_type_common(enum_inst.def, &enum_inst.instantiation, ty_args)
+    }
+
+    fn instantiate_type_common(
+        &self,
+        gt_idx: CachedTypeIndex,
+        type_params: &[Type],
+        ty_args: &[Type],
+    ) -> PartialVMResult<Type> {
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
         // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
         // This prevents constructing larger and larger types via struct instantiation.
         let mut sum_nodes = 1u64;
-        for ty in ty_args.iter().chain(struct_inst.instantiation.iter()) {
+        for ty in ty_args.iter().chain(type_params.iter()) {
             sum_nodes = sum_nodes.saturating_add(self.loader.count_type_nodes(ty));
             if sum_nodes > MAX_TYPE_INSTANTIATION_NODES {
                 return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
             }
         }
 
-        Ok(Type::StructInstantiation(
-            struct_inst.def,
-            struct_inst
-                .instantiation
+        Ok(Type::DatatypeInstantiation(
+            gt_idx,
+            type_params
                 .iter()
                 .map(|ty| self.subst(ty, ty_args))
                 .collect::<PartialVMResult<_>>()?,
@@ -1359,8 +1471,22 @@ impl<'a> Resolver<'a> {
         self.binary.loaded.field_count(idx.0)
     }
 
+    pub(crate) fn variant_field_count(&self, idx: EnumDefinitionIndex, vtag: VariantTag) -> u16 {
+        self.binary.loaded.variant_field_count(idx, vtag)
+    }
+
     pub(crate) fn field_instantiation_count(&self, idx: StructDefInstantiationIndex) -> u16 {
         self.binary.loaded.field_instantiation_count(idx.0)
+    }
+
+    pub(crate) fn variant_instantiantiation_field_count(
+        &self,
+        idx: EnumDefInstantiationIndex,
+        vtag: VariantTag,
+    ) -> u16 {
+        self.binary
+            .loaded
+            .variant_instantiantiation_field_count(idx, vtag)
     }
 
     pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<R::MoveTypeLayout> {
@@ -1392,16 +1518,26 @@ pub(crate) struct LoadedModule {
     //
     // types as indexes into the Loader type list
     //
+    #[allow(dead_code)]
+    type_refs: Vec<CachedTypeIndex>,
 
     // struct references carry the index into the global vector of types.
     // That is effectively an indirection over the ref table:
     // the instruction carries an index into this table which contains the index into the
     // glabal table of types. No instantiation of generic types is saved into the global table.
-    #[allow(dead_code)]
-    struct_refs: Vec<CachedStructIndex>,
     structs: Vec<StructDef>,
     // materialized instantiations, whether partial or not
     struct_instantiations: Vec<StructInstantiation>,
+
+    // enum references carry the index into the global vector of types.
+    // That is effectively an indirection over the ref table:
+    // the instruction carries an index into this table which contains the index into the
+    // glabal table of types. No instantiation of generic types is saved into the global table.
+    // Note that variants are not carried in the global table as these should stay in sync with the
+    // enum type.
+    enums: Vec<EnumDef>,
+    // materialized instantiations, whether partial or not
+    enum_instantiations: Vec<EnumInstantiation>,
 
     // functions as indexes into the Loader function list
     // That is effectively an indirection over the ref table:
@@ -1439,9 +1575,11 @@ impl LoadedModule {
         let self_id = module.self_id();
         let module_view = BinaryIndexedView::Module(module);
 
-        let mut struct_refs = vec![];
+        let mut type_refs = vec![];
         let mut structs = vec![];
         let mut struct_instantiations = vec![];
+        let mut enums = vec![];
+        let mut enum_instantiations = vec![];
         let mut function_refs = vec![];
         let mut function_instantiations = vec![];
         let mut field_handles = vec![];
@@ -1449,16 +1587,16 @@ impl LoadedModule {
         let mut function_map = HashMap::new();
         let mut single_signature_token_map = BTreeMap::new();
 
-        for struct_handle in module.struct_handles() {
-            let struct_name = module.identifier_at(struct_handle.name);
-            let module_handle = module.module_handle_at(struct_handle.module);
+        for datatype_handle in module.datatype_handles() {
+            let struct_name = module.identifier_at(datatype_handle.name);
+            let module_handle = module.module_handle_at(datatype_handle.module);
             let runtime_id = module.module_id_for_handle(module_handle);
-            struct_refs.push(cache.resolve_struct_by_name(struct_name, &runtime_id)?.0);
+            type_refs.push(cache.resolve_type_by_name(struct_name, &runtime_id)?.0);
         }
 
         for struct_def in module.struct_defs() {
-            let idx = struct_refs[struct_def.struct_handle.0 as usize];
-            let field_count = cache.structs.binaries[idx.0].fields.len() as u16;
+            let idx = type_refs[struct_def.struct_handle.0 as usize];
+            let field_count = cache.types.binaries[idx.0].get_struct()?.fields.len() as u16;
             structs.push(StructDef { field_count, idx });
         }
 
@@ -1473,6 +1611,42 @@ impl LoadedModule {
             struct_instantiations.push(StructInstantiation {
                 field_count,
                 def: struct_def.idx,
+                instantiation,
+            });
+        }
+
+        for enum_def in module.enum_defs() {
+            let idx = type_refs[enum_def.enum_handle.0 as usize];
+            let enum_type = cache.types.binaries[idx.0].get_enum()?;
+            let variant_count = enum_type.variants.len() as u16;
+            let variants = enum_type
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(tag, variant_type)| VariantDef {
+                    tag: tag as u16,
+                    field_count: variant_type.fields.len() as u16,
+                    field_types: variant_type.fields.clone(),
+                })
+                .collect();
+            enums.push(EnumDef {
+                variant_count,
+                variants,
+                idx,
+            });
+        }
+
+        for enum_inst in module.enum_instantiations() {
+            let def = enum_inst.def.0 as usize;
+            let enum_def = &enums[def];
+            let variant_count_map = enum_def.variants.iter().map(|v| v.field_count).collect();
+            let mut instantiation = vec![];
+            for ty in &module.signature_at(enum_inst.type_parameters).0 {
+                instantiation.push(cache.make_type(module_view, ty)?);
+            }
+            enum_instantiations.push(EnumInstantiation {
+                variant_count_map,
+                def: enum_def.idx,
                 instantiation,
             });
         }
@@ -1574,9 +1748,11 @@ impl LoadedModule {
 
         Ok(Self {
             id: storage_id,
-            struct_refs,
+            type_refs,
             structs,
             struct_instantiations,
+            enums,
+            enum_instantiations,
             function_refs,
             function_instantiations,
             field_handles,
@@ -1586,7 +1762,7 @@ impl LoadedModule {
         })
     }
 
-    fn struct_at(&self, idx: StructDefinitionIndex) -> CachedStructIndex {
+    fn struct_at(&self, idx: StructDefinitionIndex) -> CachedTypeIndex {
         self.structs[idx.0 as usize].idx
     }
 
@@ -1621,6 +1797,31 @@ impl LoadedModule {
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
         self.single_signature_token_map.get(&idx).unwrap()
     }
+
+    fn enum_at(&self, idx: EnumDefinitionIndex) -> CachedTypeIndex {
+        self.enums[idx.0 as usize].idx
+    }
+
+    fn enum_instantiation_at(&self, idx: u16) -> &EnumInstantiation {
+        &self.enum_instantiations[idx as usize]
+    }
+
+    fn variant_at(&self, eidx: EnumDefinitionIndex, vtag: VariantTag) -> &VariantDef {
+        let enum_def = &self.enums[eidx.0 as usize];
+        &enum_def.variants[vtag as usize]
+    }
+
+    fn variant_field_count(&self, eidx: EnumDefinitionIndex, vtag: VariantTag) -> u16 {
+        self.variant_at(eidx, vtag).field_count
+    }
+
+    fn variant_instantiantiation_field_count(
+        &self,
+        eidx: EnumDefInstantiationIndex,
+        vtag: VariantTag,
+    ) -> u16 {
+        self.enum_instantiations[eidx.0 as usize].variant_count_map[vtag as usize]
+    }
 }
 
 // A runtime function
@@ -1641,6 +1842,7 @@ pub(crate) struct Function {
     parameters_len: usize,
     locals_len: usize,
     return_len: usize,
+    jump_tables: Vec<VariantJumpTable>,
 }
 
 impl Function {
@@ -1668,12 +1870,13 @@ impl Function {
         let parameters = handle.parameters;
         let parameters_len = module.signature_at(parameters).0.len();
         // Native functions do not have a code unit
-        let (code, locals_len) = match &def.code {
+        let (code, locals_len, jump_tables) = match &def.code {
             Some(code) => (
                 code.code.clone(),
                 parameters_len + module.signature_at(code.locals).0.len(),
+                code.jump_tables.clone(),
             ),
-            None => (vec![], 0),
+            None => (vec![], 0, vec![]),
         };
         let return_ = handle.return_;
         let return_len = module.signature_at(return_).0.len();
@@ -1692,6 +1895,7 @@ impl Function {
             parameters_len,
             locals_len,
             return_len,
+            jump_tables,
         }
     }
 
@@ -1735,6 +1939,10 @@ impl Function {
 
     pub(crate) fn code(&self) -> &[Bytecode] {
         &self.code
+    }
+
+    pub(crate) fn jump_tables(&self) -> &[VariantJumpTable] {
+        &self.jump_tables
     }
 
     pub(crate) fn type_parameters(&self) -> &[AbilitySet] {
@@ -1804,7 +2012,7 @@ struct StructDef {
     // struct field count
     field_count: u16,
     // `ModuelCache::structs` global table index
-    idx: CachedStructIndex,
+    idx: CachedTypeIndex,
 }
 
 #[derive(Debug)]
@@ -1812,7 +2020,7 @@ struct StructInstantiation {
     // struct field count
     field_count: u16,
     // `ModuelCache::structs` global table index. It is the generic type.
-    def: CachedStructIndex,
+    def: CachedTypeIndex,
     instantiation: Vec<Type>,
 }
 
@@ -1821,7 +2029,7 @@ struct StructInstantiation {
 struct FieldHandle {
     offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
-    owner: CachedStructIndex,
+    owner: CachedTypeIndex,
 }
 
 // A field instantiation. The offset is the only used information when operating on a field
@@ -1830,35 +2038,63 @@ struct FieldInstantiation {
     offset: usize,
     // `ModuelCache::structs` global table index. It is the generic type.
     #[allow(unused)]
-    owner: CachedStructIndex,
+    owner: CachedTypeIndex,
+}
+
+#[derive(Debug)]
+struct EnumDef {
+    // enum variant count
+    #[allow(unused)]
+    variant_count: u16,
+    variants: Vec<VariantDef>,
+    // `ModuelCache::types` global table index
+    idx: CachedTypeIndex,
+}
+
+#[derive(Debug)]
+struct EnumInstantiation {
+    // enum variant count
+    variant_count_map: Vec<u16>,
+    // `ModuelCache::types` global table index
+    def: CachedTypeIndex,
+    instantiation: Vec<Type>,
+}
+
+#[derive(Debug)]
+struct VariantDef {
+    #[allow(unused)]
+    tag: u16,
+    field_count: u16,
+    #[allow(unused)]
+    field_types: Vec<Type>,
 }
 
 //
 // Cache for data associated to a Struct, used for de/serialization and more
 //
 
-struct StructInfo {
-    runtime_struct_tag: Option<StructTag>,
-    defining_struct_tag: Option<StructTag>,
-    struct_layout: Option<R::MoveStructLayout>,
-    annotated_struct_layout: Option<A::MoveStructLayout>,
+struct DatatypeInfo {
+    runtime_tag: Option<StructTag>,
+    defining_tag: Option<StructTag>,
+    layout: Option<R::MoveDatatypeLayout>,
+    annotated_layout: Option<A::MoveDatatypeLayout>,
     node_count: Option<u64>,
     annotated_node_count: Option<u64>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum StructTagType {
+enum DatatypeTagType {
     Runtime,
     Defining,
 }
 
-impl StructInfo {
+impl DatatypeInfo {
     fn new() -> Self {
         Self {
-            runtime_struct_tag: None,
-            defining_struct_tag: None,
-            struct_layout: None,
-            annotated_struct_layout: None,
+            runtime_tag: None,
+            defining_tag: None,
+            layout: None,
+            annotated_layout: None,
             node_count: None,
             annotated_node_count: None,
         }
@@ -1866,13 +2102,13 @@ impl StructInfo {
 }
 
 pub(crate) struct TypeCache {
-    structs: HashMap<CachedStructIndex, HashMap<Vec<Type>, StructInfo>>,
+    cached_types: HashMap<CachedTypeIndex, HashMap<Vec<Type>, DatatypeInfo>>,
 }
 
 impl TypeCache {
     fn new() -> Self {
         Self {
-            structs: HashMap::new(),
+            cached_types: HashMap::new(),
         }
     }
 }
@@ -1891,25 +2127,25 @@ const MAX_TYPE_INSTANTIATION_NODES: u64 = 128;
 impl Loader {
     fn read_cached_struct_tag(
         &self,
-        gidx: CachedStructIndex,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
-        tag_type: StructTagType,
+        tag_type: DatatypeTagType,
     ) -> Option<StructTag> {
         let cache = self.type_cache.read();
-        let map = cache.structs.get(&gidx)?;
+        let map = cache.cached_types.get(&gidx)?;
         let info = map.get(ty_args)?;
 
         match tag_type {
-            StructTagType::Runtime => info.runtime_struct_tag.clone(),
-            StructTagType::Defining => info.defining_struct_tag.clone(),
+            DatatypeTagType::Runtime => info.runtime_tag.clone(),
+            DatatypeTagType::Defining => info.defining_tag.clone(),
         }
     }
 
-    fn struct_gidx_to_type_tag(
+    fn datatype_gidx_to_type_tag(
         &self,
-        gidx: CachedStructIndex,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
-        tag_type: StructTagType,
+        tag_type: DatatypeTagType,
     ) -> PartialVMResult<StructTag> {
         if let Some(cached) = self.read_cached_struct_tag(gidx, ty_args, tag_type) {
             return Ok(cached);
@@ -1919,18 +2155,18 @@ impl Loader {
             .iter()
             .map(|ty| self.type_to_type_tag_impl(ty, tag_type))
             .collect::<PartialVMResult<Vec<_>>>()?;
-        let struct_type = self.module_cache.read().struct_at(gidx);
+        let struct_type = self.module_cache.read().type_at(gidx);
 
         let mut cache = self.type_cache.write();
         let info = cache
-            .structs
+            .cached_types
             .entry(gidx)
             .or_default()
             .entry(ty_args.to_vec())
-            .or_insert_with(StructInfo::new);
+            .or_insert_with(DatatypeInfo::new);
 
         match tag_type {
-            StructTagType::Runtime => {
+            DatatypeTagType::Runtime => {
                 let tag = StructTag {
                     address: *struct_type.runtime_id.address(),
                     module: struct_type.runtime_id.name().to_owned(),
@@ -1938,11 +2174,11 @@ impl Loader {
                     type_params: ty_arg_tags,
                 };
 
-                info.runtime_struct_tag = Some(tag.clone());
+                info.runtime_tag = Some(tag.clone());
                 Ok(tag)
             }
 
-            StructTagType::Defining => {
+            DatatypeTagType::Defining => {
                 let tag = StructTag {
                     address: *struct_type.defining_id.address(),
                     module: struct_type.defining_id.name().to_owned(),
@@ -1950,7 +2186,7 @@ impl Loader {
                     type_params: ty_arg_tags,
                 };
 
-                info.defining_struct_tag = Some(tag.clone());
+                info.defining_tag = Some(tag.clone());
                 Ok(tag)
             }
         }
@@ -1959,7 +2195,7 @@ impl Loader {
     fn type_to_type_tag_impl(
         &self,
         ty: &Type,
-        tag_type: StructTagType,
+        tag_type: DatatypeTagType,
     ) -> PartialVMResult<TypeTag> {
         Ok(match ty {
             Type::Bool => TypeTag::Bool,
@@ -1974,13 +2210,13 @@ impl Loader {
             Type::Vector(ty) => {
                 TypeTag::Vector(Box::new(self.type_to_type_tag_impl(ty, tag_type)?))
             }
-            Type::Struct(gidx) => TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(
+            Type::Datatype(gidx) => TypeTag::Struct(Box::new(self.datatype_gidx_to_type_tag(
                 *gidx,
                 &[],
                 tag_type,
             )?)),
-            Type::StructInstantiation(gidx, ty_args) => TypeTag::Struct(Box::new(
-                self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+            Type::DatatypeInstantiation(gidx, ty_args) => TypeTag::Struct(Box::new(
+                self.datatype_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
             )),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
@@ -2000,7 +2236,7 @@ impl Loader {
                     result += 1;
                     todo.push(ty);
                 }
-                Type::StructInstantiation(_, ty_args) => {
+                Type::DatatypeInstantiation(_, ty_args) => {
                     result += 1;
                     todo.extend(ty_args.iter())
                 }
@@ -2012,50 +2248,71 @@ impl Loader {
         result
     }
 
-    fn struct_gidx_to_type_layout(
+    fn type_gidx_to_type_layout(
         &self,
-        gidx: CachedStructIndex,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<R::MoveStructLayout> {
-        if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
-            if let Some(struct_info) = struct_map.get(ty_args) {
-                if let Some(node_count) = &struct_info.node_count {
+    ) -> PartialVMResult<R::MoveDatatypeLayout> {
+        if let Some(type_map) = self.type_cache.read().cached_types.get(&gidx) {
+            if let Some(type_info) = type_map.get(ty_args) {
+                if let Some(node_count) = &type_info.node_count {
                     *count += *node_count
                 }
-                if let Some(layout) = &struct_info.struct_layout {
+                if let Some(layout) = &type_info.layout {
                     return Ok(layout.clone());
                 }
             }
         }
 
         let count_before = *count;
-        let struct_type = self.module_cache.read().struct_at(gidx);
-        let field_tys = struct_type
-            .fields
-            .iter()
-            .map(|ty| self.subst(ty, ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let field_layouts = field_tys
-            .iter()
-            .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let field_node_count = *count - count_before;
+        let ty = self.module_cache.read().type_at(gidx);
+        let type_layout = match ty.datatype_info {
+            Datatype::Enum(ref einfo) => {
+                let mut variant_layouts = vec![];
+                for variant in einfo.variants.iter() {
+                    let field_tys = variant
+                        .fields
+                        .iter()
+                        .map(|ty| self.subst(ty, ty_args))
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    let field_layouts = field_tys
+                        .iter()
+                        .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    variant_layouts.push(field_layouts);
+                }
+                R::MoveDatatypeLayout::Enum(R::MoveEnumLayout(variant_layouts))
+            }
+            Datatype::Struct(ref sinfo) => {
+                let field_tys = sinfo
+                    .fields
+                    .iter()
+                    .map(|ty| self.subst(ty, ty_args))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let field_layouts = field_tys
+                    .iter()
+                    .map(|ty| self.type_to_type_layout_impl(ty, count, depth + 1))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
 
-        let struct_layout = R::MoveStructLayout::new(field_layouts);
+                R::MoveDatatypeLayout::Struct(R::MoveStructLayout::new(field_layouts))
+            }
+        };
+
+        let field_node_count = *count - count_before;
 
         let mut cache = self.type_cache.write();
         let info = cache
-            .structs
+            .cached_types
             .entry(gidx)
             .or_default()
             .entry(ty_args.to_vec())
-            .or_insert_with(StructInfo::new);
-        info.struct_layout = Some(struct_layout.clone());
+            .or_insert_with(DatatypeInfo::new);
+        info.layout = Some(type_layout.clone());
         info.node_count = Some(field_node_count);
 
-        Ok(struct_layout)
+        Ok(type_layout)
     }
 
     fn type_to_type_layout_impl(
@@ -2084,15 +2341,12 @@ impl Loader {
             Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(
                 self.type_to_type_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Struct(gidx) => R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(
-                *gidx,
-                &[],
-                count,
-                depth,
-            )?),
-            Type::StructInstantiation(gidx, ty_args) => R::MoveTypeLayout::Struct(
-                self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
-            ),
+            Type::Datatype(gidx) => self
+                .type_gidx_to_type_layout(*gidx, &[], count, depth)?
+                .into_layout(),
+            Type::DatatypeInstantiation(gidx, ty_args) => self
+                .type_gidx_to_type_layout(*gidx, ty_args, count, depth)?
+                .into_layout(),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2102,59 +2356,98 @@ impl Loader {
         })
     }
 
-    fn struct_gidx_to_fully_annotated_layout(
+    fn datatype_gidx_to_fully_annotated_layout(
         &self,
-        gidx: CachedStructIndex,
+        gidx: CachedTypeIndex,
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<A::MoveStructLayout> {
-        if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
+    ) -> PartialVMResult<A::MoveDatatypeLayout> {
+        if let Some(struct_map) = self.type_cache.read().cached_types.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(annotated_node_count) = &struct_info.annotated_node_count {
                     *count += *annotated_node_count
                 }
-                if let Some(layout) = &struct_info.annotated_struct_layout {
+                if let Some(layout) = &struct_info.annotated_layout {
                     return Ok(layout.clone());
                 }
             }
         }
 
-        let struct_type = self.module_cache.read().struct_at(gidx);
-        if struct_type.fields.len() != struct_type.field_names.len() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "Field types did not match the length of field names in loaded struct"
-                        .to_owned(),
-                ),
-            );
-        }
         let count_before = *count;
-        let struct_tag = self.struct_gidx_to_type_tag(gidx, ty_args, StructTagType::Defining)?;
-        let field_layouts = struct_type
-            .field_names
-            .iter()
-            .zip(&struct_type.fields)
-            .map(|(n, ty)| {
-                let ty = self.subst(ty, ty_args)?;
-                let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
-                Ok(A::MoveFieldLayout::new(n.clone(), l))
-            })
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        let struct_layout = A::MoveStructLayout::new(struct_tag, field_layouts);
+        let ty = self.module_cache.read().type_at(gidx);
+        let struct_tag =
+            self.datatype_gidx_to_type_tag(gidx, ty_args, DatatypeTagType::Defining)?;
+        let type_layout = match &ty.datatype_info {
+            Datatype::Enum(enum_type) => {
+                let mut variant_layouts = BTreeMap::new();
+                for variant in enum_type.variants.iter() {
+                    if variant.fields.len() != variant.field_names.len() {
+                        return Err(
+                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                                "Field types did not match the length of field names in loaded enum variant"
+                                .to_owned(),
+                            ),
+                        );
+                    }
+                    let field_layouts = variant
+                        .field_names
+                        .iter()
+                        .zip(variant.fields.iter())
+                        .map(|(n, ty)| {
+                            let ty = self.subst(ty, ty_args)?;
+                            let l =
+                                self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
+                            Ok(A::MoveFieldLayout::new(n.clone(), l))
+                        })
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    variant_layouts.insert(
+                        (variant.variant_name.clone(), variant.variant_tag),
+                        field_layouts,
+                    );
+                }
+                A::MoveDatatypeLayout::Enum(A::MoveEnumLayout {
+                    type_: struct_tag.clone(),
+                    variants: variant_layouts,
+                })
+            }
+            Datatype::Struct(struct_type) => {
+                if struct_type.fields.len() != struct_type.field_names.len() {
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(
+                            "Field types did not match the length of field names in loaded struct"
+                                .to_owned(),
+                        ),
+                    );
+                }
+                let field_layouts = struct_type
+                    .field_names
+                    .iter()
+                    .zip(&struct_type.fields)
+                    .map(|(n, ty)| {
+                        let ty = self.subst(ty, ty_args)?;
+                        let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
+                        Ok(A::MoveFieldLayout::new(n.clone(), l))
+                    })
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                A::MoveDatatypeLayout::Struct(A::MoveStructLayout::new(struct_tag, field_layouts))
+            }
+        };
+
         let field_node_count = *count - count_before;
 
         let mut cache = self.type_cache.write();
         let info = cache
-            .structs
+            .cached_types
             .entry(gidx)
             .or_default()
             .entry(ty_args.to_vec())
-            .or_insert_with(StructInfo::new);
-        info.annotated_struct_layout = Some(struct_layout.clone());
+            .or_insert_with(DatatypeInfo::new);
+        info.annotated_layout = Some(type_layout.clone());
         info.annotated_node_count = Some(field_node_count);
 
-        Ok(struct_layout)
+        Ok(type_layout)
     }
 
     fn type_to_fully_annotated_layout_impl(
@@ -2183,12 +2476,12 @@ impl Loader {
             Type::Vector(ty) => A::MoveTypeLayout::Vector(Box::new(
                 self.type_to_fully_annotated_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Struct(gidx) => A::MoveTypeLayout::Struct(
-                self.struct_gidx_to_fully_annotated_layout(*gidx, &[], count, depth)?,
-            ),
-            Type::StructInstantiation(gidx, ty_args) => A::MoveTypeLayout::Struct(
-                self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
-            ),
+            Type::Datatype(gidx) => self
+                .datatype_gidx_to_fully_annotated_layout(*gidx, &[], count, depth)?
+                .into_layout(),
+            Type::DatatypeInstantiation(gidx, ty_args) => self
+                .datatype_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?
+                .into_layout(),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2199,11 +2492,11 @@ impl Loader {
     }
 
     pub(crate) fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(ty, StructTagType::Defining)
+        self.type_to_type_tag_impl(ty, DatatypeTagType::Defining)
     }
 
     pub(crate) fn type_to_runtime_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
-        self.type_to_type_tag_impl(ty, StructTagType::Runtime)
+        self.type_to_type_tag_impl(ty, DatatypeTagType::Runtime)
     }
 
     pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<R::MoveTypeLayout> {
