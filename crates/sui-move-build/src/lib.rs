@@ -6,11 +6,13 @@ extern crate move_ir_types;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
+use anyhow::anyhow;
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
     access::ModuleAccess,
@@ -22,6 +24,7 @@ use move_compiler::{
     cfgir::visitor::AbstractInterpreterVisitor,
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
+    editions::{Edition, Flavor},
     expansion::ast::{AttributeName_, Attributes},
     shared::known_attributes::KnownAttribute,
     typing::visitor::TypingVisitor,
@@ -34,6 +37,7 @@ use move_package::{
     compilation::{
         build_plan::BuildPlan, compiled_package::CompiledPackage as MoveCompiledPackage,
     },
+    lock_file::{self, schema::ToolchainVersion},
     package_hooks::PackageHooks,
     resolution::resolution_graph::ResolvedGraph,
     BuildConfig as MoveBuildConfig,
@@ -184,10 +188,22 @@ impl BuildConfig {
 
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
-    pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
+    pub fn build(mut self, path: PathBuf) -> SuiResult<CompiledPackage> {
         let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
+
+        let toolchain_version = resolve_toolchain_version(
+            self.config.lock_file.clone(),
+            self.config.default_flavor,
+            self.config.default_edition,
+        )
+        .map_err(|err| SuiError::ModuleBuildFailure {
+            error: format!("{:?}", err),
+        })?;
+        self.config.default_flavor = Some(toolchain_version.flavor);
+        self.config.default_edition = Some(toolchain_version.edition);
+
         let resolution_graph = self.resolution_graph(&path)?;
         build_from_resolution_graph(
             path,
@@ -198,20 +214,7 @@ impl BuildConfig {
         )
     }
 
-    pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
-        use move_compiler::editions::Flavor;
-
-        let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
-        if flavor != &Flavor::Sui {
-            return Err(SuiError::ModuleBuildFailure {
-                error: format!(
-                    "The flavor of the Move compiler cannot be overridden with anything but \
-                        \"{}\", but the default override was set to: \"{flavor}\"",
-                    Flavor::Sui,
-                ),
-            });
-        }
-
+    pub fn resolution_graph(self, path: &Path) -> SuiResult<ResolvedGraph> {
         if self.print_diags_to_stderr {
             self.config
                 .resolution_graph_for_package(path, &mut std::io::stderr())
@@ -266,6 +269,47 @@ pub fn build_from_resolution_graph(
         published_at,
         dependency_ids,
         path,
+    })
+}
+
+pub fn resolve_toolchain_version(
+    lock_file: Option<PathBuf>,
+    default_flavor: Option<Flavor>,
+    default_edition: Option<Edition>,
+) -> anyhow::Result<ToolchainVersion> {
+    // Top-level invariant: if a flavor is set in Move.toml (i.e., default_flavor is Some) it must be valid.
+    match default_flavor {
+        Some(flavor) if flavor != Flavor::Sui => anyhow::bail!(
+            "The flavor of the Move compiler cannot be overridden with anything but \
+                        \"{}\", but the default override was set to: \"{flavor}\" in Move.toml",
+            Flavor::Sui
+        ),
+        _ => (),
+    };
+
+    // If a Move.lock file exists and contains a toolchain version, use those values. Then, honor any Move.toml overrides of those values.
+    if let Some(lock_file) = lock_file {
+        let mut lock_path = File::open(lock_file)?;
+        let toolchain_version = lock_file::schema::ToolchainVersion::read(&mut lock_path)
+            .map_err(|e| anyhow!("Move.lock: {:?}", e))?;
+
+        if let Some(mut toolchain_version) = toolchain_version {
+            // Lock file specifies toolchain version. But: honor Move.toml overrides if they exist.
+            if let Some(edition) = default_edition {
+                toolchain_version.edition = edition
+            }
+            if let Some(flavor) = default_flavor {
+                toolchain_version.flavor = flavor
+            }
+            return Ok(toolchain_version);
+        }
+    }
+
+    // Lock file exists, but does not specify a toolchain version. Use Move.toml values or defaults.
+    Ok(ToolchainVersion {
+        compiler_version: env!("CARGO_PKG_VERSION").into(),
+        edition: default_edition.unwrap_or_default(),
+        flavor: default_flavor.unwrap_or(Flavor::Sui),
     })
 }
 
