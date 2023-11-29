@@ -33,7 +33,8 @@ use crate::{
         sui_address::SuiAddress,
         sui_system_state_summary::SuiSystemStateSummary,
         system_parameters::SystemParameters,
-        transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
+        transaction_block::{TransactionBlock, TransactionBlockFilter},
+        transaction_block_effects::TransactionBlockEffects,
         transaction_block_kind::{
             AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
