@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use tracing::info;
+
 use crate::config::ServerConfig;
 use crate::error::Error;
 use crate::server::builder::ServerBuilder;
@@ -15,7 +17,7 @@ async fn graphiql(ide_title: axum::Extension<Option<String>>) -> impl axum::resp
 }
 
 pub async fn start_graphiql_server(server_config: &ServerConfig) -> Result<(), Error> {
-    println!("Starting server with config: {:?}", server_config);
+    info!("Starting server with config: {:?}", server_config);
     start_graphiql_server_impl(ServerBuilder::from_config(server_config).await?).await
 }
 
@@ -31,7 +33,7 @@ async fn start_graphiql_server_impl(server_builder: ServerBuilder) -> Result<(),
         .route("/", axum::routing::get(graphiql))
         .build()?;
 
-    println!("Launch GraphiQL IDE at: http://{}", address);
+    info!("Launch GraphiQL IDE at: http://{}", address);
 
     server.run().await
 }
