@@ -26,6 +26,7 @@ RUN cargo build --profile ${PROFILE} \
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR "$WORKDIR/sui"
+COPY --from=builder /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
 COPY --from=builder /sui/target/release/sui-node /usr/local/bin
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-faucet /usr/local/bin
