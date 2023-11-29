@@ -4,16 +4,13 @@
 //! This analysis flags uses of the sui::coin::Coin struct in fields of other structs. In most cases
 //! it's preferable to use sui::balance::Balance instead to save space.
 
-use move_command_line_common::{address::NumericalAddress, parser::NumberFormat};
 use move_compiler::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
-    expansion::ast as E,
     naming::ast as N,
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::{ast as T, visitor::TypingVisitor},
 };
-use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
@@ -72,23 +69,8 @@ fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
         T::Ref(_, inner_t) => is_field_coin_type(inner_t),
         T::Apply(_, tname, _) => {
             let sp!(_, tname) = tname;
-            if let N::TypeName_::ModuleType(mident, sname) = tname {
-                return is_mident_sui_coin(mident) || sname.value() == COIN_STRUCT_NAME.into();
-            }
-            false
+            tname.is(SUI_PKG_NAME, COIN_MOD_NAME, COIN_STRUCT_NAME)
         }
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => false,
-    }
-}
-
-fn is_mident_sui_coin(sp!(_, mident): &E::ModuleIdent) -> bool {
-    use E::Address as A;
-    if mident.module.value() != COIN_MOD_NAME.into() {
-        return false;
-    }
-    let sui_addr = NumericalAddress::new(AccountAddress::TWO.into_bytes(), NumberFormat::Hex);
-    match mident.address {
-        A::Numerical { value: addr, .. } => addr.value == sui_addr,
-        A::NamedUnassigned(n) => n.value == SUI_PKG_NAME.into(),
     }
 }
