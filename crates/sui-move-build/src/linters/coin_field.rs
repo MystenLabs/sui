@@ -73,7 +73,7 @@ fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
         T::Apply(_, tname, _) => {
             let sp!(_, tname) = tname;
             if let N::TypeName_::ModuleType(mident, sname) = tname {
-                return is_mident_sui_coin(mident) || sname.value() == COIN_STRUCT_NAME.into();
+                return is_mident_sui_coin(mident) && sname.value() == COIN_STRUCT_NAME.into();
             }
             false
         }
