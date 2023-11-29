@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ExecuteTransactionBlockParams, SuiClient } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
@@ -273,9 +273,9 @@ export class EnokiFlow {
 		const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair));
 
 		const proof = await this.#enokiClient.createZkLoginZkp({
-			jwt: zkp.jwt!,
-			maxEpoch: zkp.maxEpoch!,
-			randomness: zkp.randomness!,
+			jwt: zkp.jwt,
+			maxEpoch: zkp.maxEpoch,
+			randomness: zkp.randomness,
 			ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 		});
 
@@ -311,18 +311,20 @@ export class EnokiFlow {
 		});
 	}
 
-	async sponsorAndExecuteTransactionBlock({
+	async sponsorTransactionBlock({
 		network,
 		transactionBlock,
 		client,
-		...options
 	}: {
 		network?: 'mainnet' | 'testnet';
 		transactionBlock: TransactionBlock;
 		client: SuiClient;
-	} & Omit<ExecuteTransactionBlockParams, 'signature' | 'transactionBlock'>) {
+	}) {
 		const session = await this.getSession();
-		const keypair = await this.getKeypair();
+
+		if (!session || !session.jwt) {
+			throw new Error('Missing required data for sponsorship.');
+		}
 
 		const transactionBlockKindBytes = await transactionBlock.build({
 			onlyTransactionKind: true,
@@ -336,19 +338,50 @@ export class EnokiFlow {
 			},
 		});
 
-		const { bytes, signature: sponsorSignature } =
-			await this.#enokiClient.createSponsoredTransactionBlock({
-				jwt: session!.jwt!,
-				network,
-				transactionBlockKindBytes: toB64(transactionBlockKindBytes),
-			});
+		return await this.#enokiClient.createSponsoredTransactionBlock({
+			jwt: session.jwt,
+			network,
+			transactionBlockKindBytes: toB64(transactionBlockKindBytes),
+		});
+	}
 
+	async executeTransactionBlock({
+		bytes,
+		digest,
+		client,
+	}: {
+		bytes: string;
+		digest: string;
+		client: SuiClient;
+	}) {
+		const keypair = await this.getKeypair();
 		const userSignature = await keypair.signTransactionBlock(fromB64(bytes));
 
-		return client.executeTransactionBlock({
-			transactionBlock: bytes,
-			signature: [userSignature.signature, sponsorSignature],
-			...options,
+		await this.#enokiClient.executeSponsoredTransactionBlock({
+			digest,
+			signature: userSignature.signature,
 		});
+
+		// TODO: Should the parent just do this?
+		await client.waitForTransactionBlock({ digest });
+
+		return { digest };
+	}
+
+	async sponsorAndExecuteTransactionBlock({
+		network,
+		transactionBlock,
+		client,
+	}: {
+		network?: 'mainnet' | 'testnet';
+		transactionBlock: TransactionBlock;
+		client: SuiClient;
+	}) {
+		const { bytes, digest } = await this.sponsorTransactionBlock({
+			network,
+			transactionBlock,
+			client,
+		});
+		return await this.executeTransactionBlock({ bytes, digest, client });
 	}
 }
