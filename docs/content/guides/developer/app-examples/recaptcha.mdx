@@ -61,8 +61,7 @@ module recaptcha::recaptcha {
 There are few details to take note of in this code:
 
 1. The fourth line declares the module name as `recaptcha` within the package `recaptcha`.
-1. The next eight lines use the use keyword to import types and functions from other modules, such as `sui::clock::Clock`, `sui::dynamic_field as df`, `sui::ed25519::ed25519_verify`, `sui::event::emit,sui::math`, `sui::object::{Self, UID}`, `sui::transfer`, and `sui::tx_context::{sender, TxContext}`.
-These moduless are needed for the implementation of the reCAPTCHA verification and the interaction logic.
+1. The next eight lines use the use keyword to import types and functions from other modules, such as `sui::clock::Clock`, `sui::dynamic_field as df`, `sui::ed25519::ed25519_verify`, `sui::event::emit,sui::math`, `sui::object::{Self, UID}`, `sui::transfer`, and `sui::tx_context::{sender, TxContext}`. These modules are needed for the implementation of the reCAPTCHA verification and the interaction logic.
 1. The following three lines declare the error codes, namely: `EVerificationExpired`, `EInvalidSignature`, and `ENotYetVerified`, that are used to check the validity of the reCAPTCHA test result and the eligibility of the user. The error codes are also used in the unit tests to verify the correctness of the program. 
 1. The last line declares the constant `TIME_WINDOW`, which specifies the duration of the time window in milliseconds. The time window is the period of time that the user is eligible to interact with the smart contract after passing the reCAPTCHA test.
 
