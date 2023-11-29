@@ -6,7 +6,6 @@ use move_compiler::{
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     naming::ast as N,
-    parser::ast::Ability_,
 };
 use move_ir_types::location::Loc;
 
@@ -135,20 +134,14 @@ pub fn base_type(t: &N::Type) -> Option<&N::Type> {
     }
 }
 
-/// Returns true if a given type represents an object (or a wrappable object if the argument is set
-/// to true).
-pub fn is_obj_type(sp!(_, st_): &SingleType, wrappable: bool) -> bool {
+/// Returns abilities of a given type, if any..
+pub fn type_abilities(sp!(_, st_): &SingleType) -> Option<E::AbilitySet> {
     let sp!(_, bt_) = match st_ {
         SingleType_::Base(v) => v,
         SingleType_::Ref(_, v) => v,
     };
     if let BaseType_::Apply(abilities, _, _) = bt_ {
-        if abilities.has_ability_(Ability_::Key) {
-            if wrappable {
-                return abilities.has_ability_(Ability_::Store);
-            }
-            return true;
-        }
+        return Some(abilities.clone());
     }
-    false
+    None
 }

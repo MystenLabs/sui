@@ -21,13 +21,14 @@ use move_compiler::{
         Diagnostic, Diagnostics,
     },
     hlir::ast::{Label, ModuleCall, Type, Type_, Var},
+    parser::ast::Ability_,
     shared::CompilationEnv,
 };
 use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
 use super::{
-    is_obj_type, LinterDiagCategory, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    type_abilities, LinterDiagCategory, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
     PUBLIC_TRANSFER_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
@@ -136,10 +137,7 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
         {
             if let Value::SenderAddress(sender_addr_loc) = args[1] {
                 if is_wrappable_obj_type(&f.arguments[0].ty) {
-                    let msg = format!(
-                        "Transfer of an object to transaction sender address in function {}",
-                        self.fn_name
-                    );
+                    let msg = "Transfer of an object to transaction sender address";
                     let uid_msg =
                         "Returning an object from a function, allows a caller to use the object \
                                and enables composability via programmable transactions.";
@@ -166,11 +164,14 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
     }
 }
 
-pub fn is_wrappable_obj_type(sp!(_, t): &Type) -> bool {
-    if let Type_::Single(st) = t {
-        return is_obj_type(st, true /* wrappable */);
-    }
-    false
+pub fn is_wrappable_obj_type(sp!(_, t_): &Type) -> bool {
+    let Type_::Single(st) = t_ else {
+        return false;
+    };
+    let Some(abilities) = type_abilities(st) else {
+        return false;
+    };
+    abilities.has_ability_(Ability_::Key) && abilities.has_ability_(Ability_::Store)
 }
 
 impl SimpleDomain for State {

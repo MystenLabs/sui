@@ -21,13 +21,14 @@ use move_compiler::{
         codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
     },
-    hlir::ast::{Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
+    hlir::ast::{Exp, LValue, LValue_, Label, ModuleCall, SingleType, Type, Type_, Var},
+    parser::ast::Ability_,
     shared::{CompilationEnv, Identifier},
 };
 use std::collections::BTreeMap;
 
 use super::{
-    is_obj_type, LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    type_abilities, LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
     PUBLIC_SHARE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
@@ -153,7 +154,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
         Some(match &return_ty.value {
             Type_::Unit => vec![],
             Type_::Single(t) => {
-                let v = if is_obj_type(t, false /* wrappable */) {
+                let v = if is_obj_type(t) {
                     Value::NotFreshObj(t.loc)
                 } else {
                     Value::Other
@@ -163,7 +164,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
             Type_::Multiple(types) => types
                 .iter()
                 .map(|t| {
-                    if is_obj_type(t, false /* wrappable */) {
+                    if is_obj_type(t) {
                         Value::NotFreshObj(t.loc)
                     } else {
                         Value::Other
@@ -200,9 +201,16 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
 
 fn is_obj(sp!(_, l_): &LValue) -> bool {
     if let LValue_::Var(_, st) = l_ {
-        return is_obj_type(st, false /* wrappable */);
+        return is_obj_type(st);
     }
     false
+}
+
+fn is_obj_type(st_: &SingleType) -> bool {
+    let Some(abilities) = type_abilities(st_) else {
+        return false;
+    };
+    abilities.has_ability_(Ability_::Key)
 }
 
 impl SimpleDomain for State {
@@ -210,7 +218,7 @@ impl SimpleDomain for State {
 
     fn new(context: &CFGContext, mut locals: BTreeMap<Var, LocalState<Value>>) -> Self {
         for (v, st) in &context.signature.parameters {
-            if is_obj_type(st, false /* wrappable */) {
+            if is_obj_type(st) {
                 let local_state = locals.get_mut(v).unwrap();
                 if let LocalState::Available(loc, _) = local_state {
                     *local_state = LocalState::Available(*loc, Value::NotFreshObj(*loc));
