@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use diesel::sql_types::VarChar;
+use diesel::sql_types::{BigInt, VarChar};
 use diesel::{QueryableByName, RunQueryDsl};
 use std::collections::BTreeMap;
-use std::str::FromStr;
 use std::time::Duration;
 use tracing::info;
 
@@ -16,8 +14,8 @@ use crate::IndexerError;
 use crate::PgConnectionPool;
 
 const GET_PARTITION_SQL: &str = r"
-SELECT parent.relname                           AS table_name,
-       MAX(SUBSTRING(child.relname FROM '\d$')) AS last_partition
+SELECT parent.relname                                            AS table_name,
+       MAX(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS last_partition
 FROM pg_inherits
          JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
          JOIN pg_class child ON pg_inherits.inhrelid = child.oid
@@ -72,8 +70,8 @@ impl PgPartitionManager {
         struct PartitionedTable {
             #[diesel(sql_type = VarChar)]
             table_name: String,
-            #[diesel(sql_type = VarChar)]
-            last_partition: String,
+            #[diesel(sql_type = BigInt)]
+            last_partition: i64,
         }
 
         Ok(
@@ -82,12 +80,8 @@ impl PgPartitionManager {
                 conn
             ))?
             .into_iter()
-            .map(|table: PartitionedTable| {
-                u64::from_str(&table.last_partition)
-                    .map(|last_partition| (table.table_name, last_partition))
-                    .map_err(|e| anyhow!(e))
-            })
-            .collect::<Result<_, _>>()?,
+            .map(|table: PartitionedTable| (table.table_name, table.last_partition as u64))
+            .collect(),
         )
     }
 
@@ -104,8 +98,10 @@ impl PgPartitionManager {
         }
         assert!(
             last_partition == data.last_epoch,
-            "last_partition != last_epoch for table {}",
-            table
+            "last_partition != last_epoch for table {}, {}, {}",
+            table,
+            last_partition,
+            data.last_epoch
         );
         transactional_blocking_with_retry!(
             &self.cp,
