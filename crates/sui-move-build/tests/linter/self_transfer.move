@@ -27,7 +27,7 @@ module 0x42::test {
         transfer::transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx))
     }
 
-    public fun private_transfer_no_store_bad(ctx: &mut TxContext) {
+    public fun private_transfer_no_store(ctx: &mut TxContext) {
         transfer::transfer(S2 { id: object::new(ctx), }, tx_context::sender(ctx))
     }
 
