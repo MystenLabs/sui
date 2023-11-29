@@ -118,6 +118,48 @@ This coupled with the fact that the parent object can always define custom rules
 
 Just like with custom transfer policies, you can use and couple these restrictions to create powerful expressions. For example, you can implement [soul-bound objects](#soul-bound-example) using both custom transfer and receivership rules.
 
+## Using SDKs
+
+### Typescript
+
+When creating transactions you will interact with `Receiving` transaction inputs almost exactly as you would with other object arguments in the Typescript SDK. For example, if in the [Simple Account](#simple-account) example below you wanted to send a transaction that received a coin object with ID `0xc0ffee` that was sent to your account at `0xcafe` you could do so with the following:
+
+```ts
+... // Setup Typescript SDK as normal.
+const tx = new TransactionBlock();
+tx.moveCall({
+  target: `${examplePackageId}::account::accept_payment`,
+  arguments: [tx.object("0xcafe"), tx.object("0xc0ffee")]
+});
+const result = await client.signAndExecuteTransactionBlock({
+      transactionBlock: tx,
+  });
+...
+```
+
+Additionally just as with object arguments that also have an `ObjectRef` constructor where you provide an explicit object ID, version, and digest if you want, there is also a `ReceivingRef` constructor that takes the same arguments corresponding to a receiving argument.
+
+### Rust
+
+You can create and interact with `Receiving` transaction inputs in the Rust SDK in much the same way you would in the Typescript SDK. The same call as in the Typescript example above but using the Rust SDK would look like the following:
+
+```rust
+... // setup Rust SDK client as normal
+client
+  .transaction_builder()
+  .move_call(
+     sending_account,
+     example_package_id,
+     "account",
+     "accept_payment",
+     vec!["0x2::sui::SUI"],
+     vec![
+       SuiJsonValue::from_object_id("0xcafe"),
+       SuiJsonValue::from_object_id("0xc0ffee") // 0xcoffee is turned into the `Receiving<...>` argument of `accept_payment` by the SDK
+     ])
+  ...
+```
+
 ## Examples
 
 The following examples demonstrate receiving previously sent objects.
@@ -163,7 +205,7 @@ module examples::shared_object_auth {
 }
 ```
 
-### Receiving objects and adding them as dynamic fields
+### Receiving objects and adding them as dynamic fields {#simple-account}
 
 This example defines a basic account-type model where an `Account` object holds its coin balances in different dynamic fields. This `Account` is also transferable to a different address or object.
 
