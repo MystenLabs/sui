@@ -108,12 +108,13 @@ impl TransactionBlockEffects {
 
     /// The effect this transaction had on objects on-chain.
     async fn object_changes(&self) -> Result<Option<Vec<ObjectChange>>> {
-        let mut changes = Vec::with_capacity(self.stored.object_changes.len());
-        for change in self.stored.object_changes.iter().flatten() {
-            changes.push(ObjectChange::read(change).extend()?);
-        }
-
-        Ok(Some(changes))
+        Ok(Some(
+            self.native
+                .object_changes()
+                .into_iter()
+                .map(|native| ObjectChange { native })
+                .collect(),
+        ))
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
