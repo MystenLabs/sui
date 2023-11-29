@@ -98,43 +98,27 @@ impl PgPartitionManager {
         data: &EpochPartitionData,
     ) -> Result<(), IndexerError> {
         info!("epoch partition data is {:?}", data.clone());
-        let (last_epoch, next_epoch, last_epoch_start_cp, next_epoch_start_cp) = (
-            data.last_epoch,
-            data.next_epoch,
-            data.last_epoch_start_cp,
-            data.next_epoch_start_cp,
-        );
-        if next_epoch == 0 {
+        if data.next_epoch == 0 {
             tracing::info!("Epoch 0 partition has been crate in migrations, skipped.");
             return Ok(());
         }
         assert!(
-            last_partition == last_epoch,
+            last_partition == data.last_epoch,
             "last_partition != last_epoch for table {}",
             table
-        );
-        let detach_last_partition =
-            format!("ALTER TABLE {table} DETACH PARTITION {table}_partition_{last_epoch};");
-        transactional_blocking_with_retry!(
-            &self.cp,
-            |conn| { RunQueryDsl::execute(diesel::sql_query(detach_last_partition.clone()), conn) },
-            Duration::from_secs(10)
-        )?;
-
-        // reattach last partition and create new partition in a separate DB transaction,
-        // to avoid dependency on serializable(), which might not always supported by DB.
-        let reattach_last_partition = format!(
-            "ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch} FOR VALUES FROM ({last_epoch_start_cp}) TO ({next_epoch_start_cp});"
-        );
-        let create_new_partition = format!(
-            "CREATE TABLE {table}_partition_{next_epoch} PARTITION OF {table}
-            FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);"
         );
         transactional_blocking_with_retry!(
             &self.cp,
             |conn| {
-                RunQueryDsl::execute(diesel::sql_query(reattach_last_partition.clone()), conn)?;
-                RunQueryDsl::execute(diesel::sql_query(create_new_partition.clone()), conn)
+                RunQueryDsl::execute(
+                    diesel::sql_query("CALL advance_partition($1, $2, $3, $4, $5)")
+                        .bind::<diesel::sql_types::Text, _>(table.clone())
+                        .bind::<diesel::sql_types::BigInt, _>(data.last_epoch as i64)
+                        .bind::<diesel::sql_types::BigInt, _>(data.next_epoch as i64)
+                        .bind::<diesel::sql_types::BigInt, _>(data.last_epoch_start_cp as i64)
+                        .bind::<diesel::sql_types::BigInt, _>(data.next_epoch_start_cp as i64),
+                    conn,
+                )
             },
             Duration::from_secs(10)
         )?;
