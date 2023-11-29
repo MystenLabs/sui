@@ -24,29 +24,34 @@ pub(crate) struct MoveModule {
     pub parsed: ParsedMoveModule,
 }
 
-#[derive(SimpleObject)]
-#[graphql(complex)]
-pub(crate) struct MoveModuleId {
-    #[graphql(skip)]
-    pub package: SuiAddress,
-    pub name: String,
-}
-
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
 #[Object]
 impl MoveModule {
-    async fn file_format_version(&self) -> u32 {
-        self.parsed.bytecode().version
+    /// The package that this Move module was defined in
+    async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_move_package(self.storage_id, None)
+            .await
+            .extend()?
+            .ok_or_else(|| {
+                Error::Internal(format!(
+                    "Cannot load package for module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                ))
+            })
+            .extend()
     }
 
-    async fn module_id(&self) -> MoveModuleId {
-        // TODO: Rethink the need for MoveModuleId -- we probably don't need it (MoveModule should
-        // expose access to its package).
-        MoveModuleId {
-            package: self.storage_id,
-            name: self.parsed.name().to_string(),
-        }
+    /// The module's (unqualified) name.
+    async fn name(&self) -> &str {
+        self.parsed.name()
+    }
+
+    /// Format version of this module's bytecode.
+    async fn file_format_version(&self) -> u32 {
+        self.parsed.bytecode().version
     }
 
     /// Modules that this module considers friends (these modules can access `public(friend)`
@@ -319,24 +324,6 @@ impl MoveModule {
                 .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
                 .extend()?,
         ))
-    }
-}
-
-#[ComplexObject]
-impl MoveModuleId {
-    /// The package that this Move module was defined in
-    async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_package(self.package, None)
-            .await
-            .extend()?
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Cannot load package for module {}::{}",
-                    self.package, self.name,
-                ))
-            })
-            .extend()
     }
 }
 

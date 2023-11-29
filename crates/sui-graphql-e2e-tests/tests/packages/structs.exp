@@ -231,11 +231,9 @@ Response: {
                     "module": {
                       "s": {
                         "module": {
-                          "moduleId": {
-                            "package": {
-                              "asObject": {
-                                "location": "0x8c1ea70fe9be060cbd9cf2b15d8e10efa6adfa11fb582645a33930be7f0c07da"
-                              }
+                          "package": {
+                            "asObject": {
+                              "location": "0x8c1ea70fe9be060cbd9cf2b15d8e10efa6adfa11fb582645a33930be7f0c07da"
                             }
                           }
                         },
@@ -260,11 +258,9 @@ Response: {
                       },
                       "t": {
                         "module": {
-                          "moduleId": {
-                            "package": {
-                              "asObject": {
-                                "location": "0x0ce0fe064fd500775e2ffaeeb5807df0c18026c6ba4b1ab4f9ec4f571c05419e"
-                              }
+                          "package": {
+                            "asObject": {
+                              "location": "0x0ce0fe064fd500775e2ffaeeb5807df0c18026c6ba4b1ab4f9ec4f571c05419e"
                             }
                           }
                         },

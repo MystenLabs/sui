@@ -26,21 +26,21 @@ fragment ModuleFriends on Object {
             # Fetch the names of all friend modules and check that there are no
             # pages on either side.
             all: friendConnection {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
 
             # After is an exclusive lower bound, so only expect two modules in
             # the page, and an indication there's a previous page.
             after: friendConnection(after: "0") {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
 
             # Before is an exclusive upper bound, so only expect two modules in
             # the page, and an indication there's a next page.
             before: friendConnection(before: "2") {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
         }
@@ -70,28 +70,28 @@ fragment ModuleFriends on Object {
             # Limit the number of elements in the page using `first` and skip
             # elements using `after`.
             prefix: friendConnection(after: "0", first: 1) {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
 
             # This limit has no effect because there were only two nodes in the
             # page to begin with.
             prefixAll: friendConnection(after: "0", first: 2) {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
 
             # Limit the number of elements in the page using `last` and skip
             # elements from the end using `before`.
             suffix: friendConnection(before: "2", last: 1) {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
 
             # This limit has no effect because there were only two nodes in the
             # page to begin with.
             suffixAll: friendConnection(before: "2", last: 2) {
-                nodes { moduleId { name } }
+                nodes { name }
                 pageInfo { hasNextPage hasPreviousPage }
             }
         }
@@ -140,7 +140,7 @@ fragment ModuleFriends on Object {
     asMovePackage {
         module(name: "n") {
             friendConnection {
-                nodes { moduleId { name } }
+                nodes { name }
             }
         }
     }

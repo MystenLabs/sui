@@ -3,15 +3,22 @@
 
 use async_graphql::*;
 
+use crate::context_data::db_data_provider::PgManager;
+
 use super::{
-    address::Address, base64::Base64, date_time::DateTime, move_module::MoveModuleId,
+    address::Address, base64::Base64, date_time::DateTime, move_module::MoveModule,
     move_type::MoveType, sui_address::SuiAddress,
 };
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct Event {
-    /// Package id and module name of Move module that the event was emitted in
-    pub sending_module_id: Option<MoveModuleId>,
+    /// Package ID of the Move module that the event was emitted in.
+    #[graphql(skip)]
+    pub sending_package: SuiAddress,
+    /// Name of the module (in `sending_package`) that the event was emitted in.
+    #[graphql(skip)]
+    pub sending_module: String,
     /// Package, module, and type of the event
     pub event_type: Option<MoveType>,
     pub senders: Option<Vec<Address>>,
@@ -47,4 +54,15 @@ pub(crate) struct EventFilter {
     // pub any
     // pub all
     // pub not
+}
+
+#[ComplexObject]
+impl Event {
+    /// The Move module that the event was emitted in.
+    async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_move_module(self.sending_package, &self.sending_module)
+            .await
+            .extend()
+    }
 }

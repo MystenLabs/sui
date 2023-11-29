@@ -36,19 +36,13 @@ Response: {
                       "all": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m0"
-                            }
+                            "name": "m0"
                           },
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           },
                           {
-                            "moduleId": {
-                              "name": "m2"
-                            }
+                            "name": "m2"
                           }
                         ],
                         "pageInfo": {
@@ -59,14 +53,10 @@ Response: {
                       "after": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           },
                           {
-                            "moduleId": {
-                              "name": "m2"
-                            }
+                            "name": "m2"
                           }
                         ],
                         "pageInfo": {
@@ -77,14 +67,10 @@ Response: {
                       "before": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m0"
-                            }
+                            "name": "m0"
                           },
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           }
                         ],
                         "pageInfo": {
@@ -129,9 +115,7 @@ Response: {
                       "prefix": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           }
                         ],
                         "pageInfo": {
@@ -142,14 +126,10 @@ Response: {
                       "prefixAll": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           },
                           {
-                            "moduleId": {
-                              "name": "m2"
-                            }
+                            "name": "m2"
                           }
                         ],
                         "pageInfo": {
@@ -160,9 +140,7 @@ Response: {
                       "suffix": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           }
                         ],
                         "pageInfo": {
@@ -173,14 +151,10 @@ Response: {
                       "suffixAll": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m0"
-                            }
+                            "name": "m0"
                           },
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           }
                         ],
                         "pageInfo": {
@@ -233,24 +207,16 @@ Response: {
                       "friendConnection": {
                         "nodes": [
                           {
-                            "moduleId": {
-                              "name": "m0"
-                            }
+                            "name": "m0"
                           },
                           {
-                            "moduleId": {
-                              "name": "m1"
-                            }
+                            "name": "m1"
                           },
                           {
-                            "moduleId": {
-                              "name": "m2"
-                            }
+                            "name": "m2"
                           },
                           {
-                            "moduleId": {
-                              "name": "m3"
-                            }
+                            "name": "m3"
                           }
                         ]
                       }

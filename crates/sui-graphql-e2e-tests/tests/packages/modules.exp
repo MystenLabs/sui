@@ -8,7 +8,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 
 task 2 'create-checkpoint'. lines 33-33:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 35-68:
+task 3 'run-graphql'. lines 35-63:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -27,12 +27,10 @@ Response: {
                   "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81",
                   "asMovePackage": {
                     "module": {
-                      "moduleId": {
-                        "name": "m",
-                        "package": {
-                          "asObject": {
-                            "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81"
-                          }
+                      "name": "m",
+                      "package": {
+                        "asObject": {
+                          "location": "0x2f86be7a9efd6db3d7229ac487191db02084ea261b66135f75873dd1c09b2c81"
                         }
                       },
                       "fileFormatVersion": 6,
@@ -50,7 +48,7 @@ Response: {
   }
 }
 
-task 4 'run-graphql'. lines 70-102:
+task 4 'run-graphql'. lines 65-97:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -71,19 +69,13 @@ Response: {
                     "all": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "m"
-                          }
+                          "name": "m"
                         },
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         },
                         {
-                          "moduleId": {
-                            "name": "o"
-                          }
+                          "name": "o"
                         }
                       ],
                       "pageInfo": {
@@ -94,14 +86,10 @@ Response: {
                     "after": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         },
                         {
-                          "moduleId": {
-                            "name": "o"
-                          }
+                          "name": "o"
                         }
                       ],
                       "pageInfo": {
@@ -112,14 +100,10 @@ Response: {
                     "before": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "m"
-                          }
+                          "name": "m"
                         },
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         }
                       ],
                       "pageInfo": {
@@ -138,7 +122,7 @@ Response: {
   }
 }
 
-task 5 'run-graphql'. lines 104-139:
+task 5 'run-graphql'. lines 99-134:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -159,9 +143,7 @@ Response: {
                     "prefix": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         }
                       ],
                       "pageInfo": {
@@ -172,14 +154,10 @@ Response: {
                     "prefixAll": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         },
                         {
-                          "moduleId": {
-                            "name": "o"
-                          }
+                          "name": "o"
                         }
                       ],
                       "pageInfo": {
@@ -190,14 +168,10 @@ Response: {
                     "prefixExcess": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         },
                         {
-                          "moduleId": {
-                            "name": "o"
-                          }
+                          "name": "o"
                         }
                       ],
                       "pageInfo": {
@@ -208,9 +182,7 @@ Response: {
                     "suffix": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         }
                       ],
                       "pageInfo": {
@@ -221,14 +193,10 @@ Response: {
                     "suffixAll": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "m"
-                          }
+                          "name": "m"
                         },
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         }
                       ],
                       "pageInfo": {
@@ -239,14 +207,10 @@ Response: {
                     "suffixExcess": {
                       "nodes": [
                         {
-                          "moduleId": {
-                            "name": "m"
-                          }
+                          "name": "m"
                         },
                         {
-                          "moduleId": {
-                            "name": "n"
-                          }
+                          "name": "n"
                         }
                       ],
                       "pageInfo": {

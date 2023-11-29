@@ -724,7 +724,7 @@
 >    }
 >  ) {
 >    nodes {
->      sendingModuleId {
+>      sendingModule {
 >        name
 >        package {
 >          asObject {

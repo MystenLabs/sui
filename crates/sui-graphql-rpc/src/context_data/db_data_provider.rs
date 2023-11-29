@@ -20,7 +20,7 @@ use crate::{
         epoch::Epoch,
         event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
-        move_module::{MoveModule, MoveModuleId},
+        move_module::MoveModule,
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
@@ -1263,10 +1263,8 @@ impl PgManager {
             connection.edges.extend(results.into_iter().map(|e| {
                 let cursor = String::from(e.id);
                 let event = Event {
-                    sending_module_id: Some(MoveModuleId {
-                        package: SuiAddress::from_array(**e.package_id),
-                        name: e.transaction_module.to_string(),
-                    }),
+                    sending_package: SuiAddress::from(e.package_id),
+                    sending_module: e.transaction_module.to_string(),
                     event_type: Some(MoveType::new(
                         e.type_.to_canonical_string(/* with_prefix */ true),
                     )),
