@@ -59,11 +59,11 @@ impl Subst {
             // that case has already been taken care of above. This case is added for explicitness,
             // but it could be rolled into the catch-all at the bottom of this match.
             (SignatureToken::TypeParameter(_), _) => false,
-            (SignatureToken::Struct(sig1), SignatureToken::Struct(sig2)) => sig1 == sig2,
+            (SignatureToken::Datatype(sig1), SignatureToken::Datatype(sig2)) => sig1 == sig2,
             // Build a substitution from recursing into structs
             (
-                SignatureToken::StructInstantiation(sig1, params1),
-                SignatureToken::StructInstantiation(sig2, params2),
+                SignatureToken::DatatypeInstantiation(sig1, params1),
+                SignatureToken::DatatypeInstantiation(sig2, params2),
             ) => {
                 if sig1 != sig2 {
                     return false;
@@ -231,8 +231,8 @@ pub fn stack_top_is_castable_to(state: &AbstractState, typ: SignatureToken) -> b
             | SignatureToken::Address
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
-            | SignatureToken::Struct(_)
-            | SignatureToken::StructInstantiation(_, _)
+            | SignatureToken::Datatype(_)
+            | SignatureToken::DatatypeInstantiation(_, _)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
             | SignatureToken::TypeParameter(_) => false,
@@ -340,8 +340,8 @@ pub fn stack_ref_polymorphic_eq(state: &AbstractState, index1: usize, index2: us
                 | SignatureToken::Address
                 | SignatureToken::Signer
                 | SignatureToken::Vector(_)
-                | SignatureToken::Struct(_)
-                | SignatureToken::StructInstantiation(_, _)
+                | SignatureToken::Datatype(_)
+                | SignatureToken::DatatypeInstantiation(_, _)
                 | SignatureToken::TypeParameter(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
@@ -556,8 +556,8 @@ pub fn stack_has_struct(state: &AbstractState, struct_index: StructDefinitionInd
     if state.stack_len() > 0 {
         if let Some(struct_value) = state.stack_peek(0) {
             match struct_value.token {
-                SignatureToken::Struct(struct_handle)
-                | SignatureToken::StructInstantiation(struct_handle, _) => {
+                SignatureToken::Datatype(struct_handle)
+                | SignatureToken::DatatypeInstantiation(struct_handle, _) => {
                     let struct_def = state.module.module.struct_def_at(struct_index);
                     return struct_handle == struct_def.struct_handle;
                 }
@@ -598,7 +598,7 @@ pub fn struct_abilities(
     let struct_handle = state
         .module
         .module
-        .struct_handle_at(struct_def.struct_handle);
+        .datatype_handle_at(struct_def.struct_handle);
     let declared_phantom_parameters = struct_handle
         .type_parameters
         .iter()
@@ -667,8 +667,8 @@ pub fn stack_has_reference(state: &AbstractState, index: usize, mutability: Muta
                 | SignatureToken::Address
                 | SignatureToken::Signer
                 | SignatureToken::Vector(_)
-                | SignatureToken::Struct(_)
-                | SignatureToken::StructInstantiation(_, _)
+                | SignatureToken::Datatype(_)
+                | SignatureToken::DatatypeInstantiation(_, _)
                 | SignatureToken::TypeParameter(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
@@ -726,10 +726,13 @@ pub fn create_struct(
     let struct_def = state_copy.module.module.struct_def_at(struct_index);
     // Get the type, and kind of this struct
     let sig_tok = match instantiation {
-        None => SignatureToken::Struct(struct_def.struct_handle),
+        None => SignatureToken::Datatype(struct_def.struct_handle),
         Some(inst) => {
             let ty_instantiation = state.module.instantiantiation_at(inst);
-            SignatureToken::StructInstantiation(struct_def.struct_handle, ty_instantiation.clone())
+            SignatureToken::DatatypeInstantiation(
+                struct_def.struct_handle,
+                ty_instantiation.clone(),
+            )
         }
     };
     let struct_kind = abilities_for_token(&state, &sig_tok, &state.instantiation);
@@ -743,7 +746,7 @@ pub fn stack_unpack_struct_instantiation(
 ) -> (StructDefinitionIndex, Vec<SignatureToken>) {
     if let Some(av) = state.stack_peek(0) {
         match av.token {
-            SignatureToken::StructInstantiation(handle, toks) => {
+            SignatureToken::DatatypeInstantiation(handle, toks) => {
                 let mut def_filter = state
                     .module
                     .module
@@ -763,7 +766,7 @@ pub fn stack_unpack_struct_instantiation(
             | SignatureToken::Address
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
-            | SignatureToken::Struct(_)
+            | SignatureToken::Datatype(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
             | SignatureToken::TypeParameter(_)
@@ -892,8 +895,8 @@ pub fn register_dereference(state: &AbstractState) -> Result<AbstractState, VMEr
             | SignatureToken::Address
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
-            | SignatureToken::Struct(_)
-            | SignatureToken::StructInstantiation(_, _)
+            | SignatureToken::Datatype(_)
+            | SignatureToken::DatatypeInstantiation(_, _)
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32

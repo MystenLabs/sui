@@ -6,10 +6,10 @@ extern crate test_generation;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{
-        empty_module, Ability, AbilitySet, Bytecode, CompiledModule, FieldDefinition, FieldHandle,
-        FieldHandleIndex, IdentifierIndex, ModuleHandleIndex, SignatureToken, StructDefinition,
-        StructDefinitionIndex, StructFieldInformation, StructHandle, StructHandleIndex, TableIndex,
-        TypeSignature,
+        empty_module, Ability, AbilitySet, Bytecode, CompiledModule, DatatypeHandle,
+        DatatypeHandleIndex, FieldDefinition, FieldHandle, FieldHandleIndex, IdentifierIndex,
+        ModuleHandleIndex, SignatureToken, StructDefinition, StructDefinitionIndex,
+        StructFieldInformation, TableIndex, TypeSignature,
     },
     views::{StructDefinitionView, ViewInternals},
 };
@@ -42,11 +42,11 @@ fn generate_module_with_struct(resource: bool) -> CompiledModule {
         });
     }
     let struct_def = StructDefinition {
-        struct_handle: StructHandleIndex(struct_index),
+        struct_handle: DatatypeHandleIndex(struct_index),
         field_information: StructFieldInformation::Declared(fields),
     };
     module.struct_defs.push(struct_def);
-    module.struct_handles = vec![StructHandle {
+    module.datatype_handles = vec![DatatypeHandle {
         module: ModuleHandleIndex::new(0),
         name: IdentifierIndex::new((struct_index + offset) as TableIndex),
         abilities: if resource {
@@ -79,7 +79,10 @@ fn create_struct_value(module: &CompiledModule) -> (AbstractValue, Vec<Signature
     )
     .unwrap();
     (
-        AbstractValue::new_struct(SignatureToken::Struct(struct_def.struct_handle), abilities),
+        AbstractValue::new_struct(
+            SignatureToken::Datatype(struct_def.struct_handle),
+            abilities,
+        ),
         tokens,
     )
 }
