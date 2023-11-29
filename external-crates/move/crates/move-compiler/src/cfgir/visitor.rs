@@ -259,7 +259,7 @@ pub trait SimpleAbsInt: Sized {
                 self.exp(context, state, e);
             }
             C::Jump { .. } => (),
-            C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
     }
 

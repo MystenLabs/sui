@@ -12,6 +12,7 @@ pub(crate) enum TransactionBlockKind {
     ChangeEpochTransaction(ChangeEpochTransaction),
     ProgrammableTransactionBlock(ProgrammableTransaction),
     AuthenticatorStateUpdateTransaction(AuthenticatorStateUpdate),
+    RandomnessStateUpdateTransaction(RandomnessStateUpdate),
     EndOfEpochTransaction(EndOfEpochTransaction),
 }
 
@@ -24,6 +25,12 @@ pub(crate) struct ProgrammableTransaction {
 // TODO: flesh out the authenticator state update type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct AuthenticatorStateUpdate {
+    pub value: String,
+}
+
+// TODO: flesh out the randomness state update type
+#[derive(SimpleObject, Clone, Eq, PartialEq)]
+pub(crate) struct RandomnessStateUpdate {
     pub value: String,
 }
 

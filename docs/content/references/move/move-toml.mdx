@@ -3,7 +3,7 @@ title: Move.toml File
 description: Get the details for a Move package manifest.
 ---
 
-Every Move package has a `Move.toml` file as a manifest for the package. The Sui Move compiler creates the `Move.toml` file for you when you create a new package, but you might need to update the file throughout the lifespan of your package.    
+Every Move package has a `Move.toml` file as a manifest for the package. The Sui Move compiler creates the `Move.toml` file for you when you create a new package, but you might need to update the file throughout the lifespan of your package.
 
 The manifest contains information divided into three sections:
 * `[package]`: Your package metadata, such as name and version.
@@ -30,7 +30,7 @@ If your package depends on another package, like the Sui framework, the network 
 
 ## [dependencies] section
 
-The Sui Move compiler creates the `[dependencies]` section for you with a single entry for the GitHub address of the Sui network. If you need to use a local version of the network, you can edit the address to point to the local version. For example, 
+The Sui Move compiler creates the `[dependencies]` section for you with a single entry for the GitHub address of the Sui network. If you need to use a local version of the network, you can edit the address to point to the local version. For example,
 
 ```toml
 Sui = { local = "../crates/sui-framework" }
@@ -50,13 +50,13 @@ sui =  "0000000000000000000000000000000000000000000000000000000000000002"
 
 The aliases defined in `[addresses]` enable you to reference the shortened name instead of the actual address. For example, when you import from Sui in a module, you can write:
 
-```rust
+```move
 use sui::transfer
 ```
 
 Without the alias, you have to write:
 
-```rust
+```move
 // You could also use 0x2
 use 0000000000000000000000000000000000000000000000000000000000000002::transfer
 ```

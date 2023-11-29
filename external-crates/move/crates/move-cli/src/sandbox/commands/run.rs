@@ -120,7 +120,7 @@ pub fn run(
             txn_args,
         )
     } else {
-        let (_changeset, _events) = session.finish().0.map_err(|e| e.into_vm_status())?;
+        let (_changeset, _events) = session.finish().0?;
         Ok(())
     }
 }

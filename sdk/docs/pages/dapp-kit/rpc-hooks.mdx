@@ -38,6 +38,60 @@ function MyComponent() {
 }
 ```
 
+## `useSuiClientQueries`
+
+You can fetch a variable numer of Sui RPC queries using the `useSuiClientQueries` hook. This hook is
+a wrapper around the [useQueries](https://tanstack.com/query/latest/docs/react/reference/useQueries)
+hook from @tanstack/react-query.
+
+`queries` value is an array with query option objects identical to the `useSuiClientQuery` hook.
+
+`combine` is an optional parameter. You can use this to combine the results of the queries into a
+single value. The result will be structurally shared to be as referentially stable as possible.
+
+```tsx
+import { useSuiClientQueries } from '@mysten/dapp-kit';
+
+function MyComponent() {
+	const { data, isPending, isError } = useSuiClientQueries({
+		queries: [
+			{
+				method: 'getAllBalances',
+				params: {
+					owner: '0x123',
+				},
+			},
+			{
+				method: 'queryTransactionBlocks',
+				params: {
+					filter: {
+						FromAddress: '0x123',
+					},
+				},
+			},
+		],
+		combine: (result) => {
+			return {
+				data: result.map((res) => res.data),
+				isSuccess: result.every((res) => res.isSuccess),
+				isPending: result.some((res) => res.isPending),
+				isError: result.some((res) => res.isError),
+			};
+		},
+	});
+
+	if (isPending) {
+		return <div>Loading...</div>;
+	}
+
+	if (isError) {
+		return <div>Fetching Error</div>;
+	}
+
+	return <pre>{JSON.stringify(data, null, 2)}</pre>;
+}
+```
+
 ## `useSuiClientInfiniteQuery`
 
 For RPC methods that support pagination dApp Kit also implements a `useSuiClientInfiniteQuery` hook.

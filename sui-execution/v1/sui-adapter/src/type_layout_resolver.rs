@@ -11,7 +11,7 @@ use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
 use sui_types::execution::TypeLayoutStore;
-use sui_types::storage::{BackingPackageStore, PackageObjectArc};
+use sui_types::storage::{BackingPackageStore, PackageObject};
 use sui_types::{error::SuiError, object::MoveObject, type_resolver::LayoutResolver};
 
 /// Retrieve a `MoveStructLayout` from a `Type`.
@@ -56,7 +56,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
 }
 
 impl<'state> BackingPackageStore for NullSuiResolver<'state> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.0.get_package_object(package_id)
     }
 }

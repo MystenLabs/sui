@@ -380,11 +380,11 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::While(e1, e2) => {
+        E::While(_, e1, e2) => {
             exp(context, e1);
             exp(context, e2);
         }
-        E::Loop { has_break: _, body } => exp(context, body),
+        E::Loop { body, .. } => exp(context, body),
         E::Block(seq) => sequence(context, seq),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);
@@ -399,6 +399,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         E::Return(e) => exp(context, e),
         E::Abort(e) => exp(context, e),
+        E::Give(_, e) => exp(context, e),
         E::Dereference(e) => exp(context, e),
         E::UnaryExp(_, e) => exp(context, e),
         E::BinopExp(e1, _, _, e2) => {
@@ -436,8 +437,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Copy { .. }
         | E::Use(_)
         | E::Constant(..)
-        | E::Break
-        | E::Continue
+        | E::Continue(_)
         | E::BorrowLocal(..)
         | E::Spec(..)
         | E::UnresolvedError => (),

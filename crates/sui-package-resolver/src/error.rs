@@ -44,7 +44,7 @@ pub enum Error {
     StructNotFound(AccountAddress, String, String),
 
     #[error("Expected {0} type parameters, but got {1}")]
-    TypeArityMismatch(u16, usize),
+    TypeArityMismatch(usize, usize),
 
     #[error("Type Parameter {0} out of bounds ({1})")]
     TypeParamOOB(u16, usize),

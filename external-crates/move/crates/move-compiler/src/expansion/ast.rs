@@ -472,7 +472,7 @@ pub enum Exp_ {
 
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Break,
+    Break(Box<Exp>),
     Continue,
 
     Dereference(Box<Exp>),
@@ -1719,7 +1719,11 @@ impl AstDebug for Exp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Break => w.write("break"),
+            E::Break(exp) => {
+                w.write("break");
+                w.write(" ");
+                exp.ast_debug(w);
+            }
             E::Continue => w.write("continue"),
             E::Dereference(e) => {
                 w.write("*");

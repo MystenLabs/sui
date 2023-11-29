@@ -23,6 +23,7 @@ export default {
 				'gradient-blue-end': '#4C75A6',
 				facebook: '#1877F2',
 				twitch: '#6441A5',
+				kakao: '#FEE500',
 			},
 			minHeight: {
 				8: '2rem',

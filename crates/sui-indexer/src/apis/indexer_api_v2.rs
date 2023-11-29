@@ -20,7 +20,9 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::{DynamicFieldName, Field};
+use sui_types::error::SuiObjectResponseError;
 use sui_types::event::EventID;
+use sui_types::object::ObjectRead;
 use sui_types::TypeTag;
 
 pub(crate) struct IndexerApiV2 {
@@ -63,11 +65,52 @@ impl IndexerApiV2 {
         objects.truncate(limit);
 
         let next_cursor = objects.last().map(|o_read| o_read.object_id());
-
-        let data = objects
+        let mut parallel_tasks = vec![];
+        for o in objects {
+            let inner_clone = self.inner.clone();
+            let options = options.clone();
+            parallel_tasks.push(tokio::task::spawn(async move {
+                match o {
+                    ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                        SuiObjectResponseError::NotExists { object_id: id },
+                    )),
+                    ObjectRead::Exists(object_ref, o, layout) => {
+                        if options.show_display {
+                            match inner_clone.get_display_fields(&o, &layout).await {
+                                Ok(rendered_fields) => Ok(SuiObjectResponse::new_with_data(
+                                    (object_ref, o, layout, options, Some(rendered_fields))
+                                        .try_into()?,
+                                )),
+                                Err(e) => Ok(SuiObjectResponse::new(
+                                    Some((object_ref, o, layout, options, None).try_into()?),
+                                    Some(SuiObjectResponseError::DisplayError {
+                                        error: e.to_string(),
+                                    }),
+                                )),
+                            }
+                        } else {
+                            Ok(SuiObjectResponse::new_with_data(
+                                (object_ref, o, layout, options, None).try_into()?,
+                            ))
+                        }
+                    }
+                    ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                        SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                            object_id,
+                            version,
+                            digest,
+                        }),
+                    ),
+                }
+            }));
+        }
+        let data = futures::future::join_all(parallel_tasks)
+            .await
             .into_iter()
-            .map(|o| (o, options.clone()).try_into())
-            .collect::<Result<Vec<SuiObjectResponse>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e: tokio::task::JoinError| anyhow::anyhow!(e))?
+            .into_iter()
+            .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
         Ok(Page {
             data,

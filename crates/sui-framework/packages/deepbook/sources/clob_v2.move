@@ -270,6 +270,27 @@ module deepbook::clob_v2 {
         owner: address
     }
 
+    /// Accessor functions
+    public fun usr_open_orders_exist<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+        owner: address
+    ): bool {
+        table::contains(&pool.usr_open_orders, owner)
+    }
+
+    public fun usr_open_orders_for_address<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+        owner: address
+    ): &LinkedTable<u64, u64> {
+        table::borrow(&pool.usr_open_orders, owner)
+    }
+
+    public fun usr_open_orders<BaseAsset, QuoteAsset>(
+        pool: &Pool<BaseAsset, QuoteAsset>, 
+    ): &Table<address, LinkedTable<u64, u64>> {
+        &pool.usr_open_orders
+    }
+
     /// Function to withdraw fees created from a pool
     public fun withdraw_fees<BaseAsset, QuoteAsset>(
         _pool_owner_cap: &PoolOwnerCap,
@@ -1678,8 +1699,11 @@ module deepbook::clob_v2 {
         account_cap: &AccountCap
     ): vector<Order> {
         let owner = account_owner(account_cap);
-        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let open_orders = vector::empty<Order>();
+        if (!usr_open_orders_exist(pool, owner)) {
+            return open_orders
+        };
+        let usr_open_order_ids = table::borrow(&pool.usr_open_orders, owner);
         let order_id = linked_table::front(usr_open_order_ids);
         while (!option::is_none(order_id)) {
             let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
@@ -1858,27 +1882,43 @@ module deepbook::clob_v2 {
     }
 
     // Methods for accessing pool data, used by the order_query package
-    public(friend) fun asks<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
+    public fun asks<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
         &pool.asks
     }
 
-    public(friend) fun bids<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
+    public fun bids<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
         &pool.bids
     }
 
-    public(friend) fun open_orders(tick_level: &TickLevel): &LinkedTable<u64, Order> {
+    public fun tick_size<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        pool.tick_size
+    }
+
+    public fun maker_rebate_rate<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        pool.maker_rebate_rate
+    }
+
+    public fun taker_fee_rate<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        pool.taker_fee_rate
+    }
+
+    public fun pool_size<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): u64 {
+        critbit::size(&pool.asks) + critbit::size(&pool.bids)
+    }
+
+    public fun open_orders(tick_level: &TickLevel): &LinkedTable<u64, Order> {
         &tick_level.open_orders
     }
 
-    public(friend) fun order_id(order: &Order): u64 {
+    public fun order_id(order: &Order): u64 {
         order.order_id
     }
 
-    public(friend) fun tick_level(order: &Order): u64 {
+    public fun tick_level(order: &Order): u64 {
         order.price
     }
 
-    public(friend) fun expire_timestamp(order: &Order): u64 {
+    public fun expire_timestamp(order: &Order): u64 {
         order.expire_timestamp
     }
 

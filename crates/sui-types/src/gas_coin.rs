@@ -116,6 +116,11 @@ mod checked {
         pub fn new_for_testing(value: u64) -> Self {
             Self::new(ObjectID::random(), value)
         }
+
+        #[cfg(test)]
+        pub fn new_for_testing_with_id(id: ObjectID, value: u64) -> Self {
+            Self::new(id, value)
+        }
     }
 
     impl TryFrom<&MoveObject> for GasCoin {

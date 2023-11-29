@@ -9,9 +9,9 @@ pub mod headers;
 pub mod node_state_getter;
 mod objects;
 
-pub use checkpoints::{CheckpointData, CheckpointTransaction};
 pub use client::Client;
 use node_state_getter::NodeStateGetter;
+pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 
 async fn health_check() -> StatusCode {
     StatusCode::OK

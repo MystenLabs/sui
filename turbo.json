@@ -3,9 +3,11 @@
 	"pipeline": {
 		"lint": {},
 		"test": {
+			"dependsOn": ["^build"],
 			"outputs": ["coverage/**"]
 		},
 		"dev": {
+			"dependsOn": ["^build"],
 			"cache": false,
 			"persistent": true
 		},

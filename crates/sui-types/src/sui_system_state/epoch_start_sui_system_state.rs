@@ -22,6 +22,7 @@ pub trait EpochStartSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn epoch_duration_ms(&self) -> u64;
+    fn get_validator_addresses(&self) -> Vec<SuiAddress>;
     fn get_sui_committee(&self) -> Committee;
     fn get_narwhal_committee(&self) -> NarwhalCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
@@ -121,6 +122,13 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
 
     fn epoch_duration_ms(&self) -> u64 {
         self.epoch_duration_ms
+    }
+
+    fn get_validator_addresses(&self) -> Vec<SuiAddress> {
+        self.active_validators
+            .iter()
+            .map(|validator| validator.sui_address)
+            .collect()
     }
 
     fn get_sui_committee(&self) -> Committee {

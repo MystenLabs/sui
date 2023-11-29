@@ -23,6 +23,7 @@ use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -62,7 +63,7 @@ pub async fn start_cluster(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -107,7 +108,7 @@ pub async fn serve_executor(
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -163,6 +164,11 @@ pub async fn start_test_indexer_v2(
     reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
+    // Reduce the connection pool size to 20 for testing
+    // to prevent maxing out
+    info!("Setting DB_POOL_SIZE to 20");
+    std::env::set_var("DB_POOL_SIZE", "20");
+
     let db_url = db_url.unwrap_or_else(|| {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
         let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
@@ -224,26 +230,30 @@ pub async fn start_test_indexer_v2(
 }
 
 impl ExecutorCluster {
-    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, timeout: Duration) {
-        async fn inner(s: &ExecutorCluster, checkpoint: u64) {
-            let mut highest_checkpoint = s
+    pub async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
+        let current_checkpoint = self
+            .indexer_store
+            .get_latest_tx_checkpoint_sequence_number()
+            .await
+            .unwrap()
+            .unwrap();
+
+        let checkpoint_diff = std::cmp::max(1, checkpoint.saturating_sub(current_checkpoint));
+        let timeout = base_timeout.mul_f64(checkpoint_diff as f64);
+
+        tokio::time::timeout(timeout, async {
+            while self
                 .indexer_store
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .unwrap()
-                .unwrap();
-            while highest_checkpoint < checkpoint {
+                .unwrap()
+                < checkpoint
+            {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                highest_checkpoint = s
-                    .indexer_store
-                    .get_latest_tx_checkpoint_sequence_number()
-                    .await
-                    .unwrap()
-                    .unwrap();
             }
-        }
-        tokio::time::timeout(timeout, inner(self, checkpoint))
-            .await
-            .expect("Timeout waiting for indexer to catchup to checkpoint");
+        })
+        .await
+        .expect("Timeout waiting for indexer to catchup to checkpoint");
     }
 }

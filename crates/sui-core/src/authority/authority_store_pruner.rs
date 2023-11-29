@@ -31,7 +31,7 @@ use sui_types::{
 };
 use tokio::sync::oneshot::{self, Sender};
 use tokio::time::Instant;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use typed_store::{Map, TypedStoreError};
 
 use super::authority_store_tables::AuthorityPerpetualTables;
@@ -58,6 +58,8 @@ pub struct AuthorityStorePruningMetrics {
     pub num_pruned_objects: IntCounter,
     pub num_pruned_tombstones: IntCounter,
     pub last_pruned_effects_checkpoint: IntGauge,
+    pub num_epochs_to_retain_for_objects: IntGauge,
+    pub num_epochs_to_retain_for_checkpoints: IntGauge,
 }
 
 impl AuthorityStorePruningMetrics {
@@ -84,6 +86,18 @@ impl AuthorityStorePruningMetrics {
             last_pruned_effects_checkpoint: register_int_gauge_with_registry!(
                 "last_pruned_effects_checkpoint",
                 "Last pruned effects checkpoint",
+                registry
+            )
+            .unwrap(),
+            num_epochs_to_retain_for_objects: register_int_gauge_with_registry!(
+                "num_epochs_to_retain_for_objects",
+                "Number of epochs to retain for objects",
+                registry
+            )
+            .unwrap(),
+            num_epochs_to_retain_for_checkpoints: register_int_gauge_with_registry!(
+                "num_epochs_to_retain_for_checkpoints",
+                "Number of epochs to retain for checkpoints",
                 registry
             )
             .unwrap(),
@@ -423,7 +437,7 @@ impl AuthorityStorePruner {
                             checkpoint_number,
                             metrics.clone(),
                             indirect_objects_threshold,
-                            config.enable_pruning_tombstones,
+                            !config.killswitch_tombstone_pruning,
                         )
                         .await?
                     }
@@ -453,7 +467,7 @@ impl AuthorityStorePruner {
                         checkpoint_number,
                         metrics.clone(),
                         indirect_objects_threshold,
-                        config.enable_pruning_tombstones,
+                        !config.killswitch_tombstone_pruning,
                     )
                     .await?
                 }
@@ -527,16 +541,8 @@ impl AuthorityStorePruner {
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        let tick_duration = Duration::from_millis(match config.pruning_run_delay_seconds {
-            None => {
-                if config.num_epochs_to_retain > 0 {
-                    min(epoch_duration_ms / 2, 60 * 60 * 1000)
-                } else {
-                    min(epoch_duration_ms / 2, 60 * 1000)
-                }
-            }
-            Some(duration_seconds) => duration_seconds * 1000,
-        });
+
+        let tick_duration = Duration::from_millis(min(epoch_duration_ms / 2, 60 * 1000));
         let pruning_initial_delay = if cfg!(msim) {
             Duration::from_millis(1)
         } else {
@@ -570,6 +576,15 @@ impl AuthorityStorePruner {
             });
         }
 
+        metrics
+            .num_epochs_to_retain_for_objects
+            .set(config.num_epochs_to_retain as i64);
+        metrics.num_epochs_to_retain_for_checkpoints.set(
+            config
+                .num_epochs_to_retain_for_checkpoints
+                .unwrap_or_default() as i64,
+        );
+
         tokio::task::spawn(async move {
             loop {
                 tokio::select! {
@@ -594,12 +609,23 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         objects_lock_table: Arc<RwLockTable<ObjectContentDigest>>,
-        pruning_config: AuthorityStorePruningConfig,
+        mut pruning_config: AuthorityStorePruningConfig,
+        is_validator: bool,
         epoch_duration_ms: u64,
         registry: &Registry,
         indirect_objects_threshold: usize,
         archive_readers: ArchiveReaderBalancer,
     ) -> Self {
+        if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
+        {
+            warn!("Using objects pruner with num_epochs_to_retain = {} can lead to performance issues", pruning_config.num_epochs_to_retain);
+            if is_validator {
+                warn!("Resetting to aggressive pruner.");
+                pruning_config.num_epochs_to_retain = 0;
+            } else {
+                warn!("Consider using an aggressive pruner (num_epochs_to_retain = 0)");
+            }
+        }
         AuthorityStorePruner {
             _objects_pruner_cancel_handle: Self::setup_pruning(
                 pruning_config,

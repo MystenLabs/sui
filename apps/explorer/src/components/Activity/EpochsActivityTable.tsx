@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSuiClient } from '@mysten/dapp-kit';
+import { useSuiClient, useSuiClientInfiniteQuery } from '@mysten/dapp-kit';
 import { ArrowRight12 } from '@mysten/icons';
 import { Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { genTableDataFromEpochsData } from './utils';
-import { useGetEpochs } from '~/hooks/useGetEpochs';
 import { Link } from '~/ui/Link';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -36,8 +35,12 @@ export function EpochsActivityTable({
 		select: (epoch) => Number(epoch.epoch) + 1,
 	});
 
-	const epochs = useGetEpochs(limit);
-	const { data, isFetching, pagination, isPending, isError } = useCursorPagination(epochs);
+	const epochMetricsQuery = useSuiClientInfiniteQuery('getEpochMetrics', {
+		limit,
+		descendingOrder: true,
+	});
+	const { data, isFetching, pagination, isPending, isError } =
+		useCursorPagination(epochMetricsQuery);
 
 	const cardData = data ? genTableDataFromEpochsData(data) : undefined;
 

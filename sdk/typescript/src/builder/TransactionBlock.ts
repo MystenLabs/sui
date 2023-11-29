@@ -11,6 +11,7 @@ import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
+	extractReference,
 	extractStructTag,
 	getObjectReference,
 	SuiObjectRef,
@@ -773,10 +774,15 @@ export class TransactionBlock {
 
 				if (initialSharedVersion) {
 					// There could be multiple transactions that reference the same shared object.
-					// If one of them is a mutable reference, then we should mark the input
+					// If one of them is a mutable reference or taken by value, then we should mark the input
 					// as mutable.
+					const isByValue =
+						normalizedType != null &&
+						extractMutableReference(normalizedType) == null &&
+						extractReference(normalizedType) == null;
 					const mutable =
 						isMutableSharedObjectInput(input.value) ||
+						isByValue ||
 						(normalizedType != null && extractMutableReference(normalizedType) != null);
 
 					input.value = Inputs.SharedObjectRef({

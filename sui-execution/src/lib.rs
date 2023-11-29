@@ -15,12 +15,14 @@ pub mod executor;
 pub mod verifier;
 
 mod latest;
+mod next_vm;
 mod v0;
 mod v1;
 
 #[cfg(test)]
 mod tests;
 
+pub const NEXT_VM: u64 = u64::MAX;
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,
@@ -46,6 +48,12 @@ pub fn executor(
             silent,
         )?),
 
+        NEXT_VM => Arc::new(next_vm::Executor::new(
+            protocol_config,
+            paranoid_type_checks,
+            silent,
+        )?),
+
         v => panic!("Unsupported execution version {v}"),
     })
 }
@@ -60,6 +68,7 @@ pub fn verifier<'m>(
         0 => Box::new(v0::Verifier::new(protocol_config, is_metered, metrics)),
         1 => Box::new(v1::Verifier::new(protocol_config, is_metered, metrics)),
         2 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
+        NEXT_VM => Box::new(next_vm::Verifier::new(protocol_config, is_metered, metrics)),
         v => panic!("Unsupported execution version {v}"),
     }
 }

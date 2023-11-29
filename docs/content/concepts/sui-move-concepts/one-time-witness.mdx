@@ -13,7 +13,7 @@ The only instance of this type is passed to its module's `init` function when th
 
 To check whether a type could be used as a OTW, pass an instance of it to `sui::types::is_one_time_witness`.
 
-```rust
+```move
 module examples::mycoin {
 
     /// Name matches the module name
@@ -28,7 +28,7 @@ module examples::mycoin {
 
 The following example illustrates how you could use a OTW:
 
-```rust
+```move
 /// This example illustrates how One Time Witness works.
 ///
 /// One Time Witness (OTW) is an instance of a type which is guaranteed to

@@ -22,9 +22,9 @@ You can set up and configure a [Sui Full node](./sui-full-node.mdx) using Docker
 
 ## Set up Sui addresses
 
-Sui addresses do not require on-chain initialization, you can spend from an address if it corresponds to your private key. You can derive a 32-byte Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function. 
+Sui addresses do not require on-chain initialization, you can spend from an address if it corresponds to your private key. You can derive a 32-byte Sui address by hashing the signature scheme flag byte concatenated with public key bytes `flag || pubkey` using the [BLAKE2b](https://www.blake2.net/) (256 bits output) hashing function.
 
-Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1, Secp256r1 and multisig. The corresponding flag bytes are 0x00, 0x01, 0x02, 0x03 respectively. 
+Currently, Sui address supports these signature schemes: pure Ed25519, Secp256k1, Secp256r1 and multisig. The corresponding flag bytes are 0x00, 0x01, 0x02, 0x03 respectively.
 
 The following code sample demonstrates how to derive a Sui address in Rust:
 
@@ -189,8 +189,8 @@ Sui supports the following API operations related to staking. You can find the s
  - `request_add_stake`
  Add user stake to a validator's staking pool.
 
-```rust
-public entry fun request_add_stake(
+```move
+public fun request_add_stake(
    self: &mut SuiSystemState,
    stake: Coin<SUI>,
    validator_address: address,
@@ -209,8 +209,8 @@ public entry fun request_add_stake(
  - `request_add_stake_mul_coin`
  Add user stake to a validator's staking pool using multiple coins.
 
-```rust
-public entry fun request_add_stake_mul_coin(
+```move
+public fun request_add_stake_mul_coin(
    self: &mut SuiSystemState,
    delegate_stakes: vector<Coin<SUI>>,
    stake_amount: option::Option<u64>,
@@ -225,8 +225,8 @@ public entry fun request_add_stake_mul_coin(
  - `request_add_stake_with_locked_coin`
  Add user stake to a validator's staking pool using a locked SUI coin.
 
-```rust
-public entry fun request_add_stake_with_locked_coin(
+```move
+public fun request_add_stake_with_locked_coin(
    self: &mut SuiSystemState,
    stake: LockedCoin<SUI>,
    validator_address: address,
@@ -240,8 +240,8 @@ public entry fun request_add_stake_with_locked_coin(
  - `request_withdraw_stake`
  Withdraw some portion of a user stake from a validator's staking pool.
 
-```rust
-public entry fun request_withdraw_stake(
+```move
+public fun request_withdraw_stake(
    self: &mut SuiSystemState,
    delegation: &mut Delegation,
    staked_sui: &mut StakedSui,

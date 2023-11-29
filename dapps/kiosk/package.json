@@ -4,8 +4,8 @@
 	"version": "0.0.10",
 	"type": "module",
 	"scripts": {
-		"dev": "turbo build --filter kiosk-demo^... && vite",
-		"build": "turbo build --filter kiosk-demo^... && vite build",
+		"dev": "vite",
+		"build": "vite build",
 		"preview": "vite preview",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",

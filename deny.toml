@@ -63,6 +63,8 @@ ignore = [
     # "RUSTSEC-2021-0145",
     # webpki
     "RUSTSEC-2023-0052",
+    # we don't do RSA signing on Sui (only verifying for zklogin)
+    "RUSTSEC-2023-0071",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -93,6 +95,7 @@ allow = [
     "CC0-1.0",
     "0BSD",
     "LicenseRef-ring",
+    "Unlicense",
     "BSL-1.0",
     "Unicode-DFS-2016",
     #"Apache-2.0 WITH LLVM-exception",

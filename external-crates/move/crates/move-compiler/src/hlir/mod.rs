@@ -3,4 +3,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ast;
+pub(crate) mod detect_dead_code;
 pub(crate) mod translate;

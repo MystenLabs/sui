@@ -218,6 +218,14 @@ pub async fn compare_system_package<S: ObjectStore>(
         check_struct_and_pub_function_linking: true,
         check_struct_layout: true,
         check_friend_linking: false,
+        // Checking `entry` linkage is required because system packages are updated in-place, and a
+        // transaction that was rolled back to make way for reconfiguration should still be runnable
+        // after a reconfiguration that upgraded the framework.
+        //
+        // A transaction that calls a system function that was previously `entry` and is now private
+        // will fail because its entrypoint became no longer callable. A transaction that calls a
+        // system function that was previously `public entry` and is now just `public` could also
+        // fail if one of its mutable inputs was being used in another private `entry` function.
         check_private_entry_linking: true,
         disallowed_new_abilities: AbilitySet::singleton(Ability::Key),
         disallow_change_struct_type_params: true,

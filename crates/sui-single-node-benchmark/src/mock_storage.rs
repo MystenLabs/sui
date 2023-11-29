@@ -16,7 +16,7 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
     get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, ObjectStore,
-    PackageObjectArc, ParentSync,
+    PackageObject, ParentSync,
 };
 use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult};
 
@@ -52,11 +52,11 @@ impl InMemoryObjectStore {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
-            let obj: Option<Arc<_>> = match kind {
+            let obj: Option<Object> = match kind {
                 InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => self
-                    .get_object_by_key(&objref.0, objref.1)?
-                    .map(|o| o.into()),
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
 
                 InputObjectKind::SharedMoveObject { id, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
@@ -74,7 +74,7 @@ impl InMemoryObjectStore {
                         )
                     });
 
-                    self.get_object_by_key(id, *version)?.map(|o| o.into())
+                    self.get_object_by_key(id, *version)?
                 }
             };
 
@@ -93,15 +93,13 @@ impl InMemoryObjectStore {
     ) -> SuiResult<InputObjects> {
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
-            let obj: Option<Arc<_>> = match kind {
+            let obj: Option<Object> = match kind {
                 InputObjectKind::MovePackage(id) => self.get_package_object(id)?.map(|o| o.into()),
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => self
-                    .get_object_by_key(&objref.0, objref.1)?
-                    .map(|o| o.into()),
-
-                InputObjectKind::SharedMoveObject { id, .. } => {
-                    self.get_object(id)?.map(|o| o.into())
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
                 }
+
+                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id)?,
             };
 
             input_objects.push(ObjectReadResult::new(
@@ -136,7 +134,7 @@ impl ObjectStore for InMemoryObjectStore {
 }
 
 impl BackingPackageStore for InMemoryObjectStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.package_cache.get_package_object(package_id, self)
     }
 }

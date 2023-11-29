@@ -17,7 +17,6 @@ use crate::schema_v2::{move_call_metrics, move_calls};
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = move_calls)]
 pub struct StoredMoveCall {
-    pub id: Option<i64>,
     pub transaction_sequence_number: i64,
     pub checkpoint_sequence_number: i64,
     pub epoch: i64,
@@ -26,11 +25,10 @@ pub struct StoredMoveCall {
     pub move_function: String,
 }
 
-#[derive(Clone, Debug, Default, Insertable)]
+#[derive(Clone, Debug, Insertable)]
 #[diesel(table_name = move_call_metrics)]
 pub struct StoredMoveCallMetrics {
     pub id: Option<i64>,
-    pub checkpoint_sequence_number: i64,
     pub epoch: i64,
     pub day: i64,
     pub move_package: String,
@@ -39,13 +37,26 @@ pub struct StoredMoveCallMetrics {
     pub count: i64,
 }
 
+impl Default for StoredMoveCallMetrics {
+    fn default() -> Self {
+        Self {
+            id: None,
+            epoch: -1,
+            day: -1,
+            move_package: "".to_string(),
+            move_module: "".to_string(),
+            move_function: "".to_string(),
+            count: -1,
+        }
+    }
+}
+
 // for auto-incremented id, the committed id is None, so Option<i64>,
 // but when querying, the returned type is i64, thus a separate type is needed.
 #[derive(Clone, Debug, Queryable)]
 #[diesel(table_name = move_call_metrics)]
 pub struct QueriedMoveCallMetrics {
     pub id: i64,
-    pub checkpoint_sequence_number: i64,
     pub epoch: i64,
     pub day: i64,
     pub move_package: String,
@@ -76,7 +87,6 @@ impl From<QueriedMoveCallMetrics> for StoredMoveCallMetrics {
     fn from(q: QueriedMoveCallMetrics) -> Self {
         StoredMoveCallMetrics {
             id: Some(q.id),
-            checkpoint_sequence_number: q.checkpoint_sequence_number,
             epoch: q.epoch,
             day: q.day,
             move_package: q.move_package,

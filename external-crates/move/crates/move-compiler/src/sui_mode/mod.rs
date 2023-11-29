@@ -41,6 +41,9 @@ pub const SUI_CLOCK_CREATE: Symbol = symbol!("create");
 pub const AUTHENTICATOR_STATE_MODULE_NAME: Symbol = symbol!("authenticator_state");
 pub const AUTHENTICATOR_STATE_TYPE_NAME: Symbol = symbol!("AuthenticatorState");
 pub const AUTHENTICATOR_STATE_CREATE: Symbol = symbol!("create");
+pub const RANDOMNESS_MODULE_NAME: Symbol = symbol!("random");
+pub const RANDOMNESS_STATE_TYPE_NAME: Symbol = symbol!("Random");
+pub const RANDOMNESS_STATE_CREATE: Symbol = symbol!("create");
 
 pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
 pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");

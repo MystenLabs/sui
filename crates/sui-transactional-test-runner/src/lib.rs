@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::EventFilter;
 use sui_rest_api::node_state_getter::NodeStateGetter;
@@ -37,6 +38,8 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
@@ -45,6 +48,7 @@ use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    telemetry_subscribers::init_for_testing();
     run_test_impl::<SuiTestAdapter>(path, Some(&*PRE_COMPILED)).await?;
     Ok(())
 }
@@ -91,6 +95,8 @@ pub trait TransactionalAdapter: Send + Sync + ObjectStore + NodeStateGetter {
         tx_digest: &TransactionDigest,
         limit: usize,
     ) -> SuiResult<Vec<Event>>;
+
+    async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>>;
 }
 
 #[async_trait::async_trait]
@@ -167,6 +173,23 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         _amount: u64,
     ) -> anyhow::Result<TransactionEffects> {
         unimplemented!("request_gas not supported")
+    }
+
+    async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>> {
+        Ok(self
+            .fullnode
+            .get_system_state()
+            .map_err(|e| {
+                SuiError::SuiSystemStateReadError(format!(
+                    "Failed to get system state from fullnode: {}",
+                    e
+                ))
+            })?
+            .into_sui_system_state_summary()
+            .active_validators
+            .iter()
+            .map(|x| x.sui_address)
+            .collect::<Vec<_>>())
     }
 }
 
@@ -300,5 +323,11 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         amount: u64,
     ) -> anyhow::Result<TransactionEffects> {
         self.request_gas(address, amount)
+    }
+
+    async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>> {
+        // TODO: this is a hack to get the validator addresses. Currently using start state
+        //       but we should have a better way to get this information after reconfig
+        Ok(self.epoch_start_state().get_validator_addresses())
     }
 }

@@ -46,6 +46,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
 use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
+use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
@@ -668,13 +669,22 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 impl TryFrom<&ZkLoginAuthenticator> for SuiAddress {
     type Error = SuiError;
     fn try_from(authenticator: &ZkLoginAuthenticator) -> SuiResult<Self> {
+        TryFrom::try_from(&authenticator.inputs)
+    }
+}
+
+/// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
+/// [zklogin_flag || iss_bytes_length || iss_bytes || address_seed in bytes].
+impl TryFrom<&ZkLoginInputs> for SuiAddress {
+    type Error = SuiError;
+    fn try_from(inputs: &ZkLoginInputs) -> SuiResult<Self> {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-        let iss_bytes = authenticator.get_iss().as_bytes();
+        let iss_bytes = inputs.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
         hasher.update(
-            big_int_str_to_bytes(authenticator.get_address_seed())
+            big_int_str_to_bytes(inputs.get_address_seed())
                 .map_err(|_| SuiError::InvalidAddress)?,
         );
         Ok(SuiAddress(hasher.finalize().digest))

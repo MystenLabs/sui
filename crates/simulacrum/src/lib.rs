@@ -25,6 +25,7 @@ use sui_types::crypto::AuthoritySignature;
 use sui_types::error::SuiError;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
@@ -265,6 +266,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
     pub fn keystore(&self) -> &KeyStore {
         &self.keystore
+    }
+
+    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
+        self.epoch_state.epoch_start_state()
     }
 
     /// Return a handle to the internally held RNG.

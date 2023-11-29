@@ -124,7 +124,7 @@ const guides = [
 					'guides/developer/app-examples/escrow',
 					'guides/developer/app-examples/trusted-swap',
 					'guides/developer/app-examples/tic-tac-toe',
-					'guides/developer/app-examples/trusted-swap',
+					'guides/developer/app-examples/recaptcha',
 					'guides/developer/app-examples/turnip-town',
 					{
 						type: 'category',
@@ -163,7 +163,6 @@ const guides = [
 			'guides/operator/genesis',
 			'guides/operator/validator-committee',
 			'guides/operator/validator-tasks',
-			'guides/operator/staking-rewards',
 			'guides/operator/node-tools',
 			'guides/operator/formal-snapshot',
 			'guides/operator/exchange-integration',

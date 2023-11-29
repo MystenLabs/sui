@@ -16,11 +16,13 @@ module 0x42::M {
         return 1 + 2;
         return { 1 + 2 };
         return { 1 } && false;
+        false && return { 1 };
 
         // abort
         abort 1 + 2;
         abort { 1 + 2 };
         abort { 1 } && false;
+        false && abort { 1 };
 
         0
     }

@@ -11,8 +11,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
-    ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
+    AuthorityKeyPairWithPath, AuthorityStorePruningConfig, CheckpointExecutorConfig,
+    DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
+    OverloadThresholdConfig, StateArchiveConfig, StateSnapshotConfig,
     DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol};
@@ -33,6 +34,8 @@ pub struct ValidatorConfigBuilder {
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     force_unpruned_checkpoints: bool,
     jwk_fetch_interval: Option<Duration>,
+    overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl ValidatorConfigBuilder {
@@ -62,6 +65,16 @@ impl ValidatorConfigBuilder {
 
     pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
         self.jwk_fetch_interval = Some(i);
+        self
+    }
+
+    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
+        self.overload_threshold_config = Some(config);
+        self
+    }
+
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
         self
     }
 
@@ -118,11 +131,15 @@ impl ValidatorConfigBuilder {
             ..Default::default()
         };
 
-        let mut pruning_config = AuthorityStorePruningConfig::validator_config();
+        let mut pruning_config = AuthorityStorePruningConfig::default();
         if self.force_unpruned_checkpoints {
             pruning_config.set_num_epochs_to_retain_for_checkpoints(None);
         }
         let pruning_config = pruning_config;
+        let checkpoint_executor_config = CheckpointExecutorConfig {
+            data_ingestion_dir: self.data_ingestion_dir,
+            ..Default::default()
+        };
 
         NodeConfig {
             protocol_key_pair: AuthorityKeyPairWithPath::new(validator.key_pair),
@@ -146,7 +163,7 @@ impl ValidatorConfigBuilder {
             authority_store_pruning_config: pruning_config,
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
-            checkpoint_executor_config: Default::default(),
+            checkpoint_executor_config,
             metrics: None,
             supported_protocol_versions: self.supported_protocol_versions,
             db_checkpoint_config: Default::default(),
@@ -171,7 +188,7 @@ impl ValidatorConfigBuilder {
                 .map(|i| i.as_secs())
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
-            overload_threshold_config: Default::default(),
+            overload_threshold_config: self.overload_threshold_config.unwrap_or_default(),
         }
     }
 
@@ -381,7 +398,7 @@ impl FullnodeConfigBuilder {
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
-            authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            authority_store_pruning_config: AuthorityStorePruningConfig::default(),
             end_of_epoch_broadcast_channel_capacity:
                 default_end_of_epoch_broadcast_channel_capacity(),
             checkpoint_executor_config: Default::default(),

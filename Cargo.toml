@@ -58,6 +58,9 @@ exclude = [
     "external-crates/move/crates/serializer-tests",
     "external-crates/move/crates/spec-flatten",
     "external-crates/move/crates/test-generation",
+    "external-crates/move/move-execution/next-vm/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/next-vm/crates/move-stdlib",
+    "external-crates/move/move-execution/next-vm/crates/move-vm-runtime",
     "external-crates/move/move-execution/v0/move-bytecode-verifier",
     "external-crates/move/move-execution/v0/move-stdlib",
     "external-crates/move/move-execution/v0/move-vm/runtime",
@@ -85,6 +88,7 @@ members = [
     "crates/sui-archival",
     "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
+    "crates/sui-bridge",
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
@@ -167,6 +171,9 @@ members = [
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
+    "sui-execution/next-vm/sui-adapter",
+    "sui-execution/next-vm/sui-move-natives",
+    "sui-execution/next-vm/sui-verifier",
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
@@ -526,9 +533,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc"}
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "517ec93ad2eba1807c9508f14953814a33523edc", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "643831ec3b67bdd2b5f998c0bec1b7c91823351f" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "643831ec3b67bdd2b5f998c0bec1b7c91823351f"}
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "643831ec3b67bdd2b5f998c0bec1b7c91823351f", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
