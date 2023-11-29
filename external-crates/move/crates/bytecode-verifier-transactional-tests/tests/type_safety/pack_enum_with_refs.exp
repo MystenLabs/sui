@@ -1,0 +1,82 @@
+processed 9 tasks
+
+task 0 'publish'. lines 1-11:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: PACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 1 'publish'. lines 13-23:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [],
+    offsets: [],
+}
+
+task 2 'publish'. lines 25-28:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 3 'publish'. lines 30-40:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: PACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 4 'publish'. lines 42-52:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [],
+    offsets: [],
+}
+
+task 5 'publish'. lines 54-60:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 6 'publish'. lines 62-72:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: PACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 7 'publish'. lines 74-84:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 8 'publish'. lines 86-89:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: INVALID_SIGNATURE_TOKEN,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}

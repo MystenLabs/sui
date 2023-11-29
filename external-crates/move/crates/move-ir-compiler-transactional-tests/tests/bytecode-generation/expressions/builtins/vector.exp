@@ -1,8 +1,10 @@
 processed 1 task
 
 task 0 'print-bytecode'. lines 1-33:
-// Move bytecode v6
+// Move bytecode v7
 module 1.m {
+
+
 
 
 entry foo() {
@@ -13,12 +15,12 @@ L3:	loc3: u64
 L4:	loc4: &u64
 L5:	loc5: &mut u64
 B0:
-	0: VecPack(2, 0)
+	0: VecPack(1, 0)
 	1: StLoc[0](loc0: vector<u64>)
 	2: ImmBorrowLoc[0](loc0: vector<u64>)
 	3: StLoc[1](loc1: &vector<u64>)
 	4: CopyLoc[1](loc1: &vector<u64>)
-	5: VecLen(2)
+	5: VecLen(1)
 	6: StLoc[3](loc3: u64)
 	7: MoveLoc[1](loc1: &vector<u64>)
 	8: Pop
@@ -26,36 +28,37 @@ B0:
 	10: StLoc[2](loc2: &mut vector<u64>)
 	11: CopyLoc[2](loc2: &mut vector<u64>)
 	12: LdU64(0)
-	13: VecPushBack(2)
+	13: VecPushBack(1)
 	14: CopyLoc[2](loc2: &mut vector<u64>)
 	15: LdU64(1)
-	16: VecPushBack(2)
+	16: VecPushBack(1)
 	17: CopyLoc[2](loc2: &mut vector<u64>)
 	18: LdU64(0)
-	19: VecImmBorrow(2)
+	19: VecImmBorrow(1)
 	20: StLoc[4](loc4: &u64)
 	21: MoveLoc[4](loc4: &u64)
 	22: Pop
 	23: CopyLoc[2](loc2: &mut vector<u64>)
 	24: LdU64(1)
-	25: VecMutBorrow(2)
+	25: VecMutBorrow(1)
 	26: StLoc[5](loc5: &mut u64)
 	27: MoveLoc[5](loc5: &mut u64)
 	28: Pop
 	29: CopyLoc[2](loc2: &mut vector<u64>)
 	30: LdU64(0)
 	31: LdU64(1)
-	32: VecSwap(2)
+	32: VecSwap(1)
 	33: CopyLoc[2](loc2: &mut vector<u64>)
-	34: VecPopBack(2)
+	34: VecPopBack(1)
 	35: Pop
 	36: CopyLoc[2](loc2: &mut vector<u64>)
-	37: VecPopBack(2)
+	37: VecPopBack(1)
 	38: Pop
 	39: MoveLoc[2](loc2: &mut vector<u64>)
 	40: Pop
 	41: MoveLoc[0](loc0: vector<u64>)
-	42: VecUnpack(2, 0)
+	42: VecUnpack(1, 0)
 	43: Ret
+
 }
 }

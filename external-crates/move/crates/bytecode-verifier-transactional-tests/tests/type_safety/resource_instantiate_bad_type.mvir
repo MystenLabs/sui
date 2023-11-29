@@ -12,3 +12,17 @@ module 0x42.Test {
     }
 
 }
+
+//# publish
+
+module 0x43.Test {
+    struct B { b: bool }
+    enum A { V { b: bool } }
+    enum T { V { ft: Self.B } }
+
+    public t1(x: Self.A): Self.T {
+    label b0:
+        // arg type mismatch
+        return T.V{ft: move(x)};
+    }
+}

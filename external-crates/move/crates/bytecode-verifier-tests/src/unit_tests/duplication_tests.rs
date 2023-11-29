@@ -21,6 +21,9 @@ fn duplicated_friend_decls() {
 proptest! {
     #[test]
     fn valid_duplication(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(DuplicationChecker::verify_module(&module).is_ok());
+        // println!("{:#?}", module);
+        let x = DuplicationChecker::verify_module(&module);
+        println!("{:#?}", x);
+        prop_assert!(x.is_ok());
     }
 }

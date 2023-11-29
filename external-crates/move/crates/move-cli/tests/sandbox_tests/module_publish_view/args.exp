@@ -1,18 +1,21 @@
 Command `sandbox publish -v`:
 Found 1 modules
-Publishing a new module 0000000000000000000000000000000000000000000000000000000000000042::Module (wrote 152 bytes)
-Wrote 152 bytes of module ID's and code
+Publishing a new module 0000000000000000000000000000000000000000000000000000000000000042::Module (wrote 153 bytes)
+Wrote 153 bytes of module ID's and code
 Command `sandbox view storage/0x0000000000000000000000000000000000000000000000000000000000000042/modules/Module.mv`:
-// Move bytecode v6
+// Move bytecode v7
 module 42.Module {
 struct S {
 	i: u64
 }
+
+
 
 public foo(Arg0: u64): S {
 B0:
 	0: MoveLoc[0](Arg0: u64)
 	1: Pack[0](S)
 	2: Ret
+
 }
 }

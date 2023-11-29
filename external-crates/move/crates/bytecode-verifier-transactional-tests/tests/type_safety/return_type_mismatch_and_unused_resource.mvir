@@ -51,3 +51,30 @@ module 0x1.M2 {
         return move(r);
     }
 }
+
+//# publish
+module 0x2.M {
+    enum R { V { flag: bool } }
+
+    // Type checking is done before memory safety checks
+    // wrong return type
+    t1(): bool {
+        let c: Self.R;
+    label b0:
+        c = R.V { flag: false };
+        return 0;
+    }
+}
+
+//# publish
+module 0x2.M {
+    enum R { V { flag: bool } }
+
+    t1(): u64 {
+        let c: Self.R;
+    label b0:
+        c = R.V { flag: false };
+        // unused resource
+        return 0;
+    }
+}

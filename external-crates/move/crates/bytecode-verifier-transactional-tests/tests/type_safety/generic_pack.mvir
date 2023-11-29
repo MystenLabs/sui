@@ -22,3 +22,28 @@ module 0x1.N {
         abort 0;
     }
 }
+
+//# publish
+module 0x2.M {
+    enum Foo<T> { V { x: T } }
+
+    foo() {
+        let x: Self.Foo<u64>;
+    label b0:
+        x = Foo.V<u64> { x : 42 }; // valid
+        abort 0;
+    }
+}
+
+//# publish
+module 0x2.N {
+    enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
+    enum Bar has key { V { f: bool } }
+
+    foo() {
+        let x: Self.Foo<u64, Self.Bar>;
+    label b0:
+        x = Foo.V<u64, Self.Bar> { x : 42, y: Bar.V { f: false } }; // valid
+        abort 0;
+    }
+}

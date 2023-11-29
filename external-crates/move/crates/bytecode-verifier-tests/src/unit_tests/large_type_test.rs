@@ -48,6 +48,7 @@ fn test_large_types() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(0)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -68,6 +69,7 @@ fn test_large_types() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(1)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -89,6 +91,7 @@ fn test_large_types() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(1)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -109,6 +112,7 @@ fn test_large_types() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -131,6 +135,7 @@ fn test_large_types() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(0),
                 code: vec![],
+                jump_tables: vec![],
             }),
         });
 

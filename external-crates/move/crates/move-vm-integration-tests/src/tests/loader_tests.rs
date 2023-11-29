@@ -27,7 +27,7 @@ use move_vm_runtime::{move_vm::MoveVM, session::SerializedReturnValues};
 use move_vm_test_utils::InMemoryStorage;
 use move_vm_types::{
     gas::UnmeteredGasMeter,
-    loaded_data::runtime_types::{DepthFormula, StructType, Type},
+    loaded_data::runtime_types::{CachedDatatype, DepthFormula, Type},
 };
 
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
@@ -204,10 +204,10 @@ impl Adapter {
             .expect("Loading type should succeed")
     }
 
-    fn load_struct(&self, module_id: &ModuleId, struct_name: &IdentStr) -> Arc<StructType> {
+    fn load_datatype(&self, module_id: &ModuleId, struct_name: &IdentStr) -> Arc<CachedDatatype> {
         let session = self.vm.new_session(&self.store);
         session
-            .load_struct(module_id, struct_name)
+            .load_datatype(module_id, struct_name)
             .expect("Loading struct should succeed")
             .1
     }
@@ -607,14 +607,14 @@ fn test_depth() {
     ];
     adapter.publish_modules(modules);
     // loads all structs sequentially
-    for (module_name, struct_name, expected_depth) in structs.iter() {
+    for (module_name, type_name, expected_depth) in structs.iter() {
         let computed_depth = &adapter
-            .load_struct(
+            .load_datatype(
                 &ModuleId::new(
                     DEFAULT_ACCOUNT,
                     Identifier::new(module_name.to_string()).unwrap(),
                 ),
-                ident_str!(struct_name),
+                ident_str!(type_name),
             )
             .depth;
         assert_eq!(computed_depth, expected_depth);

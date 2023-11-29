@@ -1,0 +1,10 @@
+processed 1 task
+
+task 0 'publish'. lines 1-11:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: GENERIC_MEMBER_OPCODE_MISMATCH,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}

@@ -1,4 +1,4 @@
-processed 3 tasks
+processed 6 tasks
 
 task 0 'publish'. lines 1-10:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M1'. Got VMError: {
@@ -23,6 +23,33 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x42::M3,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 3 'publish'. lines 34-43:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::M1'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x43::M1,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 4 'publish'. lines 45-54:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::M2'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x43::M2,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
+    offsets: [],
+}
+
+task 5 'publish'. lines 56-65:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000043::M3'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x43::M3,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }

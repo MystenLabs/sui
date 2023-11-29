@@ -23,3 +23,29 @@ module 0x1.N {
         return;
     }
 }
+
+//# publish
+module 0x2.M {
+    enum Foo<T> { V { x: T } }
+
+    foo() {
+        let x: u64;
+    label b0:
+        Foo.V<u64> { x: x } = Foo.V<u64> { x: 42 }; // valid
+        return;
+    }
+}
+
+//# publish
+module 0x2.N {
+    enum Foo<T1: copy + drop, T2> { V { x: T1, y: T2 } }
+
+    foo() {
+        let x: u64;
+        let y: bool;
+    label b0:
+        // valid
+        Foo.V<u64, bool> { x: x, y: y }  = Foo.V<u64, bool> { x: 42, y: true };
+        return;
+    }
+}

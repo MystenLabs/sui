@@ -1,7 +1,7 @@
 Command `build`:
 BUILDING Test
 Command `disassemble --package Test --name m`:
-// Move bytecode v6
+// Move bytecode v7
 module 42.m {
 struct Zs {
 	dummy_field: bool
@@ -10,15 +10,19 @@ struct As {
 	dummy_field: bool
 }
 
+
+
 public zf(): u64 {
 B0:
 	0: LdConst[0](U64: 01000000..)
 	1: Ret
+
 }
 public af(): u32 {
 B0:
 	0: LdConst[1](U32: 00000000)
 	1: Ret
+
 }
 
 Constants [

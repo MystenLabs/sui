@@ -48,8 +48,10 @@ module std::AModule {
     }
 }
 Command `coverage bytecode --module AModule`:
-// Move bytecode v6
+// Move bytecode v7
 module 1.AModule {
+
+
 
 
 public double_except_three(x#0#0: u64): u64 {
@@ -68,6 +70,7 @@ B3:
 [4]	8: MoveLoc[0](x#0#0: u64)
 [4]	9: Mul
 [4]	10: Ret
+
 }
 
 Constants [
@@ -75,8 +78,10 @@ Constants [
 ]
 }
 Command `disassemble --package MoveStdlib --name signer`:
-// Move bytecode v6
+// Move bytecode v7
 module 1.signer {
+
+
 
 
 native public borrow_address(s#0#0: &signer): &address
@@ -86,6 +91,7 @@ B0:
 	1: Call borrow_address(&signer): &address
 	2: ReadRef
 	3: Ret
+
 }
 }
 Command `errmap`:

@@ -27,3 +27,32 @@ label b0:
     return;
 }
 }
+
+//# publish
+module 0x43.Test {
+    enum T has drop {V {fint: u64, fv: bool} }
+
+    public t1(fint: u64, fv: bool): Self.T {
+    label b0:
+        return T.V{fint: move(fint), fv: move(fv)};
+    }
+
+    public t2(fint: u64): Self.T {
+    label b0:
+        return T.V{fint:  move(fint), fv: false};
+    }
+}
+
+//# run
+module 0x43.m {
+import 0x43.Test;
+
+entry foo() {
+    let t1: Test.T;
+    let t2: Test.T;
+label b0:
+    t1 = Test.t1(0, false);
+    t2 = Test.t2(0);
+    return;
+}
+}

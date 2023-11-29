@@ -1,0 +1,39 @@
+//# publish
+module 0x42.m {
+
+    enum Threes<T> has {
+        One { pos0: T } ,
+        Two{},
+        Three { pos0: T }
+    }
+
+    t0(): u64 {
+            let loc3: u64;
+            let loc1: Self.Threes<u64>;
+            let inner: u64;
+            let copier: u64;
+        label l0:
+            loc1 = Threes.Three<u64>{pos0: 0};
+
+            variant_switch Threes (&loc1) {
+                One : l1,
+                Two : l2,
+                Three : l3
+            };
+        label l1:
+            Threes.One<u64>{pos0: copier } = move(loc1);
+            loc3 = 1u64;
+            jump l4;
+        label l2:
+            Threes.Two<u64>{ } = move(loc1);
+            loc3 = 1u64;
+            jump l4;
+        label l3:
+            Threes.Three<u64>{pos0: inner} = move(loc1);
+            copier = copy(inner);
+            loc3 = copy(copier);
+            jump l4;
+        label l4:
+            return move(loc3);
+    }
+}

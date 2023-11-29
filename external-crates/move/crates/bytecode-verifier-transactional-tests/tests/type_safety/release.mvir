@@ -8,3 +8,14 @@ module 0x1.M {
         return;
     }
 }
+
+//# publish
+module 0x2.M {
+    enum Coin { V { value: u64 } }
+    t(): Self.Coin {
+    label b0:
+        // cannot pop without the drop ability
+        _ = Coin.V { value: 0 };
+        return;
+    }
+}

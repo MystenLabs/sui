@@ -32,6 +32,7 @@ fn test_vec_pack() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![],
+            jump_tables: vec![],
         }),
     });
 

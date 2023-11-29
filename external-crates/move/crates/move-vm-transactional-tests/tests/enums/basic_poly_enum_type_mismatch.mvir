@@ -1,0 +1,49 @@
+//# print-bytecode
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants<T> {
+        One { },
+        Two { x: u64 }
+    }
+
+    public f<T>(t: T, e: T): T {
+        let x: Self.EnumWithTwoVariants<T>;
+        let y: T;
+        label b0:
+            x = EnumWithTwoVariants.Two<T> { x: move(t) };
+            variant_switch EnumWithTwoVariants (&x) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One<T> { } = move(x);
+            return move(e);
+        label b2:
+            EnumWithTwoVariants.Two<T> { x: y } = move(x);
+            return move(y);
+    }
+}
+
+//# publish
+module 0x1.MonomorphicEnums {
+    enum EnumWithTwoVariants<T> {
+        One { },
+        Two { x: u64 }
+    }
+
+    public f<T>(t: T, e: T): T {
+        let x: Self.EnumWithTwoVariants<T>;
+        let y: T;
+        label b0:
+            x = EnumWithTwoVariants.Two<T> { x: move(t) };
+            variant_switch EnumWithTwoVariants (&x) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One<T> { } = move(x);
+            return move(e);
+        label b2:
+            EnumWithTwoVariants.Two<T> { x: y } = move(x);
+            return move(y);
+    }
+}

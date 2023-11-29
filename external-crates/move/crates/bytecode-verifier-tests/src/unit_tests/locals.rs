@@ -35,6 +35,7 @@ fn test_locals() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -67,6 +68,7 @@ fn test_locals() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::LdTrue, Bytecode::LdU8(0), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -89,6 +91,7 @@ fn test_locals() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(1),
                 code: vec![],
+                jump_tables: vec![],
             }),
         });
 
