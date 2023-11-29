@@ -1,47 +1,53 @@
 ---
 title: Transactions
+description: In Sui, a transaction is more than a basic record of the flow of assets. Transactions in Sui represent calls to specific functionality that execute on inputs to define the result of the transaction. This topic demonstrates how to create transactions using the Sui CLI, Sui TypeScript SDK, and Sui Rust SDK.
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem'; 
 
-### Overview
-In Sui, a transaction is more than a basic record of the flow of assets. Transactions in Sui represent calls to specific functionality (e.g., calling a smart contract function) that execute on inputs to define the result of the transaction.
+
+In Sui, a transaction is more than a basic record of the flow of assets. Transactions in Sui represent calls to specific functionality (like calling a smart contract function) that execute on inputs to define the result of the transaction.
+
 Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or an encoded value (for example, a vector of bytes used as an argument to a Move call). 
-Once a transaction is constructed, usually through using [Programmable Transaction Blocks](./building-ptb), the user signs the transaction and submits it to be executed on-chain.
+After a transaction is constructed, usually through using [programmable transaction blocks](./building-ptb) (PTBs), the user signs the transaction and submits it to be executed on chain.
 
-### Workflow
+## Workflow
 
-The following high-level process describes the overall workflow for constructing and executing a transaction on-chain:
-* The user constructs the transaction data by creating a `TransactionBlock` where multiple transactions are chained. This is usually done with [Programmable Transaction Blocks (PTB)](./building-ptb).
+The following high-level process describes the overall workflow for constructing and executing an on-chain transaction:
+
+* Construct the transaction data by creating a `TransactionBlock` where multiple transactions are chained. This is usually done with a PTB.
 * The SDK's built-in gas estimation and coin selection picks the gas coin.
-* The user signs the transaction to generate a [Signature](/concepts/cryptography/transaction-auth/signatures#user-signature).
-* The user submits the `TransactionBlock` to be executed on-chain.
+* Sign the transaction to generate a [signature](/concepts/cryptography/transaction-auth/signatures#user-signature).
+* Submit the `TransactionBlock` for on-chain execution.
 
 :::info
-If the user wants to use a specific gas coin, the user should first find the gas coin object id to be used to pay for gas, and explicitly use that in the PTB. If there is no gas coin object, the user should use the [splitCoin](./building-ptb#available-transactions) transaction to create a gas coin object. The split coin transaction should be the first transaction call in the PTB.
+
+If you want to use a specific gas coin, first find the gas coin object ID to be used to pay for gas, and explicitly use that in the PTB. If there is no gas coin object, use the [splitCoin](./building-ptb#available-transactions) transaction to create a gas coin object. The split coin transaction should be the first transaction call in the PTB.
+
 :::
 
+## Examples
 
-### Examples
-
-Here is an example on how to transfer SUI in a transaction using the CLI, Rust SDK, and TS SDK.
+Here is an example on how to transfer SUI in a transaction using the Sui CLI, Rust SDK, and TypeScript SDK.
 
 <Tabs groupId="examples-sending-transaction">
 
 <TabItem value="cli" label="Sui CLI" default>
 
-Get the gas coin object id of the active address. This is the coin from which 1000 MIST is transferred to another address.
+Get the gas coin object id of the active address. This is the coin from which 1,000 MIST is transferred to another address.
+
 ```shell
 sui client gas
 ```
 
 If you want to extract just the address and have [`jq`](https://jqlang.github.io/jq/) installed, then use:
+
 ```shell
 sui client gas --json | jq -r '.[] | .gasCoinId'
 ```
 
-Transfer 1000 MIST to another address.
+Transfer 1,000 MIST to another address.
 
 ```shell
 sui client transfer-sui \
@@ -169,7 +175,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 <TabItem value="ts-sdk" label="TS SDK">
 
-This example is borrowed from the Sui TS SDK [repository](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#transfer-sui).
+This example is borrowed from the Sui TypeScript SDK [repository](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#transfer-sui).
 
 ```js
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
