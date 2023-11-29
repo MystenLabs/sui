@@ -32,7 +32,7 @@ do
         exit 0
     elif [[ "$cmd" == "-pkg" ]]; then
         OP="package"
-        OPTS="-o move-VSCODE_OS.vsix"
+        OPTS="-omove-VSCODE_OS.vsix"
     elif [[ "$cmd" == "-pub" ]]; then
         OP="publish"
         OPTS=""
