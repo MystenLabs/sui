@@ -361,8 +361,8 @@ impl CheckpointExecutor {
                 tx_manager.clone(),
                 accumulator.clone(),
                 local_execution_timeout_sec,
-                data_ingestion_dir,
                 &metrics,
+                data_ingestion_dir.clone(),
             )
             .await
             {
@@ -526,6 +526,7 @@ async fn execute_checkpoint(
     accumulator: Arc<StateAccumulator>,
     local_execution_timeout_sec: u64,
     metrics: &Arc<CheckpointExecutorMetrics>,
+    data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
     debug!("Preparing checkpoint for execution",);
     let prepare_start = Instant::now();
@@ -560,6 +561,7 @@ async fn execute_checkpoint(
         checkpoint,
         metrics,
         prepare_start,
+        data_ingestion_dir,
     )
     .await?;
     Ok(())
@@ -928,6 +930,7 @@ async fn execute_transactions(
     checkpoint: VerifiedCheckpoint,
     metrics: &Arc<CheckpointExecutorMetrics>,
     prepare_start: Instant,
+    data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
     let effects_digests: HashMap<_, _> = execution_digests
         .iter()
@@ -999,6 +1002,7 @@ async fn execute_transactions(
         transaction_manager,
         accumulator,
         local_execution_timeout_sec,
+        data_ingestion_dir,
     )
     .await;
 
