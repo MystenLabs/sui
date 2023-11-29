@@ -8,6 +8,7 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
+use crate::config::ServiceConfig;
 use crate::context_data::db_data_provider::{validate_cursor_pagination, PgManager};
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
@@ -17,6 +18,7 @@ use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {
+    // TODO: Add storag ID of package (bytecode always contains runtime ID)
     pub native: Vec<u8>,
     pub parsed: ParsedMoveModule,
 }
@@ -164,26 +166,78 @@ impl MoveModule {
     /// Look-up the definition of a struct defined in this module, by its name.
     #[graphql(name = "struct")]
     async fn struct_(&self, name: String) -> Result<Option<MoveStruct>> {
-        use sui_package_resolver::error::Error as E;
-        let def = match self.parsed.struct_def(&name) {
-            Ok(Some(def)) => def,
-            Ok(None) | Err(E::StructNotFound(_, _, _)) => return Ok(None),
-            Err(e) => return Err(Error::Internal(e.to_string())).extend(),
-        };
-
-        Ok(Some(MoveStruct::new(
-            self.parsed.name().to_string(),
-            name,
-            def,
-        )))
+        self.struct_impl(name).extend()
     }
 
-    // structConnection(
-    //   first: Int,
-    //   after: String,
-    //   last: Int,
-    //   before: String,
-    // ): MoveStructConnection
+    /// Iterate through the structs defined in this module.
+    async fn struct_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, MoveStruct>>> {
+        let default_page_size = ctx
+            .data::<ServiceConfig>()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .extend()?
+            .limits
+            .max_page_size;
+
+        // TODO: make cursor opaque.
+        // for now it same as struct name
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+
+        let struct_range = self.parsed.structs(after.as_deref(), before.as_deref());
+
+        let total = struct_range.clone().count() as u64;
+        let (skip, take) = match (first, last) {
+            (Some(first), Some(last)) if last < first => (first - last, last),
+            (Some(first), _) => (0, first),
+            (None, Some(last)) if last < total => (total - last, last),
+            (None, _) => (0, default_page_size),
+        };
+
+        let mut connection = Connection::new(false, false);
+        for name in struct_range.skip(skip as usize).take(take as usize) {
+            let Some(struct_) = self.struct_impl(name.to_string()).extend()? else {
+                return Err(Error::Internal(format!(
+                    "Cannot deserialize struct {name} in module {}::{}",
+                    // TODO: Replace with storage ID
+                    self.parsed
+                        .bytecode()
+                        .self_id()
+                        .address()
+                        .to_canonical_display(/* with_prefix */ true),
+                    self.parsed.name(),
+                )))
+                .extend();
+            };
+
+            connection.edges.push(Edge::new(name.to_string(), struct_));
+        }
+
+        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
+            self.parsed
+                .structs(None, Some(&fst.cursor))
+                .next()
+                .is_some()
+        });
+
+        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
+            self.parsed
+                .structs(Some(&lst.cursor), None)
+                .next()
+                .is_some()
+        });
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
+    }
 
     // function(name: String!): MoveFunction
     // functionConnection(
@@ -227,5 +281,22 @@ impl MoveModuleId {
                 ))
             })
             .extend()
+    }
+}
+
+impl MoveModule {
+    fn struct_impl(&self, name: String) -> Result<Option<MoveStruct>, Error> {
+        use sui_package_resolver::error::Error as E;
+        let def = match self.parsed.struct_def(&name) {
+            Ok(Some(def)) => def,
+            Ok(None) | Err(E::StructNotFound(_, _, _)) => return Ok(None),
+            Err(e) => return Err(Error::Internal(e.to_string())),
+        };
+
+        Ok(Some(MoveStruct::new(
+            self.parsed.name().to_string(),
+            name,
+            def,
+        )))
     }
 }
