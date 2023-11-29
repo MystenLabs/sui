@@ -134,7 +134,7 @@ pub fn base_type(t: &N::Type) -> Option<&N::Type> {
     }
 }
 
-/// Returns abilities of a given type, if any..
+/// Returns abilities of a given type, if any.
 pub fn type_abilities(sp!(_, st_): &SingleType) -> Option<E::AbilitySet> {
     let sp!(_, bt_) = match st_ {
         SingleType_::Base(v) => v,
