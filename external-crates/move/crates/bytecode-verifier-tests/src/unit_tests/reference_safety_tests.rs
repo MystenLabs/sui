@@ -35,6 +35,7 @@ fn test_bicliques() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(0)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -61,6 +62,7 @@ fn test_bicliques() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![],
+            jump_tables: vec![],
         }),
     });
     let code = &mut m.function_defs[1].code.as_mut().unwrap().code;
@@ -87,6 +89,7 @@ fn test_bicliques() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -109,6 +112,7 @@ fn test_bicliques() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(0),
                 code: vec![],
+                jump_tables: vec![],
             }),
         });
         let code = &mut m.function_defs[i as usize + 2].code.as_mut().unwrap().code;
@@ -160,6 +164,7 @@ fn test_merge_state_large_graph() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(0)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -185,6 +190,7 @@ fn test_merge_state_large_graph() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(1)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -205,6 +211,7 @@ fn test_merge_state_large_graph() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(1)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -226,6 +233,7 @@ fn test_merge_state_large_graph() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(1),
                 code: vec![],
+                jump_tables: vec![],
             }),
         });
         let code = &mut m.function_defs[i as usize + 3].code.as_mut().unwrap().code;
@@ -282,6 +290,7 @@ fn test_merge_state() {
         code: Some(CodeUnit {
             locals: SignatureIndex(0),
             code: vec![Bytecode::Call(FunctionHandleIndex(0)), Bytecode::Ret],
+            jump_tables: vec![],
         }),
     });
 
@@ -313,6 +322,7 @@ fn test_merge_state() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(2),
                 code: vec![],
+                jump_tables: vec![],
             }),
         });
         let code = &mut m.function_defs[i as usize + 1].code.as_mut().unwrap().code;
@@ -395,6 +405,7 @@ fn test_copyloc_pop() {
             code: Some(CodeUnit {
                 locals: SignatureIndex(2),
                 code: vec![],
+                jump_tables: vec![],
             }),
         });
         let code = &mut m.function_defs[i as usize].code.as_mut().unwrap().code;

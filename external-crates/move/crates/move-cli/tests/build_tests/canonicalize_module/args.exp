@@ -1,5 +1,5 @@
 Command `disassemble --Xdebug --package Test --name c`:
-// Move bytecode v6
+// Move bytecode v7
 module 2.c {
 use 0000000000000000000000000000000000000000000000000000000000000002::b;
 use 0000000000000000000000000000000000000000000000000000000000000003::d;
@@ -14,6 +14,8 @@ struct A {
 	b: vector<B>
 }
 
+
+
 public g(): u64 {
 B0:
 	0: Call a::f(): u64
@@ -23,6 +25,7 @@ B0:
 	4: Call e::g(B): u64
 	5: Add
 	6: Ret
+
 }
 public f(): u64 {
 B0:
@@ -31,11 +34,12 @@ B0:
 	2: Call e::f(A): u64
 	3: Add
 	4: Ret
+
 }
 }
 
 CompiledModule {
-    version: 6,
+    version: 7,
     self_module_handle_idx: ModuleHandleIndex(0),
     module_handles: [
         ModuleHandle {
@@ -59,26 +63,26 @@ CompiledModule {
             name: IdentifierIndex(6),
         },
     ],
-    struct_handles: [
-        StructHandle {
+    datatype_handles: [
+        DatatypeHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(1),
             abilities: [],
             type_parameters: [],
         },
-        StructHandle {
+        DatatypeHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(0),
             abilities: [],
             type_parameters: [],
         },
-        StructHandle {
+        DatatypeHandle {
             module: ModuleHandleIndex(4),
             name: IdentifierIndex(0),
             abilities: [Drop, ],
             type_parameters: [],
         },
-        StructHandle {
+        DatatypeHandle {
             module: ModuleHandleIndex(4),
             name: IdentifierIndex(1),
             abilities: [Drop, ],
@@ -166,12 +170,12 @@ CompiledModule {
         ),
         Signature(
             [
-                Struct(StructHandleIndex(3)),
+                Struct(DatatypeHandleIndex(3)),
             ],
         ),
         Signature(
             [
-                Struct(StructHandleIndex(2)),
+                Struct(DatatypeHandleIndex(2)),
             ],
         ),
     ],
@@ -217,7 +221,7 @@ CompiledModule {
     metadata: [],
     struct_defs: [
         StructDefinition {
-            struct_handle: StructHandleIndex(0),
+            struct_handle: DatatypeHandleIndex(0),
             field_information: Declared(
                 [
                     FieldDefinition {
@@ -230,13 +234,13 @@ CompiledModule {
             ),
         },
         StructDefinition {
-            struct_handle: StructHandleIndex(1),
+            struct_handle: DatatypeHandleIndex(1),
             field_information: Declared(
                 [
                     FieldDefinition {
                         name: IdentifierIndex(3),
                         signature: TypeSignature(
-                            Vector(Struct(StructHandleIndex(0))),
+                            Vector(Struct(DatatypeHandleIndex(0))),
                         ),
                     },
                 ],
@@ -261,6 +265,7 @@ CompiledModule {
                         Add,
                         Ret,
                     ],
+                    jump_tables: [],
                 },
             ),
         },
@@ -279,8 +284,11 @@ CompiledModule {
                         Add,
                         Ret,
                     ],
+                    jump_tables: [],
                 },
             ),
         },
     ],
+    enum_defs: [],
+    enum_def_instantiations: [],
 }

@@ -63,3 +63,69 @@ module 0x42.Token {
         return;
     }
 }
+
+//# publish
+module 0x43.Token {
+    import 0x1.signer;
+
+    enum T has key {V { balance: u64} }
+
+    public new(balance: u64): Self.T  {
+    label b0:
+        return T.V {balance: copy(balance)};
+    }
+
+    public value(this: &Self.T): u64 {
+        let b: u64;
+        let b_ref: &u64;
+    label b0:
+        T.V {balance: b_ref} &= move(this);
+        b = *move(b_ref);
+        return move(b);
+    }
+
+    public bump(this: &mut Self.T) {
+        let val: &mut u64;
+        let x: u64;
+    label b0:
+        T.V {balance: val} &mut = move(this);
+        x = *copy(val) + 1;
+        *move(val) = copy(x);
+        return;
+    }
+
+    public publish(account: &signer, t: Self.T) {
+    label b0:
+        abort(0);
+    }
+
+    fake(addr: address): &mut Self.T { label b0: abort(0); }
+
+    public test(account: &signer) {
+        let z: Self.T;
+        let addr1: address;
+        let struct1: &mut Self.T;
+        let imm_struct1: &Self.T;
+        let struct1_original_balance: u64;
+        let struct1_new_balance: u64;
+    label b0:
+        z = Self.new(0);
+        Self.publish(copy(account), move(z));
+
+        addr1 = signer.address_of(move(account));
+        // returns mut reference, test its usage
+        struct1 = Self.fake(copy(addr1));
+
+        imm_struct1 = freeze(copy(struct1));
+        struct1_original_balance = Self.value(move(imm_struct1));
+        assert(move(struct1_original_balance) == 0, 42);
+
+        Self.bump(copy(struct1));
+
+        imm_struct1 = freeze(move(struct1));
+        struct1_new_balance = Self.value(move(imm_struct1));
+        assert(move(struct1_new_balance) == 1, 43);
+
+        return;
+    }
+}

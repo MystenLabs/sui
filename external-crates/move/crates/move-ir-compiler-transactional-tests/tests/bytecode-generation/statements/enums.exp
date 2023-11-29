@@ -1,0 +1,107 @@
+processed 1 task
+
+task 0 'print-bytecode'. lines 1-71:
+// Move bytecode v7
+module 3d8.M {
+
+
+enum T has drop {
+	X {  },
+	Y { f: u64 }
+}
+
+f(): T {
+B0:
+	0: PackVariant(EnumDefinitionIndex(0), 0)
+	1: Ret
+
+}
+f1(): T {
+L0:	loc0: T
+L1:	loc1: u64
+B0:
+	0: LdU64(0)
+	1: PackVariant(EnumDefinitionIndex(0), 1)
+	2: StLoc[0](loc0: T)
+	3: MoveLoc[0](loc0: T)
+	4: UnpackVariant(EnumDefinitionIndex(0), 1)
+	5: StLoc[1](loc1: u64)
+	6: PackVariant(EnumDefinitionIndex(0), 0)
+	7: Ret
+
+}
+f2(): T {
+L0:	loc0: T
+L1:	loc1: u64
+B0:
+	0: LdU64(0)
+	1: PackVariant(EnumDefinitionIndex(0), 1)
+	2: StLoc[0](loc0: T)
+	3: ImmBorrowLoc[0](loc0: T)
+	4: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	5: LdU64(1)
+	6: Ret
+B2:
+	7: MoveLoc[0](loc0: T)
+	8: UnpackVariant(EnumDefinitionIndex(0), 1)
+	9: StLoc[1](loc1: u64)
+	10: MoveLoc[1](loc1: u64)
+	11: Ret
+Jump tables:
+[0]:	variant_switch T {
+		Variant0 => jump 5
+		Variant1 => jump 7
+	}
+}
+f3(): T {
+L0:	loc0: T
+L1:	loc1: u64
+L2:	loc2: &u64
+B0:
+	0: LdU64(0)
+	1: PackVariant(EnumDefinitionIndex(0), 1)
+	2: StLoc[0](loc0: T)
+	3: ImmBorrowLoc[0](loc0: T)
+	4: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	5: LdU64(1)
+	6: Ret
+B2:
+	7: ImmBorrowLoc[0](loc0: T)
+	8: UnpackVariantImmRef(EnumDefinitionIndex(0), 1)
+	9: StLoc[2](loc2: &u64)
+	10: LdU64(0)
+	11: Ret
+Jump tables:
+[0]:	variant_switch T {
+		Variant0 => jump 5
+		Variant1 => jump 7
+	}
+}
+f4(): T {
+L0:	loc0: T
+L1:	loc1: u64
+L2:	loc2: &mut u64
+B0:
+	0: LdU64(0)
+	1: PackVariant(EnumDefinitionIndex(0), 1)
+	2: StLoc[0](loc0: T)
+	3: ImmBorrowLoc[0](loc0: T)
+	4: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	5: LdU64(1)
+	6: Ret
+B2:
+	7: MutBorrowLoc[0](loc0: T)
+	8: UnpackVariantMutRef(EnumDefinitionIndex(0), 1)
+	9: StLoc[2](loc2: &mut u64)
+	10: LdU64(0)
+	11: Ret
+Jump tables:
+[0]:	variant_switch T {
+		Variant0 => jump 5
+		Variant1 => jump 7
+	}
+}
+}

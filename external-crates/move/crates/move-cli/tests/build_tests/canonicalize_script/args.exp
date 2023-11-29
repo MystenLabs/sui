@@ -1,0 +1,223 @@
+Command `disassemble --Xdebug --name main`:
+// Move bytecode v7
+script {
+use 0000000000000000000000000000000000000000000000000000000000000002::b;
+use 0000000000000000000000000000000000000000000000000000000000000003::c;
+use 0000000000000000000000000000000000000000000000000000000000000001::a;
+use 0000000000000000000000000000000000000000000000000000000000000004::d;
+
+
+
+
+
+
+main() {
+L0:	a#1#0: A
+L1:	b#1#0: B
+B0:
+	0: Call d::a(): A
+	1: StLoc[0](a#1#0: A)
+	2: Call d::b(): B
+	3: StLoc[1](b#1#0: B)
+	4: Call a::f(): u64
+	5: Call b::f(): u64
+	6: Add
+	7: Call c::f(): u64
+	8: Add
+	9: MoveLoc[1](b#1#0: B)
+	10: Call d::g(B): u64
+	11: Add
+	12: MoveLoc[0](a#1#0: A)
+	13: Call d::f(A): u64
+	14: Add
+	15: LdU64(220)
+	16: Eq
+	17: BrFalse(19)
+B1:
+	18: Branch(21)
+B2:
+	19: LdU64(0)
+	20: Abort
+B3:
+	21: Ret
+
+}
+}
+
+CompiledScript {
+    version: 7,
+    module_handles: [
+        ModuleHandle {
+            address: AddressIdentifierIndex(1),
+            name: IdentifierIndex(3),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(2),
+            name: IdentifierIndex(4),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(0),
+            name: IdentifierIndex(2),
+        },
+        ModuleHandle {
+            address: AddressIdentifierIndex(3),
+            name: IdentifierIndex(5),
+        },
+    ],
+    datatype_handles: [
+        DatatypeHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(0),
+            abilities: [Drop, ],
+            type_parameters: [],
+        },
+        DatatypeHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(1),
+            abilities: [Drop, ],
+            type_parameters: [],
+        },
+    ],
+    function_handles: [
+        FunctionHandle {
+            module: ModuleHandleIndex(0),
+            name: IdentifierIndex(6),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(4),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(1),
+            name: IdentifierIndex(6),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(4),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(2),
+            name: IdentifierIndex(6),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(4),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(2),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(2),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(3),
+            parameters: SignatureIndex(0),
+            return_: SignatureIndex(3),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(6),
+            parameters: SignatureIndex(2),
+            return_: SignatureIndex(4),
+            type_parameters: [],
+        },
+        FunctionHandle {
+            module: ModuleHandleIndex(3),
+            name: IdentifierIndex(7),
+            parameters: SignatureIndex(3),
+            return_: SignatureIndex(4),
+            type_parameters: [],
+        },
+    ],
+    function_instantiations: [],
+    signatures: [
+        Signature(
+            [],
+        ),
+        Signature(
+            [
+                Struct(DatatypeHandleIndex(0)),
+                Struct(DatatypeHandleIndex(1)),
+            ],
+        ),
+        Signature(
+            [
+                Struct(DatatypeHandleIndex(0)),
+            ],
+        ),
+        Signature(
+            [
+                Struct(DatatypeHandleIndex(1)),
+            ],
+        ),
+        Signature(
+            [
+                U64,
+            ],
+        ),
+    ],
+    identifiers: [
+        Identifier(
+            "A",
+        ),
+        Identifier(
+            "B",
+        ),
+        Identifier(
+            "a",
+        ),
+        Identifier(
+            "b",
+        ),
+        Identifier(
+            "c",
+        ),
+        Identifier(
+            "d",
+        ),
+        Identifier(
+            "f",
+        ),
+        Identifier(
+            "g",
+        ),
+    ],
+    address_identifiers: [
+        0000000000000000000000000000000000000000000000000000000000000001,
+        0000000000000000000000000000000000000000000000000000000000000002,
+        0000000000000000000000000000000000000000000000000000000000000003,
+        0000000000000000000000000000000000000000000000000000000000000004,
+    ],
+    constant_pool: [],
+    metadata: [],
+    code: CodeUnit {
+        locals: SignatureIndex(1),
+        code: [
+            Call(3),
+            StLoc(0),
+            Call(4),
+            StLoc(1),
+            Call(2),
+            Call(0),
+            Add,
+            Call(1),
+            Add,
+            MoveLoc(1),
+            Call(6),
+            Add,
+            MoveLoc(0),
+            Call(5),
+            Add,
+            LdU64(220),
+            Eq,
+            BrFalse(19),
+            Branch(21),
+            LdU64(0),
+            Abort,
+            Ret,
+        ],
+        jump_tables: [],
+    },
+    type_parameters: [],
+    parameters: SignatureIndex(0),
+}

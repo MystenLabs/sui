@@ -9,12 +9,12 @@ use move_binary_format::{
     errors::VMResult,
     file_format::{
         AbilitySet, AddressIdentifierIndex, Bytecode, Bytecode::*, CodeUnit, CompiledModule,
-        Constant, ConstantPoolIndex, FieldDefinition, FunctionDefinition, FunctionHandle,
-        FunctionHandleIndex, FunctionInstantiation, FunctionInstantiationIndex, IdentifierIndex,
-        ModuleHandle, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
-        SignatureToken::*, StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
-        StructDefinitionIndex, StructFieldInformation, StructHandle, StructHandleIndex,
-        StructTypeParameter, TypeSignature,
+        Constant, ConstantPoolIndex, DatatypeHandle, DatatypeHandleIndex, DatatypeTyParameter,
+        FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+        FunctionInstantiation, FunctionInstantiationIndex, IdentifierIndex, ModuleHandle,
+        ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, SignatureToken::*,
+        StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
+        StructDefinitionIndex, StructFieldInformation, TypeSignature,
     },
 };
 use move_core_types::{
@@ -346,7 +346,7 @@ fn make_module(
         func_type_params.clone()
     };
     let struct_type_parameters = vec![
-        StructTypeParameter {
+        DatatypeTyParameter {
             constraints: AbilitySet::EMPTY,
             is_phantom: false,
         };
@@ -391,14 +391,14 @@ fn make_module(
             name: IdentifierIndex(0),
         }],
         // struct definition
-        struct_handles: vec![StructHandle {
+        datatype_handles: vec![DatatypeHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(1),
             abilities: AbilitySet::ALL,
             type_parameters: struct_type_parameters,
         }],
         struct_defs: vec![StructDefinition {
-            struct_handle: StructHandleIndex(0),
+            struct_handle: DatatypeHandleIndex(0),
             field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                 name: IdentifierIndex(2),
                 signature: TypeSignature(U8),
@@ -436,6 +436,7 @@ fn make_module(
                 acquires_global_resources: vec![],
                 code: Some(CodeUnit {
                     locals: SignatureIndex(locals_idx as u16),
+                    jump_tables: vec![],
                     code,
                 }),
             },
@@ -446,6 +447,7 @@ fn make_module(
                 acquires_global_resources: vec![],
                 code: Some(CodeUnit {
                     locals: SignatureIndex(locals_idx as u16),
+                    jump_tables: vec![],
                     code: vec![
                         CopyLoc(0),
                         LdU64(1),
@@ -468,6 +470,7 @@ fn make_module(
                 acquires_global_resources: vec![],
                 code: Some(CodeUnit {
                     locals: SignatureIndex(locals_idx as u16),
+                    jump_tables: vec![],
                     code: vec![Ret],
                 }),
             },
@@ -505,6 +508,8 @@ fn make_module(
         friend_decls: vec![],
         field_instantiations: vec![],
         metadata: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
     };
     // uncomment to see the module generated
     // println!("Module: {:#?}", module);
@@ -719,7 +724,7 @@ fn vec_pack_gen_deep_it(
         for _ in 0..STRUCT_TY_PARAMS {
             ty_args.push(big_ty.clone());
         }
-        big_ty = StructInstantiation(StructHandleIndex(0), ty_args);
+        big_ty = DatatypeInstantiation(DatatypeHandleIndex(0), ty_args);
     }
 
     //
@@ -876,7 +881,7 @@ fn deep_gen_call_it(
         for _ in 0..STRUCT_TY_PARAMS {
             ty_args.push(big_ty.clone());
         }
-        big_ty = StructInstantiation(StructHandleIndex(0), ty_args);
+        big_ty = DatatypeInstantiation(DatatypeHandleIndex(0), ty_args);
     }
 
     //
@@ -1011,7 +1016,7 @@ fn deep_rec_gen_call(
         for _ in 0..STRUCT_TY_PARAMS {
             ty_args.push(big_ty.clone());
         }
-        big_ty = StructInstantiation(StructHandleIndex(0), ty_args);
+        big_ty = DatatypeInstantiation(DatatypeHandleIndex(0), ty_args);
     }
 
     //

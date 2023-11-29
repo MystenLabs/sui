@@ -1,0 +1,75 @@
+processed 3 tasks
+
+task 0 'print-bytecode'. lines 3-50:
+// Move bytecode v7
+module 1.MonomorphicEnums {
+
+
+enum EnumWithTwoVariants has drop {
+	One { x: u64 },
+	Two { x: u64, y: u64 }
+}
+
+public f(Arg0: u64): EnumWithTwoVariants {
+B0:
+	0: LdU64(0)
+	1: StLoc[1](loc0: u64)
+	2: MoveLoc[0](Arg0: u64)
+	3: MoveLoc[1](loc0: u64)
+	4: PackVariant(EnumDefinitionIndex(0), 1)
+	5: Ret
+
+}
+public mutate(Arg0: &mut EnumWithTwoVariants, Arg1: u64) {
+B0:
+	0: CopyLoc[0](Arg0: &mut EnumWithTwoVariants)
+	1: FreezeRef
+	2: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	3: MoveLoc[0](Arg0: &mut EnumWithTwoVariants)
+	4: UnpackVariantMutRef(EnumDefinitionIndex(0), 0)
+	5: StLoc[2](loc0: &mut u64)
+	6: MoveLoc[1](Arg1: u64)
+	7: MoveLoc[2](loc0: &mut u64)
+	8: WriteRef
+	9: Ret
+B2:
+	10: MoveLoc[0](Arg0: &mut EnumWithTwoVariants)
+	11: UnpackVariantMutRef(EnumDefinitionIndex(0), 1)
+	12: StLoc[3](loc1: &mut u64)
+	13: StLoc[2](loc0: &mut u64)
+	14: MoveLoc[1](Arg1: u64)
+	15: MoveLoc[2](loc0: &mut u64)
+	16: WriteRef
+	17: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 3
+		Variant1 => jump 10
+	}
+}
+public get(Arg0: &EnumWithTwoVariants): &u64 {
+L0:	loc1: &u64
+B0:
+	0: CopyLoc[0](Arg0: &EnumWithTwoVariants)
+	1: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	2: MoveLoc[0](Arg0: &EnumWithTwoVariants)
+	3: UnpackVariantImmRef(EnumDefinitionIndex(0), 0)
+	4: StLoc[1](loc0: &u64)
+	5: MoveLoc[1](loc0: &u64)
+	6: Ret
+B2:
+	7: MoveLoc[0](Arg0: &EnumWithTwoVariants)
+	8: UnpackVariantImmRef(EnumDefinitionIndex(0), 1)
+	9: StLoc[2](loc1: &u64)
+	10: StLoc[1](loc0: &u64)
+	11: MoveLoc[1](loc0: &u64)
+	12: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 2
+		Variant1 => jump 7
+	}
+}
+}

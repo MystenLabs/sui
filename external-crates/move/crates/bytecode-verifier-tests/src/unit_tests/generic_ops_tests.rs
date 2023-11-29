@@ -36,33 +36,33 @@ fn make_module() -> CompiledModule {
         address_identifiers: vec![
             AccountAddress::ZERO, // Module address
         ],
-        struct_handles: vec![
-            StructHandle {
+        datatype_handles: vec![
+            DatatypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(1),
                 abilities: AbilitySet::PRIMITIVES,
                 type_parameters: vec![],
             },
-            StructHandle {
+            DatatypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(2),
                 abilities: AbilitySet::PRIMITIVES,
-                type_parameters: vec![StructTypeParameter {
+                type_parameters: vec![DatatypeTyParameter {
                     constraints: AbilitySet::PRIMITIVES,
                     is_phantom: false,
                 }],
             },
-            StructHandle {
+            DatatypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(3),
                 abilities: AbilitySet::EMPTY | Ability::Key,
                 type_parameters: vec![],
             },
-            StructHandle {
+            DatatypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(4),
                 abilities: AbilitySet::EMPTY | Ability::Key,
-                type_parameters: vec![StructTypeParameter {
+                type_parameters: vec![DatatypeTyParameter {
                     constraints: AbilitySet::PRIMITIVES,
                     is_phantom: false,
                 }],
@@ -71,7 +71,7 @@ fn make_module() -> CompiledModule {
         struct_defs: vec![
             // struct S { f: u64 }
             StructDefinition {
-                struct_handle: StructHandleIndex(0),
+                struct_handle: DatatypeHandleIndex(0),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::U64),
@@ -79,7 +79,7 @@ fn make_module() -> CompiledModule {
             },
             // struct GS<T> { f: T }
             StructDefinition {
-                struct_handle: StructHandleIndex(1),
+                struct_handle: DatatypeHandleIndex(1),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::TypeParameter(0)),
@@ -87,7 +87,7 @@ fn make_module() -> CompiledModule {
             },
             // struct R has key { f: u64 }
             StructDefinition {
-                struct_handle: StructHandleIndex(2),
+                struct_handle: DatatypeHandleIndex(2),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::U64),
@@ -95,7 +95,7 @@ fn make_module() -> CompiledModule {
             },
             // struct GR<T> has key { f: T }
             StructDefinition {
-                struct_handle: StructHandleIndex(3),
+                struct_handle: DatatypeHandleIndex(3),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::TypeParameter(0)),
@@ -138,6 +138,7 @@ fn make_module() -> CompiledModule {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
             // fun g_fn<T>() { return; }
@@ -149,6 +150,7 @@ fn make_module() -> CompiledModule {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
             // fun test_fn() { ... } - tests will fill up the code
@@ -160,6 +162,7 @@ fn make_module() -> CompiledModule {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![],
+                    jump_tables: vec![],
                 }),
             },
         ],
@@ -180,6 +183,8 @@ fn make_module() -> CompiledModule {
         struct_def_instantiations: vec![],
         function_instantiations: vec![],
         field_instantiations: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
     }
 }
 
@@ -193,6 +198,7 @@ fn generic_call_to_non_generic_func() {
             Bytecode::CallGeneric(FunctionInstantiationIndex(0)),
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module.function_instantiations.push(FunctionInstantiation {
         handle: FunctionHandleIndex(0),
@@ -214,6 +220,7 @@ fn non_generic_call_to_generic_func() {
     module.function_defs[2].code = Some(CodeUnit {
         locals: SignatureIndex(0),
         code: vec![Bytecode::Call(FunctionHandleIndex(1)), Bytecode::Ret],
+        jump_tables: vec![],
     });
     let err = InstructionConsistency::verify_module(&module)
         .expect_err("Call to generic function must fail");
@@ -235,6 +242,7 @@ fn generic_pack_on_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -263,6 +271,7 @@ fn non_generic_pack_on_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     let err = InstructionConsistency::verify_module(&module)
         .expect_err("Pack to generic struct must fail");
@@ -285,6 +294,7 @@ fn generic_unpack_on_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -314,6 +324,7 @@ fn non_generic_unpack_on_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -343,6 +354,7 @@ fn generic_mut_borrow_field_on_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module.field_instantiations.push(FieldInstantiation {
         handle: FieldHandleIndex(0),
@@ -374,6 +386,7 @@ fn non_generic_mut_borrow_field_on_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -407,6 +420,7 @@ fn generic_borrow_field_on_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module.field_instantiations.push(FieldInstantiation {
         handle: FieldHandleIndex(0),
@@ -438,6 +452,7 @@ fn non_generic_borrow_field_on_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -473,6 +488,7 @@ fn generic_mut_borrow_global_to_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -504,6 +520,7 @@ fn non_generic_mut_borrow_global_to_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     let err = InstructionConsistency::verify_module(&module)
         .expect_err("MutBorrowGlobal to generic function must fail");
@@ -528,6 +545,7 @@ fn generic_immut_borrow_global_to_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -559,6 +577,7 @@ fn non_generic_immut_borrow_global_to_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     let err = InstructionConsistency::verify_module(&module)
         .expect_err("ImmBorrowGlobal to generic function must fail");
@@ -580,6 +599,7 @@ fn generic_exists_to_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -608,6 +628,7 @@ fn non_generic_exists_to_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     let err = InstructionConsistency::verify_module(&module)
         .expect_err("Exists to generic function must fail");
@@ -633,6 +654,7 @@ fn generic_move_from_to_non_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -665,6 +687,7 @@ fn non_generic_move_from_to_generic_struct() {
             Bytecode::Pop,
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -694,6 +717,7 @@ fn generic_move_to_on_non_generic_struct() {
             Bytecode::MoveToGeneric(StructDefInstantiationIndex(0)),
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations
@@ -723,6 +747,7 @@ fn non_generic_move_to_on_generic_struct() {
             Bytecode::MoveTo(StructDefinitionIndex(3)),
             Bytecode::Ret,
         ],
+        jump_tables: vec![],
     });
     module
         .struct_def_instantiations

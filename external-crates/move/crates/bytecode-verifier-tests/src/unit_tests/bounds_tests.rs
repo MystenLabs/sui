@@ -91,7 +91,7 @@ fn invalid_struct_in_fn_return_() {
     let mut m = basic_test_module();
     m.function_handles[0].return_ = SignatureIndex(1);
     m.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(1))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(1))]));
     assert_eq!(
         BoundsChecker::verify_module(&m).unwrap_err().major_status(),
         StatusCode::INDEX_OUT_OF_BOUNDS
@@ -122,7 +122,7 @@ fn invalid_struct_in_field() {
     let mut m = basic_test_module();
     match &mut m.struct_defs[0].field_information {
         StructFieldInformation::Declared(ref mut fields) => {
-            fields[0].signature.0 = Struct(StructHandleIndex::new(3));
+            fields[0].signature.0 = Datatype(DatatypeHandleIndex::new(3));
             assert_eq!(
                 BoundsChecker::verify_module(&m).unwrap_err().major_status(),
                 StatusCode::INDEX_OUT_OF_BOUNDS
@@ -140,7 +140,7 @@ fn invalid_struct_with_actuals_in_field() {
     match &mut m.struct_defs[0].field_information {
         StructFieldInformation::Declared(ref mut fields) => {
             fields[0].signature.0 =
-                StructInstantiation(StructHandleIndex::new(0), vec![TypeParameter(0)]);
+                DatatypeInstantiation(DatatypeHandleIndex::new(0), vec![TypeParameter(0)]);
             assert_eq!(
                 BoundsChecker::verify_module(&m).unwrap_err().major_status(),
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH
@@ -229,7 +229,7 @@ fn invalid_struct_as_type_actual_in_exists() {
 
     let mut m = basic_test_module();
     m.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(3))]));
     m.function_instantiations.push(FunctionInstantiation {
         handle: FunctionHandleIndex::new(0),
         type_parameters: SignatureIndex::new(1),
@@ -249,7 +249,7 @@ fn script_invalid_struct_as_type_argument_in_exists() {
 
     let mut s = basic_test_script();
     s.signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(3))]));
     s.function_instantiations.push(FunctionInstantiation {
         handle: FunctionHandleIndex::new(0),
         type_parameters: SignatureIndex::new(1),
@@ -334,7 +334,7 @@ fn invalid_struct_for_vector_operation() {
     let mut skeleton = basic_test_module();
     skeleton
         .signatures
-        .push(Signature(vec![Struct(StructHandleIndex::new(3))]));
+        .push(Signature(vec![Datatype(DatatypeHandleIndex::new(3))]));
     let sig_index = SignatureIndex((skeleton.signatures.len() - 1) as u16);
     for bytecode in vec![
         VecPack(sig_index, 0),
@@ -375,6 +375,109 @@ fn invalid_type_param_for_vector_operation() {
     ] {
         let mut m = skeleton.clone();
         m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
+        assert_eq!(
+            BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+            StatusCode::INDEX_OUT_OF_BOUNDS
+        );
+    }
+}
+
+#[test]
+fn invalid_enum_index_for_enum_operation() {
+    use Bytecode::*;
+
+    let skeleton = basic_test_module();
+    let enum_index = EnumDefinitionIndex(skeleton.enum_defs.len() as u16);
+    let enum_def_inst = EnumDefInstantiationIndex(skeleton.enum_def_instantiations.len() as u16);
+    for bytecode in vec![
+        PackVariant(enum_index, 0),
+        UnpackVariant(enum_index, 0),
+        UnpackVariantImmRef(enum_index, 0),
+        UnpackVariantMutRef(enum_index, 0),
+        PackVariantGeneric(enum_def_inst, 0),
+        UnpackVariantGeneric(enum_def_inst, 0),
+        UnpackVariantGenericImmRef(enum_def_inst, 0),
+        UnpackVariantGenericMutRef(enum_def_inst, 0),
+    ] {
+        let mut m = skeleton.clone();
+        m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
+        assert_eq!(
+            BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+            StatusCode::INDEX_OUT_OF_BOUNDS
+        );
+    }
+}
+
+#[test]
+fn invalid_variant_jump_table_index() {
+    use Bytecode::*;
+
+    let skeleton = basic_test_module();
+    let jt_index = VariantJumpTableIndex(
+        skeleton.function_defs[0]
+            .code
+            .as_ref()
+            .map(|c| c.jump_tables.len() as u16)
+            .unwrap_or(0u16),
+    );
+    let mut m = skeleton.clone();
+    m.function_defs[0].code.as_mut().unwrap().code = vec![VariantSwitch(jt_index)];
+    assert_eq!(
+        BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+        StatusCode::INDEX_OUT_OF_BOUNDS
+    );
+}
+
+#[test]
+fn invalid_variant_jump_table_code_offset() {
+    use Bytecode::*;
+
+    let mut skeleton = basic_test_module_with_enum();
+    let enum_index = EnumDefinitionIndex(0);
+    skeleton.function_defs[0].code.as_mut().unwrap().code = vec![LdU64(0), Pop, Ret];
+    skeleton.function_defs[0].code.as_mut().unwrap().jump_tables = vec![VariantJumpTable {
+        head_enum: enum_index,
+        jump_table: vec![100],
+    }];
+
+    let jt_index = VariantJumpTableIndex(
+        skeleton.function_defs[0]
+            .code
+            .as_ref()
+            .map(|c| c.jump_tables.len() as u16)
+            .unwrap_or(0u16),
+    );
+    let mut m = skeleton.clone();
+    m.function_defs[0].code.as_mut().unwrap().code = vec![VariantSwitch(jt_index)];
+    assert_eq!(
+        BoundsChecker::verify_module(&m).unwrap_err().major_status(),
+        StatusCode::INDEX_OUT_OF_BOUNDS
+    );
+}
+
+#[test]
+fn invalid_variant_index_for_enum_operation() {
+    use Bytecode::*;
+
+    let skeleton = basic_test_module_with_enum();
+    let enum_index = EnumDefinitionIndex(0);
+    let enum_def_inst = EnumDefInstantiationIndex(0);
+    for bytecode in vec![
+        PackVariant(enum_index, 100),
+        UnpackVariant(enum_index, 100),
+        UnpackVariantImmRef(enum_index, 100),
+        UnpackVariantMutRef(enum_index, 100),
+        PackVariantGeneric(enum_def_inst, 100),
+        UnpackVariantGeneric(enum_def_inst, 100),
+        UnpackVariantGenericImmRef(enum_def_inst, 100),
+        UnpackVariantGenericMutRef(enum_def_inst, 100),
+    ] {
+        let mut m = skeleton.clone();
+        m.function_defs[0].code.as_mut().unwrap().code = vec![bytecode];
+        m.enum_def_instantiations.push(EnumDefInstantiation {
+            def: EnumDefinitionIndex(0),
+            type_parameters: SignatureIndex(0),
+        });
         assert_eq!(
             BoundsChecker::verify_module(&m).unwrap_err().major_status(),
             StatusCode::INDEX_OUT_OF_BOUNDS

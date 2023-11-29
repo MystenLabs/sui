@@ -1,0 +1,75 @@
+processed 3 tasks
+
+task 0 'print-bytecode'. lines 3-50:
+// Move bytecode v7
+module 1.PolymorphicEnums {
+
+
+enum EnumWithTwoVariants<Ty0: drop> has drop {
+	One { x: Ty0 },
+	Two { x: Ty0, y: u64 }
+}
+
+public f<Ty0: drop>(Arg0: Ty0): EnumWithTwoVariants<Ty0> {
+B0:
+	0: LdU64(0)
+	1: StLoc[1](loc0: u64)
+	2: MoveLoc[0](Arg0: Ty0)
+	3: MoveLoc[1](loc0: u64)
+	4: PackVariantGeneric(EnumDefInstantiationIndex(0), 1)
+	5: Ret
+
+}
+public mutate<Ty0: drop>(Arg0: &mut EnumWithTwoVariants<Ty0>, Arg1: Ty0) {
+B0:
+	0: CopyLoc[0](Arg0: &mut EnumWithTwoVariants<Ty0>)
+	1: FreezeRef
+	2: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	3: MoveLoc[0](Arg0: &mut EnumWithTwoVariants<Ty0>)
+	4: UnpackVariantGenericMutRef(EnumDefInstantiationIndex(0), 0)
+	5: StLoc[2](loc0: &mut Ty0)
+	6: MoveLoc[1](Arg1: Ty0)
+	7: MoveLoc[2](loc0: &mut Ty0)
+	8: WriteRef
+	9: Ret
+B2:
+	10: MoveLoc[0](Arg0: &mut EnumWithTwoVariants<Ty0>)
+	11: UnpackVariantGenericMutRef(EnumDefInstantiationIndex(0), 1)
+	12: StLoc[3](loc1: &mut u64)
+	13: StLoc[2](loc0: &mut Ty0)
+	14: MoveLoc[1](Arg1: Ty0)
+	15: MoveLoc[2](loc0: &mut Ty0)
+	16: WriteRef
+	17: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 3
+		Variant1 => jump 10
+	}
+}
+public get<Ty0: drop>(Arg0: &EnumWithTwoVariants<Ty0>): &Ty0 {
+L0:	loc1: &u64
+B0:
+	0: CopyLoc[0](Arg0: &EnumWithTwoVariants<Ty0>)
+	1: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	2: MoveLoc[0](Arg0: &EnumWithTwoVariants<Ty0>)
+	3: UnpackVariantGenericImmRef(EnumDefInstantiationIndex(0), 0)
+	4: StLoc[1](loc0: &Ty0)
+	5: MoveLoc[1](loc0: &Ty0)
+	6: Ret
+B2:
+	7: MoveLoc[0](Arg0: &EnumWithTwoVariants<Ty0>)
+	8: UnpackVariantGenericImmRef(EnumDefInstantiationIndex(0), 1)
+	9: StLoc[2](loc1: &u64)
+	10: StLoc[1](loc0: &Ty0)
+	11: MoveLoc[1](loc0: &Ty0)
+	12: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 2
+		Variant1 => jump 7
+	}
+}
+}

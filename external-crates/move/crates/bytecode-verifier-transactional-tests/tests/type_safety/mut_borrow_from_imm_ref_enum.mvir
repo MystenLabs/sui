@@ -1,0 +1,38 @@
+//# publish
+module 0x42.Token {
+    enum  T { V{value: u64}}
+    public new(m: u64): Self.T {
+    label b0:
+        return T.V{value: copy(m)};
+    }
+    public destroy(t: Self.T) {
+        let value: u64;
+    label b0:
+        T.V {value} = move(t);
+        return;
+    }
+
+    public bump_value(this: &Self.T) {
+        let val: &mut u64;
+        let x: u64;
+    label b0:
+        // cannot unpack mut from an imm ref
+        T.V { value: val } &mut = move(this);
+        x = *copy(val) + 1;
+        *move(val) = copy(x);
+        return;
+    }
+}
+
+//# publish
+module 0x42.Token {
+    enum  T<B> { V{value: B }}
+
+    public bump_value<B>(this: &Self.T<B>, new: B) {
+        let val: &mut B;
+    label b0:
+        // cannot unpack mut from an imm ref
+        T.V<B> { value: val } &mut = move(this);
+        return;
+    }
+}

@@ -1,0 +1,47 @@
+processed 3 tasks
+
+task 0 'print-bytecode'. lines 3-34:
+// Move bytecode v7
+module 1.PolymorphicEnums {
+
+
+enum EnumWithTwoVariants<Ty0> has drop {
+	One { x: Ty0 },
+	Two { x: Ty0, y: Ty0 }
+}
+
+public f(Arg0: u64): EnumWithTwoVariants<u64> {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: PackVariantGeneric(EnumDefInstantiationIndex(0), 0)
+	2: Ret
+
+}
+public mutate(Arg0: &mut EnumWithTwoVariants<u64>, Arg1: u64, Arg2: u64) {
+B0:
+	0: MoveLoc[1](Arg1: u64)
+	1: MoveLoc[2](Arg2: u64)
+	2: PackVariantGeneric(EnumDefInstantiationIndex(0), 1)
+	3: MoveLoc[0](Arg0: &mut EnumWithTwoVariants<u64>)
+	4: WriteRef
+	5: Ret
+
+}
+public is_variant_two(Arg0: &EnumWithTwoVariants<u64>): bool {
+L0:	loc1: &u64
+B0:
+	0: CopyLoc[0](Arg0: &EnumWithTwoVariants<u64>)
+	1: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	2: LdFalse
+	3: Ret
+B2:
+	4: LdTrue
+	5: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 2
+		Variant1 => jump 4
+	}
+}
+}

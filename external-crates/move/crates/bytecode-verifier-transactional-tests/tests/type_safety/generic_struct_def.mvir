@@ -8,3 +8,14 @@ module 0x1.M {
     struct Foo<T> { x: T }
     struct Bar<T1, T2, T3: key, T4: copy + drop> { x1: T2, x2: T3, x3: T4, x4: T1 }
 }
+
+//# publish
+
+// This test checks that for each enum definition
+//   1) type parameters have correct kind constraints
+//   2) fields have correct types
+
+module 0x2.M {
+    enum Foo<T> { V { x: T } }
+    enum Bar<T1, T2, T3: key, T4: copy + drop> { V { x1: T2, x2: T3, x3: T4, x4: T1 } }
+}

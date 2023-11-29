@@ -1,0 +1,46 @@
+processed 6 tasks
+
+task 1 'publish'. lines 10-14:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M0'. Got VMError: {
+    major_status: RECURSIVE_ENUM_DEFINITION,
+    sub_status: None,
+    location: 0x1::M0,
+    indices: [(EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 2 'publish'. lines 16-28:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M1'. Got VMError: {
+    major_status: RECURSIVE_ENUM_DEFINITION,
+    sub_status: None,
+    location: 0x1::M1,
+    indices: [(EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 3 'publish'. lines 30-36:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
+    major_status: RECURSIVE_ENUM_DEFINITION,
+    sub_status: None,
+    location: 0x1::M2,
+    indices: [(EnumDefinition, 1)],
+    offsets: [],
+}
+
+task 4 'publish'. lines 38-45:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
+    major_status: RECURSIVE_ENUM_DEFINITION,
+    sub_status: None,
+    location: 0x1::M3,
+    indices: [(EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 5 'publish'. lines 47-56:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
+    major_status: RECURSIVE_ENUM_DEFINITION,
+    sub_status: None,
+    location: 0x1::M3,
+    indices: [(EnumDefinition, 3)],
+    offsets: [],
+}

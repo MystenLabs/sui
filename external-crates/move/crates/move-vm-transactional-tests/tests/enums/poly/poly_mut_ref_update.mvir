@@ -1,0 +1,119 @@
+// Tests that mutable borrows from enum variants work correctly.
+
+//# print-bytecode
+module 0x1.PolymorphicEnums {
+    enum EnumWithTwoVariants<T: drop> has drop {
+        One { x: T },
+        Two { x: T, y: u64 }
+    }
+
+    public f<T: drop>(t: T): Self.EnumWithTwoVariants<T> {
+        let l: u64;
+        label b0:
+            l = 0;
+            return EnumWithTwoVariants.Two<T> { x: move(t), y: move(l) };
+    }
+
+    public mutate<T: drop>(e: &mut Self.EnumWithTwoVariants<T>, v: T) {
+        let x: &mut T;
+        let u: &mut u64;
+        label b0:
+        variant_switch EnumWithTwoVariants (freeze(copy(e))) {
+            One : b1,
+            Two : b2,
+        };
+        label b1:
+            EnumWithTwoVariants.One<T> { x } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+        label b2:
+            EnumWithTwoVariants.Two<T> { x, y: u } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+    }
+
+    public get<T: drop>(e: &Self.EnumWithTwoVariants<T>): &T {
+        let x: &T;
+        let u: &u64;
+        label b0:
+            variant_switch EnumWithTwoVariants (copy(e)) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One<T> { x } &= move(e);
+            return move(x);
+        label b2:
+            EnumWithTwoVariants.Two<T> { x, y: u } &= move(e);
+            return move(x);
+    }
+}
+
+//# publish
+module 0x1.PolymorphicEnums {
+    enum EnumWithTwoVariants<T: drop> has drop {
+        One { x: T },
+        Two { x: T, y: u64 }
+    }
+
+    public f<T: drop>(t: T): Self.EnumWithTwoVariants<T> {
+        let l: u64;
+        label b0:
+            l = 0;
+            return EnumWithTwoVariants.Two<T> { x: move(t), y: move(l) };
+    }
+
+    public mutate<T: drop>(e: &mut Self.EnumWithTwoVariants<T>, v: T) {
+        let x: &mut T;
+        let u: &mut u64;
+        label b0:
+        variant_switch EnumWithTwoVariants (freeze(copy(e))) {
+            One : b1,
+            Two : b2,
+        };
+        label b1:
+            EnumWithTwoVariants.One<T> { x } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+        label b2:
+            EnumWithTwoVariants.Two<T> { x, y: u } &mut = move(e);
+            *(move(x)) = move(v);
+            return;
+    }
+
+    public get<T: drop>(e: &Self.EnumWithTwoVariants<T>): &T {
+        let x: &T;
+        let u: &u64;
+        label b0:
+            variant_switch EnumWithTwoVariants (copy(e)) {
+                One : b1,
+                Two : b2,
+            };
+        label b1:
+            EnumWithTwoVariants.One<T> { x } &= move(e);
+            return move(x);
+        label b2:
+            EnumWithTwoVariants.Two<T> { x, y: u } &= move(e);
+            return move(x);
+    }
+}
+
+//# run
+module 0x2.m {
+import 0x1.PolymorphicEnums;
+entry foo() {
+    let x: PolymorphicEnums.EnumWithTwoVariants<u64>;
+    let y: &u64;
+    label b0:
+        x = PolymorphicEnums.f<u64>(42);
+        y = PolymorphicEnums.get<u64>(&x);
+        assert(*move(y) == 42, 100);
+        PolymorphicEnums.mutate<u64>(&mut x, 43);
+        y = PolymorphicEnums.get<u64>(&x);
+        assert(*move(y) == 43, 100);
+        PolymorphicEnums.mutate<u64>(&mut x, 10);
+        y = PolymorphicEnums.get<u64>(&x);
+        assert(*move(y) == 10, 100);
+        return;
+}
+}

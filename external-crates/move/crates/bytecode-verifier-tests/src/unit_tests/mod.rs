@@ -4,6 +4,7 @@
 
 use move_vm_config::verifier::{
     VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN, DEFAULT_MAX_IDENTIFIER_LENGTH,
+    DEFAULT_MAX_VARIANTS,
 };
 
 pub mod ability_field_requirements_tests;
@@ -39,7 +40,7 @@ pub(crate) fn production_config() -> VerifierConfig {
         max_type_nodes: Some(256),
         max_push_size: Some(10000),
         max_dependency_depth: Some(100),
-        max_struct_definitions: Some(200),
+        max_data_definitions: Some(200),
         max_fields_in_struct: Some(30),
         max_function_definitions: Some(1000),
 
@@ -52,5 +53,6 @@ pub(crate) fn production_config() -> VerifierConfig {
         max_per_mod_meter_units: Some(1000 * 8000),
         max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
         max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
+        max_variants_in_enum: Some(DEFAULT_MAX_VARIANTS),
     }
 }

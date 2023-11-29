@@ -1,0 +1,6 @@
+//# print-bytecode
+module 0x3d8.M {
+    enum T { V { } }
+    // Struct declarations need to be before enum declarations.
+    struct T { x: u64, }
+}

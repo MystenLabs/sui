@@ -1,0 +1,91 @@
+processed 12 tasks
+
+task 1 'publish'. lines 16-29:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_SWITCH_BAD_OPERAND,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 2 'publish'. lines 31-44:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_SWITCH_BAD_OPERAND,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 3 'publish'. lines 46-59:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_SWITCH_BAD_OPERAND,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 4 'publish'. lines 61-74:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_TYPE_MISMATCH,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 5 'publish'. lines 76-89:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_SWITCH_BAD_OPERAND,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 6 'publish'. lines 92-107:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_TYPE_MISMATCH,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 7 'publish'. lines 109-124:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: ENUM_SWITCH_BAD_OPERAND,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 9 'publish'. lines 142-156:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::P'. Got VMError: {
+    major_status: ENUM_TYPE_MISMATCH,
+    sub_status: None,
+    location: 0x2::P,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 10 'publish'. lines 158-172:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::P'. Got VMError: {
+    major_status: ENUM_TYPE_MISMATCH,
+    sub_status: None,
+    location: 0x2::P,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 11 'publish'. lines 174-188:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::P'. Got VMError: {
+    major_status: ENUM_TYPE_MISMATCH,
+    sub_status: None,
+    location: 0x2::P,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}

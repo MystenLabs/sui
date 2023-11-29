@@ -45,3 +45,65 @@ module 0x1.M3 {
         a: Self.S1<T>
     }
 }
+
+//# publish
+module 0x2.M1 {
+    // Not using a phantom parameter at all is ok.
+    enum S1<phantom T> {
+        V { a: u64 }
+    }
+
+    // Phantom parameters can be used in phantom position.
+    enum S2<phantom T> {
+        V {
+            a: Self.S1<T>,
+            b: vector<Self.S1<T>>
+        }
+    }
+
+    // It's ok to not use a non-phantom parameter (backward-compatibility).
+    enum S3<T> {
+        V { a: u64 }
+    }
+
+    // Mixing phantom and non-phantom parameters
+    enum S4<phantom T1, T2, phantom T3, T4> {
+        V {
+            a: T2,
+            b: T4
+        }
+    }
+}
+
+//# publish
+module 0x2.M2 {
+    import 0x2.M1;
+
+    // Phantom position across modules
+    enum S<phantom T> {
+        V { a: M1.S2<M1.S1<T>> }
+    }
+}
+
+//# publish
+module 0x2.M3 {
+    // Phantom parameters should be allowed to be declared with constraints.
+
+    enum S1<phantom T: copy> {
+        V { a: u64 }
+    }
+
+    enum S2<phantom T: copy + drop + store> {
+        V { a: Self.S1<T> }
+    }
+}
+
+//# publish
+module 0x2.M4 {
+    import 0x1.M1;
+
+    // Phantom position across modules
+    enum S<phantom T> {
+        V { a: M1.S2<M1.S1<T>> }
+    }
+}

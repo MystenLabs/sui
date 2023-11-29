@@ -1,4 +1,0 @@
-test
-test --silence-warnings
-test --silence-warnings --warnings-are-errors
-test --warnings-are-errors

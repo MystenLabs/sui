@@ -1,0 +1,37 @@
+processed 3 tasks
+
+task 0 'print-bytecode'. lines 1-24:
+// Move bytecode v7
+module 1.MonomorphicEnums {
+
+
+enum EnumWithTwoVariants<Ty0> {
+	One {  },
+	Two { x: Ty0 }
+}
+
+public f<Ty0>(Arg0: Ty0, Arg1: Ty0): Ty0 {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: PackVariantGeneric(EnumDefInstantiationIndex(0), 1)
+	2: StLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	3: ImmBorrowLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	4: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	5: MoveLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	6: UnpackVariantGeneric(EnumDefInstantiationIndex(0), 0)
+	7: MoveLoc[1](Arg1: Ty0)
+	8: Ret
+B2:
+	9: MoveLoc[2](loc0: EnumWithTwoVariants<Ty0>)
+	10: UnpackVariantGeneric(EnumDefInstantiationIndex(0), 1)
+	11: StLoc[3](loc1: Ty0)
+	12: MoveLoc[3](loc1: Ty0)
+	13: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 5
+		Variant1 => jump 9
+	}
+}
+}

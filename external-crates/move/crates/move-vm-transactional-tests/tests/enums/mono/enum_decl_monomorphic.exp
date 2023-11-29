@@ -1,0 +1,46 @@
+processed 3 tasks
+
+task 0 'print-bytecode'. lines 1-33:
+// Move bytecode v7
+module 1.MonomorphicEnums {
+
+
+enum EnumWithOneVariant {
+	One {  }
+}
+enum EnumWithTwoVariants {
+	One {  },
+	Two { x: u64 }
+}
+enum EnumWithTwoVariantsPlusAbilities has copy, drop, store, key {
+	One {  },
+	Two { x: u64 }
+}
+
+public f(): u64 {
+L0:	loc0: EnumWithTwoVariants
+L1:	loc1: u64
+B0:
+	0: LdU64(42)
+	1: PackVariant(EnumDefinitionIndex(1), 1)
+	2: StLoc[0](loc0: EnumWithTwoVariants)
+	3: ImmBorrowLoc[0](loc0: EnumWithTwoVariants)
+	4: VariantSwitch(VariantJumpTableIndex(0))
+B1:
+	5: MoveLoc[0](loc0: EnumWithTwoVariants)
+	6: UnpackVariant(EnumDefinitionIndex(1), 0)
+	7: LdU64(0)
+	8: Ret
+B2:
+	9: MoveLoc[0](loc0: EnumWithTwoVariants)
+	10: UnpackVariant(EnumDefinitionIndex(1), 1)
+	11: StLoc[1](loc1: u64)
+	12: MoveLoc[1](loc1: u64)
+	13: Ret
+Jump tables:
+[0]:	variant_switch EnumWithTwoVariants {
+		Variant0 => jump 5
+		Variant1 => jump 9
+	}
+}
+}

@@ -1,4 +1,4 @@
-processed 4 tasks
+processed 6 tasks
 
 task 0 'publish'. lines 1-13:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
@@ -34,4 +34,22 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
+}
+
+task 4 'publish'. lines 55-67:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M'. Got VMError: {
+    major_status: RET_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
+}
+
+task 5 'publish'. lines 69-80:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M'. Got VMError: {
+    major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
+    sub_status: None,
+    location: 0x2::M,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 4)],
 }
