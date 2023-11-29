@@ -20,7 +20,7 @@ use crate::{
         epoch::Epoch,
         event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
-        move_module::MoveModuleId,
+        move_module::{MoveModule, MoveModuleId},
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
@@ -785,6 +785,21 @@ impl PgManager {
         Ok(Some(MovePackage::try_from(&object).map_err(|_| {
             Error::Internal(format!("{address} is not a package"))
         })?))
+    }
+
+    pub(crate) async fn fetch_move_module(
+        &self,
+        address: SuiAddress,
+        name: &str,
+    ) -> Result<Option<MoveModule>, Error> {
+        // Fetch the latest version of a package (this means that when we fetch a module from the
+        // system framework via one of its types, we will always get the latest version of that
+        // module).
+        let Some(package) = self.fetch_move_package(address, None).await? else {
+            return Ok(None);
+        };
+
+        package.module_impl(name)
     }
 
     pub(crate) async fn fetch_owned_objs(

@@ -12,6 +12,7 @@ use crate::context_data::db_data_provider::{validate_cursor_pagination, PgManage
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
+use super::move_struct::MoveStruct;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -145,7 +146,7 @@ impl MoveModule {
                 .extend());
             }
 
-            let Some(friend) = package.module_impl(friend_mod.as_str())? else {
+            let Some(friend) = package.module_impl(friend_mod.as_str()).extend()? else {
                 return Err(Error::Internal(format!(
                     "Failed to load friend module of {}: {}",
                     self_id.to_canonical_display(/* with_prefix */ true),
@@ -160,7 +161,23 @@ impl MoveModule {
         Ok(connection)
     }
 
-    // struct(name: String!): MoveStructDecl
+    /// Look-up the definition of a struct defined in this module, by its name.
+    #[graphql(name = "struct")]
+    async fn struct_(&self, name: String) -> Result<Option<MoveStruct>> {
+        use sui_package_resolver::error::Error as E;
+        let def = match self.parsed.struct_def(&name) {
+            Ok(Some(def)) => def,
+            Ok(None) | Err(E::StructNotFound(_, _, _)) => return Ok(None),
+            Err(e) => return Err(Error::Internal(e.to_string())).extend(),
+        };
+
+        Ok(Some(MoveStruct::new(
+            self.parsed.name().to_string(),
+            name,
+            def,
+        )))
+    }
+
     // structConnection(
     //   first: Int,
     //   after: String,

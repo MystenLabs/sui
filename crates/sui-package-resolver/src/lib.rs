@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use lru::LruCache;
+use move_binary_format::file_format::{AbilitySet, StructTypeParameter};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
@@ -187,16 +188,19 @@ pub struct Module {
 
 /// Deserialized representation of a struct definition.
 #[derive(Debug)]
-struct StructDef {
+pub struct StructDef {
     /// The storage ID of the package that first introduced this type.
-    defining_id: AccountAddress,
+    pub defining_id: AccountAddress,
 
-    /// Number of type parameters.
-    type_params: u16,
+    /// This type's abilities.
+    pub abilities: AbilitySet,
+
+    /// Ability constraints and phantom status for type parameters
+    pub type_params: Vec<StructTypeParameter>,
 
     /// Serialized representation of fields (names and deserialized signatures). Signatures refer to
     /// packages at their runtime IDs (not their storage ID or defining ID).
-    fields: Vec<(String, OpenSignatureBody)>,
+    pub fields: Vec<(String, OpenSignatureBody)>,
 }
 
 /// Fully qualified struct identifier.  Uses copy-on-write strings so that when it is used as a key
@@ -304,7 +308,7 @@ impl Package {
 
     fn struct_def(&self, module_name: &str, struct_name: &str) -> Result<StructDef> {
         let module = self.module(module_name)?;
-        let Some(&(defining_id, index)) = module.struct_index.get(struct_name) else {
+        let Some(struct_def) = module.struct_def(struct_name)? else {
             return Err(Error::StructNotFound(
                 self.storage_id,
                 module_name.to_string(),
@@ -312,28 +316,7 @@ impl Package {
             ));
         };
 
-        let struct_def = module.bytecode.struct_def_at(index);
-        let struct_handle = module.bytecode.struct_handle_at(struct_def.struct_handle);
-        let type_params = struct_handle.type_parameters.len() as u16;
-
-        let fields = match &struct_def.field_information {
-            StructFieldInformation::Native => vec![],
-            StructFieldInformation::Declared(fields) => fields
-                .iter()
-                .map(|f| {
-                    Ok((
-                        module.bytecode.identifier_at(f.name).to_string(),
-                        OpenSignatureBody::read(&f.signature.0, &module.bytecode)?,
-                    ))
-                })
-                .collect::<Result<_>>()?,
-        };
-
-        Ok(StructDef {
-            defining_id,
-            type_params,
-            fields,
-        })
+        Ok(struct_def)
     }
 
     /// Translate the `runtime_id` of a package to a specific storage ID using this package's
@@ -381,6 +364,47 @@ impl Module {
 
     pub fn bytecode(&self) -> &CompiledModule {
         &self.bytecode
+    }
+
+    /// The module's name
+    pub fn name(&self) -> &str {
+        self.bytecode
+            .identifier_at(self.bytecode.self_handle().name)
+            .as_str()
+    }
+
+    /// Get the struct definition corresponding to the struct with name `name` in this module.
+    /// Returns `Ok(None)` if the struct cannot be found in this module, `Err(...)` if there was an
+    /// error deserializing it, and `Ok(Some(def))` on success.
+    pub fn struct_def(&self, name: &str) -> Result<Option<StructDef>> {
+        let Some(&(defining_id, index)) = self.struct_index.get(name) else {
+            return Ok(None);
+        };
+
+        let struct_def = self.bytecode.struct_def_at(index);
+        let struct_handle = self.bytecode.struct_handle_at(struct_def.struct_handle);
+        let abilities = struct_handle.abilities;
+        let type_params = struct_handle.type_parameters.clone();
+
+        let fields = match &struct_def.field_information {
+            StructFieldInformation::Native => vec![],
+            StructFieldInformation::Declared(fields) => fields
+                .iter()
+                .map(|f| {
+                    Ok((
+                        self.bytecode.identifier_at(f.name).to_string(),
+                        OpenSignatureBody::read(&f.signature.0, &self.bytecode)?,
+                    ))
+                })
+                .collect::<Result<_>>()?,
+        };
+
+        Ok(Some(StructDef {
+            defining_id,
+            abilities,
+            type_params,
+            fields,
+        }))
     }
 }
 
@@ -592,8 +616,11 @@ impl ResolutionContext {
                     ..
                 } = s.as_ref();
 
-                if def.type_params as usize != type_params.len() {
-                    return Err(Error::TypeArityMismatch(def.type_params, type_params.len()));
+                if def.type_params.len() != type_params.len() {
+                    return Err(Error::TypeArityMismatch(
+                        def.type_params.len(),
+                        type_params.len(),
+                    ));
                 }
 
                 // TODO (optimization): This could be made more efficient by only generating layouts
