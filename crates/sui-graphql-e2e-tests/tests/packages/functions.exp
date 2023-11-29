@@ -173,12 +173,6 @@ Response: {
               },
               {
                 "outputState": {
-                  "address": "0x743464cf1eacc8f8f82cd5efe9232adc5339109ef831ce224b0b6381d29460ed",
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
                   "address": "0x3c522829dd3548215df55b28471de3d42e4c121a75ec44f35f60ebf2275115ee",
                   "asMovePackage": {
                     "module": {
@@ -235,6 +229,12 @@ Response: {
                       }
                     }
                   }
+                }
+              },
+              {
+                "outputState": {
+                  "address": "0x743464cf1eacc8f8f82cd5efe9232adc5339109ef831ce224b0b6381d29460ed",
+                  "asMovePackage": null
                 }
               }
             ]

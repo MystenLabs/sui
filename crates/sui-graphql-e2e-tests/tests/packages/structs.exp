@@ -149,13 +149,13 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "address": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
+                  "address": "0x00947c61559161baebff14abf3a953508186311498625e6d340ac24a82d7f36e",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "address": "0x00947c61559161baebff14abf3a953508186311498625e6d340ac24a82d7f36e",
+                  "address": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
                   "asMovePackage": null
                 }
               },

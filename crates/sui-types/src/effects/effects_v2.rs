@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::object_change::{IDOperation, ObjectIn, ObjectOut};
-use super::EffectsObjectChange;
+use super::object_change::{ObjectIn, ObjectOut};
+use super::{EffectsObjectChange, IDOperation, ObjectChange};
 use crate::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     VersionDigest,
@@ -240,6 +240,36 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         ObjectDigest::OBJECT_DIGEST_WRAPPED,
                     )),
                     _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn object_changes(&self) -> Vec<ObjectChange> {
+        self.changed_objects
+            .iter()
+            .map(|(id, change)| {
+                let input_version_digest = match &change.input_state {
+                    ObjectIn::NotExist => None,
+                    ObjectIn::Exist((vd, _)) => Some(*vd),
+                };
+
+                let output_version_digest = match &change.output_state {
+                    ObjectOut::NotExist => None,
+                    ObjectOut::ObjectWrite((d, _)) => Some((self.lamport_version, *d)),
+                    ObjectOut::PackageWrite(vd) => Some(*vd),
+                };
+
+                ObjectChange {
+                    id: *id,
+
+                    input_version: input_version_digest.map(|k| k.0),
+                    input_digest: input_version_digest.map(|k| k.1),
+
+                    output_version: output_version_digest.map(|k| k.0),
+                    output_digest: output_version_digest.map(|k| k.1),
+
+                    id_operation: change.id_operation,
                 }
             })
             .collect()

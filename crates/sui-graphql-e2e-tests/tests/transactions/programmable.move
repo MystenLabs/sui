@@ -56,6 +56,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -144,6 +146,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -223,6 +227,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -303,6 +309,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
