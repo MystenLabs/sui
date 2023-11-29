@@ -1,0 +1,22 @@
+//# publish
+module 0x1.Tester {
+    enum X { V { f: u64 } }
+
+    bump_and_give(x_ref: &mut Self.X): &u64 {
+        let f_ref: &mut u64;
+    label b0:
+        X.V { f: f_ref } &mut = move(x_ref);
+        *(copy(f_ref)) = *copy(f_ref) + 1;
+        return freeze(move(f_ref));
+    }
+
+    contrived_example_no(x_ref: &mut Self.X): &u64 {
+        let returned_ref: &u64;
+        let f_ref: &mut u64;
+    label b0:
+        returned_ref = Self.bump_and_give(copy(x_ref));
+        // ERROR Cannot mutably borrow from `x_ref` it is being borrowed by `returned_ref`
+        X.V { f: f_ref } &mut = move(x_ref);
+        return move(returned_ref);
+    }
+}

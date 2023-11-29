@@ -1,0 +1,21 @@
+//# publish
+module 0x42.M {
+    enum M has drop { V { } }
+    public new(): Self.M {
+    label b0:
+        return M.V { };
+    }
+}
+
+//# run
+
+module 0x43.m {
+import 0x42.M;
+
+entry foo() {
+    let x: M.M;
+label b0:
+    x = M.new();
+    return;
+}
+}

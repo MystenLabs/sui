@@ -1,0 +1,43 @@
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: &Self.Foo<u64>) {
+    label b0:
+        // valid
+        variant_switch Foo move(x) {
+            V : b1,
+        };
+    label b1:
+        return;
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T } }
+
+    foo(x: &Self.Foo<u64>) {
+    label b0:
+        // invalid
+        variant_switch Foo move(x) {
+        };
+    label b1:
+        return;
+    }
+}
+
+//# publish
+module 0x2.O {
+    enum Foo<T> { V { x: T }, X { } }
+
+    foo(x: &Self.Foo<u64>) {
+    label b0:
+        // invalid
+        variant_switch Foo move(x) {
+            V : b1,
+        };
+    label b1:
+        return;
+    }
+}

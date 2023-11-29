@@ -1,4 +1,4 @@
-processed 5 tasks
+processed 10 tasks
 
 task 1 'publish'. lines 16-21:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
@@ -33,5 +33,41 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     sub_status: None,
     location: 0x1::M5,
     indices: [(StructDefinition, 0)],
+    offsets: [],
+}
+
+task 6 'publish'. lines 56-61:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M2'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M2,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 7 'publish'. lines 63-68:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M3'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M3,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 8 'publish'. lines 70-75:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M4'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M4,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
+    offsets: [],
+}
+
+task 9 'publish'. lines 77-82:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M5'. Got VMError: {
+    major_status: FIELD_MISSING_TYPE_ABILITY,
+    sub_status: None,
+    location: 0x2::M5,
+    indices: [(EnumDefinition, 0), (VariantTag, 0), (FieldDefinition, 0)],
     offsets: [],
 }

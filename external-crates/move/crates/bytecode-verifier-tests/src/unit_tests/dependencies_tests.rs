@@ -54,6 +54,7 @@ fn mk_script_function_module() -> CompiledModule {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
             // public(script) fun g_fn<T>() { return; }
@@ -65,6 +66,7 @@ fn mk_script_function_module() -> CompiledModule {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
         ],
@@ -72,7 +74,7 @@ fn mk_script_function_module() -> CompiledModule {
             Signature(vec![]), // void
         ],
         struct_defs: vec![],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         constant_pool: vec![],
         metadata: vec![],
         field_handles: vec![],
@@ -80,6 +82,10 @@ fn mk_script_function_module() -> CompiledModule {
         struct_def_instantiations: vec![],
         function_instantiations: vec![],
         field_instantiations: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
     };
     move_bytecode_verifier::verify_module_unmetered(&m).unwrap();
     m
@@ -157,6 +163,7 @@ fn mk_invoking_module(use_generic: bool, valid: bool) -> CompiledModule {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(0),
                     code: vec![call, Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
         ],
@@ -165,13 +172,17 @@ fn mk_invoking_module(use_generic: bool, valid: bool) -> CompiledModule {
             Signature(vec![SignatureToken::U64]), // u64
         ],
         struct_defs: vec![],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         constant_pool: vec![],
         metadata: vec![],
         field_handles: vec![],
         friend_decls: vec![],
         struct_def_instantiations: vec![],
         field_instantiations: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
     };
     move_bytecode_verifier::verify_module_unmetered(&m).unwrap();
     m
@@ -228,12 +239,13 @@ fn mk_invoking_script(use_generic: bool) -> CompiledScript {
         code: CodeUnit {
             locals: SignatureIndex(0),
             code: vec![call, Bytecode::Ret],
+            jump_tables: vec![],
         },
         signatures: vec![
             Signature(vec![]),                    // void
             Signature(vec![SignatureToken::U64]), // u64
         ],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         constant_pool: vec![],
         metadata: vec![],
     };

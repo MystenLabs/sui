@@ -1,0 +1,71 @@
+//# print-bytecode
+module 0x3d8.M {
+    enum T has drop {
+        X { },
+        Y { f: u64 },
+    }
+
+    f(): Self.T {
+        label b0:
+            return T.X { };
+    }
+
+    f1(): Self.T {
+        let x: Self.T;
+        let f: u64;
+        label b0:
+            x = T.Y { f: 0 };
+            T.Y { f } = move(x);
+            return T.X { };
+    }
+
+    f2(): Self.T {
+        let x: Self.T;
+        let f: u64;
+        label b0:
+            x = T.Y { f: 0 };
+            variant_switch T (&x) {
+                X : b1,
+                Y : b2,
+            };
+        label b1:
+            return 1;
+        label b2:
+            T.Y { f } = move(x);
+            return move(f);
+    }
+
+    f3(): Self.T {
+        let x: Self.T;
+        let f: u64;
+        let g: &u64;
+        label b0:
+            x = T.Y { f: 0 };
+            variant_switch T (&x) {
+                X : b1,
+                Y : b2,
+            };
+        label b1:
+            return 1;
+        label b2:
+            T.Y { f: g }& = &x;
+            return 0;
+    }
+
+    f4(): Self.T {
+        let x: Self.T;
+        let f: u64;
+        let g: &mut u64;
+        label b0:
+            x = T.Y { f: 0 };
+            variant_switch T (&x) {
+                X : b1,
+                Y : b2,
+            };
+        label b1:
+            return 1;
+        label b2:
+            T.Y { f: g }&mut = &mut x;
+            return 0;
+    }
+}

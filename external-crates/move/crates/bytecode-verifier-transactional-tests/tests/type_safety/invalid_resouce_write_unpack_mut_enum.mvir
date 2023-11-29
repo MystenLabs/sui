@@ -1,0 +1,15 @@
+//# publish
+module 0x43.RTest {
+    enum Coin has store { V{ value: u64 } }
+    enum T { V{ f: Self.Coin } }
+
+      public update(t: &mut Self.T, i: Self.Coin) {
+        let x: &mut Self.Coin;
+      label b0:
+          T.V { f: x } &mut = move(t);
+        // cannot assign to ref where type does not have drop
+        *move(x) = move(i);
+        return;
+    }
+}
+
