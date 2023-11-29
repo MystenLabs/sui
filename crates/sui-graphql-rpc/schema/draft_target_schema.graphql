@@ -899,6 +899,8 @@ type GasCostSummary {
 }
 
 type ObjectChange {
+  location: SuiAddress!
+
   inputState: Object
   outputState: Object
 

@@ -24,7 +24,7 @@ use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocol
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
-pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
+pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
@@ -384,6 +384,8 @@ pub trait TransactionEffectsAPI {
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
 
+    fn object_changes(&self) -> Vec<ObjectChange>;
+
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
     // dummy object ref and owner. This is not ideal.
@@ -421,6 +423,22 @@ pub trait TransactionEffectsAPI {
 
     // Adding a tombstone for a deleted object.
     fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef);
+}
+
+pub struct ObjectChange {
+    pub id: ObjectID,
+    pub input_version: Option<SequenceNumber>,
+    pub input_digest: Option<ObjectDigest>,
+    pub output_version: Option<SequenceNumber>,
+    pub output_digest: Option<ObjectDigest>,
+    pub id_operation: IDOperation,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum IDOperation {
+    None,
+    Created,
+    Deleted,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]

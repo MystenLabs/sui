@@ -11,7 +11,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 
 task 2 'create-checkpoint'. lines 21-21:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 23-86:
+task 3 'run-graphql'. lines 23-88:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -66,6 +66,7 @@ Response: {
             ],
             "objectChanges": [
               {
+                "location": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
@@ -74,6 +75,7 @@ Response: {
                 }
               },
               {
+                "location": "0x40e56eaf7b7596bb72e96051b7fc36b49006c68d32e9021a616677ac6365622c",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -82,6 +84,7 @@ Response: {
                 }
               },
               {
+                "location": "0x82ad18dd7f6e0d4e580f2f041379fb164a58e8432dc013193af5cb1b59c1b972",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -119,15 +122,15 @@ Response: {
   }
 }
 
-task 4 'upgrade'. lines 88-106:
+task 4 'upgrade'. lines 90-108:
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5 'create-checkpoint'. lines 108-108:
+task 5 'create-checkpoint'. lines 110-110:
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 110-174:
+task 6 'run-graphql'. lines 112-178:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -185,6 +188,7 @@ Response: {
             ],
             "objectChanges": [
               {
+                "location": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
@@ -193,6 +197,7 @@ Response: {
                 }
               },
               {
+                "location": "0x40e56eaf7b7596bb72e96051b7fc36b49006c68d32e9021a616677ac6365622c",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
@@ -201,6 +206,7 @@ Response: {
                 }
               },
               {
+                "location": "0x84dbae55ee0f0fbe4cdd240a4a2b8df5e24a39837069c54e88dce7a8f6c5fab3",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -238,15 +244,15 @@ Response: {
   }
 }
 
-task 7 'programmable'. lines 176-185:
+task 7 'programmable'. lines 180-189:
 created: object(7,0), object(7,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3328800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'create-checkpoint'. lines 187-187:
+task 8 'create-checkpoint'. lines 191-191:
 Checkpoint created: 3
 
-task 9 'run-graphql'. lines 189-262:
+task 9 'run-graphql'. lines 193-268:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -301,6 +307,7 @@ Response: {
             ],
             "objectChanges": [
               {
+                "location": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
@@ -322,6 +329,7 @@ Response: {
                 }
               },
               {
+                "location": "0x7348e658c081015348e0e528f860253443246c670abb4a61fbc26d4ad8205479",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -344,6 +352,7 @@ Response: {
                 }
               },
               {
+                "location": "0xc1ee9db6c7be461ff569fe368d1dc24e6c2ad957a8bfd76e64e360d4b86febf0",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -394,14 +403,14 @@ Response: {
   }
 }
 
-task 10 'programmable'. lines 264-265:
+task 10 'programmable'. lines 270-271:
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
 
-task 11 'create-checkpoint'. lines 267-267:
+task 11 'create-checkpoint'. lines 273-273:
 Checkpoint created: 4
 
-task 12 'run-graphql'. lines 269-333:
+task 12 'run-graphql'. lines 275-341:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -456,6 +465,7 @@ Response: {
             ],
             "objectChanges": [
               {
+                "location": "0x02150ebfe3d017c2726bd482f6d3c8a63516a398d7d98e2ee69396764e04bc76",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {

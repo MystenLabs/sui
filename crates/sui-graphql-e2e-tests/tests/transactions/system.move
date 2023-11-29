@@ -41,6 +41,8 @@
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -113,6 +115,8 @@
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -186,6 +190,8 @@
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 

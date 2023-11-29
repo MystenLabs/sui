@@ -1093,7 +1093,15 @@ Effect on an individual Object (keyed by its ID).
 """
 type ObjectChange {
 	"""
-	The contents of the object at the end of the transaction.
+	The address of the object that has changed.
+	"""
+	location: SuiAddress!
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
 	"""
 	outputState: Object
 	"""
