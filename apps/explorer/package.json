@@ -3,8 +3,6 @@
 	"private": true,
 	"scripts": {
 		"dev": "vite --port 3000",
-		"dev-deps": "turbo run dev --filter sui-explorer^... --concurrency 100",
-		"dev-local": "vite --port 3000",
 		"test": "pnpm test:unit",
 		"test:unit": "vitest run",
 		"typecheck": "tsc -b",
