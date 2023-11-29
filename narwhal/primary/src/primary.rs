@@ -65,7 +65,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap},
     sync::OnceLock,
 };
-use storage::{CertificateStore, PayloadStore, ProposerStore, VoteDigestStore};
+use storage::{CertificateStore, PayloadStore, ProposerStore, RandomnessStore, VoteDigestStore};
 use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
@@ -115,6 +115,7 @@ impl Primary {
         proposer_store: ProposerStore,
         payload_store: PayloadStore,
         vote_digest_store: VoteDigestStore,
+        randomness_store: RandomnessStore,
         tx_new_certificates: Sender<Certificate>,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
@@ -542,6 +543,7 @@ impl Primary {
             RandomnessPrivateKey::from(randomness_private_key),
             leader_schedule,
             network,
+            randomness_store,
         );
         handles.push(state_handler_handle);
 

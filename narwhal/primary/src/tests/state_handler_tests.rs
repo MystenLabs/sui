@@ -7,6 +7,7 @@ use fastcrypto::{
     serde_helpers::ToFromByteArray,
     traits::{KeyPair, ToFromBytes},
 };
+
 use test_utils::CommitteeFixture;
 
 #[tokio::test]
@@ -28,6 +29,7 @@ async fn dkg() {
 
     for (_i, authority) in fixture.authorities().enumerate() {
         let network = test_utils::test_network(authority.network_keypair(), authority.address());
+        let randomness_store = RandomnessStore::new_for_tests();
         let vss_key_output = Arc::new(OnceLock::new());
 
         let (tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
@@ -54,6 +56,7 @@ async fn dkg() {
             network,
             vss_key_output.clone(),
             tx_system_messages,
+            randomness_store,
         )
         .unwrap();
 

@@ -7450,6 +7450,7 @@ name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "lru 0.10.0",
  "mysten-common",
