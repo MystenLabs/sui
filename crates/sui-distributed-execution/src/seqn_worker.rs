@@ -507,7 +507,8 @@ impl SequenceWorkerState {
         let transactions = ctx.generate_transactions(tx_generator).await;
         let elapsed = start_time.elapsed().as_millis() as f64;
         println!(
-            "Tx generation finished in {}ms at a rate of {} TPS",
+            "{} txs generated in {}ms at a rate of {} TPS",
+            transactions.len(),
             elapsed,
             1000f64 * workload.tx_count as f64 / elapsed,
         );
