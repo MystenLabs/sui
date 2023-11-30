@@ -2076,7 +2076,7 @@ impl AuthorityPerEpochStore {
         // Pre-process transactions to find the most recent randomness round included in the commit.
         let mut last_randomness_round_written = self.last_randomness_round_written()?;
         // There must be at most one RandomnessStateUpdate per commit.
-        let mut randomness_state_update_found = false;
+        let mut randomness_state_update_found = None;
         for tx in system_transactions.iter() {
             let SequencedConsensusTransactionKind::System(tx) = &tx.0.transaction else {
                 unreachable!("system_transactions vector should only contain system transactions")
@@ -2084,8 +2084,12 @@ impl AuthorityPerEpochStore {
             if let TransactionKind::RandomnessStateUpdate(rsu) =
                 tx.data().intent_message().value.kind()
             {
-                assert!(!randomness_state_update_found);
-                randomness_state_update_found = true;
+                assert!(
+                    randomness_state_update_found.is_none(),
+                    "found multiple RandomnessStateUpdates in one commit: {:?}, {rsu:?}",
+                    randomness_state_update_found.unwrap(),
+                );
+                randomness_state_update_found = Some(rsu);
                 last_randomness_round_written = std::cmp::max(
                     last_randomness_round_written,
                     RandomnessRound(rsu.randomness_round),

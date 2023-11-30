@@ -359,7 +359,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                                 consensus_output.leader_author_index(),
                             ));
                         } else {
-                            debug!("ignoring RandomnessStateUpdate tx for round {round:?}: randomness state is not enabled on this node")
+                            debug!("ignoring RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}: randomness state is not enabled on this node")
                         }
                     } else {
                         let transaction = SequencedConsensusTransactionKind::External(transaction);
