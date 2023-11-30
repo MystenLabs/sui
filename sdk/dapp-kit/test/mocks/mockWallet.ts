@@ -37,11 +37,18 @@ export class MockWallet implements Wallet {
 		};
 	});
 
+	readonly id?: string;
+
 	constructor(
+		id: string | null | undefined,
 		name: string,
 		accounts: ReadonlyWalletAccount[],
 		features: IdentifierRecord<unknown>,
 	) {
+		if (id) {
+			this.id = id;
+		}
+
 		this.#walletName = name;
 		this.#accounts = accounts;
 		this.#features = features;
