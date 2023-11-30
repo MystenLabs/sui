@@ -209,6 +209,11 @@ pub enum OwnerType {
     Shared = 3,
 }
 
+pub enum ObjectStatus {
+    Active = 0,
+    WrappedOrDeleted = 1,
+}
+
 impl TryFrom<i16> for OwnerType {
     type Error = IndexerError;
 
@@ -243,7 +248,7 @@ pub enum DynamicFieldKind {
     DynamicObject = 1,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct IndexedObject {
     pub object_id: ObjectID,
     pub object_version: u64,
@@ -286,6 +291,13 @@ impl IndexedObject {
             df_info,
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct IndexedDeletedObject {
+    pub object_id: ObjectID,
+    pub object_version: u64,
+    pub checkpoint_sequence_number: u64,
 }
 
 #[derive(Debug)]

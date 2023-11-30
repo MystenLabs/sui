@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::sql_types::{VarChar, BigInt};
+use diesel::sql_types::{BigInt, VarChar};
 use diesel::{QueryableByName, RunQueryDsl};
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -80,9 +80,7 @@ impl PgPartitionManager {
                 conn
             ))?
             .into_iter()
-            .map(|table: PartitionedTable| {
-                (table.table_name, table.last_partition as u64)
-            })
+            .map(|table: PartitionedTable| (table.table_name, table.last_partition as u64))
             .collect(),
         )
     }
@@ -101,7 +99,9 @@ impl PgPartitionManager {
         assert!(
             last_partition == data.last_epoch,
             "last_partition != last_epoch for table {}, {}, {}",
-            table, last_partition, data.last_epoch
+            table,
+            last_partition,
+            data.last_epoch
         );
         transactional_blocking_with_retry!(
             &self.cp,

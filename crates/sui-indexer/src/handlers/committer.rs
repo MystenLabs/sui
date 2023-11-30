@@ -144,7 +144,8 @@ async fn commit_checkpoints<S>(
             state.persist_events(events_batch),
             state.persist_displays(display_updates_batch),
             state.persist_packages(packages_batch),
-            state.persist_objects(object_changes_batch),
+            state.persist_objects(object_changes_batch.clone()),
+            state.persist_object_history(object_changes_batch),
         ];
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
