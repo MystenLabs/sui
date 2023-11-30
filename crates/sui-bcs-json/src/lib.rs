@@ -18,12 +18,13 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-/// Return 0 for success and 1 for failure
-///
 /// Converts the JSON data into a BCS array.
 /// The result points to the address where the new BCS
 /// array is stored. Don't forget to deallocate the memory
 /// by calling the sui_bcs_json_free_array function.
+///
+/// Returns 0 for success, 1 for failing to create the Rust strings from the
+/// input pointers and 2 for failing to convert the JSON to BCS.
 ///
 /// # Safety
 /// Unsafe function.
@@ -64,18 +65,18 @@ pub unsafe extern "C" fn sui_json_to_bcs(
         }
         Err(e) => {
             ffi_helpers::update_last_error(e);
-            1
+            2
         }
     }
 }
 
-/// Return 0 if the conversion from BCS to JSON is successful, and 1 or 2 for
-/// failure. 1 represents a failure from parsing the BCS to JSON, and 2
-/// represents an error building the CString from the JSON data.
-///
+/// Converts the BCS array into a JSON string.
 /// The result argument will point to the address where the JSON
 /// string is stored. Make sure you release the allocated memory
 /// by calling sui_bcs_json_free_string function!
+///
+/// Returns 0 for success, 1 for failing to create the Rust strings from the
+/// input pointers and 2 for failing to convert the BCS array into JSON.
 ///
 /// # Safety
 /// Unsafe function.
@@ -105,7 +106,7 @@ pub unsafe extern "C" fn sui_bcs_to_json(
                 Ok(c) => c.into_raw(),
                 Err(e) => {
                     ffi_helpers::update_last_error(e);
-                    return 2;
+                    return 1;
                 }
             };
             unsafe { *result = cstr as *const i8 };
@@ -113,7 +114,7 @@ pub unsafe extern "C" fn sui_bcs_to_json(
         }
         Err(e) => {
             ffi_helpers::update_last_error(e);
-            1
+            2
         }
     }
 }
