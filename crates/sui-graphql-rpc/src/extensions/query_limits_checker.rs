@@ -123,8 +123,6 @@ impl Extension for QueryLimitsChecker {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        // TODO: limit/ban directives for now
-
         let cfg = ctx
             .data::<ServiceConfig>()
             .expect("No service config provided in schema data");
@@ -212,6 +210,13 @@ impl QueryLimitsChecker {
 
                 match &curr_sel.node {
                     Selection::Field(f) => {
+                        if !f.node.directives.is_empty() {
+                            return Err(graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                "Fields with directives are not supported",
+                                f.pos,
+                            ));
+                        }
                         for field_sel in f.node.selection_set.node.items.iter() {
                             que.push_back(field_sel);
                             cost.num_nodes += 1;
@@ -234,6 +239,13 @@ impl QueryLimitsChecker {
                         // TODO: this is inefficient as we might loop over same fragment multiple times
                         // Ideally web should cache the costs of fragments we've seen before
                         // Will do as enhancement
+                        if !frag_def.node.directives.is_empty() {
+                            return Err(graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                "Fragments with directives are not supported",
+                                frag_def.pos,
+                            ));
+                        }
                         for frag_sel in frag_def.node.selection_set.node.items.iter() {
                             que.push_back(frag_sel);
                             cost.num_nodes += 1;
@@ -241,6 +253,13 @@ impl QueryLimitsChecker {
                         }
                     }
                     Selection::InlineFragment(fs) => {
+                        if !fs.node.directives.is_empty() {
+                            return Err(graphql_error_at_pos(
+                                INTERNAL_SERVER_ERROR,
+                                "Inline fragments with directives are not supported",
+                                fs.pos,
+                            ));
+                        }
                         for in_frag_sel in fs.node.selection_set.node.items.iter() {
                             que.push_back(in_frag_sel);
                             cost.num_nodes += 1;
