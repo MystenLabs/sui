@@ -5938,7 +5938,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events emitted in a specified Move module.",
+            "description": "Return events emitted in a specified Move module. If the event is defined in Module A but emitted in a tx with Module B, query `MoveModule` by module B returns the event. Query `MoveEventModule` by module A returns the event too.",
             "type": "object",
             "required": [
               "MoveModule"
@@ -5969,7 +5969,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events with the given move event struct name",
+            "description": "Return events with the given Move event struct name (struct tag). For example, if the event is defined in `0xabcd::MyModule`, and named `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.",
             "type": "object",
             "required": [
               "MoveEventType"
@@ -5982,7 +5982,7 @@
             "additionalProperties": false
           },
           {
-            "description": "Return events with the given move event module name",
+            "description": "Return events with the given Move module name where the event struct is defined. If the event is defined in Module A but emitted in a tx with Module B, query `MoveEventModule` by module A returns the event. Query `MoveModule` by module B returns the event too.",
             "type": "object",
             "required": [
               "MoveEventModule"
