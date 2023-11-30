@@ -846,17 +846,17 @@ type MakeMoveVecTransaction {
 type TransactionSignature
 
 type TransactionBlockEffects {
-  status: ExecutionStatus!
+  transactionBlock: TransactionBlock!
+  status: ExecutionStatus
 
   errors: String
-  transactionBlock: TransactionBlock
-  dependencies: [TransactionBlock]
+  dependencies: [TransactionBlock!]
 
   lamportVersion: Int
   gasEffects: GasEffects
-  objectReads: [Object]
-  objectChanges: [ObjectChange]
-  balanceChanges: [BalanceChange]
+  objectReads: [Object!]
+  objectChanges: [ObjectChange!]
+  balanceChanges: [BalanceChange!]
   timestamp: DateTime
   epoch: Epoch
   checkpoint: Checkpoint

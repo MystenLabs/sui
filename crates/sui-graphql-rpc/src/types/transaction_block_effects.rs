@@ -4,51 +4,29 @@
 use std::str::FromStr;
 
 use async_graphql::*;
-use sui_indexer::types_v2::IndexedObjectChange;
-use sui_json_rpc_types::{
-    BalanceChange as NativeBalanceChange, SuiExecutionStatus, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+use sui_indexer::{models_v2::transactions::StoredTransaction, types_v2::IndexedObjectChange};
+use sui_json_rpc_types::BalanceChange as NativeBalanceChange;
+use sui_types::{
+    effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
+    execution_status::ExecutionStatus as NativeExecutionStatus,
 };
-use sui_types::digests::TransactionDigest;
 
 use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
-    big_int::BigInt, checkpoint::Checkpoint, date_time::DateTime, digest::Digest, epoch::Epoch,
+    base64::Base64, big_int::BigInt, checkpoint::Checkpoint, date_time::DateTime, epoch::Epoch,
     gas::GasEffects, move_type::MoveType, object::Object, owner::Owner, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 
-#[derive(Clone, SimpleObject)]
-#[graphql(complex)]
+#[derive(Clone)]
 pub(crate) struct TransactionBlockEffects {
-    #[graphql(skip)]
-    pub gas_effects: GasEffects,
-    pub status: ExecutionStatus,
-    pub errors: Option<String>,
+    /// Representation of transaction effects in the Indexer's Store.  The indexer stores the
+    /// transaction data and its effects together, in one table.
+    pub stored: StoredTransaction,
 
-    #[graphql(skip)]
-    pub tx_block_digest: Digest,
-    // pub transaction_block: Option<Box<TransactionBlock>>,
-    #[graphql(skip)]
-    pub dependencies: Vec<TransactionDigest>,
-    pub lamport_version: Option<u64>,
-    // unclear what object reads is about, TODO @ashok
-    // pub object_reads: Vec<Object>,
-    #[graphql(skip)]
-    pub object_changes_as_bcs: Vec<Option<Vec<u8>>>,
-    pub balance_changes: Option<Vec<Option<BalanceChange>>>,
-    // have their own resolvers in the impl block
-    #[graphql(skip)]
-    pub epoch_id: u64,
-    // pub epoch: Option<Epoch>,
-    // pub checkpoint: Option<Checkpoint>,
-    #[graphql(skip)]
-    checkpoint_seq_number: u64,
-    /// UTC timestamp in milliseconds since epoch (1/1/1970)
-    /// representing the time when the checkpoint that contains
-    /// this transaction was created
-    pub timestamp: Option<DateTime>,
+    /// Deserialized representation of `stored.raw_effects`.
+    pub native: NativeTransactionEffects,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -72,47 +50,70 @@ pub(crate) struct ObjectChange {
     pub id_deleted: Option<bool>,
 }
 
-#[ComplexObject]
+#[Object]
 impl TransactionBlockEffects {
-    // the lamport version is the sequence number?
-    async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        let checkpoint = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, Some(self.checkpoint_seq_number))
+    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<TransactionBlock> {
+        let digest = self.native.transaction_digest().to_string();
+        ctx.data_unchecked::<PgManager>()
+            .fetch_tx(digest.as_str())
             .await
-            .extend()?;
-        Ok(checkpoint)
+            .extend()?
+            .ok_or_else(|| {
+                Error::Internal(format!(
+                    "Failed to get transaction {digest} from its effects"
+                ))
+            })
+            .extend()
     }
 
-    // resolve the dependencies based on the transaction digests
-    async fn dependencies(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Vec<Option<TransactionBlock>>>> {
-        let digests = &self.dependencies;
+    async fn status(&self) -> Option<ExecutionStatus> {
+        Some(match self.native.status() {
+            NativeExecutionStatus::Success => ExecutionStatus::Success,
+            NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
+        })
+    }
 
+    async fn lamport_version(&self) -> Option<u64> {
+        if let Some(((_id, version, _digest), _owner)) = self.native.created().first() {
+            Some(version.value())
+        } else {
+            None
+        }
+    }
+
+    async fn errors(&self) -> Option<String> {
+        match self.native.status() {
+            NativeExecutionStatus::Success => None,
+
+            NativeExecutionStatus::Failure {
+                error,
+                command: None,
+            } => Some(format!("{error:?}")),
+
+            NativeExecutionStatus::Failure {
+                error,
+                command: Some(command),
+            } => Some(format!("{error:?} in command {command}")),
+        }
+    }
+
+    async fn dependencies(&self, ctx: &Context<'_>) -> Result<Option<Vec<TransactionBlock>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_txs_by_digests(digests)
+            .fetch_txs_by_digests(self.native.dependencies())
             .await
             .extend()
     }
 
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.epoch_id)
-            .await
-            .extend()?;
-        Ok(Some(epoch))
-    }
-
     async fn gas_effects(&self) -> Option<GasEffects> {
-        Some(self.gas_effects)
+        Some(GasEffects::from(&self.native))
     }
 
-    async fn object_changes(&self, ctx: &Context<'_>) -> Result<Option<Vec<Option<ObjectChange>>>> {
+    // TODO object_reads
+
+    async fn object_changes(&self, ctx: &Context<'_>) -> Result<Option<Vec<ObjectChange>>> {
         let mut changes = vec![];
-        for bcs in self.object_changes_as_bcs.iter().flatten() {
+
+        for bcs in self.stored.object_changes.iter().flatten() {
             let object_change: IndexedObjectChange = bcs::from_bytes(bcs)
                 .map_err(|_| {
                     Error::Internal(
@@ -122,60 +123,49 @@ impl TransactionBlockEffects {
                 .extend()?;
             changes.push(ObjectChange::from(object_change, ctx).await.extend()?);
         }
+
         Ok(Some(changes))
     }
 
-    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<Option<TransactionBlock>> {
+    async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
+        let changes = BalanceChange::from(&self.stored.balance_changes).extend()?;
+        Ok(Some(changes))
+    }
+
+    async fn timestamp(&self) -> Option<DateTime> {
+        DateTime::from_ms(self.stored.timestamp_ms)
+    }
+
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        Ok(Some(
+            ctx.data_unchecked::<PgManager>()
+                .fetch_epoch_strict(self.native.executed_epoch())
+                .await
+                .extend()?,
+        ))
+    }
+
+    async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
+        let checkpoint = self.stored.checkpoint_sequence_number as u64;
         ctx.data_unchecked::<PgManager>()
-            .fetch_tx(self.tx_block_digest.to_string().as_str())
+            .fetch_checkpoint(None, Some(checkpoint))
             .await
             .extend()
     }
-}
 
-impl TransactionBlockEffects {
-    pub fn from_stored_transaction(
-        balance_changes: Vec<Option<Vec<u8>>>,
-        checkpoint_seq_number: u64,
-        object_changes: Vec<Option<Vec<u8>>>,
-        tx_effects: &SuiTransactionBlockEffects,
-        tx_block_digest: Digest,
-        timestamp: Option<DateTime>,
-    ) -> Result<Option<Self>, Error> {
-        let (status, errors) = match tx_effects.status() {
-            SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
-            SuiExecutionStatus::Failure { error } => {
-                (ExecutionStatus::Failure, Some(error.clone()))
-            }
-        };
-        let lamport_version = tx_effects
-            .created()
-            .first()
-            .map(|x| x.reference.version.value());
-        let balance_changes = BalanceChange::from(balance_changes)?;
+    // TODO: event_connection: EventConnection
 
-        Ok(Some(Self {
-            gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
-            status,
-            errors,
-            lamport_version,
-            dependencies: tx_effects.dependencies().to_vec(),
-            balance_changes: Some(balance_changes),
-            epoch_id: tx_effects.executed_epoch(),
-            tx_block_digest,
-            object_changes_as_bcs: object_changes,
-            checkpoint_seq_number,
-            timestamp,
-        }))
+    async fn bcs(&self) -> Option<Base64> {
+        Some(Base64::from(&self.stored.raw_effects))
     }
 }
 
 impl BalanceChange {
-    fn from(balance_changes: Vec<Option<Vec<u8>>>) -> Result<Vec<Option<BalanceChange>>, Error> {
+    fn from(balance_changes: &[Option<Vec<u8>>]) -> Result<Vec<BalanceChange>, Error> {
         let mut output = vec![];
-        for balance_change_bcs in balance_changes.into_iter().flatten() {
-            let balance_change: NativeBalanceChange = bcs::from_bytes(&balance_change_bcs)
-                .map_err(|_| {
+        for balance_change_bcs in balance_changes.iter().flatten() {
+            let balance_change: NativeBalanceChange =
+                bcs::from_bytes(balance_change_bcs).map_err(|_| {
                     Error::Internal("Cannot convert bcs bytes to BalanceChange".to_string())
                 })?;
             let balance_change_owner_address =
@@ -196,13 +186,13 @@ impl BalanceChange {
                         "Cannot convert balance change amount to BigInt amount".to_string(),
                     )
                 })?;
-            output.push(Some(BalanceChange {
+            output.push(BalanceChange {
                 owner: Some(owner),
                 amount: Some(amount),
                 coin_type: Some(MoveType::new(
                     balance_change.coin_type.to_canonical_string(true),
                 )),
-            }))
+            })
         }
         Ok(output)
     }
@@ -211,10 +201,7 @@ impl BalanceChange {
 // TODO this should be replaced together with the whole TXBLOCKEFFECTS once the indexer has this stuff implemented
 // see effects_v2.rs in indexer
 impl ObjectChange {
-    async fn from(
-        object_change: IndexedObjectChange,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Self>, Error> {
+    async fn from(object_change: IndexedObjectChange, ctx: &Context<'_>) -> Result<Self, Error> {
         match object_change {
             IndexedObjectChange::Created {
                 sender: _,
@@ -231,12 +218,12 @@ impl ObjectChange {
                     .data_unchecked::<PgManager>()
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
-                Ok(Some(Self {
+                Ok(Self {
                     input_state: None,
                     output_state,
                     id_created: Some(true),
                     id_deleted: None,
-                }))
+                })
             }
 
             IndexedObjectChange::Published {
@@ -253,12 +240,12 @@ impl ObjectChange {
                     .data_unchecked::<PgManager>()
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
-                Ok(Some(Self {
+                Ok(Self {
                     input_state: None,
                     output_state,
                     id_created: Some(true),
                     id_deleted: None,
-                }))
+                })
             }
             IndexedObjectChange::Transferred {
                 sender: _,
@@ -279,12 +266,12 @@ impl ObjectChange {
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
 
-                Ok(Some(Self {
+                Ok(Self {
                     input_state: output_state.clone(),
                     output_state,
                     id_created: None,
                     id_deleted: None,
-                }))
+                })
             }
             IndexedObjectChange::Mutated {
                 sender: _,
@@ -306,12 +293,12 @@ impl ObjectChange {
                     .data_unchecked::<PgManager>()
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
-                Ok(Some(Self {
+                Ok(Self {
                     input_state,
                     output_state,
                     id_created: None,
                     id_deleted: None,
-                }))
+                })
             }
             IndexedObjectChange::Deleted {
                 sender: _,
@@ -326,12 +313,12 @@ impl ObjectChange {
                     .data_unchecked::<PgManager>()
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
-                Ok(Some(Self {
+                Ok(Self {
                     input_state,
                     output_state: None,
                     id_created: None,
                     id_deleted: Some(true),
-                }))
+                })
             }
             IndexedObjectChange::Wrapped {
                 sender: _,
@@ -346,13 +333,25 @@ impl ObjectChange {
                     .data_unchecked::<PgManager>()
                     .fetch_obj(sui_address, Some(version.value()))
                     .await?;
-                Ok(Some(Self {
+                Ok(Self {
                     input_state: None,
                     output_state,
                     id_created: None,
                     id_deleted: None,
-                }))
+                })
             }
         }
+    }
+}
+
+impl TryFrom<StoredTransaction> for TransactionBlockEffects {
+    type Error = Error;
+
+    fn try_from(stored: StoredTransaction) -> Result<Self, Error> {
+        let native = bcs::from_bytes(&stored.raw_effects).map_err(|e| {
+            Error::Internal(format!("Error deserializing transaction effects: {e}"))
+        })?;
+
+        Ok(TransactionBlockEffects { stored, native })
     }
 }
