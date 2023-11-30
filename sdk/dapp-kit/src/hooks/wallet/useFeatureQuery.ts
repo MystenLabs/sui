@@ -8,12 +8,10 @@ import { useEffect } from 'react';
 
 import { useCurrentWallet } from './useCurrentWallet.js';
 
-export interface DappKitWalletStandardFeatureMethods extends SuiFeatures {
-	'foo:bar': {
-		version: '1.0.0';
-		bar: (name: string) => Promise<string>;
-	};
-}
+/**
+ * This is the interface that defines custom wallet features that are available through the `useFeatureQuery` hook.
+ */
+export interface DappKitWalletStandardFeatureMethods extends SuiFeatures {}
 
 type FunctionKeys<T> = {
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
@@ -67,7 +65,3 @@ export function useFeatureQuery<
 
 	return queryResult;
 }
-
-// eslint-disable-next-line react-hooks/rules-of-hooks
-const { data } = useFeatureQuery('foo:bar', ['foo']);
-void data;
