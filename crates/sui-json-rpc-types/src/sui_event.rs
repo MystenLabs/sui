@@ -190,6 +190,9 @@ pub enum EventFilter {
     /// Return events emitted in a specified Package.
     Package(ObjectID),
     /// Return events emitted in a specified Move module.
+    /// If the event is defined in Module A but emitted in a tx with Module B,
+    /// query `MoveModule` by module B returns the event.
+    /// Query `MoveEventModule` by module A returns the event too.
     MoveModule {
         /// the Move package ID
         package: ObjectID,
@@ -198,13 +201,18 @@ pub enum EventFilter {
         #[serde_as(as = "DisplayFromStr")]
         module: Identifier,
     },
-    /// Return events with the given move event struct name
+    /// Return events with the given Move event struct name (struct tag).
+    /// For example, if the event is defined in `0xabcd::MyModule`, and named
+    /// `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.
     MoveEventType(
         #[schemars(with = "String")]
         #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
-    /// Return events with the given move event module name
+    /// Return events with the given Move module name where the event struct is defined.
+    /// If the event is defined in Module A but emitted in a tx with Module B,
+    /// query `MoveEventModule` by module A returns the event.
+    /// Query `MoveModule` by module B returns the event too.
     MoveEventModule {
         /// the Move package ID
         package: ObjectID,
