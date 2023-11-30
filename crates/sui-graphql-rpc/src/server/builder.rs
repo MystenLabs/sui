@@ -22,18 +22,23 @@ use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::http::HeaderMap;
-use axum::routing::{post, MethodRouter};
+use axum::response::IntoResponse;
+use axum::routing::{post, MethodRouter, Route};
 use axum::{
     extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
     middleware,
 };
 use axum::{headers::Header, Router};
+use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
+use hyper::Body;
 use hyper::Server as HyperServer;
+use std::convert::Infallible;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
+use tower::{Layer, Service};
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -53,8 +58,6 @@ pub(crate) struct ServerBuilder {
     host: String,
 
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
-    ide_title: Option<String>,
-
     router: Option<Router>,
 }
 
@@ -64,7 +67,6 @@ impl ServerBuilder {
             port,
             host,
             schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
-            ide_title: None,
             router: None,
         }
     }
@@ -93,35 +95,15 @@ impl ServerBuilder {
         self
     }
 
-    fn ide_title(mut self, name: String) -> Self {
-        self.ide_title = Some(name);
-        self
-    }
-
     fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
 
-    fn build_components(
-        self,
-    ) -> (
-        String,
-        Option<String>,
-        Schema<Query, Mutation, EmptySubscription>,
-        Router,
-    ) {
+    fn build_components(self) -> (String, Schema<Query, Mutation, EmptySubscription>, Router) {
         let address = self.address();
-        let ServerBuilder {
-            schema,
-            // TODO: remove this once we have expose layer in builder.
-            // This should be set in the builder.
-            ide_title,
-            router,
-            ..
-        } = self;
+        let ServerBuilder { schema, router, .. } = self;
         (
             address,
-            ide_title,
             schema.finish(),
             router.expect("Router not initialized"),
         )
@@ -145,14 +127,23 @@ impl ServerBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Server, Error> {
-        let (address, ide_title, schema, router) = self.build_components();
+    pub fn layer<L>(mut self, layer: L) -> Self
+    where
+        L: Layer<Route> + Clone + Send + 'static,
+        L::Service: Service<Request<Body>> + Clone + Send + 'static,
+        <L::Service as Service<Request<Body>>>::Response: IntoResponse + 'static,
+        <L::Service as Service<Request<Body>>>::Error: Into<Infallible> + 'static,
+        <L::Service as Service<Request<Body>>>::Future: Send + 'static,
+    {
+        self.init_router();
+        self.router = self.router.map(|router| router.layer(layer));
+        self
+    }
 
-        let app = router
-            .layer(axum::extract::Extension(schema))
-            // TODO: remove this once we have expose layer in builder.
-            // This should be set in the builder.
-            .layer(axum::extract::Extension(ide_title));
+    pub fn build(self) -> Result<Server, Error> {
+        let (address, schema, router) = self.build_components();
+
+        let app = router.layer(axum::extract::Extension(schema));
 
         Ok(Server {
             server: axum::Server::bind(
@@ -164,9 +155,11 @@ impl ServerBuilder {
         })
     }
 
-    pub async fn from_yaml_config(path: &str) -> Result<Self, Error> {
+    pub async fn from_yaml_config(path: &str) -> Result<(Self, ServerConfig), Error> {
         let config = ServerConfig::from_yaml(path)?;
-        Self::from_config(&config).await
+        Self::from_config(&config)
+            .await
+            .map(|builder| (builder, config))
     }
 
     pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
@@ -223,7 +216,6 @@ impl ServerBuilder {
             .context_data(Resolver::new(package_cache))
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
-            .ide_title(config.ide.ide_title.clone())
             .context_data(Arc::new(metrics))
             .context_data(config.clone());
 

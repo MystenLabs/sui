@@ -22,6 +22,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::error::SuiError;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
@@ -206,7 +207,12 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let round = self.epoch_state.next_consensus_round();
         let timestamp_ms = self.store.get_clock().timestamp_ms() + duration.as_millis() as u64;
         let consensus_commit_prologue_transaction =
-            VerifiedTransaction::new_consensus_commit_prologue(epoch, round, timestamp_ms);
+            VerifiedTransaction::new_consensus_commit_prologue_v2(
+                epoch,
+                round,
+                timestamp_ms,
+                ConsensusCommitDigest::default(),
+            );
 
         self.execute_transaction(consensus_commit_prologue_transaction.into())
             .expect("advancing the clock cannot fail")

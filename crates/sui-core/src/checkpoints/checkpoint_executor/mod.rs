@@ -178,8 +178,8 @@ impl CheckpointExecutor {
                 // This makes sure we don't re-schedule the same checkpoint multiple times.
                 &mut next_to_schedule,
                 epoch_store.clone(),
-            )
-            .await;
+            );
+
             self.metrics
                 .checkpoint_exec_inflight
                 .set(pending.len() as i64);
@@ -286,7 +286,7 @@ impl CheckpointExecutor {
     }
 
     #[instrument(level = "debug", skip_all)]
-    async fn schedule_synced_checkpoints(
+    fn schedule_synced_checkpoints(
         &self,
         pending: &mut CheckpointExecutionBuffer,
         next_to_schedule: &mut CheckpointSequenceNumber,
@@ -318,20 +318,19 @@ impl CheckpointExecutor {
                 return;
             }
 
-            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone())
-                .await;
+            self.schedule_checkpoint(checkpoint, pending, epoch_store.clone());
             *next_to_schedule += 1;
         }
     }
 
     #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
-    async fn schedule_checkpoint(
+    fn schedule_checkpoint(
         &self,
         checkpoint: VerifiedCheckpoint,
         pending: &mut CheckpointExecutionBuffer,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        debug!("Scheduling checkpoint for execution");
+        debug!(checkpoint_seq=?checkpoint.sequence_number(), "Scheduling checkpoint for execution");
 
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
@@ -344,172 +343,38 @@ impl CheckpointExecutor {
             epoch_store.epoch(),
         );
 
-        let epoch_store = epoch_store.clone();
-        // NOTE: We can't re-enqueue out of order. Therefore we cannot allow
-        // any retryable failures after enqueue. Before is ok.
-        while let Err(err) = self
-            .execute_checkpoint(checkpoint.clone(), epoch_store.clone(), pending)
-            .await
-        {
-            error!(
-                "Error while executing checkpoint, will retry in 1s: {:?}",
-                err
-            );
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            self.metrics.checkpoint_exec_errors.inc();
-        }
-    }
-
-    // Logs within the function are annotated with the checkpoint sequence number and epoch,
-    // from schedule_checkpoint().
-    #[instrument(level = "debug", skip_all)]
-    async fn execute_checkpoint(
-        &self,
-        checkpoint: VerifiedCheckpoint,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        pending: &mut CheckpointExecutionBuffer,
-    ) -> SuiResult {
-        debug!("Preparing checkpoint for execution",);
-        let prepare_start = Instant::now();
-
-        // this function must guarantee that all transactions in the checkpoint are executed before it
-        // returns. This invariant is enforced in two phases:
-        // - First, we filter out any already executed transactions from the checkpoint in
-        //   get_unexecuted_transactions()
-        // - Second, we execute all remaining transactions.
-
-        let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
-            checkpoint.clone(),
-            self.authority_store.clone(),
-            self.checkpoint_store.clone(),
-            epoch_store.clone(),
-        );
-
-        let tx_count = execution_digests.len();
-        debug!("Number of transactions in the checkpoint: {:?}", tx_count);
-        self.metrics
-            .checkpoint_transaction_count
-            .report(tx_count as u64);
-
-        self.execute_transactions(
-            execution_digests,
-            all_tx_digests.clone(),
-            executable_txns,
-            epoch_store.clone(),
-            checkpoint,
-            pending,
-            prepare_start,
-        )
-        .await?;
-        Ok(())
-    }
-
-    // Logs within the function are annotated with the checkpoint sequence number and epoch,
-    // from schedule_checkpoint().
-    #[instrument(level = "debug", skip_all)]
-    async fn execute_transactions(
-        &self,
-        execution_digests: Vec<ExecutionDigests>,
-        all_tx_digests: Vec<TransactionDigest>,
-        executable_txns: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        checkpoint: VerifiedCheckpoint,
-        pending: &mut CheckpointExecutionBuffer,
-        prepare_start: Instant,
-    ) -> SuiResult {
-        let effects_digests: HashMap<_, _> = execution_digests
-            .iter()
-            .map(|digest| (digest.transaction, digest.effects))
-            .collect();
-
-        let shared_effects_digests = executable_txns
-            .iter()
-            .filter(|(tx, _)| tx.contains_shared_object())
-            .map(|(tx, _)| {
-                effects_digests
-                    .get(tx.digest())
-                    .expect("Transaction digest not found in effects_digests")
-            })
-            .collect::<Vec<_>>();
-
-        let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = self
-            .authority_store
-            .perpetual_tables
-            .effects
-            .multi_get(shared_effects_digests.clone())?
-            .into_iter()
-            .zip(shared_effects_digests)
-            .map(|(fx, fx_digest)| {
-                if fx.is_none() {
-                    panic!(
-                        "Transaction effects for effects digest {:?} do not exist in effects table",
-                        fx_digest
-                    );
-                }
-                let fx = fx.unwrap();
-                (*fx.transaction_digest(), fx)
-            })
-            .collect();
-
-        for (tx, _) in &executable_txns {
-            if tx.contains_shared_object() {
-                epoch_store
-                    .acquire_shared_locks_from_effects(
-                        tx,
-                        digest_to_effects.get(tx.digest()).unwrap(),
-                        &self.authority_store,
-                    )
-                    .await?;
-            }
-        }
-
-        let exec_start = Instant::now();
-        let prepare_elapsed = exec_start - prepare_start;
-        self.metrics
-            .checkpoint_prepare_latency_us
-            .report(prepare_elapsed.as_micros() as u64);
-        if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
-            info!(
-                "Checkpoint preparation for execution took {:?}",
-                prepare_elapsed
-            );
-        }
-
-        self.tx_manager
-            .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
-
+        let metrics = self.metrics.clone();
         let local_execution_timeout_sec = self.config.local_execution_timeout_sec;
         let data_ingestion_dir = self.config.data_ingestion_dir.clone();
-        let checkpoint_store = self.checkpoint_store.clone();
         let authority_store = self.authority_store.clone();
+        let checkpoint_store = self.checkpoint_store.clone();
         let tx_manager = self.tx_manager.clone();
         let accumulator = self.accumulator.clone();
-        let metrics = self.metrics.clone();
+
         pending.push_back(spawn_monitored_task!(async move {
-            handle_execution_effects(
-                execution_digests,
-                all_tx_digests,
+            let epoch_store = epoch_store.clone();
+            while let Err(err) = execute_checkpoint(
                 checkpoint.clone(),
-                checkpoint_store,
-                authority_store,
-                epoch_store,
-                tx_manager,
-                accumulator,
+                authority_store.clone(),
+                checkpoint_store.clone(),
+                epoch_store.clone(),
+                tx_manager.clone(),
+                accumulator.clone(),
                 local_execution_timeout_sec,
-                data_ingestion_dir,
+                &metrics,
+                data_ingestion_dir.clone(),
             )
-            .await;
-            let exec_elapsed = exec_start.elapsed();
-            metrics
-                .checkpoint_exec_latency_us
-                .report(exec_elapsed.as_micros() as u64);
-            if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
-                info!(seq = ?checkpoint.sequence_number(), "Checkpoint execution took {:?}", exec_elapsed);
+            .await
+            {
+                error!(
+                    "Error while executing checkpoint, will retry in 1s: {:?}",
+                    err
+                );
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                metrics.checkpoint_exec_errors.inc();
             }
             checkpoint
         }));
-
-        Ok(())
     }
 
     async fn execute_change_epoch_tx(
@@ -647,6 +512,59 @@ impl CheckpointExecutor {
         }
         false
     }
+}
+
+// Logs within the function are annotated with the checkpoint sequence number and epoch,
+// from schedule_checkpoint().
+#[instrument(level = "debug", skip_all)]
+async fn execute_checkpoint(
+    checkpoint: VerifiedCheckpoint,
+    authority_store: Arc<AuthorityStore>,
+    checkpoint_store: Arc<CheckpointStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
+    accumulator: Arc<StateAccumulator>,
+    local_execution_timeout_sec: u64,
+    metrics: &Arc<CheckpointExecutorMetrics>,
+    data_ingestion_dir: Option<PathBuf>,
+) -> SuiResult {
+    debug!(checkpoint_seq=?checkpoint.sequence_number(), "Preparing checkpoint for execution",);
+    let prepare_start = Instant::now();
+
+    // this function must guarantee that all transactions in the checkpoint are executed before it
+    // returns. This invariant is enforced in two phases:
+    // - First, we filter out any already executed transactions from the checkpoint in
+    //   get_unexecuted_transactions()
+    // - Second, we execute all remaining transactions.
+
+    let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
+        checkpoint.clone(),
+        authority_store.clone(),
+        checkpoint_store.clone(),
+        epoch_store.clone(),
+    );
+
+    let tx_count = execution_digests.len();
+    debug!(checkpoint_seq=?checkpoint.sequence_number(), "Number of transactions in the checkpoint: {:?}", tx_count);
+    metrics.checkpoint_transaction_count.report(tx_count as u64);
+
+    execute_transactions(
+        execution_digests,
+        all_tx_digests.clone(),
+        executable_txns,
+        authority_store.clone(),
+        checkpoint_store.clone(),
+        epoch_store.clone(),
+        transaction_manager,
+        accumulator,
+        local_execution_timeout_sec,
+        checkpoint,
+        metrics,
+        prepare_start,
+        data_ingestion_dir,
+    )
+    .await?;
+    Ok(())
 }
 
 #[instrument(level = "error", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
@@ -994,6 +912,110 @@ fn get_unexecuted_transactions(
     };
 
     (execution_digests, all_tx_digests, executable_txns)
+}
+
+// Logs within the function are annotated with the checkpoint sequence number and epoch,
+// from schedule_checkpoint().
+#[instrument(level = "debug", skip_all)]
+async fn execute_transactions(
+    execution_digests: Vec<ExecutionDigests>,
+    all_tx_digests: Vec<TransactionDigest>,
+    executable_txns: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+    authority_store: Arc<AuthorityStore>,
+    checkpoint_store: Arc<CheckpointStore>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    transaction_manager: Arc<TransactionManager>,
+    accumulator: Arc<StateAccumulator>,
+    local_execution_timeout_sec: u64,
+    checkpoint: VerifiedCheckpoint,
+    metrics: &Arc<CheckpointExecutorMetrics>,
+    prepare_start: Instant,
+    data_ingestion_dir: Option<PathBuf>,
+) -> SuiResult {
+    let effects_digests: HashMap<_, _> = execution_digests
+        .iter()
+        .map(|digest| (digest.transaction, digest.effects))
+        .collect();
+
+    let shared_effects_digests = executable_txns
+        .iter()
+        .filter(|(tx, _)| tx.contains_shared_object())
+        .map(|(tx, _)| {
+            effects_digests
+                .get(tx.digest())
+                .expect("Transaction digest not found in effects_digests")
+        })
+        .collect::<Vec<_>>();
+
+    let digest_to_effects: HashMap<TransactionDigest, TransactionEffects> = authority_store
+        .perpetual_tables
+        .effects
+        .multi_get(shared_effects_digests.clone())?
+        .into_iter()
+        .zip(shared_effects_digests)
+        .map(|(fx, fx_digest)| {
+            if fx.is_none() {
+                panic!(
+                    "Transaction effects for effects digest {:?} do not exist in effects table",
+                    fx_digest
+                );
+            }
+            let fx = fx.unwrap();
+            (*fx.transaction_digest(), fx)
+        })
+        .collect();
+
+    for (tx, _) in &executable_txns {
+        if tx.contains_shared_object() {
+            epoch_store
+                .acquire_shared_locks_from_effects(
+                    tx,
+                    digest_to_effects.get(tx.digest()).unwrap(),
+                    &authority_store,
+                )
+                .await?;
+        }
+    }
+
+    let prepare_elapsed = prepare_start.elapsed();
+    metrics
+        .checkpoint_prepare_latency_us
+        .report(prepare_elapsed.as_micros() as u64);
+    if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
+        info!(
+            checkpoint_seq=?checkpoint.sequence_number(),
+            "Checkpoint preparation for execution took {:?}",
+            prepare_elapsed
+        );
+    }
+
+    let exec_start = Instant::now();
+    transaction_manager
+        .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
+
+    handle_execution_effects(
+        execution_digests,
+        all_tx_digests,
+        checkpoint.clone(),
+        checkpoint_store,
+        authority_store,
+        epoch_store,
+        transaction_manager,
+        accumulator,
+        local_execution_timeout_sec,
+        data_ingestion_dir,
+    )
+    .await;
+
+    let exec_elapsed = exec_start.elapsed();
+    metrics
+        .checkpoint_exec_latency_us
+        .report(exec_elapsed.as_micros() as u64);
+    if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
+        info!(checkpoint_seq = ?checkpoint.sequence_number(), "Checkpoint execution took {:?}", exec_elapsed);
+    }
+
+    Ok(())
 }
 
 #[instrument(level = "debug", skip_all)]

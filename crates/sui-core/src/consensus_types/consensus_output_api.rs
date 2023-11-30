@@ -3,8 +3,9 @@
 
 use crate::consensus_types::AuthorityIndex;
 use fastcrypto::hash::Hash;
-use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI, SystemMessage};
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI, SystemMessage};
 use std::fmt::Display;
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 
 /// A list of tuples of:
@@ -25,6 +26,9 @@ pub(crate) trait ConsensusOutputAPI: Display {
 
     /// Returns all transactions in the commit.
     fn transactions(&self) -> ConsensusOutputTransactions<'_>;
+
+    /// Returns the digest of consensus output.
+    fn consensus_digest(&self) -> ConsensusCommitDigest;
 }
 
 impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
@@ -98,6 +102,13 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                 (cert.origin().0, transactions)
             }).collect()
     }
+
+    fn consensus_digest(&self) -> ConsensusCommitDigest {
+        // We port ConsensusOutputDigest, a narwhal space object, into ConsensusCommitDigest, a sui-core space object.
+        // We assume they always have the same format.
+        static_assertions::assert_eq_size!(ConsensusCommitDigest, ConsensusOutputDigest);
+        ConsensusCommitDigest::new(self.digest().into_inner())
+    }
 }
 
 impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubDag {
@@ -148,5 +159,10 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
                 (author, transactions)
             })
             .collect()
+    }
+
+    fn consensus_digest(&self) -> ConsensusCommitDigest {
+        // TODO(mysticeti): implement consensus output digest.
+        ConsensusCommitDigest::default()
     }
 }

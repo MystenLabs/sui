@@ -644,6 +644,8 @@ impl VerifiedCheckpointContents {
 #[cfg(test)]
 #[cfg(feature = "test-utils")]
 mod tests {
+    use crate::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEffectsDigest};
+    use crate::transaction::VerifiedTransaction;
     use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
@@ -774,5 +776,68 @@ mod tests {
                 .verify_authority_signatures(&committee)
                 .is_err()
         )
+    }
+
+    // Generate a CheckpointSummary from the input transaction digest. All the other fields in the generated
+    // CheckpointSummary will be the same. The generated CheckpointSummary can be used to test how input
+    // transaction digest affects CheckpointSummary.
+    fn generate_test_checkpoint_summary_from_digest(
+        digest: TransactionDigest,
+    ) -> CheckpointSummary {
+        CheckpointSummary::new(
+            1,
+            2,
+            10,
+            &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::new(
+                digest,
+                TransactionEffectsDigest::ZERO,
+            )]),
+            None,
+            GasCostSummary::default(),
+            None,
+            100,
+        )
+    }
+
+    // Tests that ConsensusCommitPrologue with different consensus commit digest will result in different checkpoint content.
+    #[test]
+    fn test_checkpoing_summary_with_different_consensus_digest() {
+        // First, tests that same consensus commit digest will procude the same checkpoint content.
+        {
+            let t1 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::default(),
+            );
+            let t2 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::default(),
+            );
+            let c1 = generate_test_checkpoint_summary_from_digest(*t1.digest());
+            let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
+            assert_eq!(c1.digest(), c2.digest());
+        }
+
+        // Next, tests that different consensus commit digests will procude the different checkpoint contents.
+        {
+            let t1 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::default(),
+            );
+            let t2 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::random(),
+            );
+            let c1 = generate_test_checkpoint_summary_from_digest(*t1.digest());
+            let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
+            assert_ne!(c1.digest(), c2.digest());
+        }
     }
 }

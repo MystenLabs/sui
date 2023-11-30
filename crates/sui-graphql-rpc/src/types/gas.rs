@@ -5,14 +5,14 @@ use crate::context_data::db_data_provider::PgManager;
 use crate::types::object::Object;
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc_types::{OwnedObjectRef, SuiGasData};
+use sui_json_rpc_types::SuiGasData;
 use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
+    effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     gas::GasCostSummary as NativeGasCostSummary,
     transaction::GasData,
 };
 
-use super::digest::Digest;
 use super::object::ObjectFilter;
 use super::{address::Address, big_int::BigInt, sui_address::SuiAddress};
 
@@ -34,15 +34,9 @@ pub(crate) struct GasCostSummary {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct GasEffects {
-    pub gcs: GasCostSummary,
-    pub object_ref: ObjectRef,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ObjectRef {
+    pub summary: GasCostSummary,
     pub object_id: SuiAddress,
-    pub version: u64,
-    pub digest: Digest,
+    pub object_version: u64,
 }
 
 #[Object]
@@ -111,13 +105,24 @@ impl GasCostSummary {
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.object_ref.object_id, Some(self.object_ref.version))
+            .fetch_obj(self.object_id, Some(self.object_version))
             .await
             .extend()
     }
 
-    async fn gas_summary(&self) -> Option<GasCostSummary> {
-        Some(self.gcs)
+    async fn gas_summary(&self) -> Option<&GasCostSummary> {
+        Some(&self.summary)
+    }
+}
+
+impl GasEffects {
+    pub(crate) fn from(effects: &NativeTransactionEffects) -> Self {
+        let ((id, version, _digest), _owner) = effects.gas_object();
+        Self {
+            summary: GasCostSummary::from(effects.gas_cost_summary()),
+            object_id: SuiAddress::from(id),
+            object_version: version.value(),
+        }
     }
 }
 
@@ -150,19 +155,6 @@ impl From<&NativeGasCostSummary> for GasCostSummary {
             storage_cost: gcs.storage_cost,
             storage_rebate: gcs.storage_rebate,
             non_refundable_storage_fee: gcs.non_refundable_storage_fee,
-        }
-    }
-}
-
-impl From<(&NativeGasCostSummary, &OwnedObjectRef)> for GasEffects {
-    fn from((gcs, gas_obj_ref): (&NativeGasCostSummary, &OwnedObjectRef)) -> Self {
-        Self {
-            gcs: gcs.into(),
-            object_ref: ObjectRef {
-                object_id: SuiAddress::from_array(**gas_obj_ref.object_id()),
-                version: gas_obj_ref.version().value(),
-                digest: Digest::from_array(gas_obj_ref.reference.digest.into_inner()),
-            },
         }
     }
 }

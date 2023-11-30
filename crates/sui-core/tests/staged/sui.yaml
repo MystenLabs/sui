@@ -222,11 +222,21 @@ CompressedSignature:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginAuthenticatorAsBytes
+ConsensusCommitDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
     - round: U64
     - commit_timestamp_ms: U64
+ConsensusCommitPrologueV2:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
 Data:
   ENUM:
     0:
@@ -955,6 +965,10 @@ TransactionKind:
       RandomnessStateUpdate:
         NEWTYPE:
           TYPENAME: RandomnessStateUpdate
+    7:
+      ConsensusCommitPrologueV2:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV2
 TypeArgumentError:
   ENUM:
     0:

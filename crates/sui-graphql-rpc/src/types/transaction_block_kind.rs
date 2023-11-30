@@ -45,6 +45,7 @@ pub(crate) struct TxBlockKindNotImplementedYet {
     pub(crate) text: String,
 }
 
+// TODO: add ConsensusCommitPrologueTransactionV2 for TransactionKind::ConsensusCommitPrologueV2.
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct ConsensusCommitPrologueTransaction {
