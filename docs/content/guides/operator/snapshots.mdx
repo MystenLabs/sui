@@ -26,7 +26,7 @@ Full nodes do not take snapshots by default. To enable this feature you must app
 Changing the configs for a full node is done by the following steps:
 
 1. Stop your node, if it's running.
-2. Open your fullnode.yaml config file and apply config updates.
+2. Open your fullnode.yaml config file and apply config updates as shown below.
 3. Save the fullnode.yaml file and restart the node.
 
 ### Enabling RocksDB snapshots
@@ -63,7 +63,7 @@ Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 se
          aws-region: "<BUCKET-REGION>"
          object-store-connection-limit: 200
    ```
-   The configuration settings show in the example are specific to AWS S3, but GCS, Azure Storage, and Cloudflare R2 are all supported.
+   The configuration settings shown in the example are specific to AWS S3, but GCS, Azure Storage, and Cloudflare R2 are all supported.
 
 ## Restoring a Full node using snapshots
 
@@ -90,7 +90,7 @@ When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/
 
 ### Restoring using Formal snapshots
 
-To restore using a Formal snapshot, you can use the `sui-tool` binary. `sui-tool` can be downloaded along with other sui binaries.
+To restore using a Formal snapshot, use the `sui-tool` binary. `sui-tool` can be downloaded along with other sui binaries.
 See [Install Sui](./getting-started/sui-install.mdx) for more details.
 
 The following steps can be used to restore a node from a formal snapshot:
@@ -112,7 +112,7 @@ The following steps can be used to restore a node from a formal snapshot:
 
 ## Mysten Labs managed snapshots
 
-Mysten is providing two tiers of snapshot storage access. *High throughput, Requester Pays enabled buckets*, and *Free, permissionless buckets*.
+Mysten Labs hosts two tiers of snapshot storage access. *High throughput, Requester Pays enabled buckets*, and *free, permissionless buckets*.
 
 *High throughput, Requester Pays enabled buckets*:
 * GCS and S3 are both setup with requester pays. This means that you'll need to provide a set of valid AWS/GCP credentials when downloading from these buckets.
