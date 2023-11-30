@@ -89,7 +89,7 @@ module sui::coin {
     }
 
     /// Get immutable reference to the balance of a coin.
-    public fun coin_balance<T>(coin: &Coin<T>): &Balance<T> {
+    public fun balance<T>(coin: &Coin<T>): &Balance<T> {
         &coin.balance
     }
 
@@ -117,7 +117,7 @@ module sui::coin {
     ): Coin<T> {
         Coin {
             id: object::new(ctx),
-            balance: sui::balance::split(balance, value)
+            balance: balance::split(balance, value)
         }
     }
 
@@ -132,7 +132,7 @@ module sui::coin {
 
     /// Put a `Coin<T>` to the `Balance<T>`.
     public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
-        sui::balance::join(balance, into_balance(coin));
+        balance::join(balance, into_balance(coin));
     }
 
     spec put {
@@ -148,9 +148,9 @@ module sui::coin {
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
-        let Coin { id, balance: coin_balance} = c;
+        let Coin { id, balance } = c;
         object::delete(id);
-        balance::join(&mut self.balance, coin_balance);
+        balance::join(&mut self.balance, balance);
     }
 
     spec join {
@@ -222,9 +222,9 @@ module sui::coin {
 
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
-        let Coin { id, balance: coin_balance } = c;
+        let Coin { id, balance } = c;
         object::delete(id);
-        balance::destroy_zero(coin_balance)
+        balance::destroy_zero(balance)
     }
 
     // === Registering new coin types and managing the coin supply ===
