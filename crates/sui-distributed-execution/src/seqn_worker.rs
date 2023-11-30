@@ -500,19 +500,6 @@ impl SequenceWorkerState {
             elapsed,
             1000f64 * workload.num_accounts() as f64 / elapsed
         );
-        // first send genesis objects to all EWs
-        // let genesis_objects = ctx.get_genesis_objects();
-        // for ew_id in &ew_ids {
-        //     println!("SW sending genesis objects to {}", ew_id);
-        //     out_to_network
-        //         .send(NetworkMessage {
-        //             src: 0,
-        //             dst: *ew_id,
-        //             payload: SailfishMessage::GenesisObjects(genesis_objects.clone()),
-        //         })
-        //         .await
-        //         .expect("sending failed");
-        // }
 
         // then generate transactions and send them to all EWs
         let start_time = std::time::Instant::now();

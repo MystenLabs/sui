@@ -563,7 +563,7 @@ pub fn get_authority_key_pair() -> (SuiAddress, AuthorityKeyPair) {
 /// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
 pub fn get_key_pair_from_rng<KP: KeypairTraits, R>(csprng: &mut R) -> (SuiAddress, KP)
 where
-    R: rand::CryptoRng + rand::RngCore,
+    R: rand::RngCore,
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
 {
     let kp = KP::generate(&mut StdRng::from_rng(csprng).unwrap());

@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::rngs::mock::StepRng;
+// use rand::rngs::StdRng;
+// use rand::SeedableRng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
@@ -37,7 +38,8 @@ pub async fn batch_create_account_and_gas(
     //     .collect();
 
     // deterministically generate accounts and gas
-    let mut rng = StdRng::from_seed([0; 32]);
+    // let mut rng = StdRng::from_seed([0; 32]);
+    let mut rng = StepRng::new(2, 1);
     let mut tasks = vec![];
     // TODO: is there a way to do this in parallel, while maintaining determinism?
     for idx in 0..num_accounts {
