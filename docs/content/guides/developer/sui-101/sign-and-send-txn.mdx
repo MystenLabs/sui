@@ -1,19 +1,40 @@
 ---
-title: Signing Transactions
+title: Signing and Sending Transactions
 ---
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-To execute a transaction to Sui, you must submit a signature along with the transaction. The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender Sui address. 
+Transactions in Sui represent calls to specific functionality (like calling a smart contract function) that execute on inputs to define the result of the transaction.
+
+Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](./building-ptb) (PTBs), the user signs the transaction and submits it to be executed on chain.
+
+The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender Sui address. 
 
 Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are Ed25519 Pure, ECDSA Secp256k1, ECDSA Secp256r1, Multisig, and ZkLogin. 
 
 You can instantiate Ed25519 Pure, ECDSA Secp256k1, and ECDSA Secp256r1 using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to multisig and ZkLogin, please refer to their own pages for instructions. 
 
+With a signature and the transaction bytes, a transaction can be executed successfully. 
+
+## Workflow
+
+The following high-level process describes the overall workflow for constructing, signing and executing an on-chain transaction:
+
+* Construct the transaction data by creating a `TransactionBlock` where multiple transactions are chained. See [Building Programmable Transaction Blocks](./building-ptb.mdx) for more information. 
+* The SDK's built-in gas estimation and coin selection picks the gas coin.
+* Sign the transaction to generate a [signature](/concepts/cryptography/transaction-auth/signatures#user-signature).
+* Submit the `TransactionBlock` and its signature for on-chain execution.
+
+:::info
+
+If you want to use a specific gas coin, first find the gas coin object ID to be used to pay for gas, and explicitly use that in the PTB. If there is no gas coin object, use the [splitCoin](./building-ptb#available-transactions) transaction to create a gas coin object. The split coin transaction should be the first transaction call in the PTB.
+
+:::
+
 ## Examples
 
-The following examples demonstrate how to sign transactions using Rust, TypeScript, or the Sui CLI.
+The following examples demonstrate how to sign and execute transactions using Rust, TypeScript, or the Sui CLI.
 
 <Tabs groupId="code-language">
 
@@ -22,6 +43,14 @@ The following examples demonstrate how to sign transactions using Rust, TypeScri
 There are various ways to instantiate a key pair and to derive its public key and Sui address using the Sui TypeScript SDK.
 
 ```tsx
+    import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+    import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
+    import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
+    import { fromHEX } from '@mysten/bcs';
+    import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+    import { type Keypair } from '@mysten/sui.js/cryptography';
+    import { TransactionBlock } from '@mysten/sui.js/transactions';
+    
     const kp_rand_0 = new Ed25519Keypair();
     const kp_rand_1 = new Secp256k1Keypair();
     const kp_rand_2 = new Secp256r1Keypair();
@@ -67,7 +96,7 @@ There are various ways to instantiate a key pair and to derive its public key an
 
 <TabItem value="rust" label="Rust">
 
-There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK. You can find the complete runnable code under the crates/sui-sdk folder of the Sui repository. 
+There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK. You can find the complete runnable in [Sui repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/sign_tx_guide.rs)/
 
 ```Rust
     // deterministically generate a keypair, testing only, do not use for mainnet.
@@ -183,7 +212,7 @@ The Sui CLI initiates a local file in `~/.sui/keystore` on your machine with a l
 
 There are three ways to initialize a key:
 
-```bash
+```shell
 # generate randomly. 
 sui client new-address ed25519
 sui client new-address secp256k1
@@ -202,11 +231,13 @@ sui keytool import "$MNEMONICS" secp256r1
 
 Create a transfer transaction in CLI. Set the $SUI_ADDRESS to the one corresponding to the key pair used to sign. Then sign with the private key corresponding to the sender address. 
 
-```bash
-sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
+```shell
+sui client gas
+sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id $GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
 sui keytool sign --address $SUI_ADDRESS --data $TX_BYTES
 sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIGNATURE
 ```
+
 </TabItem>
 </Tabs>
 
