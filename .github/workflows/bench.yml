@@ -50,7 +50,7 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
     - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-    # Turn off the caching on self-hosted jobs
+    # Turn off the caching on ubuntu-latest jobs
     # Enable caching of the 'librocksdb-sys' crate by additionally caching the
     # 'librocksdb-sys' src directory which is managed by cargo
     # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
