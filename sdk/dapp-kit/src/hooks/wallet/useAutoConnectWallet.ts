@@ -4,6 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLayoutEffect, useState } from 'react';
 
+import { getWalletUniqueIdentifier } from '../../utils/walletUtils.js';
 import { useConnectWallet } from './useConnectWallet.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWallets } from './useWallets.js';
@@ -43,7 +44,9 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
 				return 'attempted';
 			}
 
-			const wallet = wallets.find((wallet) => wallet.name === lastConnectedWalletName);
+			const wallet = wallets.find(
+				(wallet) => getWalletUniqueIdentifier(wallet) === lastConnectedWalletName,
+			);
 			if (wallet) {
 				await connectWallet({
 					wallet,
