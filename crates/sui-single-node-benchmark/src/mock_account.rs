@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::stream::FuturesUnordered;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::collections::BTreeMap;
@@ -38,21 +39,34 @@ pub async fn batch_create_account_and_gas(
 
     // deterministically generate accounts and gas
     let mut rng = StdRng::from_seed([0; 32]);
-    let mut tasks = vec![];
     // TODO: is there a way to do this in parallel, while maintaining determinism?
     let (sender, keypair) = get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
     let keypair = Arc::new(keypair);
-    for idx in 0..num_accounts {
-        let starting_id = idx * gas_object_num_per_account;
-        let objects = (0..gas_object_num_per_account)
-            .map(|i| new_gas_object(starting_id + i, sender))
-            .collect::<Vec<_>>();
-        tasks.push((sender, keypair.clone(), objects));
-    }
+
+    let tasks: FuturesUnordered<_> = (0..num_accounts)
+        .map(|idx| {
+            let starting_id = idx * gas_object_num_per_account;
+            let keypair = keypair.clone();
+            tokio::spawn(async move {
+                let objects = (0..gas_object_num_per_account)
+                    .map(|i| new_gas_object(starting_id + i, sender))
+                    .collect::<Vec<_>>();
+                (sender, keypair, objects)
+            })
+        })
+        .collect();
+
+    // for idx in 0..num_accounts {
+    //     let starting_id = idx * gas_object_num_per_account;
+    //     let objects = (0..gas_object_num_per_account)
+    //         .map(|i| new_gas_object(starting_id + i, sender))
+    //         .collect::<Vec<_>>();
+    //     tasks.push((sender, keypair.clone(), objects));
+    // }
     let mut accounts = BTreeMap::new();
     let mut genesis_gas_objects = vec![];
-    for (sender, keypair, gas_objects) in tasks {
-        // let (sender, keypair, gas_objects) = task.await.unwrap();
+    for task in tasks {
+        let (sender, keypair, gas_objects) = task.await.unwrap();
         let gas_object_refs: Vec<_> = gas_objects
             .iter()
             .map(|o| o.compute_object_reference())
