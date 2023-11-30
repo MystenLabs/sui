@@ -12080,10 +12080,11 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "0.0.0"
+version = "1.15.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
+ "expect-test",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",

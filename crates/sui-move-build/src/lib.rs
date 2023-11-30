@@ -287,30 +287,35 @@ pub fn resolve_toolchain_version(
         _ => (),
     };
 
-    // If a Move.lock file exists and contains a toolchain version, use those values. Then, honor any Move.toml overrides of those values.
-    if let Some(lock_file) = lock_file {
-        let mut lock_path = File::open(lock_file)?;
-        let toolchain_version = lock_file::schema::ToolchainVersion::read(&mut lock_path)
-            .map_err(|e| anyhow!("Move.lock: {:?}", e))?;
-
-        if let Some(mut toolchain_version) = toolchain_version {
-            // Lock file specifies toolchain version. But: honor Move.toml overrides if they exist.
-            if let Some(edition) = default_edition {
-                toolchain_version.edition = edition
-            }
-            if let Some(flavor) = default_flavor {
-                toolchain_version.flavor = flavor
-            }
-            return Ok(toolchain_version);
-        }
-    }
-
-    // Lock file exists, but does not specify a toolchain version. Use Move.toml values or defaults.
-    Ok(ToolchainVersion {
+    let base_toolchain_version = ToolchainVersion {
         compiler_version: env!("CARGO_PKG_VERSION").into(),
         edition: default_edition.unwrap_or_default(),
         flavor: default_flavor.unwrap_or(Flavor::Sui),
-    })
+    };
+
+    match lock_file {
+        Some(lock_file) if lock_file.exists() => {
+            let mut lock_path = File::open(lock_file)?;
+            let toolchain_version = lock_file::schema::ToolchainVersion::read(&mut lock_path)
+                .map_err(|e| anyhow!("Move.lock: {:?}", e))?;
+
+            if let Some(mut toolchain_version) = toolchain_version {
+                // Lock file specifies toolchain version. But: honor Move.toml overrides if they exist.
+                if let Some(edition) = default_edition {
+                    toolchain_version.edition = edition
+                }
+                if let Some(flavor) = default_flavor {
+                    toolchain_version.flavor = flavor
+                }
+                Ok(toolchain_version)
+            } else {
+                // Lock file exists but does not specify toolchain version.
+                Ok(base_toolchain_version)
+            }
+        }
+        // Lock file does not exist.
+        _ => Ok(base_toolchain_version),
+    }
 }
 
 impl CompiledPackage {
