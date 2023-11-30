@@ -59,6 +59,7 @@ use sui_storage::{
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::get_authority_key_pair;
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
@@ -618,8 +619,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction =
-                    VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
+                let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                    0,
+                    0,
+                    timestamp_ms,
+                    ConsensusCommitDigest::default(),
+                );
                 let summary = self.execute_txn(transaction.into()).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);
                 Ok(output)

@@ -1362,6 +1362,7 @@
                 "enable_effects_v2": false,
                 "enable_jwk_consensus_updates": false,
                 "end_of_epoch_transaction_supported": false,
+                "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
@@ -5517,6 +5518,9 @@
             "additionalProperties": false
           }
         ]
+      },
+      "ConsensusCommitDigest": {
+        "$ref": "#/components/schemas/Digest"
       },
       "Data": {
         "oneOf": [
@@ -10234,6 +10238,36 @@
                 "items": {
                   "$ref": "#/components/schemas/SuiEndOfEpochTransactionKind"
                 }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV2"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }
           }

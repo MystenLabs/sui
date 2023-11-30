@@ -253,7 +253,7 @@ Response: {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "digest": "J2gfeoDEySDWfUEdboMehk45L9ndHHFv3nLF16UWXxej",
+          "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn",
           "sender": {
             "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
           },
@@ -297,7 +297,7 @@ Response: {
                 "inputState": null,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
-                  "digest": "G7kvXbP2RrfuNizWxggZ3FBc8XAUPCKpSkxEb5hdCExK"
+                  "digest": "28w3Mp2x4vt94bq4TejrbLcfMsMaevDyPz6h98sgcnw4"
                 }
               }
             ],
@@ -318,7 +318,7 @@ Response: {
               "sequenceNumber": 1
             },
             "transactionBlock": {
-              "digest": "J2gfeoDEySDWfUEdboMehk45L9ndHHFv3nLF16UWXxej"
+              "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn"
             }
           },
           "expiration": null

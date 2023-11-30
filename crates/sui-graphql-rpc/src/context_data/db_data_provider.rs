@@ -1755,6 +1755,14 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
             }
+            TransactionKind::ConsensusCommitPrologueV2(x) => {
+                let consensus = ConsensusCommitPrologueTransaction {
+                    epoch_id: x.epoch,
+                    round: Some(x.round),
+                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
+                };
+                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
+            }
             TransactionKind::Genesis(x) => {
                 let genesis = GenesisTransaction {
                     objects: Some(

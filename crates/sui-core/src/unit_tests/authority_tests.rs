@@ -31,13 +31,14 @@ use sui_json_rpc_types::{
 };
 use sui_macros::sim_test;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages_consensus::ConsensusCommitPrologue;
+use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
@@ -3031,6 +3032,43 @@ async fn test_refusal_to_sign_consensus_commit_prologue() {
             epoch: 0,
             round: 0,
             commit_timestamp_ms: 42,
+        }),
+        sender,
+        gas_ref,
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        rgp,
+    );
+
+    // Sender is able to sign it.
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let transaction = authority_state.verify_transaction(transaction).unwrap();
+
+    // But the authority should refuse to handle it.
+    assert!(matches!(
+        authority_state
+            .handle_transaction(&epoch_store, transaction)
+            .await,
+        Err(SuiError::InvalidSystemTransaction),
+    ));
+}
+
+#[tokio::test]
+async fn test_refusal_to_sign_consensus_commit_prologue_v2() {
+    // The system should refuse to handle sender-signed system transactions
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+
+    let gas_ref = gas_object.compute_object_reference();
+    let tx_data = TransactionData::new(
+        TransactionKind::ConsensusCommitPrologueV2(ConsensusCommitPrologueV2 {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 42,
+            consensus_commit_digest: ConsensusCommitDigest::default(),
         }),
         sender,
         gas_ref,

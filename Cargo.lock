@@ -11420,6 +11420,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "shared-crypto",
  "signature 1.6.4",
+ "static_assertions",
  "sui-archival",
  "sui-config",
  "sui-execution",
