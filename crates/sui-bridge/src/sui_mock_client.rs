@@ -3,18 +3,18 @@
 
 //! A mock implementation of Sui JSON-RPC client.
 
-#[cfg(test)]
 use crate::sui_client::SuiClientInner;
 use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
-use sui_json_rpc_types::{EventFilter, EventPage};
+use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::ObjectID;
+use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::Identifier;
 
 /// Mock client used in test environments.
-#[cfg(test)]
+#[allow(clippy::type_complexity)]
 #[derive(Clone, Debug)]
 pub struct SuiMockClient {
     // the top two fields do not change during tests so we don't need them to be Arc<Mutex>>
@@ -24,7 +24,6 @@ pub struct SuiMockClient {
     past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, EventID)>>>,
 }
 
-#[cfg(test)]
 impl SuiMockClient {
     pub fn default() -> Self {
         Self {
@@ -53,7 +52,6 @@ impl SuiMockClient {
     }
 }
 
-#[cfg(test)]
 #[async_trait]
 impl SuiClientInner for SuiMockClient {
     type Error = sui_sdk::error::Error;
@@ -85,6 +83,13 @@ impl SuiClientInner for SuiMockClient {
             }
             _ => unimplemented!(),
         }
+    }
+
+    async fn get_events_by_tx_digest(
+        &self,
+        _tx_digest: TransactionDigest,
+    ) -> Result<Vec<SuiEvent>, Self::Error> {
+        unimplemented!()
     }
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {

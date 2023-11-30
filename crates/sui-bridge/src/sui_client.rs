@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::EventPage;
 use sui_json_rpc_types::{EventFilter, Page, SuiEvent};
 use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
+use sui_types::event;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
@@ -21,6 +22,7 @@ use sui_types::{
 use tap::TapFallible;
 
 use crate::error::{BridgeError, BridgeResult};
+use crate::events::SuiBridgeEvent;
 
 pub(crate) struct SuiClient<P> {
     inner: P,
@@ -143,22 +145,20 @@ where
 
     pub async fn get_bridge_events_by_tx_digest(
         &self,
-        tx_digest: &str,
+        tx_digest: &TransactionDigest,
     ) -> BridgeResult<Vec<SuiBridgeEvent>> {
-        unimplemented!()
+        let events = self.inner.get_events_by_tx_digest(*tx_digest).await?;
+        let mut bridge_events = vec![];
+        for e in events {
+            let bridge_event = SuiBridgeEvent::try_from_sui_event(&e)?;
+            if let Some(bridge_event) = bridge_event {
+                bridge_events.push(bridge_event);
+            } else {
+                tracing::warn!("Observed non recognized Sui event: {:?}", e);
+            }
+        }
+        Ok(bridge_events)
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SuiToEthBridgeEvent {
-    pub source_address: SuiAddress,
-    pub destination_address: Address,
-    pub coin_name: String,
-    pub amount: U256,
-}
-
-pub enum SuiBridgeEvent {
-    SuiToEthBridge(SuiToEthBridgeEvent),
 }
 
 /// Use a trait to abstract over the SuiSDKClient and SuiMockClient for testing.
@@ -170,6 +170,11 @@ pub trait SuiClientInner: Send + Sync {
         query: EventFilter,
         cursor: EventID,
     ) -> Result<EventPage, Self::Error>;
+
+    async fn get_events_by_tx_digest(
+        &self,
+        tx_digest: TransactionDigest,
+    ) -> Result<Vec<SuiEvent>, Self::Error>;
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error>;
 
@@ -188,6 +193,13 @@ impl SuiClientInner for SuiSdkClient {
         self.event_api()
             .query_events(query, Some(cursor), None, false)
             .await
+    }
+
+    async fn get_events_by_tx_digest(
+        &self,
+        tx_digest: TransactionDigest,
+    ) -> Result<Vec<SuiEvent>, Self::Error> {
+        self.event_api().get_events(tx_digest).await
     }
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
@@ -232,7 +244,7 @@ mod tests {
         };
 
         mock_client.add_event_response(
-            package.clone(),
+            package,
             module.clone(),
             EventID {
                 tx_digest: cursor,
@@ -241,7 +253,7 @@ mod tests {
             events,
         );
         let page = sui_client
-            .query_events_by_module(package, module.clone(), cursor.clone())
+            .query_events_by_module(package, module.clone(), cursor)
             .await
             .unwrap();
         assert_eq!(
@@ -256,7 +268,7 @@ mod tests {
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
             (
-                package.clone(),
+                package,
                 module.clone(),
                 EventID {
                     tx_digest: cursor,
@@ -274,7 +286,7 @@ mod tests {
             has_next_page: false,
         };
         mock_client.add_event_response(
-            package.clone(),
+            package,
             module.clone(),
             EventID {
                 tx_digest: cursor,
@@ -283,7 +295,7 @@ mod tests {
             events,
         );
         let page = sui_client
-            .query_events_by_module(package, module.clone(), cursor.clone())
+            .query_events_by_module(package, module.clone(), cursor)
             .await
             .unwrap();
         assert_eq!(
@@ -298,7 +310,7 @@ mod tests {
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
             (
-                package.clone(),
+                package,
                 module.clone(),
                 EventID {
                     tx_digest: cursor,
@@ -317,7 +329,7 @@ mod tests {
             has_next_page: true,
         };
         mock_client.add_event_response(
-            package.clone(),
+            package,
             module.clone(),
             EventID {
                 tx_digest: cursor,
@@ -334,12 +346,7 @@ mod tests {
             next_cursor: Some(event_2.id.clone()),
             has_next_page: true,
         };
-        mock_client.add_event_response(
-            package.clone(),
-            module.clone(),
-            event_1.id.clone(),
-            events_page_2,
-        );
+        mock_client.add_event_response(package, module.clone(), event_1.id.clone(), events_page_2);
         // page 3 (event 3, event 4, different tx_digest)
         let mut event_3 = SuiEvent::random_for_testing();
         event_3.id.tx_digest = event_2.id.tx_digest;
@@ -351,14 +358,9 @@ mod tests {
             next_cursor: Some(event_4.id.clone()),
             has_next_page: true,
         };
-        mock_client.add_event_response(
-            package.clone(),
-            module.clone(),
-            event_2.id.clone(),
-            events_page_3,
-        );
+        mock_client.add_event_response(package, module.clone(), event_2.id.clone(), events_page_3);
         let page: Page<SuiEvent, TransactionDigest> = sui_client
-            .query_events_by_module(package, module.clone(), cursor.clone())
+            .query_events_by_module(package, module.clone(), cursor)
             .await
             .unwrap();
         // Get back event_1, event_2 and event_2 because of transaction level granularity
@@ -374,10 +376,10 @@ mod tests {
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
             (
-                package.clone(),
+                package,
                 module.clone(),
                 EventID {
-                    tx_digest: cursor.clone(),
+                    tx_digest: cursor,
                     event_seq: u16::MAX as u64
                 }
             )
@@ -385,12 +387,12 @@ mod tests {
         // second page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package.clone(), module.clone(), event_1.id.clone())
+            (package, module.clone(), event_1.id.clone())
         );
         // third page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package.clone(), module.clone(), event_2.id.clone())
+            (package, module.clone(), event_2.id.clone())
         );
         // no more
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
@@ -401,14 +403,9 @@ mod tests {
             next_cursor: Some(event_4.id.clone()),
             has_next_page: true,
         };
-        mock_client.add_event_response(
-            package.clone(),
-            module.clone(),
-            event_2.id.clone(),
-            events_page_3,
-        );
+        mock_client.add_event_response(package, module.clone(), event_2.id.clone(), events_page_3);
         let page: Page<SuiEvent, TransactionDigest> = sui_client
-            .query_events_by_module(package, module.clone(), cursor.clone())
+            .query_events_by_module(package, module.clone(), cursor)
             .await
             .unwrap();
         assert_eq!(
@@ -423,10 +420,10 @@ mod tests {
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
             (
-                package.clone(),
+                package,
                 module.clone(),
                 EventID {
-                    tx_digest: cursor.clone(),
+                    tx_digest: cursor,
                     event_seq: u16::MAX as u64
                 }
             )
@@ -434,12 +431,12 @@ mod tests {
         // second page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package.clone(), module.clone(), event_1.id.clone())
+            (package, module.clone(), event_1.id.clone())
         );
         // third page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package.clone(), module.clone(), event_2.id.clone())
+            (package, module.clone(), event_2.id.clone())
         );
         // no more
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
@@ -450,14 +447,9 @@ mod tests {
             next_cursor: Some(event_2.id.clone()),
             has_next_page: false,
         };
-        mock_client.add_event_response(
-            package.clone(),
-            module.clone(),
-            event_1.id.clone(),
-            events_page_2,
-        );
+        mock_client.add_event_response(package, module.clone(), event_1.id.clone(), events_page_2);
         let page: Page<SuiEvent, TransactionDigest> = sui_client
-            .query_events_by_module(package, module.clone(), cursor.clone())
+            .query_events_by_module(package, module.clone(), cursor)
             .await
             .unwrap();
         assert_eq!(
@@ -472,10 +464,10 @@ mod tests {
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
             (
-                package.clone(),
+                package,
                 module.clone(),
                 EventID {
-                    tx_digest: cursor.clone(),
+                    tx_digest: cursor,
                     event_seq: u16::MAX as u64
                 }
             )
@@ -483,7 +475,7 @@ mod tests {
         // second page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package.clone(), module.clone(), event_1.id.clone())
+            (package, module.clone(), event_1.id.clone())
         );
         // no more
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
