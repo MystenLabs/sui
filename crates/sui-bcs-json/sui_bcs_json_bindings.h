@@ -15,10 +15,10 @@
  * # Safety
  * Unsafe function.
  */
-size_t sui_bcs_from_json(const char *type_name,
-                         const char *json_data,
-                         const uint8_t **result,
-                         size_t *length);
+size_t sui_json_to_bcs(const char *type_name,
+                       const char *json_data,
+                       const uint8_t **result,
+                       size_t *length);
 
 /**
  * Return 0 if the conversion from BCS to JSON is successful, and 1 or 2 for
@@ -39,14 +39,9 @@ size_t sui_bcs_to_json(const char *type_name,
                        bool pretty);
 
 /**
- * Frees a Rust-allocated `Vec<u8>`.
+ * Free Rust-allocated memory.
  */
-void sui_bcs_json_free_array(const uint8_t *ptr, size_t len);
-
-/**
- * Frees a Rust-allocated string.
- */
-void sui_bcs_json_free_string(const char *pointer);
+void sui_bcs_json_free(const uint8_t *ptr, size_t len);
 
 /**
  * Get the length of the last error message in bytes when encoded as UTF-8, including the trailing null. This function wraps last_error_length from ffi_helpers crate.

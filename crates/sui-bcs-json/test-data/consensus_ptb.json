@@ -1,25 +1,25 @@
-  {
-    "V1": {
-      "kind": {
-        "ConsensusCommitPrologue": {
-          "commit_timestamp_ms": 66036204,
-          "epoch": 88506474,
-          "round": 59217204
-        }
-      },
-      "sender": "0x12e977a2b5e76593335b3e3c6b42abe1e6b4ad4ffac029911642a240c6f7297b",
-      "gas_data": {
-        "payment": [
-          [
-            "0x36880aa88af908f2b676cb164c1c50a3360ac326fc07a1fa4e4ce33f74e7c2aa",
-            6,
-            "BspouVBr4tU1RT4poMDf7iwCHpqLe7GReCCvBJEmgg1C"
-          ]
-        ],
-        "owner": "0x12e977a2b5e76593335b3e3c6b42abe1e6b4ad4ffac029911642a240c6f7297b",
-        "price": 1000,
-        "budget": 5000000
-      },
-      "expiration": "None"
-    }
+{
+  "V1": {
+    "kind": {
+      "ConsensusCommitPrologue": {
+        "epoch": 88506474,
+        "round": 59217204,
+        "commit_timestamp_ms": 66036204
+      }
+    },
+    "sender": "0x12e977a2b5e76593335b3e3c6b42abe1e6b4ad4ffac029911642a240c6f7297b",
+    "gas_data": {
+      "payment": [
+        [
+          "0x36880aa88af908f2b676cb164c1c50a3360ac326fc07a1fa4e4ce33f74e7c2aa",
+          6,
+          "BspouVBr4tU1RT4poMDf7iwCHpqLe7GReCCvBJEmgg1C"
+        ]
+      ],
+      "owner": "0x12e977a2b5e76593335b3e3c6b42abe1e6b4ad4ffac029911642a240c6f7297b",
+      "price": 1000,
+      "budget": 5000000
+    },
+    "expiration": "None"
   }
+}
