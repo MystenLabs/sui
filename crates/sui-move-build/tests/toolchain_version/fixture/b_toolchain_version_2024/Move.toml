@@ -1,0 +1,8 @@
+[package]
+name = "a"
+version = "0.0.1"
+
+[dependencies]
+
+[addresses]
+a = "0x0"
