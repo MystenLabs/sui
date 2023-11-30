@@ -4,9 +4,9 @@
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive, get_object,
-    get_transaction_block, make_clients, restore_from_db_checkpoint, state_sync_from_archive,
-    verify_archive, verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput,
-    VerboseObjectOutput,
+    get_transaction_block, make_clients, pkg_dump, restore_from_db_checkpoint,
+    state_sync_from_archive, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::env;
@@ -35,6 +35,22 @@ pub enum Verbosity {
     Concise,
     Verbose,
 }
+const GIT_REVISION: &str = {
+    if let Some(revision) = option_env!("GIT_REVISION") {
+        revision
+    } else {
+        let version = git_version::git_version!(
+            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
+            fallback = ""
+        );
+
+        if version.is_empty() {
+            panic!("unable to query git revision");
+        }
+        version
+    }
+};
+const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 #[derive(Parser)]
 #[command(
@@ -42,7 +58,7 @@ pub enum Verbosity {
     about = "Debugging utilities for sui",
     rename_all = "kebab-case",
     author,
-    version
+    version = VERSION,
 )]
 pub enum ToolCommand {
     /// Fetch the same object from all validators
@@ -165,6 +181,27 @@ pub enum ToolCommand {
         end: u64,
         #[arg(default_value_t = 80)]
         max_content_length: usize,
+    },
+
+    /// Download all packages to the local filesystem from an indexer database. Each package gets
+    /// its own sub-directory, named for its ID on-chain, containing two metadata files
+    /// (linkage.json and origins.json) as well as a file for every module it contains. Each module
+    /// file is named for its module name, with a .mv suffix, and contains Move bytecode (suitable
+    /// for passing into a disassembler).
+    #[command(name = "dump-packages")]
+    DumpPackages {
+        /// Connection information for the Indexer's Postgres DB.
+        #[clap(long, short)]
+        db_url: String,
+
+        /// Path to a non-existent directory that can be created and filled with package information.
+        #[clap(long, short)]
+        output_dir: PathBuf,
+
+        /// If false (default), log level will be overridden to "off", and output will be reduced to
+        /// necessary status information.
+        #[clap(short, long = "verbose")]
+        verbose: bool,
     },
 
     #[command(name = "dump-validators")]
@@ -404,6 +441,19 @@ impl ToolCommand {
                     Some(c) => execute_db_tool_command(path, c).await?,
                     None => print_db_all_tables(path)?,
                 }
+            }
+            ToolCommand::DumpPackages {
+                db_url,
+                output_dir,
+                verbose,
+            } => {
+                if !verbose {
+                    tracing_handle
+                        .update_log("off")
+                        .expect("Failed to update log level");
+                }
+
+                pkg_dump::dump(db_url, output_dir).await?;
             }
             ToolCommand::DumpValidators { genesis, concise } => {
                 let genesis = Genesis::load(genesis).unwrap();

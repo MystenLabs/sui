@@ -8,7 +8,8 @@ use clap::*;
 use futures::stream::BoxStream;
 use object_store::aws::AmazonS3Builder;
 use object_store::path::Path;
-use object_store::{DynObjectStore, ObjectMeta};
+use object_store::{ClientOptions, DynObjectStore, ObjectMeta};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -82,6 +83,12 @@ pub struct ObjectStoreConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub google_service_account: Option<String>,
+    /// When using Google Cloud Storage as the object store and writing to a
+    /// bucket with Requester Pays enabled, set this to the project_id
+    /// you want to associate the write cost with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    pub google_project_id: Option<String>,
     /// When using Microsoft Azure as the object store, set this to the
     /// azure account name
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -168,6 +175,17 @@ impl ObjectStoreConfig {
         }
         if let Some(account) = &self.google_service_account {
             builder = builder.with_service_account_path(account);
+        }
+        if let Some(google_project_id) = &self.google_project_id {
+            let x_project_header = HeaderName::from_static("x-goog-user-project");
+            let iam_req_header = HeaderName::from_static("userproject");
+
+            let mut headers = HeaderMap::new();
+            headers.insert(x_project_header, HeaderValue::from_str(google_project_id)?);
+            headers.insert(iam_req_header, HeaderValue::from_str(google_project_id)?);
+
+            builder =
+                builder.with_client_options(ClientOptions::new().with_default_headers(headers));
         }
 
         Ok(Arc::new(LimitStore::new(

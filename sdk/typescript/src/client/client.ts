@@ -30,6 +30,7 @@ import type {
 	DryRunTransactionBlockResponse,
 	DynamicFieldPage,
 	EpochInfo,
+	EpochMetricsPage,
 	EpochPage,
 	ExecuteTransactionBlockParams,
 	GetAllBalancesParams,
@@ -668,6 +669,15 @@ export class SuiClient {
 
 	async getAddressMetrics(): Promise<AddressMetrics> {
 		return await this.transport.request({ method: 'suix_getLatestAddressMetrics', params: [] });
+	}
+
+	async getEpochMetrics(
+		input?: { descendingOrder?: boolean } & PaginationArguments<EpochMetricsPage['nextCursor']>,
+	): Promise<EpochMetricsPage> {
+		return await this.transport.request({
+			method: 'suix_getEpochMetrics',
+			params: [input?.cursor, input?.limit, input?.descendingOrder],
+		});
 	}
 
 	async getAllEpochAddressMetrics(input?: {

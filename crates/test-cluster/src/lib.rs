@@ -655,6 +655,7 @@ pub struct TestClusterBuilder {
     config_dir: Option<PathBuf>,
     default_jwks: bool,
     overload_threshold_config: Option<OverloadThresholdConfig>,
+    data_ingestion_dir: Option<PathBuf>,
 }
 
 impl TestClusterBuilder {
@@ -675,6 +676,7 @@ impl TestClusterBuilder {
             config_dir: None,
             default_jwks: false,
             overload_threshold_config: None,
+            data_ingestion_dir: None,
         }
     }
 
@@ -819,6 +821,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
+        self.data_ingestion_dir = Some(path);
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
@@ -926,6 +933,10 @@ impl TestClusterBuilder {
 
         if let Some(config_dir) = self.config_dir.take() {
             builder = builder.dir(config_dir);
+        }
+
+        if let Some(data_ingestion_dir) = self.data_ingestion_dir.take() {
+            builder = builder.with_data_ingestion_dir(data_ingestion_dir);
         }
 
         let mut swarm = builder.build();

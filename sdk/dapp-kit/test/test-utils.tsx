@@ -45,6 +45,11 @@ export function registerMockWallet({
 }) {
 	const walletsApi = getWallets();
 	const mockWallet = new MockWallet(walletName, accounts, features);
+
+	if (walletsApi.get().find((wallet) => wallet.name === walletName)) {
+		throw new Error('Wallet already registered, must call `unregister` before the test ends.');
+	}
+
 	return {
 		unregister: walletsApi.register(mockWallet),
 		mockWallet,

@@ -18,3 +18,4 @@ packages:
   - '!sdk/typescript/bcs'
   - '!sdk/typescript/zklogin'
   - '!sdk/enoki/react'
+  - '!sdk/move-binary-format-wasm/pkg'

@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_compiler::{diagnostics::codes::WarningFilter, expansion::ast as E, naming::ast as N};
+use move_compiler::{
+    diagnostics::codes::WarningFilter,
+    expansion::ast as E,
+    hlir::ast::{BaseType_, SingleType, SingleType_},
+    naming::ast as N,
+};
 use move_ir_types::location::Loc;
 
 pub mod coin_field;
@@ -127,4 +132,16 @@ pub fn base_type(t: &N::Type) -> Option<&N::Type> {
         T::Apply(_, _, _) | T::Param(_) => Some(t),
         T::Unit | T::Var(_) | T::Anything | T::UnresolvedError => None,
     }
+}
+
+/// Returns abilities of a given type, if any.
+pub fn type_abilities(sp!(_, st_): &SingleType) -> Option<E::AbilitySet> {
+    let sp!(_, bt_) = match st_ {
+        SingleType_::Base(v) => v,
+        SingleType_::Ref(_, v) => v,
+    };
+    if let BaseType_::Apply(abilities, _, _) = bt_ {
+        return Some(abilities.clone());
+    }
+    None
 }

@@ -20,7 +20,7 @@ use crate::{
         epoch::Epoch,
         event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
-        move_module::MoveModuleId,
+        move_module::MoveModule,
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
@@ -33,7 +33,8 @@ use crate::{
         sui_address::SuiAddress,
         sui_system_state_summary::SuiSystemStateSummary,
         system_parameters::SystemParameters,
-        transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
+        transaction_block::{TransactionBlock, TransactionBlockFilter},
+        transaction_block_effects::TransactionBlockEffects,
         transaction_block_kind::{
             AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
@@ -787,6 +788,21 @@ impl PgManager {
         })?))
     }
 
+    pub(crate) async fn fetch_move_module(
+        &self,
+        address: SuiAddress,
+        name: &str,
+    ) -> Result<Option<MoveModule>, Error> {
+        // Fetch the latest version of a package (this means that when we fetch a module from the
+        // system framework via one of its types, we will always get the latest version of that
+        // module).
+        let Some(package) = self.fetch_move_package(address, None).await? else {
+            return Ok(None);
+        };
+
+        package.module_impl(name)
+    }
+
     pub(crate) async fn fetch_owned_objs(
         &self,
         first: Option<u64>,
@@ -1248,10 +1264,8 @@ impl PgManager {
             connection.edges.extend(results.into_iter().map(|e| {
                 let cursor = String::from(e.id);
                 let event = Event {
-                    sending_module_id: Some(MoveModuleId {
-                        package: SuiAddress::from_array(**e.package_id),
-                        name: e.transaction_module.to_string(),
-                    }),
+                    sending_package: SuiAddress::from(e.package_id),
+                    sending_module: e.transaction_module.to_string(),
                     event_type: Some(MoveType::new(
                         e.type_.to_canonical_string(/* with_prefix */ true),
                     )),

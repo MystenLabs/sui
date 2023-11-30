@@ -7,7 +7,7 @@ use lsp_server::Request;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    editions::SyntaxEdition,
+    editions::Edition,
     parser::{
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
         lexer::{Lexer, Tok},
@@ -74,7 +74,7 @@ fn builtins() -> Vec<CompletionItem> {
 /// simple textual suggestions.
 fn identifiers(buffer: &str, symbols: &Symbols, path: &PathBuf) -> Vec<CompletionItem> {
     // TODO thread through package configs
-    let mut lexer = Lexer::new(buffer, FileHash::new(buffer), SyntaxEdition::Legacy);
+    let mut lexer = Lexer::new(buffer, FileHash::new(buffer), Edition::LEGACY);
     if lexer.advance().is_err() {
         return vec![];
     }

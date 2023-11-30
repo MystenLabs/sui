@@ -3,6 +3,9 @@
 
 use async_trait::async_trait;
 use lru::LruCache;
+use move_binary_format::file_format::{
+    AbilitySet, FunctionDefinitionIndex, Signature, SignatureIndex, StructTypeParameter, Visibility,
+};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::BTreeMap};
@@ -183,20 +186,46 @@ pub struct Module {
     /// Index mapping struct names to their defining ID, and the index for their definition in the
     /// bytecode, to speed up definition lookups.
     struct_index: BTreeMap<String, (AccountAddress, StructDefinitionIndex)>,
+
+    /// Index mapping function names to the index for their definition in the bytecode, to speed up
+    /// definition lookups.
+    function_index: BTreeMap<String, FunctionDefinitionIndex>,
 }
 
 /// Deserialized representation of a struct definition.
 #[derive(Debug)]
-struct StructDef {
+pub struct StructDef {
     /// The storage ID of the package that first introduced this type.
-    defining_id: AccountAddress,
+    pub defining_id: AccountAddress,
 
-    /// Number of type parameters.
-    type_params: u16,
+    /// This type's abilities.
+    pub abilities: AbilitySet,
+
+    /// Ability constraints and phantom status for type parameters
+    pub type_params: Vec<StructTypeParameter>,
 
     /// Serialized representation of fields (names and deserialized signatures). Signatures refer to
     /// packages at their runtime IDs (not their storage ID or defining ID).
-    fields: Vec<(String, OpenSignatureBody)>,
+    pub fields: Vec<(String, OpenSignatureBody)>,
+}
+
+/// Deserialized representation of a function definition
+#[derive(Debug)]
+pub struct FunctionDef {
+    /// Whether the function is `public`, `private` or `public(friend)`.
+    pub visibility: Visibility,
+
+    /// Whether the function is marked `entry` or not.
+    pub is_entry: bool,
+
+    /// Ability constraints for type parameters
+    pub type_params: Vec<AbilitySet>,
+
+    /// Formal parameter types.
+    pub parameters: Vec<OpenSignature>,
+
+    /// Return types.
+    pub return_: Vec<OpenSignature>,
 }
 
 /// Fully qualified struct identifier.  Uses copy-on-write strings so that when it is used as a key
@@ -211,6 +240,19 @@ pub struct StructRef<'m, 'n> {
 
 /// A `StructRef` that owns its strings.
 pub type StructKey = StructRef<'static, 'static>;
+
+#[derive(Clone, Debug)]
+pub enum Reference {
+    Immutable,
+    Mutable,
+}
+
+#[allow(dead_code)] // TODO: Remove when integrated
+#[derive(Clone, Debug)]
+pub struct OpenSignature {
+    pub ref_: Option<Reference>,
+    pub body: OpenSignatureBody,
+}
 
 /// Deserialized representation of a type signature that could appear as a field type for a struct.
 /// Signatures refer to structs at their runtime IDs and can contain references to free type
@@ -304,7 +346,7 @@ impl Package {
 
     fn struct_def(&self, module_name: &str, struct_name: &str) -> Result<StructDef> {
         let module = self.module(module_name)?;
-        let Some(&(defining_id, index)) = module.struct_index.get(struct_name) else {
+        let Some(struct_def) = module.struct_def(struct_name)? else {
             return Err(Error::StructNotFound(
                 self.storage_id,
                 module_name.to_string(),
@@ -312,28 +354,7 @@ impl Package {
             ));
         };
 
-        let struct_def = module.bytecode.struct_def_at(index);
-        let struct_handle = module.bytecode.struct_handle_at(struct_def.struct_handle);
-        let type_params = struct_handle.type_parameters.len() as u16;
-
-        let fields = match &struct_def.field_information {
-            StructFieldInformation::Native => vec![],
-            StructFieldInformation::Declared(fields) => fields
-                .iter()
-                .map(|f| {
-                    Ok((
-                        module.bytecode.identifier_at(f.name).to_string(),
-                        OpenSignatureBody::read(&f.signature.0, &module.bytecode)?,
-                    ))
-                })
-                .collect::<Result<_>>()?,
-        };
-
-        Ok(StructDef {
-            defining_id,
-            type_params,
-            fields,
-        })
+        Ok(struct_def)
     }
 
     /// Translate the `runtime_id` of a package to a specific storage ID using this package's
@@ -373,14 +394,139 @@ impl Module {
             struct_index.insert(struct_, (defining_id, index));
         }
 
+        let mut function_index = BTreeMap::new();
+        for (index, def) in bytecode.function_defs.iter().enumerate() {
+            let fh = bytecode.function_handle_at(def.function);
+            let function = bytecode.identifier_at(fh.name).to_string();
+            let index = FunctionDefinitionIndex::new(index as TableIndex);
+
+            function_index.insert(function, index);
+        }
+
         Ok(Module {
             bytecode,
             struct_index,
+            function_index,
         })
     }
 
     pub fn bytecode(&self) -> &CompiledModule {
         &self.bytecode
+    }
+
+    /// The module's name
+    pub fn name(&self) -> &str {
+        self.bytecode
+            .identifier_at(self.bytecode.self_handle().name)
+            .as_str()
+    }
+
+    /// Iterate over the structs with names strictly after `after` (or from the beginning), and
+    /// strictly before `before` (or to the end).
+    pub fn structs(
+        &self,
+        after: Option<&str>,
+        before: Option<&str>,
+    ) -> impl Iterator<Item = &str> + Clone {
+        use std::ops::Bound as B;
+        self.struct_index
+            .range::<str, _>((
+                after.map_or(B::Unbounded, B::Excluded),
+                before.map_or(B::Unbounded, B::Excluded),
+            ))
+            .map(|(name, _)| name.as_str())
+    }
+
+    /// Get the struct definition corresponding to the struct with name `name` in this module.
+    /// Returns `Ok(None)` if the struct cannot be found in this module, `Err(...)` if there was an
+    /// error deserializing it, and `Ok(Some(def))` on success.
+    pub fn struct_def(&self, name: &str) -> Result<Option<StructDef>> {
+        let Some(&(defining_id, index)) = self.struct_index.get(name) else {
+            return Ok(None);
+        };
+
+        let struct_def = self.bytecode.struct_def_at(index);
+        let struct_handle = self.bytecode.struct_handle_at(struct_def.struct_handle);
+        let abilities = struct_handle.abilities;
+        let type_params = struct_handle.type_parameters.clone();
+
+        let fields = match &struct_def.field_information {
+            StructFieldInformation::Native => vec![],
+            StructFieldInformation::Declared(fields) => fields
+                .iter()
+                .map(|f| {
+                    Ok((
+                        self.bytecode.identifier_at(f.name).to_string(),
+                        OpenSignatureBody::read(&f.signature.0, &self.bytecode)?,
+                    ))
+                })
+                .collect::<Result<_>>()?,
+        };
+
+        Ok(Some(StructDef {
+            defining_id,
+            abilities,
+            type_params,
+            fields,
+        }))
+    }
+
+    /// Iterate over the functions with names strictly after `after` (or from the beginning), and
+    /// strictly before `before` (or to the end).
+    pub fn functions(
+        &self,
+        after: Option<&str>,
+        before: Option<&str>,
+    ) -> impl Iterator<Item = &str> + Clone {
+        use std::ops::Bound as B;
+        self.function_index
+            .range::<str, _>((
+                after.map_or(B::Unbounded, B::Excluded),
+                before.map_or(B::Unbounded, B::Excluded),
+            ))
+            .map(|(name, _)| name.as_str())
+    }
+
+    /// Get the function definition corresponding to the function with name `name` in this module.
+    /// Returns `Ok(None)` if the function cannot be found in this module, `Err(...)` if there was
+    /// an error deserializing it, and `Ok(Some(def))` on success.
+    pub fn function_def(&self, name: &str) -> Result<Option<FunctionDef>> {
+        let Some(&index) = self.function_index.get(name) else {
+            return Ok(None);
+        };
+
+        let function_def = self.bytecode.function_def_at(index);
+        let function_handle = self.bytecode.function_handle_at(function_def.function);
+
+        Ok(Some(FunctionDef {
+            visibility: function_def.visibility,
+            is_entry: function_def.is_entry,
+            type_params: function_handle.type_parameters.clone(),
+            parameters: read_signature(function_handle.parameters, &self.bytecode)?,
+            return_: read_signature(function_handle.return_, &self.bytecode)?,
+        }))
+    }
+}
+
+impl OpenSignature {
+    fn read(sig: &SignatureToken, bytecode: &CompiledModule) -> Result<Self> {
+        use SignatureToken as S;
+        Ok(match sig {
+            S::Reference(sig) => OpenSignature {
+                ref_: Some(Reference::Immutable),
+                body: OpenSignatureBody::read(sig, bytecode)?,
+            },
+
+            S::MutableReference(sig) => OpenSignature {
+                ref_: Some(Reference::Mutable),
+                body: OpenSignatureBody::read(sig, bytecode)?,
+            },
+
+            sig => OpenSignature {
+                ref_: None,
+                body: OpenSignatureBody::read(sig, bytecode)?,
+            },
+        })
     }
 }
 
@@ -592,8 +738,11 @@ impl ResolutionContext {
                     ..
                 } = s.as_ref();
 
-                if def.type_params as usize != type_params.len() {
-                    return Err(Error::TypeArityMismatch(def.type_params, type_params.len()));
+                if def.type_params.len() != type_params.len() {
+                    return Err(Error::TypeArityMismatch(
+                        def.type_params.len(),
+                        type_params.len(),
+                    ));
                 }
 
                 // TODO (optimization): This could be made more efficient by only generating layouts
@@ -723,6 +872,19 @@ impl<'s> From<&'s StructTag> for StructRef<'s, 's> {
 /// Translate a string into an `Identifier`, but translating errors into this module's error type.
 fn ident(s: &str) -> Result<Identifier> {
     Identifier::new(s).map_err(|_| Error::NotAnIdentifier(s.to_string()))
+}
+
+/// Read and deserialize a signature index (from function parameter or return types) into a vector
+/// of signatures.
+fn read_signature(idx: SignatureIndex, bytecode: &CompiledModule) -> Result<Vec<OpenSignature>> {
+    let Signature(tokens) = bytecode.signature_at(idx);
+    let mut sigs = Vec::with_capacity(tokens.len());
+
+    for token in tokens {
+        sigs.push(OpenSignature::read(token, bytecode)?);
+    }
+
+    Ok(sigs)
 }
 
 #[cfg(test)]
@@ -1107,6 +1269,234 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, Error::TypeArityMismatch(2, 3)));
+    }
+
+    #[tokio::test]
+    async fn test_structs() {
+        let (_, cache) = package_cache([(1, build_package("a0"), a0_types())]);
+        let a0 = cache
+            .fetch(AccountAddress::from_str("0xa0").unwrap())
+            .await
+            .unwrap();
+        let m = a0.module("m").unwrap();
+
+        assert_eq!(
+            m.structs(None, None).collect::<Vec<_>>(),
+            vec!["T0", "T1", "T2"],
+        );
+
+        assert_eq!(m.structs(None, Some("T1")).collect::<Vec<_>>(), vec!["T0"],);
+
+        assert_eq!(
+            m.structs(Some("T0"), Some("T2")).collect::<Vec<_>>(),
+            vec!["T1"],
+        );
+
+        assert_eq!(m.structs(Some("T1"), None).collect::<Vec<_>>(), vec!["T2"],);
+
+        let t0 = m.struct_def("T0").unwrap().unwrap();
+        let t1 = m.struct_def("T1").unwrap().unwrap();
+        let t2 = m.struct_def("T2").unwrap().unwrap();
+
+        let expect = expect![[r#"
+            a0::m::T0: StructDef {
+                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+                abilities: [],
+                type_params: [],
+                fields: [
+                    (
+                        "b",
+                        Bool,
+                    ),
+                    (
+                        "v",
+                        Vector(
+                            Struct(
+                                StructRef {
+                                    package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                    module: "m",
+                                    name: "T1",
+                                },
+                                [
+                                    Struct(
+                                        StructRef {
+                                            package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                            module: "m",
+                                            name: "T2",
+                                        },
+                                        [],
+                                    ),
+                                    U128,
+                                ],
+                            ),
+                        ),
+                    ),
+                ],
+            }
+            a0::m::T1: StructDef {
+                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+                abilities: [],
+                type_params: [
+                    StructTypeParameter {
+                        constraints: [],
+                        is_phantom: false,
+                    },
+                    StructTypeParameter {
+                        constraints: [],
+                        is_phantom: false,
+                    },
+                ],
+                fields: [
+                    (
+                        "a",
+                        Address,
+                    ),
+                    (
+                        "p",
+                        TypeParameter(
+                            0,
+                        ),
+                    ),
+                    (
+                        "q",
+                        Vector(
+                            TypeParameter(
+                                1,
+                            ),
+                        ),
+                    ),
+                ],
+            }
+            a0::m::T2: StructDef {
+                defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
+                abilities: [],
+                type_params: [],
+                fields: [
+                    (
+                        "x",
+                        U8,
+                    ),
+                ],
+            }"#]];
+        expect.assert_eq(&format!(
+            "a0::m::T0: {t0:#?}\n\
+             a0::m::T1: {t1:#?}\n\
+             a0::m::T2: {t2:#?}"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_functions() {
+        let (_, cache) = package_cache([
+            (1, build_package("a0"), a0_types()),
+            (2, build_package("a1"), a1_types()),
+            (1, build_package("b0"), b0_types()),
+            (1, build_package("c0"), c0_types()),
+        ]);
+
+        let c0 = cache
+            .fetch(AccountAddress::from_str("0xc0").unwrap())
+            .await
+            .unwrap();
+        let m = c0.module("m").unwrap();
+
+        assert_eq!(
+            m.functions(None, None).collect::<Vec<_>>(),
+            vec!["bar", "baz", "foo"],
+        );
+
+        assert_eq!(
+            m.functions(None, Some("baz")).collect::<Vec<_>>(),
+            vec!["bar"],
+        );
+
+        assert_eq!(
+            m.functions(Some("bar"), Some("foo")).collect::<Vec<_>>(),
+            vec!["baz"],
+        );
+
+        assert_eq!(
+            m.functions(Some("baz"), None).collect::<Vec<_>>(),
+            vec!["foo"],
+        );
+
+        let foo = m.function_def("foo").unwrap().unwrap();
+        let bar = m.function_def("bar").unwrap().unwrap();
+        let baz = m.function_def("baz").unwrap().unwrap();
+
+        let expect = expect![[r#"
+            c0::m::foo: FunctionDef {
+                visibility: Public,
+                is_entry: false,
+                type_params: [],
+                parameters: [],
+                return_: [],
+            }
+            c0::m::bar: FunctionDef {
+                visibility: Friend,
+                is_entry: false,
+                type_params: [],
+                parameters: [
+                    OpenSignature {
+                        ref_: Some(
+                            Immutable,
+                        ),
+                        body: Struct(
+                            StructRef {
+                                package: 00000000000000000000000000000000000000000000000000000000000000c0,
+                                module: "m",
+                                name: "T0",
+                            },
+                            [],
+                        ),
+                    },
+                    OpenSignature {
+                        ref_: Some(
+                            Mutable,
+                        ),
+                        body: Struct(
+                            StructRef {
+                                package: 00000000000000000000000000000000000000000000000000000000000000a0,
+                                module: "n",
+                                name: "T1",
+                            },
+                            [],
+                        ),
+                    },
+                ],
+                return_: [
+                    OpenSignature {
+                        ref_: None,
+                        body: U64,
+                    },
+                ],
+            }
+            c0::m::baz: FunctionDef {
+                visibility: Private,
+                is_entry: false,
+                type_params: [],
+                parameters: [
+                    OpenSignature {
+                        ref_: None,
+                        body: U8,
+                    },
+                ],
+                return_: [
+                    OpenSignature {
+                        ref_: None,
+                        body: U16,
+                    },
+                    OpenSignature {
+                        ref_: None,
+                        body: U32,
+                    },
+                ],
+            }"#]];
+        expect.assert_eq(&format!(
+            "c0::m::foo: {foo:#?}\n\
+             c0::m::bar: {bar:#?}\n\
+             c0::m::baz: {baz:#?}"
+        ));
     }
 
     /***** Test Helpers ***************************************************************************/

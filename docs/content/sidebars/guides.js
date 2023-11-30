@@ -124,7 +124,7 @@ const guides = [
 					'guides/developer/app-examples/escrow',
 					'guides/developer/app-examples/trusted-swap',
 					'guides/developer/app-examples/tic-tac-toe',
-					'guides/developer/app-examples/trusted-swap',
+					'guides/developer/app-examples/recaptcha',
 					'guides/developer/app-examples/turnip-town',
 					{
 						type: 'category',

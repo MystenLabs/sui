@@ -696,8 +696,7 @@ fn sign_tx_effects(
 }
 
 #[tokio::test]
-#[should_panic]
-async fn test_handle_transaction_panic() {
+async fn test_handle_transaction_fork() {
     let mut authorities = BTreeMap::new();
     let mut clients = BTreeMap::new();
     let mut authority_keys = Vec::new();
@@ -767,7 +766,11 @@ async fn test_handle_transaction_panic() {
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
 
     // We have forked, should panic
-    let _ = agg.process_transaction(tx.clone()).await;
+    let err = agg.process_transaction(tx.clone()).await.unwrap_err();
+    assert!(matches!(
+        err,
+        AggregatorProcessTransactionError::FatalTransaction { .. }
+    ));
 }
 
 #[tokio::test]
@@ -1966,17 +1969,23 @@ async fn test_byzantine_authority_sig_aggregation() {
 }
 
 #[tokio::test]
-#[should_panic]
 async fn test_fork_panic_process_cert_6_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(3, 6).await;
+    let err = process_with_cert(3, 6).await.unwrap_err();
+    assert!(matches!(
+        err,
+        AggregatorProcessTransactionError::FatalTransaction { .. }
+    ));
 }
 
 #[tokio::test]
-#[should_panic]
 async fn test_fork_panic_process_cert_4_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(2, 4).await;
+    let err = process_with_cert(2, 4).await.unwrap_err();
+    assert!(matches!(
+        err,
+        AggregatorProcessTransactionError::FatalTransaction { .. }
+    ));
 }
 
 // Aggregator aggregate signatures from authorities and process the transaction as signed.

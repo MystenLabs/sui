@@ -116,9 +116,10 @@ export function createWalletStore({
 
 					set(() => ({
 						accounts,
-						currentAccount: currentAccount
-							? accounts.find(({ address }) => address === currentAccount.address)
-							: accounts[0],
+						currentAccount:
+							(currentAccount &&
+								accounts.find(({ address }) => address === currentAccount.address)) ||
+							accounts[0],
 					}));
 				},
 			}),

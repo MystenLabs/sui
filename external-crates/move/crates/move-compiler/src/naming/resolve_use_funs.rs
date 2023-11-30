@@ -320,10 +320,11 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(_, econd, ebody) => {
+        N::Exp_::While(econd, _, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }
+        N::Exp_::NamedBlock(_, s) => sequence(context, s),
         N::Exp_::Block(s) => sequence(context, s),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);

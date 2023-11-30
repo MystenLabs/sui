@@ -577,6 +577,8 @@ pub enum QuantKind_ {
 }
 pub type QuantKind = Spanned<QuantKind_>;
 
+new_name!(BlockLabel);
+
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
@@ -610,6 +612,8 @@ pub enum Exp_ {
     // loop eloop
     Loop(Box<Exp>),
 
+    // 'label: { seq }
+    NamedBlock(BlockLabel, Sequence),
     // { seq }
     Block(Sequence),
     // fun (x1, ..., xn) e
@@ -630,14 +634,14 @@ pub enum Exp_ {
     // a = e
     Assign(Box<Exp>, Box<Exp>),
 
-    // return e
-    Return(Option<Box<Exp>>),
     // abort e
     Abort(Box<Exp>),
+    // return e
+    Return(Option<BlockLabel>, Option<Box<Exp>>),
     // break
-    Break(Option<Box<Exp>>),
+    Break(Option<BlockLabel>, Option<Box<Exp>>),
     // continue
-    Continue,
+    Continue(Option<BlockLabel>),
 
     // *e
     Dereference(Box<Exp>),
@@ -1788,6 +1792,10 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
+            E::NamedBlock(name, seq) => {
+                w.write(format!("'{}: ", name));
+                w.block(|w| seq.ast_debug(w))
+            }
             E::Block(seq) => w.block(|w| seq.ast_debug(w)),
             E::Lambda(sp!(_, bs), e) => {
                 w.write("fun ");
@@ -1817,25 +1825,30 @@ impl AstDebug for Exp_ {
                 w.write(" = ");
                 rhs.ast_debug(w);
             }
-            E::Return(e) => {
-                w.write("return");
-                if let Some(v) = e {
-                    w.write(" ");
-                    v.ast_debug(w);
-                }
-            }
             E::Abort(e) => {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Break(e) => {
-                w.write("break");
+            E::Return(name, e) => {
+                w.write("return");
+                name.map(|name| w.write(format!(" '{} ", name)));
                 if let Some(v) = e {
                     w.write(" ");
                     v.ast_debug(w);
                 }
             }
-            E::Continue => w.write("continue"),
+            E::Break(name, e) => {
+                w.write("break");
+                name.map(|name| w.write(format!(" '{} ", name)));
+                if let Some(v) = e {
+                    w.write(" ");
+                    v.ast_debug(w);
+                }
+            }
+            E::Continue(name) => {
+                w.write("continue");
+                name.map(|name| w.write(format!(" '{}", name)));
+            }
             E::Dereference(e) => {
                 w.write("*");
                 e.ast_debug(w)

@@ -137,10 +137,13 @@ describe('WalletProvider', () => {
 		);
 
 		result.current.connectWallet.mutate({ wallet: mockWallet });
+
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 
 		// Simulate deleting the account we're currently connected to.
-		mockWallet.deleteFirstAccount();
+		act(() => {
+			mockWallet.deleteFirstAccount();
+		});
 
 		expect(result.current.currentAccount).toBeTruthy();
 		await waitFor(() => {

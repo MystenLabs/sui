@@ -1,5 +1,11 @@
 # @mysten/zklogin
 
+## 0.3.8
+
+### Patch Changes
+
+- 0e3d0dfae: Add simple length checks
+
 ## 0.3.7
 
 ### Patch Changes

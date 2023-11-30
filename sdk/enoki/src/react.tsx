@@ -32,8 +32,14 @@ export function useZkLogin() {
 	return useStore(flow.$zkLoginState);
 }
 
+export function useZkLoginSession() {
+	const flow = useEnokiFlow();
+	return useStore(flow.$zkLoginSession).value;
+}
+
 export function useAuthCallback() {
 	const flow = useEnokiFlow();
+	const [state, setState] = useState<string | null>(null);
 	const [handled, setHandled] = useState(false);
 	const [hash, setHash] = useState<string | null>(null);
 
@@ -50,7 +56,7 @@ export function useAuthCallback() {
 
 		(async () => {
 			try {
-				await flow.handleAuthCallback(hash);
+				setState(await flow.handleAuthCallback(hash));
 
 				window.location.hash = '';
 			} finally {
@@ -59,5 +65,5 @@ export function useAuthCallback() {
 		})();
 	}, [hash, flow]);
 
-	return handled;
+	return { handled, state };
 }

@@ -1649,8 +1649,10 @@ pub enum CompressedSignature {
     Ed25519(Ed25519SignatureAsBytes),
     Secp256k1(Secp256k1SignatureAsBytes),
     Secp256r1(Secp256r1SignatureAsBytes),
-    ZkLogin(GenericSignature), // Rely on GenericSignature to handle serde. It can only be GenericSignature::ZkLoginAuthenticator.
+    ZkLogin(ZkLoginAuthenticatorAsBytes),
 }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct ZkLoginAuthenticatorAsBytes(#[schemars(with = "Base64")] pub Vec<u8>);
 
 impl AsRef<[u8]> for CompressedSignature {
     fn as_ref(&self) -> &[u8] {
@@ -1658,7 +1660,7 @@ impl AsRef<[u8]> for CompressedSignature {
             CompressedSignature::Ed25519(sig) => &sig.0,
             CompressedSignature::Secp256k1(sig) => &sig.0,
             CompressedSignature::Secp256r1(sig) => &sig.0,
-            CompressedSignature::ZkLogin(sig) => sig.as_ref(),
+            CompressedSignature::ZkLogin(sig) => &sig.0,
         }
     }
 }

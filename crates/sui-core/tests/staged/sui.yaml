@@ -221,7 +221,7 @@ CompressedSignature:
     3:
       ZkLogin:
         NEWTYPE:
-          TYPENAME: GenericSignature
+          TYPENAME: ZkLoginAuthenticatorAsBytes
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
@@ -1034,6 +1034,9 @@ UpgradeInfo:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+ZkLoginAuthenticatorAsBytes:
+  NEWTYPESTRUCT:
+    SEQ: U8
 ZkLoginPublicIdentifier:
   NEWTYPESTRUCT:
     SEQ: U8

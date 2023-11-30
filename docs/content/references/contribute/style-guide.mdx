@@ -559,19 +559,22 @@ Measurements should be written as numerals.
 
 ## Links {#links}
 
+Always use relative links when linking to topics on docs.sui.io.
+
+Include the `.mdx` extension when creating internal links so that they also work from the source file in GitHub.
+
 Use the topic title of the target topic as the link text for the link in a list or "Learn more" sentences. Do not use a URL as the link text.
 
 <Tabs>
 <TabItem value="example" label="Example" default>
 
-> To learn more, see [Examples of Sui Smart Contracts](https://docs.sui.io/explore/examples).
+> To learn more, see [Examples of Sui Smart Contracts](/guides/developer/app-examples.mdx).
 
 </TabItem>
 <TabItem value="markdown" label="Markdown">
 
-```
-
-To learn more, see [Examples of Sui Smart Contracts](https://docs.sui.io/explore/examples).
+```markdown
+To learn more, see [Examples of Sui Smart Contracts](/guides/developer/app-examples.mdx).
 
 ```
 
@@ -583,14 +586,14 @@ Use keywords from the target topic title when using links inline.
 <Tabs>
 <TabItem value="example" label="Example" default>
 
-> Before you install Sui, make sure to install the [prerequisites](https://docs.sui.io/build/install#prerequisites).
+> Before you install Sui, make sure to install the [prerequisites](/guides/developer/getting-started/sui-install.mdx#prerequisites).
 
 </TabItem>
 <TabItem value="markdown" label="Markdown">
 
 ```
 
-Before you install Sui, make sure to install the [prerequisites](https://docs.sui.io/build/install#prerequisites).
+Before you install Sui, make sure to install the [prerequisites](/guides/developer/getting-started/sui-install.mdx#prerequisites).
 
 ```
 

@@ -1,18 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::ZkLoginAuthenticator;
+use crate::crypto::{PublicKey, Signature, SuiKeyPair, ZkLoginPublicIdentifier};
 use crate::error::SuiError;
 use crate::signature::{AuthenticatorTrait, VerifyParams};
+use crate::utils::TestData;
 use crate::utils::{
-    get_legacy_zklogin_user_address, get_zklogin_user_address, make_zklogin_tx,
-    sign_zklogin_personal_msg,
+    get_legacy_zklogin_user_address, get_zklogin_user_address, make_transaction_data,
+    make_zklogin_tx, sign_zklogin_personal_msg,
 };
 use crate::{
     base_types::SuiAddress, signature::GenericSignature, zk_login_util::DEFAULT_JWK_BYTES,
 };
 use fastcrypto::encoding::Base64;
-use fastcrypto::traits::ToFromBytes;
-use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, JWK};
+use fastcrypto::traits::{EncodeDecodeBase64, ToFromBytes};
+use fastcrypto_zkp::bn254::zk_login::{parse_jwks, JwkId, OIDCProvider, ZkLoginInputs, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
@@ -41,10 +44,33 @@ fn zklogin_authenticator_jwk() {
     // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
     let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true, true);
 
-    let res =
-        authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
-    // Verify passes.
-    assert!(res.is_ok());
+    let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
+        .expect("Unable to open file");
+    let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
+
+    for test in test_datum {
+        let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
+        let pk_zklogin = PublicKey::ZkLogin(
+            ZkLoginPublicIdentifier::new(
+                &OIDCProvider::Twitch.get_config().iss,
+                &test.address_seed,
+            )
+            .unwrap(),
+        );
+        let addr = (&pk_zklogin).into();
+        let tx_data = make_transaction_data(addr);
+        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
+        let eph_sig = Signature::new_secure(&msg, &kp);
+        let zklogin_inputs =
+            ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
+        let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            zklogin_inputs,
+            10,
+            eph_sig,
+        ));
+        let res = generic_sig.verify_authenticator(&msg, addr, Some(0), &aux_verify_data);
+        assert!(res.is_ok());
+    }
 
     let res = legacy_authenticator.verify_authenticator(
         &legacy_intent_msg,

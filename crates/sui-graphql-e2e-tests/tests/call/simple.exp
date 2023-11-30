@@ -145,19 +145,19 @@ Value: "0x42"
 
 Name: Test
 Type: SuiAddress!
-Value: "0x8F2732502E7B64AFF525EB4252FFCBCFAA1859525DE38A84AE84B3B1FBA298EF"
+Value: "0x8f2732502e7b64aff525eb4252ffcbcfaa1859525de38a84ae84b3b1fba298ef"
 
 Name: Test_opt
 Type: SuiAddress
-Value: "0x8F2732502E7B64AFF525EB4252FFCBCFAA1859525DE38A84AE84B3B1FBA298EF"
+Value: "0x8f2732502e7b64aff525eb4252ffcbcfaa1859525de38a84ae84b3b1fba298ef"
 
 Name: deepbook
 Type: SuiAddress!
-Value: "0xDEE9"
+Value: "0xdee9"
 
 Name: deepbook_opt
 Type: SuiAddress
-Value: "0xDEE9"
+Value: "0xdee9"
 
 Name: obj_0_0
 Type: SuiAddress!
@@ -206,3 +206,11 @@ Value: "0x3"
 Name: sui_system_opt
 Type: SuiAddress
 Value: "0x3"
+
+Name: validator_0
+Type: SuiAddress!
+Value: "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+
+Name: validator_0_opt
+Type: SuiAddress
+Value: "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"

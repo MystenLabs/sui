@@ -38,14 +38,9 @@ fragment Modules on Object {
     location
     asMovePackage {
         module(name: "m") {
-            moduleId {
-                name
-                package {
-                    asObject {
-                        location
-                    }
-                }
-            }
+            name
+            package { asObject { location } }
+
             fileFormatVersion
             bytes
             disassembly
@@ -69,7 +64,7 @@ fragment Modules on Object {
 
 //# run-graphql
 fragment NodeNames on MoveModuleConnection {
-    nodes { moduleId { name } }
+    nodes { name }
     pageInfo { hasNextPage hasPreviousPage }
 }
 
@@ -103,7 +98,7 @@ fragment Modules on Object {
 
 //# run-graphql
 fragment NodeNames on MoveModuleConnection {
-    nodes { moduleId { name } }
+    nodes { name }
     pageInfo { hasNextPage hasPreviousPage }
 }
 

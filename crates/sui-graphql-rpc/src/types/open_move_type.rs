@@ -4,16 +4,27 @@
 use std::fmt;
 
 use async_graphql::*;
+use move_binary_format::file_format::{Ability, AbilitySet, Visibility};
 use serde::{Deserialize, Serialize};
-use sui_package_resolver::OpenSignatureBody;
+use sui_package_resolver::{OpenSignature, OpenSignatureBody, Reference};
 
-/// Represents types that could contain references or free type parameters.  Such types can appear
-/// as function parameters, in fields of structs, or as actual type parameter.
-#[derive(SimpleObject)]
-#[graphql(complex)]
 pub(crate) struct OpenMoveType {
-    /// Structured representation of the type signature.
     signature: OpenMoveTypeSignature,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum MoveAbility {
+    Copy,
+    Drop,
+    Key,
+    Store,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum MoveVisibility {
+    Public,
+    Private,
+    Friend,
 }
 
 scalar!(
@@ -37,10 +48,10 @@ type OpenMoveTypeSignatureBody =
         package: string,
         module: string,
         type: string,
-        typeParameters: [OpenMoveTypeSignatureBody]?
+        typeParameters: [OpenMoveTypeSignatureBody]
       }
     }
-  | { TypeParameter: number }"
+  | { typeParameter: number }"
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,11 +92,43 @@ pub(crate) enum OpenMoveTypeSignatureBody {
     },
 }
 
-#[ComplexObject]
+/// Represents types that could contain references or free type parameters.  Such types can appear
+/// as function parameters, in fields of structs, or as actual type parameter.
+#[Object]
 impl OpenMoveType {
+    /// Structured representation of the type signature.
+    async fn signature(&self) -> Option<&OpenMoveTypeSignature> {
+        Some(&self.signature)
+    }
+
     /// Flat representation of the type signature, as a displayable string.
-    async fn repr(&self) -> String {
-        self.signature.to_string()
+    async fn repr(&self) -> Option<String> {
+        Some(self.signature.to_string())
+    }
+}
+
+impl From<OpenSignature> for OpenMoveType {
+    fn from(signature: OpenSignature) -> Self {
+        OpenMoveType {
+            signature: signature.into(),
+        }
+    }
+}
+
+impl From<OpenSignatureBody> for OpenMoveType {
+    fn from(signature: OpenSignatureBody) -> Self {
+        OpenMoveType {
+            signature: signature.into(),
+        }
+    }
+}
+
+impl From<OpenSignature> for OpenMoveTypeSignature {
+    fn from(signature: OpenSignature) -> Self {
+        OpenMoveTypeSignature {
+            ref_: signature.ref_.map(OpenMoveTypeReference::from),
+            body: signature.body.into(),
+        }
     }
 }
 
@@ -123,6 +166,45 @@ impl From<OpenSignatureBody> for OpenMoveTypeSignatureBody {
             },
 
             OSB::TypeParameter(idx) => OMTSB::TypeParameter(idx),
+        }
+    }
+}
+
+impl From<Reference> for OpenMoveTypeReference {
+    fn from(ref_: Reference) -> Self {
+        use OpenMoveTypeReference as M;
+        use Reference as R;
+
+        match ref_ {
+            R::Immutable => M::Immutable,
+            R::Mutable => M::Mutable,
+        }
+    }
+}
+
+impl From<Ability> for MoveAbility {
+    fn from(ability: Ability) -> Self {
+        use Ability as A;
+        use MoveAbility as M;
+
+        match ability {
+            A::Copy => M::Copy,
+            A::Drop => M::Drop,
+            A::Store => M::Store,
+            A::Key => M::Key,
+        }
+    }
+}
+
+impl From<Visibility> for MoveVisibility {
+    fn from(visibility: Visibility) -> Self {
+        use MoveVisibility as M;
+        use Visibility as V;
+
+        match visibility {
+            V::Private => M::Private,
+            V::Public => M::Public,
+            V::Friend => M::Friend,
         }
     }
 }
@@ -181,6 +263,11 @@ impl fmt::Display for OpenMoveTypeSignatureBody {
             }
         }
     }
+}
+
+/// Convert an `AbilitySet` from the binary format into a vector of `MoveAbility` (a GraphQL type).
+pub(crate) fn abilities(set: AbilitySet) -> Vec<MoveAbility> {
+    set.into_iter().map(MoveAbility::from).collect()
 }
 
 #[cfg(test)]

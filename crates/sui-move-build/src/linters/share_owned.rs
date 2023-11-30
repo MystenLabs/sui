@@ -21,18 +21,15 @@ use move_compiler::{
         codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
     },
-    hlir::ast::{
-        BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_, Type, Type_,
-        Var,
-    },
+    hlir::ast::{Exp, LValue, LValue_, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::Ability_,
     shared::{CompilationEnv, Identifier},
 };
 use std::collections::BTreeMap;
 
 use super::{
-    LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX, PUBLIC_SHARE_FUN, SHARE_FUN,
-    SUI_PKG_NAME, TRANSFER_MOD_NAME,
+    type_abilities, LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    PUBLIC_SHARE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
 const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
@@ -209,17 +206,11 @@ fn is_obj(sp!(_, l_): &LValue) -> bool {
     false
 }
 
-fn is_obj_type(sp!(_, st_): &SingleType) -> bool {
-    let sp!(_, bt_) = match st_ {
-        SingleType_::Base(v) => v,
-        SingleType_::Ref(_, v) => v,
+fn is_obj_type(st_: &SingleType) -> bool {
+    let Some(abilities) = type_abilities(st_) else {
+        return false;
     };
-    if let BaseType_::Apply(abilities, _, _) = bt_ {
-        if abilities.has_ability_(Ability_::Key) {
-            return true;
-        }
-    }
-    false
+    abilities.has_ability_(Ability_::Key)
 }
 
 impl SimpleDomain for State {

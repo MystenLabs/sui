@@ -137,11 +137,12 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
-            E::While(_, e1, e2) => {
+            E::While(e1, _, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }
             E::Loop { body, .. } => self.visit_exp(body),
+            E::NamedBlock(_, seq) => self.visit_seq(seq),
             E::Block(seq) => self.visit_seq(seq),
             E::Assign(_, _, e) => self.visit_exp(e),
             E::Mutate(e1, e2) => {

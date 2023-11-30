@@ -1,5 +1,24 @@
 # @mysten/enoki
 
+## 0.0.6
+
+### Patch Changes
+
+- 0eb6fa61b: Hydrate the session on mount
+
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [0e3d0dfae]
+  - @mysten/zklogin@0.3.8
+
+## 0.0.4
+
+### Patch Changes
+
+- 732fdbb5b: Make enoki flow session observable. Expose state parameter on useAuthCallback.
+
 ## 0.0.3
 
 ### Patch Changes

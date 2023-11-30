@@ -141,7 +141,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             .is_err()
         {
             return Err(SuiError::InvalidSignature {
-                error: "Ephermal signature verify failed".to_string(),
+                error: "Ephemermal signature verify failed".to_string(),
             });
         }
         Ok(())

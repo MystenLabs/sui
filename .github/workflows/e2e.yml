@@ -57,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Playwright Browsers
-        run: pnpm explorer playwright install --with-deps chromium
+        run: pnpm --filter sui-explorer playwright install --with-deps chromium
 
       - name: Set env
         run: |
@@ -66,7 +66,7 @@ jobs:
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
+        run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js test:e2e'
 
       - name: Build explorer
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
@@ -75,7 +75,7 @@ jobs:
       - name: Run Explorer e2e tests
         # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm explorer playwright test
+        run: pnpm --filter sui-explorer playwright test
       - uses: actions/upload-artifact@v3
         if: always()
         with:
@@ -90,10 +90,10 @@ jobs:
       - name: Build Wallet
         # need to run Wallet e2e when its upstream(TS SDK and Rust) or itself is changed
         if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-        run: pnpm wallet build:dev
+        run: pnpm wallet build
       - name: Run Wallet e2e tests
         if: ${{ needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'}}
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm wallet playwright test
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- pnpm --filter sui-wallet playwright test
       - uses: actions/upload-artifact@v3
         if: always()
         with:

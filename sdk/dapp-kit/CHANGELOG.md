@@ -1,5 +1,17 @@
 # @mysten/dapp-kit
 
+## 0.10.1
+
+### Patch Changes
+
+- 367779ea2: Improve the reliability of the `useAutoConnectWallet` hook.
+
+## 0.10.0
+
+### Minor Changes
+
+- 47b137d03: Add new useSuiClientQueries hook to support variable client queries
+
 ## 0.9.1
 
 ### Patch Changes

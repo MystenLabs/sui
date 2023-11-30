@@ -57,7 +57,7 @@ impl MovePackage {
     /// A representation of the module called `name` in this package, including the
     /// structs and functions it defines.
     async fn module(&self, name: String) -> Result<Option<MoveModule>> {
-        self.module_impl(&name)
+        self.module_impl(&name).extend()
     }
 
     /// Paginate through the MoveModules defined in this package.
@@ -108,6 +108,7 @@ impl MovePackage {
             connection.edges.push(Edge::new(
                 name.clone(),
                 MoveModule {
+                    storage_id: self.super_.address,
                     native: native.clone(),
                     parsed: parsed.clone(),
                 },
@@ -194,21 +195,22 @@ impl MovePackage {
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
-    pub(crate) fn module_impl(&self, name: &str) -> Result<Option<MoveModule>> {
+    pub(crate) fn module_impl(&self, name: &str) -> Result<Option<MoveModule>, Error> {
         use PackageCacheError as E;
         match (
             self.native.serialized_module_map().get(name),
-            self.parsed_package().extend()?.module(name),
+            self.parsed_package()?.module(name),
         ) {
             (Some(native), Ok(parsed)) => Ok(Some(MoveModule {
+                storage_id: self.super_.address,
                 native: native.clone(),
                 parsed: parsed.clone(),
             })),
 
             (None, _) | (_, Err(E::ModuleNotFound(_, _))) => Ok(None),
-            (_, Err(e)) => {
-                Err(Error::Internal(format!("Unexpected error fetching module: {e}")).extend())
-            }
+            (_, Err(e)) => Err(Error::Internal(format!(
+                "Unexpected error fetching module: {e}"
+            ))),
         }
     }
 }

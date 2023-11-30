@@ -8,44 +8,50 @@ use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
+use crate::config::ServiceConfig;
 use crate::context_data::db_data_provider::{validate_cursor_pagination, PgManager};
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
+use super::move_function::MoveFunction;
+use super::move_struct::MoveStruct;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {
+    pub storage_id: SuiAddress,
     pub native: Vec<u8>,
     pub parsed: ParsedMoveModule,
-}
-
-#[derive(SimpleObject)]
-#[graphql(complex)]
-pub(crate) struct MoveModuleId {
-    #[graphql(skip)]
-    pub package: SuiAddress,
-    pub name: String,
 }
 
 /// Represents a module in Move, a library that defines struct types
 /// and functions that operate on these types.
 #[Object]
 impl MoveModule {
-    async fn file_format_version(&self) -> u32 {
-        self.parsed.bytecode().version
+    /// The package that this Move module was defined in
+    async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_move_package(self.storage_id, None)
+            .await
+            .extend()?
+            .ok_or_else(|| {
+                Error::Internal(format!(
+                    "Cannot load package for module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                ))
+            })
+            .extend()
     }
 
-    // TODO: impl all fields
+    /// The module's (unqualified) name.
+    async fn name(&self) -> &str {
+        self.parsed.name()
+    }
 
-    async fn module_id(&self) -> MoveModuleId {
-        // TODO: Rethink the need for MoveModuleId -- we probably don't need it (MoveModule should
-        // expose access to its package).
-        let self_id = self.parsed.bytecode().self_id();
-        MoveModuleId {
-            package: SuiAddress::from(*self_id.address()),
-            name: self_id.name().to_string(),
-        }
+    /// Format version of this module's bytecode.
+    async fn file_format_version(&self) -> u32 {
+        self.parsed.bytecode().version
     }
 
     /// Modules that this module considers friends (these modules can access `public(friend)`
@@ -109,16 +115,16 @@ impl MoveModule {
         connection.has_previous_page = 0 < lo;
         connection.has_next_page = hi < total;
 
-        let self_id = bytecode.self_id();
+        let runtime_id = *bytecode.self_id().address();
         let Some(package) = ctx
             .data_unchecked::<PgManager>()
-            .fetch_move_package(SuiAddress::from(*self_id.address()), None)
+            .fetch_move_package(self.storage_id, None)
             .await
             .extend()?
         else {
             return Err(Error::Internal(format!(
                 "Failed to load package for module: {}",
-                self_id.to_canonical_display(/* with_prefix */ true),
+                self.storage_id,
             ))
             .extend());
         };
@@ -135,20 +141,21 @@ impl MoveModule {
             let friend_pkg = bytecode.address_identifier_at(decl.address);
             let friend_mod = bytecode.identifier_at(decl.name);
 
-            if friend_pkg != self_id.address() {
+            if friend_pkg != &runtime_id {
                 return Err(Error::Internal(format!(
                     "Friend module of {} from a different package: {}::{}",
-                    self_id.to_canonical_display(/* with_prefix */ true),
+                    runtime_id.to_canonical_display(/* with_prefix */ true),
                     friend_pkg.to_canonical_display(/* with_prefix */ true),
                     friend_mod,
                 ))
                 .extend());
             }
 
-            let Some(friend) = package.module_impl(friend_mod.as_str())? else {
+            let Some(friend) = package.module_impl(friend_mod.as_str()).extend()? else {
                 return Err(Error::Internal(format!(
-                    "Failed to load friend module of {}: {}",
-                    self_id.to_canonical_display(/* with_prefix */ true),
+                    "Failed to load friend module of {}::{}: {}",
+                    self.storage_id,
+                    self.parsed.name(),
                     friend_mod,
                 ))
                 .extend());
@@ -160,21 +167,146 @@ impl MoveModule {
         Ok(connection)
     }
 
-    // struct(name: String!): MoveStructDecl
-    // structConnection(
-    //   first: Int,
-    //   after: String,
-    //   last: Int,
-    //   before: String,
-    // ): MoveStructConnection
+    /// Look-up the definition of a struct defined in this module, by its name.
+    #[graphql(name = "struct")]
+    async fn struct_(&self, name: String) -> Result<Option<MoveStruct>> {
+        self.struct_impl(name).extend()
+    }
 
-    // function(name: String!): MoveFunction
-    // functionConnection(
-    //   first: Int,
-    //   after: String,
-    //   last: Int,
-    //   before: String,
-    // ): MoveFunctionConnection
+    /// Iterate through the structs defined in this module.
+    async fn struct_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, MoveStruct>>> {
+        let default_page_size = ctx
+            .data::<ServiceConfig>()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .extend()?
+            .limits
+            .max_page_size;
+
+        // TODO: make cursor opaque.
+        // for now it same as struct name
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+
+        let struct_range = self.parsed.structs(after.as_deref(), before.as_deref());
+
+        let total = struct_range.clone().count() as u64;
+        let (skip, take) = match (first, last) {
+            (Some(first), Some(last)) if last < first => (first - last, last),
+            (Some(first), _) => (0, first),
+            (None, Some(last)) if last < total => (total - last, last),
+            (None, _) => (0, default_page_size),
+        };
+
+        let mut connection = Connection::new(false, false);
+        for name in struct_range.skip(skip as usize).take(take as usize) {
+            let Some(struct_) = self.struct_impl(name.to_string()).extend()? else {
+                return Err(Error::Internal(format!(
+                    "Cannot deserialize struct {name} in module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                )))
+                .extend();
+            };
+
+            connection.edges.push(Edge::new(name.to_string(), struct_));
+        }
+
+        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
+            self.parsed
+                .structs(None, Some(&fst.cursor))
+                .next()
+                .is_some()
+        });
+
+        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
+            self.parsed
+                .structs(Some(&lst.cursor), None)
+                .next()
+                .is_some()
+        });
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
+    }
+
+    /// Look-up the signature of a function defined in this module, by its name.
+    async fn function(&self, name: String) -> Result<Option<MoveFunction>> {
+        self.function_impl(name).extend()
+    }
+
+    /// Iterate through the signatures of functions defined in this module.
+    async fn function_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, MoveFunction>>> {
+        let default_page_size = ctx
+            .data::<ServiceConfig>()
+            .map_err(|_| Error::Internal("Unable to fetch service configuration.".to_string()))
+            .extend()?
+            .limits
+            .max_page_size;
+
+        // TODO: make cursor opaque.
+        // for now it same as function name
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+
+        let function_range = self.parsed.functions(after.as_deref(), before.as_deref());
+
+        let total = function_range.clone().count() as u64;
+        let (skip, take) = match (first, last) {
+            (Some(first), Some(last)) if last < first => (first - last, last),
+            (Some(first), _) => (0, first),
+            (None, Some(last)) if last < total => (total - last, last),
+            (None, _) => (0, default_page_size),
+        };
+
+        let mut connection = Connection::new(false, false);
+        for name in function_range.skip(skip as usize).take(take as usize) {
+            let Some(function) = self.function_impl(name.to_string()).extend()? else {
+                return Err(Error::Internal(format!(
+                    "Cannot deserialize function {name} in module {}::{}",
+                    self.storage_id,
+                    self.parsed.name(),
+                )))
+                .extend();
+            };
+
+            connection.edges.push(Edge::new(name.to_string(), function));
+        }
+
+        connection.has_previous_page = connection.edges.first().is_some_and(|fst| {
+            self.parsed
+                .functions(None, Some(&fst.cursor))
+                .next()
+                .is_some()
+        });
+
+        connection.has_next_page = connection.edges.last().is_some_and(|lst| {
+            self.parsed
+                .functions(Some(&lst.cursor), None)
+                .next()
+                .is_some()
+        });
+
+        if connection.edges.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(connection))
+        }
+    }
 
     /// The Base64 encoded bcs serialization of the module.
     async fn bytes(&self) -> Option<Base64> {
@@ -195,20 +327,33 @@ impl MoveModule {
     }
 }
 
-#[ComplexObject]
-impl MoveModuleId {
-    /// The package that this Move module was defined in
-    async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_package(self.package, None)
-            .await
-            .extend()?
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Cannot load package for module {}::{}",
-                    self.package, self.name,
-                ))
-            })
-            .extend()
+impl MoveModule {
+    fn struct_impl(&self, name: String) -> Result<Option<MoveStruct>, Error> {
+        let def = match self.parsed.struct_def(&name) {
+            Ok(Some(def)) => def,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(Error::Internal(e.to_string())),
+        };
+
+        Ok(Some(MoveStruct::new(
+            self.parsed.name().to_string(),
+            name,
+            def,
+        )))
+    }
+
+    fn function_impl(&self, name: String) -> Result<Option<MoveFunction>, Error> {
+        let def = match self.parsed.function_def(&name) {
+            Ok(Some(def)) => def,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(Error::Internal(e.to_string())),
+        };
+
+        Ok(Some(MoveFunction::new(
+            self.storage_id,
+            self.parsed.name().to_string(),
+            name,
+            def,
+        )))
     }
 }

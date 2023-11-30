@@ -48,7 +48,7 @@ export class MockWallet implements Wallet {
 		this.#eventHandlers = [];
 		this.mocks = {
 			connect: vi.fn().mockImplementation(() => ({ accounts: this.#accounts })),
-			disconnect: vi.fn(),
+			disconnect: vi.fn().mockImplementation(() => {}),
 		};
 	}
 

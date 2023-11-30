@@ -29,6 +29,7 @@ tokio-util.workspace = true
 sui-core.workspace = true
 sui-config.workspace = true
 sui-network.workspace = true
+sui-storage.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true

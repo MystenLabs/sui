@@ -999,6 +999,7 @@ fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
 //          | "(" Comma<Exp> ")"
 //          | "(" <Exp> ":" <Type> ")"
 //          | "(" <Exp> "as" <Type> ")"
+//          | <Label> <Exp>
 //          | "{" <Sequence>
 //          | "if" "(" <Exp> ")" <Exp> "else" "{" <Exp> "}"
 //          | "if" "(" <Exp> ")" "{" <Exp> "}"
@@ -1057,6 +1058,14 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         }
 
         Tok::Identifier | Tok::RestrictedIdentifier => parse_name_exp(context)?,
+
+        Tok::BlockLabel => {
+            // TODO: improve error messages around this.
+            let label = parse_block_label(context)?;
+            consume_token(context.tokens, Tok::Colon)?;
+            consume_token(context.tokens, Tok::LBrace)?;
+            Exp_::NamedBlock(label, parse_sequence(context)?)
+        }
 
         Tok::NumValue => {
             // Check if this is a ModuleIdent (in a ModuleAccess).
@@ -1142,6 +1151,29 @@ fn is_control_exp(tok: Tok) -> bool {
         tok,
         Tok::Break | Tok::Continue | Tok::If | Tok::While | Tok::Loop | Tok::Return | Tok::Abort
     )
+}
+
+fn parse_block_label(context: &mut Context) -> Result<BlockLabel, Box<Diagnostic>> {
+    let id: Symbol = match context.tokens.peek() {
+        Tok::BlockLabel => {
+            // peel off leading tick '
+            let content = context.tokens.content();
+            let peeled = &content[1..content.len()];
+            peeled.into()
+        }
+        _ => {
+            return Err(unexpected_token_error(context.tokens, "a block identifier"));
+        }
+    };
+    let start_loc = context.tokens.start_loc();
+    context.tokens.advance()?;
+    let end_loc = context.tokens.previous_end_loc();
+    Ok(BlockLabel(spanned(
+        context.tokens.file_hash(),
+        start_loc,
+        end_loc,
+        id,
+    )))
 }
 
 // if there is a block, only parse the block, not any subsequent tokens
@@ -1230,13 +1262,17 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         }
         Tok::Return => {
             context.tokens.advance()?;
+            let label = match context.tokens.peek() {
+                Tok::BlockLabel => Some(parse_block_label(context)?),
+                _ => None,
+            };
             let (e, ends_in_block) = if !at_start_of_exp(context) {
                 (None, false)
             } else {
                 let (e, ends_in_block) = parse_exp_or_sequence(context)?;
                 (Some(Box::new(e)), ends_in_block)
             };
-            (Exp_::Return(e), ends_in_block)
+            (Exp_::Return(label, e), ends_in_block)
         }
         Tok::Abort => {
             context.tokens.advance()?;
@@ -1245,17 +1281,25 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         }
         Tok::Break => {
             context.tokens.advance()?;
+            let label = match context.tokens.peek() {
+                Tok::BlockLabel => Some(parse_block_label(context)?),
+                _ => None,
+            };
             let (e, ends_in_block) = if !at_start_of_exp(context) {
                 (None, false)
             } else {
                 let (e, ends_in_block) = parse_exp_or_sequence(context)?;
                 (Some(Box::new(e)), ends_in_block)
             };
-            (Exp_::Break(e), ends_in_block)
+            (Exp_::Break(label, e), ends_in_block)
         }
         Tok::Continue => {
             context.tokens.advance()?;
-            (Exp_::Continue, false)
+            let label = match context.tokens.peek() {
+                Tok::BlockLabel => Some(parse_block_label(context)?),
+                _ => None,
+            };
+            (Exp_::Continue(label), false)
         }
         _ => unreachable!(),
     };
@@ -3588,7 +3632,7 @@ pub fn parse_file_string(
     input: &str,
     package: Option<Symbol>,
 ) -> Result<(Vec<Definition>, MatchedFileCommentMap), Diagnostics> {
-    let edition = env.syntax_edition(package);
+    let edition = env.edition(package);
     let mut tokens = Lexer::new(input, file_hash, edition);
     match tokens.advance() {
         Err(err) => Err(Diagnostics::from(vec![*err])),

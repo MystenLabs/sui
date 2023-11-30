@@ -2,9 +2,7 @@
 	"name": "sui-explorer",
 	"private": true,
 	"scripts": {
-		"dev": "concurrently 'pnpm:dev-deps' 'pnpm:dev-local'",
-		"dev-deps": "turbo run dev --filter sui-explorer^... --concurrency 100",
-		"dev-local": "vite --port 3000",
+		"dev": "vite --port 3000",
 		"test": "pnpm test:unit",
 		"test:unit": "vitest run",
 		"typecheck": "tsc -b",

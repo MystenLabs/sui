@@ -20,6 +20,7 @@ use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::http::HeaderMap;
+use axum::routing::{post, MethodRouter};
 use axum::{
     extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
     middleware,
@@ -41,6 +42,123 @@ impl Server {
         self.server
             .await
             .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
+    }
+}
+
+pub(crate) struct ServerBuilder {
+    port: u16,
+    host: String,
+
+    schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
+    ide_title: Option<String>,
+
+    router: Option<Router>,
+}
+
+impl ServerBuilder {
+    pub fn new(port: u16, host: String) -> Self {
+        Self {
+            port,
+            host,
+            schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
+            ide_title: None,
+            router: None,
+        }
+    }
+
+    pub fn address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+
+    pub fn max_query_depth(mut self, max_depth: u32) -> Self {
+        self.schema = self.schema.limit_depth(max_depth as usize);
+        self
+    }
+
+    pub fn max_query_nodes(mut self, max_nodes: u32) -> Self {
+        self.schema = self.schema.limit_complexity(max_nodes as usize);
+        self
+    }
+
+    pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
+        self.schema = self.schema.data(context_data);
+        self
+    }
+
+    pub fn extension(mut self, extension: impl ExtensionFactory) -> Self {
+        self.schema = self.schema.extension(extension);
+        self
+    }
+
+    fn ide_title(mut self, name: String) -> Self {
+        self.ide_title = Some(name);
+        self
+    }
+
+    fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
+        self.schema.finish()
+    }
+
+    fn build_components(
+        self,
+    ) -> (
+        String,
+        Option<String>,
+        Schema<Query, EmptyMutation, EmptySubscription>,
+        Router,
+    ) {
+        let address = self.address();
+        let ServerBuilder {
+            schema,
+            // TODO: remove this once we have expose layer in builder.
+            // This should be set in the builder.
+            ide_title,
+            router,
+            ..
+        } = self;
+        (
+            address,
+            ide_title,
+            schema.finish(),
+            router.expect("Router not initialized"),
+        )
+    }
+
+    fn init_router(&mut self) {
+        if self.router.is_none() {
+            let router: Router = Router::new()
+                .route("/", post(graphql_handler))
+                .route("/health", axum::routing::get(health_checks))
+                .route("/schema", axum::routing::get(get_schema))
+                .layer(middleware::from_fn(check_version_middleware))
+                .layer(middleware::from_fn(set_version_middleware));
+            self.router = Some(router);
+        }
+    }
+
+    pub fn route(mut self, path: &str, method_handler: MethodRouter) -> Self {
+        self.init_router();
+        self.router = self.router.map(|router| router.route(path, method_handler));
+        self
+    }
+
+    pub fn build(self) -> Result<Server, Error> {
+        let (address, ide_title, schema, router) = self.build_components();
+
+        let app = router
+            .layer(axum::extract::Extension(schema))
+            // TODO: remove this once we have expose layer in builder.
+            // This should be set in the builder.
+            .layer(axum::extract::Extension(ide_title));
+
+        Ok(Server {
+            server: axum::Server::bind(
+                &address
+                    .parse()
+                    .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
+            )
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+        })
     }
 
     pub async fn from_yaml_config(path: &str) -> Result<Self, Error> {
@@ -103,82 +221,7 @@ impl Server {
             builder = builder.extension(Timeout);
         }
 
-        builder.build()
-    }
-}
-
-pub(crate) struct ServerBuilder {
-    port: u16,
-    host: String,
-
-    schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
-    ide_title: Option<String>,
-}
-
-impl ServerBuilder {
-    pub fn new(port: u16, host: String) -> Self {
-        Self {
-            port,
-            host,
-            schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
-            ide_title: None,
-        }
-    }
-
-    pub fn address(&self) -> String {
-        format!("{}:{}", self.host, self.port)
-    }
-
-    pub fn max_query_depth(mut self, max_depth: u32) -> Self {
-        self.schema = self.schema.limit_depth(max_depth as usize);
-        self
-    }
-
-    pub fn max_query_nodes(mut self, max_nodes: u32) -> Self {
-        self.schema = self.schema.limit_complexity(max_nodes as usize);
-        self
-    }
-
-    pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
-        self.schema = self.schema.data(context_data);
-        self
-    }
-
-    pub fn extension(mut self, extension: impl ExtensionFactory) -> Self {
-        self.schema = self.schema.extension(extension);
-        self
-    }
-
-    fn ide_title(mut self, name: String) -> Self {
-        self.ide_title = Some(name);
-        self
-    }
-
-    fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
-        self.schema.finish()
-    }
-
-    pub fn build(self) -> Result<Server, Error> {
-        let address = self.address();
-        let ide_title = self.ide_title.clone();
-        let schema = self.build_schema();
-
-        let app = axum::Router::new()
-            .route("/", axum::routing::get(graphiql).post(graphql_handler))
-            .route("/schema", axum::routing::get(get_schema))
-            .route("/health", axum::routing::get(health_checks))
-            .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(ide_title))
-            .layer(middleware::from_fn(check_version_middleware))
-            .layer(middleware::from_fn(set_version_middleware));
-        Ok(Server {
-            server: axum::Server::bind(
-                &address
-                    .parse()
-                    .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
-            )
-            .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
-        })
+        Ok(builder)
     }
 }
 
@@ -209,15 +252,6 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
     schema.execute(req).await.into()
-}
-
-async fn graphiql(ide_title: axum::Extension<Option<String>>) -> impl axum::response::IntoResponse {
-    let gq = async_graphql::http::GraphiQLSource::build().endpoint("/");
-    if let axum::Extension(Some(title)) = ide_title {
-        axum::response::Html(gq.title(&title).finish())
-    } else {
-        axum::response::Html(gq.finish())
-    }
 }
 
 async fn health_checks(

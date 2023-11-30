@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ExecuteTransactionBlockParams, SuiClient } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type { TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
 import { decodeJwt } from 'jose';
 import type { WritableAtom } from 'nanostores';
-import { atom, onSet } from 'nanostores';
+import { atom, onMount, onSet } from 'nanostores';
 
 import type { Encryption } from './encryption.js';
 import { createDefaultEncryption } from './encryption.js';
@@ -63,9 +63,7 @@ export class EnokiFlow {
 	#encryptionKey: string;
 	#store: SyncStore;
 
-	#zkLoginSessionInitialized: boolean;
-	#zkLoginSession: ZkLoginSession | null;
-
+	$zkLoginSession: WritableAtom<{ initialized: boolean; value: ZkLoginSession | null }>;
 	$zkLoginState: WritableAtom<ZkLoginState>;
 
 	constructor(config: EnokiFlowConfig) {
@@ -89,9 +87,12 @@ export class EnokiFlow {
 		}
 
 		this.$zkLoginState = atom(storedState || {});
+		this.$zkLoginSession = atom({ initialized: false, value: null });
 
-		this.#zkLoginSessionInitialized = false;
-		this.#zkLoginSession = null;
+		// Hydrate the session on mount:
+		onMount(this.$zkLoginSession, () => {
+			this.getSession();
+		});
 
 		onSet(this.$zkLoginState, ({ newValue }) => {
 			this.#store.set(this.#storageKeys.STATE, JSON.stringify(newValue));
@@ -215,12 +216,12 @@ export class EnokiFlow {
 			this.#store.delete(this.#storageKeys.SESSION);
 		}
 
-		this.#zkLoginSession = newValue;
+		this.$zkLoginSession.set({ initialized: true, value: newValue });
 	}
 
 	async getSession() {
-		if (this.#zkLoginSessionInitialized) {
-			return this.#zkLoginSession;
+		if (this.$zkLoginSession.get().initialized) {
+			return this.$zkLoginSession.get().value;
 		}
 
 		try {
@@ -236,13 +237,13 @@ export class EnokiFlow {
 			if (state?.expiresAt && Date.now() > state.expiresAt) {
 				await this.logout();
 			} else {
-				this.#zkLoginSession = state;
+				this.$zkLoginSession.set({ initialized: true, value: state });
 			}
-
-			return this.#zkLoginSession;
-		} finally {
-			this.#zkLoginSessionInitialized = true;
+		} catch {
+			this.$zkLoginSession.set({ initialized: true, value: null });
 		}
+
+		return this.$zkLoginSession.get().value;
 	}
 
 	async logout() {
@@ -272,9 +273,9 @@ export class EnokiFlow {
 		const ephemeralKeyPair = Ed25519Keypair.fromSecretKey(fromB64(zkp.ephemeralKeyPair));
 
 		const proof = await this.#enokiClient.createZkLoginZkp({
-			jwt: zkp.jwt!,
-			maxEpoch: zkp.maxEpoch!,
-			randomness: zkp.randomness!,
+			jwt: zkp.jwt,
+			maxEpoch: zkp.maxEpoch,
+			randomness: zkp.randomness,
 			ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
 		});
 
@@ -310,18 +311,20 @@ export class EnokiFlow {
 		});
 	}
 
-	async sponsorAndExecuteTransactionBlock({
+	async sponsorTransactionBlock({
 		network,
 		transactionBlock,
 		client,
-		...options
 	}: {
 		network?: 'mainnet' | 'testnet';
 		transactionBlock: TransactionBlock;
 		client: SuiClient;
-	} & Omit<ExecuteTransactionBlockParams, 'signature' | 'transactionBlock'>) {
+	}) {
 		const session = await this.getSession();
-		const keypair = await this.getKeypair();
+
+		if (!session || !session.jwt) {
+			throw new Error('Missing required data for sponsorship.');
+		}
 
 		const transactionBlockKindBytes = await transactionBlock.build({
 			onlyTransactionKind: true,
@@ -335,19 +338,50 @@ export class EnokiFlow {
 			},
 		});
 
-		const { bytes, signature: sponsorSignature } =
-			await this.#enokiClient.createSponsoredTransactionBlock({
-				jwt: session!.jwt!,
-				network,
-				transactionBlockKindBytes: toB64(transactionBlockKindBytes),
-			});
+		return await this.#enokiClient.createSponsoredTransactionBlock({
+			jwt: session.jwt,
+			network,
+			transactionBlockKindBytes: toB64(transactionBlockKindBytes),
+		});
+	}
 
+	async executeTransactionBlock({
+		bytes,
+		digest,
+		client,
+	}: {
+		bytes: string;
+		digest: string;
+		client: SuiClient;
+	}) {
+		const keypair = await this.getKeypair();
 		const userSignature = await keypair.signTransactionBlock(fromB64(bytes));
 
-		return client.executeTransactionBlock({
-			transactionBlock: bytes,
-			signature: [userSignature.signature, sponsorSignature],
-			...options,
+		await this.#enokiClient.executeSponsoredTransactionBlock({
+			digest,
+			signature: userSignature.signature,
 		});
+
+		// TODO: Should the parent just do this?
+		await client.waitForTransactionBlock({ digest });
+
+		return { digest };
+	}
+
+	async sponsorAndExecuteTransactionBlock({
+		network,
+		transactionBlock,
+		client,
+	}: {
+		network?: 'mainnet' | 'testnet';
+		transactionBlock: TransactionBlock;
+		client: SuiClient;
+	}) {
+		const { bytes, digest } = await this.sponsorTransactionBlock({
+			network,
+			transactionBlock,
+			client,
+		});
+		return await this.executeTransactionBlock({ bytes, digest, client });
 	}
 }
