@@ -491,7 +491,7 @@ fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
         );
         diag.add_note(
             "Access chains that start with '::' must be one of the following forms: \
-                      \n  '::<address>::<module>', '::<address>::<module>::<member>'",
+            \n  '::<address>::<module>', '::<address>::<module>::<member>'",
         );
         return Err(Box::new(diag));
     }
