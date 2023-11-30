@@ -11,3 +11,4 @@ pub mod sui_client;
 
 #[cfg(test)]
 pub(crate) mod eth_mock_provider;
+pub(crate) mod sui_mock_client;
