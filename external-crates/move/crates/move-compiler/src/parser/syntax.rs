@@ -1087,7 +1087,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             Exp_::Vector(vec_loc, tys_opt, args)
         }
 
-        Tok::ColonColon => {
+        Tok::ColonColon if context.env.supports_feature(context.package_name, FeatureGate::Move2024Paths) => {
             if context.tokens.lookahead()? == Tok::Identifier {
                 parse_name_exp(context)?
             } else {

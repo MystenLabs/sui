@@ -1,8 +1,8 @@
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_no_args.move:2:22
   │
-2 │     struct Mine { f: Q }
-  │                      ^ Unbound type 'Q' in current scope
+2 │     struct Mine { f: A }
+  │                      ^ Unbound type 'A' in current scope
 
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_no_args.move:3:16
@@ -19,12 +19,12 @@ error[E03004]: unbound type
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_no_args.move:4:16
   │
-4 │         let _: R = (0: P);
-  │                ^ Unbound type 'R' in current scope
+4 │         let _: B = (0: P);
+  │                ^ Unbound type 'B' in current scope
 
 error[E03004]: unbound type
   ┌─ tests/move_check/naming/unresolved_type_no_args.move:4:24
   │
-4 │         let _: R = (0: P);
+4 │         let _: B = (0: P);
   │                        ^ Unbound type 'P' in current scope
 
