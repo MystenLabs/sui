@@ -330,7 +330,7 @@ impl CheckpointExecutor {
         pending: &mut CheckpointExecutionBuffer,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        debug!("Scheduling checkpoint for execution");
+        debug!(checkpoint_seq=?checkpoint.sequence_number(), "Scheduling checkpoint for execution");
 
         // Mismatch between node epoch and checkpoint epoch after startup
         // crash recovery is invalid
@@ -528,7 +528,7 @@ async fn execute_checkpoint(
     metrics: &Arc<CheckpointExecutorMetrics>,
     data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
-    debug!("Preparing checkpoint for execution",);
+    debug!(checkpoint_seq=?checkpoint.sequence_number(), "Preparing checkpoint for execution",);
     let prepare_start = Instant::now();
 
     // this function must guarantee that all transactions in the checkpoint are executed before it
@@ -545,7 +545,7 @@ async fn execute_checkpoint(
     );
 
     let tx_count = execution_digests.len();
-    debug!("Number of transactions in the checkpoint: {:?}", tx_count);
+    debug!(checkpoint_seq=?checkpoint.sequence_number(), "Number of transactions in the checkpoint: {:?}", tx_count);
     metrics.checkpoint_transaction_count.report(tx_count as u64);
 
     execute_transactions(
@@ -977,18 +977,19 @@ async fn execute_transactions(
         }
     }
 
-    let exec_start = Instant::now();
-    let prepare_elapsed = exec_start - prepare_start;
+    let prepare_elapsed = prepare_start.elapsed();
     metrics
         .checkpoint_prepare_latency_us
         .report(prepare_elapsed.as_micros() as u64);
     if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
         info!(
+            checkpoint_seq=?checkpoint.sequence_number(),
             "Checkpoint preparation for execution took {:?}",
             prepare_elapsed
         );
     }
 
+    let exec_start = Instant::now();
     transaction_manager
         .enqueue_with_expected_effects_digest(executable_txns.clone(), &epoch_store)?;
 
@@ -1011,7 +1012,7 @@ async fn execute_transactions(
         .checkpoint_exec_latency_us
         .report(exec_elapsed.as_micros() as u64);
     if checkpoint.sequence_number % CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL == 0 {
-        info!(seq = ?checkpoint.sequence_number(), "Checkpoint execution took {:?}", exec_elapsed);
+        info!(checkpoint_seq = ?checkpoint.sequence_number(), "Checkpoint execution took {:?}", exec_elapsed);
     }
 
     Ok(())
