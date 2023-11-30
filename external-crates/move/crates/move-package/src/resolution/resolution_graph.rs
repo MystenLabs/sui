@@ -307,12 +307,9 @@ impl ResolvedGraph {
 
     pub fn contains_renaming(&self) -> Option<PackageName> {
         // Make sure no renamings have been performed
-        for (pkg_name, pkg) in self.package_table.iter() {
-            if !pkg.renaming.is_empty() {
-                return Some(*pkg_name);
-            }
-        }
-        None
+        self.package_table
+            .iter()
+            .find_map(|(name, pkg)| (!pkg.renaming.is_empty()).then(|| *name))
     }
 }
 
@@ -466,11 +463,7 @@ impl Package {
 
     pub fn get_bytecodes(&self) -> Result<Vec<FileName>> {
         let path = Package::get_build_paths(&self.package_path)?;
-        let places_to_look = path
-            .into_iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect::<Vec<_>>();
-        Ok(find_filenames(&places_to_look, |path| {
+        Ok(find_filenames(&path, |path| {
             extension_equals(path, MOVE_COMPILED_EXTENSION)
         })?
         .into_iter()
