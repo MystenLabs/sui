@@ -12,10 +12,9 @@ import type {
 	SuiSignTransactionBlockMethod,
 	Wallet,
 } from '@mysten/wallet-standard';
-import { getWallets, SUI_CHAINS } from '@mysten/wallet-standard';
+import { SUI_CHAINS } from '@mysten/wallet-standard';
 
-import type { EnokiClient } from '../EnokiClient/index.js';
-import type { AuthProvider } from '../EnokiFlow.js';
+import type { AuthProvider, EnokiFlow } from '../EnokiFlow.js';
 
 const getWalletName = (provider: AuthProvider, clientId: string) =>
 	`Enoki Wallet (${provider} ${clientId})`;
@@ -27,13 +26,13 @@ export type EnokiFeature = {
 };
 
 export class EnokiWallet implements Wallet {
-	#client: EnokiClient;
+	#flow: EnokiFlow;
 
 	provider: AuthProvider;
 	clientId: string;
 
-	constructor(client: EnokiClient, provider: AuthProvider, clientId: string) {
-		this.#client = client;
+	constructor(flow: EnokiFlow, provider: AuthProvider, clientId: string) {
+		this.#flow = flow;
 		this.provider = provider;
 		this.clientId = clientId;
 	}
@@ -108,16 +107,16 @@ export class EnokiWallet implements Wallet {
 	};
 }
 
-export function registerEnokiWallet(client: EnokiClient, provider: AuthProvider, clientId: string) {
-	const walletsApi = getWallets();
-	const registeredWallets = walletsApi.get();
+// export function registerEnokiWallet(client: EnokiClient, provider: AuthProvider, clientId: string) {
+// 	const walletsApi = getWallets();
+// 	const registeredWallets = walletsApi.get();
 
-	if (registeredWallets.find((wallet) => wallet.name === getWalletName(provider, clientId))) {
-		console.warn(
-			'registerUnsafeBurnerWallet: Unsafe Burner Wallet already registered, skipping duplicate registration.',
-		);
-		return;
-	}
+// 	if (registeredWallets.find((wallet) => wallet.name === getWalletName(provider, clientId))) {
+// 		console.warn(
+// 			'registerUnsafeBurnerWallet: Unsafe Burner Wallet already registered, skipping duplicate registration.',
+// 		);
+// 		return;
+// 	}
 
-	return walletsApi.register(new EnokiWallet(client, provider, clientId));
-}
+// 	return walletsApi.register(new EnokiWallet(client, provider, clientId));
+// }
