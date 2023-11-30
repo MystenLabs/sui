@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::rngs::mock::StepRng;
-// use rand::rngs::StdRng;
-// use rand::SeedableRng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
@@ -38,17 +37,17 @@ pub async fn batch_create_account_and_gas(
     //     .collect();
 
     // deterministically generate accounts and gas
-    // let mut rng = StdRng::from_seed([0; 32]);
-    let mut rng = StepRng::new(2, 1);
+    let mut rng = StdRng::from_seed([0; 32]);
     let mut tasks = vec![];
     // TODO: is there a way to do this in parallel, while maintaining determinism?
+    let (sender, keypair) = get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
+    let keypair = Arc::new(keypair);
     for idx in 0..num_accounts {
         let starting_id = idx * gas_object_num_per_account;
-        let (sender, keypair) = get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
         let objects = (0..gas_object_num_per_account)
             .map(|i| new_gas_object(starting_id + i, sender))
             .collect::<Vec<_>>();
-        tasks.push((sender, keypair, objects));
+        tasks.push((sender, keypair.clone(), objects));
     }
     let mut accounts = BTreeMap::new();
     let mut genesis_gas_objects = vec![];
@@ -62,7 +61,7 @@ pub async fn batch_create_account_and_gas(
             sender,
             Account {
                 sender,
-                keypair: Arc::new(keypair),
+                keypair,
                 gas_objects: Arc::new(gas_object_refs),
             },
         );

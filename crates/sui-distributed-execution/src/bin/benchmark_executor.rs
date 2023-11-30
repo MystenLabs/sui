@@ -1,7 +1,6 @@
 use clap::*;
 use prometheus::Registry;
 use std::net::{IpAddr, Ipv4Addr};
-use std::thread::sleep;
 use std::time::Duration;
 use std::{fs, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
