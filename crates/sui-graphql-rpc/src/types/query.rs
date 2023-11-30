@@ -18,7 +18,10 @@ use super::{
     sui_system_state_summary::SuiSystemStateSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
-use crate::{config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error, mutations::Mutation};
+use crate::{
+    config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
+    mutations::Mutation,
+};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;

@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::code;
-use crate::types::date_time::DateTime;
-use crate::types::digest::Digest;
-use crate::types::transaction_block_effects::TransactionBlockEffects;
+
 use crate::{error::graphql_error, types::transaction_exec::ExecutionResult};
 use async_graphql::*;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions};
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClient;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::{signature::GenericSignature, transaction::Transaction};
@@ -24,7 +22,6 @@ impl Mutation {
         tx_bytes: String,
         signatures: Vec<String>,
     ) -> Result<ExecutionResult> {
-        // Get the list of fullnode urls from config
         let sui_sdk_client: &SuiClient = ctx.data().map_err(|_| {
             graphql_error(
                 code::INTERNAL_SERVER_ERROR,
@@ -83,7 +80,7 @@ impl Mutation {
             .quorum_driver_api()
             .execute_transaction_block(
                 transaction,
-                SuiTransactionBlockResponseOptions::full_content(),
+                SuiTransactionBlockResponseOptions::default(),
                 Some(ExecuteTransactionRequestType::WaitForEffectsCert),
             )
             .await
@@ -94,61 +91,10 @@ impl Mutation {
                 )
             })?;
 
-        let timestamp = result
-            .timestamp_ms
-            .and_then(|t| DateTime::from_ms(t as i64));
-        let balance_changes = result
-            .balance_changes
-            .ok_or(graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                "Balance changes not in transaction result",
-            ))?
-            .iter()
-            .map(|b| {
-                Some(bcs::to_bytes(b).map_err(|e| {
-                    graphql_error(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to serialize balance change: {:?}", e),
-                    )
-                }))
-                .transpose()
-            })
-            .collect::<Result<Vec<Option<Vec<u8>>>, ServerError>>()?;
-        let object_changes = result
-            .object_changes
-            .ok_or(graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                "Object changes not in transaction result",
-            ))?
-            .iter()
-            .map(|b| {
-                Some(bcs::to_bytes(b).map_err(|e| {
-                    graphql_error(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to serialize object change: {:?}", e),
-                    )
-                }))
-                .transpose()
-            })
-            .collect::<Result<Vec<Option<Vec<u8>>>, ServerError>>()?;
-        let tx_effects = result.effects.ok_or(graphql_error(
-            code::INTERNAL_SERVER_ERROR,
-            "Effects not in transaction result",
-        ))?;
-        let tx_block_digest = Digest::try_from(tx_effects.transaction_digest().inner().as_slice())?;
-        let errors = result.errors;
-
-        let effects = TransactionBlockEffects::from_stored_transaction(
-            balance_changes,
-            None,
-            object_changes,
-            &tx_effects,
-            tx_block_digest,
-            timestamp,
-        )?;
         Ok(ExecutionResult {
-            effects: Some(effects),
-            errors,
+            effects: None,
+            errors: result.errors,
+            digest: result.digest.to_string(),
         })
     }
 }

@@ -436,6 +436,21 @@ input EventFilter {
 	eventType: String
 }
 
+type ExecutionResult {
+	"""
+	The effects field captures the results to the chain of executing this transaction
+	"""
+	effects: TransactionBlockEffects
+	"""
+	The errors field captures any errors that occurred during execution
+	"""
+	errors: [String!]!
+	"""
+	The digest field captures the digest of the transaction block
+	"""
+	digest: String!
+}
+
 enum ExecutionStatus {
 	SUCCESS
 	FAILURE
@@ -906,6 +921,10 @@ enum MoveVisibility {
 	PUBLIC
 	PRIVATE
 	FRIEND
+}
+
+type Mutation {
+	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
 type Object implements ObjectOwner {
@@ -1740,5 +1759,6 @@ type ValidatorSet {
 
 schema {
 	query: Query
+	mutation: Mutation
 }
 

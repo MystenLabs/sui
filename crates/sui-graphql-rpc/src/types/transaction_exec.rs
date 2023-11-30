@@ -11,4 +11,7 @@ pub(crate) struct ExecutionResult {
 
     /// The errors field captures any errors that occurred during execution
     pub errors: Vec<String>,
+
+    /// The digest field captures the digest of the transaction block
+    pub digest: String,
 }
