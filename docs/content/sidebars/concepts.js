@@ -168,7 +168,15 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
-			'concepts/cryptography/zklogin',
+			{
+				type: 'category',
+				label: 'zkLogin',
+				link: {
+					type: 'doc',
+					id: 'concepts/cryptography/zklogin',
+				},
+				items: ['concepts/cryptography/zklogin/zklogin-examples'],
+			},
 			{
 				type: 'category',
 				label: 'System',
@@ -209,7 +217,7 @@ const concepts = [
 			'concepts/sui-architecture/epochs',
 			'concepts/sui-architecture/protocol-upgrades',
 			'concepts/sui-architecture/data-management-things',
-			'concepts/sui-architecture/staking-rewards'
+			'concepts/sui-architecture/staking-rewards',
 		],
 	},
 	{
