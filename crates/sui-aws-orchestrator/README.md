@@ -81,7 +81,22 @@ Instances listed with a green number are available and ready for use, while inst
 Also keep in mind that there is nothing stopping you from running the `deploy` command multiple times if you find your self
 needing more instances down the line.
 
-## Step 4. Running benchmarks
+## Step 4. Choose protocol
+
+There is support to benchmark either Sui or Narwhal only. To choose which protocol to benchmark, you can set the `Protocol` & `BenchmarkType` field [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-aws-orchestrator/src/main.rs#L33-L34)
+
+```
+// Sui
+use protocol::sui::{SuiBenchmarkType, SuiProtocol};
+type Protocol = SuiProtocol;
+type BenchmarkType = SuiBenchmarkType;
+// Narwhal
+use protocol::narwhal::{NarwhalBenchmarkType, NarwhalProtocol};
+type Protocol = NarwhalProtocol;
+type BenchmarkType = NarwhalBenchmarkType;
+```
+
+## Step 5. Running benchmarks
 
 Running benchmarks involves installing the specified version of the codebase on the remote machines and running one validator and one load generator per instance. For example, the following command benchmarks a committee of 10 validators under a constant load of 200 tx/s for 3 minutes:
 
@@ -91,7 +106,7 @@ cargo run --bin sui-aws-orchestrator -- benchmark --committee 10 fixed-load --lo
 
 In a network of 10 validators, each with a corresponding load generator, each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `sui-aws-orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
 
-## Step 5. Monitoring
+## Step 6. Monitoring
 
 The orchestrator provides facilities to monitor metrics on clients and nodes. The orchestrator deploys a [Prometheus](https://prometheus.io) instance and a [Grafana](https://grafana.com) instance on a dedicated remote machine. Grafana is then available on the address printed on stdout (e.g., `http://3.83.97.12:3000`) with the default username and password both set to `admin`. You can either create a [new dashboard](https://grafana.com/docs/grafana/latest/getting-started/build-first-dashboard/) or [import](https://grafana.com/docs/grafana/latest/dashboards/manage-dashboards/#import-a-dashboard) the example dashboards located in the `./assets` folder.
 

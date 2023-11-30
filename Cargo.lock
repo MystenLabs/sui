@@ -11204,6 +11204,7 @@ dependencies = [
  "eyre",
  "futures",
  "mysten-metrics",
+ "narwhal-config",
  "prettytable-rs",
  "prometheus-parse",
  "reqwest",
