@@ -137,6 +137,20 @@ Response: {
           {
             "name": {
               "type": {
+                "repr": "u64"
+              },
+              "data": {
+                "Number": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            },
+            "value": {
+              "__typename": "MoveObject"
+            }
+          },
+          {
+            "name": {
+              "type": {
                 "repr": "bool"
               },
               "data": {
