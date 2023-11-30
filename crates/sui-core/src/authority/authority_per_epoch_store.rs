@@ -2584,7 +2584,7 @@ impl AuthorityPerEpochStore {
                 {
                     batch.insert_batch(
                         &self.tables.randomness_rounds_written,
-                        [(RandomnessRound(rsu.round), ())],
+                        [(RandomnessRound(rsu.randomness_round), ())],
                     )?;
                 }
 

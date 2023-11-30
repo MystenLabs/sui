@@ -457,7 +457,6 @@ impl SuiTransactionBlockKind {
             TransactionKind::RandomnessStateUpdate(update) => {
                 Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
                     epoch: update.epoch,
-                    round: update.round,
                     randomness_round: update.randomness_round,
                     random_bytes: update.random_bytes,
                 })
@@ -1308,9 +1307,6 @@ pub struct SuiRandomnessStateUpdate {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub epoch: u64,
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub round: u64,
 
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]

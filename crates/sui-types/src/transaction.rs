@@ -229,8 +229,6 @@ impl AuthenticatorStateUpdate {
 pub struct RandomnessStateUpdate {
     /// Epoch of the randomness state update transaction
     pub epoch: u64,
-    /// Consensus round of the randomness state update
-    pub round: u64,
     /// Randomness round of the update
     pub randomness_round: u64,
     /// Updated random bytes
@@ -2423,14 +2421,12 @@ impl VerifiedTransaction {
 
     pub fn new_randomness_state_update(
         epoch: u64,
-        round: u64,
         randomness_round: u64,
         random_bytes: Vec<u8>,
         randomness_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
         RandomnessStateUpdate {
             epoch,
-            round,
             randomness_round,
             random_bytes,
             randomness_obj_initial_shared_version,

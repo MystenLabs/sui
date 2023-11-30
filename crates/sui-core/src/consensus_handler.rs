@@ -346,7 +346,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                             debug!("adding RandomnessStateUpdate tx for round {round:?}");
                             let randomness_state_update_transaction = self
                                 .randomness_state_update_transaction(
-                                    round,
                                     *randomness_round,
                                     bytes.clone(),
                                 );
@@ -565,14 +564,12 @@ impl<T, C> ConsensusHandler<T, C> {
 
     fn randomness_state_update_transaction(
         &self,
-        round: u64,
         randomness_round: u64,
         random_bytes: Vec<u8>,
     ) -> VerifiedExecutableTransaction {
         assert!(self.epoch_store.randomness_state_enabled());
         let transaction = VerifiedTransaction::new_randomness_state_update(
             self.epoch(),
-            round,
             randomness_round,
             random_bytes,
             self.epoch_store

@@ -53,7 +53,6 @@ pub enum ConsensusTransactionKey {
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
     // the same id by malfunctioning providers.
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
-    RandomnessStateUpdate(u64),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -80,7 +79,6 @@ impl Debug for ConsensusTransactionKey {
                     jwk
                 )
             }
-            Self::RandomnessStateUpdate(round) => write!(f, "RandomnessStateUpdate({round:?})"),
         }
     }
 }
@@ -254,8 +252,8 @@ impl ConsensusTransaction {
                     key.clone(),
                 )))
             }
-            ConsensusTransactionKind::RandomnessStateUpdate(round, _bytes) => {
-                ConsensusTransactionKey::RandomnessStateUpdate(*round)
+            ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
+                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
             }
         }
     }
