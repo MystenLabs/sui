@@ -9,7 +9,7 @@ Transactions in Sui represent calls to specific functionality (like calling a sm
 
 Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](./building-ptb) (PTBs), the user signs the transaction and submits it to be executed on chain.
 
-The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender Sui address. 
+The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender's Sui address. 
 
 Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are Ed25519 Pure, ECDSA Secp256k1, ECDSA Secp256r1, Multisig, and ZkLogin. 
 
