@@ -445,7 +445,7 @@ Response: {
           },
           "effects": {
             "status": "FAILURE",
-            "errors": "UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }",
+            "errors": "Unused result without the drop ability. Command result 0, return value 0",
             "lamportVersion": null,
             "dependencies": [
               {

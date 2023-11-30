@@ -88,12 +88,23 @@ impl TransactionBlockEffects {
             NativeExecutionStatus::Failure {
                 error,
                 command: None,
-            } => Some(format!("{error:?}")),
+            } => Some(error.to_string()),
 
             NativeExecutionStatus::Failure {
                 error,
                 command: Some(command),
-            } => Some(format!("{error:?} in command {command}")),
+            } => {
+                // Convert the command index into an ordinal.
+                let command = command + 1;
+                let suffix = match command % 10 {
+                    1 => "st",
+                    2 => "nd",
+                    3 => "rd",
+                    _ => "th",
+                };
+
+                Some(format!("{error} in {command}{suffix} command."))
+            }
         }
     }
 
