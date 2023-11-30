@@ -34,3 +34,28 @@ CREATE INDEX objects_owner ON objects (owner_type, owner_id) WHERE owner_type BE
 CREATE INDEX objects_coin ON objects (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;
 CREATE INDEX objects_checkpoint_sequence_number ON objects (checkpoint_sequence_number);
 CREATE INDEX objects_type ON objects (object_type);
+
+-- similar to objects table, except that
+-- 1. the primary key to store multiple object versions and partitions by checkpoint_sequence_number
+-- 2. allow null values in some columns for deleted / wrapped objects
+-- 3. object_status to mark the status of the object, which is either Active or WrappedOrDeleted
+CREATE TABLE objects_history (
+    object_id                   bytea         NOT NULL,
+    object_version              bigint        NOT NULL,
+    object_status               smallint      NOT NULL,
+    object_digest               bytea,
+    checkpoint_sequence_number  bigint        NOT NULL,
+    owner_type                  smallint,
+    owner_id                    bytea,
+    object_type                 text,
+    serialized_object           bytea,
+    coin_type                   text,
+    coin_balance                bigint,
+    df_kind                     smallint,
+    df_name                     bytea,
+    df_object_type              text,
+    df_object_id                bytea,
+    CONSTRAINT objects_history_pk PRIMARY KEY (object_id, object_version, checkpoint_sequence_number)
+) PARTITION BY RANGE (checkpoint_sequence_number);
+CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
+-- TODO(gegaowp): add corresponding indices for consistent reads of objects_history table

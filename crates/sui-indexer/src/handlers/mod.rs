@@ -8,13 +8,11 @@ pub mod tx_processor;
 
 use std::collections::BTreeMap;
 
-use sui_types::base_types::ObjectRef;
-
 use crate::{
     models_v2::display::StoredDisplay,
     types_v2::{
-        IndexedCheckpoint, IndexedEpochInfo, IndexedEvent, IndexedObject, IndexedPackage,
-        IndexedTransaction, TxIndex,
+        IndexedCheckpoint, IndexedDeletedObject, IndexedEpochInfo, IndexedEvent, IndexedObject,
+        IndexedPackage, IndexedTransaction, TxIndex,
     },
 };
 
@@ -30,10 +28,10 @@ pub struct CheckpointDataToCommit {
     pub epoch: Option<EpochToCommit>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TransactionObjectChangesToCommit {
     pub changed_objects: Vec<IndexedObject>,
-    pub deleted_objects: Vec<ObjectRef>,
+    pub deleted_objects: Vec<IndexedDeletedObject>,
 }
 
 #[derive(Clone, Debug)]

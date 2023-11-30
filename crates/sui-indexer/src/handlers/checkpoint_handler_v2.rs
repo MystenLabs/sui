@@ -46,7 +46,7 @@ use crate::types_v2::IndexedEpochInfo;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedTransaction, IndexerResult, TransactionKind, TxIndex,
 };
-use crate::types_v2::{IndexedObject, IndexedPackage};
+use crate::types_v2::{IndexedDeletedObject, IndexedObject, IndexedPackage};
 use crate::IndexerConfig;
 
 use super::tx_processor::EpochEndIndexingObjectStore;
@@ -521,11 +521,18 @@ where
             .iter()
             .flat_map(|tx| get_deleted_objects(&tx.effects))
             .collect::<Vec<_>>();
-
         let deleted_object_ids = deleted_objects
             .iter()
             .map(|o| (o.0, o.1))
             .collect::<HashSet<_>>();
+        let indexed_deleted_objects = deleted_objects
+            .into_iter()
+            .map(|o| IndexedDeletedObject {
+                object_id: o.0,
+                object_version: o.1.value(),
+                checkpoint_sequence_number: checkpoint_seq,
+            })
+            .collect();
 
         let (objects, intermediate_versions) = get_latest_objects(data.output_objects());
 
@@ -576,7 +583,7 @@ where
             .collect();
         TransactionObjectChangesToCommit {
             changed_objects,
-            deleted_objects,
+            deleted_objects: indexed_deleted_objects,
         }
     }
 
