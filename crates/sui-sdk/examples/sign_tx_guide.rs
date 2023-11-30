@@ -93,7 +93,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .next();
 
     if coin.is_none() {
-        println!("gas coin not found, refer to this re getting gas coin https://docs.sui.io/guides/developer/getting-started/get-coins");
+        println!("Gas coin not found. Please check this doc for how to request coins: https://docs.sui.io/guides/developer/getting-started/get-coins");
         return Ok(());
     }
     let gas_coin = coin.unwrap();
