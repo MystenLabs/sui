@@ -13,13 +13,13 @@ mod error;
 pub mod examples;
 pub mod extensions;
 mod metrics;
-mod mutations;
+mod mutation;
 pub mod test_infra;
 mod types;
 pub mod utils;
 
 use async_graphql::*;
-use mutations::Mutation;
+use mutation::Mutation;
 use types::owner::ObjectOwner;
 
 use crate::types::query::Query;

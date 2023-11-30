@@ -83,7 +83,7 @@ mod tests {
     use async_graphql::{EmptySubscription, Schema};
     use expect_test::expect;
 
-    use crate::{functional_group::FunctionalGroup, mutations::Mutation, types::query::Query};
+    use crate::{functional_group::FunctionalGroup, mutation::Mutation, types::query::Query};
 
     use super::*;
 

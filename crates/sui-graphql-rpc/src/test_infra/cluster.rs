@@ -142,10 +142,7 @@ pub async fn start_graphql_server_with_fn_rpc(
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {
-        server_config
-            .tx_exec_full_node
-            .node_rpc_urls
-            .insert(0, fn_rpc_url);
+        server_config.tx_exec_full_node.node_rpc_url = Some(fn_rpc_url);
     };
 
     // Starts graphql server

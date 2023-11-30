@@ -20,7 +20,7 @@ use super::{
 };
 use crate::{
     config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
-    mutations::Mutation,
+    mutation::Mutation,
 };
 
 pub(crate) struct Query;

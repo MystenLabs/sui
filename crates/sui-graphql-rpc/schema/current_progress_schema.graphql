@@ -434,13 +434,9 @@ input EventFilter {
 
 type ExecutionResult {
 	"""
-	The effects field captures the results to the chain of executing this transaction
-	"""
-	effects: TransactionBlockEffects
-	"""
 	The errors field captures any errors that occurred during execution
 	"""
-	errors: [String!]!
+	errors: [String!]
 	"""
 	The digest field captures the digest of the transaction block
 	"""

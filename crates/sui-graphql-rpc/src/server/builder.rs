@@ -3,7 +3,7 @@
 
 use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
-use crate::mutations::Mutation;
+use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
     context_data::db_data_provider::PgManager,
@@ -184,12 +184,10 @@ impl ServerBuilder {
         let package_cache = PackageStoreWithLruCache::new(package_store);
         let fn_rpc_url = config
             .tx_exec_full_node
-            .node_rpc_urls
-            // TODO: decide how to handle multiple fullnode urls
-            // Maybe allow changing sdk client if one of the urls fails
-            .first()
+            .node_rpc_url
+            .clone()
             .ok_or(Error::Internal(
-                "No fullnode urls found in config".to_string(),
+                "No fullnode url found in config".to_string(),
             ))?;
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: wrap this in custom logic to pick proper fullnode url

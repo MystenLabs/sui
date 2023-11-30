@@ -264,18 +264,14 @@ impl Default for InternalFeatureConfig {
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct TxExecFullNodeConfig {
     #[serde(default)]
-    pub(crate) node_rpc_urls: Vec<String>,
+    pub(crate) node_rpc_url: Option<String>,
 }
 
 impl Default for TxExecFullNodeConfig {
     fn default() -> Self {
         Self {
             // TODO: infer default fullnode url from chain id
-            node_rpc_urls: vec![
-                "https://fullnode.testnet.sui.io:443".to_string(),
-                "http://localhost:9000".to_string(),
-                "https://fullnode.devnet.sui.io:443".to_string(),
-            ],
+            node_rpc_url: Some("https://fullnode.testnet.sui.io:443".to_string()),
         }
     }
 }

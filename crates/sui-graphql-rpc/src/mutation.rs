@@ -5,6 +5,7 @@ use crate::error::code;
 
 use crate::{error::graphql_error, types::transaction_exec::ExecutionResult};
 use async_graphql::*;
+use fastcrypto::encoding::Encoding;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -29,46 +30,26 @@ impl Mutation {
             )
         })?;
 
-        let tx_data = bcs::from_bytes(
-            &Base64::try_from(tx_bytes)
-                .map_err(|e| {
-                    graphql_error(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to deserialize transaction to Base64: {:?}", e),
-                    )
-                })?
-                .to_vec()
-                .map_err(|e| {
-                    graphql_error(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to decode Base64 to vec: {:?}", e),
-                    )
-                })?,
-        )?;
+        let tx_data = bcs::from_bytes(&Base64::decode(&tx_bytes).map_err(|e| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Unable to deserialize transaction bytes from Base64: {e}"),
+            )
+        })?)?;
 
         let mut sigs = Vec::new();
         for sig in signatures {
             sigs.push(
-                GenericSignature::from_bytes(
-                    &Base64::try_from(sig)
-                        .map_err(|e| {
-                            graphql_error(
-                                code::INTERNAL_SERVER_ERROR,
-                                format!("Unable to deserialize signature to Base64: {:?}", e),
-                            )
-                        })?
-                        .to_vec()
-                        .map_err(|e| {
-                            graphql_error(
-                                code::INTERNAL_SERVER_ERROR,
-                                format!("Unable to decode Base64 to vec: {:?}", e),
-                            )
-                        })?,
-                )
+                GenericSignature::from_bytes(&Base64::decode(&sig).map_err(|e| {
+                    graphql_error(
+                        code::INTERNAL_SERVER_ERROR,
+                        format!("Unable to deserialize signature bytes {sig} from Base64: {e}"),
+                    )
+                })?)
                 .map_err(|e| {
                     graphql_error(
                         code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to create generic signature from bytes: {:?}", e),
+                        format!("Unable to create signature from bytes: {e}"),
                     )
                 })?,
             );
@@ -92,8 +73,11 @@ impl Mutation {
             })?;
 
         Ok(ExecutionResult {
-            effects: None,
-            errors: result.errors,
+            errors: if result.errors.is_empty() {
+                None
+            } else {
+                Some(result.errors)
+            },
             digest: result.digest.to_string(),
         })
     }
