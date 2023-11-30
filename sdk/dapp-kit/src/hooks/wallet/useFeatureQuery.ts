@@ -2,28 +2,60 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiFeatures } from '@mysten/wallet-standard';
-import type { UseQueryResult } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
 
-export interface SuiWalletStandardFeatureMethods extends SuiFeatures {}
+import { useCurrentWallet } from './useCurrentWallet.js';
+
+export interface DappKitWalletStandardFeatureMethods extends SuiFeatures {
+	'foo:bar': {
+		version: '1.0.0';
+		bar: (name: string) => Promise<string>;
+	};
+}
 
 type FunctionKeys<T> = {
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
 }[keyof T];
 
 export function useFeatureQuery<
-	Feature extends keyof SuiWalletStandardFeatureMethods,
+	Feature extends keyof DappKitWalletStandardFeatureMethods,
 	Method extends FunctionKeys<
-		SuiWalletStandardFeatureMethods[Feature]
+		DappKitWalletStandardFeatureMethods[Feature]
 	> = (Feature extends `${string}:${infer M}` ? M : never) &
-		FunctionKeys<SuiWalletStandardFeatureMethods[Feature]>,
+		FunctionKeys<DappKitWalletStandardFeatureMethods[Feature]>,
 >(
-	feature: Feature,
-	method: Method = feature.split(':')[1] as Method,
-): UseQueryResult<Awaited<ReturnType<SuiWalletStandardFeatureMethods[Feature][Method]>>> {
-	void method;
-	throw new Error('Not implemented');
+	featureName: Feature,
+	args?: Parameters<DappKitWalletStandardFeatureMethods[Feature][Method]>,
+	options?: Omit<
+		UseQueryOptions<Awaited<ReturnType<DappKitWalletStandardFeatureMethods[Feature][Method]>>>,
+		'queryFn' | 'queryKey'
+	>,
+	methodName: Method = featureName.split(':')[1] as Method,
+): UseQueryResult<Awaited<ReturnType<DappKitWalletStandardFeatureMethods[Feature][Method]>>> {
+	const { currentWallet } = useCurrentWallet();
+
+	return useQuery({
+		...options,
+		// eslint-disable-next-line @tanstack/query/exhaustive-deps
+		queryKey: [
+			'@mysten/dapp-kit',
+			'wallet-feature',
+			{ wallet: currentWallet?.name, featureName, methodName, args },
+		],
+		queryFn: async () => {
+			if (!currentWallet) return null;
+
+			const walletFeature = (currentWallet.features[featureName] as any)?.[methodName];
+
+			if (!walletFeature) return null;
+
+			return await walletFeature(...(args ?? []));
+		},
+		enabled: !!currentWallet,
+	});
 }
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
-const { data } = useFeatureQuery('sui:signPersonalMessage');
+const { data } = useFeatureQuery('foo:bar', ['foo']);
 void data;
