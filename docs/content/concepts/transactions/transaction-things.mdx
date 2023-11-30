@@ -3,4 +3,83 @@ title: Submission, Certification, Finalization, Certified Effects, Checkpoints
 draft: true
 ---
 
-Content coming soon
+# Introduction
+
+A Sui transaction goes through many different steps during its lifecycle.
+This document provides a high-level view of that process.
+
+## Submission
+
+Let's say a user wants to transfer an NFT to their friend.
+First, the user creates a transaction to do so, using a wallet or another app.
+The transaction will include the user's gas payment object and a command to transfer the NFT object to the recipient.
+Before submission, the wallet must also sign the transaction.
+
+Once the transaction has been signed, the wallet or app submits the transaction to a Sui full node on behalf of the user.
+
+## Certification
+
+Once the transaction has been submitted to the full node, the full node begins attempting to certify the transaction.
+
+The process of certification is as follows:
+
+1. Send the transaction to a validator and ask it to attach its signature to the transaction, which shows that the validator has determined that the transaction is valid.
+2. The validator checks the transaction for validity, which includes the following conditions:
+   - The user's signature is valid.
+   - The user has access to all the owned input objects used by the transaction (i.e., they are the owner of the objects).
+   - All the shared input objects used by the transaction exist.
+   - The gas coin is a `Coin<SUI>` object, and it contains at least as much gas as specified in the transaction's gas budget.
+3. If all the validity checks pass, the validator then attempts to lock all the owned input objects to the given transaction digest.
+   This ensures each owned input object can only be used by one transaction at a time and is the way that Sui prevents double-spending.
+4. If the locking succeeds, the validator signs the transaction using its BLS private key and returns the signature to the full node.
+5. The full node continues the process for each validator, until it has signatures from a quorum (>2/3rds by stake) of validators. Note that, in fact, this process occurs in parallel to minimize latency.
+
+Once a quorum of signatures has been collected, we say that the transaction is certified, or equivalently, that we have formed a _Transaction Certificate_.
+Because of the locking step described above, it is impossible to concurrently form certificates for two different transactions that attempt to use the same owned object.
+This is true even if there are some dishonest validators that illegally sign both transactions, because of a principle in distributed computing called "quorum intersection".
+If fewer than 1/3rd of the validators are dishonest (aka Byzantine), then the set of signers for any two certificates must have an overlap that includes at least one honest validator.
+And, crucially, because that validator is honest, it will never sign two transactions that attempt to access the same input object.
+
+(Note that in the discussion above, when we refer to two transactions accessing the same input object, we mean the same object at the same version.
+Of course, an object can be accessed by multiple transactions, one after another.)
+
+## Execution
+
+Now that a certificate has been formed, the full node can send the certificate to validators for execution.
+Each validator verifies the signatures on the certificate.
+If the certificate signatures are valid, then the validator can be sure that the transaction is valid and is not attempting to double-spend any objects.
+
+Then, each validator does the following:
+- If the transaction does not access any shared input objects, it executes it immediately.
+- If it does access shared input objects, it submits the object to Sui's consensus layer, which orders the transaction with respect to other transactions using the same shared object(s) and then executes it.
+
+# Certified Effects
+
+Once the transaction has been executed, the validator signs the effects of the transaction and returns them to the full node.
+The transaction effects are essentially a list of all the things that the transaction did, which mainly include:
+- All the objects that were mutated, created, wrapped, unwrapped, or deleted.
+- The gas that was spent.
+- The execution status (Success or an error code) of the transaction.
+
+Eventually, the full node will collect effects signatures from a quorum of validators.
+This collection of signatures, plus the effects themselves, is called an _Effects Certificate_.
+An _Effects Certificate_ is a guarantee of transaction finality.
+Once an _Effects Certificate_ has been observed by a full node or user, they can be guaranteed that the transaction will be included in a checkpoint, which means that the transaction cannot be reverted.
+If they wanted, the user could present the effects certificate to their friend in order to prove that they sent them the NFT.
+The presence of the validator signatures means that an effects certificate cannot be forged.
+
+# Checkpoints
+
+The final stage of the transaction's life cycle is inclusion in a checkpoint.
+As validators execute transactions, they submit them to consensus.
+(Note that while transactions that use shared input objects must be sent to consensus before they are executed, owned-input-only transactions are sent to consensus as well.
+The difference is that owned-input-only transactions are executed first).
+The consensus layer produces a universally agreed-upon ordering of transactions.
+This ordering is the starting point for the creation of checkpoints.
+The validators take chunks of ordered transactions from the consensus layer and use them to form a checkpoint.
+Each chunk of transactions is first made causally complete and causally ordered - this means that the validators add any missing dependencies to the list of transactions and order them so that dependencies always appear before dependees in checkpoints.
+
+Then the validator constructs a checkpoint, which (among other things) contains a list of transaction digests as well as the digests of the transaction effects of each transaction.
+
+At this point, the transaction has reached the end of its lifecycle and been included in the permanent record of transaction activity on the Sui network.
+
