@@ -1,25 +1,25 @@
 ---
 title: Transaction Lifecycle
-description: The lifecycle of a transaction on the Sui network has some differences compared to those from other blockchains. 
+description: The lifecycle of a transaction on the Sui network has some differences compared to those from other blockchains.
 ---
 
 At a high level, the following figure outlines the lifecycle of a transaction on the Sui blockchain.
 
 ![Transaction lifecycle](./images/txn-lifecycle.png)
 
-The following steps align with those in the preceding image. 
+The following steps align with those in the preceding image.
 
 1. The first step of the process is the creation of a transaction. A user with a private key creates and signs a user transaction to either mutate objects they own, or a mix of objects they own and [shared objects](../object-ownership/shared.mdx).
 
-1. Sui sends the transaction to each validator (often through a Full node). Validators perform a series of validity and safety checks, sign it, and return the signed transaction to the client. 
+1. Sui sends the transaction to each validator (often through a Full node). Validators perform a series of validity and safety checks, sign it, and return the signed transaction to the client.
 
 1. The client then collects the responses from a supermajority of validators to form a transaction certificate. As a result, unlike consensus-based blockchains, Sui validators do not need to propagate signatures on a best-effort basis (gossip signatures) or aggregate certificates. This effort is now the responsibility of the client or gateway.
 
-1. After assembling the certificate, the client sends it back to all validators, who check its validity and acknowledge its receipt to the client. If the transaction involves owned objects exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the [consensus engine](../sui-architecture/consensus.mdx) (**direct fast path**). All certificates are forwarded to the Sui DAG-based consensus protocol (also operated by the Sui validators). 
+1. After assembling the certificate, the client sends it back to all validators, who check its validity and acknowledge its receipt to the client. If the transaction involves owned objects exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the consensus engine (**direct fast path**). All certificates are forwarded to the Sui DAG-based consensus protocol (also operated by the Sui validators).
 
-1. Consensus eventually outputs a total order of certificates; the validators check and execute those that contain shared objects. 
+1. Consensus eventually outputs a total order of certificates; the validators check and execute those that contain shared objects.
 
-1. Clients can collect a supermajority of validator responses, assemble them into an effect certificate, and use it as proof of the settlement of the transaction. 
+1. Clients can collect a supermajority of validator responses, assemble them into an effect certificate, and use it as proof of the settlement of the transaction.
 
 1. Subsequently, Sui forms checkpoints for every consensus commit, which it also uses to drive the reconfiguration protocol.
 
