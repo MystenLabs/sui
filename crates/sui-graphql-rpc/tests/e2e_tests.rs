@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
@@ -303,8 +303,7 @@ mod tests {
         let res = binding.get("executeTransactionBlock").unwrap();
 
         let digest = res.get("digest").unwrap().as_str().unwrap();
-        let errors = res.get("errors").unwrap().as_array().unwrap();
-        assert!(errors.is_empty());
+        assert!(res.get("errors").unwrap().is_null());
         assert_eq!(digest, original_digest.to_string());
 
         // Wait for the transaction to be committed and indexed
