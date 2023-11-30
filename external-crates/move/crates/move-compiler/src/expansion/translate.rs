@@ -1508,7 +1508,10 @@ impl PathExpander for Move2024PathExpander {
                             let base_str = format!("{}", chain);
                             let realized_str = format!("{}::{}", address, module);
                             if base_str != realized_str {
-                                diag.add_note(format!("Resolved '{}' to module identifier '{}'", base_str, realized_str));
+                                diag.add_note(format!(
+                                    "Resolved '{}' to module identifier '{}'",
+                                    base_str, realized_str
+                                ));
                             }
                             context.env.add_diag(diag);
                             return None;

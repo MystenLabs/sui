@@ -485,13 +485,13 @@ fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
         let mut diag = diag!(
             Syntax::UnexpectedToken,
             (
-                context.tokens.current_token_loc(),
-                "Expected '::' after an address in a module access chain"
+                ln.loc,
+                "Expected '::' after the address in this module access chain"
             )
         );
         diag.add_note(
             "Access chains that start with '::' must be one of the following forms: \
-                      \n  '::<address>::<module>', '::<address>::<module>::<member>",
+                      \n  '::<address>::<module>', '::<address>::<module>::<member>'",
         );
         return Err(Box::new(diag));
     }
@@ -1087,7 +1087,11 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             Exp_::Vector(vec_loc, tys_opt, args)
         }
 
-        Tok::ColonColon if context.env.supports_feature(context.package_name, FeatureGate::Move2024Paths) => {
+        Tok::ColonColon
+            if context
+                .env
+                .supports_feature(context.package_name, FeatureGate::Move2024Paths) =>
+        {
             if context.tokens.lookahead()? == Tok::Identifier {
                 parse_name_exp(context)?
             } else {
