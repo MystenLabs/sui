@@ -4,5 +4,5 @@ error[E03006]: unexpected name in this position
 7 │     fun foo(x: X) { x; }
   │                ^ Unexpected module identifier. A module identifier is not a valid type
   │
-  = The fully-qualified name is '@0x2::X'
+  = Resolved 'X' to module identifier '0x2::X'
 

@@ -1487,7 +1487,7 @@ impl PathExpander for Move2024PathExpander {
         } else {
             let module_access = match access {
                 Access::ApplyPositional | Access::ApplyNamed | Access::Type => {
-                    let resolved_name = self.resolve_name_access_chain(context, chain);
+                    let resolved_name = self.resolve_name_access_chain(context, chain.clone());
                     match resolved_name {
                         UnresolvedName(_, name) => EN::Name(name),
                         ModuleAccess(_, access) => access,
@@ -1505,10 +1505,11 @@ impl PathExpander for Move2024PathExpander {
                                 "module".to_string(),
                                 access,
                             );
-                            diag.add_note(format!(
-                                "The fully-qualified name is '@{}::{}'",
-                                address, module
-                            ));
+                            let base_str = format!("{}", chain);
+                            let realized_str = format!("{}::{}", address, module);
+                            if base_str != realized_str {
+                                diag.add_note(format!("Resolved '{}' to module identifier '{}'", base_str, realized_str));
+                            }
                             context.env.add_diag(diag);
                             return None;
                         }
