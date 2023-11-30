@@ -27,5 +27,5 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: ./docs/site
       - name: Build
-        run: pnpm turbo build
+        run: pnpm build
         working-directory: ./docs/site
