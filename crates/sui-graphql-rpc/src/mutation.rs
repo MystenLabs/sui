@@ -17,6 +17,16 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
+    /// Execute a transaction, committing its effects on chain.
+    ///
+    /// `txBytes` is a `TransactionData` struct that has been BCS-encoded
+    ///     and then Base64-encoded.
+    /// `signatures` are a list of `flag || signature || pubkey` bytes,
+    ///     Base64-encoded.
+    ///
+    /// Waits until the transaction has been finalised on chain to return
+    /// its transaction digest.  If the transaction could not be
+    /// finalised, returns the errors that prevented it, instead.
     async fn execute_transaction_block(
         &self,
         ctx: &Context<'_>,
