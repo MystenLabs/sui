@@ -8,6 +8,7 @@ module deepbook::math {
 
     friend deepbook::clob;
     friend deepbook::clob_v2;
+    friend deepbook::clob_v3;
     friend deepbook::critbit;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<

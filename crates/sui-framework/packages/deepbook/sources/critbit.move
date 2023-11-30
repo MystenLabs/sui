@@ -8,6 +8,7 @@ module deepbook::critbit {
 
     friend deepbook::clob;
     friend deepbook::clob_v2;
+    friend deepbook::clob_v3;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EExceedCapacity: u64 = 2;
