@@ -1697,6 +1697,23 @@ export type Rpc_Validator_FieldsFragment = { __typename?: 'Validator', atRisk?: 
 
 export type Rpc_Credential_FieldsFragment = { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null };
 
+export type GetDynamicFieldObjectQueryVariables = Exact<{
+  parentId: Scalars['SuiAddress']['input'];
+  name: DynamicFieldName;
+}>;
+
+
+export type GetDynamicFieldObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicObjectField?: { __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null, value?: { __typename: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null, asObject: { __typename?: 'Object', location: any, digest: string, version: number } } | { __typename: 'MoveValue' } | null } | null } | null };
+
+export type GetDynamicFieldsQueryVariables = Exact<{
+  parentId: Scalars['SuiAddress']['input'];
+  first?: InputMaybe<Scalars['Int']['input']>;
+  cursor?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type GetDynamicFieldsQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicFieldConnection?: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null, asObject: { __typename?: 'Object', storageRebate?: any | null, location: any, digest: string, version: number } } | { __typename: 'MoveValue' } | null }> } | null } | null };
+
 export type GetLatestCheckpointSequenceNumberQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -1766,6 +1783,11 @@ export type GetTotalSupplyQueryVariables = Exact<{
 
 
 export type GetTotalSupplyQuery = { __typename?: 'Query', coinMetadata?: { __typename?: 'CoinMetadata', supply?: any | null, decimals?: number | null } | null };
+
+export type GetTotalTransactionBlocksQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type GetTotalTransactionBlocksQuery = { __typename?: 'Query', checkpoint?: { __typename?: 'Checkpoint', networkTotalTransactions?: number | null } | null };
 
 export type ResolveNameServiceAddressQueryVariables = Exact<{
   name: Scalars['String']['input'];
@@ -1879,24 +1901,26 @@ export type QueryTransactionBlocksQueryVariables = Exact<{
   after?: InputMaybe<Scalars['String']['input']>;
   showBalanceChanges?: InputMaybe<Scalars['Boolean']['input']>;
   showEffects?: InputMaybe<Scalars['Boolean']['input']>;
+  showInput?: InputMaybe<Scalars['Boolean']['input']>;
   showObjectChanges?: InputMaybe<Scalars['Boolean']['input']>;
   showRawInput?: InputMaybe<Scalars['Boolean']['input']>;
   filter?: InputMaybe<TransactionBlockFilter>;
 }>;
 
 
-export type QueryTransactionBlocksQuery = { __typename?: 'Query', transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', location: any } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null } | null> | null } | null }> } | null };
+export type QueryTransactionBlocksQuery = { __typename?: 'Query', transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, sender?: { __typename?: 'Address', location: any } | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, location: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null } | null> | null } | null }> } | null };
 
 export type GetTransactionBlockQueryVariables = Exact<{
   digest: Scalars['String']['input'];
   showBalanceChanges?: InputMaybe<Scalars['Boolean']['input']>;
   showEffects?: InputMaybe<Scalars['Boolean']['input']>;
+  showInput?: InputMaybe<Scalars['Boolean']['input']>;
   showObjectChanges?: InputMaybe<Scalars['Boolean']['input']>;
   showRawInput?: InputMaybe<Scalars['Boolean']['input']>;
 }>;
 
 
-export type GetTransactionBlockQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', location: any } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null } | null> | null } | null } | null };
+export type GetTransactionBlockQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, sender?: { __typename?: 'Address', location: any } | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, location: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null } | null> | null } | null } | null };
 
 export type MultiGetTransactionBlocksQueryVariables = Exact<{
   digests: Array<Scalars['String']['input']> | Scalars['String']['input'];
@@ -1904,14 +1928,15 @@ export type MultiGetTransactionBlocksQueryVariables = Exact<{
   cursor?: InputMaybe<Scalars['String']['input']>;
   showBalanceChanges?: InputMaybe<Scalars['Boolean']['input']>;
   showEffects?: InputMaybe<Scalars['Boolean']['input']>;
+  showInput?: InputMaybe<Scalars['Boolean']['input']>;
   showObjectChanges?: InputMaybe<Scalars['Boolean']['input']>;
   showRawInput?: InputMaybe<Scalars['Boolean']['input']>;
 }>;
 
 
-export type MultiGetTransactionBlocksQuery = { __typename?: 'Query', transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', location: any } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null } | null> | null } | null }> } | null };
+export type MultiGetTransactionBlocksQuery = { __typename?: 'Query', transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, sender?: { __typename?: 'Address', location: any } | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, location: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null } | null> | null } | null }> } | null };
 
-export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', location: any } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, objectId: any, owner?: { __typename?: 'Owner', location: any } | null } | null } | null> | null } | null };
+export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest: string, rawTransaction?: any | null, sender?: { __typename?: 'Address', location: any } | null, signatures?: Array<{ __typename?: 'TransactionSignature', base64Sig: any } | null> | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null> | null, dependencies?: Array<{ __typename?: 'TransactionBlock', digest: string } | null> | null, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest: string, version: number, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest: string, location: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null } | null, outputState?: { __typename?: 'Object', version: number, digest: string, location: any, owner?: { __typename?: 'Owner', asAddress?: { __typename?: 'Address', location: any } | null, asObject?: { __typename?: 'Object', location: any } | null } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null } | null> | null } | null };
 
 export class TypedDocumentString<TResult, TVariables>
   extends String
@@ -2066,7 +2091,11 @@ export const Rpc_Stake_FieldsFragmentDoc = new TypedDocumentString(`
 export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
     fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
   digest
+  rawTransaction: bcs @include(if: $showInput)
   rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    location
+  }
   signatures {
     base64Sig
   }
@@ -2080,7 +2109,12 @@ export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
         repr
       }
       owner {
-        location
+        asAddress {
+          location
+        }
+        asObject {
+          location
+        }
       }
       amount
     }
@@ -2089,6 +2123,19 @@ export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+        digest
+        version
+        location
+      }
       gasSummary {
         storageCost
         storageRebate
@@ -2099,23 +2146,69 @@ export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
+    objectChanges @include(if: $showEffects) {
+      idCreated
+      idDeleted
+      inputState {
+        version
+        digest
+        location
+      }
+      outputState {
+        version
+        digest
+        location
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+      }
+    }
     objectChanges @include(if: $showObjectChanges) {
       idCreated
       idDeleted
       inputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
       outputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
     }
@@ -2310,6 +2403,74 @@ fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {
   proofOfPossession
   protocolPubKey
 }`) as unknown as TypedDocumentString<GetCurrentEpochQuery, GetCurrentEpochQueryVariables>;
+export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
+    query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
+  object(address: $parentId) {
+    dynamicObjectField(name: $name) {
+      name {
+        type {
+          repr
+        }
+      }
+      value {
+        __typename
+        ... on MoveObject {
+          contents {
+            json
+            type {
+              repr
+            }
+          }
+          asObject {
+            location
+            digest
+            version
+          }
+        }
+      }
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<GetDynamicFieldObjectQuery, GetDynamicFieldObjectQueryVariables>;
+export const GetDynamicFieldsDocument = new TypedDocumentString(`
+    query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
+  object(address: $parentId) {
+    dynamicFieldConnection(first: $first, after: $cursor) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        name {
+          bcs
+          json
+          type {
+            layout
+            repr
+          }
+        }
+        value {
+          __typename
+          ... on MoveObject {
+            contents {
+              type {
+                repr
+              }
+              json
+            }
+            asObject {
+              storageRebate
+              location
+              digest
+              version
+            }
+          }
+        }
+      }
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<GetDynamicFieldsQuery, GetDynamicFieldsQueryVariables>;
 export const GetLatestCheckpointSequenceNumberDocument = new TypedDocumentString(`
     query getLatestCheckpointSequenceNumber {
   checkpoint {
@@ -2513,6 +2674,13 @@ export const GetTotalSupplyDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<GetTotalSupplyQuery, GetTotalSupplyQueryVariables>;
+export const GetTotalTransactionBlocksDocument = new TypedDocumentString(`
+    query getTotalTransactionBlocks {
+  checkpoint {
+    networkTotalTransactions
+  }
+}
+    `) as unknown as TypedDocumentString<GetTotalTransactionBlocksQuery, GetTotalTransactionBlocksQueryVariables>;
 export const ResolveNameServiceAddressDocument = new TypedDocumentString(`
     query resolveNameServiceAddress($name: String!) {
   resolveNameServiceAddress(name: $name) {
@@ -2863,7 +3031,7 @@ export const GetStakesByIdsDocument = new TypedDocumentString(`
   }
 }`) as unknown as TypedDocumentString<GetStakesByIdsQuery, GetStakesByIdsQueryVariables>;
 export const QueryTransactionBlocksDocument = new TypedDocumentString(`
-    query queryTransactionBlocks($first: Int, $last: Int, $before: String, $after: String, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false, $filter: TransactionBlockFilter) {
+    query queryTransactionBlocks($first: Int, $last: Int, $before: String, $after: String, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false, $filter: TransactionBlockFilter) {
   transactionBlockConnection(
     first: $first
     after: $after
@@ -2884,7 +3052,11 @@ export const QueryTransactionBlocksDocument = new TypedDocumentString(`
 }
     fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
   digest
+  rawTransaction: bcs @include(if: $showInput)
   rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    location
+  }
   signatures {
     base64Sig
   }
@@ -2898,7 +3070,12 @@ export const QueryTransactionBlocksDocument = new TypedDocumentString(`
         repr
       }
       owner {
-        location
+        asAddress {
+          location
+        }
+        asObject {
+          location
+        }
       }
       amount
     }
@@ -2907,6 +3084,19 @@ export const QueryTransactionBlocksDocument = new TypedDocumentString(`
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+        digest
+        version
+        location
+      }
       gasSummary {
         storageCost
         storageRebate
@@ -2917,37 +3107,87 @@ export const QueryTransactionBlocksDocument = new TypedDocumentString(`
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
+    objectChanges @include(if: $showEffects) {
+      idCreated
+      idDeleted
+      inputState {
+        version
+        digest
+        location
+      }
+      outputState {
+        version
+        digest
+        location
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+      }
+    }
     objectChanges @include(if: $showObjectChanges) {
       idCreated
       idDeleted
       inputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
       outputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
     }
   }
 }`) as unknown as TypedDocumentString<QueryTransactionBlocksQuery, QueryTransactionBlocksQueryVariables>;
 export const GetTransactionBlockDocument = new TypedDocumentString(`
-    query getTransactionBlock($digest: String!, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
+    query getTransactionBlock($digest: String!, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
   transactionBlock(digest: $digest) {
     ...RPC_TRANSACTION_FIELDS
   }
 }
     fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
   digest
+  rawTransaction: bcs @include(if: $showInput)
   rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    location
+  }
   signatures {
     base64Sig
   }
@@ -2961,7 +3201,12 @@ export const GetTransactionBlockDocument = new TypedDocumentString(`
         repr
       }
       owner {
-        location
+        asAddress {
+          location
+        }
+        asObject {
+          location
+        }
       }
       amount
     }
@@ -2970,6 +3215,19 @@ export const GetTransactionBlockDocument = new TypedDocumentString(`
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+        digest
+        version
+        location
+      }
       gasSummary {
         storageCost
         storageRebate
@@ -2980,30 +3238,76 @@ export const GetTransactionBlockDocument = new TypedDocumentString(`
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
+    objectChanges @include(if: $showEffects) {
+      idCreated
+      idDeleted
+      inputState {
+        version
+        digest
+        location
+      }
+      outputState {
+        version
+        digest
+        location
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+      }
+    }
     objectChanges @include(if: $showObjectChanges) {
       idCreated
       idDeleted
       inputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
       outputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
     }
   }
 }`) as unknown as TypedDocumentString<GetTransactionBlockQuery, GetTransactionBlockQueryVariables>;
 export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
-    query multiGetTransactionBlocks($digests: [String!]!, $limit: Int, $cursor: String, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
+    query multiGetTransactionBlocks($digests: [String!]!, $limit: Int, $cursor: String, $showBalanceChanges: Boolean = false, $showEffects: Boolean = false, $showInput: Boolean = false, $showObjectChanges: Boolean = false, $showRawInput: Boolean = false) {
   transactionBlockConnection(
     first: $limit
     after: $cursor
@@ -3022,7 +3326,11 @@ export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
 }
     fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
   digest
+  rawTransaction: bcs @include(if: $showInput)
   rawTransaction: bcs @include(if: $showRawInput)
+  sender {
+    location
+  }
   signatures {
     base64Sig
   }
@@ -3036,7 +3344,12 @@ export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
         repr
       }
       owner {
-        location
+        asAddress {
+          location
+        }
+        asObject {
+          location
+        }
       }
       amount
     }
@@ -3045,6 +3358,19 @@ export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
     }
     status @include(if: $showEffects)
     gasEffects @include(if: $showEffects) {
+      gasObject {
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+        digest
+        version
+        location
+      }
       gasSummary {
         storageCost
         storageRebate
@@ -3055,23 +3381,69 @@ export const MultiGetTransactionBlocksDocument = new TypedDocumentString(`
     executedEpoch: epoch @include(if: $showEffects) {
       epochId
     }
+    objectChanges @include(if: $showEffects) {
+      idCreated
+      idDeleted
+      inputState {
+        version
+        digest
+        location
+      }
+      outputState {
+        version
+        digest
+        location
+        owner {
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
+        }
+      }
+    }
     objectChanges @include(if: $showObjectChanges) {
       idCreated
       idDeleted
       inputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
       outputState {
         version
         digest
-        objectId: location
+        location
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
         owner {
-          location
+          asAddress {
+            location
+          }
+          asObject {
+            location
+          }
         }
       }
     }

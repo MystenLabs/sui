@@ -9,7 +9,7 @@ query queryTransactionBlocks(
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
 	#$showEvents: Boolean = false,
-	#$showInput: Boolean = false,
+	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
 	$showRawInput: Boolean = false
 	$filter: TransactionBlockFilter
@@ -38,7 +38,7 @@ query getTransactionBlock(
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
 	#$showEvents: Boolean = false,
-	#$showInput: Boolean = false,
+	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
 	$showRawInput: Boolean = false
 ) {
@@ -54,7 +54,7 @@ query multiGetTransactionBlocks(
 	$showBalanceChanges: Boolean = false
 	$showEffects: Boolean = false
 	#$showEvents: Boolean = false,
-	#$showInput: Boolean = false,
+	$showInput: Boolean = false
 	$showObjectChanges: Boolean = false
 	$showRawInput: Boolean = false
 ) {
@@ -77,7 +77,11 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 	# transaction can be derived from bcs, except:
 	# - valueType for Pure inputs
 	# - requires a lot of re-structuring
+	rawTransaction: bcs @include(if: $showInput)
 	rawTransaction: bcs @include(if: $showRawInput)
+	sender {
+		location
+	}
 
 	signatures {
 		base64Sig
@@ -93,7 +97,12 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 				repr
 			}
 			owner {
-				location
+				asAddress {
+					location
+				}
+				asObject {
+					location
+				}
 			}
 			amount
 		}
@@ -105,6 +114,19 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 		}
 		status @include(if: $showEffects)
 		gasEffects @include(if: $showEffects) {
+			gasObject {
+				owner {
+					asAddress {
+						location
+					}
+					asObject {
+						location
+					}
+				}
+				digest
+				version
+				location
+			}
 			gasSummary {
 				storageCost
 				storageRebate
@@ -115,23 +137,71 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 		executedEpoch: epoch @include(if: $showEffects) {
 			epochId
 		}
+
+		objectChanges @include(if: $showEffects) {
+			idCreated
+			idDeleted
+			inputState {
+				version
+				digest
+				location
+			}
+			outputState {
+				version
+				digest
+				location
+				owner {
+					asAddress {
+						location
+					}
+					asObject {
+						location
+					}
+				}
+			}
+		}
+
 		objectChanges @include(if: $showObjectChanges) {
 			idCreated
 			idDeleted
 			inputState {
 				version
 				digest
-				objectId: location
+				location
+				asMoveObject {
+					contents {
+						type {
+							repr
+						}
+					}
+				}
 				owner {
-					location
+					asAddress {
+						location
+					}
+					asObject {
+						location
+					}
 				}
 			}
 			outputState {
 				version
 				digest
-				objectId: location
+				location
+				asMoveObject {
+					contents {
+						type {
+							repr
+						}
+					}
+				}
 				owner {
-					location
+					asAddress {
+						location
+					}
+					asObject {
+						location
+					}
 				}
 			}
 		}
