@@ -4,6 +4,7 @@
 import type { SuiFeatures } from '@mysten/wallet-standard';
 import { useQuery } from '@tanstack/react-query';
 import type { UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
 import { useCurrentWallet } from './useCurrentWallet.js';
 
@@ -35,7 +36,7 @@ export function useFeatureQuery<
 ): UseQueryResult<Awaited<ReturnType<DappKitWalletStandardFeatureMethods[Feature][Method]>>> {
 	const { currentWallet } = useCurrentWallet();
 
-	return useQuery({
+	const queryResult = useQuery({
 		...options,
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: [
@@ -54,6 +55,17 @@ export function useFeatureQuery<
 		},
 		enabled: !!currentWallet,
 	});
+
+	useEffect(() => {
+		// There's no subscription for the data within features changing, so we allow them to trigger the `change` event to.
+		const unlisten = currentWallet?.features['standard:events'].on('change', () => {
+			queryResult.refetch();
+		});
+
+		return unlisten;
+	}, [queryResult, currentWallet]);
+
+	return queryResult;
 }
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
