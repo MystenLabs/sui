@@ -26,11 +26,6 @@ Response: {
               },
               {
                 "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
                   "asMovePackage": {
                     "module": {
                       "all": {
@@ -81,6 +76,11 @@ Response: {
                     }
                   }
                 }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
+                }
               }
             ]
           }
@@ -98,11 +98,6 @@ Response: {
         {
           "effects": {
             "objectChanges": [
-              {
-                "outputState": {
-                  "asMovePackage": null
-                }
-              },
               {
                 "outputState": {
                   "asMovePackage": null
@@ -164,6 +159,11 @@ Response: {
                       }
                     }
                   }
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
                 }
               }
             ]
