@@ -738,7 +738,7 @@ mod checked {
                     && !external_transfers.contains(&id)
                 {
                     return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectWrapped,
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
                         Some(format!("Wrapping shared object {} not allowed", id).into()),
                     ));
                 }

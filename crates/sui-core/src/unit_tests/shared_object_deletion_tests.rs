@@ -34,7 +34,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::execution_status::ExecutionFailureStatus::{
-    InputObjectDeleted, MoveAbort, SharedObjectWrapped,
+    InputObjectDeleted, SharedObjectOperationNotAllowed,
 };
 use sui_types::transaction::{ObjectArg, VerifiedCertificate};
 
@@ -1516,7 +1516,10 @@ async fn test_wrap_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(error.unwrap().kind(), SharedObjectWrapped));
+    assert!(matches!(
+        error.unwrap().kind(),
+        SharedObjectOperationNotAllowed
+    ));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());
@@ -1573,7 +1576,10 @@ async fn test_convert_to_owned_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(error.unwrap().kind(), MoveAbort(..)));
+    assert!(matches!(
+        error.unwrap().kind(),
+        SharedObjectOperationNotAllowed
+    ));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());
@@ -1602,7 +1608,10 @@ async fn test_freeze_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(error.unwrap().kind(), MoveAbort(..)));
+    assert!(matches!(
+        error.unwrap().kind(),
+        SharedObjectOperationNotAllowed
+    ));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());

@@ -5,7 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::BTreeSet;
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -405,19 +405,6 @@ mod checked {
                 return Err(CommandArgumentError::InvalidObjectByValue);
             }
 
-            // ensure we don't transfer shared objects to new owners
-            if matches!(
-                input_metadata_opt,
-                Some(InputObjectMetadata::InputObject {
-                    owner: Owner::Shared { .. },
-                    ..
-                })
-            ) && matches!(command_kind, CommandKind::TransferObjects)
-                && shared_obj_deletion_enabled
-            {
-                return Err(CommandArgumentError::SharedObjectOperationNotAllowed);
-            }
-
             let val = if is_copyable {
                 val_opt.as_ref().unwrap().clone()
             } else {
@@ -718,7 +705,6 @@ mod checked {
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove();
-            let external_transfers = additional_writes.keys().copied().collect::<HashSet<_>>();
 
             let RuntimeResults {
                 writes,
@@ -731,18 +717,6 @@ mod checked {
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
-
-            for id in by_value_shared_objects {
-                if !writes.contains_key(&id)
-                    && !deleted_object_ids.contains_key(&id)
-                    && !external_transfers.contains(&id)
-                {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectWrapped,
-                        Some(format!("Wrapping shared object {} not allowed", id).into()),
-                    ));
-                }
-            }
 
             loaded_runtime_objects.extend(loaded_child_objects);
 
@@ -808,6 +782,35 @@ mod checked {
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
                 written_objects.insert(id, object);
+            }
+
+            // Before finishing, ensure that any shared object taken by value by the transaction is either:
+            // 1. Mutated (and still has a shared ownership); or
+            // 2. Deleted.
+            // Otherwise, the shared object operation is not allowed and we fail the transaction.
+            for id in &by_value_shared_objects {
+                match written_objects.get(id) {
+                    Some(obj) => {
+                        if !obj.is_shared() {
+                            return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed", id).into(),
+                                ),
+                            ));
+                        }
+                    }
+                    None => {
+                        if !deleted_object_ids.contains_key(id) {
+                            return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed", id).into(),
+                                ),
+                            ));
+                        }
+                    }
+                }
             }
 
             let user_events = user_events

@@ -19,5 +19,5 @@ Version: 3
 Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
 
 task 4 'programmable'. lines 32-33:
-Error: Transaction Effects Status: Invalid command argument at 0. Shared object operations such a wrapping, freezing, or converting to owned are not allowed.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: SharedObjectOperationNotAllowed } at command Some(0)
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
