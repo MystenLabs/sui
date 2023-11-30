@@ -4,7 +4,7 @@ Programmable transaction blocks are used to define all user transactions on Sui.
 
 Each programmable transaction block is consists of a block that is comprised of individual transaction commands (sometimes referred to themselves as transactions). Each transaction command is executed in order, and the results from a transaction command can be used in any subsequent transaction command. The effects, i.e. object modifications or transfers, of all transaction commands in a block are applied atomically at the end of the transaction, and if one transaction command fails, the entire block fails and no effects from the commands are applied.
 
-This document will cover the semantics of the execution of the transaction commands.
+This document will cover the semantics of the execution of the transaction commands. Note that it will assume familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents: (TODO LINKS)
 
 ## Transaction Type
 
@@ -69,32 +69,80 @@ Each command takes `Argument`s, which specify the input or result being used. Th
   - For example, given an input vector of `[Object1, Object2, Pure1, Object3]`, `Object1` would be accessed with `Input(0)` and `Pure1` would be accessed with `Input(2)`.
 - `GasCoin` is a special input argument representing the object for the GasCoin. It is kept separate from the other inputs because the gas coin is always present in each transaction and has special restrictions not present for other inputs. Additionally, the gas coin being separate makes its usage very explicit, which is helpful for sponsored transactions where the sponsor might not want the sender to use the gas coin for anything other than gas.
   - The gas coin cannot be taken by-value except with the `TransferObjects` command. If you need an owned version of the gas coin, you can first use `SplitCoins` to split off a single coin.
+  - This limitation exists to make it easy for the remaining gas to be returned to the coin at the beginning of execution. In other words, if the gas coin was wrapped or deleted, then there would not be an obvious spot for the excess gas to be returned. See the execution section for more details.
 - `NestedResult(u16, u16)` uses the value from a previous command. The first `u16` is the index of the command in the command vector, and the second `u16` is the index of the result in the result vector of that command.
-  - For example, given a command vector of `[MoveCall1, MoveCall2, TransferObjects]` where `MoveCall2` has a result vector of `[Value1, Value2]`, `Value1` would be accessed with `NestedResult(1, 0)` and `Value2` would be accessed with `NestedResult(1, 1)``.
+  - For example, given a command vector of `[MoveCall1, MoveCall2, TransferObjects]` where `MoveCall2` has a result vector of `[Value1, Value2]`, `Value1` would be accessed with `NestedResult(1, 0)` and `Value2` would be accessed with `NestedResult(1, 1)`.
 - `Result(u16)` is a special form of `NestedResult` where `Result(i)` is equivalent to `NestedResult(i, 0)`. However, this will error if the result array at index `i` is empty or has more than one value.
   - The intention of `Result` was to allow for accessing of the entire result array, but that is not yet supported at this time. So in general, `NestedResult` should be used instead of `Result`.
 
-## Commands
-
-### `MoveCall`
-
-### `TransferObjects`
-
-### `SplitCoins`
-
-### `MergeCoins`
-
-### `MakeMoveVec`
-
-### `Publish`
-
-### `Upgrade`
-
 ## Execution
+
+For the execution of programmable transaxtion block: the input vector is populated by the input objects or pure value bytes. Then the commands are executed in order, and the results are stored in the result vector. Finally, the effects of the transaction are applied atomically. The following sections will describe each aspect of execution in greater detail.
 
 ### Start of Execution
 
+At the beginning of execution, the programmable transaction block runtime takes the already loaded input objects and loads them into the input array. The objects are already verified by the network, checking rules like existence and valid ownership. The pure value bytes are also loaded into the array but not validated until usage.
+
+The most important thing to note at this stage is the effects on the gas coin. At the beginning of execution, the maximum gas budget (in terms of `SUI`) is withdrawn from the gas coin. Any unused gas will be returned to the gas coin at the end of execution, even if the coin has changed owners!
+
 ### Executing a Command
+
+Each command is then executed in order. First, let's look a the rules around arguments, which are shared by all commands.
+
+#### Arguments
+
+- Each argument can be used by-reference or by-value. The usage is based on the type of the argument and the type signature of the command.
+  - If the signature expects an `&mut T`, the runtime checks the argument has type `T` and it is then mutably borrowed.
+  - If the signature expects an `&T`, the runtime checks the argument has type `T` and it is then immutably borrowed.
+  - If the signature expects an `T`, the runtime checks the argument has type `T` and it is copied if `T: copy` and moved otherwise.
+    - Note that no object in Sui has `copy` because the unique ID field `sui::object::UID` present in all objects does not have the `copy` ability.
+- The transaction fails if an argument is used in any form after being moved. There is no way to restore an argument to its position (its input or result index) after it is moved.
+- If an argument is copied but does not have the `drop` ability, then the last usage is inferred to be a move. As a result, if an argument has `copy` and does not have `drop`, the last usage _must_ be by value. Otherwise, the transaction will fail because a value without `drop` has not been used.
+- The borrowing of arguments has other rules to ensure unique safe usage of an argument by reference.
+  - If an argument is mutably borrowed, there must be no outstanding borrows.
+  - If an argument is immutably borrowed, there must be no outstanding _mutable_ borrows. Duplicate immutable borrows are allowed.
+  - If an argument is moved, there must be no outstanding borrows. Moving a borrowed value would make those outstanding borrows unsafe.
+  - If an argument is copied, there must be no outstanding _mutable_ borrows. It is safe and allowed to copy a value that is immutably borrowed.
+- The `GasCoin` has special restrictions on being used by-value (moved). It can only be used by-value with the `TransferObjects` command.
+- Shared objects also have restrictions on being used by-value. These restrictions exist to ensure that at the end of the transaction the shared object is either still shared or has been deleted. A shared object cannot be unshared, i.e. having the owner changed, and it cannot be wrapped.
+  - A shared object marked as not `mutable`, that is it was marked as being used read-only, cannot be used by value.
+  - A shared object cannot be transferred or frozen. The command `TransferObjects` and the related Move functions will fail when used with a shared object.
+  - A shared object can be wrapped and can become a dynamic field transiently, but by the end of the transaction, it must be re-shared or deleted.
+- Pure values are not type checked until their usage.
+  - When checking if a pure value has type `T`, it is checked whether `T` is a vlaid type for a pure value (see the list above). If it is, the bytes are then validated.
+  - A pure value can be used be used with multiple types as long as the bytes are valid for each type. For example, a string could be used as an ASCII string `std::ascii::String` and as a UTF8 string `std::string::String`.
+  - However, once the pure value is mutably borrowed, the type becomes fixed. And all future usages must be with that type.
+
+#### `MoveCall`
+
+#### `TransferObjects`
+
+The command has the form `TransferObjects(ObjectArgs, AddressArg)` where `ObjectArgs` is a vector of objects and `AddressArg` is the address the objects are sent to.
+
+- Each argument `ObjectArgs: Vec<Argument>` must be an object. However, the objects do not have the same type.
+- The address argument `AddressArg: Argument` must be an address, which could come from a `Pure` input or a result.
+- All arguments, objects and address, are taken by value.
+  - While the signature of this command cannot be expressed in Move, you can think of it roughly as having the signature `(vector<forall T: key + store. T>, address): ()`.
+
+#### `SplitCoins`
+
+The command has the form `SplitCoins(CoinArg, AmountArgs)` where `CoinArg` is the coin being split and `AmountArgs` is a vector of amounts to split off.
+
+- When the transaction is signed, the network verifies that the AmountArgs is non-empty.
+- The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being split. It can be any coin type and is not limited to `SUI` coins.
+- The amount arguments `AmountArgs: Vec<Argument>` must be `u64` values, which could come from a `Pure` input or a result.
+- The coin argument is taken by mutable reference.
+- The amount arguments are taken by value (copied).
+- The result of the command is a vector of coins, `sui::coin::Coin<T>`. The coin type `T` is the same as the coin being split, and the number of results matches the number of arguments
+  - For a rough signature expressed in Move, it is similar to a function `<T: key + store>(coin: &mut sui::coin::Coin<T>, amounts: vector<u64>): vector<sui::coin::Coin<T>>` where the result `vector` is guaranteed to have the same length as the `amounts` vector.
+
+#### `MergeCoins`
+
+#### `MakeMoveVec`
+
+#### `Publish`
+
+#### `Upgrade`
 
 ### End of Execution
 
