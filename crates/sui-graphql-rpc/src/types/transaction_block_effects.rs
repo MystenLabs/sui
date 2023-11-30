@@ -43,8 +43,10 @@ pub(crate) struct TransactionBlockEffects {
     pub epoch_id: u64,
     // pub epoch: Option<Epoch>,
     // pub checkpoint: Option<Checkpoint>,
+    // The checkpoint sequence number may not be present
+    // in the case of a transaction that was just submitted
     #[graphql(skip)]
-    checkpoint_seq_number: u64,
+    checkpoint_seq_number: Option<u64>,
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     /// representing the time when the checkpoint that contains
     /// this transaction was created
@@ -78,7 +80,7 @@ impl TransactionBlockEffects {
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
         let checkpoint = ctx
             .data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, Some(self.checkpoint_seq_number))
+            .fetch_checkpoint(None, self.checkpoint_seq_number)
             .await
             .extend()?;
         Ok(checkpoint)
@@ -136,12 +138,12 @@ impl TransactionBlockEffects {
 impl TransactionBlockEffects {
     pub fn from_stored_transaction(
         balance_changes: Vec<Option<Vec<u8>>>,
-        checkpoint_seq_number: u64,
+        checkpoint_seq_number: Option<u64>,
         object_changes: Vec<Option<Vec<u8>>>,
         tx_effects: &SuiTransactionBlockEffects,
         tx_block_digest: Digest,
         timestamp: Option<DateTime>,
-    ) -> Result<Option<Self>, Error> {
+    ) -> Result<Self, Error> {
         let (status, errors) = match tx_effects.status() {
             SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
             SuiExecutionStatus::Failure { error } => {
@@ -154,7 +156,7 @@ impl TransactionBlockEffects {
             .map(|x| x.reference.version.value());
         let balance_changes = BalanceChange::from(balance_changes)?;
 
-        Ok(Some(Self {
+        Ok(Self {
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
             status,
             errors,
@@ -166,7 +168,7 @@ impl TransactionBlockEffects {
             object_changes_as_bcs: object_changes,
             checkpoint_seq_number,
             timestamp,
-        }))
+        })
     }
 }
 

@@ -1558,7 +1558,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         let effects = match SuiTransactionBlockEffects::try_from(effects) {
             Ok(effects) => TransactionBlockEffects::from_stored_transaction(
                 balance_changes,
-                tx.checkpoint_sequence_number as u64,
+                Some(tx.checkpoint_sequence_number as u64),
                 object_changes,
                 &effects,
                 digest,
@@ -1588,7 +1588,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
 
         Ok(Self {
             digest,
-            effects,
+            effects: Some(effects),
             sender: Some(sender),
             bcs: Some(Base64::from(&tx.raw_transaction)),
             gas_input: Some(gas_input),

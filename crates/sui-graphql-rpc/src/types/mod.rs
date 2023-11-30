@@ -41,6 +41,7 @@ pub(crate) mod system_parameters;
 pub(crate) mod transaction_block;
 pub(crate) mod transaction_block_effects;
 pub(crate) mod transaction_block_kind;
+pub(crate) mod transaction_exec;
 pub(crate) mod transaction_signature;
 pub(crate) mod validator;
 pub(crate) mod validator_credentials;
