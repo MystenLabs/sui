@@ -27,7 +27,7 @@ module P0::m {
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }
@@ -117,7 +117,7 @@ module P0::m {
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }
@@ -198,7 +198,7 @@ module P0::m {
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }
@@ -280,7 +280,7 @@ module P0::m {
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }
