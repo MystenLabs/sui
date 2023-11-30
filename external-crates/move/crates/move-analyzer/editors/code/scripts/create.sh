@@ -54,7 +54,6 @@ SUPPORTED_OS[macos-x86_64]=darwin-x64
 SUPPORTED_OS[ubuntu-x86_64]=linux-x64
 SUPPORTED_OS[windows-x86_64]=win32-x64
 
-TMP_DIR=/Users/adamwelc/tmp/tmp
 TMP_DIR=$( mktemp -d -t vscode-create )
 trap "clean_tmp_dir $TMP_DIR" EXIT
 

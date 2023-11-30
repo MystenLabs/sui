@@ -56,7 +56,7 @@ export class Configuration {
      * Installs language server binary in the default location unless a user-specified
      * (but not default) server location already contains a server binary.
      *
-     * @returns `true` if server binary installation succeeded, `fase` otherwise.
+     * @returns `true` if server binary installation succeeded, `false` otherwise.
      */
     async installServerBinary(extensionContext: vscode.ExtensionContext): Promise<boolean> {
         log.info('Installing language server binary');
@@ -91,9 +91,9 @@ export class Configuration {
                     { modal: true },
                     items,
                 );
-                return Promise.resolve(false);
+                return false;
             } // Otherwise simply return and use the existing user-specified binary.
-            return Promise.resolve(true);
+            return true;
         }
 
         assert(serverPath === this.defaultServerPath);
@@ -105,14 +105,14 @@ export class Configuration {
                 await vscode.workspace.fs.delete(this.defaultServerPath);
             } else {
                 // Since there is no bundled binary, let's use the one that's in the (default) path.
-                return Promise.resolve(true);
+                return true;
             }
         }
 
         if (!bundledServerExists) {
             // See a comment earlier in this function for why we need to use modal messages. In this
             // particular case,  the extension would never activate and its settings that could be
-            // used to override location of the server binary would not be available,
+            // used to override location of the server binary would not be available.
             const items: vscode.MessageItem = { title: 'OK', isCloseAffordance: true };
             await vscode.window.showErrorMessage(
                 'Pre-built move-analyzer binary is not available for this platform. ' +
@@ -121,7 +121,7 @@ export class Configuration {
                 { modal: true },
                 items,
             );
-            return Promise.resolve(false);
+            return false;
         }
 
         // Check if directory to store server binary exists (create it if necessary).
@@ -135,6 +135,6 @@ export class Configuration {
 
         await vscode.workspace.fs.copy(bundledServerPath, this.defaultServerPath);
 
-        return Promise.resolve(true);
+        return true;
     }
 }

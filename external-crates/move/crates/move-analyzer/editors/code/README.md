@@ -14,32 +14,42 @@ language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
 4. Open any file that ends in `.move`.
 
 Installation of the extension will also install a platform-specific pre-built move-analyzer binary in
-the `~/.sui/bin` directory, overwriting the existing binary if it already exists. The move-analyzer 
-binary is responsible for the advanced features of this VSCode extension (e.g., go to definition,
-type on hover). Please see the [Troubleshooting][#troubleshooting] section for situations when 
+the default directory (see [here](#what-if-i-want-to-use-a-move-analyzer-binary-in-a-different-location)
+for information on the location of this directory), overwriting the existing binary if it already exists.
+The move-analyzer binary is responsible for the advanced features of this VSCode extension (e.g., go to
+definition, type on hover). Please see [Troubleshooting](#troubleshooting) for situations when
 the pre-built move-analyzer binary is not available for your platform or if you want to use move-analyzer
 binary stored in a different location.
 
 # Troubleshooting
 
-## What if pre-built move-analyzer binary is not available for my platform?
+## What if the pre-built move-analyzer binary is not available for my platform?
+
+If you are on Windows, the following answer assumes that your Windows user name is `USER`.
 
 The `move-analyzer` language server is a Rust program which you can install manually provided
 that you have Rust development already [installed](https://www.rust-lang.org/tools/install).
 This can be done in two steps:
 
-1. Invoke `cargo install --git https://github.com/MystenLabs/sui move-analyzer` to install the
-`move-analyzer` language server in your Cargo binary directory. On Linux, this is usually
-usually `~/.cargo/bin`.
-2. Copy the move-analyzer binary to `~/.sui/bin` which is its default location.
+1. Install the move-analyzer installation prerequisites for your platform. They are the same
+as prerequisites for Sui installation - for Linux, macOS and Windows these prerequisites and
+their installation instructions can be found
+[here](https://docs.sui.io/guides/developer/getting-started/sui-install#additional-prerequisites-by-operating-system)
+2. Invoke `cargo install --git https://github.com/MystenLabs/sui move-analyzer` to install the
+`move-analyzer` language server in your Cargo binary directory, which is typically located
+in the `~/.cargo/bin` (macOS/Linux) or `C:\Users\USER\.cargo\bin` (Windows) directory.
+3. Copy the move-analyzer binary to `~/.sui/bin` (macOS/Linux) or `C:\Users\USER\.sui\bin`
+(Windows), which is its default location (create this directory if it does not exist).
 
 ## What if I want to use a move-analyzer binary in a different location?
 
-If your `move-analyzer` binary is in a different location than the default one (`~/.sui/bib`),
-you may have the extension look for the binary at this new location by using the the VSCode's
-settings (`⌘,` on macOS, or use the menu item *Code > Preferences > Settings*). Search for the
-`move.server.path` workspace setting, set it to the new location of the `move-analyzer` binary,
-and restart VSCode.
+If you are on Windows, the following answer assumes that your Windows user name is `USER`.
+
+If your `move-analyzer` binary is in a different directory than the default one (`~/.sui/bin`
+on macOS or Linux, or `C:\Users\USER\.sui\bin` on Windows), you may have the extension look
+for the binary at this new location by using VSCode's settings (`⌘,` on macOS, or use the menu
+item *Code > Preferences > Settings*). Search for the `move.server.path` workspace setting,
+set it to the new location of the `move-analyzer` binary, and restart VSCode.
 
 ## What if everything else fails?
 
