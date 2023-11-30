@@ -340,7 +340,7 @@ mod test {
     fn prometheus_parse() {
         let report = r#"
             # HELP benchmark_duration Duration of the benchmark
-            # TYPE benchmark_duration counter
+            # TYPE benchmark_duration gauge
             benchmark_duration 30
             # HELP latency_s Total time in seconds to return a response
             # TYPE latency_s histogram

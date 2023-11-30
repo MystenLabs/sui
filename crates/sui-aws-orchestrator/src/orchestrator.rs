@@ -441,8 +441,12 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics, T: BenchmarkType> Orchestrator<P,
         // Select the instances to run.
         let (clients, nodes, _) = self.select_instances(parameters)?;
 
-        // Regularly scrape the client metrics.
-        let metrics_commands = self.protocol_commands.clients_metrics_command(clients);
+        // Regularly scrape the client
+        let mut metrics_commands = self.protocol_commands.clients_metrics_command(clients);
+
+        // TODO: Remove this when narwhal client latency metrics are available.
+        // We will be getting latency metrics directly from narwhal nodes instead from the nw client
+        metrics_commands.append(&mut self.protocol_commands.nodes_metrics_command(nodes.clone()));
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut metrics_interval = time::interval(self.scrape_interval);

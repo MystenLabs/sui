@@ -139,7 +139,9 @@ impl Client {
 
         let mut handles = Vec::new();
 
-        let num_parallel_tasks = 10;
+        // TODO: figure out how to scale the client without needing to scale tasks
+        // Current results are showing about 10 tx/s per task.
+        let num_parallel_tasks = self.rate.min(25000);
         let rate_per_task = self.rate / num_parallel_tasks;
         let target_tx_interval: Duration = Duration::from_millis(1000 / rate_per_task);
         info!(

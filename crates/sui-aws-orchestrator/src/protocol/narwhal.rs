@@ -198,6 +198,7 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
             .enumerate()
             .map(|(i, instance)| {
                 let run = [
+                    "ulimit -n 51200 && ", // required so we can scale the client
                     "RUST_LOG=info cargo run --release --features benchmark --bin narwhal-benchmark-client -- ",
                     &format!(
                         "--addr {} --size {} --rate {} --nodes {} --client-metric-port {}",
@@ -232,9 +233,16 @@ impl NarwhalProtocol {
 
 impl ProtocolMetrics for NarwhalProtocol {
     const BENCHMARK_DURATION: &'static str = "narwhal_benchmark_duration";
-    const TOTAL_TRANSACTIONS: &'static str = "narwhal_client_latency_s_count";
-    const LATENCY_BUCKETS: &'static str = "narwhal_client_latency_s";
-    const LATENCY_SUM: &'static str = "narwhal_client_latency_s_sum";
+    // TODO: Improve metrics used for benchmark summary.
+    // Currently the only route should be `SubmitTransaction` so this should be a
+    // good proxy for total tx
+    const TOTAL_TRANSACTIONS: &'static str = "worker_req_latency_by_route_count";
+    // Does not include the time taken for the tx to be included in the batch, only
+    // from batch creation to when the batch is fetched for execution
+    const LATENCY_BUCKETS: &'static str = "batch_execution_latency";
+    const LATENCY_SUM: &'static str = "batch_execution_latency_sum";
+    // Measuring client submit latency but this only factors in submission and
+    // not time to commit
     const LATENCY_SQUARED_SUM: &'static str = "narwhal_client_latency_squared_s";
 
     fn nodes_metrics_path<I>(&self, instances: I) -> Vec<(Instance, String)>

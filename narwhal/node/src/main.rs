@@ -629,10 +629,12 @@ async fn run(
     };
 
     if let Some(registry) = worker_registry {
+        mysten_metrics::init_metrics(&registry);
         registry_service.add(registry);
     }
 
     if let Some(registry) = primary_registry {
+        mysten_metrics::init_metrics(&registry);
         registry_service.add(registry);
     }
 
