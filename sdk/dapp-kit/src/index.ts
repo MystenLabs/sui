@@ -22,6 +22,7 @@ export * from './hooks/wallet/useSignPersonalMessage.js';
 export * from './hooks/wallet/useSignTransactionBlock.js';
 export * from './hooks/wallet/useSwitchAccount.js';
 export * from './hooks/wallet/useWallets.js';
+export * from './hooks/wallet/useFeatureQuery.js';
 export * from './themes/lightTheme.js';
 export * from './types.js';
 
