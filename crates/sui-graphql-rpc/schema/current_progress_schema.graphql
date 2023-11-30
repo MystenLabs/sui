@@ -356,6 +356,42 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	The total number of checkpoints in this epoch.
+	"""
+	totalCheckpoints: BigInt
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch.
+	"""
+	totalGasFees: BigInt
+	"""
+	The total MIST rewarded as stake.
+	"""
+	totalStakeRewards: BigInt
+	"""
+	The amount added to total gas fees to make up the total stake rewards.
+	"""
+	totalStakeSubsidies: BigInt
+	"""
+	The storage fund available in this epoch.
+	This fund is used to redistribute storage fees from past transactions
+	to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing
+	the net amount of storage fees accumulated in this epoch.
+	"""
+	netInflow: BigInt
+	"""
+	The storage fees paid for transactions executed during the epoch.
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users
+	who deleted the data associated with past transactions.
+	"""
+	fundOutflow: BigInt
+	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
 	"""
 	protocolConfigs: ProtocolConfigs

@@ -522,6 +522,15 @@ type Epoch {
   startTimestamp: DateTime
   endTimestamp: DateTime
 
+  totalCheckpoints: BigInt
+  totalGasFees: BigInt
+  totalStakeRewards: BigInt
+  totalStakeSubsidies: BigInt
+  fundSize: BigInt
+  netInflow: BigInt
+  fundInflow: BigInt
+  fundOutflow: BigInt
+  
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
   checkpointConnection(
