@@ -11,11 +11,11 @@ Inputs can either be an object reference (either to an owned object, an immutabl
 
 The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender's Sui address. 
 
-Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are Ed25519 Pure, ECDSA Secp256k1, ECDSA Secp256r1, Multisig, and ZkLogin. 
+Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are `Ed25519 Pure`, `ECDSA Secp256k1`, `ECDSA Secp256r1`, `Multisig`, and `zkLogin`. 
 
-You can instantiate Ed25519 Pure, ECDSA Secp256k1, and ECDSA Secp256r1 using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to multisig and ZkLogin, please refer to their own pages for instructions. 
+You can instantiate `Ed25519 Pure`, `ECDSA Secp256k1`, and `ECDSA Secp256r1` using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to `Multisig` and `zkLogin`, please refer to their own pages ([Multisig](/concepts/cryptography/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions. 
 
-With a signature and the transaction bytes, a transaction can be executed successfully. 
+With a signature and the transaction bytes, a transaction can be submitted to be executed.
 
 ## Workflow
 
@@ -43,13 +43,13 @@ The following examples demonstrate how to sign and execute transactions using Ru
 There are various ways to instantiate a key pair and to derive its public key and Sui address using the Sui TypeScript SDK.
 
 ```tsx
+    import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+    import { TransactionBlock } from '@mysten/sui.js/transactions';
+    import { type Keypair } from '@mysten/sui.js/cryptography';
     import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
     import { Secp256k1Keypair } from '@mysten/sui.js/keypairs/secp256k1';
     import { Secp256r1Keypair } from '@mysten/sui.js/keypairs/secp256r1';
     import { fromHEX } from '@mysten/bcs';
-    import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-    import { type Keypair } from '@mysten/sui.js/cryptography';
-    import { TransactionBlock } from '@mysten/sui.js/transactions';
     
     const kp_rand_0 = new Ed25519Keypair();
     const kp_rand_1 = new Secp256k1Keypair();
