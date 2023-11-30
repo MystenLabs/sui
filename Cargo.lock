@@ -11733,6 +11733,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hex",
+ "http",
  "hyper",
  "insta",
  "lru 0.10.0",

@@ -18,19 +18,28 @@ async fn graphiql(ide_title: axum::Extension<Option<String>>) -> impl axum::resp
 
 pub async fn start_graphiql_server(server_config: &ServerConfig) -> Result<(), Error> {
     info!("Starting server with config: {:?}", server_config);
-    start_graphiql_server_impl(ServerBuilder::from_config(server_config).await?).await
+    start_graphiql_server_impl(
+        ServerBuilder::from_config(server_config).await?,
+        server_config.ide.ide_title.clone(),
+    )
+    .await
 }
 
 pub async fn start_graphiql_server_from_cfg_path(server_config_path: &str) -> Result<(), Error> {
-    start_graphiql_server_impl(ServerBuilder::from_yaml_config(server_config_path).await?).await
+    let (server_builder, config) = ServerBuilder::from_yaml_config(server_config_path).await?;
+    start_graphiql_server_impl(server_builder, config.ide.ide_title).await
 }
 
-async fn start_graphiql_server_impl(server_builder: ServerBuilder) -> Result<(), Error> {
+async fn start_graphiql_server_impl(
+    server_builder: ServerBuilder,
+    ide_title: String,
+) -> Result<(), Error> {
     let address = server_builder.address();
 
     // Add GraphiQL IDE handler on GET request to `/`` endpoint
     let server = server_builder
         .route("/", axum::routing::get(graphiql))
+        .layer(axum::extract::Extension(Some(ide_title)))
         .build()?;
 
     info!("Launch GraphiQL IDE at: http://{}", address);
