@@ -12121,6 +12121,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12141,6 +12142,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12161,6 +12163,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12181,6 +12184,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
