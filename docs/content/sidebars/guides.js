@@ -59,7 +59,7 @@ const guides = [
 					'guides/developer/sui-101/create-nft',
 					'guides/developer/sui-101/using-events',
 					'guides/developer/sui-101/access-time',
-					'guides/developer/sui-101/sign-and-send-txn.mdx
+					'guides/developer/sui-101/sign-and-send-txn.mdx',
 					'guides/developer/sui-101/sponsor-txn',
 					'guides/developer/sui-101/coin-mgt',
 					'guides/developer/sui-101/building-ptb',
