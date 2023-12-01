@@ -81,6 +81,10 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn lamport_version(&self) -> SequenceNumber {
+        self.lamport_version
+    }
+
     fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)> {
         self.changed_objects
             .iter()

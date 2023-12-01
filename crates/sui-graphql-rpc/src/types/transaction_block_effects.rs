@@ -57,19 +57,10 @@ impl TransactionBlockEffects {
         })
     }
 
-    /// The latest version of all objects that have been created or modified by this transaction,
-    /// immediately following this transaction.  A system transaction that does not modify or create
-    /// objects will not have a lamport version.
-    async fn lamport_version(&self) -> Option<u64> {
-        if let Some(((_id, version, _digest), _owner)) = self.native.created().first() {
-            Some(version.value())
-        } else if let Some(((_id, version, _digest), _owner)) = self.native.mutated().first() {
-            Some(version.value())
-        } else if let Some(((_id, version, _digest), _owner)) = self.native.unwrapped().first() {
-            Some(version.value())
-        } else {
-            None
-        }
+    /// The latest version of all objects (apart from packages) that have been created or modified
+    /// by this transaction, immediately following this transaction.
+    async fn lamport_version(&self) -> u64 {
+        self.native.lamport_version().value()
     }
 
     /// The reason for a transaction failure, if it did fail.
