@@ -218,15 +218,15 @@ impl BuildConfig {
             .set_silence_warnings(self.silence_warnings)
     }
 
-    pub fn update_lock_file_toolchain_version(&self, compiler_version: String) -> Result<()> {
+    pub fn update_lock_file_toolchain_version(
+        &self,
+        path: PathBuf,
+        compiler_version: String,
+    ) -> Result<()> {
         let Some(lock_file) = self.lock_file.as_ref() else {
             return Ok(());
         };
-        let install_dir = self
-            .install_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("."));
-        let mut lock = LockFile::from(install_dir, lock_file)?;
+        let mut lock = LockFile::from(path, lock_file)?;
         lock.seek(SeekFrom::Start(0))?;
         update_compiler_toolchain(
             &mut lock,
