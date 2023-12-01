@@ -50,6 +50,7 @@ import type {
 	SuiSystemStateSummary,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
+	SuiValidatorSummary,
 	TransactionEffects,
 	ValidatorsApy,
 } from '../client/types/generated.js';
@@ -94,6 +95,7 @@ import type {
 	QueryEventsQueryVariables,
 	Rpc_Object_FieldsFragment,
 	Rpc_Transaction_FieldsFragment,
+	Rpc_Validator_FieldsFragment,
 	TransactionBlockKindInput,
 } from './generated.js';
 import {
@@ -101,6 +103,7 @@ import {
 	GetBalanceDocument,
 	GetChainIdentifierDocument,
 	GetCheckpointDocument,
+	GetCheckpointsDocument,
 	GetCoinMetadataDocument,
 	GetCoinsDocument,
 	GetCurrentEpochDocument,
@@ -221,8 +224,22 @@ export class GraphQLSuiClient extends SuiClient {
 		return extractedData as NonNullable<Data>;
 	}
 
-	override getRpcApiVersion(): Promise<string | undefined> {
-		throw new Error('Method not implemented.');
+	override async getRpcApiVersion(): Promise<string | undefined> {
+		const res = await fetch(this.#graphqlURL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				query: 'query { __typename }',
+			}),
+		});
+
+		if (!res.ok) {
+			throw new Error('Failed to fetch');
+		}
+
+		return res.headers.get('x-sui-rpc-version') ?? undefined;
 	}
 
 	override async getCoins(input: GetCoinsParams): Promise<PaginatedCoins> {
@@ -580,9 +597,13 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.transactionBlockConnection,
 		);
 
+		if (pagination.last) {
+			transactionBlocks.reverse();
+		}
+
 		return {
 			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
-			nextCursor: pagination.last ? pageInfo.endCursor : pageInfo.startCursor,
+			nextCursor: pagination.last ? pageInfo.startCursor : pageInfo.endCursor,
 			data: transactionBlocks.map((transactionBlock) =>
 				mapGraphQLTransactionBlockToRpcTransactionBlock(transactionBlock, input.options),
 			),
@@ -699,45 +720,9 @@ export class GraphQLSuiClient extends SuiClient {
 		);
 
 		return {
-			activeValidators: systemState.validatorSet?.activeValidators?.map((validator) => ({
-				commissionRate: validator.commissionRate?.toString()!,
-				description: validator.description!,
-				exchangeRatesId: validator.exchangeRates?.asObject?.location!,
-				exchangeRatesSize: 'TODO',
-				gasPrice: validator.gasPrice,
-				imageUrl: validator.imageUrl!,
-				name: validator.name!,
-				netAddress: validator.credentials?.netAddress!,
-				networkPubkeyBytes: validator.credentials?.networkPubKey!,
-				nextEpochCommissionRate: validator.nextEpochCommissionRate?.toString()!,
-				nextEpochGasPrice: validator.nextEpochGasPrice,
-				nextEpochNetAddress: validator.nextEpochCredentials?.netAddress,
-				nextEpochNetworkPubkeyBytes: validator.nextEpochCredentials?.networkPubKey,
-				nextEpochP2pAddress: validator.nextEpochCredentials?.p2PAddress,
-				nextEpochPrimaryAddress: validator.nextEpochCredentials?.primaryAddress,
-				nextEpochProofOfPossession: validator.nextEpochCredentials?.proofOfPossession,
-				nextEpochProtocolPubkeyBytes: validator.nextEpochCredentials?.protocolPubKey,
-				nextEpochStake: validator.nextEpochStake!,
-				nextEpochWorkerAddress: validator.nextEpochCredentials?.workerAddress,
-				nextEpochWorkerPubkeyBytes: validator.nextEpochCredentials?.workerPubKey,
-				operationCapId: validator.operationCap?.asObject?.location!,
-				p2pAddress: validator.credentials?.p2PAddress!,
-				pendingTotalSuiWithdraw: validator.pendingTotalSuiWithdraw,
-				pendingPoolTokenWithdraw: validator.pendingPoolTokenWithdraw,
-				poolTokenBalance: validator.poolTokenBalance,
-				pendingStake: validator.pendingStake,
-				primaryAddress: validator.credentials?.primaryAddress!,
-				projectUrl: validator.projectUrl!,
-				proofOfPossessionBytes: validator.credentials?.proofOfPossession,
-				protocolPubkeyBytes: validator.credentials?.protocolPubKey,
-				rewardsPool: validator.rewardsPool,
-				stakingPoolId: 'TODO',
-				stakingPoolSuiBalance: validator.stakingPoolSuiBalance,
-				suiAddress: validator.address.location,
-				votingPower: validator.votingPower?.toString()!,
-				workerAddress: validator.credentials?.workerAddress!,
-				workerPubkeyBytes: validator.credentials?.workerPubKey,
-			}))!,
+			activeValidators: systemState.validatorSet?.activeValidators?.map(
+				mapGraphQlValidatorToRpcValidator,
+			)!,
 			atRiskValidators: [], // TODO;
 			epoch: String(systemState.epoch?.epochId),
 			epochDurationMs: String(
@@ -776,12 +761,14 @@ export class GraphQLSuiClient extends SuiClient {
 				systemState.storageFund?.totalObjectStorageRebates,
 			),
 			systemStateVersion: String(systemState.systemStateVersion),
-			totalStake: 'TODO',
+			totalStake: systemState.validatorSet?.totalStake,
 			validatorCandidatesId: 'TODO',
-			validatorCandidatesSize: 'TODO',
+			validatorCandidatesSize: systemState.validatorSet?.validatorCandidatesSize?.toString()!,
 			validatorLowStakeGracePeriod: systemState.systemParameters?.validatorLowStakeGracePeriod,
 			validatorLowStakeThreshold: systemState.systemParameters?.validatorLowStakeThreshold,
-			validatorReportRecords: [], // TODO;
+			validatorReportRecords: systemState.validatorSet?.activeValidators?.flatMap(
+				(validator) => validator.reportRecords,
+			)!,
 			validatorVeryLowStakeThreshold: systemState.systemParameters?.validatorVeryLowStakeThreshold,
 		};
 	}
@@ -820,13 +807,17 @@ export class GraphQLSuiClient extends SuiClient {
 			(data) => data.eventConnection,
 		);
 
+		if (pagination.last) {
+			events.reverse();
+		}
+
 		return {
 			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
-			nextCursor: (pagination.last ? pageInfo.endCursor : pageInfo.startCursor) as never,
+			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
 			data: events.map((event) => ({
 				bcs: event.bcs,
 				id: 'TODO' as never, // TODO: turn id into an object
-				packageId: event.sendingModuleId?.package.asObject?.location!,
+				packageId: event.sendingModule?.package.asObject?.location!,
 				parsedJson: event.json ? JSON.parse(event.json) : undefined,
 				sender: event.senders?.[0]?.location,
 				timestampMs: new Date(event.timestamp).getTime().toString(),
@@ -896,8 +887,6 @@ export class GraphQLSuiClient extends SuiClient {
 				},
 			},
 			(data) => {
-				console.log(data);
-
 				return data.object?.dynamicObjectField;
 			},
 		);
@@ -966,10 +955,14 @@ export class GraphQLSuiClient extends SuiClient {
 			{
 				query: GetCheckpointDocument,
 				variables: {
-					id: {
-						// TODO handle differentiating digest and sequence number
-						digest: input.id,
-					},
+					id:
+						typeof input.id === 'number' || isNumericString(input.id)
+							? {
+									sequenceNumber: Number.parseInt(input.id.toString(), 10),
+							  }
+							: {
+									digest: input.id,
+							  },
 				},
 			},
 			(data) => data.checkpoint,
@@ -978,11 +971,11 @@ export class GraphQLSuiClient extends SuiClient {
 		return {
 			checkpointCommitments: [], // TODO
 			digest: checkpoint.digest,
-			endOfEpochData: checkpoint.endOfEpoch && {
-				epochCommitments: [], // TODO
-				nextEpochCommittee: [], // TODO
-				nextEpochProtocolVersion: String(checkpoint.endOfEpoch.nextProtocolVersion),
-			},
+			// endOfEpochData: checkpoint.endOfEpoch && { // TODO
+			// 	epochCommitments: [], // TODO
+			// 	nextEpochCommittee: [], // TODO
+			// 	nextEpochProtocolVersion: String(checkpoint.endOfEpoch.nextProtocolVersion),
+			// },
 			epoch: String(checkpoint.epoch?.epochId),
 			epochRollingGasCostSummary: {
 				computationCost: checkpoint.rollingGasSummary?.computationCost,
@@ -991,7 +984,9 @@ export class GraphQLSuiClient extends SuiClient {
 				storageRebate: checkpoint.rollingGasSummary?.storageRebate,
 			},
 			networkTotalTransactions: String(checkpoint.networkTotalTransactions),
-			previousDigest: checkpoint.previousCheckpointDigest,
+			...(checkpoint.previousCheckpointDigest
+				? { previousDigest: checkpoint.previousCheckpointDigest }
+				: {}),
 			sequenceNumber: String(checkpoint.sequenceNumber),
 			timestampMs: new Date(checkpoint.timestamp).getTime().toString(),
 			transactions:
@@ -1004,8 +999,55 @@ export class GraphQLSuiClient extends SuiClient {
 	override async getCheckpoints(
 		input: PaginationArguments<string | null> & GetCheckpointsParams,
 	): Promise<CheckpointPage> {
-		void input;
-		throw new Error('Method not implemented.');
+		const pagination: Partial<QueryEventsQueryVariables> = input.descendingOrder
+			? { last: input.limit, before: input.cursor as never }
+			: { first: input.limit, after: input.cursor as never };
+
+		const { nodes: checkpoints, pageInfo } = await this.#graphqlQuery(
+			{
+				query: GetCheckpointsDocument,
+				variables: {
+					...pagination,
+				},
+			},
+			(data) => data.checkpointConnection,
+		);
+
+		if (pagination.last) {
+			checkpoints.reverse();
+		}
+
+		return {
+			hasNextPage: pagination.last ? pageInfo.hasPreviousPage : pageInfo.hasNextPage,
+			nextCursor: (pagination.last ? pageInfo.startCursor : pageInfo.endCursor) as never,
+			data: checkpoints.map((checkpoint) => ({
+				checkpointCommitments: [], // TODO
+				digest: checkpoint.digest,
+				// endOfEpochData: checkpoint.endOfEpoch && { // TODO
+				// 	epochCommitments: [], // TODO
+				// 	nextEpochCommittee: [], // TODO
+				// 	nextEpochProtocolVersion: String(checkpoint.endOfEpoch.nextProtocolVersion),
+				// },
+				epoch: String(checkpoint.epoch?.epochId),
+				epochRollingGasCostSummary: {
+					computationCost: checkpoint.rollingGasSummary?.computationCost,
+					nonRefundableStorageFee: checkpoint.rollingGasSummary?.nonRefundableStorageFee,
+					storageCost: checkpoint.rollingGasSummary?.storageCost,
+					storageRebate: checkpoint.rollingGasSummary?.storageRebate,
+				},
+				networkTotalTransactions: String(checkpoint.networkTotalTransactions),
+				...(checkpoint.previousCheckpointDigest
+					? { previousDigest: checkpoint.previousCheckpointDigest }
+					: {}),
+				sequenceNumber: String(checkpoint.sequenceNumber),
+				timestampMs: new Date(checkpoint.timestamp).getTime().toString(),
+				transactions:
+					checkpoint.transactionBlockConnection?.nodes.map(
+						(transactionBlock) => transactionBlock.digest!,
+					) ?? [],
+				validatorSignature: checkpoint.validatorSignature,
+			})),
+		};
 	}
 
 	override async getCommitteeInfo(
@@ -1053,11 +1095,11 @@ export class GraphQLSuiClient extends SuiClient {
 
 		return {
 			epoch: String(epoch.epochId),
-			validators: [], // TODO,
+			validators: epoch.validatorSet?.activeValidators?.map(mapGraphQlValidatorToRpcValidator)!,
 			epochTotalTransactions: 'TODO',
-			firstCheckpointId: epoch.firstCheckpoint?.nodes[0]?.digest!,
-			endOfEpochInfo: {} as never, // TODO,
-			referenceGasPrice: epoch.referenceGasPrice,
+			firstCheckpointId: epoch.firstCheckpoint?.nodes[0]?.sequenceNumber.toString()!,
+			endOfEpochInfo: null,
+			referenceGasPrice: Number.parseInt(epoch.referenceGasPrice, 10),
 			epochStartTimestamp: new Date(epoch.startTimestamp).getTime().toString(),
 		};
 	}
@@ -1094,10 +1136,11 @@ export class GraphQLSuiClient extends SuiClient {
 		const attributes: Record<string, ProtocolConfigValue | null> = {};
 
 		for (const { key, value } of protocolConfig.configs) {
+			const [_, type, val] = /^(.+)\((.*)\)$/i.exec(value) ?? [value, 'u64', value];
+
 			attributes[key] = {
-				// TODO: can't infer types correctly here
-				u64: value,
-			};
+				[type.toLocaleLowerCase()]: val,
+			} as ProtocolConfigValue;
 		}
 
 		for (const { key, value } of protocolConfig.featureFlags) {
@@ -1105,9 +1148,9 @@ export class GraphQLSuiClient extends SuiClient {
 		}
 
 		return {
-			maxSupportedProtocolVersion: 'TODO',
-			minSupportedProtocolVersion: 'TODO',
-			protocolVersion: String(protocolConfig.protocolVersion),
+			maxSupportedProtocolVersion: protocolConfig.protocolVersion?.toString(),
+			minSupportedProtocolVersion: '1',
+			protocolVersion: protocolConfig.protocolVersion?.toString(),
 			attributes,
 			featureFlags,
 		};
@@ -1116,37 +1159,34 @@ export class GraphQLSuiClient extends SuiClient {
 	override async resolveNameServiceAddress(
 		input: ResolveNameServiceAddressParams,
 	): Promise<string | null> {
-		const address = await this.#graphqlQuery(
-			{
-				query: ResolveNameServiceAddressDocument,
-				variables: {
-					name: input.name,
-				},
+		const data = await this.#graphqlQuery({
+			query: ResolveNameServiceAddressDocument,
+			variables: {
+				name: input.name,
 			},
-			(data) => data.resolveNameServiceAddress?.location,
-		);
+		});
 
-		return address;
+		return data.resolveNameServiceAddress?.location ?? null;
 	}
 
 	override async resolveNameServiceNames(
 		input: ResolveNameServiceNamesParams,
 	): Promise<ResolvedNameServiceNames> {
-		const name = await this.#graphqlQuery(
+		const address = await this.#graphqlQuery(
 			{
 				query: ResolveNameServiceNamesDocument,
 				variables: {
 					address: input.address,
 				},
 			},
-			(data) => data.address?.defaultNameServiceName,
+			(data) => data.address,
 		);
 
 		// TODO currently only defaultNameServiceName is supported
 		return {
 			hasNextPage: false,
 			nextCursor: null,
-			data: [name],
+			data: address.defaultNameServiceName ? [address.defaultNameServiceName] : [],
 		};
 	}
 }
@@ -1228,7 +1268,7 @@ function mapGraphQLTransactionBlockToRpcTransactionBlock(
 		})),
 		checkpoint: transactionBlock.effects?.checkpoint?.sequenceNumber.toString(),
 		timestampMs: new Date(transactionBlock.effects?.timestamp).getTime().toString(),
-		// confirmedLocalExecution: TODO
+		confirmedLocalExecution: false, // Not supported in GraphQL
 		digest: transactionBlock.digest,
 		effects: options?.showEffects
 			? {
@@ -1434,6 +1474,55 @@ function moveDataToRpcContent(data: MoveData, layout: MoveTypeLayout): MoveValue
 	throw new Error('Invalid move data');
 }
 
+function mapGraphQlValidatorToRpcValidator(
+	validator: Rpc_Validator_FieldsFragment,
+): SuiValidatorSummary {
+	return {
+		commissionRate: validator.commissionRate?.toString()!,
+		description: validator.description!,
+		exchangeRatesId: validator.exchangeRates?.asObject?.location!,
+		exchangeRatesSize: 'TODO',
+		gasPrice: validator.gasPrice,
+		imageUrl: validator.imageUrl!,
+		name: validator.name!,
+		netAddress: validator.credentials?.netAddress!,
+		networkPubkeyBytes: validator.credentials?.networkPubKey!,
+		nextEpochCommissionRate: validator.nextEpochCommissionRate?.toString()!,
+		nextEpochGasPrice: validator.nextEpochGasPrice,
+		nextEpochNetAddress: validator.nextEpochCredentials?.netAddress,
+		nextEpochNetworkPubkeyBytes: validator.nextEpochCredentials?.networkPubKey,
+		nextEpochP2pAddress: validator.nextEpochCredentials?.p2PAddress,
+		nextEpochPrimaryAddress: validator.nextEpochCredentials?.primaryAddress,
+		nextEpochProofOfPossession: validator.nextEpochCredentials?.proofOfPossession,
+		nextEpochProtocolPubkeyBytes: validator.nextEpochCredentials?.protocolPubKey,
+		nextEpochStake: validator.nextEpochStake!,
+		nextEpochWorkerAddress: validator.nextEpochCredentials?.workerAddress,
+		nextEpochWorkerPubkeyBytes: validator.nextEpochCredentials?.workerPubKey,
+		operationCapId: validator.operationCap?.asObject?.location!,
+		p2pAddress: validator.credentials?.p2PAddress!,
+		pendingTotalSuiWithdraw: validator.pendingTotalSuiWithdraw,
+		pendingPoolTokenWithdraw: validator.pendingPoolTokenWithdraw,
+		poolTokenBalance: validator.poolTokenBalance,
+		pendingStake: validator.pendingStake,
+		primaryAddress: validator.credentials?.primaryAddress!,
+		projectUrl: validator.projectUrl!,
+		proofOfPossessionBytes: validator.credentials?.proofOfPossession,
+		protocolPubkeyBytes: validator.credentials?.protocolPubKey,
+		rewardsPool: validator.rewardsPool,
+		stakingPoolId: validator.stakingPool?.asObject?.location!,
+		stakingPoolActivationEpoch: validator.stakingPoolActivationEpoch?.toString(),
+		stakingPoolSuiBalance: validator.stakingPoolSuiBalance,
+		suiAddress: validator.address.location,
+		votingPower: validator.votingPower?.toString()!,
+		workerAddress: validator.credentials?.workerAddress!,
+		workerPubkeyBytes: validator.credentials?.workerPubKey,
+	};
+}
+
 function toShortTypeString<T extends string | null | undefined>(type?: T): T {
 	return type?.replace(/0x0+/g, '0x') as T;
+}
+
+function isNumericString(value: string) {
+	return /^-?\d+$/.test(value);
 }

@@ -12,7 +12,5 @@ query getProtocolConfig($protocolVersion: Int) {
 			key
 			value
 		}
-		#maxSupportedProtocolVersion
-		#minSupportedProtocolVersion
 	}
 }

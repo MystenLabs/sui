@@ -65,6 +65,30 @@ export type Scalars = {
    *     }
    */
   MoveTypeSignature: { input: any; output: any; }
+  /**
+   * The shape of an abstract Move Type (a type that can contain free type parameters, and can optionally be taken by reference), corresponding to the following recursive type:
+   *
+   * type OpenMoveTypeSignature = {
+   *   ref: ("&" | "&mut")?,
+   *   body: OpenMoveTypeSignatureBody,
+   * }
+   *
+   * type OpenMoveTypeSignatureBody =
+   *     "address"
+   *   | "bool"
+   *   | "u8" | "u16" | ... | "u256"
+   *   | { vector: OpenMoveTypeSignatureBody }
+   *   | {
+   *       struct {
+   *         package: string,
+   *         module: string,
+   *         type: string,
+   *         typeParameters: [OpenMoveTypeSignatureBody]
+   *       }
+   *     }
+   *   | { typeParameter: number }
+   */
+  OpenMoveTypeSignature: { input: any; output: any; }
   SuiAddress: { input: any; output: any; }
 };
 
@@ -416,12 +440,38 @@ export type Epoch = {
   endTimestamp?: Maybe<Scalars['DateTime']['output']>;
   /** The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change */
   epochId: Scalars['Int']['output'];
+  /** The storage fees paid for transactions executed during the epoch. */
+  fundInflow?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The storage fee rebates paid to users
+   * who deleted the data associated with past transactions.
+   */
+  fundOutflow?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The storage fund available in this epoch.
+   * This fund is used to redistribute storage fees from past transactions
+   * to future validators.
+   */
+  fundSize?: Maybe<Scalars['BigInt']['output']>;
+  /**
+   * The difference between the fund inflow and outflow, representing
+   * the net amount of storage fees accumulated in this epoch.
+   */
+  netInflow?: Maybe<Scalars['BigInt']['output']>;
   /** The epoch's corresponding protocol configuration, including the feature flags and the configuration options */
   protocolConfigs?: Maybe<ProtocolConfigs>;
   /** The minimum gas price that a quorum of validators are guaranteed to sign a transaction for */
   referenceGasPrice?: Maybe<Scalars['BigInt']['output']>;
   /** The epoch's starting timestamp */
   startTimestamp?: Maybe<Scalars['DateTime']['output']>;
+  /** The total number of checkpoints in this epoch. */
+  totalCheckpoints?: Maybe<Scalars['BigInt']['output']>;
+  /** The total amount of gas fees (in MIST) that were paid in this epoch. */
+  totalGasFees?: Maybe<Scalars['BigInt']['output']>;
+  /** The total MIST rewarded as stake. */
+  totalStakeRewards?: Maybe<Scalars['BigInt']['output']>;
+  /** The amount added to total gas fees to make up the total stake rewards. */
+  totalStakeSubsidies?: Maybe<Scalars['BigInt']['output']>;
   /** The epoch's corresponding transaction blocks */
   transactionBlockConnection?: Maybe<TransactionBlockConnection>;
   /** Validator related properties, including the active validators */
@@ -454,8 +504,8 @@ export type Event = {
   /** JSON string representation of the event */
   json?: Maybe<Scalars['String']['output']>;
   senders?: Maybe<Array<Address>>;
-  /** Package id and module name of Move module that the event was emitted in */
-  sendingModuleId?: Maybe<MoveModuleId>;
+  /** The Move module that the event was emitted in. */
+  sendingModule?: Maybe<MoveModule>;
   /** UTC timestamp in milliseconds since epoch (1/1/1970) */
   timestamp?: Maybe<Scalars['DateTime']['output']>;
 };
@@ -566,6 +616,73 @@ export type Linkage = {
   version: Scalars['Int']['output'];
 };
 
+export enum MoveAbility {
+  Copy = 'COPY',
+  Drop = 'DROP',
+  Key = 'KEY',
+  Store = 'STORE'
+}
+
+export type MoveField = {
+  __typename?: 'MoveField';
+  name: Scalars['String']['output'];
+  type?: Maybe<OpenMoveType>;
+};
+
+/** Signature of a function, defined in a Move module. */
+export type MoveFunction = {
+  __typename?: 'MoveFunction';
+  /** Whether the function has the `entry` modifier or not. */
+  isEntry?: Maybe<Scalars['Boolean']['output']>;
+  /** The module this function was defined in. */
+  module: MoveModule;
+  /** The function's (unqualified) name. */
+  name: Scalars['String']['output'];
+  /**
+   * The function's parameter types.  These types can reference type parameters introduce by this
+   * function (see `typeParameters`).
+   */
+  parameters?: Maybe<Array<OpenMoveType>>;
+  /**
+   * The function's return types.  There can be multiple because functions in Move can return
+   * multiple values.  These types can reference type parameters introduced by this function (see
+   * `typeParameters`).
+   */
+  return?: Maybe<Array<OpenMoveType>>;
+  /**
+   * Constraints on the function's formal type parameters.  Move bytecode does not name type
+   * parameters, so when they are referenced (e.g. in parameter and return types) they are
+   * identified by their index in this list.
+   */
+  typeParameters?: Maybe<Array<MoveFunctionTypeParameter>>;
+  /** The function's visibility: `public`, `public(friend)`, or `private`. */
+  visibility?: Maybe<MoveVisibility>;
+};
+
+export type MoveFunctionConnection = {
+  __typename?: 'MoveFunctionConnection';
+  /** A list of edges. */
+  edges: Array<MoveFunctionEdge>;
+  /** A list of nodes. */
+  nodes: Array<MoveFunction>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type MoveFunctionEdge = {
+  __typename?: 'MoveFunctionEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: MoveFunction;
+};
+
+export type MoveFunctionTypeParameter = {
+  __typename?: 'MoveFunctionTypeParameter';
+  constraints: Array<MoveAbility>;
+};
+
 /**
  * Represents a module in Move, a library that defines struct types
  * and functions that operate on these types.
@@ -576,13 +693,25 @@ export type MoveModule = {
   bytes?: Maybe<Scalars['Base64']['output']>;
   /** Textual representation of the module's bytecode. */
   disassembly?: Maybe<Scalars['String']['output']>;
+  /** Format version of this module's bytecode. */
   fileFormatVersion: Scalars['Int']['output'];
   /**
    * Modules that this module considers friends (these modules can access `public(friend)`
    * functions from this module).
    */
   friendConnection: MoveModuleConnection;
-  moduleId: MoveModuleId;
+  /** Look-up the signature of a function defined in this module, by its name. */
+  function?: Maybe<MoveFunction>;
+  /** Iterate through the signatures of functions defined in this module. */
+  functionConnection?: Maybe<MoveFunctionConnection>;
+  /** The module's (unqualified) name. */
+  name: Scalars['String']['output'];
+  /** The package that this Move module was defined in */
+  package: MovePackage;
+  /** Look-up the definition of a struct defined in this module, by its name. */
+  struct?: Maybe<MoveStruct>;
+  /** Iterate through the structs defined in this module. */
+  structConnection?: Maybe<MoveStructConnection>;
 };
 
 
@@ -591,6 +720,48 @@ export type MoveModule = {
  * and functions that operate on these types.
  */
 export type MoveModuleFriendConnectionArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * Represents a module in Move, a library that defines struct types
+ * and functions that operate on these types.
+ */
+export type MoveModuleFunctionArgs = {
+  name: Scalars['String']['input'];
+};
+
+
+/**
+ * Represents a module in Move, a library that defines struct types
+ * and functions that operate on these types.
+ */
+export type MoveModuleFunctionConnectionArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+/**
+ * Represents a module in Move, a library that defines struct types
+ * and functions that operate on these types.
+ */
+export type MoveModuleStructArgs = {
+  name: Scalars['String']['input'];
+};
+
+
+/**
+ * Represents a module in Move, a library that defines struct types
+ * and functions that operate on these types.
+ */
+export type MoveModuleStructConnectionArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
@@ -614,13 +785,6 @@ export type MoveModuleEdge = {
   cursor: Scalars['String']['output'];
   /** The item at the end of the edge */
   node: MoveModule;
-};
-
-export type MoveModuleId = {
-  __typename?: 'MoveModuleId';
-  name: Scalars['String']['output'];
-  /** The package that this Move module was defined in */
-  package: MovePackage;
 };
 
 export type MoveObject = {
@@ -680,6 +844,53 @@ export type MovePackageModuleConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
 };
 
+/** Description of a type, defined in a Move module. */
+export type MoveStruct = {
+  __typename?: 'MoveStruct';
+  /** Abilities this struct has. */
+  abilities?: Maybe<Array<MoveAbility>>;
+  /**
+   * The names and types of the struct's fields.  Field types reference type parameters, by their
+   * index in the defining struct's `typeParameters` list.
+   */
+  fields?: Maybe<Array<MoveField>>;
+  /** The module this struct was originally defined in. */
+  module: MoveModule;
+  /** The struct's (unqualified) type name. */
+  name: Scalars['String']['output'];
+  /**
+   * Constraints on the struct's formal type parameters.  Move bytecode does not name type
+   * parameters, so when they are referenced (e.g. in field types) they are identified by their
+   * index in this list.
+   */
+  typeParameters?: Maybe<Array<MoveStructTypeParameter>>;
+};
+
+export type MoveStructConnection = {
+  __typename?: 'MoveStructConnection';
+  /** A list of edges. */
+  edges: Array<MoveStructEdge>;
+  /** A list of nodes. */
+  nodes: Array<MoveStruct>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+};
+
+/** An edge in a connection. */
+export type MoveStructEdge = {
+  __typename?: 'MoveStructEdge';
+  /** A cursor for use in pagination */
+  cursor: Scalars['String']['output'];
+  /** The item at the end of the edge */
+  node: MoveStruct;
+};
+
+export type MoveStructTypeParameter = {
+  __typename?: 'MoveStructTypeParameter';
+  constraints: Array<MoveAbility>;
+  isPhantom: Scalars['Boolean']['output'];
+};
+
 /** Represents concrete types (no type parameters, no references) */
 export type MoveType = {
   __typename?: 'MoveType';
@@ -714,6 +925,12 @@ export type MoveValue = {
   type: MoveType;
 };
 
+export enum MoveVisibility {
+  Friend = 'FRIEND',
+  Private = 'PRIVATE',
+  Public = 'PUBLIC'
+}
+
 export type Object = ObjectOwner & {
   __typename?: 'Object';
   /** Attempts to convert the object into a MoveObject */
@@ -728,8 +945,9 @@ export type Object = ObjectOwner & {
   bcs?: Maybe<Scalars['Base64']['output']>;
   /**
    * The coin objects for the given address.
-   * The type field is a string of the inner type of the coin
-   * by which to filter (e.g., 0x2::sui::SUI).
+   *
+   * The type field is a string of the inner type of the coin by which to filter
+   * (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
    */
   coinConnection?: Maybe<CoinConnection>;
   /** The domain that a user address has explicitly configured as their default domain */
@@ -957,6 +1175,18 @@ export type ObjectOwnerStakedSuiConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
 };
 
+/**
+ * Represents types that could contain references or free type parameters.  Such types can appear
+ * as function parameters, in fields of structs, or as actual type parameter.
+ */
+export type OpenMoveType = {
+  __typename?: 'OpenMoveType';
+  /** Flat representation of the type signature, as a displayable string. */
+  repr?: Maybe<Scalars['String']['output']>;
+  /** Structured representation of the type signature. */
+  signature?: Maybe<Scalars['OpenMoveTypeSignature']['output']>;
+};
+
 export type Owner = ObjectOwner & {
   __typename?: 'Owner';
   asAddress?: Maybe<Address>;
@@ -964,9 +1194,10 @@ export type Owner = ObjectOwner & {
   balance?: Maybe<Balance>;
   balanceConnection?: Maybe<BalanceConnection>;
   /**
-   * The coin objects for the given address.
-   * The type field is a string of the inner type of the coin
-   * by which to filter (e.g., 0x2::sui::SUI).
+   * The coin objects for the given address or object.
+   *
+   * The type field is a string of the inner type of the coin by which to filter
+   * (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
    */
   coinConnection?: Maybe<CoinConnection>;
   defaultNameServiceName?: Maybe<Scalars['String']['output']>;
@@ -1146,8 +1377,9 @@ export type Query = {
   checkpointConnection?: Maybe<CheckpointConnection>;
   /**
    * The coin objects that exist in the network.
-   * The type field is a string of the inner type of the coin by which to filter.
-   * If no type is provided, it will default to 0x2::sui::SUI.
+   *
+   * The type field is a string of the inner type of the coin by which to filter
+   * (e.g. `0x2::sui::SUI`). If no type is provided, it will default to `0x2::sui::SUI`.
    */
   coinConnection?: Maybe<CoinConnection>;
   coinMetadata?: Maybe<CoinMetadata>;
@@ -1278,6 +1510,8 @@ export type SafeMode = {
 
 export type ServiceConfig = {
   __typename?: 'ServiceConfig';
+  /** Default number of elements allowed on a single page of a connection. */
+  defaultPageSize: Scalars['BigInt']['output'];
   /** List of all features that are enabled on this GraphQL service. */
   enabledFeatures: Array<Feature>;
   /** Check whether `feature` is enabled on this GraphQL service. */
@@ -1642,6 +1876,25 @@ export type ValidatorSet = {
   validatorCandidatesSize?: Maybe<Scalars['Int']['output']>;
 };
 
+export type GetCheckpointQueryVariables = Exact<{
+  id?: InputMaybe<CheckpointId>;
+}>;
+
+
+export type GetCheckpointQuery = { __typename?: 'Query', checkpoint?: { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp?: any | null, validatorSignature?: any | null, endOfEpoch?: { __typename?: 'EndOfEpochData', nextProtocolVersion?: number | null, newCommittee?: Array<{ __typename?: 'CommitteeMember', authorityName?: string | null, stakeUnit?: number | null }> | null } | null, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null } | null };
+
+export type GetCheckpointsQueryVariables = Exact<{
+  first?: InputMaybe<Scalars['Int']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type GetCheckpointsQuery = { __typename?: 'Query', checkpointConnection?: { __typename?: 'CheckpointConnection', pageInfo: { __typename?: 'PageInfo', startCursor?: string | null, endCursor?: string | null, hasNextPage: boolean, hasPreviousPage: boolean }, nodes: Array<{ __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp?: any | null, validatorSignature?: any | null, endOfEpoch?: { __typename?: 'EndOfEpochData', nextProtocolVersion?: number | null, newCommittee?: Array<{ __typename?: 'CommitteeMember', authorityName?: string | null, stakeUnit?: number | null }> | null } | null, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null }> } | null };
+
+export type Rpc_Checkpoint_FieldsFragment = { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp?: any | null, validatorSignature?: any | null, endOfEpoch?: { __typename?: 'EndOfEpochData', nextProtocolVersion?: number | null, newCommittee?: Array<{ __typename?: 'CommitteeMember', authorityName?: string | null, stakeUnit?: number | null }> | null } | null, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null };
+
 export type GetAllBalancesQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -1664,13 +1917,6 @@ export type GetChainIdentifierQueryVariables = Exact<{ [key: string]: never; }>;
 
 export type GetChainIdentifierQuery = { __typename?: 'Query', chainIdentifier: string };
 
-export type GetCheckpointQueryVariables = Exact<{
-  id?: InputMaybe<CheckpointId>;
-}>;
-
-
-export type GetCheckpointQuery = { __typename?: 'Query', checkpoint?: { __typename?: 'Checkpoint', digest: string, networkTotalTransactions?: number | null, previousCheckpointDigest?: string | null, sequenceNumber: number, timestamp?: any | null, validatorSignature?: any | null, endOfEpoch?: { __typename?: 'EndOfEpochData', nextProtocolVersion?: number | null, newCommittee?: Array<{ __typename?: 'CommitteeMember', authorityName?: string | null, stakeUnit?: number | null }> | null } | null, epoch?: { __typename?: 'Epoch', epochId: number } | null, rollingGasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null } | null, transactionBlockConnection?: { __typename?: 'TransactionBlockConnection', nodes: Array<{ __typename?: 'TransactionBlock', digest: string }> } | null } | null };
-
 export type GetCoinMetadataQueryVariables = Exact<{
   coinType: Scalars['String']['input'];
 }>;
@@ -1691,9 +1937,9 @@ export type GetCoinsQuery = { __typename?: 'Query', address?: { __typename?: 'Ad
 export type GetCurrentEpochQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetCurrentEpochQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp?: any | null, endTimestamp?: any | null, referenceGasPrice?: any | null, validatorSet?: { __typename?: 'ValidatorSet', activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, reportRecords?: Array<any> | null, exchangeRates?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, address: { __typename?: 'Address', location: any } }> | null } | null, firstCheckpoint?: { __typename?: 'CheckpointConnection', nodes: Array<{ __typename?: 'Checkpoint', digest: string, sequenceNumber: number }> } | null } | null };
+export type GetCurrentEpochQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp?: any | null, endTimestamp?: any | null, referenceGasPrice?: any | null, validatorSet?: { __typename?: 'ValidatorSet', activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, reportRecords?: Array<any> | null, exchangeRates?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', location: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, stakingPool?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, address: { __typename?: 'Address', location: any } }> | null } | null, firstCheckpoint?: { __typename?: 'CheckpointConnection', nodes: Array<{ __typename?: 'Checkpoint', sequenceNumber: number }> } | null } | null };
 
-export type Rpc_Validator_FieldsFragment = { __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, reportRecords?: Array<any> | null, exchangeRates?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, address: { __typename?: 'Address', location: any } };
+export type Rpc_Validator_FieldsFragment = { __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, reportRecords?: Array<any> | null, exchangeRates?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', location: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, stakingPool?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, address: { __typename?: 'Address', location: any } };
 
 export type Rpc_Credential_FieldsFragment = { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null };
 
@@ -1722,7 +1968,7 @@ export type GetLatestCheckpointSequenceNumberQuery = { __typename?: 'Query', che
 export type GetLatestSuiSystemStateQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetLatestSuiSystemStateQuery = { __typename?: 'Query', latestSuiSystemState: { __typename?: 'SuiSystemStateSummary', referenceGasPrice?: any | null, systemStateVersion?: any | null, safeMode?: { __typename?: 'SafeMode', enabled?: boolean | null, gasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, nonRefundableStorageFee?: any | null, storageCost?: any | null, storageRebate?: any | null } | null } | null, stakeSubsidy?: { __typename?: 'StakeSubsidy', balance?: any | null, currentDistributionAmount?: any | null, decreaseRate?: number | null, distributionCounter?: number | null, periodLength?: number | null } | null, storageFund?: { __typename?: 'StorageFund', nonRefundableBalance?: any | null, totalObjectStorageRebates?: any | null } | null, systemParameters?: { __typename?: 'SystemParameters', minValidatorCount?: number | null, maxValidatorCount?: number | null, minValidatorJoiningStake?: any | null, durationMs?: any | null, validatorLowStakeThreshold?: any | null, validatorLowStakeGracePeriod?: any | null, validatorVeryLowStakeThreshold?: any | null } | null, protocolConfigs?: { __typename?: 'ProtocolConfigs', protocolVersion: number } | null, validatorSet?: { __typename?: 'ValidatorSet', inactivePoolsSize?: number | null, pendingActiveValidatorsSize?: number | null, validatorCandidatesSize?: number | null, pendingRemovals?: Array<number> | null, totalStake?: any | null, activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, reportRecords?: Array<any> | null, exchangeRates?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, address: { __typename?: 'Address', location: any } }> | null } | null, epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp?: any | null, endTimestamp?: any | null } | null } };
+export type GetLatestSuiSystemStateQuery = { __typename?: 'Query', latestSuiSystemState: { __typename?: 'SuiSystemStateSummary', referenceGasPrice?: any | null, systemStateVersion?: any | null, safeMode?: { __typename?: 'SafeMode', enabled?: boolean | null, gasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, nonRefundableStorageFee?: any | null, storageCost?: any | null, storageRebate?: any | null } | null } | null, stakeSubsidy?: { __typename?: 'StakeSubsidy', balance?: any | null, currentDistributionAmount?: any | null, decreaseRate?: number | null, distributionCounter?: number | null, periodLength?: number | null } | null, storageFund?: { __typename?: 'StorageFund', nonRefundableBalance?: any | null, totalObjectStorageRebates?: any | null } | null, systemParameters?: { __typename?: 'SystemParameters', minValidatorCount?: number | null, maxValidatorCount?: number | null, minValidatorJoiningStake?: any | null, durationMs?: any | null, validatorLowStakeThreshold?: any | null, validatorLowStakeGracePeriod?: any | null, validatorVeryLowStakeThreshold?: any | null } | null, protocolConfigs?: { __typename?: 'ProtocolConfigs', protocolVersion: number } | null, validatorSet?: { __typename?: 'ValidatorSet', inactivePoolsSize?: number | null, pendingActiveValidatorsSize?: number | null, validatorCandidatesSize?: number | null, pendingRemovals?: Array<number> | null, totalStake?: any | null, activeValidators?: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, reportRecords?: Array<any> | null, exchangeRates?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', json: any } | null, asObject: { __typename?: 'Object', location: any } } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, stakingPool?: { __typename?: 'MoveObject', asObject: { __typename?: 'Object', location: any } } | null, address: { __typename?: 'Address', location: any } }> | null } | null, epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp?: any | null, endTimestamp?: any | null } | null } };
 
 export type GetMoveFunctionArgTypesQueryVariables = Exact<{
   packageId: Scalars['SuiAddress']['input'];
@@ -1872,7 +2118,7 @@ export type QueryEventsQueryVariables = Exact<{
 }>;
 
 
-export type QueryEventsQuery = { __typename?: 'Query', eventConnection?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, endCursor?: string | null, startCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json?: string | null, bcs?: any | null, timestamp?: any | null, sendingModuleId?: { __typename?: 'MoveModuleId', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', location: any } } } | null, senders?: Array<{ __typename?: 'Address', location: any }> | null, eventType?: { __typename?: 'MoveType', repr: string } | null }> } | null };
+export type QueryEventsQuery = { __typename?: 'Query', eventConnection?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, endCursor?: string | null, startCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json?: string | null, bcs?: any | null, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', asObject: { __typename?: 'Object', location: any } } } | null, senders?: Array<{ __typename?: 'Address', location: any }> | null, eventType?: { __typename?: 'MoveType', repr: string } | null }> } | null };
 
 export type GetStakesQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -1952,6 +2198,37 @@ export class TypedDocumentString<TResult, TVariables>
     return this.value;
   }
 }
+export const Rpc_Checkpoint_FieldsFragmentDoc = new TypedDocumentString(`
+    fragment RPC_Checkpoint_Fields on Checkpoint {
+  digest
+  endOfEpoch {
+    newCommittee {
+      authorityName
+      stakeUnit
+    }
+    nextProtocolVersion
+  }
+  epoch {
+    epochId
+  }
+  rollingGasSummary {
+    computationCost
+    storageCost
+    storageRebate
+    nonRefundableStorageFee
+  }
+  networkTotalTransactions
+  previousCheckpointDigest
+  sequenceNumber
+  timestamp
+  transactionBlockConnection {
+    nodes {
+      digest
+    }
+  }
+  validatorSignature
+}
+    `, {"fragmentName":"RPC_Checkpoint_Fields"}) as unknown as TypedDocumentString<Rpc_Checkpoint_FieldsFragment, unknown>;
 export const Rpc_Credential_FieldsFragmentDoc = new TypedDocumentString(`
     fragment RPC_CREDENTIAL_FIELDS on ValidatorCredentials {
   netAddress
@@ -1970,6 +2247,9 @@ export const Rpc_Validator_FieldsFragmentDoc = new TypedDocumentString(`
   commissionRate
   exchangeRatesSize
   exchangeRates {
+    contents {
+      json
+    }
     asObject {
       location
     }
@@ -1999,6 +2279,12 @@ export const Rpc_Validator_FieldsFragmentDoc = new TypedDocumentString(`
   poolTokenBalance
   projectUrl
   rewardsPool
+  stakingPool {
+    asObject {
+      location
+    }
+  }
+  stakingPoolActivationEpoch
   stakingPoolSuiBalance
   address {
     location
@@ -2215,6 +2501,84 @@ export const Rpc_Transaction_FieldsFragmentDoc = new TypedDocumentString(`
   }
 }
     `, {"fragmentName":"RPC_TRANSACTION_FIELDS"}) as unknown as TypedDocumentString<Rpc_Transaction_FieldsFragment, unknown>;
+export const GetCheckpointDocument = new TypedDocumentString(`
+    query getCheckpoint($id: CheckpointId) {
+  checkpoint(id: $id) {
+    ...RPC_Checkpoint_Fields
+  }
+}
+    fragment RPC_Checkpoint_Fields on Checkpoint {
+  digest
+  endOfEpoch {
+    newCommittee {
+      authorityName
+      stakeUnit
+    }
+    nextProtocolVersion
+  }
+  epoch {
+    epochId
+  }
+  rollingGasSummary {
+    computationCost
+    storageCost
+    storageRebate
+    nonRefundableStorageFee
+  }
+  networkTotalTransactions
+  previousCheckpointDigest
+  sequenceNumber
+  timestamp
+  transactionBlockConnection {
+    nodes {
+      digest
+    }
+  }
+  validatorSignature
+}`) as unknown as TypedDocumentString<GetCheckpointQuery, GetCheckpointQueryVariables>;
+export const GetCheckpointsDocument = new TypedDocumentString(`
+    query getCheckpoints($first: Int, $before: String, $last: Int, $after: String) {
+  checkpointConnection(first: $first, after: $after, last: $last, before: $before) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasNextPage
+      hasPreviousPage
+    }
+    nodes {
+      ...RPC_Checkpoint_Fields
+    }
+  }
+}
+    fragment RPC_Checkpoint_Fields on Checkpoint {
+  digest
+  endOfEpoch {
+    newCommittee {
+      authorityName
+      stakeUnit
+    }
+    nextProtocolVersion
+  }
+  epoch {
+    epochId
+  }
+  rollingGasSummary {
+    computationCost
+    storageCost
+    storageRebate
+    nonRefundableStorageFee
+  }
+  networkTotalTransactions
+  previousCheckpointDigest
+  sequenceNumber
+  timestamp
+  transactionBlockConnection {
+    nodes {
+      digest
+    }
+  }
+  validatorSignature
+}`) as unknown as TypedDocumentString<GetCheckpointsQuery, GetCheckpointsQueryVariables>;
 export const GetAllBalancesDocument = new TypedDocumentString(`
     query getAllBalances($owner: SuiAddress!, $limit: Int, $cursor: String) {
   address(address: $owner) {
@@ -2252,39 +2616,6 @@ export const GetChainIdentifierDocument = new TypedDocumentString(`
   chainIdentifier
 }
     `) as unknown as TypedDocumentString<GetChainIdentifierQuery, GetChainIdentifierQueryVariables>;
-export const GetCheckpointDocument = new TypedDocumentString(`
-    query getCheckpoint($id: CheckpointId) {
-  checkpoint(id: $id) {
-    digest
-    endOfEpoch {
-      newCommittee {
-        authorityName
-        stakeUnit
-      }
-      nextProtocolVersion
-    }
-    epoch {
-      epochId
-    }
-    rollingGasSummary {
-      computationCost
-      storageCost
-      storageRebate
-      nonRefundableStorageFee
-    }
-    networkTotalTransactions
-    previousCheckpointDigest
-    sequenceNumber
-    timestamp
-    transactionBlockConnection {
-      nodes {
-        digest
-      }
-    }
-    validatorSignature
-  }
-}
-    `) as unknown as TypedDocumentString<GetCheckpointQuery, GetCheckpointQueryVariables>;
 export const GetCoinMetadataDocument = new TypedDocumentString(`
     query getCoinMetadata($coinType: String!) {
   coinMetadata(coinType: $coinType) {
@@ -2343,7 +2674,6 @@ export const GetCurrentEpochDocument = new TypedDocumentString(`
     }
     firstCheckpoint: checkpointConnection(first: 1) {
       nodes {
-        digest
         sequenceNumber
       }
     }
@@ -2357,6 +2687,9 @@ export const GetCurrentEpochDocument = new TypedDocumentString(`
   commissionRate
   exchangeRatesSize
   exchangeRates {
+    contents {
+      json
+    }
     asObject {
       location
     }
@@ -2386,6 +2719,12 @@ export const GetCurrentEpochDocument = new TypedDocumentString(`
   poolTokenBalance
   projectUrl
   rewardsPool
+  stakingPool {
+    asObject {
+      location
+    }
+  }
+  stakingPoolActivationEpoch
   stakingPoolSuiBalance
   address {
     location
@@ -2537,6 +2876,9 @@ export const GetLatestSuiSystemStateDocument = new TypedDocumentString(`
   commissionRate
   exchangeRatesSize
   exchangeRates {
+    contents {
+      json
+    }
     asObject {
       location
     }
@@ -2566,6 +2908,12 @@ export const GetLatestSuiSystemStateDocument = new TypedDocumentString(`
   poolTokenBalance
   projectUrl
   rewardsPool
+  stakingPool {
+    asObject {
+      location
+    }
+  }
+  stakingPoolActivationEpoch
   stakingPoolSuiBalance
   address {
     location
@@ -2937,7 +3285,7 @@ export const QueryEventsDocument = new TypedDocumentString(`
       startCursor
     }
     nodes {
-      sendingModuleId {
+      sendingModule {
         package {
           asObject {
             location

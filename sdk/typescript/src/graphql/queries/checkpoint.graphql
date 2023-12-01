@@ -1,0 +1,55 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getCheckpoint($id: CheckpointId) {
+	checkpoint(id: $id) {
+		...RPC_Checkpoint_Fields
+	}
+}
+
+query getCheckpoints($first: Int, $before: String, $last: Int, $after: String) {
+	checkpointConnection(first: $first, after: $after, last: $last, before: $before) {
+		pageInfo {
+			startCursor
+			endCursor
+			hasNextPage
+			hasPreviousPage
+		}
+		nodes {
+			...RPC_Checkpoint_Fields
+		}
+	}
+}
+
+fragment RPC_Checkpoint_Fields on Checkpoint {
+	# checkpointCommitments
+	digest
+	endOfEpoch {
+		newCommittee {
+			authorityName
+			stakeUnit
+		}
+		nextProtocolVersion
+	}
+	epoch {
+		epochId
+	}
+
+	rollingGasSummary {
+		computationCost
+		storageCost
+		storageRebate
+		nonRefundableStorageFee
+	}
+	networkTotalTransactions
+	previousCheckpointDigest
+	sequenceNumber
+	timestamp
+	# might be truncated? should we set a higher limit or paginate?
+	transactionBlockConnection {
+		nodes {
+			digest
+		}
+	}
+	validatorSignature
+}

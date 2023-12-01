@@ -21,7 +21,7 @@ query queryEvents(
 			startCursor
 		}
 		nodes {
-			sendingModuleId {
+			sendingModule {
 				package {
 					asObject {
 						location

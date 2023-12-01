@@ -12,11 +12,9 @@ query getCurrentEpoch {
 		# epochTotalTransactions
 		firstCheckpoint: checkpointConnection(first: 1) {
 			nodes {
-				digest
 				sequenceNumber
 			}
 		}
-		# endOfEpoch it not needed for current epoch
 		startTimestamp
 		endTimestamp
 		referenceGasPrice
@@ -28,6 +26,9 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 	commissionRate
 	exchangeRatesSize
 	exchangeRates {
+		contents {
+			json
+		}
 		asObject {
 			location
 		}
@@ -57,6 +58,12 @@ fragment RPC_VALIDATOR_FIELDS on Validator {
 	poolTokenBalance
 	projectUrl
 	rewardsPool
+	stakingPool {
+		asObject {
+			location
+		}
+	}
+	stakingPoolActivationEpoch
 	stakingPoolSuiBalance
 	address {
 		location

@@ -44,6 +44,12 @@ describe('GraphQL SuiClient compatibility', () => {
 		await toolbox.client.waitForTransactionBlock({ digest: transactionBlockDigest });
 	});
 
+	test('getRpcApiVersion', async () => {
+		const version = await toolbox.graphQLClient!.getRpcApiVersion();
+
+		expect(version?.match(/^\d+.\d+.\d+$/)).not.toBeNull();
+	});
+
 	test('getCoins', async () => {
 		const rpcCoins = await toolbox.client.getCoins({
 			owner: toolbox.address(),
@@ -580,13 +586,117 @@ describe('GraphQL SuiClient compatibility', () => {
 		expect(graphql).toEqual(rpc);
 	});
 
-	test.only('getCheckpoint', async () => {
-		const latest = await toolbox.client.getLatestCheckpointSequenceNumber();
+	test('getCheckpoint', async () => {
 		const rpc = await toolbox.client.getCheckpoint({
-			id: latest,
+			id: '3',
 		});
 		const graphql = await toolbox.graphQLClient!.getCheckpoint({
-			id: latest,
+			id: '3',
+		});
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test('getCheckpoints', async () => {
+		const rpc = await toolbox.client.getCheckpoints({
+			descendingOrder: false,
+			limit: 5,
+		});
+		const graphql = await toolbox.graphQLClient!.getCheckpoints({
+			descendingOrder: false,
+			limit: 5,
+		});
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getCommitteeInfo', async () => {
+		const rpc = await toolbox.client.getCommitteeInfo({});
+		const graphql = await toolbox.graphQLClient!.getCommitteeInfo({});
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getNetworkMetrics', async () => {
+		const rpc = await toolbox.client.getNetworkMetrics();
+		const graphql = await toolbox.graphQLClient!.getNetworkMetrics();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getMoveCallMetrics', async () => {
+		const rpc = await toolbox.client.getMoveCallMetrics();
+		const graphql = await toolbox.graphQLClient!.getMoveCallMetrics();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getAddressMetrics', async () => {
+		const rpc = await toolbox.client.getAddressMetrics();
+		const graphql = await toolbox.graphQLClient!.getAddressMetrics();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getAllEpochAddressMetrics', async () => {
+		const rpc = await toolbox.client.getAllEpochAddressMetrics();
+		const graphql = await toolbox.graphQLClient!.getAllEpochAddressMetrics();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getEpochs', async () => {
+		const rpc = await toolbox.client.getEpochs();
+		const graphql = await toolbox.graphQLClient!.getEpochs();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getCurrentEpoch', async () => {
+		const rpc = await toolbox.client.getCurrentEpoch();
+		const graphql = await toolbox.graphQLClient!.getCurrentEpoch();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test.skip('getValidatorsApy', async () => {
+		const rpc = await toolbox.client.getValidatorsApy();
+		const graphql = await toolbox.graphQLClient!.getValidatorsApy();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test('getChainIdentifier', async () => {
+		const rpc = await toolbox.client.getChainIdentifier();
+		const graphql = await toolbox.graphQLClient!.getChainIdentifier();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test('getProtocolConfig', async () => {
+		const rpc = await toolbox.client.getProtocolConfig();
+		const graphql = await toolbox.graphQLClient!.getProtocolConfig();
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test('resolveNameServiceAddress', async () => {
+		const rpc = await toolbox.client.resolveNameServiceAddress({
+			name: 'test.sui',
+		});
+		const graphql = await toolbox.graphQLClient!.resolveNameServiceAddress({
+			name: 'test.sui',
+		});
+
+		expect(graphql).toEqual(rpc);
+	});
+
+	test('resolveNameServiceNames', async () => {
+		const rpc = await toolbox.client.resolveNameServiceNames({
+			address: toolbox.address(),
+		});
+		const graphql = await toolbox.graphQLClient!.resolveNameServiceNames({
+			address: toolbox.address(),
 		});
 
 		expect(graphql).toEqual(rpc);

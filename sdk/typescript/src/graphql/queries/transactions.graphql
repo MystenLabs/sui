@@ -73,10 +73,6 @@ query multiGetTransactionBlocks(
 
 fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 	digest
-	# timestampMs
-	# transaction can be derived from bcs, except:
-	# - valueType for Pure inputs
-	# - requires a lot of re-structuring
 	rawTransaction: bcs @include(if: $showInput)
 	rawTransaction: bcs @include(if: $showRawInput)
 	sender {
@@ -87,7 +83,7 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 		base64Sig
 	}
 	effects {
-		# eventsConnection {... }
+		# eventsConnection @include(if: $showEvents) {... }
 		checkpoint {
 			sequenceNumber
 		}
@@ -106,9 +102,6 @@ fragment RPC_TRANSACTION_FIELDS on TransactionBlock {
 			}
 			amount
 		}
-		# messageVersion
-		# eventsDigest
-		# object changes don't work, not sure if all data is available
 		dependencies @include(if: $showEffects) {
 			digest
 		}
