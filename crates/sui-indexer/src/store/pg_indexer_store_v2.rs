@@ -6,7 +6,6 @@ use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -33,12 +32,14 @@ use crate::models_v2::checkpoints::StoredCheckpoint;
 use crate::models_v2::display::StoredDisplay;
 use crate::models_v2::epoch::StoredEpochInfo;
 use crate::models_v2::events::StoredEvent;
-use crate::models_v2::objects::StoredObject;
+use crate::models_v2::objects::{
+    StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
+};
 use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
 use crate::schema_v2::{
-    checkpoints, display, epochs, events, objects, packages, transactions, tx_calls,
-    tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+    checkpoints, display, epochs, events, objects, objects_history, packages, transactions,
+    tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
@@ -236,7 +237,7 @@ impl PgIndexerStoreV2 {
                             objects::object_id.eq_any(
                                 deleted_objects_chunk
                                     .iter()
-                                    .map(|o| o.to_vec())
+                                    .map(|o| o.object_id.clone())
                                     .collect::<Vec<_>>(),
                             ),
                         ),
@@ -255,6 +256,60 @@ impl PgIndexerStoreV2 {
             info!(
                 elapsed,
                 "Persisted {} chunked objects",
+                mutated_objects.len() + deleted_object_ids.len(),
+            )
+        })
+    }
+
+    fn persist_objects_history_chunk(
+        &self,
+        objects: Vec<ObjectChangeToCommit>,
+    ) -> Result<(), IndexerError> {
+        let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
+        let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
+        for object in objects {
+            match object {
+                ObjectChangeToCommit::MutatedObject(stored_object) => {
+                    mutated_objects.push(stored_object.into());
+                }
+                ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
+                    deleted_object_ids.push(stored_deleted_object.into());
+                }
+            }
+        }
+
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                for mutated_object_change_chunk in
+                    mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(objects_history::table)
+                        .values(mutated_object_change_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .map_err(IndexerError::from)
+                        .context("Failed to write object mutations to objects_history in DB.")?;
+                }
+
+                for deleted_objects_chunk in
+                    deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    diesel::insert_into(objects_history::table)
+                        .values(deleted_objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                        .map_err(IndexerError::from)
+                        .context("Failed to write object deletions to objects_history in DB.")?;
+                }
+
+                Ok::<(), IndexerError>(())
+            },
+            Duration::from_secs(60)
+        )
+        .tap(|_| {
+            info!(
+                "Persisted {} chunked objects history",
                 mutated_objects.len() + deleted_object_ids.len(),
             )
         })
@@ -771,6 +826,41 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         Ok(())
     }
 
+    async fn persist_object_history(
+        &self,
+        object_changes: Vec<TransactionObjectChangesToCommit>,
+    ) -> Result<(), IndexerError> {
+        if object_changes.is_empty() {
+            return Ok(());
+        }
+        let objects = make_final_list_of_objects_to_commit(object_changes);
+        let guard = self
+            .metrics
+            .checkpoint_db_commit_latency_objects_history
+            .start_timer();
+
+        let len = objects.len();
+        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_history_chunk(c)))
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all objects history chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} objects history", len);
+        Ok(())
+    }
+
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
@@ -926,17 +1016,18 @@ fn make_final_list_of_objects_to_commit(
     tx_object_changes: Vec<TransactionObjectChangesToCommit>,
 ) -> Vec<ObjectChangeToCommit> {
     let deleted_objects = tx_object_changes
-        .iter()
-        .flat_map(|changes| &changes.deleted_objects)
-        .map(|o| o.0)
-        .collect::<HashSet<_>>();
+        .clone()
+        .into_iter()
+        .flat_map(|changes| changes.deleted_objects)
+        .map(|o| (o.object_id, o.into()))
+        .collect::<HashMap<ObjectID, StoredDeletedObject>>();
 
     let mutated_objects = tx_object_changes
         .into_iter()
         .flat_map(|changes| changes.changed_objects);
     let mut latest_objects = HashMap::new();
     for object in mutated_objects {
-        if deleted_objects.contains(&object.object_id) {
+        if deleted_objects.contains_key(&object.object_id) {
             continue;
         }
         match latest_objects.entry(object.object_id) {
@@ -951,7 +1042,7 @@ fn make_final_list_of_objects_to_commit(
         }
     }
     deleted_objects
-        .into_iter()
+        .into_values()
         .map(ObjectChangeToCommit::DeletedObject)
         .chain(
             latest_objects
@@ -965,5 +1056,5 @@ fn make_final_list_of_objects_to_commit(
 #[allow(clippy::large_enum_variant)]
 enum ObjectChangeToCommit {
     MutatedObject(StoredObject),
-    DeletedObject(ObjectID),
+    DeletedObject(StoredDeletedObject),
 }

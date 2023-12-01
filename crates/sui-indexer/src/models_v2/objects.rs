@@ -15,8 +15,8 @@ use sui_types::object::Object;
 use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
-use crate::schema_v2::objects;
-use crate::types_v2::IndexedObject;
+use crate::schema_v2::{objects, objects_history};
+use crate::types_v2::{IndexedDeletedObject, IndexedObject, ObjectStatus};
 
 #[derive(Queryable)]
 pub struct DynamicFieldColumn {
@@ -61,9 +61,83 @@ pub struct StoredObject {
 }
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
+pub struct StoredHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_status: i16,
+    pub object_digest: Option<Vec<u8>>,
+    pub checkpoint_sequence_number: i64,
+    pub owner_type: Option<i16>,
+    pub owner_id: Option<Vec<u8>>,
+    pub object_type: Option<String>,
+    pub serialized_object: Option<Vec<u8>>,
+    pub coin_type: Option<String>,
+    pub coin_balance: Option<i64>,
+    pub df_kind: Option<i16>,
+    pub df_name: Option<Vec<u8>>,
+    pub df_object_type: Option<String>,
+    pub df_object_id: Option<Vec<u8>>,
+}
+
+impl From<StoredObject> for StoredHistoryObject {
+    fn from(o: StoredObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::Active as i16,
+            object_digest: Some(o.object_digest),
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            owner_type: Some(o.owner_type),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            serialized_object: Some(o.serialized_object),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
+            df_name: o.df_name,
+            df_object_type: o.df_object_type,
+            df_object_id: o.df_object_id,
+        }
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct StoredDeletedObject {
     pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub checkpoint_sequence_number: i64,
+}
+
+impl From<IndexedDeletedObject> for StoredDeletedObject {
+    fn from(o: IndexedDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id.to_vec(),
+            object_version: o.object_version as i64,
+            checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
+        }
+    }
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
+pub struct StoredDeletedHistoryObject {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_status: i16,
+    pub checkpoint_sequence_number: i64,
+}
+
+impl From<StoredDeletedObject> for StoredDeletedHistoryObject {
+    fn from(o: StoredDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::WrappedOrDeleted as i16,
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+        }
+    }
 }
 
 impl From<IndexedObject> for StoredObject {

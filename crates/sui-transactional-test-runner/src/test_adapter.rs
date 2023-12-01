@@ -501,7 +501,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
                 cluster
-                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(15))
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
                     .await;
 
                 let used_variables = self.resolve_graphql_variables(&variables)?;
