@@ -47,6 +47,7 @@ use crate::types_v2::{
 };
 use crate::PgConnectionPool;
 
+use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStoreV2;
 
 #[macro_export]
@@ -80,6 +81,7 @@ pub struct PgIndexerStoreV2 {
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
     parallel_objects_chunk_size: usize,
+    partition_manager: PgPartitionManager,
 }
 
 impl PgIndexerStoreV2 {
@@ -95,12 +97,16 @@ impl PgIndexerStoreV2 {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
             .parse::<usize>()
             .unwrap();
+        let partition_manager = PgPartitionManager::new(blocking_cp.clone())
+            .expect("Failed to initialize partition manager");
+
         Self {
             blocking_cp,
             module_cache,
             metrics,
             parallel_chunk_size,
             parallel_objects_chunk_size,
+            partition_manager,
         }
     }
 
@@ -563,74 +569,96 @@ impl PgIndexerStoreV2 {
         Ok(())
     }
 
-    fn persist_epoch(&self, data: &Vec<EpochToCommit>) -> Result<(), IndexerError> {
-        if data.is_empty() {
-            return Ok(());
-        }
+    fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
         let guard = self
             .metrics
-            .checkpoint_db_commit_latency_epochs
+            .checkpoint_db_commit_latency_epoch
             .start_timer();
+        let epoch_id = epoch.new_epoch.epoch;
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                for epoch_data in data {
-                    if let Some(last_epoch) = &epoch_data.last_epoch {
-                        let last_epoch_id = last_epoch.epoch;
-                        let last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
-                        info!(last_epoch_id, "Persisting epoch end data: {:?}", last_epoch);
-                        diesel::insert_into(epochs::table)
-                            .values(last_epoch)
-                            .on_conflict(epochs::epoch)
-                            .do_update()
-                            .set((
-                                // Note: it's crucial that we don't include epoch beinning info
-                                // below as we don't want to override them. They are
-                                // validators, first_checkpoint_id, epoch_start_timestamp and so on.
-                                epochs::epoch_total_transactions
-                                    .eq(excluded(epochs::epoch_total_transactions)),
-                                epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
-                                epochs::epoch_end_timestamp
-                                    .eq(excluded(epochs::epoch_end_timestamp)),
-                                epochs::storage_fund_reinvestment
-                                    .eq(excluded(epochs::storage_fund_reinvestment)),
-                                epochs::storage_charge.eq(excluded(epochs::storage_charge)),
-                                epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
-                                epochs::storage_fund_balance
-                                    .eq(excluded(epochs::storage_fund_balance)),
-                                epochs::stake_subsidy_amount
-                                    .eq(excluded(epochs::stake_subsidy_amount)),
-                                epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
-                                epochs::total_stake_rewards_distributed
-                                    .eq(excluded(epochs::total_stake_rewards_distributed)),
-                                epochs::leftover_storage_fund_inflow
-                                    .eq(excluded(epochs::leftover_storage_fund_inflow)),
-                                epochs::new_total_stake.eq(excluded(epochs::new_total_stake)),
-                                epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                                epochs::next_epoch_reference_gas_price
-                                    .eq(excluded(epochs::next_epoch_reference_gas_price)),
-                                epochs::next_epoch_protocol_version
-                                    .eq(excluded(epochs::next_epoch_protocol_version)),
-                            ))
-                            .execute(conn)?;
-                    }
-                    let epoch_id = epoch_data.new_epoch.epoch;
-                    info!(epoch_id, "Persisting initial epoch state");
-                    let new_epoch =
-                        StoredEpochInfo::from_epoch_beginning_info(&epoch_data.new_epoch);
+                if let Some(last_epoch) = &epoch.last_epoch {
+                    let last_epoch_id = last_epoch.epoch;
+                    let last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
+                    info!(last_epoch_id, "Persisting epoch end data: {:?}", last_epoch);
                     diesel::insert_into(epochs::table)
-                        .values(new_epoch)
-                        .on_conflict_do_nothing()
+                        .values(last_epoch)
+                        .on_conflict(epochs::epoch)
+                        .do_update()
+                        .set((
+                            // Note: it's crucial that we don't include epoch beginning info
+                            // below as we don't want to override them. They are
+                            // validators, first_checkpoint_id, epoch_start_timestamp and so on.
+                            epochs::epoch_total_transactions
+                                .eq(excluded(epochs::epoch_total_transactions)),
+                            epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
+                            epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
+                            epochs::storage_fund_reinvestment
+                                .eq(excluded(epochs::storage_fund_reinvestment)),
+                            epochs::storage_charge.eq(excluded(epochs::storage_charge)),
+                            epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
+                            epochs::storage_fund_balance.eq(excluded(epochs::storage_fund_balance)),
+                            epochs::stake_subsidy_amount.eq(excluded(epochs::stake_subsidy_amount)),
+                            epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
+                            epochs::total_stake_rewards_distributed
+                                .eq(excluded(epochs::total_stake_rewards_distributed)),
+                            epochs::leftover_storage_fund_inflow
+                                .eq(excluded(epochs::leftover_storage_fund_inflow)),
+                            epochs::new_total_stake.eq(excluded(epochs::new_total_stake)),
+                            epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
+                            epochs::next_epoch_reference_gas_price
+                                .eq(excluded(epochs::next_epoch_reference_gas_price)),
+                            epochs::next_epoch_protocol_version
+                                .eq(excluded(epochs::next_epoch_protocol_version)),
+                        ))
                         .execute(conn)?;
                 }
+                let epoch_id = epoch.new_epoch.epoch;
+                info!(epoch_id, "Persisting epoch beginning info");
+                let new_epoch = StoredEpochInfo::from_epoch_beginning_info(&epoch.new_epoch);
+                diesel::insert_into(epochs::table)
+                    .values(new_epoch)
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
                 Ok::<(), IndexerError>(())
             },
             Duration::from_secs(60)
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} epochs", data.len())
+            info!(elapsed, epoch_id, "Persisted epoch beginning info");
         })
+    }
+
+    fn advance_epoch(&self, epoch_to_commit: EpochToCommit) -> Result<(), IndexerError> {
+        let last_epoch_id = epoch_to_commit.last_epoch.as_ref().map(|e| e.epoch);
+        // partition_0 has been created, so no need to advance it.
+        if let Some(last_epoch_id) = last_epoch_id {
+            let last_db_epoch: Option<StoredEpochInfo> =
+                read_only_blocking!(&self.blocking_cp, |conn| {
+                    epochs::table
+                        .filter(epochs::epoch.eq(last_epoch_id as i64))
+                        .first::<StoredEpochInfo>(conn)
+                        .optional()
+                })
+                .context("Failed to read last epoch from PostgresDB")?;
+            if let Some(last_epoch) = last_db_epoch {
+                let epoch_partition_data =
+                    EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
+                let table_partitions = self.partition_manager.get_table_partitions()?;
+                for (table, last_partition) in table_partitions {
+                    self.partition_manager.advance_table_epoch_partition(
+                        table,
+                        last_partition,
+                        &epoch_partition_data,
+                    )?;
+                }
+            } else {
+                tracing::error!("Last epoch: {} from PostgresDB is None.", last_epoch_id);
+            }
+        }
+        Ok(())
     }
 
     fn get_network_total_transactions_by_end_of_epoch(
@@ -866,8 +894,13 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         Ok(())
     }
 
-    async fn persist_epoch(&self, data: Vec<EpochToCommit>) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.persist_epoch(&data))
+    async fn persist_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
+        self.execute_in_blocking_worker(move |this| this.persist_epoch(epoch))
+            .await
+    }
+
+    async fn advance_epoch(&self, epoch: EpochToCommit) -> Result<(), IndexerError> {
+        self.execute_in_blocking_worker(move |this| this.advance_epoch(epoch))
             .await
     }
 

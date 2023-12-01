@@ -162,7 +162,23 @@ diesel::table! {
 }
 
 diesel::table! {
-    transactions (tx_sequence_number) {
+    transactions (tx_sequence_number, checkpoint_sequence_number) {
+        tx_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        raw_transaction -> Bytea,
+        raw_effects -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        timestamp_ms -> Int8,
+        object_changes -> Array<Nullable<Bytea>>,
+        balance_changes -> Array<Nullable<Bytea>>,
+        events -> Array<Nullable<Bytea>>,
+        transaction_kind -> Int2,
+        success_command_count -> Int2,
+    }
+}
+
+diesel::table! {
+    transactions_partition_0 (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
         raw_transaction -> Bytea,
@@ -255,6 +271,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     objects,
     packages,
     transactions,
+    transactions_partition_0,
     tx_calls,
     tx_changed_objects,
     tx_count_metrics,

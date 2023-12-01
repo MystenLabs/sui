@@ -82,7 +82,7 @@ impl IndexedCheckpoint {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct IndexedEpochInfo {
     pub epoch: u64,
     pub validators: Vec<SuiValidatorSummary>,
