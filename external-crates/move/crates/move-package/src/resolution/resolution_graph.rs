@@ -309,7 +309,7 @@ impl ResolvedGraph {
         // Make sure no renamings have been performed
         self.package_table
             .iter()
-            .find_map(|(name, pkg)| (!pkg.renaming.is_empty()).then(|| *name))
+            .find_map(|(name, pkg)| (!pkg.renaming.is_empty()).then_some(*name))
     }
 }
 

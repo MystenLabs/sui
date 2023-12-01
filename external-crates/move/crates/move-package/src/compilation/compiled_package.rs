@@ -435,7 +435,8 @@ impl CompiledPackage {
     ) -> Result<CompiledPackage> {
         let immediate_dependencies = transitive_dependencies
             .iter()
-            .filter_map(|dep| dep.is_immediate.then(|| dep.name))
+            .filter(|&dep| dep.is_immediate)
+            .map(|dep| dep.name)
             .collect::<Vec<_>>();
         for dep in &transitive_dependencies {
             writeln!(w, "{} {}", "INCLUDING DEPENDENCY".bold().green(), dep.name)?;
