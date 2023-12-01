@@ -7,30 +7,30 @@ use async_graphql::*;
 
 #[derive(Union, PartialEq, Clone, Eq)]
 pub(crate) enum TransactionBlockKind {
-    ConsensusCommitPrologueTransaction(ConsensusCommitPrologueTransaction),
-    GenesisTransaction(GenesisTransaction),
-    ChangeEpochTransaction(ChangeEpochTransaction),
-    ProgrammableTransactionBlock(ProgrammableTransaction),
-    AuthenticatorStateUpdateTransaction(AuthenticatorStateUpdate),
-    RandomnessStateUpdateTransaction(RandomnessStateUpdate),
-    EndOfEpochTransaction(EndOfEpochTransaction),
+    ConsensusCommitPrologue(ConsensusCommitPrologueTransaction),
+    Genesis(GenesisTransaction),
+    ChangeEpoch(ChangeEpochTransaction),
+    Programmable(ProgrammableTransactionBlock),
+    AuthenticatorState(AuthenticatorStateUpdateTransaction),
+    Randomness(RandomnessStateUpdateTransaction),
+    EndOfEpoch(EndOfEpochTransaction),
 }
 
 // TODO: flesh out the programmable transaction block type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
-pub(crate) struct ProgrammableTransaction {
+pub(crate) struct ProgrammableTransactionBlock {
     pub value: String,
 }
 
 // TODO: flesh out the authenticator state update type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
-pub(crate) struct AuthenticatorStateUpdate {
+pub(crate) struct AuthenticatorStateUpdateTransaction {
     pub value: String,
 }
 
 // TODO: flesh out the randomness state update type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
-pub(crate) struct RandomnessStateUpdate {
+pub(crate) struct RandomnessStateUpdateTransaction {
     pub value: String,
 }
 

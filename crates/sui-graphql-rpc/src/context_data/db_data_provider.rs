@@ -35,9 +35,9 @@ use crate::{
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
         transaction_block_kind::{
-            AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
-            EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
-            RandomnessStateUpdate, TransactionBlockKind,
+            AuthenticatorStateUpdateTransaction, ChangeEpochTransaction,
+            ConsensusCommitPrologueTransaction, EndOfEpochTransaction, GenesisTransaction,
+            ProgrammableTransactionBlock, RandomnessStateUpdateTransaction, TransactionBlockKind,
         },
         validator::Validator,
         validator_credentials::ValidatorCredentials,
@@ -1668,7 +1668,7 @@ impl From<&TransactionKind> for TransactionBlockKind {
                     computation_charge: Some(BigInt::from(x.computation_charge)),
                     storage_rebate: Some(BigInt::from(x.storage_rebate)),
                 };
-                TransactionBlockKind::ChangeEpochTransaction(change)
+                TransactionBlockKind::ChangeEpoch(change)
             }
             TransactionKind::ConsensusCommitPrologue(x) => {
                 let consensus = ConsensusCommitPrologueTransaction {
@@ -1676,7 +1676,7 @@ impl From<&TransactionKind> for TransactionBlockKind {
                     round: Some(x.round),
                     timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
                 };
-                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
+                TransactionBlockKind::ConsensusCommitPrologue(consensus)
             }
             TransactionKind::ConsensusCommitPrologueV2(x) => {
                 let consensus = ConsensusCommitPrologueTransaction {
@@ -1684,7 +1684,7 @@ impl From<&TransactionKind> for TransactionBlockKind {
                     round: Some(x.round),
                     timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
                 };
-                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
+                TransactionBlockKind::ConsensusCommitPrologue(consensus)
             }
             TransactionKind::Genesis(x) => {
                 let genesis = GenesisTransaction {
@@ -1696,31 +1696,29 @@ impl From<&TransactionKind> for TransactionBlockKind {
                             .collect::<Vec<_>>(),
                     ),
                 };
-                TransactionBlockKind::GenesisTransaction(genesis)
+                TransactionBlockKind::Genesis(genesis)
             }
             // TODO: flesh out type
             TransactionKind::ProgrammableTransaction(pt) => {
-                TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
+                TransactionBlockKind::Programmable(ProgrammableTransactionBlock {
                     value: format!("{:?}", pt),
                 })
             }
             // TODO: flesh out type
             TransactionKind::AuthenticatorStateUpdate(asu) => {
-                TransactionBlockKind::AuthenticatorStateUpdateTransaction(
-                    AuthenticatorStateUpdate {
-                        value: format!("{:?}", asu),
-                    },
-                )
+                TransactionBlockKind::AuthenticatorState(AuthenticatorStateUpdateTransaction {
+                    value: format!("{:?}", asu),
+                })
             }
             // TODO: flesh out type
             TransactionKind::RandomnessStateUpdate(rsu) => {
-                TransactionBlockKind::RandomnessStateUpdateTransaction(RandomnessStateUpdate {
+                TransactionBlockKind::Randomness(RandomnessStateUpdateTransaction {
                     value: format!("{:?}", rsu),
                 })
             }
             // TODO: flesh out type
             TransactionKind::EndOfEpochTransaction(et) => {
-                TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
+                TransactionBlockKind::EndOfEpoch(EndOfEpochTransaction {
                     value: format!("{:?}", et),
                 })
             }
