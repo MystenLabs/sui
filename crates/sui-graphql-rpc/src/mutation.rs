@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error, types::transaction_exec::ExecutionResult};
+use crate::{error::Error, types::execution_result::ExecutionResult};
 use async_graphql::*;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
@@ -31,9 +31,13 @@ impl Mutation {
         tx_bytes: String,
         signatures: Vec<String>,
     ) -> Result<ExecutionResult> {
-        let sui_sdk_client: &SuiClient = ctx
+        let sui_sdk_client: &Option<SuiClient> = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Sui SDK client".to_string()))
+            .extend()?;
+        let sui_sdk_client = sui_sdk_client
+            .as_ref()
+            .ok_or_else(|| Error::Internal("Sui SDK client not initialized".to_string()))
             .extend()?;
         let tx_data = bcs::from_bytes(
             &Base64::decode(&tx_bytes)

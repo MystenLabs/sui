@@ -39,6 +39,7 @@ use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
 use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
+use tracing::warn;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -175,20 +176,22 @@ impl ServerBuilder {
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
-        let fn_rpc_url = config
-            .tx_exec_full_node
-            .node_rpc_url
-            .clone()
-            .ok_or(Error::Internal(
-                "No fullnode url found in config".to_string(),
-            ))?;
+
         // SDK for talking to fullnode. Used for executing transactions only
-        let sui_sdk_client = SuiClientBuilder::default()
-            .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
-            .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
-            .build(fn_rpc_url)
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to create SuiClient: {}", e)))?;
+        // TODO: fail fast if no url, once we enable mutations fully
+        let sui_sdk_client = if let Some(url) = &config.tx_exec_full_node.node_rpc_url {
+            Some(
+                SuiClientBuilder::default()
+                    .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+                    .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+                    .build(url)
+                    .await
+                    .map_err(|e| Error::Internal(format!("Failed to create SuiClient: {}", e)))?,
+            )
+        } else {
+            warn!("No fullnode url found in config. Mutations will not work");
+            None
+        };
 
         let prom_addr: SocketAddr = format!(
             "{}:{}",
