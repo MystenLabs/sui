@@ -52,7 +52,6 @@ use sui_types::messages_grpc::{
     HandleCertificateResponseV2, LayoutGenerationOption, ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
-use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
@@ -1398,11 +1397,6 @@ where
             Ok(PlainTransactionInfoResponse::Signed(signed)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
-                    .tap_ok(|opt_cert| {
-                        if let Some(cert) = opt_cert.as_ref() {
-                            debug!(?tx_digest, ?cert, "Collected tx certificate for digest")
-                        }
-                    })
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, effects, events)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
@@ -1442,9 +1436,6 @@ where
             InsertResult::QuorumReached(cert_sig) => {
                 let ct =
                     CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
-                let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
-                let ct_digest = ct.digest();
-                debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
                 ct.verify_committee_sigs_only(&self.committee)?;
                 Ok(Some(ProcessTransactionResult::Certified(ct)))
             }
