@@ -99,11 +99,12 @@ The following steps can be used to restore a node from a formal snapshot:
 2. Run the command:
    ```
    sui-tool download-db-snapshot --epoch "<EPOCH-NUMBER>" --genesis "<PATH-TO-GENESIS-BLOB>" \
-        --formal --snapshot-bucket <bucket-NAME> --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request --snapshot-bucket-type=s3
+        --formal --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request --snapshot-bucket-type=s3
    ```
    - `--epoch`: The epoch that you want to download, eg. `200`. Mysten Labs hosted buckets will only keep the last 90 epochs. 
    - `--genesis`: The path to the location of the network's `genesis.blob`.
    - `--formal`: If set, restore from formal (slim, DB agnostic) snapshot.
+   - `--network`: Network to download snapshot for. Defaults to "mainnet".
    - `--snapshot-bucket`: Source snapshot bucket name, eg `mysten-mainnet-snapshots`.
    - `--snapshot-bucket-type`: Snapshot bucket type. GCS and S3 currently supported.
    - `--path`: Path to snapshot directory on local filesystem.
