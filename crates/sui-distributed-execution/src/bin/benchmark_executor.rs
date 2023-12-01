@@ -4,10 +4,15 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 use std::{fs, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
+use sui_distributed_execution::seqn_worker::{COMPONENT, WORKLOAD};
+use sui_distributed_execution::storage::export_to_files;
 use sui_distributed_execution::sw_agent::*;
 use sui_distributed_execution::types::*;
 use sui_distributed_execution::{ew_agent::*, prometheus::start_prometheus_server};
 use sui_distributed_execution::{metrics::Metrics, server::*};
+use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
+use sui_single_node_benchmark::workload::Workload;
+use sui_types::transaction::Transaction;
 use tokio::task::{JoinError, JoinHandle};
 
 /// Top-level executor shard structure.
@@ -73,6 +78,15 @@ struct Args {
     #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
     duration: Duration,
 
+    /// The working directory where the files will be generated.
+    #[clap(
+        long,
+        value_name = "FILE",
+        default_value = "~/working_dir",
+        global = true
+    )]
+    working_directory: PathBuf,
+
     #[clap(subcommand)]
     operation: Operation,
 }
@@ -109,9 +123,6 @@ enum Operation {
         /// Number of sequence workers.
         #[clap(long, default_value_t = 1)]
         sequence_workers: usize,
-        /// The working directory where the files will be generated.
-        #[clap(long, value_name = "FILE", default_value = "genesis")]
-        working_directory: PathBuf,
     },
 }
 
@@ -120,6 +131,7 @@ async fn main() {
     let args = Args::parse();
     let tx_count = args.tx_count;
     let duration = args.duration;
+    let working_directory = args.working_directory;
 
     match args.operation {
         Operation::Run { id, config_path } => {
@@ -129,6 +141,10 @@ async fn main() {
                 e.attrs.insert("tx_count".to_string(), tx_count.to_string());
                 e.attrs
                     .insert("duration".to_string(), duration.as_secs().to_string());
+                e.attrs.insert(
+                    "working_dir".to_string(),
+                    working_directory.into_os_string().into_string().unwrap(),
+                );
             });
 
             // Spawn the executor shard (blocking).
@@ -143,7 +159,6 @@ async fn main() {
         Operation::Genesis {
             ips,
             sequence_workers,
-            working_directory,
         } => {
             tracing::info!("Generating benchmark genesis files");
             fs::create_dir_all(&working_directory).expect(&format!(
@@ -153,8 +168,49 @@ async fn main() {
             let path = working_directory.join(GlobalConfig::DEFAULT_CONFIG_NAME);
             GlobalConfig::new_for_benchmark(ips, sequence_workers).export(path);
             tracing::info!("Generated configs.json");
+
+            // now generate accounts and txs and dump them to a file
+            let (ctx, transactions) = generate_benchmark_data(tx_count, duration).await;
+            export_to_files(
+                ctx.get_accounts(),
+                ctx.get_genesis_objects(),
+                &transactions,
+                working_directory,
+            );
         }
     }
+}
+
+async fn generate_benchmark_data(
+    tx_count: u64,
+    duration: Duration,
+) -> (BenchmarkContext, Vec<Transaction>) {
+    let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
+    println!(
+        "Setting up benchmark...{tx_count} txs per second for {} seconds",
+        duration.as_secs()
+    );
+    let start_time = std::time::Instant::now();
+    let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
+    let elapsed = start_time.elapsed().as_millis() as f64;
+    println!(
+        "Benchmark setup finished in {}ms at a rate of {} accounts/s",
+        elapsed,
+        1000f64 * workload.num_accounts() as f64 / elapsed
+    );
+
+    let start_time = std::time::Instant::now();
+    let tx_generator = workload.create_tx_generator(&mut ctx).await;
+    let transactions = ctx.generate_transactions(tx_generator).await;
+    let elapsed = start_time.elapsed().as_millis() as f64;
+    println!(
+        "{} txs generated in {}ms at a rate of {} TPS",
+        transactions.len(),
+        elapsed,
+        1000f64 * workload.tx_count as f64 / elapsed,
+    );
+
+    (ctx, transactions)
 }
 
 /// Deploy a local testbed of executor shards.
@@ -186,9 +242,9 @@ async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{fs, time::Duration};
 
-    use sui_distributed_execution::sw_agent::SWAgent;
+    use sui_distributed_execution::{storage::import_from_files, sw_agent::SWAgent};
     use tokio::time::sleep;
 
     use crate::deploy_testbed;
@@ -207,5 +263,29 @@ mod test {
                 break;
             }
         }
+    }
+
+    #[tokio::test]
+    async fn export_test() {
+        let tx_count = 300;
+        let duration = Duration::from_secs(10);
+        let working_directory = "~/test_export";
+
+        fs::create_dir_all(&working_directory).expect(&format!(
+            "Failed to create directory '{}'",
+            working_directory
+        ));
+
+        let (ctx, txs) = super::generate_benchmark_data(tx_count, duration).await;
+        super::export_to_files(
+            ctx.get_accounts(),
+            ctx.get_genesis_objects(),
+            &txs,
+            working_directory.into(),
+        );
+        let (read_accounts, read_objects, read_txs) = import_from_files(working_directory.into());
+        assert_eq!(read_accounts.len(), ctx.get_accounts().len());
+        assert_eq!(&read_objects, ctx.get_genesis_objects());
+        assert_eq!(read_txs, txs);
     }
 }

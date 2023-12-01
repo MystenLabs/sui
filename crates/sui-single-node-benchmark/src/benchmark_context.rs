@@ -76,6 +76,10 @@ impl BenchmarkContext {
         &self.genesis_objects
     }
 
+    pub fn get_accounts(&self) -> &BTreeMap<SuiAddress, Account> {
+        &self.user_accounts
+    }
+
     pub(crate) async fn publish_package(&mut self) -> ObjectRef {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["move_package"]);

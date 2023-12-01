@@ -11,7 +11,7 @@ use crate::workload::Workload;
 
 pub mod benchmark_context;
 pub mod command;
-pub(crate) mod mock_account;
+pub mod mock_account;
 pub(crate) mod mock_consensus;
 pub(crate) mod mock_storage;
 pub(crate) mod single_node;

@@ -1,6 +1,7 @@
 use std::{
     cmp,
     net::{Ipv4Addr, SocketAddr},
+    path::PathBuf,
 };
 use std::{net::IpAddr, sync::Arc};
 
@@ -20,9 +21,7 @@ use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
-use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
 use sui_single_node_benchmark::command::{Component, WorkloadKind};
-use sui_single_node_benchmark::workload::Workload;
 use sui_types::digests::ChainIdentifier;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -35,7 +34,7 @@ use tokio::{
 };
 use typed_store::rocks::default_db_options;
 
-use crate::metrics::Metrics;
+use crate::{metrics::Metrics, storage::import_from_files};
 
 use super::types::*;
 
@@ -485,33 +484,10 @@ impl SequenceWorkerState {
         out_to_network: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
         tx_count: u64,
-        duration: Duration,
+        _duration: Duration,
+        working_dir: PathBuf,
     ) {
-        let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
-        println!(
-            "Setting up benchmark...{tx_count} txs per second for {} seconds",
-            duration.as_secs()
-        );
-        let start_time = std::time::Instant::now();
-        let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
-        let elapsed = start_time.elapsed().as_millis() as f64;
-        println!(
-            "Benchmark setup finished in {}ms at a rate of {} accounts/s",
-            elapsed,
-            1000f64 * workload.num_accounts() as f64 / elapsed
-        );
-
-        // then generate transactions and send them to all EWs
-        let start_time = std::time::Instant::now();
-        let tx_generator = workload.create_tx_generator(&mut ctx).await;
-        let transactions = ctx.generate_transactions(tx_generator).await;
-        let elapsed = start_time.elapsed().as_millis() as f64;
-        println!(
-            "{} txs generated in {}ms at a rate of {} TPS",
-            transactions.len(),
-            elapsed,
-            1000f64 * workload.tx_count as f64 / elapsed,
-        );
+        let (_, _, transactions) = import_from_files(working_dir);
 
         const PRECISION: u64 = 20;
         let burst_duration = 1000 / PRECISION;

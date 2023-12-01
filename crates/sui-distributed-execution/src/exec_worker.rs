@@ -4,6 +4,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
@@ -11,8 +12,6 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_move_natives;
 use sui_protocol_config::ProtocolConfig;
-use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
-use sui_single_node_benchmark::workload::Workload;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
@@ -35,11 +34,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
-use crate::{
-    metrics::Metrics,
-    seqn_worker::{COMPONENT, WORKLOAD},
-    storage::WritableObjectStore,
-};
+use crate::storage::import_from_files;
+use crate::{metrics::Metrics, storage::WritableObjectStore};
 
 use super::types::*;
 
@@ -520,19 +516,9 @@ impl<
     //     }
     // }
 
-    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
-        let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
-        println!("Setting up accounts and gas...");
-        let start_time = std::time::Instant::now();
-        let ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
-        let elapsed = start_time.elapsed().as_millis() as f64;
-        println!(
-            "Benchmark setup finished in {}ms at a rate of {} accounts/s",
-            elapsed,
-            1000f64 * workload.num_accounts() as f64 / elapsed
-        );
-        let genesis_objects = ctx.get_genesis_objects();
-        for obj in genesis_objects {
+    fn init_genesis_objects(&self, working_directory: PathBuf) {
+        let (_, objects, _) = import_from_files(working_directory);
+        for obj in objects {
             self.memory_store
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
         }
@@ -542,8 +528,8 @@ impl<
     pub async fn run(
         &mut self,
         metrics: Arc<LimitsMetrics>,
-        tx_count: u64,
-        duration: Duration,
+        _tx_count: u64,
+        working_directory: PathBuf,
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
         out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
@@ -570,7 +556,7 @@ impl<
 
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
-            self.init_genesis_objects(tx_count, duration).await;
+            self.init_genesis_objects(working_directory);
         }
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use super::agents::*;
 use crate::{
@@ -57,8 +57,15 @@ impl Agent<SailfishMessage> for SWAgent {
             let tx_count = my_attrs["tx_count"].parse::<u64>().unwrap();
             let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
             let duration = Duration::from_secs(duration_secs);
-            SequenceWorkerState::run_with_channel(&self.out_channel, ew_ids, tx_count, duration)
-                .await;
+            let working_dir = my_attrs["working_dir"].parse::<PathBuf>().unwrap();
+            SequenceWorkerState::run_with_channel(
+                &self.out_channel,
+                ew_ids,
+                tx_count,
+                duration,
+                working_dir,
+            )
+            .await;
             println!("SW finished");
 
             loop {
