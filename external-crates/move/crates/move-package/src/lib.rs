@@ -219,23 +219,32 @@ impl BuildConfig {
     }
 
     pub fn update_lock_file_toolchain_version(&self, compiler_version: String) -> Result<()> {
-        let Some(lock_file) = self.lock_file.as_ref() else {
-            return Ok(());
-        };
-        let install_dir = self
-            .install_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("."));
-        let mut lock = LockFile::from(install_dir, lock_file)?;
-        lock.seek(SeekFrom::Start(0))?;
-        update_compiler_toolchain(
-            &mut lock,
-            compiler_version,
-            self.default_edition.unwrap_or_default(),
-            self.default_flavor.unwrap_or_default(),
-        )?;
-        let _mutx = PackageLock::lock();
-        lock.commit(lock_file)?;
-        Ok(())
+        println!(
+            "lock: {:#?} install_dir: {:#?}",
+            self.lock_file.as_ref(),
+            self.install_dir.clone()
+        );
+        match (self.lock_file.as_ref(), self.install_dir.clone()) {
+            (Some(lock_file), Some(install_dir)) => {
+                println!("install_dir: {}", install_dir.display());
+                let mut lock = LockFile::from(install_dir, lock_file)?;
+                println!("1) what");
+                lock.seek(SeekFrom::Start(0))?;
+                println!("2) h");
+                update_compiler_toolchain(
+                    &mut lock,
+                    compiler_version,
+                    self.default_edition.unwrap_or_default(),
+                    self.default_flavor.unwrap_or_default(),
+                )?;
+                println!("3) x");
+                let _mutx = PackageLock::lock();
+                lock.commit(lock_file)
+            }
+            _ => {
+                println!("?");
+                Ok(())
+            }
+        }
     }
 }

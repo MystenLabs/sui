@@ -61,19 +61,23 @@ impl LockFile {
     }
 
     /// Creates a temporary copy of an existing lock file in a sub-directory of `install_dir` and returns the handle.
-    pub fn from(install_dir: PathBuf, lock_file: &PathBuf) -> Result<LockFile> {
+    pub fn from(path: PathBuf, lock_file: &PathBuf) -> Result<LockFile> {
         let mut locks_dir = install_dir;
         locks_dir.extend([
             CompiledPackageLayout::Root.path(),
             CompiledPackageLayout::LockFiles.path(),
         ]);
+        println!("1) try create");
         fs::create_dir_all(&locks_dir).context("Creating output directory")?;
 
+        println!("2) new tempfile");
         let mut lock = tempfile::Builder::new()
             .prefix("Move.lock")
             .tempfile_in(locks_dir)
             .context("Creating lock file")?;
+        println!("3) lock file {:?}", lock);
         let lock_string = std::fs::read_to_string(lock_file)?;
+        println!("4) qqq");
         lock.write_all(lock_string.as_bytes())?;
 
         Ok(LockFile { file: lock })

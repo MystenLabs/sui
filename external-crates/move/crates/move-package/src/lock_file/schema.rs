@@ -182,9 +182,13 @@ pub fn update_compiler_toolchain(
 ) -> Result<()> {
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
+    println!("a)");
     file.seek(SeekFrom::Start(0))?;
+    println!("b)");
     let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    println!("c)");
     let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
+    println!("d)");
     let toolchain_version = toml::Value::try_from(ToolchainVersion {
         compiler_version,
         edition,
@@ -192,7 +196,9 @@ pub fn update_compiler_toolchain(
     })?;
     move_table["toolchain-version"] = to_toml_edit_value(&toolchain_version);
     write!(file, "{}", toml)?;
+    println!("e)");
     file.flush()?;
+    println!("f)");
     Ok(())
 }
 

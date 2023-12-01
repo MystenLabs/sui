@@ -185,17 +185,35 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
+        println!("what the");
+        println!(
+            "example install_dir: {:#?}",
+            self.config.install_dir.clone()
+        );
         let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
-        build_from_resolution_graph(
+        let result = build_from_resolution_graph(
             path,
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
             lint,
-        )
+        );
+        println!("toppppp");
+        if let Ok(ref compiled) = result {
+            println!("first");
+            compiled
+                .package
+                .compiled_package_info
+                .build_flags
+                .update_lock_file_toolchain_version(env!("CARGO_PKG_VERSION").into())
+                .map_err(|e| SuiError::ModuleBuildFailure {
+                    error: format!("Failed to update Move.lock toolchain version: {e}"),
+                })?;
+        }
+        result
     }
 
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
