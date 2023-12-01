@@ -84,6 +84,7 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
+        build_config.config.no_lint = true;
         build_config
     }
 
