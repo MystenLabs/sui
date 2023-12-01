@@ -47,7 +47,7 @@ As with all smart contracts on Sui, Move provides the logic that powers asset to
 
 ### asset_tokenization package
 
-The package contains the following modules:
+Select a module to view its details:
 
 <Tabs groupId="modules">
 
@@ -249,17 +249,21 @@ todo
 
 The `proxy` module comprises methods that the type owner utilizes to execute Publisher-related operations. 
 
-```mdx-code-block
-<details>
-  <summary>
-  Show diagram
-  </summary>
-```
-**Proxy Architecture Diagram**
+**Proxy architecture diagram**
+```mermaid
+flowchart LR
+    %% Z{"Methods"};
+    %% Q[Modules];
+    %% X([Objects]);
+    A[Template] -->|On new Asset type creation<br> the creator receives the Publisher for type T| B([Publisher&ltT&gt]);
+    C[Proxy] -->|On init, the Publisher of the Asset Tokenization module<br> is created and added inside the Registry shared object | D([Registry]);
+    D -->|Input to| E{Proxy Methods};
+    B -->|Input to| E;
+    E --> F([ProtectedTP]);
+    E --> G([TransferPolicy&ltTokenizedAsset&ltT&gt&gt]);
+    E --> H([TransferPolicyCap&ltTokenizedAsset&ltT&gt&gt]);
 
-todo
-```mdx-code-block
-</details>
+    E --> I([Display&ltTokenizedAsset&ltT&gt&gt]);
 ```
 
 **Structs**
@@ -371,22 +375,33 @@ The `unlock` module facilitates the unlocking of a tokenized asset specifically 
 
 It allows tokenized asset type creators to enable these operations for Kiosk assets without necessitating adherence to the default set of requirements, such as rules or policies.
 
-```mdx-code-block
-<details>
-  <summary>
-  Show diagrams
-  </summary>
+**Unlock sequence diagram**
+
+The following is a sequence diagram presenting how the unlock flow would take place. The following flow assumes that:
+
+- Tokenized assets A & B have already been minted by the creator of their type.
+- Tokenized assets A & B are already placed and locked inside the user's Kiosk.
+- Everything is executed in the same programmable transaction block (PTB).
+
+```mermaid
+sequenceDiagram
+    participant Tokenized Asset A;
+    participant Tokenized Asset B;
+    participant Kiosk;
+    participant Proxy Module;
+    participant Transfer Policy Module;
+    participant Tokenized Asset Module;
+    
+    Tokenized Asset B ->> Kiosk: Listed on user's Kiosk for 0 SUI;
+    Kiosk ->>+ Tokenized Asset B: Purchased from Kiosk, also produces Transfer Request;
+    Kiosk ->> Transfer Policy Module: Transfer Request resolved via the ProtectedTP with confirm_request;
+    Kiosk ->> Tokenized Asset A: Borrowed from user's Kiosk;
+    Tokenized Asset A ->> Tokenized Asset Module: Inputs of Join function;
+    Tokenized Asset B ->>- Tokenized Asset Module:  Inputs of Join function;
+    Tokenized Asset Module ->> Kiosk: Assets A & B are joined & A's borrow promise is resolved;
+    Tokenized Asset Module ->> Kiosk: Asset A is returned to the user's Kiosk;
 ```
-**Unlock Architecture Diagram**
 
-todo
-
-**Unlock Sequence Diagram**
-
-todo
-```mdx-code-block
-</details>
-```
 
 **Structs**
 
@@ -492,9 +507,7 @@ An example package utilizing the launchpad approach serves as the template packa
         
     - fnft_genesis
         
-        A genesis type of module that should include a OTW so that the sender can claim the Publisher.  
-
----
+        A genesis type of module that should include a OTW so that the sender can claim the Publisher.
 
 ## Variations
 
