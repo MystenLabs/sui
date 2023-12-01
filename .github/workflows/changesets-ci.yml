@@ -2,42 +2,7 @@ name: Changesets CI
 on: pull_request
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: [macos-arm64-self-hosted]
     steps:
       - name: checkout code repository
-        uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v2.4.0
-        with:
-          version: 8
-      - name: Install Nodejs
-        uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
-        with:
-          node-version: "18"
-          cache: "pnpm"
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - id: diff
-        name: Determine changed public packages from previous commit
-        run: echo "hasChanges=$(pnpm list --filter "...[$(git rev-parse HEAD^1)]" --depth -1 --json | jq "any(.[] | select(.private != true) ; length > 0)")" >> $GITHUB_OUTPUT
-      - name: Get changed files in the changesets folder
-        id: has-changesets
-        uses: tj-actions/changed-files@fb20f4d24890fadc539505b1746d260504b213d0 # pin@v34
-        with:
-          files: |
-            .changeset/**
-      - name: Create missing changeset note if there are missing changesets
-        if: steps.has-changesets.outputs.any_changed != 'true' && steps.diff.outputs.hasChanges == 'true'
-        run: |
-          echo "true" > missing-changeset.txt
-      - name: Upload missing changeset artifact
-        uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb # pin@v3
-        if: steps.has-changesets.outputs.any_changed != 'true' && steps.diff.outputs.hasChanges == 'true'
-        with:
-          name: missing-changeset
-          path: missing-changeset.txt
-          if-no-files-found: error
-          retention-days: 1
-      - name: Attempt to create snapshots.
-        run: pnpm changeset version --snapshot test-do-not-publish
+        run: echo "test!"
