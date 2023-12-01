@@ -446,7 +446,7 @@ Response: {
           "effects": {
             "status": "FAILURE",
             "errors": "Unused result without the drop ability. Command result 0, return value 0",
-            "lamportVersion": null,
+            "lamportVersion": 5,
             "dependencies": [
               {
                 "digest": "EXpWu6yQWF7S4EVo7CbuG4iRdJb4EwfBjKfpinpk8Ket"

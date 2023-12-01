@@ -76,6 +76,10 @@ impl TransactionBlockEffects {
     async fn lamport_version(&self) -> Option<u64> {
         if let Some(((_id, version, _digest), _owner)) = self.native.created().first() {
             Some(version.value())
+        } else if let Some(((_id, version, _digest), _owner)) = self.native.mutated().first() {
+            Some(version.value())
+        } else if let Some(((_id, version, _digest), _owner)) = self.native.unwrapped().first() {
+            Some(version.value())
         } else {
             None
         }
