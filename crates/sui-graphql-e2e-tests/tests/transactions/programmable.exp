@@ -47,7 +47,7 @@ Response: {
           "effects": {
             "status": "SUCCESS",
             "errors": null,
-            "lamportVersion": 1,
+            "lamportVersion": 2,
             "dependencies": [
               {
                 "digest": "E4vfJnPvdRBBqSUaw5khagQJNwud92KcBdpheAHuf8P6"
