@@ -133,20 +133,20 @@ txb.moveCall({
 	arguments: [txb.object('0xSomeObject')],
 });
 
-// txb.object will automaically convert the object iID to receiving transaction arguments if the moveCall expects it
+// txb.object automaically converts the object ID to receiving transaction arguments if the moveCall expects it
 txb.moveCall({
 	target: '0xSomeAddress::example::receive_object',
 	// 0xSomeAddress::example::receive_object expects a receiving argument and has a Move definition that looks like this:
-    // public fun receive_object<T: key>(parent_object: &mut ParentObjectType, receiving_object: Receiving<ChildObjectType>) { ... }
+        // public fun receive_object<T: key>(parent_object: &mut ParentObjectType, receiving_object: Receiving<ChildObjectType>) { ... }
 	arguments: [txb.object('0xParentObjectID'), txb.object('0xReceivingObjectID')],
 });
 
 ```
 
 When building a transaction block, Sui expects all objects to be fully resolved, including the
-object version. The SDK will automatically lookup the current version of objects for any provided
+object version. The SDK automatically looks up the current version of objects for any provided
 object reference when building a transaction block. If the object reference is used as a receiving
-argument to a `moveCall`, the object reference will be automatically converted to a receiving
+argument to a `moveCall`, the object reference is automatically converted to a receiving
 transaction argument. This greatly simplifies building transactions, but requires additional RPC
 calls. You can optimize this process by providing a fully resolved object reference instead:
 
