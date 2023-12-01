@@ -78,10 +78,12 @@ use url::Url;
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
+    editions::Flavor,
     expansion::ast::{Address, Fields, ModuleIdent, ModuleIdent_},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_},
     parser::ast::StructName,
     shared::Identifier,
+    sui_mode::linters::{known_filters, linter_visitors},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
@@ -613,6 +615,7 @@ impl Symbolicator {
         let build_config = move_package::BuildConfig {
             test_mode: true,
             install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+            default_flavor: Some(Flavor::Sui),
             ..Default::default()
         };
 
@@ -642,7 +645,11 @@ impl Symbolicator {
         let mut typed_ast = None;
         let mut diagnostics = None;
         build_plan.compile_with_driver(&mut std::io::sink(), |compiler| {
-            let (files, compilation_result) = compiler.run::<PASS_TYPING>()?;
+            let (filter_attr_name, filters) = known_filters();
+            let (files, compilation_result) = compiler
+                .add_visitors(linter_visitors())
+                .add_custom_known_filters(filters, filter_attr_name)
+                .run::<PASS_TYPING>()?;
             let (_, compiler) = match compilation_result {
                 Ok(v) => v,
                 Err(diags) => {

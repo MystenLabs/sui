@@ -7,7 +7,7 @@
 
 use move_ir_types::location::*;
 
-use move_compiler::{
+use crate::{
     cfgir::{
         absint::JoinResult,
         ast::Program,
@@ -21,7 +21,9 @@ use move_compiler::{
         codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
     },
-    hlir::ast::{Exp, LValue, LValue_, Label, ModuleCall, SingleType, Type, Type_, Var},
+    hlir::ast::{
+        Exp, LValue, LValue_, Label, ModuleCall, SingleType, Type, Type_, UnannotatedExp_, Var,
+    },
     parser::ast::Ability_,
     shared::{CompilationEnv, Identifier},
 };
@@ -113,7 +115,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
         state: &mut State,
         e: &Exp,
     ) -> Option<Vec<Value>> {
-        use move_compiler::hlir::ast::UnannotatedExp_ as E;
+        use UnannotatedExp_ as E;
 
         if let E::Pack(_, _, fields) = &e.exp.value {
             for (_, _, inner) in fields.iter() {

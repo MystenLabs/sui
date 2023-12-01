@@ -404,10 +404,6 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
-
-        /// If `true`, disable linters
-        #[clap(long, global = true)]
-        no_lint: bool,
     },
 
     /// Split a coin object into multiple coins.
@@ -567,10 +563,6 @@ pub enum SuiClientCommands {
         /// (SenderSignedData) using base64 encoding, and print out the string.
         #[clap(long, required = false)]
         serialize_signed_transaction: bool,
-
-        /// If `true`, disable linters
-        #[clap(long, global = true)]
-        no_lint: bool,
     },
 
     /// Run the bytecode verifier on the package
@@ -731,7 +723,6 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                no_lint,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -744,7 +735,6 @@ impl SuiClientCommands {
                         package_path,
                         with_unpublished_dependencies,
                         skip_dependency_verification,
-                        !no_lint,
                     )
                     .await?;
 
@@ -820,7 +810,6 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
-                no_lint,
             } => {
                 if build_config.test_mode {
                     return Err(SuiError::ModulePublishFailure {
@@ -847,7 +836,6 @@ impl SuiClientCommands {
                     package_path,
                     with_unpublished_dependencies,
                     skip_dependency_verification,
-                    !no_lint,
                 )
                 .await?;
 
@@ -1339,7 +1327,6 @@ impl SuiClientCommands {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
-                    lint: false,
                 }
                 .build(package_path)?;
 
@@ -1379,7 +1366,6 @@ fn compile_package_simple(
         config: resolve_lock_file_path(build_config, Some(package_path.clone()))?,
         run_bytecode_verifier: false,
         print_diags_to_stderr: false,
-        lint: false,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
 
@@ -1398,7 +1384,6 @@ async fn compile_package(
     package_path: PathBuf,
     with_unpublished_dependencies: bool,
     skip_dependency_verification: bool,
-    lint: bool,
 ) -> Result<
     (
         PackageDependencies,
@@ -1411,11 +1396,11 @@ async fn compile_package(
     let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
+    let lint = !config.no_lint;
     let config = BuildConfig {
         config,
         run_bytecode_verifier,
         print_diags_to_stderr,
-        lint,
     };
     let resolution_graph = config.resolution_graph(&package_path)?;
     let (package_id, dependencies) = gather_published_ids(&resolution_graph);

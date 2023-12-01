@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x42::test {
+module a::test {
     use sui::bag::Bag;
     use sui::object_bag::ObjectBag;
     use sui::table::Table;
@@ -46,5 +46,75 @@ module 0x42::test {
 
     public fun vec_set_eq(vec1: &VecSet<u64>, vec2: &VecSet<u64>): bool {
         vec1 == vec2
+    }
+}
+
+module sui::object {
+    struct UID has store {
+        id: address,
+    }
+}
+
+module sui::bag {
+    use sui::object::UID;
+
+    struct Bag has key, store {
+        id: UID
+    }
+}
+
+module sui::object_bag {
+    use sui::object::UID;
+
+    struct ObjectBag has key, store {
+        id: UID
+    }
+}
+
+module sui::table {
+    use sui::object::UID;
+
+    struct Table<phantom K: copy + drop + store, phantom V: store> has key, store {
+        id: UID
+    }
+}
+
+module sui::object_table {
+    use sui::object::UID;
+
+    struct ObjectTable<phantom K: copy + drop + store, phantom V: key + store> has key, store {
+        id: UID
+    }
+}
+
+module sui::linked_table {
+    use sui::object::UID;
+
+    struct LinkedTable<phantom K: copy + drop + store, phantom V: store> has key, store {
+        id: UID
+    }
+}
+
+module sui::table_vec {
+    use sui::object::UID;
+
+    struct TableVec<phantom Element: store> has key, store {
+        id: UID
+    }
+}
+
+module sui::vec_map {
+    use sui::object::UID;
+
+    struct VecMap<phantom K: copy, phantom V> has key, store {
+        id: UID
+    }
+}
+
+module sui::vec_set {
+    use sui::object::UID;
+
+    struct VecSet<phantom K: copy + drop> has key, store {
+        id: UID
     }
 }

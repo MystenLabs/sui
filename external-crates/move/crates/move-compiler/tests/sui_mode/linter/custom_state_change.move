@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x42::test {
+module a::test {
     use sui::object::UID;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -23,5 +23,35 @@ module 0x42::test {
 
     public fun custom_freeze_bad(o: S1) {
         transfer::freeze_object(o)
+    }
+}
+
+module sui::object {
+    struct UID has store {
+        id: address,
+    }
+    public fun new(_: &mut sui::tx_context::TxContext): UID {
+        abort 0
+    }
+}
+
+module sui::tx_context {
+    struct TxContext has drop {}
+    public fun sender(_: &TxContext): address {
+        @0
+    }
+}
+
+module sui::transfer {
+    public fun transfer<T: key>(_: T, _: address) {
+        abort 0
+    }
+
+    public fun freeze_object<T: key>(_: T) {
+        abort 0
+    }
+
+    public fun share_object<T: key>(_: T) {
+        abort 0
     }
 }

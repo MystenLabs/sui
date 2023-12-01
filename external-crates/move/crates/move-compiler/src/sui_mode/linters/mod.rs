@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_compiler::{
+use crate::{
+    cfgir::visitor::AbstractInterpreterVisitor,
+    command_line::compiler::Visitor,
     diagnostics::codes::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     naming::ast as N,
+    typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;
 
@@ -123,6 +126,17 @@ pub fn known_filters() -> (E::AttributeName_, Vec<WarningFilter>) {
             ),
         ],
     )
+}
+
+pub fn linter_visitors() -> Vec<Visitor> {
+    vec![
+        share_owned::ShareOwnedVerifier.visitor(),
+        self_transfer::SelfTransferVerifier.visitor(),
+        custom_state_change::CustomStateChangeVerifier.visitor(),
+        coin_field::CoinFieldVisitor.visitor(),
+        freeze_wrapped::FreezeWrappedVisitor.visitor(),
+        collection_equality::CollectionEqualityVisitor.visitor(),
+    ]
 }
 
 pub fn base_type(t: &N::Type) -> Option<&N::Type> {

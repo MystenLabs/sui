@@ -5,9 +5,12 @@
 //! or sui::bag::Bag are being compared for (in)equality at this type of comparison is not very
 //! useful and DOES NOT take into consideration structural (in)equality.
 
-use move_compiler::{
+use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::{
+        codes::{custom, DiagnosticInfo, Severity},
+        WarningFilters,
+    },
     naming::ast as N,
     parser::ast as P,
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
@@ -106,7 +109,7 @@ impl TypingVisitorContext for Context<'_> {
         false
     }
 
-    fn add_warning_filter_scope(&mut self, filter: move_compiler::diagnostics::WarningFilters) {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
         self.env.add_warning_filter_scope(filter)
     }
 

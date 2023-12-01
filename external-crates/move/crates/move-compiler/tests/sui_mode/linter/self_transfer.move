@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x42::test {
+module a::test {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -53,5 +53,31 @@ module 0x42::test {
     #[lint_allow(self_transfer)]
     public fun public_transfer_bad_suppressed(ctx: &mut TxContext) {
         transfer::public_transfer(S1 { id: object::new(ctx), }, tx_context::sender(ctx))
+    }
+}
+
+module sui::object {
+    struct UID has store {
+        id: address,
+    }
+    public fun new(_: &mut sui::tx_context::TxContext): UID {
+        abort 0
+    }
+}
+
+module sui::tx_context {
+    struct TxContext has drop {}
+    public fun sender(_: &TxContext): address {
+        @0
+    }
+}
+
+module sui::transfer {
+    public fun transfer<T: key>(_: T, _: address) {
+        abort 0
+    }
+
+    public fun public_transfer<T: key>(_: T, _: address) {
+        abort 0
     }
 }

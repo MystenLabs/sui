@@ -8,7 +8,9 @@ use clap::*;
 use move_command_line_common::files::{FileHash, MOVE_COVERAGE_MAP_EXTENSION};
 use move_compiler::{
     diagnostics::{self},
+    editions::Flavor,
     shared::{NumberFormat, NumericalAddress},
+    sui_mode::linters::{known_filters, linter_visitors},
     unit_test::{plan_builder::construct_test_plan, TestPlan},
     PASS_CFGIR,
 };
@@ -136,6 +138,11 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     compiler_writer: &mut CW,
     test_writer: &mut TW,
 ) -> Result<UnitTestResult> {
+    let no_lint = build_config.no_lint;
+    let sui_flavor = build_config
+        .default_flavor
+        .map_or(false, |f| f == Flavor::Sui);
+
     let mut test_plan = None;
     build_config.test_mode = true;
     build_config.dev_mode = true;
@@ -180,7 +187,16 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
     build_plan.compile_with_driver(compiler_writer, |compiler| {
-        let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
+        let (files, comments_and_compiler_res) = if no_lint || !sui_flavor {
+            compiler.run::<PASS_CFGIR>().unwrap()
+        } else {
+            let (filter_attr_name, filters) = known_filters();
+            compiler
+                .add_visitors(linter_visitors())
+                .add_custom_known_filters(filters, filter_attr_name)
+                .run::<PASS_CFGIR>()
+                .unwrap()
+        };
         let (_, compiler) =
             diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
         let (mut compiler, cfgir) = compiler.into_ast();

@@ -20,6 +20,7 @@ const-str.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true
+move-compiler.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true

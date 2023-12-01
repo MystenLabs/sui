@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[macro_use(sp)]
 extern crate move_ir_types;
 
 use std::{
@@ -19,12 +18,11 @@ use move_binary_format::{
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
-    cfgir::visitor::AbstractInterpreterVisitor,
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
     expansion::ast::{AttributeName_, Attributes},
     shared::known_attributes::KnownAttribute,
-    typing::visitor::TypingVisitor,
+    sui_mode::linters::{known_filters, linter_visitors, LINT_WARNING_PREFIX},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -52,18 +50,9 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-use crate::linters::{
-    coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
-    custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
-    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
-    LINT_WARNING_PREFIX,
-};
-
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
-
-pub mod linters;
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug)]
@@ -85,8 +74,6 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
-    /// If true, run linters
-    pub lint: bool,
 }
 
 impl BuildConfig {
@@ -129,17 +116,9 @@ impl BuildConfig {
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
             let (files, units_res) = if lint {
-                let lint_visitors = vec![
-                    ShareOwnedVerifier.visitor(),
-                    SelfTransferVerifier.visitor(),
-                    CustomStateChangeVerifier.visitor(),
-                    CoinFieldVisitor.visitor(),
-                    FreezeWrappedVisitor.visitor(),
-                    CollectionEqualityVisitor.visitor(),
-                ];
                 let (filter_attr_name, filters) = known_filters();
                 compiler
-                    .add_visitors(lint_visitors)
+                    .add_visitors(linter_visitors())
                     .add_custom_known_filters(filters, filter_attr_name)
                     .build()?
             } else {
@@ -185,7 +164,7 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        let lint = self.lint;
+        let lint = !self.config.no_lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -572,7 +551,6 @@ impl Default for BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
-            lint: false,
         }
     }
 }

@@ -45,9 +45,13 @@ pub struct Calib {
 
 pub fn execute_move_command(
     package_path: Option<PathBuf>,
-    build_config: BuildConfig,
+    mut build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {
+    if build_config.default_flavor.is_none() {
+        // set the compilation flavor to Sui unless user already set it to another flavor
+        build_config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
+    }
     match command {
         #[cfg(feature = "build")]
         Command::Build(c) => c.execute(package_path, build_config),
