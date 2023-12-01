@@ -10,4 +10,5 @@ pub(crate) struct ExecutionResult {
 
     /// The digest field captures the digest of the transaction block
     pub digest: String,
+    // TODO: add support for `TransactionBlockEffects` field
 }

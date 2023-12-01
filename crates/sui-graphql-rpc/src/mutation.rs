@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::code;
-
-use crate::{error::graphql_error, types::transaction_exec::ExecutionResult};
+use crate::{error::Error, types::transaction_exec::ExecutionResult};
 use async_graphql::*;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
@@ -24,44 +22,49 @@ impl Mutation {
     /// `signatures` are a list of `flag || signature || pubkey` bytes,
     ///     Base64-encoded.
     ///
-    /// Waits until the transaction has been finalised on chain to return
+    /// Waits until the transaction has been finalized on chain to return
     /// its transaction digest.  If the transaction could not be
-    /// finalised, returns the errors that prevented it, instead.
+    /// finalized, returns the errors that prevented it, instead.
     async fn execute_transaction_block(
         &self,
         ctx: &Context<'_>,
         tx_bytes: String,
         signatures: Vec<String>,
     ) -> Result<ExecutionResult> {
-        let sui_sdk_client: &SuiClient = ctx.data().map_err(|_| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                "Unable to fetch Sui SDK client",
-            )
-        })?;
-
-        let tx_data = bcs::from_bytes(&Base64::decode(&tx_bytes).map_err(|e| {
-            graphql_error(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Unable to deserialize transaction bytes from Base64: {e}"),
-            )
-        })?)?;
+        let sui_sdk_client: &SuiClient = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Sui SDK client".to_string()))
+            .extend()?;
+        let tx_data = bcs::from_bytes(
+            &Base64::decode(&tx_bytes)
+                .map_err(|e| {
+                    Error::Client(format!(
+                        "Unable to deserialize transaction bytes from Base64: {e}"
+                    ))
+                })
+                .extend()?,
+        )
+        .map_err(|e| {
+            Error::Client(format!(
+                "Unable to deserialize transaction bytes as BCS: {e}"
+            ))
+        })
+        .extend()?;
 
         let mut sigs = Vec::new();
         for sig in signatures {
             sigs.push(
-                GenericSignature::from_bytes(&Base64::decode(&sig).map_err(|e| {
-                    graphql_error(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to deserialize signature bytes {sig} from Base64: {e}"),
-                    )
-                })?)
-                .map_err(|e| {
-                    graphql_error(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Unable to create signature from bytes: {e}"),
-                    )
-                })?,
+                GenericSignature::from_bytes(
+                    &Base64::decode(&sig)
+                        .map_err(|e| {
+                            Error::Client(format!(
+                                "Unable to deserialize signature bytes {sig} from Base64: {e}"
+                            ))
+                        })
+                        .extend()?,
+                )
+                .map_err(|e| Error::Client(format!("Unable to create signature from bytes: {e}")))
+                .extend()?,
             );
         }
         let transaction =
@@ -75,12 +78,10 @@ impl Mutation {
                 Some(ExecuteTransactionRequestType::WaitForEffectsCert),
             )
             .await
-            .map_err(|e| {
-                graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Unable to execute transaction: {:?}", e),
-                )
-            })?;
+            // TODO: use proper error type as this could be a client error or internal error
+            // depending on the specific error returned
+            .map_err(|e| Error::Internal(format!("Unable to execute transaction: {e}")))
+            .extend()?;
 
         Ok(ExecutionResult {
             errors: if result.errors.is_empty() {

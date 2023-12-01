@@ -183,7 +183,6 @@ impl ServerBuilder {
                 "No fullnode url found in config".to_string(),
             ))?;
         // SDK for talking to fullnode. Used for executing transactions only
-        // TODO: wrap this in custom logic to pick proper fullnode url
         let sui_sdk_client = SuiClientBuilder::default()
             .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
             .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)

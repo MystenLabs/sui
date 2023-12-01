@@ -164,9 +164,9 @@ type Mutation {
   # `signatures` are a list of `flag || signature || pubkey` bytes,
   #     Base64-encoded.
   #
-  # Waits until the transaction has been finalised on chain to return
+  # Waits until the transaction has been finalized on chain to return
   # its transaction digest.  If the transaction could not be
-  # finalised, returns the errors that prevented it, instead.
+  # finalized, returns the errors that prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
     signatures: [Base64!]!,

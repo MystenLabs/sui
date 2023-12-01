@@ -261,18 +261,15 @@ impl Default for InternalFeatureConfig {
     }
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
 pub struct TxExecFullNodeConfig {
     #[serde(default)]
     pub(crate) node_rpc_url: Option<String>,
 }
 
-impl Default for TxExecFullNodeConfig {
-    fn default() -> Self {
-        Self {
-            // TODO: infer default fullnode url from chain id
-            node_rpc_url: Some("https://fullnode.testnet.sui.io:443".to_string()),
-        }
+impl TxExecFullNodeConfig {
+    pub fn new(node_rpc_url: Option<String>) -> Self {
+        Self { node_rpc_url }
     }
 }
 
