@@ -5399,14 +5399,9 @@ module deepbook::clob_test {
             );
 
             let of_event = vector::borrow(&of_events, 0);
-            let (_, _, taker_client_order_id, maker_client_order_id, is_bid, _, _, original_quantity, base_asset_quantity_filled,
-            base_asset_quantity_remaining, price, _ , _) = clob::order_filled_event_info(of_event);
-            assert!(taker_client_order_id == CLIENT_ID_BOB, 0);
-            assert!(maker_client_order_id == CLIENT_ID_ALICE, 0);
+            let (_, _, is_bid, _, _, base_asset_quantity_filled, price, _ , _) = clob::matched_order_metadata_info(of_event);
             assert!(is_bid == false, 0);
-            assert!(original_quantity == 500, 0);
             assert!(base_asset_quantity_filled == 500, 0);
-            assert!(base_asset_quantity_remaining == 0, 0);
             assert!(price == 5 * FLOAT_SCALING, 0);
 
             burn_for_testing(base_coin);
@@ -5467,14 +5462,9 @@ module deepbook::clob_test {
             );
 
             let of_event = vector::borrow(&of_events, 0);
-            let (_, _, taker_client_order_id, maker_client_order_id, is_bid, _, _, original_quantity, base_asset_quantity_filled,
-            base_asset_quantity_remaining, price, _ , _) = clob::order_filled_event_info(of_event);
-            assert!(taker_client_order_id == CLIENT_ID_BOB, 0);
-            assert!(maker_client_order_id == CLIENT_ID_ALICE, 0);
+            let (_, _, is_bid, _, _, base_asset_quantity_filled, price, _ , _) = clob::matched_order_metadata_info(of_event);
             assert!(is_bid == true, 0);
-            assert!(original_quantity == 500, 0);
             assert!(base_asset_quantity_filled == 500, 0);
-            assert!(base_asset_quantity_remaining == 0, 0);
             assert!(price == 5 * FLOAT_SCALING, 0);
 
             burn_for_testing(base_coin);
@@ -5536,14 +5526,9 @@ module deepbook::clob_test {
             );
 
             let of_event = vector::borrow(&of_events, 0);
-            let (_, _, taker_client_order_id, maker_client_order_id, is_bid, _, _, original_quantity, base_asset_quantity_filled,
-            base_asset_quantity_remaining, price, _ , _) = clob::order_filled_event_info(of_event);
-            assert!(taker_client_order_id == CLIENT_ID_BOB, 0);
-            assert!(maker_client_order_id == CLIENT_ID_ALICE, 0);
+            let (_, _, is_bid, _, _, base_asset_quantity_filled, price, _ , _) = clob::matched_order_metadata_info(of_event);
             assert!(is_bid == true, 0);
-            assert!(original_quantity == 500, 0);
             assert!(base_asset_quantity_filled == 500, 0);
-            assert!(base_asset_quantity_remaining == 0, 0);
             assert!(price == 5 * FLOAT_SCALING, 0);
 
             burn_for_testing(base_coin);
@@ -5610,14 +5595,9 @@ module deepbook::clob_test {
             );
 
             let of_event = vector::borrow(&of_events, 0);
-            let (_, _, taker_client_order_id, maker_client_order_id, is_bid, _, _, original_quantity, base_asset_quantity_filled,
-            base_asset_quantity_remaining, price, _ , _) = clob::order_filled_event_info(of_event);
-            assert!(taker_client_order_id == CLIENT_ID_BOB, 0);
-            assert!(maker_client_order_id == CLIENT_ID_ALICE, 0);
+            let (_, _, is_bid, _, _, base_asset_quantity_filled, price, _ , _) = clob::matched_order_metadata_info(of_event);
             assert!(is_bid == true, 0);
-            assert!(original_quantity == 500, 0);
             assert!(base_asset_quantity_filled == 500, 0);
-            assert!(base_asset_quantity_remaining == 0, 0);
             assert!(price == 5 * FLOAT_SCALING, 0);
 
             test::return_shared(clock);
