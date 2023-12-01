@@ -596,10 +596,10 @@ impl AuthorityStore {
     }
 
     /// Load a list of objects from the store by object reference.
-    /// If they are exist in the store, they are returned directly.
+    /// If they exist in the store, they are returned directly.
     /// If any object missing, we try to figure out the best error to return.
     /// If the object we are asking is currently locked at a future version, we know this
-    /// transaction is out-of-dated and we return a ObjectVersionUnavailableForConsumption,
+    /// transaction is out-of-date and we return a ObjectVersionUnavailableForConsumption,
     /// which indicates this is not retriable.
     /// Otherwise, we return a ObjectNotFound error, which indicates this is retriable.
     pub fn multi_get_object_with_more_accurate_error_return(
