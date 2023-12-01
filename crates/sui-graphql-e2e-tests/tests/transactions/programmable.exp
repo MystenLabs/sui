@@ -66,8 +66,8 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
                   "digest": "9dppxTwUWhC8nVH4Djdv71K75Ze4HEXe5ZU3NcX3TrK"
@@ -75,7 +75,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0xa4a7220856bab19ccaa904d168baa3d733b59c8c067cdcc300502ac352f679af",
                   "digest": "9AR9zGFB4aPcZzniVTVqRTYHwUASw5PXPYsTtomT8jyB"
@@ -83,7 +83,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0xcadb6deed476a072959bd1a031809d737240ccde7917495e16aa9793d6419a74",
                   "digest": "PaCSXQ5RCkt2vc6w2NfZMNBvoCYyM9H6uJJtx1KgEyj"
@@ -185,16 +185,16 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
                   "digest": "765g4rih8tpnzb9gHEHArtZ3Ye7SJ3CJUapLVUsdcd6K"
                 }
               },
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0xa4a7220856bab19ccaa904d168baa3d733b59c8c067cdcc300502ac352f679af",
                   "digest": "Hyz4RaTV3cApJs911rX9CURmBd7amvComK4hoNrX7Dmg"
@@ -202,7 +202,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x260de89d19ced9a26b7efba21d133f71987aa80696228f1dee6178961d0e07be",
                   "digest": "9jMyF1w9TTRgvXdsWAn8d5awmQXYD4gUe1qX586UwWVt"
@@ -301,8 +301,8 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
                   "digest": "6bbvaLxYq6Fj8bVvhvKkeZM3u27ecvwe9hGkbdsSXd2e",
@@ -323,7 +323,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x505c5f4993a1fe74c5492945104578ca55d6275a15d64ecc21de6b7b5ef34804",
                   "digest": "5ayrZbSq44X3WqnwNsVvNHGs21YntWobKUoFZQbvVMyw",
@@ -345,7 +345,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x82ff2affd2e0447baea51fb07098dd4192c38424f41e291c7b47bcae5be0f37c",
                   "digest": "choJQNN7TWytitxF59W6QgnECZkzL28oT77TSkLvox7",
@@ -456,8 +456,8 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
                   "digest": "EW31fn6wtJxosHoPLnhPNp8tNQgCctYMksKDMY6St4y5"

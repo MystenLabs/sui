@@ -74,7 +74,7 @@ Response: {
             "objectChanges": [
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000001",
                   "digest": "FvLv2TuVhx1Ga8oCLW4gZmiBnQpT7XkSdGBo753kApGD"
@@ -82,7 +82,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000002",
                   "digest": "CcD7UEtUeyPhcnqdxS5GFRTQ9xRsx71wZ3fRcGsaKEUp"
@@ -90,7 +90,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000003",
                   "digest": "4VXaAMUGRedbhHDoNifrFx2iYeC8n5qB1W6BDsUvJc3h"
@@ -98,7 +98,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
                   "digest": "EVK8EKnUhpqHEGHYX8da98qWhQT965WLxanbCZnwaT1Y"
@@ -106,7 +106,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
                   "digest": "D1mkJGFbzAZmXfD3ktF38Endz9LtnML94B5kuyQEhR1e"
@@ -114,7 +114,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000007",
                   "digest": "2aRjNBbkQWJToXLL74Wzv2GDu9sWcFPd5XXgvrgk7FAC"
@@ -122,7 +122,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x000000000000000000000000000000000000000000000000000000000000dee9",
                   "digest": "FX5F5Ex6asvjDd5xU8VBua8eSGp9YAh7rBse6LJsxwBa"
@@ -130,7 +130,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x14498a4368db5cefb6ec2fe91cf18636c5d8fc08b91e3d1417ccb0866e8b95d4",
                   "digest": "94HmeZ5AZqsm4X4HStQEkJqiuQWQWogMRepMzHNcfXVS"
@@ -138,7 +138,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x168e8bf1317ef81399ea9fabee9e217067a257731903b45ca4915c8d049b3940",
                   "digest": "8qJceXqDUSngLbk1rpquzALgcT4WtKfhM78LXepgZmtf"
@@ -146,7 +146,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x1ca7fcc2fe39d93fd041dbcbcc30b33a366b44cab26acd52e5d99f6cf2a0a6e7",
                   "digest": "5ZKMLAipLWCy8rkKBWVbf3NVbdEtna81wwNvt37PVdhj"
@@ -154,7 +154,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x3fa556a7dadc08367a52a6eb4a3b602abbc21446c1f703d2ac46866a403d718e",
                   "digest": "BUFgjXdbMvsknRVvLDefPKCzir7EPpkPmhinUQpD6SKy"
@@ -162,7 +162,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x41a7f84bd3a02e7e5bea80580e40cec419d40ef9925a51cf0128ad84b40f8041",
                   "digest": "9tGfLEvq5kUWYBUaMVSH3Qu996sAv5XAPEXGUFcYecpU"
@@ -170,7 +170,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x46ea41cad4b69f493f5cf7fcb41c96e63ea97c206107d9b25d29a7d28f683ca7",
                   "digest": "D5vv7Xzd6uDWFuYTSEFvNgfXrRsXSDna9v7h4BK7xQcW"
@@ -178,7 +178,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                   "digest": "BWHXYvVDVbLrXAWL91Bgid4Pu9oDyF8hZqNoFsZ6HM7w"
@@ -186,7 +186,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
                   "digest": "68NRbjATuQoyL78VTc3Gd96h2xoGmevmCpoAQzM7jghG"
@@ -194,7 +194,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0xd73b7dd2e4b15b4030f2d1af51a8e8335d37c9723565005f498df27d8a6d3a4d",
                   "digest": "2b3gYd9RreACiq2Cxv2LJyLS8PWHeXfDNeECYbVaf8FR"
@@ -276,8 +276,8 @@ Response: {
             "balanceChanges": [],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
                   "digest": "28w3Mp2x4vt94bq4TejrbLcfMsMaevDyPz6h98sgcnw4"
@@ -361,8 +361,8 @@ Response: {
             "balanceChanges": [],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
                   "digest": "5jzahJer9cg4yJaBZhjpEAbLtzHcKguzMtFBc1poL5fS"
@@ -370,7 +370,7 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
                   "digest": "Y4W89QnJVPhaMeoExCsfdQhF5bs5RELi5xjLgAy1h6a"
@@ -378,14 +378,14 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
+                "idDeleted": false,
                 "outputState": {
                   "location": "0xa84a25da7fef87ac6141a4920a87564ddb5bd8964333f04e7bd49facb831ba43",
                   "digest": "2dUtbkQSCPJewe9WJsxvAdu1rft1AVXwXMuWYFkYnAxr"
                 }
               },
               {
-                "idCreated": null,
+                "idCreated": false,
                 "idDeleted": true,
                 "outputState": null
               }

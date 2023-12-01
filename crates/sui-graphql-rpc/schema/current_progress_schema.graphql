@@ -1057,9 +1057,21 @@ type Object implements ObjectOwner {
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
+"""
+Effect on an individual Object (keyed by its ID).
+"""
 type ObjectChange {
+	"""
+	The contents of the object at the end of the transaction.
+	"""
 	outputState: Object
+	"""
+	Whether the ID was created in this transaction.
+	"""
 	idCreated: Boolean
+	"""
+	Whether the ID was deleted in this transaction.
+	"""
 	idDeleted: Boolean
 }
 
