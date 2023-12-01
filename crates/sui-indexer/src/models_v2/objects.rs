@@ -3,6 +3,7 @@
 
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
+use sui_json_rpc::coin_api::parse_to_struct_tag;
 
 use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
@@ -252,12 +253,20 @@ impl TryFrom<StoredObject> for SuiCoin {
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let object: Object = o.clone().try_into()?;
         let (coin_object_id, version, digest) = o.get_object_ref()?;
-        let coin_type = o
-            .coin_type
-            .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Object {} is supposed to be a coin but has an empty coin_type column",
-                coin_object_id,
-            )))?;
+        let coin_type_canonical =
+            o.coin_type
+                .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Object {} is supposed to be a coin but has an empty coin_type column",
+                    coin_object_id,
+                )))?;
+        let coin_type = parse_to_struct_tag(coin_type_canonical.as_str())
+            .map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "The type of object {} cannot be parsed as a struct tag",
+                    coin_object_id,
+                ))
+            })?
+            .to_string();
         let balance = o
             .coin_balance
             .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -285,15 +294,24 @@ pub struct CoinBalance {
     pub coin_balance: i64,
 }
 
-impl From<CoinBalance> for Balance {
-    fn from(c: CoinBalance) -> Self {
-        Self {
-            coin_type: c.coin_type,
+impl TryFrom<CoinBalance> for Balance {
+    type Error = IndexerError;
+
+    fn try_from(c: CoinBalance) -> Result<Self, Self::Error> {
+        let coin_type = parse_to_struct_tag(c.coin_type.as_str())
+            .map_err(|_| {
+                IndexerError::PersistentStorageDataCorruptionError(
+                    "The type of coin balance cannot be parsed as a struct tag".to_string(),
+                )
+            })?
+            .to_string();
+        Ok(Self {
+            coin_type,
             coin_object_count: c.coin_num as usize,
             // TODO: deal with overflow
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
-        }
+        })
     }
 }
 
@@ -335,10 +353,22 @@ mod tests {
         let stored_obj = StoredObject::from(indexed_obj);
 
         let sui_coin = SuiCoin::try_from(stored_obj).unwrap();
-        assert_eq!(
-            sui_coin.coin_type,
-            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-        );
+        assert_eq!(sui_coin.coin_type, "0x2::sui::SUI");
+    }
+
+    #[test]
+    fn test_output_format_coin_balance() {
+        let test_obj = Object::new_gas_for_testing();
+        let indexed_obj = IndexedObject::from_object(1, test_obj, None);
+
+        let stored_obj = StoredObject::from(indexed_obj);
+        let test_balance = CoinBalance {
+            coin_type: stored_obj.coin_type.unwrap(),
+            coin_num: 1,
+            coin_balance: 100,
+        };
+        let balance = Balance::try_from(test_balance).unwrap();
+        assert_eq!(balance.coin_type, "0x2::sui::SUI");
     }
 
     #[test]

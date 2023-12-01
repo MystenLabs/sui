@@ -1440,7 +1440,10 @@ impl IndexerReader {
         tracing::debug!("get coin balances query: {query}");
         let coin_balances =
             self.run_query(|conn| diesel::sql_query(query).load::<CoinBalance>(conn))?;
-        Ok(coin_balances.into_iter().map(|cb| cb.into()).collect())
+        coin_balances
+            .into_iter()
+            .map(|cb| cb.try_into())
+            .collect::<IndexerResult<Vec<_>>>()
     }
 
     pub fn get_latest_network_metrics(&self) -> IndexerResult<NetworkMetrics> {
