@@ -49,7 +49,7 @@ module deepbook::clob_test {
     #[test] fun test_swap_exact_quote_for_base(
     ) { let _ = test_swap_exact_quote_for_base_(scenario()); }
 
-    #[test] fun test_pool_with_small_fee_example() { let _ = test_swap_with_small_fee_example_(scenario()); }
+    #[test] fun test_pool_with_small_fee_example() { let _ = test_pool_with_small_fee_example_(scenario()); }
 
     #[test] fun test_swap_exact_quote_for_base_with_skipping_self_matching(
     ) { let _ = test_swap_exact_quote_for_base_with_skipping_self_matching_(scenario()); }
@@ -494,8 +494,12 @@ module deepbook::clob_test {
             );
             assert!(base_quantity_filled == 1500, 0);
             assert!(quote_quantity_filled == 4500 + 10 + 13, 0);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            let alice_account_cap = test::take_from_address<AccountCap>(&test, alice);
+            clob::check_balance_invariants_for_account(&alice_account_cap, quote_custodian, base_custodian, &pool);
             test::return_shared(pool);
             test::return_to_address<AccountCap>(bob, account_cap);
+            test::return_to_address<AccountCap>(alice, alice_account_cap);
         };
 
         // test list_open_orders after match
@@ -1292,7 +1296,7 @@ module deepbook::clob_test {
             let pool = test::take_shared<Pool<SUI, USD>>(&test);
             let clock = test::take_shared<Clock>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, bob);
-            let (coin1, coin2) =clob::place_market_order<SUI, USD>(&mut pool, &account_cap, CLIENT_ID_BOB, 600,
+            let (coin1, coin2) = clob::place_market_order<SUI, USD>(&mut pool, &account_cap, CLIENT_ID_BOB, 600,
                 false,
                 mint_for_testing<SUI>(600, ctx(&mut test)),
                 mint_for_testing<USD>(0, ctx(&mut test)),
@@ -1968,9 +1972,15 @@ module deepbook::clob_test {
             assert!(coin::value(&quote_coin) == 2, 0);
             burn_for_testing(base_coin);
             burn_for_testing(quote_coin);
+
+            // Check Alice for invariants
+            let alice_account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            clob::check_balance_invariants_for_account(&alice_account_cap, quote_custodian, base_custodian, &pool);
             test::return_shared(clock);
             test::return_shared(pool);
             test::return_to_address<AccountCap>(bob, account_cap);
+            test::return_to_address<AccountCap>(alice, alice_account_cap);
         };
         end(test)
     }
@@ -2028,18 +2038,23 @@ module deepbook::clob_test {
                 &clock,
                 ctx(&mut test)
             );
+            let alice_account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            clob::check_balance_invariants_for_account(&alice_account_cap, quote_custodian, base_custodian, &pool);
+
             assert!(coin::value(&base_coin) == 0, 0);
             assert!(coin::value(&quote_coin) == 5969, 0);
             burn_for_testing(base_coin);
             burn_for_testing(quote_coin);
             test::return_shared(clock);
             test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, alice_account_cap);
             test::return_to_address<AccountCap>(bob, account_cap);
         };
         end(test)
     }
 
-    fun test_swap_with_small_fee_example_(test: Scenario): TransactionEffects {
+    fun test_pool_with_small_fee_example_(test: Scenario): TransactionEffects {
         let (alice, bob) = people();
         let owner = @0xF;
         // setup pool and custodian
@@ -2075,6 +2090,7 @@ module deepbook::clob_test {
         {
             let pool = test::take_shared<Pool<SUI, USD>>(&test);
             let account_cap = test::take_from_address<AccountCap>(&test, alice);
+
             let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
             clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
             test::return_shared(pool);
@@ -5317,6 +5333,208 @@ module deepbook::clob_test {
                 let (_, _, _, asks) = get_pool_stat(&pool);
                 clob::check_tick_level(asks, 10 * FLOAT_SCALING, &open_orders);
             };
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        end(test)
+    }
+
+    #[test]
+    fun test_cancel_order_no_rounding(): TransactionEffects {
+        let test = scenario();
+        let (alice, bob) = people();
+        let owner = @0xF;
+        // setup pool and custodian
+        next_tx(&mut test, owner);
+        {
+            clob::setup_test(0, 0, &mut test, owner);
+        };
+        {
+            mint_account_cap_transfer(alice, test::ctx(&mut test));
+        };
+        next_tx(&mut test, bob);
+        {
+            mint_account_cap_transfer(bob, test::ctx(&mut test));
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let clock = test::take_shared<Clock>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = account_owner(&account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
+            let alice_deposit_WSUI: u64 = 1000000000;
+            let alice_deposit_USDC: u64 = 1000000000;
+            custodian::test_increase_user_available_balance<SUI>(base_custodian, account_cap_user, alice_deposit_WSUI);
+            custodian::test_increase_user_available_balance<USD>(quote_custodian, account_cap_user, alice_deposit_USDC);
+            let(_, _) = custodian::account_balance(quote_custodian, account_cap_user);
+            // Example buying 0.1 sui, for the price of .719
+            clob::test_inject_limit_order(&mut pool, CLIENT_ID_ALICE, 719000, 1000000000, 1000000000, true,
+                CANCEL_OLDEST, &account_cap,ctx(&mut test));
+
+            // Example selling 0.1 sui for the price of .519
+            clob::test_inject_limit_order(&mut pool, CLIENT_ID_ALICE, 519000, 1000000000, 1000000000, false,
+                CANCEL_OLDEST, &account_cap,ctx(&mut test));
+            test::return_shared(pool);
+            test::return_shared(clock);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        next_tx(&mut test, bob);
+        // Buys some sui from alice
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, bob);
+            let clock = test::take_shared<Clock>(&test);
+
+            let (base_coin, quote_coin, _) = clob::swap_exact_base_for_quote(
+                &mut pool,
+                CLIENT_ID_BOB,
+                &account_cap,
+                100000,
+                mint_for_testing<SUI>(100000000, ctx(&mut test)),
+                mint_for_testing<USD>(0,  ctx(&mut test)),
+                &clock,
+                ctx(&mut test)
+            );
+
+            burn_for_testing(base_coin);
+            burn_for_testing(quote_coin);
+
+            // buy second time
+            (base_coin, quote_coin, _) = clob::swap_exact_base_for_quote(
+                &mut pool,
+                CLIENT_ID_BOB,
+                &account_cap,
+                100000,
+                mint_for_testing<SUI>(100000000, ctx(&mut test)),
+                mint_for_testing<USD>(0,  ctx(&mut test)),
+                &clock,
+                ctx(&mut test)
+            );
+
+            burn_for_testing(base_coin);
+            burn_for_testing(quote_coin);
+
+            test::return_shared(pool);
+            test::return_shared(clock);
+            test::return_to_address<AccountCap>(bob, account_cap);
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            std::debug::print(&clob::list_open_orders(&pool, &account_cap));
+            // cancel all order
+            // clob::cancel_order<SUI, USD>(&mut pool, 1, &account_cap);
+            // clob::cancel_all_orders<SUI, USD>(&mut pool, &account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        next_tx(&mut test, bob);
+        // Sells some USDC to alice
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, bob);
+            let clock = test::take_shared<Clock>(&test);
+
+            let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
+                &mut pool, 
+                &account_cap, 
+                CLIENT_ID_BOB, 
+                100000,
+                true,
+                mint_for_testing<SUI>(0, ctx(&mut test)),
+                mint_for_testing<USD>(100000, ctx(&mut test)),
+                &clock,
+                ctx(&mut test)
+            );
+
+            burn_for_testing(base_coin);
+            burn_for_testing(quote_coin);
+
+            // buy second time
+            let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
+                &mut pool, 
+                &account_cap, 
+                CLIENT_ID_BOB, 
+                100000,
+                true,
+                mint_for_testing<SUI>(0, ctx(&mut test)),
+                mint_for_testing<USD>(100000, ctx(&mut test)),
+                &clock,
+                ctx(&mut test)
+            );
+
+            burn_for_testing(base_coin);
+            burn_for_testing(quote_coin);
+
+
+            // Buys but this time utilizes a different code path
+            let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
+                &mut pool, 
+                &account_cap, 
+                CLIENT_ID_BOB, 
+                100000,
+                false,
+                mint_for_testing<SUI>(100000, ctx(&mut test)),
+                mint_for_testing<USD>(0, ctx(&mut test)),
+                &clock,
+                ctx(&mut test)
+            );
+
+            burn_for_testing(base_coin);
+            burn_for_testing(quote_coin);
+
+            // buy second time
+            let (base_coin, quote_coin) = clob::place_market_order<SUI, USD>(
+                &mut pool, 
+                &account_cap, 
+                CLIENT_ID_BOB, 
+                100000,
+                false,
+                mint_for_testing<SUI>(100000, ctx(&mut test)),
+                mint_for_testing<USD>(0, ctx(&mut test)),
+                &clock,
+                ctx(&mut test)
+            );
+
+            burn_for_testing(base_coin);
+            burn_for_testing(quote_coin);
+
+            test::return_shared(pool);
+            test::return_shared(clock);
+            test::return_to_address<AccountCap>(bob, account_cap);
+        };
+        next_tx(&mut test, alice);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        next_tx(&mut test, alice);
+        // Check cancel all orders returns all funds
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            // cancel all order
+            clob::cancel_all_orders<SUI, USD>(&mut pool, &account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+            clob::check_balance_invariants_for_account(&account_cap, quote_custodian, base_custodian, &pool);
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap);
         };
