@@ -90,26 +90,26 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "location": "0x807f5a3775f335f42e0f142705b620937fb41bb5d712ee05974122c5388f8bfa",
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0x3471cbf24d6b663a8f36d66093af6f86762f824dd6745c179e08fc056320768b",
+                  "location": "0x689fb9264391eb0a1f91ed321a61bae8f8e318b9a7a7f21e68424f9e4c836d02",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0xc756da742913219d3948cf37d10a06923fdc2733df70c18940938c6c3775dc50",
+                  "location": "0xd23cf90c9a76264dfca8b27eae5cc9deee7812e25a3c46981e7e57c004f8891c",
                   "asMovePackage": {
                     "module": {
                       "function": {
                         "module": {
                           "package": {
                             "asObject": {
-                              "location": "0xc756da742913219d3948cf37d10a06923fdc2733df70c18940938c6c3775dc50"
+                              "location": "0xd23cf90c9a76264dfca8b27eae5cc9deee7812e25a3c46981e7e57c004f8891c"
                             }
                           }
                         },
@@ -167,26 +167,26 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "location": "0x3471cbf24d6b663a8f36d66093af6f86762f824dd6745c179e08fc056320768b",
+                  "location": "0x689fb9264391eb0a1f91ed321a61bae8f8e318b9a7a7f21e68424f9e4c836d02",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0x807f5a3775f335f42e0f142705b620937fb41bb5d712ee05974122c5388f8bfa",
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0xb1ceef41b21ef9f25ff3aec700bfd74db59c2adde7577de3de6eedf2e6a6d11f",
+                  "location": "0x9965bd2655c50dbd51ae264edee8ff12a28cd43842cc7de4ef25a1436384ddce",
                   "asMovePackage": {
                     "module": {
                       "f": {
                         "module": {
                           "package": {
                             "asObject": {
-                              "location": "0xb1ceef41b21ef9f25ff3aec700bfd74db59c2adde7577de3de6eedf2e6a6d11f"
+                              "location": "0x9965bd2655c50dbd51ae264edee8ff12a28cd43842cc7de4ef25a1436384ddce"
                             }
                           }
                         },
@@ -218,7 +218,7 @@ Response: {
                         "module": {
                           "package": {
                             "asObject": {
-                              "location": "0xb1ceef41b21ef9f25ff3aec700bfd74db59c2adde7577de3de6eedf2e6a6d11f"
+                              "location": "0x9965bd2655c50dbd51ae264edee8ff12a28cd43842cc7de4ef25a1436384ddce"
                             }
                           }
                         },
