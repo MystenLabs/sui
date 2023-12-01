@@ -124,7 +124,7 @@ type Checkpoint {
 	"""
 	digest: String!
 	"""
-	This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+	This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
 	"""
 	sequenceNumber: Int!
 	"""
@@ -478,6 +478,17 @@ input EventFilter {
 	eventPackage: SuiAddress
 	eventModule: String
 	eventType: String
+}
+
+type ExecutionResult {
+	"""
+	The errors field captures any errors that occurred during execution
+	"""
+	errors: [String!]
+	"""
+	The digest field captures the digest of the transaction block
+	"""
+	digest: String!
 }
 
 enum ExecutionStatus {
@@ -965,6 +976,22 @@ enum MoveVisibility {
 	PUBLIC
 	PRIVATE
 	FRIEND
+}
+
+type Mutation {
+	"""
+	Execute a transaction, committing its effects on chain.
+	
+	`txBytes` is a `TransactionData` struct that has been BCS-encoded
+	and then Base64-encoded.
+	`signatures` are a list of `flag || signature || pubkey` bytes,
+	Base64-encoded.
+	
+	Waits until the transaction has been finalized on chain to return
+	its transaction digest.  If the transaction could not be
+	finalized, returns the errors that prevented it, instead.
+	"""
+	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
 
 type Object implements ObjectOwner {
@@ -1844,4 +1871,5 @@ type ValidatorSet {
 
 schema {
 	query: Query
+	mutation: Mutation
 }

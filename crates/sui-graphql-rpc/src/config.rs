@@ -4,7 +4,7 @@
 use crate::{error::Error as SuiGraphQLError, types::big_int::BigInt};
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{collections::BTreeSet, path::PathBuf, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
@@ -20,6 +20,9 @@ const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page o
 const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
+
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
+pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Default values for the server connection configuration.
 pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
@@ -258,6 +261,18 @@ impl Default for InternalFeatureConfig {
     }
 }
 
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+pub struct TxExecFullNodeConfig {
+    #[serde(default)]
+    pub(crate) node_rpc_url: Option<String>,
+}
+
+impl TxExecFullNodeConfig {
+    pub fn new(node_rpc_url: Option<String>) -> Self {
+        Self { node_rpc_url }
+    }
+}
+
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
 pub struct ServerConfig {
     #[serde(default)]
@@ -268,6 +283,8 @@ pub struct ServerConfig {
     pub internal_features: InternalFeatureConfig,
     #[serde(default)]
     pub name_service: NameServiceConfig,
+    #[serde(default)]
+    pub tx_exec_full_node: TxExecFullNodeConfig,
     #[serde(default)]
     pub ide: Ide,
 }

@@ -26,7 +26,7 @@ pub(crate) struct Checkpoint {
     /// This hash can be used to verify checkpoint contents by checking signatures against the committee,
     /// Hashing contents to match digest, and checking that the previous checkpoint digest matches.
     pub digest: String,
-    /// This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+    /// This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
     pub sequence_number: u64,
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus.
     /// Transactions that access time in this checkpoint will observe this timestamp.

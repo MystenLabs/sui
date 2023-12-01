@@ -88,6 +88,41 @@ impl SimpleClient {
         }
         builder.send().await.map_err(|e| e.into())
     }
+
+    pub async fn execute_mutation_to_graphql(
+        &self,
+        mutation: String,
+        variables: Vec<GraphqlQueryVariable>,
+    ) -> Result<GraphqlResponse, ClientError> {
+        // TODO: condense this with execute_query_impl
+        let (type_defs, var_vals) = resolve_variables(&variables)?;
+        let body = if type_defs.is_empty() {
+            serde_json::json!({
+                "query": mutation,
+            })
+        } else {
+            // Make type defs which is a csv is the form of $var_name: $var_type
+            let type_defs_csv = type_defs
+                .iter()
+                .map(|(name, ty)| format!("${}: {}", name, ty))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mutation = format!("mutation ({}) {}", type_defs_csv, mutation);
+            serde_json::json!({
+                "query": mutation,
+                "variables": var_vals,
+            })
+        };
+
+        let res = self
+            .inner
+            .post(&self.url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(ClientError::from)?;
+        GraphqlResponse::from_resp(res).await
+    }
 }
 
 #[allow(clippy::type_complexity)]

@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
+use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
     context_data::db_data_provider::PgManager,
@@ -16,8 +18,8 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
+use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
-use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
@@ -34,8 +36,10 @@ use hyper::Server as HyperServer;
 use std::convert::Infallible;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
+use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
 use tower::{Layer, Service};
+use tracing::warn;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -54,7 +58,7 @@ pub(crate) struct ServerBuilder {
     port: u16,
     host: String,
 
-    schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
+    schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
 }
 
@@ -63,7 +67,7 @@ impl ServerBuilder {
         Self {
             port,
             host,
-            schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
+            schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
             router: None,
         }
     }
@@ -92,17 +96,11 @@ impl ServerBuilder {
         self
     }
 
-    fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
+    fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
 
-    fn build_components(
-        self,
-    ) -> (
-        String,
-        Schema<Query, EmptyMutation, EmptySubscription>,
-        Router,
-    ) {
+    fn build_components(self) -> (String, Schema<Query, Mutation, EmptySubscription>, Router) {
         let address = self.address();
         let ServerBuilder { schema, router, .. } = self;
         (
@@ -179,6 +177,22 @@ impl ServerBuilder {
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
 
+        // SDK for talking to fullnode. Used for executing transactions only
+        // TODO: fail fast if no url, once we enable mutations fully
+        let sui_sdk_client = if let Some(url) = &config.tx_exec_full_node.node_rpc_url {
+            Some(
+                SuiClientBuilder::default()
+                    .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+                    .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+                    .build(url)
+                    .await
+                    .map_err(|e| Error::Internal(format!("Failed to create SuiClient: {}", e)))?,
+            )
+        } else {
+            warn!("No fullnode url found in config. Mutations will not work");
+            None
+        };
+
         let prom_addr: SocketAddr = format!(
             "{}:{}",
             config.connection.prom_url, config.connection.prom_port
@@ -202,6 +216,7 @@ impl ServerBuilder {
             .context_data(config.service.clone())
             .context_data(pg_conn_pool)
             .context_data(Resolver::new(package_cache))
+            .context_data(sui_sdk_client)
             .context_data(name_service_config)
             .context_data(Arc::new(metrics))
             .context_data(config.clone());

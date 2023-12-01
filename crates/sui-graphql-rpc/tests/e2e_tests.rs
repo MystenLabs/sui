@@ -9,12 +9,14 @@ mod tests {
     use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
+    use std::time::Duration;
     use sui_graphql_rpc::client::simple_client::GraphqlQueryVariable;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
+    use tokio::time::sleep;
 
     #[tokio::test]
     #[serial]
@@ -244,6 +246,101 @@ mod tests {
             .await;
 
         assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_execution() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let sender = addresses[0];
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let signed_tx = cluster
+            .validator_fullnode_handle
+            .wallet
+            .sign_transaction(&tx);
+        let original_digest = signed_tx.digest();
+        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
+        let tx_bytes = tx_bytes.encoded();
+        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+
+        let mutation =
+            r#"{ executeTransactionBlock(txBytes: $tx,  signatures: $sigs) {digest errors}}"#;
+
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "tx".to_string(),
+                ty: "String!".to_string(),
+                value: json!(tx_bytes),
+            },
+            GraphqlQueryVariable {
+                name: "sigs".to_string(),
+                ty: "[String!]!".to_string(),
+                value: json!(sigs),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_mutation_to_graphql(mutation.to_string(), variables)
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("executeTransactionBlock").unwrap();
+
+        let digest = res.get("digest").unwrap().as_str().unwrap();
+        assert!(res.get("errors").unwrap().is_null());
+        assert_eq!(digest, original_digest.to_string());
+
+        // Wait for the transaction to be committed and indexed
+        sleep(Duration::from_secs(10)).await;
+        // Query the transaction
+        let query = r#"
+            {
+                transactionBlock(digest: $dig){
+                    sender {
+                        location
+                    }
+                }
+            }
+        "#;
+
+        let variables = vec![GraphqlQueryVariable {
+            name: "dig".to_string(),
+            ty: "String!".to_string(),
+            value: json!(digest),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let sender_read = binding
+            .get("transactionBlock")
+            .unwrap()
+            .get("sender")
+            .unwrap()
+            .get("location")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(sender_read, sender.to_string());
     }
 
     use sui_graphql_rpc::server::builder::tests::*;
