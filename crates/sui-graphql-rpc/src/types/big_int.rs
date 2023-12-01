@@ -63,7 +63,7 @@ macro_rules! impl_From {
     }
 }
 
-impl_From!(u8, u16, u32, i64, u64, u128, U256);
+impl_From!(u8, u16, u32, i64, u64, i128, u128, U256);
 
 #[cfg(test)]
 mod tests {
@@ -100,8 +100,18 @@ mod tests {
         assert_eq!(BigInt::from(123_456u32), BigInt("123456".to_string()));
 
         assert_eq!(
+            BigInt::from(-12_345_678_901i64),
+            BigInt("-12345678901".to_string()),
+        );
+
+        assert_eq!(
             BigInt::from(12_345_678_901u64),
             BigInt("12345678901".to_string()),
+        );
+
+        assert_eq!(
+            BigInt::from(-123_456_789_012_345_678_901i128),
+            BigInt("-123456789012345678901".to_string()),
         );
 
         assert_eq!(

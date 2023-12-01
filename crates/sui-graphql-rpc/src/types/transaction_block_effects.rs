@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use async_graphql::*;
 use sui_indexer::{models_v2::transactions::StoredTransaction, types_v2::IndexedObjectChange};
-use sui_json_rpc_types::BalanceChange as NativeBalanceChange;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     execution_status::ExecutionStatus as NativeExecutionStatus,
@@ -14,8 +11,8 @@ use sui_types::{
 use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{
-    base64::Base64, big_int::BigInt, checkpoint::Checkpoint, date_time::DateTime, epoch::Epoch,
-    gas::GasEffects, move_type::MoveType, object::Object, owner::Owner, sui_address::SuiAddress,
+    balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
+    epoch::Epoch, gas::GasEffects, object::Object, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 
@@ -33,13 +30,6 @@ pub(crate) struct TransactionBlockEffects {
 pub enum ExecutionStatus {
     Success,
     Failure,
-}
-
-#[derive(Clone, Debug, SimpleObject)]
-pub(crate) struct BalanceChange {
-    pub(crate) owner: Option<Owner>,
-    pub(crate) amount: Option<BigInt>,
-    pub(crate) coin_type: Option<MoveType>,
 }
 
 #[derive(Clone, SimpleObject)]
@@ -151,8 +141,15 @@ impl TransactionBlockEffects {
         Ok(Some(changes))
     }
 
+    /// The effect this transaction had on the balances (sum of coin values per coin type) of
+    /// addresses and objects.
     async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
-        let changes = BalanceChange::from(&self.stored.balance_changes).extend()?;
+        let mut changes = Vec::with_capacity(self.stored.balance_changes.len());
+        for change in &self.stored.balance_changes {
+            let Some(change) = change else { continue };
+            changes.push(BalanceChange::read(change).extend()?);
+        }
+
         Ok(Some(changes))
     }
 
@@ -185,44 +182,6 @@ impl TransactionBlockEffects {
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
     async fn bcs(&self) -> Option<Base64> {
         Some(Base64::from(&self.stored.raw_effects))
-    }
-}
-
-impl BalanceChange {
-    fn from(balance_changes: &[Option<Vec<u8>>]) -> Result<Vec<BalanceChange>, Error> {
-        let mut output = vec![];
-        for balance_change_bcs in balance_changes.iter().flatten() {
-            let balance_change: NativeBalanceChange =
-                bcs::from_bytes(balance_change_bcs).map_err(|_| {
-                    Error::Internal("Cannot convert bcs bytes to BalanceChange".to_string())
-                })?;
-            let balance_change_owner_address =
-                balance_change.owner.get_owner_address().map_err(|_| {
-                    Error::Internal("Cannot get the balance change owner's address".to_string())
-                })?;
-
-            let address =
-                SuiAddress::from_bytes(balance_change_owner_address.to_vec()).map_err(|_| {
-                    Error::Internal(
-                        "Cannot get a SuiAddress from the balance change owner address".to_string(),
-                    )
-                })?;
-            let owner = Owner { address };
-            let amount =
-                BigInt::from_str(balance_change.amount.to_string().as_str()).map_err(|_| {
-                    Error::Internal(
-                        "Cannot convert balance change amount to BigInt amount".to_string(),
-                    )
-                })?;
-            output.push(BalanceChange {
-                owner: Some(owner),
-                amount: Some(amount),
-                coin_type: Some(MoveType::new(
-                    balance_change.coin_type.to_canonical_string(true),
-                )),
-            })
-        }
-        Ok(output)
     }
 }
 
