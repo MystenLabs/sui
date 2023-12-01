@@ -343,7 +343,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                     ) = &transaction.kind
                     {
                         if self.epoch_store.randomness_state_enabled() {
-                            debug!("adding RandomnessStateUpdate tx for round {round:?}");
+                            debug!("adding RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}");
                             let randomness_state_update_transaction = self
                                 .randomness_state_update_transaction(
                                     *randomness_round,
