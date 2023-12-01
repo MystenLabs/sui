@@ -28,9 +28,6 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Install Rust
         run: rustup update stable
 
