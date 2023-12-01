@@ -10186,8 +10186,7 @@
               "epoch",
               "kind",
               "random_bytes",
-              "randomness_round",
-              "round"
+              "randomness_round"
             ],
             "properties": {
               "epoch": {
@@ -10208,9 +10207,6 @@
                 }
               },
               "randomness_round": {
-                "$ref": "#/components/schemas/BigInt_for_uint64"
-              },
-              "round": {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }
