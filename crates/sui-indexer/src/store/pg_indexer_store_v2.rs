@@ -704,15 +704,21 @@ impl PgIndexerStoreV2 {
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, last_partition) in table_partitions {
                     self.partition_manager.advance_table_epoch_partition(
-                        table,
+                        table.clone(),
                         last_partition,
                         &epoch_partition_data,
                     )?;
+                    // update objects_snapshot with objects_history of last epoch
+                    if table == *"objects_history" {
+                        self.partition_manager
+                            .update_objects_snapshot(&epoch_partition_data)?;
+                    }
                 }
             } else {
                 tracing::error!("Last epoch: {} from PostgresDB is None.", last_epoch_id);
             }
         }
+
         Ok(())
     }
 

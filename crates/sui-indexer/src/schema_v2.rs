@@ -195,6 +195,26 @@ diesel::table! {
 }
 
 diesel::table! {
+    objects_snapshot (object_id) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
+        checkpoint_sequence_number -> Int8,
+        owner_type -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        serialized_object -> Nullable<Bytea>,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+        df_name -> Nullable<Bytea>,
+        df_object_type -> Nullable<Text>,
+        df_object_id -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
     packages (package_id) {
         package_id -> Bytea,
         move_package -> Bytea,
@@ -311,6 +331,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     objects,
     objects_history,
     objects_history_partition_0,
+    objects_snapshot,
     packages,
     transactions,
     transactions_partition_0,
