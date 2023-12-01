@@ -111,8 +111,8 @@ impl MoveValue {
 }
 
 impl MoveValue {
-    pub fn new(repr: String, bcs: Base64) -> Self {
-        let type_ = MoveType::new(repr);
+    pub fn new(tag: TypeTag, bcs: Base64) -> Self {
+        let type_ = MoveType::new(tag);
         Self { type_, bcs }
     }
 
@@ -437,14 +437,15 @@ mod tests {
         layout: A::MoveTypeLayout,
         data: T,
     ) -> Result<MoveData, Error> {
-        let type_ = MoveType::new(tag.into());
+        let tag = TypeTag::from_str(tag.into().as_str()).unwrap();
+        let type_ = MoveType::new(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.data_impl(layout)
     }
 
     fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Result<Json, Error> {
         let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
-        let type_ = MoveType::new(tag.to_canonical_string(/* with_prefix */ true));
+        let type_ = MoveType::new(tag);
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
         MoveValue { type_, bcs }.json_impl(layout)
     }

@@ -899,24 +899,27 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type = parse_to_type_tag(coin_type)
-            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
-            .to_canonical_string(/* with_prefix */ true);
-        let result = self.get_balance(address, coin_type).await?;
+        let coin_type = parse_to_type_tag(coin_type.clone())
+            .map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+        let result = self
+            .get_balance(
+                address,
+                coin_type.to_canonical_string(/* with_prefix */ true),
+            )
+            .await?;
 
         match result {
-            Some(result) => match result {
-                (Some(balance), Some(count), Some(coin_type)) => Ok(Some(Balance {
-                    coin_object_count: Some(count as u64),
-                    total_balance: Some(BigInt::from(balance)),
-                    coin_type: Some(MoveType::new(coin_type)),
-                })),
-                (None, None, None) => Ok(None),
-                _ => Err(Error::Internal(
-                    "Expected fields are missing on balance calculation".to_string(),
-                )),
-            },
-            None => Ok(None),
+            None | Some((None, None, None)) => Ok(None),
+
+            Some((Some(balance), Some(count), Some(_coin_type))) => Ok(Some(Balance {
+                coin_object_count: Some(count as u64),
+                total_balance: Some(BigInt::from(balance)),
+                coin_type: Some(MoveType::new(coin_type)),
+            })),
+
+            _ => Err(Error::Internal(
+                "Expected fields are missing on balance calculation".to_string(),
+            )),
         }
     }
 
@@ -929,33 +932,35 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<Connection<String, Balance>>, Error> {
         let address = address.into_vec();
-
-        let balances = self
+        let Some(balances) = self
             .multi_get_balances(address, first, after, last, before)
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
 
-        if let Some(balances) = balances {
-            let mut connection = Connection::new(false, false);
-            for (balance, count, coin_type) in balances {
-                if let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) {
-                    connection.edges.push(Edge::new(
-                        coin_type.clone(),
-                        Balance {
-                            coin_object_count: Some(count as u64),
-                            total_balance: Some(BigInt::from(balance)),
-                            coin_type: Some(MoveType::new(coin_type)),
-                        },
-                    ));
-                } else {
-                    return Err(Error::Internal(
-                        "Expected fields are missing on balance calculation".to_string(),
-                    ));
-                }
-            }
-            Ok(Some(connection))
-        } else {
-            Ok(None)
+        let mut connection = Connection::new(false, false);
+        for (balance, count, coin_type) in balances {
+            let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) else {
+                return Err(Error::Internal(
+                    "Expected fields are missing on balance calculation".to_string(),
+                ));
+            };
+
+            let coin_tag = TypeTag::from_str(&coin_type)
+                .map_err(|e| Error::Internal(format!("Error parsing type '{coin_type}': {e}")))?;
+
+            connection.edges.push(Edge::new(
+                coin_type.clone(),
+                Balance {
+                    coin_object_count: Some(count as u64),
+                    total_balance: Some(BigInt::from(balance)),
+                    coin_type: Some(MoveType::new(coin_tag)),
+                },
+            ));
         }
+
+        Ok(Some(connection))
     }
 
     /// Fetches all coins owned by the given address that match the given coin type.
@@ -1268,9 +1273,7 @@ impl PgManager {
                 let event = Event {
                     sending_package: SuiAddress::from(e.package_id),
                     sending_module: e.transaction_module.to_string(),
-                    event_type: Some(MoveType::new(
-                        e.type_.to_canonical_string(/* with_prefix */ true),
-                    )),
+                    event_type: Some(MoveType::new(TypeTag::from(e.type_.clone()))),
                     senders: Some(vec![Address {
                         address: SuiAddress::from_array(e.sender.to_inner()),
                     }]),

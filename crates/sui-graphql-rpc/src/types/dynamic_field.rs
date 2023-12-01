@@ -77,10 +77,7 @@ impl DynamicField {
             .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))
             .extend()?;
 
-        Ok(Some(MoveValue::new(
-            type_tag.to_canonical_string(true),
-            Base64::from(bcs),
-        )))
+        Ok(Some(MoveValue::new(type_tag, Base64::from(bcs))))
     }
 
     /// The actual data stored in the dynamic field.
@@ -118,7 +115,7 @@ impl DynamicField {
                 .extend()?;
 
             Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
-                type_tag.to_canonical_string(true),
+                type_tag,
                 Base64::from(bcs),
             ))))
         }
