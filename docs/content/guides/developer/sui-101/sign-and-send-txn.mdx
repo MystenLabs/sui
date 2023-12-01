@@ -59,6 +59,7 @@ There are various ways to instantiate a key pair and to derive its public key an
     const kp_import_1 = Secp256k1Keypair.fromSecretKey(fromHex("0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82"));
     const kp_import_2 = Secp256r1Keypair.fromSecretKey(fromHex("0xd463e11c7915945e86ac2b72d88b8190cfad8ff7b48e7eb892c275a5cf0a3e82"));
 
+    // $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
 	const kp_derive_0 = Ed25519Keypair.deriveKeypair("$MNEMONICS");
 	const kp_derive_1 = Secp256k1Keypair.deriveKeypair("$MNEMONICS");
 	const kp_derive_2 = Secp256r1Keypair.deriveKeypair("$MNEMONICS");
@@ -71,7 +72,7 @@ There are various ways to instantiate a key pair and to derive its public key an
     const pk = kp_rand_0.getPublicKey();
     const sender = pk.toSuiAddress();
 
-    // create an example transaction block. 
+    // create an example transaction block.
     const txb = new TransactionBlock();
 	txb.setSender(sender);
 	txb.setGasPrice(5);
@@ -79,7 +80,7 @@ There are various ways to instantiate a key pair and to derive its public key an
 	const bytes = await txb.build();
     const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
 
-    // verify the signature locally. 
+    // verify the signature locally
 	expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(true);
 
     // define sui client for the desired network. 
@@ -96,10 +97,10 @@ There are various ways to instantiate a key pair and to derive its public key an
 
 <TabItem value="rust" label="Rust">
 
-There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK. You can find the complete runnable in [Sui repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/sign_tx_guide.rs)/
+There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK. You can find the complete runnable code in [Sui repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/sign_tx_guide.rs)/
 
 ```Rust
-    // deterministically generate a keypair, testing only, do not use for mainnet.
+    // deterministically generate a keypair, testing only, do not use for mainnet, use the next section to randomly generate a keypair instead.
     let skp_determ_0 =
         SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
     let _skp_determ_1 =
@@ -113,32 +114,23 @@ There are various ways to instantiate a `SuiKeyPair` and to derive its public ke
     let _skp_rand_2 = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
 
     // import a keypair from a base64 encoded 32-byte `private key`.
-    let _skp_import_no_flag_0 = SuiKeyPair::Ed25519(
-        Ed25519KeyPair::from_bytes(
-            &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=").unwrap(),
-        )
-        .unwrap(),
-    );
-    let _skp_import_no_flag_1 = SuiKeyPair::Ed25519(
-        Ed25519KeyPair::from_bytes(
-            &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=").unwrap(),
-        )
-        .unwrap(),
-    );
-    let _skp_import_no_flag_2 = SuiKeyPair::Ed25519(
-        Ed25519KeyPair::from_bytes(
-            &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=").unwrap(),
-        )
-        .unwrap(),
-    );
+    let _skp_import_no_flag_0 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&Base64::decode(
+        "1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=",
+    )?)?);
+    let _skp_import_no_flag_1 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&Base64::decode(
+        "1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=",
+    )?)?);
+    let _skp_import_no_flag_2 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&Base64::decode(
+        "1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=",
+    )?)?);
 
     // import a keypair from a base64 encoded 33-byte `flag || private key`. The signature scheme is determined by the flag.
     let _skp_import_with_flag_0 =
-        SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+        SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")?;
     let _skp_import_with_flag_1 =
-        SuiKeyPair::decode_base64("AdRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+        SuiKeyPair::decode_base64("AdRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")?;
     let _skp_import_with_flag_2 =
-        SuiKeyPair::decode_base64("AtRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+        SuiKeyPair::decode_base64("AtRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")?;
 
     // replace `skp_determ_0` with the variable names above
     let pk = skp_determ_0.public();
@@ -151,7 +143,7 @@ Next, sign transaction data constructed using an example programmable transactio
     // construct an example programmable transaction. 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.pay_sui(vec![sender], vec![1]).unwrap();
+        builder.pay_sui(vec![sender], vec![1])?;
         builder.finish()
     };
 
@@ -171,7 +163,7 @@ Next, sign transaction data constructed using an example programmable transactio
 Commit a signature to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). 
 
 ```Rust
-    // derive the digest that the keypair should sign on. 
+    // derive the digest that the keypair should sign on, i.e. the blake2b hash of `intent || tx_data`. 
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
     let raw_tx = bcs::to_bytes(&intent_msg).map_err(|_| TransactionError::ParsingError)?;
     let mut hasher = sui_types::crypto::DefaultHash::default();
@@ -181,7 +173,7 @@ Commit a signature to the Blake2b hash digest of the intent message (`intent || 
     // use SuiKeyPair to sign the digest. 
     let sui_sig = skp.sign(&digest);
 
-    // verify the signature against the transaction locally. if this fails the transaction probably will fail submitting. 
+    // verify the signature against the transaction locally. if it fails to verify locally, the transaction will fail to execute in Sui. 
     let res = sui_sig.verify_secure(&intent_msg, sender, sui_types::crypto::SignatureScheme::ED25519);
     assert!(res.is_ok());
 ```
@@ -201,7 +193,6 @@ Finally, submit the transaction with the signature.
             None,
         )
         .await?;
-
 ```
 
 </TabItem>
@@ -229,7 +220,7 @@ sui keytool import "$MNEMONICS" secp256k1
 sui keytool import "$MNEMONICS" secp256r1
 ```
 
-Create a transfer transaction in CLI. Set the $SUI_ADDRESS to the one corresponding to the key pair used to sign. Then sign with the private key corresponding to the sender address. 
+Create a transfer transaction in CLI. Set the $SUI_ADDRESS to the one corresponding to the keypair used to sign. $GAS_COIN_ID refers to the object ID that is owned by the sender to be used as gas. $GAS_BUDGET refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
 
 ```shell
 sui client gas

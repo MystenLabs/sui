@@ -30,14 +30,14 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, SuiKeyPair},
 };
 
-// This example walks through the Rust SDK usecase in sign-txn.mdx.
+// This example walks through the Rust SDK use case described in sign-and-send-txn.mdx.
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // set up sui client for the desired network.
-    let sui_client = SuiClientBuilder::default().build_devnet().await?;
+    let sui_client = SuiClientBuilder::default().build_testnet().await?;
 
-    // deterministically generate a keypair, testing only, do not use for mainnet.
+    // deterministically generate a keypair, testing only, do not use for mainnet, use the next section to randomly generate a keypair instead.
     let skp_determ_0 =
         SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
     let _skp_determ_1 =
@@ -51,32 +51,23 @@ async fn main() -> Result<(), anyhow::Error> {
     let _skp_rand_2 = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
 
     // import a keypair from a base64 encoded 32-byte `private key`.
-    let _skp_import_no_flag_0 = SuiKeyPair::Ed25519(
-        Ed25519KeyPair::from_bytes(
-            &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=").unwrap(),
-        )
-        .unwrap(),
-    );
-    let _skp_import_no_flag_1 = SuiKeyPair::Ed25519(
-        Ed25519KeyPair::from_bytes(
-            &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=").unwrap(),
-        )
-        .unwrap(),
-    );
-    let _skp_import_no_flag_2 = SuiKeyPair::Ed25519(
-        Ed25519KeyPair::from_bytes(
-            &Base64::decode("1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=").unwrap(),
-        )
-        .unwrap(),
-    );
+    let _skp_import_no_flag_0 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&Base64::decode(
+        "1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=",
+    )?)?);
+    let _skp_import_no_flag_1 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&Base64::decode(
+        "1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=",
+    )?)?);
+    let _skp_import_no_flag_2 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&Base64::decode(
+        "1GPhHHkVlF6GrCty2IuBkM+tj/e0jn64ksJ1pc8KPoI=",
+    )?)?);
 
     // import a keypair from a base64 encoded 33-byte `flag || private key`. The signature scheme is determined by the flag.
     let _skp_import_with_flag_0 =
-        SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+        SuiKeyPair::decode_base64("ANRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")?;
     let _skp_import_with_flag_1 =
-        SuiKeyPair::decode_base64("AdRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+        SuiKeyPair::decode_base64("AdRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")?;
     let _skp_import_with_flag_2 =
-        SuiKeyPair::decode_base64("AtRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C").unwrap();
+        SuiKeyPair::decode_base64("AtRj4Rx5FZRehqwrctiLgZDPrY/3tI5+uJLCdaXPCj6C")?;
 
     // replace `skp_determ_0` with the variable names above
     let pk = skp_determ_0.public();
@@ -84,12 +75,14 @@ async fn main() -> Result<(), anyhow::Error> {
     println!("Sender: {:?}", sender);
 
     // make sure the sender has a gas coin as an example.
-    let coin = sui_client
+    utils::request_tokens_from_faucet(sender, &sui_client).await?;
+    let gas_coin = sui_client
         .coin_read_api()
         .get_coins(sender, None, None, None)
         .await?
         .data
         .into_iter()
+<<<<<<< Updated upstream
         .next();
 
     if coin.is_none() {
@@ -97,11 +90,14 @@ async fn main() -> Result<(), anyhow::Error> {
         return Ok(());
     }
     let gas_coin = coin.unwrap();
+=======
+        .next()?;
+>>>>>>> Stashed changes
 
     // construct an example programmable transaction.
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.pay_sui(vec![sender], vec![1]).unwrap();
+        builder.pay_sui(vec![sender], vec![1])?;
         builder.finish()
     };
 
@@ -117,7 +113,7 @@ async fn main() -> Result<(), anyhow::Error> {
         gas_price,
     );
 
-    // derive the digest that the keypair should sign on.
+    // derive the digest that the keypair should sign on, i.e. the blake2b hash of `intent || tx_data`. 
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
     let raw_tx = bcs::to_bytes(&intent_msg).expect("bcs should not fail");
     let mut hasher = sui_types::crypto::DefaultHash::default();
@@ -127,6 +123,10 @@ async fn main() -> Result<(), anyhow::Error> {
     // use SuiKeyPair to sign the digest.
     let sui_sig = skp_determ_0.sign(&digest);
 
+    // verify the signature against the transaction locally. if it fails to verify locally, the transaction will fail to execute in Sui. 
+    let res = sui_sig.verify_secure(&intent_msg, sender, sui_types::crypto::SignatureScheme::ED25519);
+    assert!(res.is_ok());
+    
     // execute the transaction.
     let transaction_response = sui_client
         .quorum_driver_api()
