@@ -109,7 +109,6 @@ pub fn run_move_unit_tests(
         sui_move_natives::all_natives(/* silent */ false),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
-        &mut std::io::sink(),
         &mut std::io::stdout(),
     )
 }
