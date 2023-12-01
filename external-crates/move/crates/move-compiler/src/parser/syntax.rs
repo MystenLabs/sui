@@ -405,7 +405,7 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
             let loc = current_token_loc(context.tokens);
             let n = parse_identifier(context)?;
             let name = if global_name {
-                LeadingNameAccess_::AddressName(n)
+                LeadingNameAccess_::GlobalAddress(n)
             } else {
                 LeadingNameAccess_::Name(n)
             };
@@ -479,7 +479,7 @@ fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
         ln => ln,
     };
 
-    if matches!(ln, sp!(_, LeadingNameAccess_::AddressName(_)))
+    if matches!(ln, sp!(_, LeadingNameAccess_::GlobalAddress(_)))
         && context.tokens.peek() != Tok::ColonColon
     {
         let mut diag = diag!(
@@ -2847,7 +2847,7 @@ fn parse_module(
     let sp!(n1_loc, n1_) = parse_leading_name_access(context)?;
     let (address, name) = match (n1_, context.tokens.peek()) {
         (addr_ @ LeadingNameAccess_::AnonymousAddress(_), _)
-        | (addr_ @ LeadingNameAccess_::AddressName(_), _)
+        | (addr_ @ LeadingNameAccess_::GlobalAddress(_), _)
         | (addr_ @ LeadingNameAccess_::Name(_), Tok::ColonColon) => {
             let addr = sp(n1_loc, addr_);
             consume_token(context.tokens, Tok::ColonColon)?;

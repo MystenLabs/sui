@@ -395,15 +395,13 @@ fn definition(
     match def {
         P::Definition::Module(mut m) => {
             let module_paddr = std::mem::take(&mut m.address);
-            let module_addr = module_paddr.map(|a| {
-                sp(
-                    a.loc,
-                    top_level_address(
-                        &mut context.defn_context,
-                        /* suggest_declaration */ true,
-                        a,
-                    ),
-                )
+            let module_addr = module_paddr.map(|addr| {
+                let address = top_level_address(
+                    &mut context.defn_context,
+                    /* suggest_declaration */ true,
+                    addr,
+                );
+                sp(addr.loc, address)
             });
             module(context, module_map, package_name, module_addr, m)
         }
@@ -448,7 +446,7 @@ fn top_level_address_(
             debug_assert!(name_res.is_ok());
             Address::anonymous(loc, bytes)
         }
-        P::LeadingNameAccess_::AddressName(name) => {
+        P::LeadingNameAccess_::GlobalAddress(name) => {
             context.env.add_diag(diag!(
                 Syntax::InvalidAddress,
                 (loc, "Top-level addresses cannot start with '::'")
@@ -1151,7 +1149,7 @@ impl PathExpander for LegacyPathExpander {
                 }
                 Some(mident) => EN::ModuleAccess(mident, n2),
             },
-            (_, PN::Two(sp!(eloc, LN::AddressName(_)), _)) => {
+            (_, PN::Two(sp!(eloc, LN::GlobalAddress(_)), _)) => {
                 let mut diag: Diagnostic = create_feature_error(
                     context.env.edition(None), // We already know we are failing, so no package.
                     FeatureGate::Move2024Paths,
@@ -1273,7 +1271,7 @@ impl Move2024PathExpander {
         use P::LeadingNameAccess_ as LN;
         match name {
             LN::AnonymousAddress(address) => Address(loc, E::Address::anonymous(loc, address)),
-            LN::AddressName(name) => {
+            LN::GlobalAddress(name) => {
                 if let Some(address) = context
                     .named_address_mapping
                     .expect("ICE no named address mapping")
@@ -3683,7 +3681,7 @@ fn check_valid_address_name(
     use P::LeadingNameAccess_ as LN;
     match ln_ {
         LN::AnonymousAddress(_) => Ok(()),
-        LN::AddressName(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
+        LN::GlobalAddress(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
         LN::Name(n) => check_restricted_name_all_cases(context, NameCase::Address, n),
     }
 }

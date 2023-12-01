@@ -227,15 +227,27 @@ impl AliasMap {
             *used = true;
             // Type parameters are never resolved. We track them to apply appropriate shadowing.
             if matches!(entry, AliasEntry::TypeParam) {
-                None
+                return None;
             } else {
-                Some(entry.clone())
+                return Some(entry.clone());
             }
-        } else if let Some(previous) = self.previous.as_mut() {
-            previous.get(name)
-        } else {
-            None
         }
+
+        let mut current_scope: Option<&mut Box<AliasMap>> = self.previous.as_mut();
+        while let Some(scope) = current_scope {
+            if let Some((entry, used)) = scope.aliases.get_mut(name) {
+                *used = true;
+                // Type parameters are never resolved. We track them to apply appropriate shadowing.
+                if matches!(entry, AliasEntry::TypeParam) {
+                    return None;
+                } else {
+                    return Some(entry.clone());
+                }
+            }
+            current_scope = scope.previous.as_mut();
+        }
+
+        None
     }
 
     /// Pushes a new scope, adding all of the new items to it (shadowing the outer one).
