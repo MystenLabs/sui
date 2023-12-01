@@ -49,20 +49,6 @@ Response: {
           {
             "name": {
               "type": {
-                "repr": "bool"
-              },
-              "data": {
-                "Bool": false
-              },
-              "bcs": "AA=="
-            },
-            "value": {
-              "__typename": "MoveValue"
-            }
-          },
-          {
-            "name": {
-              "type": {
                 "repr": "u64"
               },
               "data": {
