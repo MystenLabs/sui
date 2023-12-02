@@ -5,11 +5,12 @@ use crate::error::BridgeError;
 use crate::eth_client::EthClient;
 use crate::sui_client::SuiClient;
 use axum::Json;
+use sui_sdk::SuiClient as SuiSdkClient;
 
 // TODO: reconfig?
 pub struct BridgeRequestHandler {
     _eth_client: EthClient<ethers::providers::Http>,
-    _sui_client: SuiClient,
+    _sui_client: SuiClient<SuiSdkClient>,
 }
 
 #[allow(clippy::new_without_default)]

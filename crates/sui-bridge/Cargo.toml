@@ -10,6 +10,8 @@ edition = "2021"
 ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
+move-core-types.workspace = true
+once_cell.workspace = true
 telemetry-subscribers.workspace = true
 prometheus.workspace = true
 async-trait.workspace = true
@@ -32,3 +34,6 @@ reqwest.workspace = true
 fastcrypto.workspace = true
 tap.workspace = true
 workspace-hack.workspace = true
+
+[dev-dependencies]
+sui-types = { workspace = true, features = ["test-utils"] }
