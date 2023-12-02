@@ -19,7 +19,9 @@ use move_binary_format::{
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
+    diagnostics::{
+        report_diagnostics_to_color_buffer, report_warnings, Diagnostics, FilesSourceText,
+    },
     expansion::ast::{AttributeName_, Attributes},
     shared::known_attributes::KnownAttribute,
     sui_mode::linters::{known_filters, linter_visitors, LINT_WARNING_PREFIX},
@@ -127,33 +129,17 @@ impl BuildConfig {
             };
             match units_res {
                 Ok((units, warning_diags)) => {
-                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-                    let (filtered_diags_num, filtered_categories) =
-                        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
-                    report_warnings(&files, warning_diags);
-                    if any_linter_warnings {
-                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
-                    }
-                    if filtered_diags_num > 0 {
-                        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
-                    }
+                    decorate_warnings(warning_diags, Some(&files));
                     fn_info = Some(Self::fn_info(&units));
                     Ok((files, units))
                 }
                 Err(error_diags) => {
+                    // with errors present don't even try decorating warnings output to avoid
+                    // clutter
                     assert!(!error_diags.is_empty());
-                    let any_linter_warnings = error_diags.any_with_prefix(LINT_WARNING_PREFIX);
-                    let (filtered_diags_num, filtered_categories) =
-                        error_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
                     let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
-                    if let Err(err) = std::io::stderr().write_all(&diags_buf) {
+                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-                    }
-                    if any_linter_warnings {
-                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
-                    }
-                    if filtered_diags_num > 0 {
-                        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
                     }
                     anyhow::bail!("Compilation error");
                 }
@@ -202,6 +188,23 @@ impl BuildConfig {
         .map_err(|err| SuiError::ModuleBuildFailure {
             error: format!("{:?}", err),
         })
+    }
+}
+
+/// There may be additional information that needs to be displayed after diagnostics are reported
+/// (optionally report diagnostics themselves if files argument is provided).
+pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
+    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
+    let (filtered_diags_num, filtered_categories) =
+        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
+    if let Some(f) = files {
+        report_warnings(f, warning_diags);
+    }
+    if any_linter_warnings {
+        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
+    }
+    if filtered_diags_num > 0 {
+        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
     }
 }
 

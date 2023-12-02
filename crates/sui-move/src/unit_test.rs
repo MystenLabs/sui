@@ -11,6 +11,7 @@ use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use sui_move_build::decorate_warnings;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -99,7 +100,7 @@ pub fn run_move_unit_tests(
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
-    move_cli::base::test::run_move_unit_tests(
+    let result = move_cli::base::test::run_move_unit_tests(
         &path,
         build_config,
         UnitTestingConfig {
@@ -110,7 +111,15 @@ pub fn run_move_unit_tests(
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::stdout(),
-    )
+    );
+    result.map(|(test_result, warning_diags)| {
+        if test_result == UnitTestResult::Success {
+            if let Some(diags) = warning_diags {
+                decorate_warnings(diags, None);
+            }
+        }
+        test_result
+    })
 }
 
 fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions) {

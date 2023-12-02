@@ -7,7 +7,7 @@ use anyhow::Result;
 use clap::*;
 use move_command_line_common::files::{FileHash, MOVE_COVERAGE_MAP_EXTENSION};
 use move_compiler::{
-    diagnostics::{self},
+    diagnostics::{self, Diagnostics},
     editions::Flavor,
     shared::{NumberFormat, NumericalAddress},
     sui_mode::linters::{known_filters, linter_visitors},
@@ -113,7 +113,7 @@ impl Test {
         )?;
 
         // Return a non-zero exit code if any test failed
-        if let UnitTestResult::Failure = result {
+        if let (UnitTestResult::Failure, _) = result {
             std::process::exit(1)
         }
         Ok(())
@@ -135,7 +135,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     cost_table: Option<CostTable>,
     compute_coverage: bool,
     writer: &mut W,
-) -> Result<UnitTestResult> {
+) -> Result<(UnitTestResult, Option<Diagnostics>)> {
     let no_lint = build_config.no_lint;
     let sui_flavor = build_config
         .default_flavor
@@ -184,6 +184,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
+    let mut warning_diags = None;
     build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = if no_lint || !sui_flavor {
             compiler.run::<PASS_CFGIR>().unwrap()
@@ -204,8 +205,9 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
             diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
-        diagnostics::report_warnings(&files, warnings);
+        diagnostics::report_warnings(&files, warnings.clone());
         test_plan = Some((built_test_plan, files.clone(), units.clone()));
+        warning_diags = Some(warnings);
         Ok((files, units))
     })?;
 
@@ -241,7 +243,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         .1
     {
         cleanup_trace();
-        return Ok(UnitTestResult::Failure);
+        return Ok((UnitTestResult::Failure, warning_diags));
     }
 
     // Compute the coverage map. This will be used by other commands after this.
@@ -249,7 +251,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
         let coverage_map = CoverageMap::from_trace_file(trace_path);
         output_map_to_file(coverage_map_path, &coverage_map).unwrap();
     }
-    Ok(UnitTestResult::Success)
+    Ok((UnitTestResult::Success, warning_diags))
 }
 
 impl From<UnitTestResult> for ExitStatus {
