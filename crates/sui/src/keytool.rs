@@ -445,7 +445,7 @@ impl KeyToolCommand {
                         CommandOutput::Alias(AliasUpdate { old_alias: old_alias.to_string() , new_alias: new_alias.to_string()  })
                          
                     },
-                   _ =>  bail!("The command expects only an old and a new alias name, but instead got {} inputs", update.len())
+                   _ => bail!("The command expects only an old and a new alias name, but instead got {} inputs", update.len())
                 }
             }
 
