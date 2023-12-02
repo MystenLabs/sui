@@ -40,7 +40,7 @@ fn run_tests_for_pkg(path_to_pkg: impl Into<String>, include_nursery_natives: bo
         &mut std::io::stdout(),
     )
     .unwrap();
-    if result != UnitTestResult::Success {
+    if result.0 != UnitTestResult::Success {
         panic!("aborting because of Move unit test failures");
     }
 }
