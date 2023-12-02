@@ -95,7 +95,12 @@ pub enum KeyToolCommand {
     /// the key scheme flag {ed25519 | secp256k1 | secp256r1} and an optional derivation path,
     /// default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
+    /// Set an alias for the key with the --alias flag. If no alias is provided,
+    /// the tool will automatically generate one.
     Import {
+        /// Sets an alias for this address
+        #[clap(long)]
+        alias: Option<String>,
         input_string: String,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
@@ -502,6 +507,7 @@ impl KeyToolCommand {
             },
 
             KeyToolCommand::Import {
+                alias,
                 input_string,
                 key_scheme,
                 derivation_path,
@@ -527,7 +533,7 @@ impl KeyToolCommand {
                         _ => return Err(anyhow!("Unsupported scheme")),
                     };
                     let key = Key::from(&skp);
-                    keystore.add_key(skp)?;
+                    keystore.add_key(alias, skp)?;
                     CommandOutput::Import(key)
                 } else {
                     let sui_address = keystore.import_from_mnemonic(
@@ -821,7 +827,7 @@ impl KeyToolCommand {
                 let pk = skp.public();
                 let ephemeral_key_identifier: SuiAddress = (&skp.public()).into();
                 println!("Ephemeral key identifier: {ephemeral_key_identifier}");
-                keystore.add_key(skp)?;
+                keystore.add_key(None, skp)?;
 
                 let mut eph_pk_bytes = vec![pk.flag()];
                 eph_pk_bytes.extend(pk.as_ref());

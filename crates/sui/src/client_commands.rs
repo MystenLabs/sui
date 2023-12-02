@@ -238,6 +238,7 @@ pub enum SuiClientCommands {
     #[clap(name = "new-address")]
     NewAddress {
         key_scheme: SignatureScheme,
+        alias: Option<String>,
         word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
     },
@@ -1137,16 +1138,24 @@ impl SuiClientCommands {
 
             SuiClientCommands::NewAddress {
                 key_scheme,
+                alias,
                 derivation_path,
                 word_length,
             } => {
                 let (address, phrase, scheme) = context.config.keystore.generate_and_add_new_key(
                     key_scheme,
+                    alias.clone(),
                     derivation_path,
                     word_length,
                 )?;
 
+                let alias = match alias {
+                    Some(x) => x,
+                    None => context.config.keystore.get_alias_by_address(&address)?,
+                };
+
                 SuiClientCommandResult::NewAddress(NewAddressOutput {
+                    alias,
                     address,
                     key_scheme: scheme,
                     recovery_phrase: phrase,
@@ -1527,7 +1536,7 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::NewAddress(new_address) => {
                 let mut builder = TableBuilder::default();
-
+                builder.push_record(vec!["alias", new_address.alias.as_str()]);
                 builder.push_record(vec!["address", new_address.address.to_string().as_str()]);
                 builder.push_record(vec![
                     "keyScheme",
@@ -1853,6 +1862,7 @@ pub struct DynamicFieldOutput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewAddressOutput {
+    pub alias: String,
     pub address: SuiAddress,
     pub key_scheme: SignatureScheme,
     pub recovery_phrase: String,

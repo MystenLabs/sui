@@ -299,11 +299,13 @@ pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let default_active_address = if let Some(address) = keystore.addresses().first() {
         *address
     } else {
-        keystore.generate_and_add_new_key(ED25519, None, None)?.0
+        keystore
+            .generate_and_add_new_key(ED25519, None, None, None)?
+            .0
     };
 
     if keystore.addresses().len() < 2 {
-        keystore.generate_and_add_new_key(ED25519, None, None)?;
+        keystore.generate_and_add_new_key(ED25519, None, None, None)?;
     }
 
     client_config.active_address = Some(default_active_address);
