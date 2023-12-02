@@ -12,11 +12,11 @@ In this document, we will be looking at the two parts of a programmable transact
 
 - The inputs, `Vec<CallArg>`, is a vector of arguments, either objects or pure values, that can be used in the transaction commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
 - The commands, `Vec<Command>`, is a vector of transaction commands. The possible commands are:
-  - `MoveCall` invokes either an `entry` or a `public` Move function in a published package.
   - `TransferObjects` sends multiple (1 or more) objects to a specified address.
   - `SplitCoins` splits off mutliple (1 or more) coins from a single coin. It can be any `sui::coin::Coin` object.
   - `MergeCoins` merges multiple (1 or more) coins into a single coin. Any `sui::coin::Coin` objects can be merged, as long as they are all of the same type.
-  - `MakeMoveVec` creates a vector (potentially empty) of Move values. This is used primiarly to construct vectors of Move values to be used as arguments to `MoveCall`.
+  - `MakeMoveVec` creates a vector (potentially empty) of Move values. This is used primarily to construct vectors of Move values to be used as arguments to `MoveCall`.
+  - `MoveCall` invokes either an `entry` or a `public` Move function in a published package.
   - `Publish` creates a new package and calls the `init` function of each module in the package.
   - `Upgrade` upgrades an existing package. The upgrade is gated by the `sui::package::UpgradeCap` for that package.
 
@@ -109,11 +109,9 @@ Each command is then executed in order. First, let's look a the rules around arg
   - A shared object cannot be transferred or frozen. The command `TransferObjects` and the related Move functions will fail when used with a shared object.
   - A shared object can be wrapped and can become a dynamic field transiently, but by the end of the transaction, it must be re-shared or deleted.
 - Pure values are not type checked until their usage.
-  - When checking if a pure value has type `T`, it is checked whether `T` is a vlaid type for a pure value (see the list above). If it is, the bytes are then validated.
+  - When checking if a pure value has type `T`, it is checked whether `T` is a valid type for a pure value (see the list above). If it is, the bytes are then validated.
   - A pure value can be used be used with multiple types as long as the bytes are valid for each type. For example, a string could be used as an ASCII string `std::ascii::String` and as a UTF8 string `std::string::String`.
   - However, once the pure value is mutably borrowed, the type becomes fixed. And all future usages must be with that type.
-
-#### `MoveCall`
 
 #### `TransferObjects`
 
@@ -122,7 +120,8 @@ The command has the form `TransferObjects(ObjectArgs, AddressArg)` where `Object
 - Each argument `ObjectArgs: Vec<Argument>` must be an object. However, the objects do not have the same type.
 - The address argument `AddressArg: Argument` must be an address, which could come from a `Pure` input or a result.
 - All arguments, objects and address, are taken by value.
-  - While the signature of this command cannot be expressed in Move, you can think of it roughly as having the signature `(vector<forall T: key + store. T>, address): ()`.
+- The command does not produce any results (an empty result vector).
+- While the signature of this command cannot be expressed in Move, you can think of it roughly as having the signature `(vector<forall T: key + store. T>, address): ()` where `forall T: key + store. T` is indicating that the `vector` is a heterogenous vector of objects.
 
 #### `SplitCoins`
 
@@ -131,19 +130,71 @@ The command has the form `SplitCoins(CoinArg, AmountArgs)` where `CoinArg` is th
 - When the transaction is signed, the network verifies that the AmountArgs is non-empty.
 - The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being split. It can be any coin type and is not limited to `SUI` coins.
 - The amount arguments `AmountArgs: Vec<Argument>` must be `u64` values, which could come from a `Pure` input or a result.
-- The coin argument is taken by mutable reference.
-- The amount arguments are taken by value (copied).
+- The coin argument `CoinArg` is taken by mutable reference.
+- The amount arguments `AmountArgs` are taken by value (copied).
 - The result of the command is a vector of coins, `sui::coin::Coin<T>`. The coin type `T` is the same as the coin being split, and the number of results matches the number of arguments
-  - For a rough signature expressed in Move, it is similar to a function `<T: key + store>(coin: &mut sui::coin::Coin<T>, amounts: vector<u64>): vector<sui::coin::Coin<T>>` where the result `vector` is guaranteed to have the same length as the `amounts` vector.
+- For a rough signature expressed in Move, it is similar to a function `<T: key + store>(coin: &mut sui::coin::Coin<T>, amounts: vector<u64>): vector<sui::coin::Coin<T>>` where the result `vector` is guaranteed to have the same length as the `amounts` vector.
 
 #### `MergeCoins`
 
+The command has the form `MergeCoins(CoinArg, ToMergeArgs)` where the `CoinArg` is the target coin in which the `ToMergeArgs` coins are merged into. In other words, we merge multiple coins (`ToMergeArgs`) into a single coin (`CoinArg`).
+
+- When the transaction is signed, the network verifies that the AmountArgs is non-empty.
+- The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being merged. It can be any coin type and is not limited to `SUI` coins.
+- The coin arguments `ToMergeArgs: Vec<Argument>` must be `sui::coin::Coin<T>` values where the `T` is the same type as the `CoinArg`.
+- The coin argument `CoinArg` is taken by mutable reference.
+- The merge arguments `ToMergeArgs` are taken by value (moved).
+- The command does not produce any results (an empty result vector).
+- For a rough signature expressed in Move, it is similar to a function `<T: key + store>(coin: &mut sui::coin::Coin<T>, to_merge: vector<sui::coin::Coin<T>>): ()`
+
 #### `MakeMoveVec`
+
+The command has the form `MakeMoveVec(VecTypeOption, Args)` where `VecTypeOption` is an optional argument specifying the type of the elements in the vector being constructed and `Args` is a vector of arguments to be used as elements in the vector.
+
+- When the transaction is signed, the network verifies that if that the type must be specified for an empty vector of `Args`.
+- The type `VecTypeOption: Option<TypeTag>` is an optional argument specifying the type of the elements in the vector being constructed. The `TypeTag` is a Move type for the elements in the vector, i.e. the `T` in the produced `vector<T>`.
+  - The type does not not have to be specified for an object vector--when `T: key`.
+  - The type _must_ be specified if the type is not an object type or when the vector is empty.
+- The arguments `Args: Vec<Argument>` are the elements of the vector. The arguments can be any type, including objects, pure values, or results from previous commands.
+- The arguments `Args` are taken by value. Copied if `T: copy` and moved otherwise.
+- The command produces a _single_ result of type `vector<T>`. The elements of the vector cannot then be accessed individually using `NestedResult`. Instead, the entire vector must be used as an argument to another command. If you wish to access the elements individually, you can use the `MoveCall` command and do so inside of Move code.
+- While the signature of this command cannot be expressed in Move, you can think of it roughly as having the signature `(T...): vector<T>` where `T...` indicates a variadic number of arguments of type `T`.
+
+#### `MoveCall`
+
+This command has the form `MoveCall(Package, Module, Function, TypeArgs, Args)` where `Package::Module::Function` combine to specify the Move function being called, `TypeArgs` is a vector of type arguments to that function, and `Args` is a vector of arguments for the Move function.
+
+- The package `Package: ObjectID` is the Object ID of the package containing the module being called.
+- The module `Module: String` is the name of the module containing the function being called.
+- The function `Function: String` is the name of the function being called.
+- The type arguments `TypeArgs: Vec<TypeTag>` are the type arguments to the function being called. They must satisfy the constraints of the type parameters for the function.
+- The arguments `Args: Vec<Argument>` are the arguments to the function being called. The arguments must be valid for the parameters as specified in the function's signature.
+- Unlike the other commands, the usage of the arguments and the number of results are dynamic--in that they both depend on the signature of the Move function being called.
 
 #### `Publish`
 
+The command has the form `Publish(ModuleBytes, TransitiveDependencies)` where `ModuleBytes` are the bytes of the module being published and `TransitiveDependencies` is a vector of package Object ID dependencies to link against.
+
+- When the transaction is signed, the network verifies that the `ModuleBytes` are not empty.
+- The module bytes `ModuleBytes: Vec<Vec<u8>>` contain the bytes of the modules being published. Each element in the vector is a module.
+- The transitive dependencies `TransitiveDependencies: Vec<ObjectID>` are the Object IDs of the packages that the new package depends on. While the modules themselves indicate the packages used as dependencies, the transitive object IDs must be provided to select the version of those packages. In other words, these object IDs are used to select the version of the packages marked as dependencies in the modules.
+- After the modules are verified, the `init` function of each module is called in same order as the module byte vector `ModuleBytes`.
+- The command produces a single result of type `sui::package::UpgradeCap`, which is the upgrade capability for the newly published package.
+
 #### `Upgrade`
+
+The command has the form `Upgrade(ModuleBytes, TransitiveDependencies, Package, UpgradeTicket)`, where the `Package` indicates the bject ID of the package being upgraded.  The `ModuleBytes` and `TransitiveDependencies` work similarly as the `Publish` command.
+
+- For details on the `ModuleBytes` and `TransitiveDependencies`, see the `Publish` command. Note though, that no `init` functions are called for the upgraded modules.
+- The `Package: ObjectID` is the Object ID of the package being upgraded. The package must exist and be the latest version.
+- The `UpgradeTicket: sui::package::UpgradeTicket` is the upgrade ticket for the package being upgraded and is generated from the `sui::package::UpgradeCap`. The ticket is taken by value (moved).
+- The command produces a single result type `sui::package::UpgradeReceipt` which provides proof for that upgrade.
+- For more details on upgrades TODO link to package upgrade doc
 
 ### End of Execution
 
+TODO
+
 ## Examples
+
+TODO
