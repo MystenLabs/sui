@@ -11420,6 +11420,7 @@ dependencies = [
  "serde_yaml 0.8.26",
  "shared-crypto",
  "signature 1.6.4",
+ "static_assertions",
  "sui-archival",
  "sui-config",
  "sui-execution",
@@ -11732,6 +11733,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hex",
+ "http",
  "hyper",
  "insta",
  "lru 0.10.0",
@@ -12119,6 +12121,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12139,6 +12142,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12159,6 +12163,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -12179,6 +12184,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 

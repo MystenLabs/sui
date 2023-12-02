@@ -29,6 +29,26 @@ pub(crate) struct Epoch {
     pub start_timestamp: Option<DateTime>,
     /// The epoch's ending timestamp
     pub end_timestamp: Option<DateTime>,
+    /// The total number of checkpoints in this epoch.
+    pub total_checkpoints: Option<BigInt>,
+    /// The total amount of gas fees (in MIST) that were paid in this epoch.
+    pub total_gas_fees: Option<BigInt>,
+    /// The total MIST rewarded as stake.
+    pub total_stake_rewards: Option<BigInt>,
+    /// The amount added to total gas fees to make up the total stake rewards.
+    pub total_stake_subsidies: Option<BigInt>,
+    /// The storage fund available in this epoch.
+    /// This fund is used to redistribute storage fees from past transactions
+    /// to future validators.
+    pub fund_size: Option<BigInt>,
+    /// The difference between the fund inflow and outflow, representing
+    /// the net amount of storage fees accumulated in this epoch.
+    pub net_inflow: Option<BigInt>,
+    /// The storage fees paid for transactions executed during the epoch.
+    pub fund_inflow: Option<BigInt>,
+    /// The storage fee rebates paid to users
+    /// who deleted the data associated with past transactions.
+    pub fund_outflow: Option<BigInt>,
 }
 
 #[ComplexObject]

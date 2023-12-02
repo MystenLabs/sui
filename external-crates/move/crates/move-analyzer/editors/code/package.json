@@ -15,7 +15,7 @@
 		"url": "https://github.com/MystenLabs/sui/issues"
 	},
 	"engines": {
-		"vscode": "^1.58.2"
+		"vscode": "^1.61.0"
 	},
 	"categories": [
 		"Programming Languages"
@@ -26,7 +26,8 @@
 	],
 	"main": "./out/src/main.js",
 	"activationEvents": [
-		"workspaceContains:Move.toml"
+		"workspaceContains:Move.toml",
+		"onLanguage:move"
 	],
 	"contributes": {
 		"commands": [
@@ -41,9 +42,13 @@
 			"title": "Move",
 			"properties": {
 				"move.server.path": {
-					"type": "string",
-					"default": "~/.sui/bin/move-analyzer",
-					"markdownDescription": "Path and filename of the move-analyzer executable, e.g. `~/.sui/bin/move-analyzer`."
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "scope": "machine-overridable",
+                    "default": null,
+                    "markdownDescription": "Path to rust-analyzer executable (points to `~/.sui/bin/move-analyzer` by default)."
 				},
 				"move.trace.server": {
 					"type": "string",
@@ -111,7 +116,7 @@
 		"@types/glob": "^7.1.4",
 		"@types/mocha": "^9.0.0",
 		"@types/node": "^14.17.22",
-		"@types/vscode": "^1.58.2",
+		"@types/vscode": "^1.61.0",
 		"@typescript-eslint/eslint-plugin": "^6.10.0",
 		"@typescript-eslint/parser": "^6.10.0",
 		"@vscode/test-electron": "^2.0.0",

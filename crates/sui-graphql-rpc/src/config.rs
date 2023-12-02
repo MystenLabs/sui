@@ -92,7 +92,7 @@ impl Default for Ide {
 impl Ide {
     pub fn new(ide_title: Option<String>) -> Self {
         Self {
-            ide_title: ide_title.unwrap_or_default(),
+            ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
         }
     }
 }

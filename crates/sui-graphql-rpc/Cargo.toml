@@ -19,6 +19,7 @@ diesel.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 futures.workspace = true
 hex.workspace = true
+http.workspace = true
 hyper.workspace = true
 lru.workspace = true
 move-binary-format.workspace = true
@@ -43,6 +44,7 @@ telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 toml.workspace = true
+tower.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
