@@ -21,7 +21,7 @@ use sui_types::{
     type_resolver::LayoutResolver,
 };
 
-use move_bytecode_verifier_v1::meter::Scope;
+use move_bytecode_verifier_v1::{meter::Scope, verify_module_unmetered};
 use move_vm_runtime_v1::move_vm::MoveVM;
 use sui_adapter_v1::adapter::{
     default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
@@ -31,8 +31,8 @@ use sui_adapter_v1::execution_engine::{
 };
 use sui_adapter_v1::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_v1::all_natives;
-use sui_types::storage::BackingStore;
-use sui_verifier_v1::meter::SuiVerifierMeter;
+use sui_types::{move_package::FnInfoMap, storage::BackingStore};
+use sui_verifier_v1::{meter::SuiVerifierMeter, verifier::sui_verify_module_unmetered};
 
 use crate::executor;
 use crate::verifier;
@@ -40,9 +40,8 @@ use crate::verifier::{VerifierMeteredValues, VerifierOverrides};
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
-pub(crate) struct Verifier<'m> {
+pub(crate) struct Verifier {
     config: VerifierConfig,
-    metrics: &'m Arc<BytecodeVerifierMetrics>,
     meter: SuiVerifierMeter,
 }
 
@@ -60,19 +59,17 @@ impl Executor {
     }
 }
 
-impl<'m> Verifier<'m> {
-    pub(crate) fn new(
+impl Verifier {
+    pub(crate) fn new(config: VerifierConfig) -> Self {
+        let meter = SuiVerifierMeter::new(&config);
+        Verifier { config, meter }
+    }
+
+    pub(crate) fn verifier_config(
         protocol_config: &ProtocolConfig,
         is_metered: bool,
-        metrics: &'m Arc<BytecodeVerifierMetrics>,
-    ) -> Self {
-        let config = default_verifier_config(protocol_config, is_metered);
-        let meter = SuiVerifierMeter::new(&config);
-        Verifier {
-            config,
-            metrics,
-            meter,
-        }
+    ) -> VerifierConfig {
+        default_verifier_config(protocol_config, is_metered)
     }
 }
 
@@ -181,13 +178,14 @@ impl executor::Executor for Executor {
     }
 }
 
-impl<'m> verifier::Verifier for Verifier<'m> {
+impl verifier::Verifier for Verifier {
     fn meter_compiled_modules(
         &mut self,
         _protocol_config: &ProtocolConfig,
         modules: &[CompiledModule],
+        metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<()> {
-        run_metered_move_bytecode_verifier(modules, &self.config, &mut self.meter, self.metrics)
+        run_metered_move_bytecode_verifier(modules, &self.config, &mut self.meter, metrics)
     }
 
     fn meter_compiled_modules_with_overrides(
@@ -195,13 +193,14 @@ impl<'m> verifier::Verifier for Verifier<'m> {
         modules: &[CompiledModule],
         _protocol_config: &ProtocolConfig,
         config_overrides: &VerifierOverrides,
+        metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<VerifierMeteredValues> {
         let mut config = self.config.clone();
         let max_per_fun_meter_current = config.max_per_fun_meter_units;
         let max_per_mod_meter_current = config.max_per_mod_meter_units;
         config.max_per_fun_meter_units = config_overrides.max_per_fun_meter_units;
         config.max_per_mod_meter_units = config_overrides.max_per_mod_meter_units;
-        run_metered_move_bytecode_verifier(modules, &config, &mut self.meter, self.metrics)?;
+        run_metered_move_bytecode_verifier(modules, &config, &mut self.meter, metrics)?;
         let fun_meter_units_result = self.meter.get_usage(Scope::Function);
         let mod_meter_units_result = self.meter.get_usage(Scope::Function);
         Ok(VerifierMeteredValues::new(
@@ -210,5 +209,20 @@ impl<'m> verifier::Verifier for Verifier<'m> {
             fun_meter_units_result,
             mod_meter_units_result,
         ))
+    }
+
+    fn verify_module_unmetered(
+        &self,
+        module: &CompiledModule,
+        fn_info_map: &FnInfoMap,
+    ) -> SuiResult<()> {
+        verify_module_unmetered(module).map_err(|err| SuiError::ModuleVerificationFailure {
+            error: err.to_string(),
+        })?;
+        sui_verify_module_unmetered(module, fn_info_map).map_err(|err| {
+            SuiError::ModuleVerificationFailure {
+                error: err.to_string(),
+            }
+        })
     }
 }

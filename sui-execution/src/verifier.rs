@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::error::SuiResult;
+use sui_types::{error::SuiResult, metrics::BytecodeVerifierMetrics, move_package::FnInfoMap};
 
 pub trait Verifier {
     /// Run the bytecode verifier with a meter limit
@@ -15,12 +16,14 @@ pub trait Verifier {
         &mut self,
         protocol_config: &ProtocolConfig,
         modules: &[CompiledModule],
+        metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<()>;
 
     fn meter_module_bytes(
         &mut self,
         protocol_config: &ProtocolConfig,
         module_bytes: &[Vec<u8>],
+        metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<()> {
         let Ok(modules) = module_bytes
             .iter()
@@ -37,7 +40,7 @@ pub trait Verifier {
             return Ok(());
         };
 
-        self.meter_compiled_modules(protocol_config, &modules)
+        self.meter_compiled_modules(protocol_config, &modules, metrics)
     }
 
     fn meter_compiled_modules_with_overrides(
@@ -45,7 +48,14 @@ pub trait Verifier {
         modules: &[CompiledModule],
         protocol_config: &ProtocolConfig,
         config_overrides: &VerifierOverrides,
+        metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<VerifierMeteredValues>;
+
+    fn verify_module_unmetered(
+        &self,
+        module: &CompiledModule,
+        fn_info_map: &FnInfoMap,
+    ) -> SuiResult<()>;
 }
 
 /// Controls verifier config values to override.

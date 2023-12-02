@@ -582,7 +582,9 @@ mod checked {
         // We use a custom config with metering enabled
         let is_metered = true;
         // Use the same verifier and meter for all packages
-        let mut verifier = sui_execution::verifier(protocol_config, is_metered, metrics);
+        let config = sui_execution::verifier_config(protocol_config, is_metered);
+        let execution_version = protocol_config.execution_version_as_option().unwrap_or(0);
+        let mut verifier = sui_execution::verifier(execution_version, config);
 
         // Measure time for verifying all packages in the PTB
         let shared_meter_verifier_timer = metrics
@@ -591,7 +593,9 @@ mod checked {
 
         let verifier_status = pt
             .non_system_packages_to_be_published()
-            .try_for_each(|module_bytes| verifier.meter_module_bytes(protocol_config, module_bytes))
+            .try_for_each(|module_bytes| {
+                verifier.meter_module_bytes(protocol_config, module_bytes, metrics)
+            })
             .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() });
 
         match verifier_status {

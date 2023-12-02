@@ -64,6 +64,7 @@ impl Build {
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
             lint,
+            version: None,
         }
         .build(rerooted_path)?;
         if dump_bytecode_as_base64 {
