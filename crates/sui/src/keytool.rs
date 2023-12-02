@@ -431,22 +431,21 @@ impl KeyToolCommand {
     pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
         let cmd_result = Ok(match self {
             KeyToolCommand::Alias { update } => {
-                let update_inputs = update;
-                match update_inputs.len() {
+                match update.len() {
                     0 =>  bail!("Please provide at least the old alias name"),
                     1 => {
-                        let old_alias = update_inputs.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?; 
-                        let new_alias = keystore.update_alias(old_alias, None)?; 
-                        CommandOutput::Alias(AliasUpdate { old_alias: old_alias.to_string() , new_alias  })
+                        let old_alias = update.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?;
+                        let new_alias = keystore.update_alias(old_alias, None)?;
+                        CommandOutput::Alias(AliasUpdate { old_alias: old_alias.to_string() , new_alias})
                     },
                     2 => {
-                        let old_alias = update_inputs.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?; 
-                        let new_alias = update_inputs.get(1).ok_or_else(|| anyhow!("Expected the new alias, but did not get any value."))?; 
+                        let old_alias = update.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?; 
+                        let new_alias = update.get(1).ok_or_else(|| anyhow!("Expected the new alias, but did not get any value."))?; 
                         keystore.update_alias(old_alias, Some(new_alias))?;
                         CommandOutput::Alias(AliasUpdate { old_alias: old_alias.to_string() , new_alias: new_alias.to_string()  })
                          
                     },
-                   _ =>  bail!("The command expects only an old and a new alias name, but instead got {} inputs", update_inputs.len())
+                   _ =>  bail!("The command expects only an old and a new alias name, but instead got {} inputs", update.len())
                 }
             }
 
@@ -1104,7 +1103,11 @@ impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             CommandOutput::Alias(update) => {
-                write!(formatter, "Old alias {} was updated to {}", update.old_alias, update.new_alias)
+                write!(
+                    formatter, 
+                    "Old alias {} was updated to {}", 
+                    update.old_alias, update.new_alias
+                )
             }
             // Sign needs to be manually built because we need to wrap the very long
             // rawTxData string and rawIntentMsg strings into multiple rows due to
