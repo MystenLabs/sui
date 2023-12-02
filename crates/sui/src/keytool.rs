@@ -95,9 +95,10 @@ pub enum KeyToolCommand {
     /// the key scheme flag {ed25519 | secp256k1 | secp256r1} and an optional derivation path,
     /// default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
-    /// You can set an alias for the key through the --alias flag. If no alias is provided,
+    /// Set an alias for the key with the --alias flag. If no alias is provided,
     /// the tool will automatically generate one.
     Import {
+        #[clap(long)]
         alias: Option<String>,
         input_string: String,
         key_scheme: SignatureScheme,
