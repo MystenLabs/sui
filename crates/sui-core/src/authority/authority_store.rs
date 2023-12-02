@@ -595,6 +595,47 @@ impl AuthorityStore {
         Ok(ret)
     }
 
+    /// Load a list of objects from the store by object reference.
+    /// If they exist in the store, they are returned directly.
+    /// If any object missing, we try to figure out the best error to return.
+    /// If the object we are asking is currently locked at a future version, we know this
+    /// transaction is out-of-date and we return a ObjectVersionUnavailableForConsumption,
+    /// which indicates this is not retriable.
+    /// Otherwise, we return a ObjectNotFound error, which indicates this is retriable.
+    pub fn multi_get_object_with_more_accurate_error_return(
+        &self,
+        object_refs: &[ObjectRef],
+    ) -> Result<Vec<Object>, SuiError> {
+        let objects = self.multi_get_object_by_key(
+            &object_refs.iter().map(ObjectKey::from).collect::<Vec<_>>(),
+        )?;
+        let mut result = Vec::new();
+        for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
+            match object_opt {
+                None => {
+                    let lock = self.get_latest_lock_for_object_id(object_ref.0)?;
+                    let error = if lock.1 >= object_ref.1 {
+                        UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *object_ref,
+                            current_version: lock.1,
+                        }
+                    } else {
+                        UserInputError::ObjectNotFound {
+                            object_id: object_ref.0,
+                            version: Some(object_ref.1),
+                        }
+                    };
+                    return Err(SuiError::UserInputError { error });
+                }
+                Some(object) => {
+                    result.push(object);
+                }
+            }
+        }
+        assert_eq!(result.len(), object_refs.len());
+        Ok(result)
+    }
+
     /// Get many objects
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();

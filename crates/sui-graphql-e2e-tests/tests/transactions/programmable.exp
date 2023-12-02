@@ -11,19 +11,19 @@ gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 
 task 2 'create-checkpoint'. lines 21-21:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 23-87:
+task 3 'run-graphql'. lines 23-86:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "digest": "BsPCR9s5YE9ujXUPLuB8W28NE5A5z5dz7Fbo7zKzX4gS",
+          "digest": "FSZEKkUnZWzDL1TN49yhAD1aQNefN8hp5knK6TpA8KRQ",
           "sender": {
             "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
             {
-              "base64Sig": "AMoZ5zqRqkxsZAVWEcTe50Z/VYWc17n/vhR/yjmPKHZSOFAvvGObtaJOIuUrZeD1TyQ3Kk0nHsgbun71uLmlvw5/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+              "base64Sig": "AEY9DLg+gy8Ypy+KPtn8ica67W/8zZCFfparfyKoENln/aD5zKNqBcPHldhQHVxgJDfFiw/zKt8tXF5rnAwZLgV/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
             }
           ],
           "gasInput": {
@@ -33,7 +33,7 @@ Response: {
             "gasPayment": {
               "nodes": [
                 {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
                 }
               ]
             },
@@ -50,7 +50,7 @@ Response: {
             "lamportVersion": 2,
             "dependencies": [
               {
-                "digest": "C5AEGK7kAtcPQotXhpzmgaAZFyTu5GtnkmcfNXFAubXk"
+                "digest": "EaSTJZe6SyqJXgZqeZ63nWQBsc27gdvaCRy26gcuexYJ"
               }
             ],
             "balanceChanges": [
@@ -66,36 +66,33 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
-                "inputState": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
-                  "digest": "9dppxTwUWhC8nVH4Djdv71K75Ze4HEXe5ZU3NcX3TrK"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
+                  "digest": "9hAdyP6ySFcGCE7rzW72LnGCm8YAG4GWzGvbc5wfQQpS"
                 }
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
-                "inputState": null,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0xa4a7220856bab19ccaa904d168baa3d733b59c8c067cdcc300502ac352f679af",
-                  "digest": "9AR9zGFB4aPcZzniVTVqRTYHwUASw5PXPYsTtomT8jyB"
+                  "location": "0x9cdba5a22278c005fe5f0e8bc59c273d7d702697b09d4f3a05a17bf19a8e3402",
+                  "digest": "9TtJ13NaPC97mYBDRUBqQnQKGypqrHC1buSvooVxVgYU"
                 }
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
-                "inputState": null,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0xcadb6deed476a072959bd1a031809d737240ccde7917495e16aa9793d6419a74",
-                  "digest": "PaCSXQ5RCkt2vc6w2NfZMNBvoCYyM9H6uJJtx1KgEyj"
+                  "location": "0xcb022a1b8142f42939d4dff61a9af0421d53db0055424b1df6cf98d2c08744b1",
+                  "digest": "22PgkfSQKn2H4QnjJUqCdBpCwtPWbRcatuWfRDmLQbRq"
                 }
               }
             ],
             "gasEffects": {
               "gasObject": {
-                "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -112,7 +109,7 @@ Response: {
               "sequenceNumber": 1
             },
             "transactionBlock": {
-              "digest": "BsPCR9s5YE9ujXUPLuB8W28NE5A5z5dz7Fbo7zKzX4gS"
+              "digest": "FSZEKkUnZWzDL1TN49yhAD1aQNefN8hp5knK6TpA8KRQ"
             }
           },
           "expiration": null
@@ -122,27 +119,27 @@ Response: {
   }
 }
 
-task 4 'upgrade'. lines 89-107:
+task 4 'upgrade'. lines 88-106:
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5 'create-checkpoint'. lines 109-109:
+task 5 'create-checkpoint'. lines 108-108:
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 111-176:
+task 6 'run-graphql'. lines 110-174:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "digest": "2c9zaJvqzNzMsqEQSaTnGEKAT5tdnjXJPbinMw8rj6zA",
+          "digest": "J9Lx2Qq3bhVkyoQj7fPgrD6rgw7SJgmjZatStejTsH69",
           "sender": {
             "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
             {
-              "base64Sig": "AIoO8Nvlr0XuZAv1kAuyUyKWEb9j1xDxtn/A8fFoENpwpHWnVhEK3PlXLIXjSUYDSqbQEnSC4sSxJdjJpndUCwp/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+              "base64Sig": "AOxU+KunyIO6dk+TfkHEcf0qwZcB9TfLeS5IiXlnsKg5EPiyD+TBmj15cDd+hniieKMbHeeoRcgdCfBnCSVeYAN/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
             }
           ],
           "gasInput": {
@@ -152,7 +149,7 @@ Response: {
             "gasPayment": {
               "nodes": [
                 {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
                 }
               ]
             },
@@ -161,18 +158,18 @@ Response: {
           },
           "kind": {
             "__typename": "ProgrammableTransaction",
-            "value": "ProgrammableTransaction { inputs: [Object(ImmOrOwnedObject((0xa4a7220856bab19ccaa904d168baa3d733b59c8c067cdcc300502ac352f679af, SequenceNumber(2), o#9AR9zGFB4aPcZzniVTVqRTYHwUASw5PXPYsTtomT8jyB))), Pure([0]), Pure([32, 171, 82, 196, 88, 52, 4, 188, 145, 159, 203, 235, 180, 132, 106, 122, 170, 108, 138, 21, 79, 188, 241, 113, 60, 80, 96, 230, 205, 10, 249, 74, 146])], commands: [MoveCall(ProgrammableMoveCall { package: 0x0000000000000000000000000000000000000000000000000000000000000002, module: Identifier(\"package\"), function: Identifier(\"authorize_upgrade\"), type_arguments: [], arguments: [Input(0), Input(1), Input(2)] }), Upgrade([[161, 28, 235, 11, 6, 0, 0, 0, 8, 1, 0, 6, 2, 6, 12, 3, 18, 20, 5, 38, 17, 7, 55, 60, 8, 115, 64, 10, 179, 1, 9, 12, 188, 1, 29, 0, 6, 1, 8, 1, 9, 0, 0, 12, 0, 1, 2, 4, 0, 2, 1, 2, 0, 0, 7, 0, 1, 0, 0, 3, 1, 2, 0, 1, 4, 4, 2, 0, 1, 7, 3, 4, 0, 2, 10, 3, 7, 8, 2, 1, 8, 0, 0, 1, 7, 8, 2, 1, 8, 1, 3, 70, 111, 111, 9, 84, 120, 67, 111, 110, 116, 101, 120, 116, 3, 85, 73, 68, 4, 98, 117, 114, 110, 6, 100, 101, 108, 101, 116, 101, 2, 105, 100, 1, 109, 3, 110, 101, 119, 6, 111, 98, 106, 101, 99, 116, 10, 116, 120, 95, 99, 111, 110, 116, 101, 120, 116, 2, 120, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 2, 5, 8, 1, 10, 10, 3, 0, 1, 0, 0, 2, 5, 11, 1, 17, 3, 11, 0, 18, 0, 2, 1, 1, 0, 0, 2, 5, 11, 0, 19, 0, 1, 17, 2, 2, 0]], [0x0000000000000000000000000000000000000000000000000000000000000001, 0x0000000000000000000000000000000000000000000000000000000000000002], 0xcadb6deed476a072959bd1a031809d737240ccde7917495e16aa9793d6419a74, Result(0)), MoveCall(ProgrammableMoveCall { package: 0x0000000000000000000000000000000000000000000000000000000000000002, module: Identifier(\"package\"), function: Identifier(\"commit_upgrade\"), type_arguments: [], arguments: [Input(0), Result(1)] })] }"
+            "value": "ProgrammableTransaction { inputs: [Object(ImmOrOwnedObject((0xcb022a1b8142f42939d4dff61a9af0421d53db0055424b1df6cf98d2c08744b1, SequenceNumber(2), o#22PgkfSQKn2H4QnjJUqCdBpCwtPWbRcatuWfRDmLQbRq))), Pure([0]), Pure([32, 171, 82, 196, 88, 52, 4, 188, 145, 159, 203, 235, 180, 132, 106, 122, 170, 108, 138, 21, 79, 188, 241, 113, 60, 80, 96, 230, 205, 10, 249, 74, 146])], commands: [MoveCall(ProgrammableMoveCall { package: 0x0000000000000000000000000000000000000000000000000000000000000002, module: Identifier(\"package\"), function: Identifier(\"authorize_upgrade\"), type_arguments: [], arguments: [Input(0), Input(1), Input(2)] }), Upgrade([[161, 28, 235, 11, 6, 0, 0, 0, 8, 1, 0, 6, 2, 6, 12, 3, 18, 20, 5, 38, 17, 7, 55, 60, 8, 115, 64, 10, 179, 1, 9, 12, 188, 1, 29, 0, 6, 1, 8, 1, 9, 0, 0, 12, 0, 1, 2, 4, 0, 2, 1, 2, 0, 0, 7, 0, 1, 0, 0, 3, 1, 2, 0, 1, 4, 4, 2, 0, 1, 7, 3, 4, 0, 2, 10, 3, 7, 8, 2, 1, 8, 0, 0, 1, 7, 8, 2, 1, 8, 1, 3, 70, 111, 111, 9, 84, 120, 67, 111, 110, 116, 101, 120, 116, 3, 85, 73, 68, 4, 98, 117, 114, 110, 6, 100, 101, 108, 101, 116, 101, 2, 105, 100, 1, 109, 3, 110, 101, 119, 6, 111, 98, 106, 101, 99, 116, 10, 116, 120, 95, 99, 111, 110, 116, 101, 120, 116, 2, 120, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 2, 5, 8, 1, 10, 10, 3, 0, 1, 0, 0, 2, 5, 11, 1, 17, 3, 11, 0, 18, 0, 2, 1, 1, 0, 0, 2, 5, 11, 0, 19, 0, 1, 17, 2, 2, 0]], [0x0000000000000000000000000000000000000000000000000000000000000001, 0x0000000000000000000000000000000000000000000000000000000000000002], 0x9cdba5a22278c005fe5f0e8bc59c273d7d702697b09d4f3a05a17bf19a8e3402, Result(0)), MoveCall(ProgrammableMoveCall { package: 0x0000000000000000000000000000000000000000000000000000000000000002, module: Identifier(\"package\"), function: Identifier(\"commit_upgrade\"), type_arguments: [], arguments: [Input(0), Result(1)] })] }"
           },
           "effects": {
             "status": "SUCCESS",
             "errors": null,
-            "lamportVersion": 2,
+            "lamportVersion": 3,
             "dependencies": [
               {
-                "digest": "C5AEGK7kAtcPQotXhpzmgaAZFyTu5GtnkmcfNXFAubXk"
+                "digest": "EaSTJZe6SyqJXgZqeZ63nWQBsc27gdvaCRy26gcuexYJ"
               },
               {
-                "digest": "BsPCR9s5YE9ujXUPLuB8W28NE5A5z5dz7Fbo7zKzX4gS"
+                "digest": "FSZEKkUnZWzDL1TN49yhAD1aQNefN8hp5knK6TpA8KRQ"
               }
             ],
             "balanceChanges": [
@@ -188,36 +185,33 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
-                "inputState": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
-                  "digest": "765g4rih8tpnzb9gHEHArtZ3Ye7SJ3CJUapLVUsdcd6K"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
+                  "digest": "HrzeYetZ3pHrBkJzJBBVcnTxPpCHpJ8nhZGCACyhtBKo"
                 }
               },
               {
-                "idCreated": null,
-                "idDeleted": null,
-                "inputState": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0xa4a7220856bab19ccaa904d168baa3d733b59c8c067cdcc300502ac352f679af",
-                  "digest": "Hyz4RaTV3cApJs911rX9CURmBd7amvComK4hoNrX7Dmg"
+                  "location": "0xcb022a1b8142f42939d4dff61a9af0421d53db0055424b1df6cf98d2c08744b1",
+                  "digest": "BGPGFFvCykDwUCusPYQGa5oQ9wsaXaL7XSr945PfZMCH"
                 }
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
-                "inputState": null,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x260de89d19ced9a26b7efba21d133f71987aa80696228f1dee6178961d0e07be",
-                  "digest": "9jMyF1w9TTRgvXdsWAn8d5awmQXYD4gUe1qX586UwWVt"
+                  "location": "0x4f751601a5219ce9ac487f44525f0e9b7c120033a71584603f91e89c78f197a5",
+                  "digest": "9ZDNw4647JCPFnrmNAzsziNbFDNznfffHpfo2UwTamSd"
                 }
               }
             ],
             "gasEffects": {
               "gasObject": {
-                "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -234,7 +228,7 @@ Response: {
               "sequenceNumber": 2
             },
             "transactionBlock": {
-              "digest": "2c9zaJvqzNzMsqEQSaTnGEKAT5tdnjXJPbinMw8rj6zA"
+              "digest": "J9Lx2Qq3bhVkyoQj7fPgrD6rgw7SJgmjZatStejTsH69"
             }
           },
           "expiration": null
@@ -244,27 +238,27 @@ Response: {
   }
 }
 
-task 7 'programmable'. lines 178-187:
+task 7 'programmable'. lines 176-185:
 created: object(7,0), object(7,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3328800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'create-checkpoint'. lines 189-189:
+task 8 'create-checkpoint'. lines 187-187:
 Checkpoint created: 3
 
-task 9 'run-graphql'. lines 191-265:
+task 9 'run-graphql'. lines 189-262:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "digest": "EXpWu6yQWF7S4EVo7CbuG4iRdJb4EwfBjKfpinpk8Ket",
+          "digest": "CKS6oUJBSpzJ43rGGA9DZFq3DqiRHdowD1RkTeHH6MF8",
           "sender": {
             "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
             {
-              "base64Sig": "AOYj7z6hnfCFn54DJtb2s+Ql7h/1d7jD3MaYdWLebKVpxHgCM/jQAZkaADUXKd1cwXbFbeJw/5kMkb9D+kVn7Q9/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+              "base64Sig": "ACswUzNS/5RVKC11OSZswb9/DW4iF1cpKorW7FJtvU6a5K8pSzlpfe8X9/htIcggzRw477+4NouGTCY+rlc9QAp/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
             }
           ],
           "gasInput": {
@@ -274,7 +268,7 @@ Response: {
             "gasPayment": {
               "nodes": [
                 {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
                 }
               ]
             },
@@ -283,7 +277,7 @@ Response: {
           },
           "kind": {
             "__typename": "ProgrammableTransaction",
-            "value": "ProgrammableTransaction { inputs: [Pure([42, 0, 0, 0, 0, 0, 0, 0]), Pure([43, 0, 0, 0, 0, 0, 0, 0]), Pure([232, 3, 0, 0, 0, 0, 0, 0]), Pure([252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30])], commands: [MakeMoveVec(Some(U64), [Input(0), Input(1)]), MakeMoveVec(Some(U64), []), SplitCoins(GasCoin, [Input(2), Input(2)]), MoveCall(ProgrammableMoveCall { package: 0x260de89d19ced9a26b7efba21d133f71987aa80696228f1dee6178961d0e07be, module: Identifier(\"m\"), function: Identifier(\"new\"), type_arguments: [], arguments: [Result(0)] }), TransferObjects([Result(3)], Input(3)), MoveCall(ProgrammableMoveCall { package: 0x260de89d19ced9a26b7efba21d133f71987aa80696228f1dee6178961d0e07be, module: Identifier(\"m\"), function: Identifier(\"new\"), type_arguments: [], arguments: [Result(1)] }), MoveCall(ProgrammableMoveCall { package: 0x260de89d19ced9a26b7efba21d133f71987aa80696228f1dee6178961d0e07be, module: Identifier(\"m\"), function: Identifier(\"burn\"), type_arguments: [], arguments: [Result(5)] }), MergeCoins(NestedResult(2, 0), [NestedResult(2, 1)]), TransferObjects([NestedResult(2, 0)], Input(3))] }"
+            "value": "ProgrammableTransaction { inputs: [Pure([42, 0, 0, 0, 0, 0, 0, 0]), Pure([43, 0, 0, 0, 0, 0, 0, 0]), Pure([232, 3, 0, 0, 0, 0, 0, 0]), Pure([252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30])], commands: [MakeMoveVec(Some(U64), [Input(0), Input(1)]), MakeMoveVec(Some(U64), []), SplitCoins(GasCoin, [Input(2), Input(2)]), MoveCall(ProgrammableMoveCall { package: 0x4f751601a5219ce9ac487f44525f0e9b7c120033a71584603f91e89c78f197a5, module: Identifier(\"m\"), function: Identifier(\"new\"), type_arguments: [], arguments: [Result(0)] }), TransferObjects([Result(3)], Input(3)), MoveCall(ProgrammableMoveCall { package: 0x4f751601a5219ce9ac487f44525f0e9b7c120033a71584603f91e89c78f197a5, module: Identifier(\"m\"), function: Identifier(\"new\"), type_arguments: [], arguments: [Result(1)] }), MoveCall(ProgrammableMoveCall { package: 0x4f751601a5219ce9ac487f44525f0e9b7c120033a71584603f91e89c78f197a5, module: Identifier(\"m\"), function: Identifier(\"burn\"), type_arguments: [], arguments: [Result(5)] }), MergeCoins(NestedResult(2, 0), [NestedResult(2, 1)]), TransferObjects([NestedResult(2, 0)], Input(3))] }"
           },
           "effects": {
             "status": "SUCCESS",
@@ -291,7 +285,7 @@ Response: {
             "lamportVersion": 4,
             "dependencies": [
               {
-                "digest": "2c9zaJvqzNzMsqEQSaTnGEKAT5tdnjXJPbinMw8rj6zA"
+                "digest": "J9Lx2Qq3bhVkyoQj7fPgrD6rgw7SJgmjZatStejTsH69"
               }
             ],
             "balanceChanges": [
@@ -307,19 +301,18 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
-                "inputState": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
-                  "digest": "6bbvaLxYq6Fj8bVvhvKkeZM3u27ecvwe9hGkbdsSXd2e",
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
+                  "digest": "GSmmU5pTKrJSDvQY1kp9GnguKNkr1dbS2yMj6P1dmQvs",
                   "asMoveObject": {
                     "contents": {
                       "type": {
                         "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                       },
                       "json": {
-                        "id": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
+                        "id": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
                         "balance": {
                           "value": "299999984338300"
                         }
@@ -330,18 +323,17 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
-                "inputState": null,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x505c5f4993a1fe74c5492945104578ca55d6275a15d64ecc21de6b7b5ef34804",
-                  "digest": "5ayrZbSq44X3WqnwNsVvNHGs21YntWobKUoFZQbvVMyw",
+                  "location": "0x309954282145fe8806db12927ad02de2d554e83cc6bdc0ed4d384c566e567f9a",
+                  "digest": "9CBDNKVp1kZXswi7UdnMRoLib9Lca27HNWejVysY5NfC",
                   "asMoveObject": {
                     "contents": {
                       "type": {
-                        "repr": "0xcadb6deed476a072959bd1a031809d737240ccde7917495e16aa9793d6419a74::m::Foo"
+                        "repr": "0x9cdba5a22278c005fe5f0e8bc59c273d7d702697b09d4f3a05a17bf19a8e3402::m::Foo"
                       },
                       "json": {
-                        "id": "0x505c5f4993a1fe74c5492945104578ca55d6275a15d64ecc21de6b7b5ef34804",
+                        "id": "0x309954282145fe8806db12927ad02de2d554e83cc6bdc0ed4d384c566e567f9a",
                         "xs": [
                           "42",
                           "43"
@@ -353,18 +345,17 @@ Response: {
               },
               {
                 "idCreated": true,
-                "idDeleted": null,
-                "inputState": null,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x82ff2affd2e0447baea51fb07098dd4192c38424f41e291c7b47bcae5be0f37c",
-                  "digest": "choJQNN7TWytitxF59W6QgnECZkzL28oT77TSkLvox7",
+                  "location": "0x4f39191638610ba8ff3bd6712c8db096b43ea2d5522444215239542d37ff9f5f",
+                  "digest": "F1uXgjCMq4FbV3dBb5yH4DSkEUcwKVSDiEUyxMCYw36U",
                   "asMoveObject": {
                     "contents": {
                       "type": {
                         "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                       },
                       "json": {
-                        "id": "0x82ff2affd2e0447baea51fb07098dd4192c38424f41e291c7b47bcae5be0f37c",
+                        "id": "0x4f39191638610ba8ff3bd6712c8db096b43ea2d5522444215239542d37ff9f5f",
                         "balance": {
                           "value": "2000"
                         }
@@ -376,7 +367,7 @@ Response: {
             ],
             "gasEffects": {
               "gasObject": {
-                "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -393,7 +384,7 @@ Response: {
               "sequenceNumber": 3
             },
             "transactionBlock": {
-              "digest": "EXpWu6yQWF7S4EVo7CbuG4iRdJb4EwfBjKfpinpk8Ket"
+              "digest": "CKS6oUJBSpzJ43rGGA9DZFq3DqiRHdowD1RkTeHH6MF8"
             }
           },
           "expiration": null
@@ -403,26 +394,26 @@ Response: {
   }
 }
 
-task 10 'programmable'. lines 267-268:
+task 10 'programmable'. lines 264-265:
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
 
-task 11 'create-checkpoint'. lines 270-270:
+task 11 'create-checkpoint'. lines 267-267:
 Checkpoint created: 4
 
-task 12 'run-graphql'. lines 272-337:
+task 12 'run-graphql'. lines 269-333:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "digest": "DQzzQPnh6vfqc74Ha8QvemWZBKqSvTYsm6KeG6y6yr67",
+          "digest": "7Y5wNUkkYtyNxn5dEXrpZUUcyKr7zNWiEtUC98hLwkXe",
           "sender": {
             "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
             {
-              "base64Sig": "APZUPyBtxSSKXbNOt/9+vHXak8c4Smyp/9KWACiLn8feXf/7YS4E5wGetyGn7ZMv5cs1mFhVeoPvfSKPtUV0IAt/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
+              "base64Sig": "AJdzBT75TWruxMmzgD/J6ZzkFsqGDWhKtppHsPGoknMUHLJZZ+KCulC7oYu3vsZHUPHUi/HzhKlXIswM+pkw/At/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
             }
           ],
           "gasInput": {
@@ -432,7 +423,7 @@ Response: {
             "gasPayment": {
               "nodes": [
                 {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
                 }
               ]
             },
@@ -445,11 +436,11 @@ Response: {
           },
           "effects": {
             "status": "FAILURE",
-            "errors": "UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }",
-            "lamportVersion": null,
+            "errors": "Unused result without the drop ability. Command result 0, return value 0",
+            "lamportVersion": 5,
             "dependencies": [
               {
-                "digest": "EXpWu6yQWF7S4EVo7CbuG4iRdJb4EwfBjKfpinpk8Ket"
+                "digest": "CKS6oUJBSpzJ43rGGA9DZFq3DqiRHdowD1RkTeHH6MF8"
               }
             ],
             "balanceChanges": [
@@ -465,18 +456,17 @@ Response: {
             ],
             "objectChanges": [
               {
-                "idCreated": null,
-                "idDeleted": null,
-                "inputState": null,
+                "idCreated": false,
+                "idDeleted": false,
                 "outputState": {
-                  "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9",
-                  "digest": "EW31fn6wtJxosHoPLnhPNp8tNQgCctYMksKDMY6St4y5"
+                  "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f",
+                  "digest": "C7Th2BL6gakD3rCeXyCWHjUhMPQpppMK99ZxFJJymxrR"
                 }
               }
             ],
             "gasEffects": {
               "gasObject": {
-                "location": "0x11c5cd8906fc48629f168f5a13a75c8ca77f69ae1ec15edfda29789f1d9638d9"
+                "location": "0x8db8a673b7f4399142f729249a3529551095b686ea9f83e5e0efaf02d35d0b3f"
               },
               "gasSummary": {
                 "computationCost": "1000000",
@@ -493,7 +483,7 @@ Response: {
               "sequenceNumber": 4
             },
             "transactionBlock": {
-              "digest": "DQzzQPnh6vfqc74Ha8QvemWZBKqSvTYsm6KeG6y6yr67"
+              "digest": "7Y5wNUkkYtyNxn5dEXrpZUUcyKr7zNWiEtUC98hLwkXe"
             }
           },
           "expiration": null

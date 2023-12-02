@@ -56,10 +56,22 @@ type Balance {
 	totalBalance: BigInt
 }
 
+"""
+Effects to the balance (sum of coin values per coin type) owned by an address or object.
+"""
 type BalanceChange {
+	"""
+	The address or object whose balance has changed.
+	"""
 	owner: Owner
-	amount: BigInt
+	"""
+	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
+	"""
 	coinType: MoveType
+	"""
+	The signed balance change.
+	"""
+	amount: BigInt
 }
 
 type BalanceConnection {
@@ -112,7 +124,7 @@ type Checkpoint {
 	"""
 	digest: String!
 	"""
-	This checkpoint's position in the total order of finalised checkpoints, agreed upon by consensus.
+	This checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
 	"""
 	sequenceNumber: Int!
 	"""
@@ -356,6 +368,42 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	The total number of checkpoints in this epoch.
+	"""
+	totalCheckpoints: BigInt
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch.
+	"""
+	totalGasFees: BigInt
+	"""
+	The total MIST rewarded as stake.
+	"""
+	totalStakeRewards: BigInt
+	"""
+	The amount added to total gas fees to make up the total stake rewards.
+	"""
+	totalStakeSubsidies: BigInt
+	"""
+	The storage fund available in this epoch.
+	This fund is used to redistribute storage fees from past transactions
+	to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing
+	the net amount of storage fees accumulated in this epoch.
+	"""
+	netInflow: BigInt
+	"""
+	The storage fees paid for transactions executed during the epoch.
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users
+	who deleted the data associated with past transactions.
+	"""
+	fundOutflow: BigInt
+	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options
 	"""
 	protocolConfigs: ProtocolConfigs
@@ -432,6 +480,17 @@ input EventFilter {
 	eventType: String
 }
 
+type ExecutionResult {
+	"""
+	The errors field captures any errors that occurred during execution
+	"""
+	errors: [String!]
+	"""
+	The digest field captures the digest of the transaction block
+	"""
+	digest: String!
+}
+
 enum ExecutionStatus {
 	SUCCESS
 	FAILURE
@@ -471,9 +530,24 @@ enum Feature {
 
 
 type GasCostSummary {
+	"""
+	Gas paid for executing this transaction.
+	"""
 	computationCost: BigInt
+	"""
+	Gas paid for the data stored on-chain by this transaction.
+	"""
 	storageCost: BigInt
+	"""
+	Part of storage cost that can be reclaimed by cleaning up data created by this transaction
+	(when objects are deleted or an object is modified, whch is treated as a deletion followed
+	by a creation).
+	"""
 	storageRebate: BigInt
+	"""
+	Part of storage cost that is not reclaimed when data created by this transaction is cleaned
+	up.
+	"""
 	nonRefundableStorageFee: BigInt
 }
 
@@ -904,6 +978,22 @@ enum MoveVisibility {
 	FRIEND
 }
 
+type Mutation {
+	"""
+	Execute a transaction, committing its effects on chain.
+	
+	`txBytes` is a `TransactionData` struct that has been BCS-encoded
+	and then Base64-encoded.
+	`signatures` are a list of `flag || signature || pubkey` bytes,
+	Base64-encoded.
+	
+	Waits until the transaction has been finalized on chain to return
+	its transaction digest.  If the transaction could not be
+	finalized, returns the errors that prevented it, instead.
+	"""
+	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
+}
+
 type Object implements ObjectOwner {
 	version: Int!
 	"""
@@ -994,10 +1084,21 @@ type Object implements ObjectOwner {
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
+"""
+Effect on an individual Object (keyed by its ID).
+"""
 type ObjectChange {
-	inputState: Object
+	"""
+	The contents of the object at the end of the transaction.
+	"""
 	outputState: Object
+	"""
+	Whether the ID was created in this transaction.
+	"""
 	idCreated: Boolean
+	"""
+	Whether the ID was deleted in this transaction.
+	"""
 	idDeleted: Boolean
 }
 
@@ -1607,22 +1708,56 @@ type TransactionBlockEdge {
 }
 
 type TransactionBlockEffects {
-	status: ExecutionStatus!
-	errors: String
-	lamportVersion: Int
-	balanceChanges: [BalanceChange]
 	"""
-	UTC timestamp in milliseconds since epoch (1/1/1970)
-	representing the time when the checkpoint that contains
-	this transaction was created
+	The transaction that ran to produce these effects.
+	"""
+	transactionBlock: TransactionBlock!
+	"""
+	Whether the transaction executed successfully or not.
+	"""
+	status: ExecutionStatus
+	"""
+	The latest version of all objects (apart from packages) that have been created or modified
+	by this transaction, immediately following this transaction.
+	"""
+	lamportVersion: Int!
+	"""
+	The reason for a transaction failure, if it did fail.
+	"""
+	errors: String
+	"""
+	Transactions whose outputs this transaction depends upon.
+	"""
+	dependencies: [TransactionBlock!]
+	"""
+	Effects to the gas object.
+	"""
+	gasEffects: GasEffects
+	"""
+	The effect this transaction had on objects on-chain.
+	"""
+	objectChanges: [ObjectChange!]
+	"""
+	The effect this transaction had on the balances (sum of coin values per coin type) of
+	addresses and objects.
+	"""
+	balanceChanges: [BalanceChange!]
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
 	"""
 	timestamp: DateTime
-	checkpoint: Checkpoint
-	dependencies: [TransactionBlock]
+	"""
+	The epoch this transaction was finalized in.
+	"""
 	epoch: Epoch
-	gasEffects: GasEffects
-	objectChanges: [ObjectChange]
-	transactionBlock: TransactionBlock
+	"""
+	The checkpoint this transaction was finalized in.
+	"""
+	checkpoint: Checkpoint
+	"""
+	Base64 encoded bcs serialization of the on-chain transaction effects.
+	"""
+	bcs: Base64
 }
 
 input TransactionBlockFilter {
@@ -1736,4 +1871,5 @@ type ValidatorSet {
 
 schema {
 	query: Query
+	mutation: Mutation
 }

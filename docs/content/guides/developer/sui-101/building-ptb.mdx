@@ -221,9 +221,9 @@ function handleSignRequest(input) {
 ## Sponsored PTBs
 
 The PTB builder can support sponsored PTBs by using the `onlyTransactionKind` flag when building the PTB.
-const txb = new TransactionBlock();
 
 ```ts
+const txb = new TransactionBlock();
 // ... add some transactions...
 
 const kindBytes = await txb.build({ provider, onlyTransactionKind: true });

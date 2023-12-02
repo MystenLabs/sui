@@ -17,13 +17,14 @@ use crate::handlers::{
     ObjectStatusTracker,
 };
 
-use crate::package_store::LocalDBPackageStore;
+use crate::package_store::{LocalDBPackageStore, PackageCache};
 use crate::tables::ObjectEntry;
 use crate::FileType;
 
 pub struct ObjectHandler {
     objects: Vec<ObjectEntry>,
-    resolver: Resolver<LocalDBPackageStore>,
+    package_store: LocalDBPackageStore,
+    resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -39,7 +40,7 @@ impl Handler for ObjectHandler {
         } = checkpoint_data;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.resolver.package_store().update(object)?;
+                self.package_store.update(object)?;
             }
             self.process_transaction(
                 checkpoint_summary.epoch,
@@ -69,10 +70,11 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
 
 impl ObjectHandler {
     pub fn new(store_path: &Path, rest_uri: &str) -> Self {
-        let store = LocalDBPackageStore::new(&store_path.join("object"), rest_uri);
+        let package_store = LocalDBPackageStore::new(&store_path.join("object"), rest_uri);
         ObjectHandler {
             objects: vec![],
-            resolver: Resolver::new(store),
+            package_store: package_store.clone(),
+            resolver: Resolver::new(PackageCache::new(package_store)),
         }
     }
     async fn process_transaction(

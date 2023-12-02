@@ -9,8 +9,8 @@ use super::{coin::Coin, object::Object};
 use crate::error::Error;
 use crate::types::stake::StakedSui;
 use async_graphql::*;
-use move_core_types::language_storage::StructTag;
 use sui_types::object::{Data, MoveObject as NativeMoveObject};
+use sui_types::TypeTag;
 
 #[derive(Clone)]
 pub(crate) struct MoveObject {
@@ -30,11 +30,8 @@ impl MoveObject {
     /// provides the flat representation of the type signature, and the bcs of the corresponding
     /// data
     async fn contents(&self) -> Option<MoveValue> {
-        let type_ = StructTag::from(self.native.type_().clone());
-        Some(MoveValue::new(
-            type_.to_canonical_string(/* with_prefix */ true),
-            self.native.contents().into(),
-        ))
+        let type_ = TypeTag::from(self.native.type_().clone());
+        Some(MoveValue::new(type_, self.native.contents().into()))
     }
 
     /// Determines whether a tx can transfer this object

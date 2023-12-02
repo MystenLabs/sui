@@ -155,6 +155,66 @@ diesel::table! {
 }
 
 diesel::table! {
+    objects_history (object_id, object_version, checkpoint_sequence_number) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
+        checkpoint_sequence_number -> Int8,
+        owner_type -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        serialized_object -> Nullable<Bytea>,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+        df_name -> Nullable<Bytea>,
+        df_object_type -> Nullable<Text>,
+        df_object_id -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    objects_history_partition_0 (object_id, object_version, checkpoint_sequence_number) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
+        checkpoint_sequence_number -> Int8,
+        owner_type -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        serialized_object -> Nullable<Bytea>,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+        df_name -> Nullable<Bytea>,
+        df_object_type -> Nullable<Text>,
+        df_object_id -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    objects_snapshot (object_id) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        object_status -> Int2,
+        object_digest -> Nullable<Bytea>,
+        checkpoint_sequence_number -> Int8,
+        owner_type -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
+        serialized_object -> Nullable<Bytea>,
+        coin_type -> Nullable<Text>,
+        coin_balance -> Nullable<Int8>,
+        df_kind -> Nullable<Int2>,
+        df_name -> Nullable<Bytea>,
+        df_object_type -> Nullable<Text>,
+        df_object_id -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
     packages (package_id) {
         package_id -> Bytea,
         move_package -> Bytea,
@@ -162,7 +222,23 @@ diesel::table! {
 }
 
 diesel::table! {
-    transactions (tx_sequence_number) {
+    transactions (tx_sequence_number, checkpoint_sequence_number) {
+        tx_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        raw_transaction -> Bytea,
+        raw_effects -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        timestamp_ms -> Int8,
+        object_changes -> Array<Nullable<Bytea>>,
+        balance_changes -> Array<Nullable<Bytea>>,
+        events -> Array<Nullable<Bytea>>,
+        transaction_kind -> Int2,
+        success_command_count -> Int2,
+    }
+}
+
+diesel::table! {
+    transactions_partition_0 (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
         raw_transaction -> Bytea,
@@ -253,8 +329,12 @@ diesel::allow_tables_to_appear_in_same_query!(
     move_call_metrics,
     move_calls,
     objects,
+    objects_history,
+    objects_history_partition_0,
+    objects_snapshot,
     packages,
     transactions,
+    transactions_partition_0,
     tx_calls,
     tx_changed_objects,
     tx_count_metrics,

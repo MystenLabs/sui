@@ -32,6 +32,7 @@ module sui::token {
     use sui::vec_set::{Self, VecSet};
     use sui::dynamic_field as df;
     use sui::transfer;
+    use sui::event;
 
     /// The action is not allowed (defined) in the policy.
     const EUnknownAction: u64 = 0;
@@ -126,6 +127,17 @@ module sui::token {
     /// `Rule` per `TokenPolicy`.
     struct RuleKey<phantom T> has store, copy, drop { is_protected: bool }
 
+    /// An event emitted when a `TokenPolicy` is created and shared. Because
+    /// `TokenPolicy` can only be shared (and potentially frozen in the future),
+    /// we emit this event in the `share_policy` function and mark it as mutable.
+    struct TokenPolicyCreated<phantom T> has copy, drop {
+        /// ID of the `TokenPolicy` that was created.
+        id: ID,
+        /// Whether the `TokenPolicy` is "shared" (mutable) or "frozen"
+        /// (immutable) - TBD.
+        is_mutable: bool,
+    }
+
     /// Create a new `TokenPolicy` and a matching `TokenPolicyCap`.
     /// The `TokenPolicy` must then be shared using the `share_policy` method.
     ///
@@ -152,6 +164,11 @@ module sui::token {
     /// Share the `TokenPolicy`. Due to `key`-only restriction, it must be
     /// shared after initialization.
     public fun share_policy<T>(policy: TokenPolicy<T>) {
+        event::emit(TokenPolicyCreated<T> {
+            id: object::id(&policy),
+            is_mutable: true,
+        });
+
         transfer::share_object(policy)
     }
 

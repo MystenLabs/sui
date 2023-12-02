@@ -62,7 +62,9 @@ pub async fn start_cluster(
         start_test_indexer_v2(Some(db_url), val_fn.rpc_url().to_string(), None, true).await;
 
     // Starts graphql server
-    let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
+    let fn_rpc_url = val_fn.rpc_url().to_string();
+    let graphql_server_handle =
+        start_graphql_server_with_fn_rpc(graphql_connection_config.clone(), Some(fn_rpc_url)).await;
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     let server_url = format!(
@@ -128,9 +130,19 @@ pub async fn serve_executor(
 }
 
 pub async fn start_graphql_server(graphql_connection_config: ConnectionConfig) -> JoinHandle<()> {
-    let server_config = ServerConfig {
+    start_graphql_server_with_fn_rpc(graphql_connection_config, None).await
+}
+
+pub async fn start_graphql_server_with_fn_rpc(
+    graphql_connection_config: ConnectionConfig,
+    fn_rpc_url: Option<String>,
+) -> JoinHandle<()> {
+    let mut server_config = ServerConfig {
         connection: graphql_connection_config,
         ..ServerConfig::default()
+    };
+    if let Some(fn_rpc_url) = fn_rpc_url {
+        server_config.tx_exec_full_node.node_rpc_url = Some(fn_rpc_url);
     };
 
     // Starts graphql server

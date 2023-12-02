@@ -32,7 +32,7 @@ env:
 jobs:
   tag:
     name: Tag
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout

@@ -164,9 +164,9 @@ type Mutation {
   # `signatures` are a list of `flag || signature || pubkey` bytes,
   #     Base64-encoded.
   #
-  # Waits until the transaction has been finalised on chain to return
+  # Waits until the transaction has been finalized on chain to return
   # its transaction digest.  If the transaction could not be
-  # finalised, returns the errors that prevented it, instead.
+  # finalized, returns the errors that prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
     signatures: [Base64!]!,
@@ -522,6 +522,15 @@ type Epoch {
   startTimestamp: DateTime
   endTimestamp: DateTime
 
+  totalCheckpoints: BigInt
+  totalGasFees: BigInt
+  totalStakeRewards: BigInt
+  totalStakeSubsidies: BigInt
+  fundSize: BigInt
+  netInflow: BigInt
+  fundInflow: BigInt
+  fundOutflow: BigInt
+  
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
   checkpointConnection(
@@ -837,17 +846,17 @@ type MakeMoveVecTransaction {
 type TransactionSignature
 
 type TransactionBlockEffects {
-  status: ExecutionStatus!
+  transactionBlock: TransactionBlock!
+  status: ExecutionStatus
 
   errors: String
-  transactionBlock: TransactionBlock
-  dependencies: [TransactionBlock]
+  dependencies: [TransactionBlock!]
 
   lamportVersion: Int
   gasEffects: GasEffects
-  objectReads: [Object]
-  objectChanges: [ObjectChange]
-  balanceChanges: [BalanceChange]
+  objectReads: [Object!]
+  objectChanges: [ObjectChange!]
+  balanceChanges: [BalanceChange!]
   timestamp: DateTime
   epoch: Epoch
   checkpoint: Checkpoint

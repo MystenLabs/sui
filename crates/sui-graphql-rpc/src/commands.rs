@@ -56,5 +56,9 @@ pub enum Command {
         /// Path to TOML file containing configuration for service.
         #[clap(short, long)]
         config: Option<PathBuf>,
+
+        /// RPC url to the Node for tx execution
+        #[clap(long)]
+        node_rpc_url: Option<String>,
     },
 }

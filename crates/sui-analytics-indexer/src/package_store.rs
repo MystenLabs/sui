@@ -6,7 +6,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use move_core_types::account_address::AccountAddress;
-use sui_package_resolver::{error::Error as PackageResolverError, Package, PackageStore, Result};
+use sui_package_resolver::{
+    error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
+};
 use sui_rest_api::Client;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::object::Object;
@@ -64,6 +66,7 @@ impl PackageStoreTables {
 /// kept updated with latest version of package objects while iterating over checkpoints. If the
 /// local db is missing (or gets deleted), packages are fetched from a full node and local store is
 /// updated
+#[derive(Clone)]
 pub struct LocalDBPackageStore {
     package_store_tables: Arc<PackageStoreTables>,
     fallback_client: Client,
@@ -119,3 +122,5 @@ impl PackageStore for LocalDBPackageStore {
         Ok(Arc::new(Package::read(&object)?))
     }
 }
+
+pub(crate) type PackageCache = PackageStoreWithLruCache<LocalDBPackageStore>;
