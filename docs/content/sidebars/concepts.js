@@ -175,7 +175,7 @@ const concepts = [
 					type: 'doc',
 					id: 'concepts/cryptography/zklogin',
 				},
-				items: ['concepts/cryptography/zklogin/zklogin-examples'],
+				items: ['concepts/cryptography/zklogin/zklogin-example'],
 			},
 			{
 				type: 'category',
