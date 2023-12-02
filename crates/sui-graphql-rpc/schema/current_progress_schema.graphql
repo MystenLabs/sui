@@ -109,11 +109,41 @@ scalar BigInt
 
 
 type ChangeEpochTransaction {
-	timestamp: DateTime
-	storageCharge: BigInt
-	computationCharge: BigInt
-	storageRebate: BigInt
-	epoch: Epoch
+	"""
+	The next (to become) epoch.
+	"""
+	epoch: Epoch!
+	"""
+	The protocol version in effect in the new epoch.
+	"""
+	protocolVersion: Int!
+	"""
+	The total amount of gas charged for storage during the previous epoch (in MIST).
+	"""
+	storageCharge: BigInt!
+	"""
+	The total amount of gas charged for computation during the previous epoch (in MIST).
+	"""
+	computationCharge: BigInt!
+	"""
+	The SUI returned to transaction senders for cleaning up objects (in MIST).
+	"""
+	storageRebate: BigInt!
+	"""
+	The total gas retained from storage fees, that will not be returned by storage rebates when
+	the relevant objects are cleaned up (in MIST).
+	"""
+	nonRefundableStorageFee: BigInt!
+	"""
+	Time at which the next epoch will start.
+	"""
+	startTimestamp: DateTime
+	"""
+	System packages (specifically framework and move stdlib) that are written before the new
+	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
+	transaction.
+	"""
+	systemPackageConnection(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 type Checkpoint {
@@ -531,22 +561,22 @@ enum Feature {
 
 type GasCostSummary {
 	"""
-	Gas paid for executing this transaction.
+	Gas paid for executing this transaction (in MIST).
 	"""
 	computationCost: BigInt
 	"""
-	Gas paid for the data stored on-chain by this transaction.
+	Gas paid for the data stored on-chain by this transaction (in MIST).
 	"""
 	storageCost: BigInt
 	"""
 	Part of storage cost that can be reclaimed by cleaning up data created by this transaction
-	(when objects are deleted or an object is modified, whch is treated as a deletion followed
-	by a creation).
+	(when objects are deleted or an object is modified, which is treated as a deletion followed
+	by a creation) (in MIST).
 	"""
 	storageRebate: BigInt
 	"""
 	Part of storage cost that is not reclaimed when data created by this transaction is cleaned
-	up.
+	up (in MIST).
 	"""
 	nonRefundableStorageFee: BigInt
 }
@@ -566,7 +596,8 @@ type GasInput {
 	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
 	"""
-	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+	An unsigned integer specifying the number of native tokens per gas unit this transaction
+	will pay (in MIST).
 	"""
 	gasPrice: BigInt
 	"""
@@ -834,6 +865,35 @@ type MovePackage {
 	"""
 	bcs: Base64
 	asObject: Object!
+}
+
+type MovePackageConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MovePackageEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MovePackage!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MovePackageEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MovePackage!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
