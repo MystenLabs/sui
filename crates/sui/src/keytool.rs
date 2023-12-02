@@ -98,6 +98,7 @@ pub enum KeyToolCommand {
     /// Set an alias for the key with the --alias flag. If no alias is provided,
     /// the tool will automatically generate one.
     Import {
+        /// Sets an alias for this address
         #[clap(long)]
         alias: Option<String>,
         input_string: String,
