@@ -49,6 +49,7 @@ pub trait AccountKeystore: Send + Sync {
     }
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
     fn aliases(&self) -> Vec<&Alias>;
+    fn aliases_mut(&mut self) -> Vec<&mut Alias>;
     fn alias_names(&self) -> Vec<&str> {
         self.aliases()
             .into_iter()
@@ -63,6 +64,12 @@ pub trait AccountKeystore: Send + Sync {
     }
 
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error>;
+
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error>;
 
     fn generate_and_add_new_key(
         &mut self,
@@ -200,6 +207,10 @@ impl AccountKeystore for FileBasedKeystore {
 
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
         self.aliases.iter().collect::<Vec<_>>()
+
+    /// Return an array of `Alias`, consisting of every alias and its corresponding public key.
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
     }
 
     fn keys(&self) -> Vec<PublicKey> {
@@ -230,6 +241,39 @@ impl AccountKeystore for FileBasedKeystore {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
             None => bail!("Cannot find alias for address {address}"),
+        }
+    }
+
+    /// Updates an old alias to the new alias
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        if !self.alias_exists(&old_alias) {
+            bail!("The provided alias {old_alias} does not exist");
+        } else {
+            let new_alias_name = match new_alias {
+                Some(x) => x.to_string(),
+                None => random_name(
+                    &self
+                        .alias_names()
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect::<HashSet<_>>(),
+                ),
+            };
+            for a in self.aliases.values_mut() {
+                if a.alias == old_alias {
+                    let pk = &a.public_key_base64;
+                    *a = Alias {
+                        alias: new_alias_name.clone(),
+                        public_key_base64: pk.clone(),
+                    };
+                }
+            }
+            self.save_aliases()?;
+            Ok(new_alias_name)
         }
     }
 
@@ -479,6 +523,41 @@ impl AccountKeystore for InMemKeystore {
                     .map(|x| x.to_string())
                     .collect::<HashSet<_>>(),
             )),
+        }
+    }
+
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
+    }
+
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        if !self.alias_exists(&old_alias) {
+            bail!("The provided alias {old_alias} does not exist");
+        } else {
+            let new_alias_name = match new_alias {
+                Some(x) => x.to_string(),
+                None => random_name(
+                    &self
+                        .alias_names()
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect::<HashSet<_>>(),
+                ),
+            };
+            for a in self.aliases.values_mut() {
+                if a.alias == old_alias {
+                    let pk = &a.public_key_base64;
+                    *a = Alias {
+                        alias: new_alias_name.clone(),
+                        public_key_base64: pk.clone(),
+                    };
+                }
+            }
+            Ok(new_alias_name)
         }
     }
 }
