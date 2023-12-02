@@ -86,7 +86,7 @@ impl TransactionBlock {
     /// transaction of this kind.
     async fn kind(&self) -> Option<TransactionBlockKind> {
         Some(TransactionBlockKind::from(
-            self.native.transaction_data().kind(),
+            self.native.transaction_data().kind().clone(),
         ))
     }
 
