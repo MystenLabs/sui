@@ -404,7 +404,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 		-e NODE_ENV=production \
 		-e DEBUG=zkLogin:info,jwks \
 		-p PORT2:8080 \
-		<prover-fe-image>
+		<prover-fe-image> 8080
 	```
 
 1. Expose the `prover-fe` service appropriately and keep the prover service internal.
@@ -417,6 +417,8 @@ A few things to note:
 - If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
 
 - Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
+
+- If you are seeing the Error message "Call to rapidsnark service took longer than 15s", consider increasing the timeout by setting the environment variable `PROVER_TIMEOUT` further, e.g., `PROVER_TIMEOUT=30`.
 
 ## Assemble the zkLogin signature and submit the transaction
 
