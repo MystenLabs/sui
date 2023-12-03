@@ -4,8 +4,11 @@
 use std::str::FromStr;
 
 use async_graphql::{connection::Connection, *};
+use fastcrypto::encoding::{Base64, Encoding};
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::{gas_coin::GAS, TypeTag};
+use sui_sdk::SuiClient;
+use sui_types::transaction::{TransactionData, TransactionKind};
 
 use super::{
     address::Address,
@@ -16,6 +19,7 @@ use super::{
     coin_metadata::CoinMetadata,
     cursor::Page,
     digest::Digest,
+    dry_run_result::DryRunResult,
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
@@ -25,17 +29,18 @@ use super::{
     sui_address::SuiAddress,
     suins_registration::{Domain, SuinsRegistration},
     transaction_block::{self, TransactionBlock, TransactionBlockFilter},
+    transaction_meta::TransactionMeta,
     type_filter::ExactTypeFilter,
 };
 use crate::{
-    config::ServiceConfig, context_data::db_data_provider::PgManager, data::Db, error::Error,
+    config::ServiceConfig, context_data::db_data_provider::PgManager, data::Db, deserialize_tx_data, error::Error,
     mutation::Mutation,
 };
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;
 
-#[Object]
+///[Object]
 impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
@@ -62,8 +67,110 @@ impl Query {
     }
 
     // availableRange - pending impl. on IndexerV2
-    // dryRunTransactionBlock
     // coinMetadata
+
+    /// Simulate running a transaction to inspect its effects without
+    /// committing to them on-chain.
+    ///
+    /// `txBytes` either a `TransactionData` struct or a `TransactionKind`
+    ///     struct, BCS-encoded and then Base64-encoded.  The expected
+    ///     type is controlled by the presence or absence of `txMeta`: If
+    ///     present, `txBytes` is assumed to be a `TransactionKind`, if
+    ///     absent, then `TransactionData`.
+    ///
+    /// `txMeta` the data that is missing from a `TransactionKind` to make
+    ///     a `TransactionData` (sender address and gas information).  All
+    ///     its fields are nullable: `sender` defaults to `0x0`, if
+    ///     `gasObjects` is not present, or is an empty list, it is
+    ///     substituted with a mock Coin object, and `gasPrice` defaults to
+    ///     the reference gas price.
+    ///
+    /// `skipChecks` optional flag to disable the usual verification
+    ///     checks that prevent access to objects that are owned by
+    ///     addresses other than the sender, and calling non-public,
+    ///     non-entry functions.  Defaults to false.
+    ///
+    /// `epoch` the epoch to simulate executing the transaction in.
+    ///     Defaults to the current epoch.
+    async fn dry_run_transaction_block(
+        &self,
+        ctx: &Context<'_>,
+        tx_bytes: String,
+        tx_meta: Option<TransactionMeta>,
+        // TODO: this implies existing of `txMeta`
+        skip_checks: Option<bool>,
+        // TODO: why is this u64 but txMeta::gasPrice is BigInt?
+        epoch: Option<u64>,
+    ) -> Result<DryRunResult> {
+        // TODO: how do we want to enforce `tx_meta` and `skip_checks` being (un)set together?
+        if tx_meta.is_some() {
+            match skip_checks {
+                Some(true) => {}
+                _ => {
+                    return Err(Error::Client(
+                        "`skipChecks` must be set to true when `txMeta` is set".to_string(),
+                    ))
+                    .extend();
+                }
+            }
+        }
+        // TODO: whats the point of this
+        let skip_checks = skip_checks.unwrap_or(false);
+
+        let sui_sdk_client: &Option<SuiClient> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Sui SDK client".to_string()))
+            .extend()?;
+        let sui_sdk_client = sui_sdk_client
+            .as_ref()
+            .ok_or_else(|| Error::Internal("Sui SDK client not initialized".to_string()))
+            .extend()?;
+
+        if let Some(TransactionMeta {
+            sender,
+            gas_price,
+            gas_objects, // TODO: None of the SDK functions use this. Gas us auto created.
+        }) = tx_meta
+        {
+            // This implies `TransactionKind`
+            let tx_kind = deserialize_tx_data::<TransactionKind>(tx_bytes)?;
+
+            // Default is 0x0
+            let sender_address =
+                sender.unwrap_or_else(|| SuiAddress::from_array([0; SuiAddress::LENGTH]));
+
+            // Default is the reference gas price which is handled by the sdk internally
+            let gas_price = gas_price
+                .map(|x| x.to_u64())
+                .transpose()
+                // TODO: repr the error without debug? Current doesn't impl Display
+                .map_err(|e| Error::Client(format!("`Unable to parse `gasPrice` to u64: {:?}", e)))
+                .extend()?
+                .map(|x| x.into());
+
+            // Default is the current epoch which is handled by the sdk internally
+            let epoch = epoch.map(|x| x.into());
+
+            let res = sui_sdk_client
+                .read_api()
+                .dev_inspect_transaction_block(sender_address.into(), tx_kind, gas_price, epoch)
+                .await?;
+        } else {
+            // This implies `TransactionData`
+            let tx_data = deserialize_tx_data::<TransactionData>(tx_bytes)?;
+
+            let res = sui_sdk_client
+                .read_api()
+                .dry_run_transaction_block(tx_data)
+                .await
+                // TODO: use proper error type as this could be a client error or internal error
+                // depending on the specific error returned
+                .map_err(|e| Error::Internal(format!("Unable to dry run transaction: {e}")))
+                .extend()?;
+        }
+        // TODO: finish implementing by converint output to DryRunResult
+        unimplemented!("dry_run_transaction_block");
+    }
 
     async fn owner(&self, address: SuiAddress) -> Option<Owner> {
         Some(Owner { address })

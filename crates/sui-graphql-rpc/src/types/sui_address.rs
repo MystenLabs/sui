@@ -37,6 +37,8 @@ pub(crate) enum FromVecError {
 }
 
 impl SuiAddress {
+    pub const LENGTH: usize = SUI_ADDRESS_LENGTH;
+
     pub fn from_array(arr: [u8; SUI_ADDRESS_LENGTH]) -> Self {
         SuiAddress(arr)
     }
