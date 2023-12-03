@@ -55,8 +55,8 @@ pub trait AccountKeystore: Send + Sync {
             .map(|a| a.alias.as_str())
             .collect()
     }
+    /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
-
     /// Check if an alias exists by its name
     fn alias_exists(&self, alias: &str) -> bool {
         self.alias_names().contains(&alias)
@@ -225,7 +225,7 @@ impl AccountKeystore for FileBasedKeystore {
         }
     }
 
-    /// Get the alias if it exists, or return an error if it does not exist.
+    /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
@@ -455,7 +455,7 @@ impl AccountKeystore for InMemKeystore {
         }
     }
 
-    /// Get an alias by its address
+    /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
