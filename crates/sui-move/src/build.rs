@@ -103,7 +103,11 @@ pub fn resolve_lock_file_path(
     mut build_config: MoveBuildConfig,
     package_path: Option<PathBuf>,
 ) -> Result<MoveBuildConfig, anyhow::Error> {
+    if build_config.lock_file.is_some() {
+        println!("lock file is already some: {:#?}", build_config.lock_file);
+    }
     if build_config.lock_file.is_none() {
+        println!("lock file is none, resolving...");
         let package_root = base::reroot_path(package_path)?;
         let lock_file_path = package_root.join("Move.lock");
         build_config.lock_file = Some(lock_file_path);

@@ -170,8 +170,15 @@ impl BuildConfig {
         let manifest_string =
             std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        println!(
+            "See pkg {} path {} with lock_string {:#?}",
+            path.display(),
+            SourcePackageLayout::Lock.path().to_string_lossy(),
+            lock_string
+        );
         let _mutx = PackageLock::lock(); // held until function returns
 
+        let other_install_dir = self.install_dir.is_some();
         let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
 
         let mut dep_graph_builder = DependencyGraphBuilder::new(
@@ -186,7 +193,8 @@ impl BuildConfig {
             lock_string,
         )?;
 
-        if modified {
+        if modified || other_install_dir {
+            println!("MODIFIED, WRITING LOCK");
             let lock = dependency_graph.write_to_lock(install_dir)?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
@@ -218,15 +226,18 @@ impl BuildConfig {
             .set_silence_warnings(self.silence_warnings)
     }
 
-    pub fn update_lock_file_toolchain_version(&self, compiler_version: String) -> Result<()> {
+    pub fn update_lock_file_toolchain_version(
+        &self,
+        path: PathBuf,
+        compiler_version: String,
+    ) -> Result<()> {
         let Some(lock_file) = self.lock_file.as_ref() else {
+            // Where does this get set? I think resolve_lock...
+            // Maybe this should get saved to path.
+            println!("no lock_file!! doing nothing...");
             return Ok(());
         };
-        let install_dir = self
-            .install_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("."));
-        let mut lock = LockFile::from(install_dir, lock_file)?;
+        let mut lock = LockFile::from(path, lock_file)?;
         lock.seek(SeekFrom::Start(0))?;
         update_compiler_toolchain(
             &mut lock,

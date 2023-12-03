@@ -188,14 +188,27 @@ impl BuildConfig {
         let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
-        let resolution_graph = self.resolution_graph(&path)?;
-        build_from_resolution_graph(
-            path,
+        let resolution_graph = self.clone().resolution_graph(&path)?;
+        let result = build_from_resolution_graph(
+            path.clone(),
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
             lint,
-        )
+        );
+        if let Ok(ref compiled) = result {
+            let path = self.config.install_dir.as_ref().unwrap_or(&path).to_owned();
+            println!("sending down path {}", path.display());
+            compiled
+                .package
+                .compiled_package_info
+                .build_flags
+                .update_lock_file_toolchain_version(path, env!("CARGO_PKG_VERSION").into())
+                .map_err(|e| SuiError::ModuleBuildFailure {
+                    error: format!("Failed to update Move.lock toolchain version: {e}"),
+                })?;
+        }
+        result
     }
 
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
