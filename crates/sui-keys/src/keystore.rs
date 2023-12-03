@@ -115,8 +115,8 @@ impl Display for Keystore {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Alias {
-    pub alias: String,
-    pub public_key_base64: String,
+    alias: String,
+    public_key_base64: String,
 }
 
 #[derive(Default)]
