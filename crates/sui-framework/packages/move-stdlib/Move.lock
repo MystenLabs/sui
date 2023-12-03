@@ -2,3 +2,10 @@
 
 [move]
 version = 0
+manifest_digest = "3FF3771B6F639B5D249A1D55EF826B1F6D5CC7C85A69CED739AF49E6B3CAAE71"
+deps_digest = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+
+[move.toolchain-version]
+compiler-version = "1.16.0"
+edition = "legacy"
+flavor = "sui"
