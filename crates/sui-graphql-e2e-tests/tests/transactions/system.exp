@@ -988,7 +988,7 @@ Response: {
 task 3 'create-checkpoint'. lines 94-94:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 96-164:
+task 4 'run-graphql'. lines 96-165:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -1015,7 +1015,8 @@ Response: {
               "epochId": 0
             },
             "round": 0,
-            "timestamp": "1970-01-01T00:00:42Z"
+            "commitTimestamp": "1970-01-01T00:00:42Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
           },
           "effects": {
             "status": "SUCCESS",
@@ -1065,10 +1066,10 @@ Response: {
   }
 }
 
-task 6 'advance-epoch'. lines 168-168:
+task 6 'advance-epoch'. lines 169-169:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 170-239:
+task 7 'run-graphql'. lines 171-240:
 Response: {
   "data": {
     "transactionBlockConnection": {

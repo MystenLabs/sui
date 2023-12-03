@@ -1252,12 +1252,13 @@
 >      kind {
 >        __typename
 >        ... on ConsensusCommitPrologueTransaction {
->          timestamp
->          round
 >          epoch {
 >            epochId
 >            referenceGasPrice
 >          }
+>          round
+>          commitTimestamp
+>          consensusCommitDigest
 >        }
 >        ... on ChangeEpochTransaction {
 >          computationCharge
