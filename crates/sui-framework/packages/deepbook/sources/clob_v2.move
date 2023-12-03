@@ -981,17 +981,7 @@ module deepbook::clob_v2 {
 
                 if (maker_order.expire_timestamp <= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                     skip_order = true;
-                    let (is_round_down, maker_quote_quantity) = clob_math::unsafe_mul_round(maker_order.quantity, maker_order.price);
-                    // If a bit is rounded down, the pool will take this as a fee.
-                    if (is_round_down) {
-                        let rounded_down_quantity = custodian::decrease_user_locked_balance<QuoteAsset>(
-                            &mut pool.quote_custodian,
-                            maker_order.owner,
-                            1
-                        );                            
-                        balance::join(&mut pool.quote_asset_trading_fees, rounded_down_quantity);
-                    };
-
+                    let maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                     custodian::unlock_balance(&mut pool.quote_custodian, maker_order.owner, maker_quote_quantity);
                     let canceled_order_event = AllOrdersCanceledComponent<BaseAsset, QuoteAsset> {
                         client_order_id: maker_order.client_order_id,
