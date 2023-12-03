@@ -1,0 +1,40 @@
+class Sui < Formula
+  desc "Sui CLI install"
+  homepage "https://docs.sui.io"
+  version "{{ release_version }}"
+  license "Apache-2.0"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/MystenLabs/sui/releases/download/mainnet-{{ release_version }}/sui-mainnet-{{ release_version }}-macos-arm64.tgz"
+      sha256 "{{ macos_arm_sha256 }}"
+
+      def install
+        bin.install "target/release/sui-macos-arm64" => "sui"
+      end
+    end
+    if Hardware::CPU.intel?
+      url "https://github.com/MystenLabs/sui/releases/download/mainnet-{{ release_version }}/sui-mainnet-{{ release_version }}-macos-x86_64.tgz"
+      sha256 "{{ macos_intel_sha256 }}"
+
+      def install
+        bin.install "target/release/sui-macos-x86_64" => "sui"
+      end
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+      url "https://github.com/MystenLabs/sui/releases/download/mainnet-{{ release_version }}/sui-mainnet-{{ release_version }}-ubuntu-x86_64.tgz"
+      sha256 "{{ linux_sha256 }}"
+
+      def install
+        bin.install "target/release/sui-ubuntu-x86_64" => "sui"
+      end
+    end
+  end
+
+  test do
+    system "#{bin}/sui --version"
+  end 
+end

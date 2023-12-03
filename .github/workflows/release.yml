@@ -109,6 +109,13 @@ jobs:
           mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
           tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
           [[ ${{ env.sui_tag }} == *"mainnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
+      #     sha256sum target/release/sui-${{ env.sui_tag }}-${os_type}.tgz > sui-${{ env.sui_tag }}-${os_type}.sha256
+
+      # - name: Upload SHA256 checksums as artifact
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     name: sha256-${{ matrix.os }}
+      #     path: sui-${{ env.sui_tag }}-${{ matrix.os }}.sha256
 
       - name: Rename binaries for Windows
         if: ${{ env.sui_tag != 'main' && matrix.os == 'windows-ghcloud' }}
@@ -143,3 +150,90 @@ jobs:
           tag_name: ${{ env.sui_tag }}
           files: |
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+
+  update-formula:
+    needs: release-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Clean up tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: | 
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+
+      # Download all artifacts from the previous job
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
+        shell: bash
+        run: |
+          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud)" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-latest-xl)" >> $GITHUB_ENV
+          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-arm64-self-hosted)" >> $GITHUB_ENV
+          
+    # Install Jinja2 for templating
+      - name: Install Jinja2
+        run: pip install jinja2
+
+      - name: Apply Jinja2 Template and Update Formula
+        run: |
+          python3 - <<EOF
+          import jinja2
+          import os
+
+          # Load the template
+          template_loader = jinja2.FileSystemLoader(searchpath="./nre/homebrew")
+          template_env = jinja2.Environment(loader=template_loader)
+          template = template_env.get_template("sui.rb.j2")
+
+          version = "${{ env.sui_tag }}"
+
+          # Render the template with variables
+          output = template.render(
+              version=version,
+              linux_sha256=${sha256_ubuntu_release},
+              macos_intel_sha256=${sha256_macos_x86_release},
+              macos_arm_sha256=${sha256_macos_arm_release}
+          )
+
+          # Write the output to the formula file
+          with open("sui.rb", "w") as file:
+            file.write(output)
+          EOF
+
+
+      # Upload the updated formula file as an artifact
+      - name: Upload Formula as Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: updated-formula
+          path: sui.rb
+
+      # Checkout Target Repository
+      - name: Checkout Target Repository
+        uses: actions/checkout@v2
+        with:
+          repository: mystenlabs/homebrew-tap
+          token: ${{ secrets.TARGET_REPO_TOKEN }}
+          path: homebrew-tap
+
+      # Download the artifact in the target repository
+      - name: Download Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: updated-formula
+          path: homebrew-tap/Formula
+
+      # Commit and Push to Target Repository
+      - name: Commit and Push to Target Repository
+        uses: github-actions-x/commit@v2.9
+        with:
+          github-token: ${{ secrets.TARGET_REPO_TOKEN }}
+          commit-message: "Update Homebrew formula for new release"
+          files: homebrew-mylocaltap/Formula/sui.rb
+          repository: mystenlabs/homebrew-tap
+          branch: main  # or your target branch
+>>>>>>> d43e16997d (initial prototype for auto-updating homebrew tap)
