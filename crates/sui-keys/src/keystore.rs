@@ -250,7 +250,7 @@ impl AccountKeystore for FileBasedKeystore {
         old_alias: &str,
         new_alias: Option<&str>,
     ) -> Result<String, anyhow::Error> {
-        if !self.alias_exists(&old_alias) {
+        if !self.alias_exists(old_alias) {
             bail!("The provided alias {old_alias} does not exist");
         } else {
             let new_alias_name = match new_alias {
@@ -535,7 +535,7 @@ impl AccountKeystore for InMemKeystore {
         old_alias: &str,
         new_alias: Option<&str>,
     ) -> Result<String, anyhow::Error> {
-        if !self.alias_exists(&old_alias) {
+        if !self.alias_exists(old_alias) {
             bail!("The provided alias {old_alias} does not exist");
         } else {
             let new_alias_name = match new_alias {

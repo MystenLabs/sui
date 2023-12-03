@@ -442,8 +442,12 @@ impl KeyToolCommand {
                         let old_alias = update.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?; 
                         let new_alias = update.get(1).ok_or_else(|| anyhow!("Expected the new alias, but did not get any value."))?; 
                         keystore.update_alias(old_alias, Some(new_alias))?;
-                        CommandOutput::Alias(AliasUpdate { old_alias: old_alias.to_string() , new_alias: new_alias.to_string()  })
-                         
+                        CommandOutput::Alias(
+                            AliasUpdate {
+                                old_alias: old_alias.to_string(),
+                                new_alias: new_alias.to_string()
+                            }
+                        )
                     },
                    _ => bail!("The command expects only an old and a new alias name, but instead got {} inputs", update.len())
                 }
@@ -1104,8 +1108,8 @@ impl Display for CommandOutput {
         match self {
             CommandOutput::Alias(update) => {
                 write!(
-                    formatter, 
-                    "Old alias {} was updated to {}", 
+                    formatter,
+                    "Old alias {} was updated to {}",
                     update.old_alias, update.new_alias
                 )
             }
