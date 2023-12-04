@@ -1,6 +1,68 @@
 ---
-title: Certification Overview
+title: Transaction Certification and Finality
 draft: true
 ---
 
-Content coming soon
+This article discusses what **transaction finality** means in Sui's context and how it is achieved.
+
+Sui blockchain has deterministic finality - once a transaction is finalized, it cannot be reverted, without a hard fork. But what defines "finality"? To answer this question, let's first look at a transaction's lifetime on Sui.
+
+Alice wants to pay the local coffee shop 10 SUI for her morning coffee. How can the coffee shop be sure that the payment is done for good and Alice can take her coffee?
+
+
+# A Transaction's Lifetime
+
+## The Path to `Effects Certificate`
+
+** 1. Transaction Creation **
+
+Alice opens the wallet App on her phone, scans coffee shop's QR code that contains the recipient address. The wallet App constructs a transaction that transfers 10 Sui from Alice's address to the coffee shop's address. Alice reviews the transaction details and approves it. The wallet App then signs the transaction with Alice's private key. Now Alice has a signed transaction.
+
+** 2. Transaction Broadcast **
+
+Alice's wallet App submits the signed transaction to a Fullnode. The Fullnode broadcasts the transaction to all validators in the network.
+
+** 3. Transaction Certification **
+
+Validators receive the transaction from the Fullnode. After examining its validity, a validator will lock the referenced owned objects, and return its signature of the transaction to the Fullnode.
+
+Once the Fullnode collects a quorum of signatures (i.e. 2/3 by stakes), a `Transaction Certificate` is formed. The `Transaction Certificate` contains the transaction and signatures from at least 2/3 of validators stakes.
+
+** 4. Transaction Finalization **
+
+The Fullnode broadcasts the `Transaction Certificate` to all validators. Validators receive the `Transaction Certificate`, verify its validity (for example, there are indeed >= 2/3 staked signatures), execute the transaction, and unlock the previously locked owned objects. `Transaction Effects` is the output of an executed transaction. Validators sign `Transaction Effects and return it to the Fullnode, along with their signatures.
+
+The Fullnode checks effects returned from valdiators are identical. Once it collects a quorum of signatures, an `Effects Certificate` is formed. The `Effects Certificate` contains the `Transaction Effects` and signatures from at least 2/3 of validators stakes.
+
+At this point, as Alice's wallet App gets back the `Effects Certificate` from Fullnode, she could share this `Effect Certified Transaction` with the coffee shop. The coffee shop can then be sure that the transaction is executed and irreversible.
+
+
+## Checkpoint
+
+Above we present how a transaction gets finalized through an `Effects Certificate`. As you can see, Fullnode plays the quorum driving role in this process.
+
+What if the Fullnode goes offline before it collects a quorum of validator-signed effects? Alice's wallet App will probably retry the process with a different Fullnode. Unfortunately Alice's phone runs out of battery before it sends the signed transaction to a new Fullnode.
+
+Don't worry! The coffee shop shortly notices Alice's payment coming in in its terminal, connected to a different Fullnode. This Fullnode learns about Alice's transaction through `Checkpoints`.
+
+A `Checkpoint` contains a list of transactions. If a transaction appears in a `Certified checkpoint` (i.e. a checkpoint that has been signed by at least 2/3 of validator stakes), it is considered finalized.
+
+To give a highly simplified overview of checkpointing: Validators submit `Transaction Certificate` they received to the consensus engine (e.g. Narwhal). The consensus engine outputs a deterministic sequence of such transactions. Periodically, validators wrap up all transactions they have seen in this time window, and construct a `Checkpoint`. They sign the `Checkpoint` and submit the signature to the consensus engine. For each checkpoint, after a quorum of validators's checkpoint signatures are sequenced in the consensus engine, the `Checkpoint` is considered Certified. A `Certified Checkpoint` is then broadcasted to all validator and connected Fullnode through a process called `State Sync`.
+
+The Fullnode that coffee shop's terminal connects to knows about Alice's transaction through `State Sync`. In this case, as long as one validator receives the `Transaction Certificate` from Alice's original Fullnode, the transaction will highly likely finalize even without an `Effects Certificate`. The coffee shop can then safely give Alice her coffee.
+
+
+## Epoch Change
+
+Periodically (as of writing, 24 hours), Sui network enters the process of `Epoch Change`. During `Epoch Change`, staking rewards are calculated and distributed, validators metadata take effects, so on and so forth. All user transactions will be delayed until the new epoch begins.
+
+If Alice's transaction is submitted at epoch boundary, in a perfect timing, it is possible that a quorum of validators already decided to not accept any new `Transaction Certificate` in this epoch. Of course this transaction will not be checkpointed either. For any transactions that are certified but not finalized, they are reverted if executed, or its owned objects are unlocked in not yet executed. In this case, `Transaction Certificate` does not guarantee finality. In the new epoch, this `Transaction Certificate` will become void because validator signatures are signed over Epoch ID. To continue this transaction, a new `Transaction Certificate` is necessary with the new Epoch ID. The standard Fullnode implementation handles this automatically.
+
+# Finality
+Now we have a better understanding of how a transaction gets certified and finalized. Let's summarize:
+
+1. A `Transaction Certificate` does not always guaranteed finality, even though it's highly likely. Specifically, a `Transaction Certificate` may become void after an `Epoch Change`.
+
+2. An `Effects Certificate` guarantees fianlity - it takes at least a quorum of validators to execute the transaction and commit to the effects.
+
+3. An inclusion in `Certified Checkpoint` guarantees finality - it takes at least a quorum of validators to certify the checkpoint, in which every transaction is executed and effects-committed.
