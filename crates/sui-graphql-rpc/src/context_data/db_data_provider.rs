@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::{CursorBound, GenericQueryBuilder, SortOrder};
+use super::db_backend::{CursorBound, GenericQueryBuilder, OrderBy};
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -130,22 +130,22 @@ pub(crate) struct CursorBounds<T> {
 }
 
 impl<T> CursorBounds<T> {
-    pub(crate) fn new(sort_order: SortOrder, before: Option<T>, after: Option<T>) -> Self {
+    pub(crate) fn new(order_by: OrderBy, before: Option<T>, after: Option<T>) -> Self {
         Self {
-            after: after.map(|a| match sort_order {
-                SortOrder::Asc => CursorBound::Gt(a),
-                SortOrder::Desc => CursorBound::Lt(a),
+            after: after.map(|a| match order_by {
+                OrderBy::Asc => CursorBound::Gt(a),
+                OrderBy::Desc => CursorBound::Lt(a),
             }),
-            before: before.map(|b| match sort_order {
-                SortOrder::Asc => CursorBound::Lt(b),
-                SortOrder::Desc => CursorBound::Gt(b),
+            before: before.map(|b| match order_by {
+                OrderBy::Asc => CursorBound::Lt(b),
+                OrderBy::Desc => CursorBound::Gt(b),
             }),
         }
     }
 }
 
 pub(crate) struct PaginationParams<T> {
-    pub sort_order: SortOrder,
+    pub order_by: OrderBy,
     pub before: Option<CursorBound<T>>,
     pub after: Option<CursorBound<T>>,
     pub requires_invert: bool,
@@ -159,23 +159,23 @@ impl<T> PaginationParams<T> {
     /// and the pagination logic for 'before' and 'after' cursors.
     /// A query defaults to 'first' if neither 'first' nor 'last' is provided.
     pub(crate) fn new(
-        sort_order: Option<SortOrder>,
+        order_by: Option<OrderBy>,
         first: Option<u64>,
         after: Option<T>,
         last: Option<u64>,
         before: Option<T>,
     ) -> Self {
-        let sort_order = sort_order.unwrap_or(SortOrder::Asc);
-        let (new_sort_order, requires_invert) = match (first, last) {
-            (None, Some(_)) => (sort_order.invert(), true),
-            _ => (sort_order, false),
+        let order_by = order_by.unwrap_or(OrderBy::Asc);
+        let (new_order_by, requires_invert) = match (first, last) {
+            (None, Some(_)) => (order_by.invert(), true),
+            _ => (order_by, false),
         };
 
-        // Note that we use the original sort_order - the cursor bounding logic is consistent with 'first' queries
-        let cursors = CursorBounds::new(sort_order, before, after);
+        // Note that we use the original order_by - the cursor bounding logic is consistent with 'first' queries
+        let cursors = CursorBounds::new(order_by, before, after);
 
         PaginationParams {
-            sort_order: new_sort_order,
+            order_by: new_order_by,
             requires_invert,
             before: cursors.before,
             after: cursors.after,
@@ -487,7 +487,7 @@ impl PgManager {
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
-                        pagination_params.sort_order,
+                        pagination_params.order_by,
                         pagination_params.before,
                         pagination_params.after,
                         limit,

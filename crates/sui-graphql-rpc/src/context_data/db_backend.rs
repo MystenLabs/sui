@@ -26,16 +26,16 @@ pub(crate) enum CursorBound<T> {
 /// Controls whether the query is in ascending or descending order.
 #[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq)]
-pub(crate) enum SortOrder {
+pub(crate) enum OrderBy {
     Asc,
     Desc,
 }
 
-impl SortOrder {
+impl OrderBy {
     pub fn invert(&self) -> Self {
         match self {
-            SortOrder::Asc => SortOrder::Desc,
-            SortOrder::Desc => SortOrder::Asc,
+            OrderBy::Asc => OrderBy::Desc,
+            OrderBy::Desc => OrderBy::Asc,
         }
     }
 }
@@ -88,7 +88,7 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
-        sort_order: SortOrder,
+        order_by: OrderBy,
         before: Option<CursorBound<i64>>,
         after: Option<CursorBound<i64>>,
         limit: i64,

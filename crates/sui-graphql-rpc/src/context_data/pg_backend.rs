@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{BalanceQuery, CursorBound, Explain, Explained, GenericQueryBuilder, SortOrder},
+    db_backend::{BalanceQuery, CursorBound, Explain, Explained, GenericQueryBuilder, OrderBy},
     db_data_provider::DbValidationError,
 };
 use crate::context_data::db_data_provider::PgManager;
@@ -336,7 +336,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
     fn multi_get_checkpoints(
-        sort_order: SortOrder,
+        order_by: OrderBy,
         before: Option<CursorBound<i64>>,
         after: Option<CursorBound<i64>>,
         limit: i64,
@@ -345,11 +345,11 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
         // TODO (wlmyng): Reduce redundancy when other multi-gets are refactored
-        match sort_order {
-            SortOrder::Asc => {
+        match order_by {
+            OrderBy::Asc => {
                 query = query.order(checkpoints::dsl::sequence_number.asc());
             }
-            SortOrder::Desc => {
+            OrderBy::Desc => {
                 query = query.order(checkpoints::dsl::sequence_number.desc());
             }
         }
