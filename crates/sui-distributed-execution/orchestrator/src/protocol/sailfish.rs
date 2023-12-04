@@ -112,7 +112,7 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
         let genesis = [
             &format!("{RUST_FLAGS} cargo run {CARGO_FLAGS} --bin {} --", Self::BIN_NAME),
             "genesis",
-            &format!("--ips {ips} --working-directory {working_directory} --sequence-workers {sequence_workers}"),
+            &format!("--ips {ips} --working-directory {working_directory} --sequence-workers {sequence_workers} --duration {} --tx-count {}", parameters.duration.as_secs(), parameters.load),
         ]
         .join(" ");
 
