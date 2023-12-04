@@ -8,7 +8,7 @@ type Address implements ObjectOwner {
 	supports additional `AddressTransactionBlockRelationship` filter
 	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
-	location: SuiAddress!
+	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
@@ -1038,7 +1038,7 @@ type Object implements ObjectOwner {
 	"""
 	The address of the object, named as such to avoid conflict with the address type.
 	"""
-	location: SuiAddress!
+	address: SuiAddress!
 	"""
 	The objects owned by this object
 	"""
@@ -1157,7 +1157,7 @@ enum ObjectKind {
 }
 
 interface ObjectOwner {
-	location: SuiAddress!
+	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
@@ -1212,7 +1212,7 @@ scalar OpenMoveTypeSignature
 type Owner implements ObjectOwner {
 	asAddress: Address
 	asObject: Object
-	location: SuiAddress!
+	address: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection

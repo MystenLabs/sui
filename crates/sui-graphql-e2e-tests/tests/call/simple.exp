@@ -93,7 +93,7 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0xa41de1be45f48fcdec134a792e4714bcc14de5f418ea3053bccc701b345902bb",
+              "address": "0xa41de1be45f48fcdec134a792e4714bcc14de5f418ea3053bccc701b345902bb",
               "digest": "2JxCFjuhFUtJ1beNXvJ92mn7U4FhNYmz7W6ovzvtY4Aa",
               "kind": "OWNED"
             }
@@ -117,7 +117,7 @@ Response: {
         "edges": [
           {
             "node": {
-              "location": "0xa41de1be45f48fcdec134a792e4714bcc14de5f418ea3053bccc701b345902bb",
+              "address": "0xa41de1be45f48fcdec134a792e4714bcc14de5f418ea3053bccc701b345902bb",
               "digest": "2JxCFjuhFUtJ1beNXvJ92mn7U4FhNYmz7W6ovzvtY4Aa",
               "kind": "OWNED"
             }
@@ -128,7 +128,7 @@ Response: {
     "object": {
       "version": 3,
       "owner": {
-        "location": "0x0000000000000000000000000000000000000000000000000000000000000042"
+        "address": "0x0000000000000000000000000000000000000000000000000000000000000042"
       }
     }
   }

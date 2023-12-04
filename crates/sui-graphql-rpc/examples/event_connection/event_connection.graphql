@@ -17,7 +17,7 @@
         repr
       }
       senders {
-        location
+        address
       }
       timestamp
       json

@@ -8,7 +8,7 @@ Response: {
         {
           "digest": "4maneZK422m9xLj5tELwFN3tSm1ZxA33hnM9dwffH6eb",
           "sender": {
-            "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
           },
           "signatures": [
             {
@@ -17,7 +17,7 @@ Response: {
           ],
           "gasInput": {
             "gasSponsor": {
-              "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
+              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
             },
             "gasPayment": {
               "nodes": []
@@ -54,7 +54,7 @@ Response: {
             "balanceChanges": [
               {
                 "owner": {
-                  "location": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+                  "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
                 },
                 "amount": "30000000000000000",
                 "coinType": {
@@ -63,7 +63,7 @@ Response: {
               },
               {
                 "owner": {
-                  "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                  "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
                 },
                 "amount": "300000000000000",
                 "coinType": {
@@ -76,7 +76,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
                   "digest": "D9yXqTeF1PAiqQ1zX9gpGwmWgbeMFMGamriW1CEovGC2"
                 }
               },
@@ -84,7 +84,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
                   "digest": "2PYZiqsDBxeWhAhg26R5eoyYJ2y2Bt5XGsnsPkYK7vov"
                 }
               },
@@ -92,7 +92,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
                   "digest": "2AYpTBk67n4uTYDaDF8uyZDke5kCZrXMT1diUyGEFgMd"
                 }
               },
@@ -100,7 +100,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
                   "digest": "Fbs9xTgJLwdzFGSEu17p7qNaLUh9wt6STq1c7JMwHXu2"
                 }
               },
@@ -108,7 +108,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
                   "digest": "5u3dDLwHFDAiAWqQ7N1dBFTp6PQogQQDGpadfH2vnAPD"
                 }
               },
@@ -116,7 +116,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
                   "digest": "6Bp2GNWJ399ASaijQXBRpyrWzZroA6L6Qvfn4sKdb4dK"
                 }
               },
@@ -124,7 +124,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
                   "digest": "Aozs5c9Jdzjw84wWJwTsx4qhHNpKPxu65shFk8kCqdh8"
                 }
               },
@@ -132,7 +132,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
+                  "address": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
                   "digest": "7GF3CdHc81pYQrAqUrsTFGzRCmDgL5tyRqYnLRLasAny"
                 }
               },
@@ -140,7 +140,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
+                  "address": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
                   "digest": "7Y5d6M2GrYhP3e2JcNgTG6N8Wc1Pm53Z4oiUgPz3NxZP"
                 }
               },
@@ -148,7 +148,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
+                  "address": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
                   "digest": "J4M3Q388RyXbxeXTLaEQcMg8QZ8MDt7Rrdjno3igw7Ks"
                 }
               },
@@ -156,7 +156,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
+                  "address": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
                   "digest": "Av6g3RLoBZFr6PyhsybmGcLmCVHDy4Qpmf9MAGTCaj9J"
                 }
               },
@@ -164,7 +164,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
+                  "address": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
                   "digest": "41iE6FBdnBT9CzcuTR8WP5c8Cc25FsZD2U3xjf7CxGux"
                 }
               },
@@ -172,7 +172,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                   "digest": "ExoYB29XiSTs8ksC7x7iosCUjoBgrptsaxsuKMY89Rax"
                 }
               },
@@ -180,7 +180,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
+                  "address": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
                   "digest": "2bihrqoXQTFnobTwuimkwewqVvC1UW4nbE2dwDpySHyS"
                 }
               },
@@ -188,7 +188,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                  "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
                   "digest": "FuAt8Ny31MyewmKqhEm1tJEbF13dh97nEKwVUpKtxV7Z"
                 }
               },
@@ -196,7 +196,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                  "address": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
                   "digest": "2MDvpPWZ39nzPCxX5qFnJQLcR9YFuE6jgY9vBjRznpmB"
                 }
               }
@@ -239,7 +239,7 @@ Response: {
         {
           "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn",
           "sender": {
-            "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
           },
           "signatures": [
             {
@@ -248,7 +248,7 @@ Response: {
           ],
           "gasInput": {
             "gasSponsor": {
-              "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
+              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
             },
             "gasPayment": {
               "nodes": []
@@ -279,7 +279,7 @@ Response: {
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
                   "digest": "28w3Mp2x4vt94bq4TejrbLcfMsMaevDyPz6h98sgcnw4"
                 }
               }
@@ -322,7 +322,7 @@ Response: {
         {
           "digest": "fvUnamxVj1m1M4DZ8dryuzqrjYRvLDHNjexNwxc6HA7",
           "sender": {
-            "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
           },
           "signatures": [
             {
@@ -331,7 +331,7 @@ Response: {
           ],
           "gasInput": {
             "gasSponsor": {
-              "location": "0x0000000000000000000000000000000000000000000000000000000000000000"
+              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
             },
             "gasPayment": {
               "nodes": []
@@ -364,7 +364,7 @@ Response: {
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
                   "digest": "5jzahJer9cg4yJaBZhjpEAbLtzHcKguzMtFBc1poL5fS"
                 }
               },
@@ -372,7 +372,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x19d32e729fa9b502bb1c9cd043465a42d341d75aa952be050355b94918530bd7",
+                  "address": "0x19d32e729fa9b502bb1c9cd043465a42d341d75aa952be050355b94918530bd7",
                   "digest": "8mEa8WX4KAN54tQ8QeTeiKeDE9YWKtxV5wD9ArYyif3q"
                 }
               },
@@ -380,7 +380,7 @@ Response: {
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
-                  "location": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
+                  "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
                   "digest": "4t3qXxnURzPoMNEYZVeCtdGnj7jKbSLRa6aDRuVeUgiW"
                 }
               },

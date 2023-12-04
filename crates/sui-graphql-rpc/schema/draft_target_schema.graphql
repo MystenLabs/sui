@@ -387,7 +387,7 @@ enum Feature {
 }
 
 interface IOwner {
-  location: SuiAddress!
+  address: SuiAddress!
 
   objectConnection(
     first: Int,

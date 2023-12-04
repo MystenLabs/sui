@@ -2,15 +2,15 @@
 {
   transactionBlock(digest: "HvTjk3ELg8gRofmB1GgrpLHBFeA53QKmUKGEuhuypezg") {
     sender {
-      location
+      address
     }
     gasInput {
       gasSponsor {
-        location
+        address
       }
       gasPayment {
         nodes {
-          location
+          address
         }
       }
       gasPrice

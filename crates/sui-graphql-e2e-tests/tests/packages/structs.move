@@ -63,7 +63,7 @@ module P0::m {
 # a reference for when we run the same transaction against the
 # upgraded package.
 fragment Structs on Object {
-    location
+    address
     asMovePackage {
         module(name: "m") {
             struct(name: "S") {
@@ -115,7 +115,7 @@ module P1::m {
 # see the IDs of types as they appear in the new package -- they will
 # all be the runtime ID.
 fragment FullStruct on MoveStruct {
-    module { package { asObject { location } } }
+    module { package { asObject { address } } }
     name
     abilities
     typeParameters {
@@ -132,7 +132,7 @@ fragment FullStruct on MoveStruct {
 }
 
 fragment Structs on Object {
-    location
+    address
     asMovePackage {
         module(name: "m") {
             s: struct(name: "S") { ...FullStruct }

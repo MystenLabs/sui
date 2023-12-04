@@ -11,12 +11,12 @@
         node {
           digest
           sender {
-            location
+            address
           }
           effects {
             gasEffects {
               gasObject {
-                location
+                address
               }
             }
           }

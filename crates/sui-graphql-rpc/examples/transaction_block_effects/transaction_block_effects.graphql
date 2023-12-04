@@ -21,7 +21,7 @@
         }
         balanceChanges {
           owner {
-            location
+            address
             balance(type: "0x2::sui::SUI") {
               totalBalance
             }
@@ -35,7 +35,7 @@
         }
         dependencies {
           sender {
-            location
+            address
           }
         }
       }

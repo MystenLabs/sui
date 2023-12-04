@@ -18,19 +18,19 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                  "address": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f",
+                  "address": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f",
                   "asMovePackage": {
                     "module": {
                       "name": "m",
                       "package": {
                         "asObject": {
-                          "location": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f"
+                          "address": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f"
                         }
                       },
                       "fileFormatVersion": 6,
@@ -58,13 +58,13 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                  "address": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f",
+                  "address": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f",
                   "asMovePackage": {
                     "all": {
                       "nodes": [
@@ -132,13 +132,13 @@ Response: {
             "objectChanges": [
               {
                 "outputState": {
-                  "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                  "address": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
                   "asMovePackage": null
                 }
               },
               {
                 "outputState": {
-                  "location": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f",
+                  "address": "0x2a57a73b21597daafca2956736cfc004e55743c3f44a73e0d949fca0756a014f",
                   "asMovePackage": {
                     "prefix": {
                       "nodes": [

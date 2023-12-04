@@ -134,7 +134,7 @@ impl Object {
     // =========== Owner interface methods =============
 
     /// The address of the object, named as such to avoid conflict with the address type.
-    pub async fn location(&self) -> SuiAddress {
+    pub async fn address(&self) -> SuiAddress {
         self.address
     }
 

@@ -11,12 +11,12 @@
             cursor
             node {
               sender {
-                location
+                address
               }
               effects {
                 gasEffects {
                   gasObject {
-                    location
+                    address
                   }
                 }
               }
