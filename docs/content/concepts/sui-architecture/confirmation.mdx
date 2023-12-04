@@ -24,7 +24,7 @@ Going back to Alice's rainy day example, her wallet App crashed during the origi
 
 The wallet App can query the Fullnode with `getTransactionBlock` RPC end point. Assuming the Fullnode is honest:
 * if response contains transaction details, the transaction must have been finalized.
-  * it is either exceuted with `WaitForLocalExecution`, or executed as a checkpointed transaction.
+  * it is either executed with `WaitForLocalExecution`, or executed as a checkpointed transaction.
 * if response is None, it could mean the transaction was dropped on the floor in some step, or is already finalized but this Fullnode does not know yet. In this scenario, the safer option is to resubmit the transaction.
 
 Before a transaction is locally executed, its effects will not be reflected on the Fullnode. Therefore the same thing applies to the coffee shop's Fullnode. Alice's transaction was not submitted through this Fullnode hence it does not have the chance to locally execute it before it being included in a checkpoint. This Fullnode must wait for the transaction to be checkpointed and state synced which normally takes a few seconds. Once the Fullnode receives this transaction in a checkpoint, it will be executed and have effects updated locally, for example the coffee shop's balance.
