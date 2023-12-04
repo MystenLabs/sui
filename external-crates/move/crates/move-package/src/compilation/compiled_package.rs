@@ -13,6 +13,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use colored::Colorize;
+use itertools::{Either, Itertools};
 use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_bytecode_utils::Modules;
@@ -114,6 +115,22 @@ impl CompilationCachingStatus {
     pub fn is_rebuilt(&self) -> bool {
         !self.is_cached()
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum ModuleFormat {
+    Source,
+    Bytecode,
+}
+
+#[derive(Debug, Clone)]
+pub struct DependencyInfo<'a> {
+    pub name: Symbol,
+    pub is_immediate: bool,
+    pub source_paths: Vec<Symbol>,
+    pub address_mapping: &'a ResolvedTable,
+    pub compiler_config: PackageConfig,
+    pub module_format: ModuleFormat,
 }
 
 impl OnDiskCompiledPackage {
@@ -409,13 +426,7 @@ impl CompiledPackage {
         w: &mut W,
         project_root: &Path,
         resolved_package: Package,
-        transitive_dependencies: Vec<(
-            /* name */ Symbol,
-            /* is immediate */ bool,
-            /* source paths */ Vec<Symbol>,
-            /* address mapping */ &ResolvedTable,
-            /* compiler config */ PackageConfig,
-        )>,
+        transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
         mut compiler_driver: impl FnMut(
             Compiler,
@@ -424,24 +435,11 @@ impl CompiledPackage {
     ) -> Result<CompiledPackage> {
         let immediate_dependencies = transitive_dependencies
             .iter()
-            .filter(|(_, is_immediate, _, _, _)| *is_immediate)
-            .map(|(name, _, _, _, _)| *name)
+            .filter(|&dep| dep.is_immediate)
+            .map(|dep| dep.name)
             .collect::<Vec<_>>();
-        let transitive_dependencies = transitive_dependencies
-            .into_iter()
-            .map(
-                |(name, _is_immediate, source_paths, address_mapping, config)| {
-                    (name, source_paths, address_mapping, config)
-                },
-            )
-            .collect::<Vec<_>>();
-        for (dep_package_name, _, _, _) in &transitive_dependencies {
-            writeln!(
-                w,
-                "{} {}",
-                "INCLUDING DEPENDENCY".bold().green(),
-                dep_package_name
-            )?;
+        for dep in &transitive_dependencies {
+            writeln!(w, "{} {}", "INCLUDING DEPENDENCY".bold().green(), dep.name)?;
         }
         let root_package_name = resolved_package.source_package.package.name;
         writeln!(w, "{} {}", "BUILDING".bold().green(), root_package_name)?;
@@ -453,11 +451,30 @@ impl CompiledPackage {
             transitive_dependencies,
         )?;
         let flags = resolution_graph.build_options.compiler_flags();
+        // Partition deps_package according whether src is available
+        let (src_deps, bytecode_deps): (Vec<_>, Vec<_>) = deps_package_paths
+            .clone()
+            .into_iter()
+            .partition_map(|(p, b)| match b {
+                ModuleFormat::Source => Either::Left(p),
+                ModuleFormat::Bytecode => Either::Right(p),
+            });
+        // If bytecode dependency is not empty, do not allow renaming
+        if !bytecode_deps.is_empty() {
+            if let Some(pkg_name) = resolution_graph.contains_renaming() {
+                anyhow::bail!(
+                    "Found address renaming in package '{}' when \
+                    building with bytecode dependencies -- this is currently not supported",
+                    pkg_name
+                )
+            }
+        }
+
         // invoke the compiler
-        let mut paths = deps_package_paths.clone();
+        let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let compiler = Compiler::from_package_paths(paths, vec![])
+        let compiler = Compiler::from_package_paths(paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
@@ -481,7 +498,7 @@ impl CompiledPackage {
         if resolution_graph.build_options.generate_docs {
             let model = run_model_builder_with_options(
                 vec![sources_package_paths],
-                deps_package_paths,
+                deps_package_paths.into_iter().map(|(p, _)| p).collect_vec(),
                 ModelBuilderOptions::default(),
                 None,
             )?;
@@ -711,30 +728,29 @@ pub(crate) fn apply_named_address_renaming(
 pub(crate) fn make_source_and_deps_for_compiler(
     resolution_graph: &ResolvedGraph,
     root: &Package,
-    deps: Vec<(
-        /* name */ Symbol,
-        /* source paths */ Vec<Symbol>,
-        /* address mapping */ &ResolvedTable,
-        /* compiler config */ PackageConfig,
-    )>,
+    deps: Vec<DependencyInfo>,
 ) -> Result<(
     /* sources */ PackagePaths,
-    /* deps */ Vec<PackagePaths>,
+    /* deps */ Vec<(PackagePaths, ModuleFormat)>,
 )> {
     let deps_package_paths = deps
         .into_iter()
-        .map(|(name, source_paths, resolved_table, config)| {
-            let paths = source_paths
+        .map(|dep| {
+            let paths = dep
+                .source_paths
                 .into_iter()
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect::<Vec<_>>();
-            let named_address_map = named_address_mapping_for_compiler(resolved_table);
-            Ok(PackagePaths {
-                name: Some((name, config)),
-                paths,
-                named_address_map,
-            })
+            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
+            Ok((
+                PackagePaths {
+                    name: Some((dep.name, dep.compiler_config)),
+                    paths,
+                    named_address_map,
+                },
+                dep.module_format,
+            ))
         })
         .collect::<Result<Vec<_>>>()?;
     let root_named_addrs = apply_named_address_renaming(

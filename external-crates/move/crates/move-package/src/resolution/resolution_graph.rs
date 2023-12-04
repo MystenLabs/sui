@@ -3,9 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Context, Result};
-use move_command_line_common::files::{find_move_filenames, FileHash};
+use move_command_line_common::files::{
+    extension_equals, find_filenames, find_move_filenames, FileHash, MOVE_COMPILED_EXTENSION,
+};
+use move_compiler::command_line::DEFAULT_OUTPUT_DIR;
 use move_compiler::{diagnostics::WarningFilters, shared::PackageConfig};
 use move_core_types::account_address::AccountAddress;
+use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -300,6 +304,13 @@ impl ResolvedGraph {
             })
             .collect()
     }
+
+    pub fn contains_renaming(&self) -> Option<PackageName> {
+        // Make sure no renamings have been performed
+        self.package_table
+            .iter()
+            .find_map(|(name, pkg)| (!pkg.renaming.is_empty()).then_some(*name))
+    }
 }
 
 impl Package {
@@ -439,6 +450,25 @@ impl Package {
             .into_iter()
             .map(FileName::from)
             .collect())
+    }
+
+    fn get_build_paths(package_path: &Path) -> Result<Vec<PathBuf>> {
+        let mut places_to_look = Vec::new();
+        let path = package_path.join(Path::new(DEFAULT_OUTPUT_DIR));
+        if path.exists() {
+            places_to_look.push(path);
+        }
+        Ok(places_to_look)
+    }
+
+    pub fn get_bytecodes(&self) -> Result<Vec<FileName>> {
+        let path = Package::get_build_paths(&self.package_path)?;
+        Ok(find_filenames(&path, |path| {
+            extension_equals(path, MOVE_COMPILED_EXTENSION)
+        })?
+        .into_iter()
+        .map(Symbol::from)
+        .collect())
     }
 
     pub(crate) fn compiler_config(

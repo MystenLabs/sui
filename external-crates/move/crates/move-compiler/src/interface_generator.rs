@@ -15,6 +15,8 @@ use move_binary_format::{
 use move_core_types::language_storage::ModuleId;
 use std::{collections::BTreeMap, fs};
 
+pub const NATIVE_INTERFACE: &str = "native_interface";
+
 macro_rules! push_line {
     ($s:ident, $e:expr) => {{
         $s = format!("{}{}\n", $s, $e);
@@ -88,6 +90,7 @@ pub fn write_module_to_string(
         members.push(format!("    {}", DISCLAIMER));
     }
     for fdef in externally_visible_funs {
+        members.push(format!(" #[{}]", NATIVE_INTERFACE));
         members.push(write_function_def(&mut context, fdef));
     }
     if has_externally_visible_funs {
