@@ -143,6 +143,3 @@ jobs:
           tag_name: ${{ env.sui_tag }}
           files: |
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
-        env:
-          # Have to use a Personal Access Token (PAT), based on https://tinyurl.com/2by2ntdr
-          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_BUILDS_TOKEN }}
