@@ -555,14 +555,10 @@ impl KeyToolCommand {
                     .into_iter()
                     .map(|pk| {
                         let mut key = Key::from(pk);
-                        let alias = keystore.get_alias_by_address(&key.sui_address);
-                        alias.map(|x| {
-                            key.alias = Some(x);
-                            key
-                        })
+                        key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
+                        key
                     })
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| anyhow!("Internal error: {e}"))?;
+                    .collect();
                 CommandOutput::List(keys)
             }
 
