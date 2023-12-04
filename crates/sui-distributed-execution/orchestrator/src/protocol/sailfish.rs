@@ -151,10 +151,11 @@ impl ProtocolCommands<SailfishBenchmarkType> for SailfishProtocol {
                     ),
                     "run",
                     &format!(
-                        "--id {id} --config-path {} --tx-count {} --duration {}",
+                        "--id {id} --config-path {} --tx-count {} --duration {} --working-directory {}",
                         config_path.display(),
                         parameters.load,
-                        parameters.duration.as_secs()
+                        parameters.duration.as_secs(),
+                        self.working_dir.display(),
                     ),
                 ]
                 .join(" ");
