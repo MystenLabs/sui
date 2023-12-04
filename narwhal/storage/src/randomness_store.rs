@@ -136,11 +136,11 @@ impl RandomnessStore {
             .collect()
     }
 
-    pub fn set_dkg_output(&self, dkg_output: dkg::Output<PkG, EncG>) {
+    pub fn set_dkg_output(&self, dkg_output: &dkg::Output<PkG, EncG>) {
         fail_point!("narwhal-store-before-write");
 
         self.dkg_output
-            .insert(&SINGLETON_KEY, &dkg_output)
+            .insert(&SINGLETON_KEY, dkg_output)
             .expect("typed_store should not fail");
 
         fail_point!("narwhal-store-after-write");

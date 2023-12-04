@@ -89,6 +89,7 @@ struct RandomnessState {
     // State for DKG.
     party: dkg::Party<PkG, EncG>,
     vss_key_output: Arc<OnceLock<PublicVssKey>>,
+    dkg_output: Option<dkg::Output<PkG, EncG>>,
 
     // State for randomness generation.
     authority_id: AuthorityIdentifier,
@@ -186,6 +187,7 @@ impl RandomnessState {
             tx_system_messages,
             party,
             vss_key_output,
+            dkg_output: None,
             authority_id,
             leader_schedule,
             network,
@@ -196,6 +198,26 @@ impl RandomnessState {
             partial_sigs: BTreeMap::new(),
             partial_sig_sender: None,
         })
+    }
+
+    fn has_dkg_output(&self) -> bool {
+        self.dkg_output.is_some() || self.store.has_dkg_output()
+    }
+
+    fn dkg_output(&mut self) -> Option<&dkg::Output<PkG, EncG>> {
+        if self.dkg_output.is_some() {
+            return self.dkg_output.as_ref();
+        }
+        let dkg_output = self.store.dkg_output();
+        if dkg_output.is_some() {
+            self.dkg_output = dkg_output;
+        }
+        self.dkg_output.as_ref()
+    }
+
+    fn set_dkg_output(&mut self, output: dkg::Output<PkG, EncG>) {
+        self.store.set_dkg_output(&output);
+        self.dkg_output = Some(output);
     }
 
     async fn start_dkg(&self) {
@@ -235,7 +257,7 @@ impl RandomnessState {
             // DKG messages are processed in consensus order.
             return;
         }
-        if self.store.has_dkg_output() {
+        if self.has_dkg_output() {
             // Once we have completed DKG, no more `Confirmation`s are needed.
             return;
         }
@@ -268,7 +290,7 @@ impl RandomnessState {
         }
 
         // Once we have enough Confirmations, process them and update shares.
-        if !self.store.has_dkg_output() && self.store.has_used_messages() {
+        if !self.has_dkg_output() && self.store.has_used_messages() {
             match self.party.complete(
                 self.store.used_messages().as_ref().expect("checked above"),
                 &self.store.confirmations(),
@@ -280,14 +302,14 @@ impl RandomnessState {
                         error!("random beacon: unable to write VSS key to output: {e:?}")
                     }
                     let num_shares = output.shares.as_ref().map_or(0, |shares| shares.len());
-                    self.store.set_dkg_output(output);
+                    self.set_dkg_output(output);
                     info!("random beacon: DKG complete with {num_shares} shares for this node");
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("random beacon: error while processing DKG Confirmations: {e:?}"),
             }
             // Begin randomness generation.
-            if self.store.has_dkg_output() {
+            if self.has_dkg_output() {
                 info!("random beacon: start randomness generation");
                 self.send_partial_signatures().await;
             }
@@ -297,7 +319,7 @@ impl RandomnessState {
     async fn update_narwhal_round(&mut self, round: Round) {
         self.narhwal_round = round;
         // Re-send partial signatures to new leader, in case the last one failed.
-        if self.store.has_dkg_output() && (self.last_narwhal_round_sent <= round) {
+        if self.has_dkg_output() && (self.last_narwhal_round_sent <= round) {
             self.send_partial_signatures().await;
         }
     }
@@ -314,17 +336,20 @@ impl RandomnessState {
     }
 
     async fn send_partial_signatures(&mut self) {
-        let Some(dkg_output) = &self.store.dkg_output() else {
-            error!("random beacon: called send_partial_signatures before DKG completed");
-            return;
-        };
-        let shares = match &dkg_output.shares {
-            Some(shares) => shares,
-            None => return, // can't participate in randomness generation without shares
-        };
         let randomness_round = self.store.randomness_round();
         debug!("random beacon: sending partial signatures for round {randomness_round}",);
+
         if self.cached_sigs.is_none() || self.cached_sigs.as_ref().unwrap().0 != randomness_round {
+            let shares = {
+                let Some(dkg_output) = self.dkg_output() else {
+                    error!("random beacon: called send_partial_signatures before DKG completed");
+                    return;
+                };
+                match &dkg_output.shares {
+                    Some(shares) => shares,
+                    None => return, // can't participate in randomness generation without shares
+                }
+            };
             self.cached_sigs = Some((
                 randomness_round,
                 ThresholdBls12381MinSig::partial_sign_batch(
