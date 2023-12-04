@@ -16,6 +16,9 @@ sui-transaction-checks.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+fastcrypto = { workspace = true, features = ["copy_key"] }
+num_cpus = "1.0"
+
 
 async-trait.workspace = true
 bcs.workspace = true

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_account::{batch_create_account_and_gas, Account};
+use crate::mock_account::{batch_parallel_create_account_and_gas, Account};
 use crate::single_node::SingleValidator;
 use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
 use crate::workload::Workload;
@@ -45,8 +45,13 @@ impl BenchmarkContext {
             "Creating {} accounts and {} gas objects",
             num_accounts, total
         );
-        let (mut user_accounts, genesis_gas_objects) =
-            batch_create_account_and_gas(num_accounts, gas_object_num_per_account).await;
+        let num_chunks = num_cpus::get() as u64;
+        let (mut user_accounts, genesis_gas_objects) = batch_parallel_create_account_and_gas(
+            num_accounts,
+            gas_object_num_per_account,
+            num_chunks,
+        )
+        .await;
         assert_eq!(genesis_gas_objects.len() as u64, total);
         let (_, admin_account) = user_accounts.pop_last().unwrap();
 
