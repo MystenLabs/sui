@@ -53,6 +53,9 @@ impl ScalarType for SuiAddress {
 
 impl SuiAddress {
     pub const LENGTH: usize = SUI_ADDRESS_LENGTH;
+
+    pub const ZERO: Self = SuiAddress([0u8; Self::LENGTH]);
+
     pub fn into_array(self) -> [u8; SUI_ADDRESS_LENGTH] {
         self.0
     }

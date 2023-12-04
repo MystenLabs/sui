@@ -1386,6 +1386,24 @@ pub enum TransactionExpiration {
     Epoch(EpochId),
 }
 
+impl From<Option<EpochId>> for TransactionExpiration {
+    fn from(e: Option<EpochId>) -> Self {
+        match e {
+            None => TransactionExpiration::None,
+            Some(e) => TransactionExpiration::Epoch(e),
+        }
+    }
+}
+
+impl From<&TransactionExpiration> for Option<EpochId> {
+    fn from(e: &TransactionExpiration) -> Self {
+        match e {
+            TransactionExpiration::None => None,
+            TransactionExpiration::Epoch(e) => Some(*e),
+        }
+    }
+}
+
 #[enum_dispatch(TransactionDataAPI)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum TransactionData {
@@ -1460,6 +1478,17 @@ impl TransactionData {
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
+        Self::new_with_epoch(kind, sender, gas_payment, gas_budget, gas_price, None)
+    }
+
+    pub fn new_with_epoch(
+        kind: TransactionKind,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+        epoch: Option<u64>,
+    ) -> Self {
         TransactionData::V1(TransactionDataV1 {
             kind,
             sender,
@@ -1469,7 +1498,7 @@ impl TransactionData {
                 payment: vec![gas_payment],
                 budget: gas_budget,
             },
-            expiration: TransactionExpiration::None,
+            expiration: epoch.into(),
         })
     }
 

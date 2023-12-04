@@ -3,9 +3,12 @@
 
 use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base64, Encoding};
+use sui_indexer::schema::transactions::gas_budget;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
 use sui_sdk::SuiClient;
-use sui_types::transaction::{TransactionData, TransactionKind};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::transaction::{TransactionData, TransactionDataAPI, TransactionKind};
 
 use super::{
     address::Address,
@@ -81,24 +84,9 @@ impl Query {
         ctx: &Context<'_>,
         tx_bytes: String,
         tx_meta: Option<TransactionMeta>,
-        // TODO: this implies existing of `txMeta`
         skip_checks: Option<bool>,
-        // TODO: why is this u64 but txMeta::gasPrice is BigInt?
         epoch: Option<u64>,
     ) -> Result<DryRunResult> {
-        // TODO: how do we want to enforce `tx_meta` and `skip_checks` being (un)set together?
-        if tx_meta.is_some() {
-            match skip_checks {
-                Some(true) => {}
-                _ => {
-                    return Err(Error::Client(
-                        "`skipChecks` must be set to true when `txMeta` is set".to_string(),
-                    ))
-                    .extend();
-                }
-            }
-        }
-        // TODO: whats the point of this
         let skip_checks = skip_checks.unwrap_or(false);
 
         let sui_sdk_client: &Option<SuiClient> = ctx
@@ -110,18 +98,17 @@ impl Query {
             .ok_or_else(|| Error::Internal("Sui SDK client not initialized".to_string()))
             .extend()?;
 
-        if let Some(TransactionMeta {
+        let exec_arg = if let Some(TransactionMeta {
             sender,
             gas_price,
-            gas_objects, // TODO: None of the SDK functions use this. Gas us auto created.
+            gas_objects, // TODO: How do we make this a mock coin when None?
         }) = tx_meta
         {
             // This implies `TransactionKind`
             let tx_kind = deserialize_tx_data::<TransactionKind>(tx_bytes)?;
 
             // Default is 0x0
-            let sender_address =
-                sender.unwrap_or_else(|| SuiAddress::from_array([0; SuiAddress::LENGTH]));
+            let sender_address = sender.unwrap_or_else(|| SuiAddress::ZERO).into();
 
             // Default is the reference gas price which is handled by the sdk internally
             let gas_price = gas_price
@@ -129,31 +116,48 @@ impl Query {
                 .transpose()
                 // TODO: repr the error without debug? Current doesn't impl Display
                 .map_err(|e| Error::Client(format!("`Unable to parse `gasPrice` to u64: {:?}", e)))
-                .extend()?
-                .map(|x| x.into());
+                .extend()?;
 
             // Default is the current epoch which is handled by the sdk internally
             let epoch = epoch.map(|x| x.into());
 
-            let dev_inspect_result = sui_sdk_client
-                .read_api()
-                .dev_inspect_transaction_block(sender_address.into(), tx_kind, gas_price, epoch)
-                .await?;
+            DryRunExecArg::TransactionKindWithMeta {
+                kind: tx_kind,
+                sender: sender_address,
+                gas_price,
+                epoch,
+                gas_objects: gas_objects.map(|x| x.iter().map(|x| x.into()).collect()),
+            }
         } else {
             // This implies `TransactionData`
             let tx_data = deserialize_tx_data::<TransactionData>(tx_bytes)?;
 
+            DryRunExecArg::TransactionData(tx_data)
+        };
+
+        // This determines if we use dry run or dev inspect when calling the FN API
+        if skip_checks {
+            let (tx_kind, sender_address, gas_price, epoch) =
+                exec_arg.into_transaction_kind_with_meta();
+            let dev_inspect_result = sui_sdk_client
+                .read_api()
+                .dev_inspect_transaction_block(
+                    sender_address,
+                    tx_kind,
+                    gas_price.map(|x| x.into()),
+                    epoch.map(|x| x.into()),
+                )
+                .await?;
+            DryRunExecResult::DevInspect(dev_inspect_result)
+        } else {
+            let tx_data = exec_arg.into_transaction_data();
             let dry_run_result = sui_sdk_client
                 .read_api()
                 .dry_run_transaction_block(tx_data)
-                .await
-                // TODO: use proper error type as this could be a client error or internal error
-                // depending on the specific error returned
-                .map_err(|e| Error::Internal(format!("Unable to dry run transaction: {e}")))
-                .extend()?;
+                .await?;
+            DryRunExecResult::DryRun(dry_run_result)
         }
-        // TODO: finish implementing by converint output to DryRunResult
-        unimplemented!("dry_run_transaction_block");
+        .into_dry_run_result()
     }
 
     async fn owner(&self, address: SuiAddress) -> Option<ObjectOwner> {
@@ -344,5 +348,91 @@ impl Query {
             .fetch_coin_metadata(coin_type)
             .await
             .extend()
+    }
+}
+
+// Intermediate enum to handle the two possible types of `tx_bytes` in `dry_run_transaction_block` usiing FN
+enum DryRunExecArg {
+    TransactionData(TransactionData),
+    TransactionKindWithMeta {
+        kind: TransactionKind,
+        sender: NativeSuiAddress,
+        gas_price: Option<u64>,
+        epoch: Option<u64>,
+        gas_objects: Option<Vec<NativeSuiAddress>>,
+    },
+}
+
+impl DryRunExecArg {
+    pub fn into_transaction_data(self) -> TransactionData {
+        match self {
+            DryRunExecArg::TransactionData(td) => return td,
+
+            // We hit this scenario if the TransactionKind and meta are provided
+            // and skip_checks is false.
+            // This requires forming a full TransactionData object.
+            DryRunExecArg::TransactionKindWithMeta {
+                kind,
+                sender,
+                gas_price,
+                epoch,
+                gas_objects,
+            } => {
+                // TODO: We need to handle the gas data
+
+                // We dont have enough info for these
+                // let gas_payment: ObjectRef;
+                // let gas_budget: u64;
+                TransactionData::new_with_epoch(
+                    kind,
+                    sender,
+                    gas_payment,
+                    gas_budget,
+                    gas_price,
+                    epoch,
+                )
+            }
+        }
+    }
+
+    pub fn into_transaction_kind_with_meta(
+        self,
+    ) -> (
+        TransactionKind,
+        /* Sender */ NativeSuiAddress,
+        /* Gas price */ Option<u64>,
+        /* Epoch */ Option<u64>,
+    ) {
+        match self {
+            DryRunExecArg::TransactionData(td) => {
+                let kind = td.kind();
+                let sender = td.sender().into();
+                let gas_price = td.gas_price();
+                let epoch = td.expiration().into();
+                (kind.clone(), sender, Some(gas_price), epoch)
+            }
+            DryRunExecArg::TransactionKindWithMeta {
+                kind,
+                sender,
+                gas_price,
+                epoch,
+                ..
+            } => (kind, sender, gas_price, epoch),
+        }
+    }
+}
+
+// Intermediate enum to handle the two possible return types of `dry_run_transaction_block` using FN
+enum DryRunExecResult {
+    DryRun(DryRunTransactionBlockResponse),
+    DevInspect(DevInspectResults),
+}
+
+impl DryRunExecResult {
+    pub fn into_dry_run_result(self) -> Result<DryRunResult> {
+        match self {
+            DryRunExecResult::DryRun(dr) => unimplemented!(),
+            DryRunExecResult::DevInspect(_) => unimplemented!(),
+        }
     }
 }
