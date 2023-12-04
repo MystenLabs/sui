@@ -419,7 +419,7 @@ ExecutionFailureStatus:
     30:
       SuiMoveVerificationTimedout: UNIT
     31:
-      SharedObjectWrapped: UNIT
+      SharedObjectOperationNotAllowed: UNIT
     32:
       InputObjectDeleted: UNIT
 ExecutionStatus:

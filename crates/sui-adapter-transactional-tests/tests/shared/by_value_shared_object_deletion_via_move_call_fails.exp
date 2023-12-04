@@ -1,0 +1,68 @@
+processed 16 tasks
+
+task 1 'publish'. lines 6-60:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8869200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 62-62:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 64-64:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'view-object'. lines 66-66:
+Owner: Shared
+Version: 3
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 5 'view-object'. lines 68-70:
+Owner: Shared
+Version: 4
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}}
+
+task 6 'programmable'. lines 71-75:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 7 'programmable'. lines 76-80:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 8 'programmable'. lines 81-85:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 9 'programmable'. lines 86-88:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 10 'run'. lines 90-90:
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11 'view-object'. lines 92-94:
+Owner: Shared
+Version: 9
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(10,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 12 'programmable'. lines 95-101:
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+
+task 13 'programmable'. lines 102-108:
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+
+task 14 'programmable'. lines 109-115:
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+
+task 15 'programmable'. lines 116-120:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
