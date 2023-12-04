@@ -2,13 +2,11 @@
 title: Tic-Tac-Toe
 ---
 
-# Tic Tac Toe
-
-On this page, we will cover three different implementations of the game tic tac toe on Sui. The first example will utilize a centralized admin that marks the board on the users’ behalf. The second example will utilize a shared object that both users can mutate. And the third example will utilize a multisig, where instead of sharing the game board, it will be in a 1-of-2 multisig of both users’ accounts. This guide will compare and contrast the design philosophies behind the three different games, as well as the pros and cons of each.
+This guide covers three different implementations of the game tic-tac-toe on Sui. The first example utilizes a centralized admin that marks the board on the users’ behalf. The second example utilizes a shared object that both users can mutate. And the third example utilizes a multisig, where instead of sharing the game board, it's in a 1-of-2 multisig of both users’ accounts. This guide compares and contrasts the design philosophies behind the three different games, as well as the pros and cons of each.
 
 ## tic_tac_toe.move
 
-In this first example of tic tac toe, the game object, including the game board, is controlled by a game admin.
+In this first example of tic-tac-toe, the game object, including the game board, is controlled by a game admin.
 
 ```move
 struct TicTacToe has key {
@@ -31,7 +29,7 @@ struct Mark has key, store {
     col: u64,
 }
 ```
-The main logic of the game is in the `create_game` function below.
+The main logic of the game is in the following `create_game` function.
 
 ```move
 /// `x_address` and `o_address` are the account address of the two players.
@@ -70,9 +68,9 @@ public entry fun create_game(x_address: address, o_address: address, ctx: &mut T
 ```
 
 Some things to note:
-- The game exists as an owned object in the game admin’s account
-- The board is initialized as a 3x3 vector of vectors, instantiated via `option::none()`
-- Both players get 5 `MarkMintCap`s each, giving them the capability to place a maximum of 5 marks each
+- The game exists as an owned object in the game admin’s account.
+- The board is initialized as a 3x3 vector of vectors, instantiated via `option::none()`.
+- Both players get five `MarkMintCap`s each, giving them the capability to place a maximum of five marks each.
 
 When playing the game, the admin operates a service that keeps track of these placement requests. When a request is received (`send_mark_to_game`), the admin tries to place the marker on the board (`place_mark`). Each move requires two steps (thus two transactions): one from the player and one from the admin. This setup relies on the admin's service to keep the game moving.
 
@@ -130,15 +128,15 @@ public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContex
 }
 ```
 
-To view the entire source code, see [here](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move). The rest of the logic, including how to check for a winner, as well as deleting the gameboard once the game has concluded, can be found here.
+To view the entire source code, see the [tic_tac_toe.move source file](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move). You can find the rest of the logic, including how to check for a winner, as well as deleting the gameboard after the game concludes there.
 
-An alternative version of this game, shared tic tac toe, is mentioned below, which uses shared objects for a simpler implementation and without a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects.
+An alternative version of this game, shared tic-tac-toe, uses shared objects for a more straightforward implementation that doesn't use a centralized service. This comes at a slightly increased cost, as using shared objects is more expensive than transactions involving wholly owned objects. 
 
 ## shared_tic_tac_toe.move
 
-In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs since Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
+In the previous version, the admin owned the game object, preventing players from directly changing the gameboard, as well as requiring two transactions for each marker placement. In this version, the game object is a shared object, allowing both players to access and modify it directly, enabling them to place markers in just one transaction. However, using a shared object generally incurs extra costs because Sui needs to sequence the operations from different transactions. In the context of this game, where players are expected to take turns, this shouldn't significantly impact performance. Overall, this shared object approach simplifies the implementation compared to the previous method.
 
-As you can see below, the `TicTacToe` object in this example is almost identical to one before it, the only difference being that the `gameboard` is represented as `vector<vector<u8>>` instead of `vector<vector<Option<Mark>>>`. We’ll discuss why this is the case below.
+As the following code demonstrates, the `TicTacToe` object in this example is almost identical to the one before it. The only difference is that the `gameboard` is represented as `vector<vector<u8>>` instead of `vector<vector<Option<Mark>>>`. The reason for this approach is explained following the code.
 
 ```move
 struct TicTacToe has key {
@@ -151,7 +149,7 @@ struct TicTacToe has key {
 }
 ```
 
-Let’s take a look at the `create_game` function below:
+Take a look at the `create_game` function:
 
 ```move
 /// `x_address` and `o_address` are the account address of the two players.
@@ -177,7 +175,7 @@ public entry fun create_game(x_address: address, o_address: address, ctx: &mut T
 }
 ```
 
-As you can see, each position on the board is replaced with `MARK_EMPTY` instead of `option::none()`. And instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint `MarkMintCap`s to the two players anymore, because the only two addresses that can play this game are `x_address` and `o_address`, and this is checked in the next function, `place_mark`:
+As the code demonstrates, each position on the board is replaced with `MARK_EMPTY` instead of `option::none()`. Instead of the game being sent to the game admin, it is instantiated as a shared object. The other notable difference is that there is no need to mint `MarkMintCap`s to the two players anymore, because the only two addresses that can play this game are `x_address` and `o_address`, and this is checked in the next function, `place_mark`:
 
 ```move
 public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
@@ -205,11 +203,13 @@ public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut Tx
 }
 ```
 
-The full source code can be found [here](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move)
-multisig_tic_tac_toe.move
-In this implementation of the game, the game is in a 1-of-2 multisig account that acts as the game admin. In this particular case, since there are only two players, a much simpler implementation can be found in the previous example. However, this example is to illustrate that in some cases, a multisig can replace shared objects, thus allowing transactions to bypass consensus when using such an implementation.
+You can find the full source code in [shared_tic_tac_toe.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move)
 
-Let us examine the two main objects in this game, `TicTacToe`, and `Mark`:
+## multisig_tic_tac_toe.move
+
+In this implementation of the game, the game is in a 1-of-2 multisig account that acts as the game admin. In this particular case, because there are only two players, the previous example is a more convenient use case. However, this example illustrates that in some cases, a multisig can replace shared objects, thus allowing transactions to bypass consensus when using such an implementation.
+
+Examine the two main objects in this game, `TicTacToe`, and `Mark`:
 
 ```move
 /// TicTacToe struct should be owned by the game-admin.
@@ -240,7 +240,7 @@ struct Mark has key {
 }
 ``` 
 
-The biggest difference in this `TicTacToe` object is that gameboard is a `vector<u8>`. But otherwise the main functionality of the gameboard is the same. The `Mark` object makes a reappearance in this version, as we need a way to identify the current player’s turn (note that this was accomplished in the shared version of the game in the `TicTacToe` object itself).
+The biggest difference in this `TicTacToe` object is that gameboard is a `vector<u8>`, but otherwise the main functionality of the gameboard is the same. The `Mark` object makes a reappearance in this version, as we need a way to identify the current player’s turn (this was accomplished in the shared version of the game in the `TicTacToe` object itself).
 
 The `create_game` function is fairly similar to one in the previous two versions:
 
@@ -274,7 +274,7 @@ public fun create_game(x_addr: address, o_addr: address, ctx: &mut TxContext) {
 }
 ```
 
-Let’s now take a look at `send_mark_to_game` and `place_mark`:
+Now take a look at `send_mark_to_game` and `place_mark`:
 
 ```move
 /// This is called by the one of the two addresses participating in the multisig, but not from
@@ -352,4 +352,4 @@ public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
 }
 ```
 
-The first function is straightforward. The player sends the location of the mark to the multisig’s account. Then in the next function, the multisig actually places down the mark the player requested, as well as all the logic to check to see if there is a winner, end the game and award a player a trophy if so, or to advance to the next player’s turn if not. See the full repo for this game [here](https://github.com/MystenLabs/multisig_tic-tac-toe).
+The first function is straightforward. The player sends the location of the mark to the multisig account. Then in the next function, the multisig actually places down the mark the player requested, as well as all the logic to check to see if there is a winner, end the game, and award a player a trophy if so, or to advance to the next player’s turn if not. See the [multisig_tic-tac-toe repo]((https://github.com/MystenLabs/multisig_tic-tac-toe) for the full source code on this version of the game.
