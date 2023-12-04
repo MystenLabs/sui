@@ -549,14 +549,18 @@ export const bcs = {
 	},
 
 	/**
-	 * Creates a helper function representing a generic type. This method returns
-	 * a function that can be used to create concrete version of the generic type.
-	 * @param names The names of the generic parameters
-	 * @param cb A callback that returns the generic type
-	 * @example
-	 * const MyStruct = bcs.generic(['T'], (T) => bcs.struct('MyStruct', { inner: T }))
-	 * MyStruct(bcs.u8()).serialize({ inner: 1 }).toBytes() // Uint8Array [ 1 ]
-	 * MyStruct(bcs.string()).serialize({ inner: 'a' }).toBytes() // Uint8Array [ 1, 97 ]
+	 * @deprecated
+	 *
+	 * Generics should be implemented as generic typescript functions instead:
+	 *
+	 * ```ts
+	 * function VecMap<K, V>, (K: BcsType<K>, V: BcsType<V>) {
+	 *   return bcs.struct('VecMap<K, V>', {
+	 *     keys: bcs.vector(K),
+	 *     values: bcs.vector(V),
+	 *   })
+	 * }
+	 * ```
 	 */
 	generic<const Names extends readonly string[], const Type extends BcsType<any>>(
 		names: Names,
