@@ -114,7 +114,7 @@ impl GasProfiler {
     }
 
     pub fn init_default_cfg(name: String, start_gas: u64) -> Self {
-        Self::init(&VMProfilerConfig::default(), name, start_gas)
+        Self::init(&Some(VMProfilerConfig::default()), name, start_gas)
     }
 
     fn profile_name(&self) -> String {
@@ -184,12 +184,18 @@ impl GasProfiler {
     }
 
     pub fn to_file(&self) {
-        if !(self.config.is_some() || *PROFILER_ENABLED) || !self.is_metered() {
+        let config;
+        if let Some(c) = &self.config {
+            config = c
+        } else {
+            return;
+        }
+        if !self.is_metered() {
             return;
         }
 
         let mut p = (*DEFAULT_PROFILE_OUTPUT_PATH.clone()).to_path_buf();
-        if let Some(f) = &self.config.full_path {
+        if let Some(f) = &config.full_path {
             p = f.clone();
         } else {
             // Get the unix timestamp
@@ -248,12 +254,14 @@ macro_rules! profile_open_frame_impl {
         #[cfg(feature = "gas-profiler")]
         {
             if let Some(profiler) = $profiler {
-                let name = if !profiler.config.use_long_function_name {
-                    GasProfiler::short_name(&$frame_name)
-                } else {
-                    $frame_name
-                };
-                profiler.open_frame(name, $frame_name, $gas_rem)
+                if let Some(config) = &profiler.config {
+                    let name = if !config.use_long_function_name {
+                        GasProfiler::short_name(&$frame_name)
+                    } else {
+                        $frame_name
+                    };
+                    profiler.open_frame(name, $frame_name, $gas_rem)
+                }
             }
         }
     };
@@ -280,12 +288,14 @@ macro_rules! profile_close_frame_impl {
         #[cfg(feature = "gas-profiler")]
         {
             if let Some(profiler) = $profiler {
-                let name = if !profiler.config.use_long_function_name {
-                    GasProfiler::short_name(&$frame_name)
-                } else {
-                    $frame_name.clone()
-                };
-                profiler.close_frame(name, $frame_name, $gas_rem)
+                if let Some(config) = &profiler.config {
+                    let name = if !config.use_long_function_name {
+                        GasProfiler::short_name(&$frame_name)
+                    } else {
+                        $frame_name
+                    };
+                    profiler.open_frame(name, $frame_name, $gas_rem)
+                }
             }
         }
     };
@@ -298,8 +308,10 @@ macro_rules! profile_open_instr {
         {
             let gas_rem = $gas_meter.remaining_gas().into();
             if let Some(profiler) = $gas_meter.get_profiler_mut() {
-                if profiler.config.track_bytecode_instructions {
-                    profiler.open_frame($frame_name.clone(), $frame_name, gas_rem)
+                if let Some(config) = &profiler.config {
+                    if config.track_bytecode_instructions {
+                        profiler.open_frame($frame_name.clone(), $frame_name, gas_rem)
+                    }
                 }
             }
         }
@@ -313,8 +325,10 @@ macro_rules! profile_close_instr {
         {
             let gas_rem = $gas_meter.remaining_gas().into();
             if let Some(profiler) = $gas_meter.get_profiler_mut() {
-                if profiler.config.track_bytecode_instructions {
-                    profiler.close_frame($frame_name.clone(), $frame_name, gas_rem)
+                if let Some(config) = &profiler.config {
+                    if config.track_bytecode_instructions {
+                        profiler.close_frame($frame_name.clone(), $frame_name, gas_rem)
+                    }
                 }
             }
         }
