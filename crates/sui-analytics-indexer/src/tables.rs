@@ -96,6 +96,8 @@ pub(crate) struct TransactionEntry {
     pub(crate) raw_transaction: String,
     pub(crate) has_zklogin_sig: bool,
     pub(crate) has_upgraded_multisig: bool,
+    pub(crate) transaction_json: Option<String>,
+    pub(crate) effects_json: Option<String>,
 }
 
 // Event information.
