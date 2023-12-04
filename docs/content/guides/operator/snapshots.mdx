@@ -14,9 +14,13 @@ To maintain a healthy Sui network, Sui encourages the Sui community to bring up 
 Sui supports two types of snapshots:
 
 - **RocksDB snapshots** are a point-in-time view of a database store. This means that the snapshot keeps the state of the system at the moment it generates the snapshot, including non-pruned data, additional indices, and other data.
-- **Formal snapshots** are database agnostic with a minimalistic format, i.e. they contain only the data necessary to restore a node to a valid state at the specified epoch, thus they have a much smaller storage footprint and are generally faster to restore from when compared to database snapshots. Formal snapshots are also supported natively by the Sui protocol. In this context, this means that we can cryptographically verify the contents of the formal snapshot against a commitment from the committee at the epoch we are restoring to. This verification happens automatically and by default during a formal snapshot restore (unless explicitly bypassed). 
+- **Formal snapshots** are database agnostic with a minimalistic format, in other words they contain only the data necessary to restore a node to a valid state at the specified epoch, thus they have a much smaller storage footprint and are generally faster to restore from when compared to database snapshots. Formal snapshots are also supported natively by the Sui protocol. In this context, this means that we can cryptographically verify the contents of the formal snapshot against a commitment from the committee at the epoch we are restoring to. This verification happens automatically and by default during a Formal snapshot restore (unless explicitly bypassed). 
 
-**Important Note:** formal snapshots are not suitable for use if you are running a RPC node that does any historical data lookups. For more information on this subject, see [node data management](./data-management.mdx).
+:::info
+
+Formal snapshots are not suitable for use if you are running an RPC node that does any historical data lookups. For more information on node data management, see [Data Management](./data-management.mdx).
+
+:::
 
 You can configure a Full node snapshot to generate a state snapshot at the end of each epoch.
 A single Full node can generate RocksDB snapshots, Formal snapshots, or both.
@@ -25,10 +29,10 @@ A single Full node can generate RocksDB snapshots, Formal snapshots, or both.
 
 Full nodes do not take snapshots by default. To enable this feature you must apply specific configs to your Full node.
 
-Changing the configs for a full node is done by the following steps:
+Follow these steps to change the configs for a Full node:
 
 1. Stop your node, if it's running.
-2. Open your fullnode.yaml config file and apply config updates as shown below.
+2. Open your fullnode.yaml config file and apply config updates as the following sections show.
 3. Save the fullnode.yaml file and restart the node.
 
 ### Enabling RocksDB snapshots
@@ -95,7 +99,7 @@ When you restore a Full node from a snapshot, write it to the path `/opt/sui/db/
 To restore using a Formal snapshot, use the `sui-tool` binary. `sui-tool` can be downloaded along with other sui binaries.
 See [Install Sui](../developer/getting-started/sui-install.mdx) for more details.
 
-The following steps can be used to restore a node from a formal snapshot:
+The following steps can be used to restore a node from a Formal snapshot:
 
 1. If it's running, stop the node.
 2. Run the command:
@@ -103,7 +107,7 @@ The following steps can be used to restore a node from a formal snapshot:
    sui-tool download-db-snapshot --epoch "<EPOCH-NUMBER>" --genesis "<PATH-TO-GENESIS-BLOB>" \
         --formal --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request --snapshot-bucket-type=s3
    ```
-   - `--epoch`: The epoch that you want to download, eg. `200`. Mysten Labs hosted buckets will only keep the last 90 epochs. 
+   - `--epoch`: The epoch that you want to download, for example `200`. Mysten Labs hosted buckets will only keep the last 90 epochs. 
    - `--genesis`: The path to the location of the network's `genesis.blob`.
    - `--formal`: If set, restore from formal (slim, DB agnostic) snapshot.
    - `--network`: Network to download snapshot for. Defaults to "mainnet".
@@ -115,23 +119,23 @@ The following steps can be used to restore a node from a formal snapshot:
 
 ## Mysten Labs managed snapshots
 
-Mysten Labs hosts two tiers of snapshot storage access. *High throughput, Requester Pays enabled buckets*, and *free, permissionless buckets*.
+Mysten Labs hosts two tiers of snapshot storage access. **High throughput, Requester Pays enabled buckets**, and **free, permissionless buckets**.
 
-*High throughput, Requester Pays enabled buckets*:
+**High throughput, Requester Pays enabled buckets:**
 * GCS and S3 are both setup with requester pays. This means that you'll need to provide a set of valid AWS/GCP credentials when downloading from these buckets.
 [Requester Pays](https://cloud.google.com/storage/docs/requester-pays) means you are charged for the egress costs of pulling the snapshot data.
 * If you are looking for the best download speeds, we recommend using the S3 buckets with [transfer acceleration](https://aws.amazon.com/s3/transfer-acceleration/) enabled.
 
-*Free, permissionless buckets*:
+**Free, permissionless buckets:**
 * These are currently hosted on Cloudflare R2, currently only in North America, but we plan on adding more regions soon.
 * Since the bucket is open to the internet, there's no need to provide any cloud credentials.
 
 ### Bucket Names
-*S3*
+**S3**
 Testnet: `s3://mysten-testnet-snapshots/`, `s3://mysten-testnet-formal/`
 Mainnet: `s3://mysten-mainnet-snapshots/`,  `s3://mysten-mainnet-formal/`
 
-*GCS*
+**GCS**
 Testnet: `gs://mysten-testnet-snapshots/`, `gs://mysten-testnet-formal/`
 Mainnet: `gs://mysten-mainnet-snapshots/`,  `gs://mysten-mainnet-formal/`
 
