@@ -45,3 +45,16 @@ workspace-hack.workspace = true
 [dev-dependencies]
 cargo_metadata = "0.15.4"
 petgraph = "0.5.1"
+
+[features]
+default = []
+gas-profiler = [
+    "sui-adapter-latest/gas-profiler",
+    "sui-adapter-v0/gas-profiler",
+    "sui-adapter-v1/gas-profiler",
+    "move-vm-runtime-next-vm/gas-profiler",
+    "move-vm-runtime-v0/gas-profiler",
+    "move-vm-runtime-v1/gas-profiler",
+    "move-vm-runtime-latest/gas-profiler",
+    "move-vm-config/gas-profiler",
+]

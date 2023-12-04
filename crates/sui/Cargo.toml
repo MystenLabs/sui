@@ -69,6 +69,8 @@ move-package.workspace = true
 csv.workspace = true
 workspace-hack.workspace = true
 
+
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
 
@@ -95,6 +97,10 @@ test = false
 name = "sui"
 path = "src/main.rs"
 
-#[features]
-#default = ["gas-profiler"]
+[features]
+default = ["gas-profiler"]
+gas-profiler = [
+    "sui-types/gas-profiler",
+    "sui-execution/gas-profiler",
+]
 
