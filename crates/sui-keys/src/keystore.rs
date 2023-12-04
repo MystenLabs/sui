@@ -207,6 +207,7 @@ impl AccountKeystore for FileBasedKeystore {
 
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
         self.aliases.iter().collect::<Vec<_>>()
+    }
 
     /// Return an array of `Alias`, consisting of every alias and its corresponding public key.
     fn aliases_mut(&mut self) -> Vec<&mut Alias> {
