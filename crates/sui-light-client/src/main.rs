@@ -65,12 +65,11 @@ fn read_checkpoint_list(config: &Config) -> CheckpointsList {
     let mut checkpoints_path = config.checkpoint_summary_dir.clone();
     checkpoints_path.push("checkpoints.yaml");
     // Read the resulting file and parse the yaml checkpoint list
-    let reader = fs::File::open(checkpoints_path.clone()).expect(
-        format!(
+    let reader = fs::File::open(checkpoints_path.clone()).unwrap_or_else(|_|
+        panic!(
             "Unable to load checkpoints from {}",
             checkpoints_path.display()
         )
-        .as_str(),
     );
     serde_yaml::from_reader(reader).unwrap()
 }
@@ -82,17 +81,16 @@ fn read_checkpoint(
     // Read the resulting file and parse the yaml checkpoint list
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
     checkpoint_path.push(format!("{}.yaml", seq));
-    let mut reader = fs::File::open(checkpoint_path.clone()).expect(
-        format!(
+    let mut reader = fs::File::open(checkpoint_path.clone()).unwrap_or_else(|_| 
+        panic!(
             "Unable to load checkpoint from {}",
             checkpoint_path.display()
         )
-        .as_str(),
     );
     let metadata = fs::metadata(&checkpoint_path).expect("unable to read metadata");
     let mut buffer = vec![0; metadata.len() as usize];
-    reader.read(&mut buffer).expect("buffer overflow");
-    bcs::from_bytes(&buffer).expect(format!("Ckp {} exists", seq).as_str())
+    reader.read_exact(&mut buffer).expect("buffer overflow");
+    bcs::from_bytes(&buffer).unwrap_or_else(|_| panic!("Ckp {} exists", seq))
 }
 
 fn write_checkpoint(
@@ -102,12 +100,11 @@ fn write_checkpoint(
     // Write the checkpoint summary to a file
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
     checkpoint_path.push(format!("{}.yaml", summary.sequence_number));
-    let mut writer = fs::File::create(checkpoint_path.clone()).expect(
-        format!(
+    let mut writer = fs::File::create(checkpoint_path.clone()).unwrap_or_else(|_|
+        panic!(
             "Unable to create checkpoint file {}",
             checkpoint_path.display()
         )
-        .as_str(),
     );
     let bytes = bcs::to_bytes(&summary).unwrap();
     writer.write_all(&bytes).unwrap();
@@ -117,12 +114,11 @@ fn write_checkpoint_list(config: &Config, checkpoints_list: &CheckpointsList) {
     // Write the checkpoint list to a file
     let mut checkpoints_path = config.checkpoint_summary_dir.clone();
     checkpoints_path.push("checkpoints.yaml");
-    let mut writer = fs::File::create(checkpoints_path.clone()).expect(
-        format!(
+    let mut writer = fs::File::create(checkpoints_path.clone()).unwrap_or_else(|_|
+        panic!(
             "Unable to create checkpoint file {}",
             checkpoints_path.display()
         )
-        .as_str(),
     );
     let bytes = serde_yaml::to_vec(&checkpoints_list).unwrap();
     writer.write_all(&bytes).unwrap();
@@ -142,11 +138,11 @@ async fn download_checkpoint_summary(
 /// between the latest on the list and the latest checkpoint.
 async fn pre_sync_checkpoints_to_latest(config: &Config) {
     // Get the local checlpoint list
-    let mut checkpoints_list: CheckpointsList = read_checkpoint_list(&config);
-    let latest_in_list = checkpoints_list.checkpoints.last().unwrap().clone();
+    let mut checkpoints_list: CheckpointsList = read_checkpoint_list(config);
+    let latest_in_list = checkpoints_list.checkpoints.last().unwrap();
 
     // Download the latest in list checkpoint
-    let summary = download_checkpoint_summary(&config, latest_in_list).await;
+    let summary = download_checkpoint_summary(config, *latest_in_list).await;
     let mut last_epoch = Some(summary.epoch());
     let mut last_checkpoint_seq = Some(summary.sequence_number);
 
@@ -166,7 +162,7 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) {
 
         while start < end {
             let mid = (start + end) / 2;
-            let summary = download_checkpoint_summary(&config, mid).await;
+            let summary = download_checkpoint_summary(config, mid).await;
 
             // print summary epoch and seq
             println!(
@@ -190,11 +186,11 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) {
 
         if let Some(summary) = found_summary {
             // Write summary to file
-            write_checkpoint(&config, &summary);
+            write_checkpoint(config, &summary);
 
             // Add to the list
             checkpoints_list.checkpoints.push(summary.sequence_number);
-            write_checkpoint_list(&config, &checkpoints_list);
+            write_checkpoint_list(config, &checkpoints_list);
 
             // Update
             last_epoch = Some(summary.epoch());
@@ -204,10 +200,10 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) {
 }
 
 async fn check_and_sync_checkpoints(config: &Config) {
-    pre_sync_checkpoints_to_latest(&config).await;
+    pre_sync_checkpoints_to_latest(config).await;
 
     // Get the local checlpoint list
-    let checkpoints_list: CheckpointsList = read_checkpoint_list(&config);
+    let checkpoints_list: CheckpointsList = read_checkpoint_list(config);
 
     // Check the signatures of all checkpoints
     // And download any missing ones
@@ -223,12 +219,12 @@ async fn check_and_sync_checkpoints(config: &Config) {
             read_checkpoint(config, *ckp_id)
         } else {
             // Download the checkpoint from the server
-            download_checkpoint_summary(&config, *ckp_id).await
+            download_checkpoint_summary(config, *ckp_id).await
         };
 
         // If we know the previous committee, we can verify the new committee
         if let Some(prev_committee) = &prev_committee {
-            summary.clone().verify(&prev_committee).unwrap();
+            summary.clone().verify(prev_committee).unwrap();
         } else {
             // If there is no previous committee check the digest is the same as the
             // given genesis digest
@@ -270,7 +266,7 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
     // Check the validity of the checkpoint summary
 
     // Load the list of stored checkpoints
-    let checkpoints_list: CheckpointsList = read_checkpoint_list(&config);
+    let checkpoints_list: CheckpointsList = read_checkpoint_list(config);
     // find the stored checkpoint before the seq checkpoint
     let prev_ckp_id = checkpoints_list
         .checkpoints
@@ -279,7 +275,7 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
         .last()
         .unwrap();
     // Read it from the store
-    let prev_ckp = read_checkpoint(&config, *prev_ckp_id);
+    let prev_ckp = read_checkpoint(config, *prev_ckp_id);
     // Get the committee from the previous checkpoint
     let prev_committee = prev_ckp
         .end_of_epoch_data
@@ -306,11 +302,11 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
 
     let found: &Vec<_> = &full_check_point
         .checkpoint_contents
-        .enumerate_transactions(&summary)
+        .enumerate_transactions(summary)
         .filter(|(_, t)| t.transaction.to_string() == tid)
         .collect();
 
-    println!("Valid: {}", found.len() > 0);
+    println!("Valid: {}", !found.is_empty());
 
     for exec_digests in found {
         println!(
@@ -319,11 +315,11 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
         );
 
         // Find the entry in the checkpoint.transactions
-        let _tx = full_check_point
+        full_check_point
             .transactions
             .iter()
             .filter(|tx| &tx.effects.execution_digests() == exec_digests.1)
-            .for_each(|tx| {
+            .for_each(|_tx| {
                 // TDOD: print more info on Effects
             });
     }
@@ -334,9 +330,9 @@ pub async fn main() {
     // Command line arguments and config loading
     let args = Args::parse();
 
-    let path = args.config.expect("Need a config file path");
+    let path = args.config.unwrap_or_else(|| panic!("Need a config file path"));
     let reader = fs::File::open(path.clone())
-        .expect(format!("Unable to load config from {}", path.display()).as_str());
+        .unwrap_or_else(|_| panic!("Unable to load config from {}", path.display()));
     let config: Config = serde_yaml::from_reader(reader).unwrap();
 
     // Print config parameters
