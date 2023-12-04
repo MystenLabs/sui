@@ -32,6 +32,22 @@ impl GovernanceReadApiV2 {
         Self { inner }
     }
 
+    pub async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
+        let system_state_summary: SuiSystemStateSummary =
+            self.get_latest_sui_system_state().await?;
+        let epoch = system_state_summary.epoch;
+        let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
+
+        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
+
+        let apys = sui_json_rpc::governance_api::calculate_apys(
+            stake_subsidy_start_epoch,
+            exchange_rate_table,
+        );
+
+        Ok(ValidatorApys { apys, epoch })
+    }
+
     pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
         match self
             .inner
@@ -296,19 +312,7 @@ impl GovernanceReadApiServer for GovernanceReadApiV2 {
     }
 
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
-        let system_state_summary: SuiSystemStateSummary =
-            self.get_latest_sui_system_state().await?;
-        let epoch = system_state_summary.epoch;
-        let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
-
-        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
-
-        let apys = sui_json_rpc::governance_api::calculate_apys(
-            stake_subsidy_start_epoch,
-            exchange_rate_table,
-        );
-
-        Ok(ValidatorApys { apys, epoch })
+        self.get_validators_apy().await.map_err(Into::into)
     }
 }
 
