@@ -698,11 +698,19 @@ impl SuiClientCommands {
             }
             SuiClientCommands::Addresses => {
                 let active_address = context.active_address()?;
-                let addresses = context.config.keystore.addresses();
-                SuiClientCommandResult::Addresses(AddressesOutput {
-                    addresses,
+                let addresses = context
+                    .config
+                    .keystore
+                    .addresses_with_alias()
+                    .into_iter()
+                    .map(|(address, alias)| (alias.alias.to_string(), *address))
+                    .collect();
+
+                let output = AddressesOutput {
                     active_address,
-                })
+                    addresses,
+                };
+                SuiClientCommandResult::Addresses(output)
             }
             SuiClientCommands::DynamicFieldQuery { id, cursor, limit } => {
                 let client = context.get_client().await?;
@@ -1474,9 +1482,18 @@ impl Display for SuiClientCommandResult {
         let mut writer = String::new();
         match self {
             SuiClientCommandResult::Addresses(addresses) => {
-                let json_obj = json!(addresses);
-                let mut table = json_to_table(&json_obj);
-                let style = TableStyle::rounded().horizontals([]);
+                let mut builder = TableBuilder::default();
+                builder.set_header(vec!["alias", "address", "active address"]);
+                for (alias, address) in &addresses.addresses {
+                    let active_address = if address == &addresses.active_address {
+                        "*".to_string()
+                    } else {
+                        "".to_string()
+                    };
+                    builder.push_record([alias.to_string(), address.to_string(), active_address]);
+                }
+                let mut table = builder.build();
+                let style = TableStyle::rounded();
                 table.with(style);
                 write!(f, "{}", table)?
             }
@@ -1848,7 +1865,7 @@ impl SuiClientCommandResult {
 #[serde(rename_all = "camelCase")]
 pub struct AddressesOutput {
     pub active_address: SuiAddress,
-    pub addresses: Vec<SuiAddress>,
+    pub addresses: Vec<(String, SuiAddress)>,
 }
 
 #[derive(Serialize)]
