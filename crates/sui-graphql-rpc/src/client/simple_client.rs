@@ -37,7 +37,7 @@ impl SimpleClient {
         query: String,
         headers: Vec<(header::HeaderName, header::HeaderValue)>,
     ) -> Result<serde_json::Value, ClientError> {
-        self.execute_impl(query, vec![], headers)
+        self.execute_impl(query, vec![], headers, false)
             .await?
             .json()
             .await
@@ -54,7 +54,7 @@ impl SimpleClient {
         if get_usage {
             headers.push((LIMITS_HEADER.clone(), HeaderValue::from_static("true")));
         }
-        GraphqlResponse::from_resp(self.execute_impl(query, variables, headers).await?).await
+        GraphqlResponse::from_resp(self.execute_impl(query, variables, headers, false).await?).await
     }
 
     async fn execute_impl(
@@ -62,6 +62,7 @@ impl SimpleClient {
         query: String,
         variables: Vec<GraphqlQueryVariable>,
         headers: Vec<(header::HeaderName, header::HeaderValue)>,
+        is_mutation: bool,
     ) -> Result<Response, ClientError> {
         let (type_defs, var_vals) = resolve_variables(&variables)?;
         let body = if type_defs.is_empty() {
@@ -75,7 +76,12 @@ impl SimpleClient {
                 .map(|(name, ty)| format!("${}: {}", name, ty))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let query = format!("query ({}) {}", type_defs_csv, query);
+            let query = format!(
+                "{} ({}) {}",
+                if is_mutation { "mutation" } else { "query" },
+                type_defs_csv,
+                query
+            );
             serde_json::json!({
                 "query": query,
                 "variables": var_vals,
@@ -94,34 +100,8 @@ impl SimpleClient {
         mutation: String,
         variables: Vec<GraphqlQueryVariable>,
     ) -> Result<GraphqlResponse, ClientError> {
-        // TODO: condense this with execute_query_impl
-        let (type_defs, var_vals) = resolve_variables(&variables)?;
-        let body = if type_defs.is_empty() {
-            serde_json::json!({
-                "query": mutation,
-            })
-        } else {
-            // Make type defs which is a csv is the form of $var_name: $var_type
-            let type_defs_csv = type_defs
-                .iter()
-                .map(|(name, ty)| format!("${}: {}", name, ty))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let mutation = format!("mutation ({}) {}", type_defs_csv, mutation);
-            serde_json::json!({
-                "query": mutation,
-                "variables": var_vals,
-            })
-        };
-
-        let res = self
-            .inner
-            .post(&self.url)
-            .json(&body)
-            .send()
+        GraphqlResponse::from_resp(self.execute_impl(mutation, variables, vec![], true).await?)
             .await
-            .map_err(ClientError::from)?;
-        GraphqlResponse::from_resp(res).await
     }
 }
 
