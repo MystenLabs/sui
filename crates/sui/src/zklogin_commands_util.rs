@@ -116,7 +116,7 @@ pub async fn perform_zk_login_test_tx(
     )?;
 
     let sender = if test_multisig {
-        keystore.add_key(skp1)?;
+        keystore.add_key(None, skp1)?;
         println!("Use multisig address as sender");
         SuiAddress::from(&multisig_pk)
     } else {
