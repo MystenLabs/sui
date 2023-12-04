@@ -1350,7 +1350,8 @@ impl AuthorityPerEpochStore {
             }
             return Some(DeferralKey::new_for_randomness_round(
                 // Deferral by two rounds guarantees that the transaction will not depend on
-                // randomness that was revealed at the time it was sequenced.
+                // randomness that was revealed but not yet sequenced at the time the transaction
+                // was sequenced.
                 last_randomness_round + 2,
                 commit_round,
             ));
