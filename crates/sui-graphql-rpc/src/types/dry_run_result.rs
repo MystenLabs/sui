@@ -20,7 +20,7 @@ pub(crate) struct DryRunResult {
 
 #[ComplexObject]
 impl DryRunResult {
-    pub async fn sender(&self) -> Option<TransactionBlock> {
+    pub async fn transaction(&self) -> Option<TransactionBlock> {
         // TODO: implement
         unimplemented!()
     }

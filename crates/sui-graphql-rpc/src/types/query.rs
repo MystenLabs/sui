@@ -135,7 +135,7 @@ impl Query {
             // Default is the current epoch which is handled by the sdk internally
             let epoch = epoch.map(|x| x.into());
 
-            let res = sui_sdk_client
+            let dev_inspect_result = sui_sdk_client
                 .read_api()
                 .dev_inspect_transaction_block(sender_address.into(), tx_kind, gas_price, epoch)
                 .await?;
@@ -143,7 +143,7 @@ impl Query {
             // This implies `TransactionData`
             let tx_data = deserialize_tx_data::<TransactionData>(tx_bytes)?;
 
-            let res = sui_sdk_client
+            let dry_run_result = sui_sdk_client
                 .read_api()
                 .dry_run_transaction_block(tx_data)
                 .await
