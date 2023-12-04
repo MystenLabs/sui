@@ -1,6 +1,30 @@
 ---
-title: Confirmation
+title: Finality Confirmation
 draft: true
 ---
 
-Content coming soon
+This article discusses different transaction execution mode and how to confirm a transaction's finality on Sui.
+
+It is strongly recommended to read [Transaction Certification and Finality](./certification-overview.mdx) first. We continue with Alice's example in this article.
+
+A Recap: with `EffectsCertificate`, a transaction is considered finalized. By finality, it means the transaction has been executed by at least a quorum of valdiators and will never be reverted.
+
+## Local Execution on Fullnode
+A detail that is omitted in [Transaction Certification and Finality](./certification-overview.mdx) is, before the Fullnode sends back `EffectsCertificate` to Alice's wallet App, it may try to execute the transaction locally, if the request asks it so.
+
+The purpose of this extra step is to keep the Fullnode up to date as much as possible, especially when the wallet App frequently hits the same Fullnode. In Alice's coffee shop example, this may be trivial, but for a high freuqency application, such as gaming, it could be important.
+
+When an App constructs a transaction, most of the time, it asks the Fullnode to choose a Gas object for it. Gas object is an owned object, meaning that if the Fullnode is stale and not aware of the right version of the object, it could lead to invalid transactions, or in the worse case, client equivocation if client software does not handle it properly. Client Equivocation can be read more in the Sponsored Transaction article. Executing on Fullnode before returning `EffectsCertificate` is one way to avoid this situation. A request can ask for such behavior by using the `WaitForLocalExecution` parameter.
+
+However, it is worth noting that `WaitForLocalExecution` is not always the best choice. For example, it adds a layer of end-to-end latency on Alice's payment transaction without significant benefits. In this case, `WaitForEffects` parameter can be used instead to have a slightly shorter user-perceived latency.
+
+## Verifying Finality
+
+Going back to Alice's rainy day example, her wallet App crashed during the original transaction. If the App stores the signed transaction locally before sending it to the Fullnode, which is a good practice, when the App restarts, it wants to verify if the transaction has been finalized first. If yes: all good; if not: it needs to resubmit the transaction.
+
+The wallet App can query the Fullnode with `getTransactionBlock` RPC end point. Assuming the Fullnode is honest:
+* if response contains transaction details, the transaction must have been finalized.
+  * it is either exceuted with `WaitForLocalExecution`, or executed as a checkpointed transaction.
+* if response is None, it could mean the transaction was dropped on the floor in some step, or is already finalized but this Fullnode does not know yet. In this scenario, the safer option is to resubmit the transaction.
+
+Before a transaction is locally executed, its effects will not be reflected on the Fullnode. Therefore the same thing applies to the coffee shop's Fullnode. Alice's transaction was not submitted through this Fullnode hence it does not have the chance to locally execute it before it being included in a checkpoint. This Fullnode must wait for the transaction to be checkpointed and state synced which normally takes a few seconds. Once the Fullnode receives this transaction in a checkpoint, it will be executed and have effects updated locally, for example the coffee shop's balance.
