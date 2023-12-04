@@ -1,85 +1,121 @@
 ---
-title: Submission, Certification, Finalization, Certified Effects, Checkpoints
-draft: true
+title: Transaction Life Cycle
+
 ---
 
-# Introduction
+A transaction on the Sui network goes through many different steps during its life cycle.
 
-A Sui transaction goes through many different steps during its lifecycle.
-This document provides a high-level view of that process.
+## Life cycle overview
+
+At a high level, the following figure outlines the life cycle of a transaction on the Sui blockchain.
+
+![Transaction life cycle](./images/txn-lifecycle.png)
+
+The following steps align with those in the preceding image. 
+
+1. The first step of the process is the creation of a transaction. A user with a private key creates and signs a user transaction to either mutate objects they own, or a mix of objects they own and [shared objects](../object-ownership/shared.mdx).
+
+1. Sui sends the transaction to each validator (often through a Full node). Validators perform a series of validity and safety checks, sign it, and return the signed transaction to the client. 
+
+1. The client then collects the responses from a supermajority of validators to form a transaction certificate. As a result, unlike consensus-based blockchains, Sui validators do not need to propagate signatures on a best-effort basis (gossip signatures) or aggregate certificates. This effort is now the responsibility of the client or gateway.
+
+1. After assembling the certificate, the client sends it back to all validators, who check its validity and acknowledge its receipt to the client. If the transaction involves owned objects exclusively, Sui can process the transaction certificate immediately and execute it without waiting for the [consensus engine](../sui-architecture/consensus.mdx) (**direct fast path**). All certificates are forwarded to the Sui DAG-based consensus protocol (also operated by the Sui validators). 
+
+1. Consensus eventually outputs a total order of certificates; the validators check and execute those that contain shared objects. 
+
+1. Clients can collect a supermajority of validator responses, assemble them into an effect certificate, and use it as proof of the settlement of the transaction. 
+
+1. Subsequently, Sui forms checkpoints for every consensus commit, which it also uses to drive the reconfiguration protocol.
+
+The complete [Sui Lutris](https://docs.sui.io/paper/sui-lutris.pdf) paper provides additional detail on how the safety and liveness protocols operate, as well as proofs of security for them in the standard distributed systems model with Byzantine participants in partial synchrony. The following sections provide more detail on the various stages of a transaction life cycle.
 
 ## Submission
 
-Let's say a user wants to transfer an NFT to their friend.
-First, the user creates a transaction to do so, using a wallet or another app.
-The transaction will include the user's gas payment object and a command to transfer the NFT object to the recipient.
-Before submission, the wallet must also sign the transaction.
+All transactions on Sui begin when they are submitted to the network. For example, imagine you want to transfer an NFT that you own in your wallet to your friend. First, you would create a transaction using a wallet or some other app. The transaction includes your gas payment object and a command to transfer the NFT object to your friend's address. Before the wallet or app submits the transaction to the network, it must also sign it.
 
-Once the transaction has been signed, the wallet or app submits the transaction to a Sui full node on behalf of the user.
+After the transaction is signed, the wallet or app submits the transaction to a Sui Full node on behalf of the user.
 
 ## Certification
 
-Once the transaction has been submitted to the full node, the full node begins attempting to certify the transaction.
+Certification happens after a transaction gets submitted to a Full node. Upon submission, the Full node begins the process of certifying the transaction. The Full node cannot certify the transaction on its own because it does not have a complete view of transactions across the network. Consequently, the Full node must send the transaction to a validator. The validator performs a validity check on the transaction and signs it if it passes. To be considered valid, the transaction must pass the following checks:
 
-The process of certification is as follows:
-
-1. Send the transaction to a validator and ask it to attach its signature to the transaction, which shows that the validator has determined that the transaction is valid.
-2. The validator checks the transaction for validity, which includes the following conditions:
-   - The user's signature is valid.
-   - The user has access to all the owned input objects used by the transaction (i.e., they are the owner of the objects).
+   - The transaction has a valid user signature.
+   - The initiator of the transaction must have access to all the owned input objects the transaction uses. In the previous NFT example, the validity check makes sure you own the NFT you're trying to send to a friend.
    - All the shared input objects used by the transaction exist.
    - The gas coin is a `Coin<SUI>` object, and it contains at least as much gas as specified in the transaction's gas budget.
-3. If all the validity checks pass, the validator then attempts to lock all the owned input objects to the given transaction digest.
-   This ensures each owned input object can only be used by one transaction at a time and is the way that Sui prevents double-spending.
-4. If the locking succeeds, the validator signs the transaction using its BLS private key and returns the signature to the full node.
-5. The full node continues the process for each validator, until it has signatures from a quorum (>2/3rds by stake) of validators. Note that, in fact, this process occurs in parallel to minimize latency.
 
-Once a quorum of signatures has been collected, we say that the transaction is certified, or equivalently, that we have formed a _Transaction Certificate_.
-Because of the locking step described above, it is impossible to concurrently form certificates for two different transactions that attempt to use the same owned object.
-This is true even if there are some dishonest validators that illegally sign both transactions, because of a principle in distributed computing called "quorum intersection".
-If fewer than 1/3rd of the validators are dishonest (aka Byzantine), then the set of signers for any two certificates must have an overlap that includes at least one honest validator.
-And, crucially, because that validator is honest, it will never sign two transactions that attempt to access the same input object.
+If all the validity checks pass, the validator then attempts to lock all the owned input objects to the given transaction digest. This ensures each owned input object can only be used by one transaction at a time and is the way that Sui prevents double-spending. In other words, this makes sure that you send your NFT to only one friend instead of trying to send the same NFT to all your friends.
 
-(Note that in the discussion above, when we refer to two transactions accessing the same input object, we mean the same object at the same version.
-Of course, an object can be accessed by multiple transactions, one after another.)
+If the locking succeeds, the validator signs the transaction using its BLS private key and returns the signature to the Full node. A single validator signature is not enough, though. The Full node must collect signatures from enough validators to form a quorum. A quorum is where the amount of stake that the group of validators hold is greater than 2/3rds the total of stake on the network. 
+
+:::info
+
+Full nodes collect signatures from validators in parallel to minimize latency. 
+
+:::
+
+After the Full node collects a quorum of validator signatures, the transaction is considered certified. To be precise, the Full node has formed a _transaction certificate_.
+
+Because of the locking step described previously, it is impossible to concurrently form certificates for two different transactions that attempt to use the same owned object. This is true even if there are some dishonest validators that illegally sign both transactions, because of a principle in distributed computing called "quorum intersection".
+
+If fewer than 1/3rd of the validators are dishonest (aka Byzantine), then the set of signers for any two certificates must have an overlap that includes at least one honest validator. And, crucially, because that validator is honest, it never signs two transactions that attempt to access the same input object at the same version. After the transaction completes, the input object version changes and can be accessed again by subsequent transactions. 
 
 ## Execution
 
-Now that a certificate has been formed, the full node can send the certificate to validators for execution.
-Each validator verifies the signatures on the certificate.
+Full nodes send transactions that have a certificate to validators for execution. Each validator verifies the signatures on the certificate.
 If the certificate signatures are valid, then the validator can be sure that the transaction is valid and is not attempting to double-spend any objects.
 
 Then, each validator does the following:
 - If the transaction does not access any shared input objects, it executes it immediately.
-- If it does access shared input objects, it submits the object to Sui's consensus layer, which orders the transaction with respect to other transactions using the same shared object(s) and then executes it.
+- If the transaction does access shared input objects, it submits the object to Sui's consensus layer, which orders the transaction with respect to other transactions using the same shared objects and then executes it.
 
-# Certified Effects
+## Certified Effects
 
-Once the transaction has been executed, the validator signs the effects of the transaction and returns them to the full node.
-The transaction effects are essentially a list of all the things that the transaction did, which mainly include:
+After the transaction executes, the validator signs the effects of the transaction and returns them to the Full node.
+The transaction effects are essentially a list of all the actions that the transaction took, which mainly include:
 - All the objects that were mutated, created, wrapped, unwrapped, or deleted.
 - The gas that was spent.
 - The execution status (Success or an error code) of the transaction.
 
-Eventually, the full node will collect effects signatures from a quorum of validators.
-This collection of signatures, plus the effects themselves, is called an _Effects Certificate_.
-An _Effects Certificate_ is a guarantee of transaction finality.
-Once an _Effects Certificate_ has been observed by a full node or user, they can be guaranteed that the transaction will be included in a checkpoint, which means that the transaction cannot be reverted.
-If they wanted, the user could present the effects certificate to their friend in order to prove that they sent them the NFT.
-The presence of the validator signatures means that an effects certificate cannot be forged.
+Eventually, the Full node collects effects signatures from a quorum of validators. This collection of signatures, plus the effects themselves, is called an _effects certificate_.
 
-# Checkpoints
+:::tip
 
-The final stage of the transaction's life cycle is inclusion in a checkpoint.
-As validators execute transactions, they submit them to consensus.
-(Note that while transactions that use shared input objects must be sent to consensus before they are executed, owned-input-only transactions are sent to consensus as well.
-The difference is that owned-input-only transactions are executed first).
-The consensus layer produces a universally agreed-upon ordering of transactions.
-This ordering is the starting point for the creation of checkpoints.
-The validators take chunks of ordered transactions from the consensus layer and use them to form a checkpoint.
-Each chunk of transactions is first made causally complete and causally ordered - this means that the validators add any missing dependencies to the list of transactions and order them so that dependencies always appear before dependees in checkpoints.
+An effects certificate is a guarantee of transaction finality.
 
-Then the validator constructs a checkpoint, which (among other things) contains a list of transaction digests as well as the digests of the transaction effects of each transaction.
+::: 
 
-At this point, the transaction has reached the end of its lifecycle and been included in the permanent record of transaction activity on the Sui network.
+After you or a Full node observes an effects certificate, you are guaranteed that the transaction is going to be included in a checkpoint, which means that the transaction cannot be reverted.
 
+If you wanted, you could present the effects certificate to your friend to prove that you sent them the NFT. The presence of the validator signatures means that an effects certificate cannot be forged.
+
+## Checkpoints
+
+Inclusion in a checkpoint is the final stage in the life cycle of a transaction. As validators execute transactions, they submit them to consensus.
+While transactions that use shared input objects must be sent to consensus before they are executed, owned-input-only transactions are also sent to consensus. The difference is that owned-input-only transactions are executed first.
+
+The consensus layer produces a universally agreed-upon ordering of transactions. This ordering is the starting point for the creation of checkpoints. 
+
+The validators take chunks of ordered transactions from the consensus layer and use them to form a checkpoint. Each chunk of transactions is first made causally complete and causally ordered - this means that the validators add any missing dependencies to the list of transactions and order them so that dependencies always appear before dependees in checkpoints.
+
+Then the validator constructs a checkpoint, which (among other data) contains a list of transaction digests as well as the digests of the transaction effects of each transaction. Because checkpoints must be complete, the network sometimes has to wait for the availability of all transactions to form the checkpoints, which may take a couple of commits to process. This process typically completes in the order of a few seconds.
+
+At this point, the transaction has reached the end of its life cycle and is included in the permanent record of transaction activity on the Sui network.
+
+## Transaction finality
+
+Transaction finality is the point at which the execution of a transaction becomes irreversible and its details cannot be altered or changed. 
+
+These two network round trips–sending and receiving the signature–take less than half a second to complete when added together. At this point the sender knows the transaction is irrevocable and is going to be processed within the epoch, no matter what. The transaction has reached finality; honest validators deem invalid any subsequent transactions using the same owned input objects during the same epoch.
+
+## Settlement finality
+
+After a validator executes a transaction, it returns signed effects from that transaction to the network.
+
+After 2f+1 validators have executed the transaction, and an effects certificate exists, the effects of the transaction (transfers, newly minted objects, and so on) have been implemented. At this point, the network can process transactions that depend on those effects. 
+
+For transactions that involve owned objects only, this happens before consensus in under half a second. If a transaction includes shared objects, it happens shortly after consensus, which can take a few seconds. At this point, the transaction reached settlement finality because now you can process more transactions on the same input objects. See [Object Ownership](concepts/object-ownership.mdx) for more information.
+
+## Checkpoints
+
+ Consequently, checkpoints are a useful way to learn about all transactions finalized. However the two types of finality come much earlier for owned object transactions, and might arrive a commit or two earlier for shared object transactions. You can operationalize this early finality, for example, by sharing the effects certificate with someone else, or perhaps allowing someone else to execute the transaction to get the effect certificate.
