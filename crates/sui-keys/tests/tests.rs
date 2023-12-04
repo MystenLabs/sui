@@ -174,3 +174,19 @@ fn keystore_display_test() -> Result<(), anyhow::Error> {
     assert!(!keystore.to_string().contains("keys:"));
     Ok(())
 }
+
+#[test]
+fn get_alias_by_address_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let alias = "my_alias_test".to_string();
+    let keypair = keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, Some(alias.clone()), None, None)
+        .unwrap();
+    assert_eq!(alias, keystore.get_alias_by_address(&keypair.0).unwrap());
+
+    // Test getting an alias of an address that is not in keystore
+    let address = generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
+    assert!(keystore.get_alias_by_address(&address.0).is_err())
+}

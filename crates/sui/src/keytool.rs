@@ -278,6 +278,7 @@ pub struct DecodedMultiSigOutput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
+    alias: Option<String>,
     sui_address: SuiAddress,
     public_base64_key: String,
     key_scheme: String,
@@ -487,6 +488,7 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{sui_address}.key");
                     write_authority_keypair_to_file(&kp, file_name)?;
                     CommandOutput::Generate(Key {
+                        alias: None,
                         sui_address,
                         public_base64_key: kp.public().encode_base64(),
                         key_scheme: key_scheme.to_string(),
@@ -551,9 +553,12 @@ impl KeyToolCommand {
                 let keys = keystore
                     .keys()
                     .into_iter()
-                    .map(Key::from)
-                    .collect::<Vec<_>>();
-
+                    .map(|pk| {
+                        let mut key = Key::from(pk);
+                        key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
+                        key
+                    })
+                    .collect();
                 CommandOutput::List(keys)
             }
 
@@ -667,6 +672,7 @@ impl KeyToolCommand {
                         Ok(keypair) => {
                             let public_base64_key = keypair.public().encode_base64();
                             CommandOutput::Show(Key {
+                                alias: None, // alias does not get stored in key files
                                 sui_address: (keypair.public()).into(),
                                 public_base64_key,
                                 key_scheme: SignatureScheme::BLS12381.to_string(),
@@ -1046,7 +1052,8 @@ impl From<&SuiKeyPair> for Key {
 impl From<PublicKey> for Key {
     fn from(key: PublicKey) -> Self {
         Key {
-            sui_address: Into::<SuiAddress>::into(&key),
+            alias: None, // this is retrieved later
+            sui_address: SuiAddress::from(&key),
             public_base64_key: key.encode_base64(),
             key_scheme: key.scheme().to_string(),
             mnemonic: None,
