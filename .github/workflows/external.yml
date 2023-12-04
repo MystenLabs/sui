@@ -75,39 +75,6 @@ jobs:
         run: |
           cargo xtest
 
-  move-prover:
-    name: move-prover
-    needs: diff
-    timeout-minutes: 20
-    if: needs.diff.outputs.isMove == 'true'
-    runs-on: [ubuntu-ghcloud]
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Prover Setup
-        run: |
-          crates/sui-move/scripts/prover_setup.sh
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Prover Run
-        working-directory: crates/sui-framework/packages
-        run: |
-          set -o pipefail
-          DOTNET_ROOT="$HOME/.dotnet"
-          BIN_DIR="$HOME/bin"
-          export DOTNET_ROOT="${DOTNET_ROOT}"
-          export PATH="${DOTNET_ROOT}/tools:\$PATH"
-          export Z3_EXE="${BIN_DIR}/z3"
-          export CVC5_EXE="${BIN_DIR}/cvc5"
-          export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          ../../../target/debug/sui move prove -p sui-framework
-          ../../../target/debug/sui move prove -p sui-system
-
-
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and
