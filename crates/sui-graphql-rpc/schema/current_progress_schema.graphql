@@ -97,6 +97,24 @@ enum AddressTransactionBlockRelationship {
 	PAID
 }
 
+type AuthenticatorStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+type AuthenticatorStateExpireTransaction {
+	"""
+	Expire JWKs that have a lower epoch than this.
+	"""
+	minEpoch: Epoch!
+	"""
+	The initial version that the AuthenticatorStateUpdate was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: Int!
+}
+
 type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
@@ -467,7 +485,41 @@ type EndOfEpochData {
 }
 
 type EndOfEpochTransaction {
-	value: String!
+	"""
+	The list of system transactions that are allowed to run at the end of the epoch.
+	"""
+	transactionConnection(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
+}
+
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction
+
+type EndOfEpochTransactionKindConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EndOfEpochTransactionKindEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [EndOfEpochTransactionKind!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EndOfEpochTransactionKindEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: EndOfEpochTransactionKind!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 type Epoch {
@@ -1524,6 +1576,13 @@ type Query {
 	resolveNameServiceAddress(name: String!): Address
 	latestSuiSystemState: SuiSystemStateSummary!
 	coinMetadata(coinType: String!): CoinMetadata
+}
+
+type RandomnessStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 """

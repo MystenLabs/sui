@@ -6,7 +6,7 @@ Checkpoint created: 1
 task 2 'advance-epoch'. lines 8-8:
 Epoch advanced: 0
 
-task 3 'run-graphql'. lines 10-30:
+task 3 'run-graphql'. lines 10-43:
 Response: {
   "data": {
     "latestSuiSystemState": {
@@ -34,14 +34,33 @@ Response: {
           }
         }
       }
+    },
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "EndOfEpochTransaction",
+            "transactionConnection": {
+              "nodes": [
+                {
+                  "__typename": "RandomnessStateCreateTransaction"
+                },
+                {
+                  "__typename": "ChangeEpochTransaction"
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }
 
-task 5 'create-checkpoint'. lines 36-36:
+task 5 'create-checkpoint'. lines 49-49:
 Checkpoint created: 3
 
-task 6 'run-graphql'. lines 38-53:
+task 6 'run-graphql'. lines 51-66:
 Response: {
   "data": {
     "transactionBlockConnection": {
