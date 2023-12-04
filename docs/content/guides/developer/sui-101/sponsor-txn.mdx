@@ -3,7 +3,7 @@ title: Sponsored Transaction
 draft: true
 ---
 
-The article gives an overview of Sponsored Transaction, a native feature on Sui blockchain that allows a transaction to be executed without user paying the Gas. It also dicusses the roles in Sponsored Transaction, and a few common use cases. Then it discusses the flow of Sponsored Transaction, mostly for deverlopers who are interested in building a Gas Station or integrate with one. Finally it talks about risk considerations of Sponsored Transaction.
+The article gives an overview of Sponsored Transaction, a native feature on Sui blockchain that allows a transaction to be executed without user paying the Gas. It also dicusses the roles in Sponsored Transaction, and a few common use cases. Then it discusses the flow of Sponsored Transaction, mostly for developers who are interested in building a Gas Station or integrate with one. Finally it talks about risk considerations of Sponsored Transaction.
 
 # Overview
 A transaction on Sui takes a payment to execute. The payment, also known as Gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects, and paid to Sui Validators to secure the network. Although Gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new users start to navigate on Sui, especially for web2 users.
@@ -13,7 +13,7 @@ Sponsored Transaction, initially proposed in issue [#2418](https://github.com/My
 Natively built in on Sui, Sponsored Transaction is easy to use, composable with all other Sui features and plays an important role in Sui's mission to bring billions of users to web3.
 
 # Roles in Sponsored Transactions
-In a Sponsored Tranaction there are 3 roles: the User, the Gas Station and the Sponsor.
+In a Sponsored Transaction there are 3 roles: the User, the Gas Station and the Sponsor.
 * The User is the entity who wants to execute a transaction they like. 
 * The Gas Station is the entity that fulfills the sponsorship request for the User's transaction by providing the Gas payment they own.
 * The Sponsor is entity that funds the Gas Station for its operations.
@@ -40,7 +40,7 @@ A Sponsored Transaction is not restricted to the above use cases. Essentially, i
 However, since at least two stake holders are involved in a Sponsored Transaction, there are some additional risk considerations to be cautious with, discussed in Risk Considerations Section below.
 
 
-# Sponsored Trasnaction Flow
+# Sponsored Transaction Flow
 
 This section is mostly for developers who are interested in building a Gas Station or integrating with one.
 
@@ -107,7 +107,7 @@ Combining with Use Cases section above, we present three flows of Sponsored Tran
 
 ## Client Equivocation Risk
 
-Client equivocation happens when more than one legit transactions that share at least one owned object (e.g. a Gas object) at a certain version are submitted to the network simaltaneously. On Sui, before a transaction is executed, owned objects in this transaction are locked on validators at specific versions. A honest validator will only accpet one tranasction and reject others. Depending on the order validators see these transactions, validators may accept different transactions. In the event of no single transaction getting accepted by at least 2/3 of validators, the owned object will be locked until end of the epoch.
+Client equivocation happens when more than one legit transactions that share at least one owned object (e.g. a Gas object) at a certain version are submitted to the network simultaneously. On Sui, before a transaction is executed, owned objects in this transaction are locked on validators at specific versions. A honest validator will only accept one transaction and reject others. Depending on the order validators see these transactions, validators may accept different transactions. In the event of no single transaction getting accepted by at least 2/3 of validators, the owned object will be locked until end of the epoch.
 
 Practically speaking, client equivocation is rare, mostly caused by buggy client software. After all, no one has incentives to lock their own objects. However, Sponsored Transaction comes with counterparty risks. For example, a malicious user could equivocate the Gas Station's Gas object by submitting another transaction that uses one owned object in the Gas Station signed transaction at the same version. Similarly, a byzantine Gas Station could do the same to the User owned objects.
 
