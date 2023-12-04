@@ -82,7 +82,8 @@ fn update_lock_file_toolchain_version() {
     build_config.default_flavor = Some(Flavor::Sui);
     build_config.default_edition = Some(Edition::E2024_ALPHA);
     build_config.lock_file = Some(lock_path.clone());
-    let _ = build_config.update_lock_file_toolchain_version("0.0.1".into());
+    let _ =
+        build_config.update_lock_file_toolchain_version(&pkg.path().to_path_buf(), "0.0.1".into());
 
     let mut lock_file = File::open(lock_path).unwrap();
     let toolchain_version =
