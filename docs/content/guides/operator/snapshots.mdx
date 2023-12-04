@@ -16,6 +16,8 @@ Sui supports two types of snapshots:
 - **RocksDB snapshots** are a point-in-time view of a database store. This means that the snapshot keeps the state of the system at the moment it generates the snapshot, including non-pruned data, additional indices, and other data.
 - **Formal snapshots** are database agnostic with a minimalistic format, i.e. they contain only the data necessary to restore a node to a valid state at the specified epoch, thus they have a much smaller storage footprint and are generally faster to restore from when compared to database snapshots. Formal snapshots are also supported natively by the Sui protocol. In this context, this means that we can cryptographically verify the contents of the formal snapshot against a commitment from the committee at the epoch we are restoring to. This verification happens automatically and by default during a formal snapshot restore (unless explicitly bypassed). 
 
+**Important Note:** formal snapshots are not suitable for use if you are running a RPC node that does any historical data lookups. For more information on this subject, see [node data management](./data-management.mdx).
+
 You can configure a Full node snapshot to generate a state snapshot at the end of each epoch.
 A single Full node can generate RocksDB snapshots, Formal snapshots, or both.
 
