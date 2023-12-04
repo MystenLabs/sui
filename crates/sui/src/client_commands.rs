@@ -704,7 +704,7 @@ impl SuiClientCommands {
                     .addresses_with_alias()
                     .into_iter()
                     .map(|(address, alias)| (alias.alias.to_string(), *address))
-                    .collect::<Vec<_>>();
+                    .collect();
 
                 let output = AddressesOutput {
                     active_address,
@@ -1484,17 +1484,13 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::Addresses(addresses) => {
                 let mut builder = TableBuilder::default();
                 builder.set_header(vec!["alias", "address", "active address"]);
-                for address in &addresses.addresses {
-                    let active_address = if address.1 == addresses.active_address {
+                for (alias, address) in &addresses.addresses {
+                    let active_address = if address == &addresses.active_address {
                         "*".to_string()
                     } else {
                         "".to_string()
                     };
-                    builder.push_record([
-                        address.0.to_string(),
-                        address.1.to_string(),
-                        active_address,
-                    ]);
+                    builder.push_record([alias.to_string(), address.to_string(), active_address]);
                 }
                 let mut table = builder.build();
                 let style = TableStyle::rounded();
