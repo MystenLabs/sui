@@ -9,6 +9,7 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
+use fastcrypto::encoding::{Base64, Encoding};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
@@ -57,10 +58,15 @@ use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
-use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::crypto::get_authority_key_pair;
-use sui_types::digests::ConsensusCommitDigest;
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
+};
+use sui_types::storage::{ObjectKey, ObjectStore};
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::DEEPBOOK_ADDRESS;
@@ -540,15 +546,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand { count }) => {
+            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand {
+                count,
+                create_random_state,
+            }) => {
                 for _ in 0..count.unwrap_or(1) {
-                    self.executor.advance_epoch().await?;
+                    self.executor.advance_epoch(create_random_state).await?;
                 }
-                let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
-                let chk = self
-                    .executor
-                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
-                Ok(Some(format!("Epoch advanced: {}", chk.data().epoch)))
+                let epoch = self.get_latest_epoch_id()?;
+                Ok(Some(format!("Epoch advanced: {epoch}")))
             }
             SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
                 self.executor
@@ -556,7 +562,25 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .await?;
                 Ok(None)
             }
+            SuiSubcommand::SetRandomState(SetRandomStateCommand {
+                randomness_round,
+                random_bytes,
+                randomness_initial_version,
+            }) => {
+                let random_bytes = Base64::decode(&random_bytes)
+                    .map_err(|e| anyhow!("Failed to decode random bytes as Base64: {e}"))?;
 
+                let latest_epoch = self.get_latest_epoch_id()?;
+                let tx = VerifiedTransaction::new_randomness_state_update(
+                    latest_epoch,
+                    randomness_round,
+                    random_bytes,
+                    SequenceNumber::from_u64(randomness_initial_version),
+                );
+
+                self.execute_txn(tx.into()).await?;
+                Ok(None)
+            }
             SuiSubcommand::ViewObject(ViewObjectCommand { id: fake_id }) => {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
@@ -1298,9 +1322,9 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn get_object(&self, id: &ObjectID, version: Option<SequenceNumber>) -> anyhow::Result<Object> {
         let obj_res = if let Some(v) = version {
-            sui_types::storage::ObjectStore::get_object_by_key(&*self.executor, id, v)
+            ObjectStore::get_object_by_key(&*self.executor, id, v)
         } else {
-            sui_types::storage::ObjectStore::get_object(&*self.executor, id)
+            ObjectStore::get_object(&*self.executor, id)
         };
         match obj_res {
             Ok(Some(obj)) => Ok(obj),
@@ -1882,65 +1906,60 @@ async fn update_named_address_mapping(
 impl NodeStateGetter for SuiTestAdapter<'_> {
     fn get_verified_checkpoint_by_sequence_number(
         &self,
-        sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
-    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::VerifiedCheckpoint> {
+        sequence_number: CheckpointSequenceNumber,
+    ) -> SuiResult<VerifiedCheckpoint> {
         self.executor
             .get_verified_checkpoint_by_sequence_number(sequence_number)
     }
 
-    fn get_latest_checkpoint_sequence_number(
-        &self,
-    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::CheckpointSequenceNumber> {
+    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
         self.executor.get_latest_checkpoint_sequence_number()
     }
 
     fn get_checkpoint_contents(
         &self,
-        content_digest: sui_types::messages_checkpoint::CheckpointContentsDigest,
-    ) -> sui_types::error::SuiResult<sui_types::messages_checkpoint::CheckpointContents> {
+        content_digest: CheckpointContentsDigest,
+    ) -> SuiResult<CheckpointContents> {
         self.executor.get_checkpoint_contents(content_digest)
     }
 
     fn multi_get_transaction_blocks(
         &self,
-        tx_digests: &[sui_types::digests::TransactionDigest],
-    ) -> sui_types::error::SuiResult<Vec<Option<VerifiedTransaction>>> {
+        tx_digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
         self.executor.multi_get_transaction_blocks(tx_digests)
     }
 
     fn multi_get_executed_effects(
         &self,
-        digests: &[sui_types::digests::TransactionDigest],
-    ) -> sui_types::error::SuiResult<Vec<Option<sui_types::effects::TransactionEffects>>> {
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         self.executor.multi_get_executed_effects(digests)
     }
 
     fn multi_get_events(
         &self,
-        event_digests: &[sui_types::digests::TransactionEventsDigest],
-    ) -> sui_types::error::SuiResult<Vec<Option<sui_types::effects::TransactionEvents>>> {
+        event_digests: &[TransactionEventsDigest],
+    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         self.executor.multi_get_events(event_digests)
     }
 
     fn multi_get_object_by_key(
         &self,
-        object_keys: &[sui_types::storage::ObjectKey],
-    ) -> Result<Vec<Option<Object>>, sui_types::error::SuiError> {
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
         self.executor.multi_get_object_by_key(object_keys)
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
-        version: sui_types::base_types::VersionNumber,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
-        sui_types::storage::ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        ObjectStore::get_object_by_key(&*self.executor, object_id, version)
     }
 
-    fn get_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Option<Object>, sui_types::error::SuiError> {
-        sui_types::storage::ObjectStore::get_object(&*self.executor, object_id)
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        ObjectStore::get_object(&*self.executor, object_id)
     }
 }

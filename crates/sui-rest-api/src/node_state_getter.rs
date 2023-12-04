@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_core::authority::AuthorityState;
+use sui_types::committee::EpochId;
 use sui_types::error::UserInputError;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
@@ -19,6 +20,13 @@ use sui_types::{
 /// Trait for getting data from the node state.
 /// TODO: need a better name for this?
 pub trait NodeStateGetter: Sync + Send {
+    fn get_latest_epoch_id(&self) -> SuiResult<EpochId> {
+        let latest_checkpoint_id = self.get_latest_checkpoint_sequence_number()?;
+        let latest_checkpoint =
+            self.get_verified_checkpoint_by_sequence_number(latest_checkpoint_id)?;
+        Ok(latest_checkpoint.epoch())
+    }
+
     fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
