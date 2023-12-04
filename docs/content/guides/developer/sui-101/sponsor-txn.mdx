@@ -1,50 +1,52 @@
 ---
 title: Sponsored Transaction
-draft: true
 ---
 
-The article gives an overview of Sponsored Transaction, a native feature on Sui blockchain that allows a transaction to be executed without user paying the Gas. It also dicusses the roles in Sponsored Transaction, and a few common use cases. Then it discusses the flow of Sponsored Transaction, mostly for developers who are interested in building a Gas Station or integrate with one. Finally it talks about risk considerations of Sponsored Transaction.
+Sponsored transactions are a primitive on the Sui blockchain that enable the execution of a transaction without a user paying the gas. It also dicusses the roles in Sponsored Transaction, and a few common use cases. Then it discusses the flow of Sponsored Transaction, mostly for developers who are interested in building a Gas Station or integrate with one. Finally it talks about risk considerations of Sponsored Transaction.
 
 # Overview
-A transaction on Sui takes a payment to execute. The payment, also known as Gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects, and paid to Sui Validators to secure the network. Although Gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new users start to navigate on Sui, especially for web2 users.
+A transaction on Sui takes a payment to execute. The payment, also known as gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects, and paid to Sui validators to secure the network. Although gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new users start to navigate on Sui, especially for web 2.0 users.
 
-Sponsored Transaction, initially proposed in issue [#2418](https://github.com/MystenLabs/sui/issues/2418), is a native feature on Sui blockchain  that massively reduces the onboarding friction for users, by allowing to execute a transaction without the user paying the Gas by themselves. Instead, the transaction is paid by the `Sponsor`, who offers their payment gas objects for the transaction.
+Sponsored transactions can reduce the onboarding friction for users because the feature streamlines the process for end users. Using sponsored transactions, you can execute a transaction without requiring the user to pay it themselves. Instead, you can act as a sponsor of the transaction, offering your own payment gas objects for the transaction.
 
-Natively built in on Sui, Sponsored Transaction is easy to use, composable with all other Sui features and plays an important role in Sui's mission to bring billions of users to web3.
+## Roles in sponsored transactions
 
-# Roles in Sponsored Transactions
-In a Sponsored Transaction there are 3 roles: the User, the Gas Station and the Sponsor.
-* The User is the entity who wants to execute a transaction they like. 
-* The Gas Station is the entity that fulfills the sponsorship request for the User's transaction by providing the Gas payment they own.
-* The Sponsor is entity that funds the Gas Station for its operations.
+In a sponsored transaction there are three roles: the user, the gas station, and the sponsor.
 
-It's not uncommon to see the Gas Station and the Sponsor is the same entity. For example, a web3 gaming studio could run its own Gas Station to sponsor users with real "free-to-play" gaming experiences, at its user acquisition stage. As it's not always trivial to maintain a Gas Station for teams of any size, they can leverage third party Gas Stations to sponsor transactions they wish to promote. 
+* The user is the entity who wants to execute a transaction. 
+* The gas station is the entity that fulfills the sponsorship request for the user's transaction by providing the gas payment they own.
+* The sponsor is entity that funds the gas station for its operations.
 
-From this point on, we will use "Gas Station" and "Sponsor" interchangeably, unless otherwise specified.
+It's not uncommon for the gas station and the sponsor to be the same entity. For example, a web3 gaming studio could run its own gas station to sponsor users with real free-to-play gaming experiences at its user acquisition stage. Because it's not always trivial to maintain a gas station for teams of any size, that gaming studio could also leverage third-party gas stations to sponsor transactions they want to promote. 
 
-# Use Cases
-Below we discuss a few common scenarios where Sponsored Transaction can unleash great potentials.
+The remainder of this guide assumes the sponsor uses their own gas station. 
 
-## App-specific Sponsorship
-In this scenario, the Sponsor has a specific set of applications they want to sponsor.
-* If the transaction is initialized by the User, the Gas Station/Sponsor would examine the transaction to see it's within that set, before they agree to provide the Gas payment. 
-* If the transaction is proposed by the Sponsor - for example a rewards claim transaction of a campaign, or simply a "try it out" advertisement transaction - it is up to the User to decide if they want to finish it off, after examining the transaction.
+## Use cases
 
-## Wildcard Sponsorship
-In this scenario, the Sponsor has little restrictions on the type of transactions the Gas payment can be used for.
-* If the Sponsor is a "gas-less" wallet, it may agree to sponsor any correct transactions proposed by its users.
-* In the form of a reward or discount, the Sponsor could offer the User an "wildcard" Gas payment, vocally promising to execute any transactions with that Gas payment.
+The following sections describe some common scenarios where sponsored transactions offer an improved user experience.
 
-A Sponsored Transaction is not restricted to the above use cases. Essentially, it is a transaction jointly made by the User and the Sponsor, hence as long as they can use approaches to agree on the transaction details.
+### App-specific sponsorship
 
-However, since at least two stake holders are involved in a Sponsored Transaction, there are some additional risk considerations to be cautious with, discussed in Risk Considerations Section below.
+In this scenario, the sponsor has a specific set of applications they want to sponsor.
+
+- If the transaction is initialized by the user, the sponsor examines the transaction to make sure it's within the set of approved applications before agreeing to provide the gas payment. 
+- If the transaction is proposed by the sponsor, the user must examine the transaction and decide if they want to execute it. Examples of this type of transaction might include a rewards claim transaction of a campaign or a "try it out" advertisement transaction.
+
+### Wildcard sponsorship
+
+In this scenario, the sponsor has few restrictions on the type of transactions the gas payment can be used for.
+
+- If the sponsor is a gasless wallet, it may agree to sponsor any valid transactions proposed by its users.
+- In the form of a reward or discount, the sponsor could offer the user a wildcard gas payment, expressly promising to execute any transactions with that gas payment.
+
+A sponsored transaction is not restricted to these use cases. Essentially, a sponsored transaction is any transaction jointly made by the user and the sponsor. As long as the stakeholders can agree on the transaction details, then the number of possible ways to provide sponsored transactions is limited only by the imagination. Because at least two stakeholders are involved in a sponsored transaction, however, there are some [additional risks](#risk} that you should take steps to mitigate.
 
 
-# Sponsored Transaction Flow
+## Sponsored transaction flow
 
-This section is mostly for developers who are interested in building a Gas Station or integrating with one.
+This section is mostly for developers who are interested in building a gas station or integrating with one.
 
-The data structure of a Transaction looks like below:
+The data structure of a transaction resembles the following:
 
 ```rust
 
@@ -72,30 +74,31 @@ pub struct GasData {
 
 ```
 
-Let's look at a few things:
-* `sender` in `TransactionDataV1` (a variant of `TransactionData`) is the User's address
-* `gas_data` in `TransactionDataV1` is the Gas payment.
-* `GasData` allows a list of Gas objects, but they must be owned by the same address, namely the `owner` in `GasData`, aka the Sponsor. When `owner` is equal to `sender` then this is a regular/non-sponsored transaction.
-* `tx_signatures` in `SenderSignedTransaction` is a list of signatures. For a Sponsored Transaction, it needs to contain two signtures, respectively by the User and the Sponsor, whilst order does not matter. The signatures are signed over the entire `TransactionData`, including `GasData`.
+A few details of note for the preceding code:
 
-So, in order to construct a correct Sponsored Transaction, either a `TransactionData` needs to be built first, then passed to both parties to sign, or one party builds `TransactionData` first, signs it and then passes the transaction and the signature to the other party (e.g. in the form of `SenderSignedTransaction`). In practice, the latter is more common. 
+- `sender` in `TransactionDataV1` (a variant of `TransactionData`) is the user address.
+- `gas_data` in `TransactionDataV1` is the gas payment.
+- `GasData` allows a list of gas objects, but the same address must own them, namely the `owner` in `GasData` (the sponsor). When `owner` is equal to `sender`, then it is a regular/non-sponsored transaction.
+- `tx_signatures` in `SenderSignedTransaction` is a list of signatures. For a sponsored transaction, the list needs to contain both signatures of the user and the sponsor in some order. The signatures are signed over the entire `TransactionData`, including `GasData`.
 
-Combining with Use Cases section above, we present three flows of Sponsored Transaction.
+So, to construct a correct sponsored transaction, you must first build a `TransactionData` object. If you are neither the user or the sponsor, you would then pass the transaction to both parties to sign. If you're the sponsor, you would sign the transaction and then pass it and the signature to the other party (in the form of `SenderSignedTransaction`) for them to sign. In practice, the latter is the more common scenario. 
 
-**I. User Proposed Transaction**
+There are three flows of sponsored transaction.
+
+**User proposed transaction**
 
 ([swimlane link](https://swimlanes.io/d/wAcnOpA_h))
 
 ![](https://static.swimlanes.io/b090340af36c8a4af6c36d4479a4d04f.png)
 
-**II. Sponsor Proposed Transaction**
+**Sponsor proposed transaction**
 
 ([swimlane link](https://swimlanes.io/#ZZE9T8QwDIb3/ApvLIWBsQMSEh8DEkI6mInb+O6itk4VOxInxH8nqe76AVki+X392G+iXnuq4fYGdmNgCRHeYhiDkIP3iCzYqg9syuGg2WmstWZMDYjG1Ora9YCK8G0gn2LoPLt6rb/kQjXLQuwo1rBL/t65SCKLdkD5dJlWwzNKwS4SfY0+YsFt2I9zuTI/047mEuj67pKthjmlHj13ki+CD6EIA56gIfCslFfRHN8zIOgyoQJkB2G/pyhZsefNLKDAiKeBWDczC7YG++d97EQ5264ExB8YNUUyZtpjbmyP1Hbb+cX7H7g0PqW+fw0uf5KkZvAKLmE/deU4K9Iv))
 
 ![](https://static.swimlanes.io/d917884a263c494bb6127102d0f64840.png)
 
 
-**III. Wildcard Gas Payment**
+**Wildcard gas payment**
 
 
 ([swimlane link](https://static.swimlanes.io/ee3962b3ac3cc5d34f317cecdde125b0.png))
@@ -103,20 +106,22 @@ Combining with Use Cases section above, we present three flows of Sponsored Tran
 ![](https://static.swimlanes.io/ee3962b3ac3cc5d34f317cecdde125b0.png)
 
 
-# Risk Considerations
+## Risk considerations {#risk}
 
-## Client Equivocation Risk
+Because at least two stakeholders are involved in a sponsored transaction, you should take steps to mitigate risk.
 
-Client equivocation happens when more than one legit transactions that share at least one owned object (e.g. a Gas object) at a certain version are submitted to the network simultaneously. On Sui, before a transaction is executed, owned objects in this transaction are locked on validators at specific versions. A honest validator will only accept one transaction and reject others. Depending on the order validators see these transactions, validators may accept different transactions. In the event of no single transaction getting accepted by at least 2/3 of validators, the owned object will be locked until end of the epoch.
+### Client equivocation risk
 
-Practically speaking, client equivocation is rare, mostly caused by buggy client software. After all, no one has incentives to lock their own objects. However, Sponsored Transaction comes with counterparty risks. For example, a malicious user could equivocate the Gas Station's Gas object by submitting another transaction that uses one owned object in the Gas Station signed transaction at the same version. Similarly, a byzantine Gas Station could do the same to the User owned objects.
+Client equivocation happens when more than one legit transaction that shares at least one owned object (such as a gas coin object) at a certain version are submitted to the network simultaneously. On Sui, before a transaction is executed, owned objects in this transaction are locked on validators at specific versions. An honest validator only accepts one transaction and rejects others. Depending on the order validators receive these transactions, validators might accept different transactions. In the event of no single transaction getting accepted by at least 2/3rds of validators, the owned object is locked until end of the epoch.
 
-Although this risk may sound trivial, it is helpful to be aware of it. Therefore, it is recommended for Gas Station to do monitoring and alerting on abnormal user behaviors. When users using Sponsored Transactions or developers integrating with a Gas station, they should also consider their reputation, to minimize the risk of client equivocation.
+Practically speaking, client equivocation is rare, mostly caused by buggy client software. After all, no one has incentives to lock their own objects. However, sponsored transactions come with counterparty risks. For example, a malicious user could equivocate the gas station's gas coin object by submitting another transaction that uses one owned object in the gas station signed transaction at the same version. Similarly, a Byzantine gas station could do the same to the user owned objects.
 
-A relevant note: both the User and the Sponsor need to sign over the entire `TransactionData`, including `GasData` because otherwise the partially signed data could be snipped by a third party (e.g. a malicious Full node) and cause client equivocation and owned objects locked. 
+Although this risk might seem trivial, it is helpful to be aware of it. Your gas station should actively monitor user behavior and alert on anything abnormal. Whether you're a user taking advantage of sponsored transactions or a developer integrating with a gas station, consider your reputation to minimize the risk of client equivocation.
 
-## Censorship Risk
+Both the user and the sponsor need to sign over the entire `TransactionData`, including `GasData` because otherwise a third party (such as a malicious Full node) could snip the partially signed data and cause client equivocation and locking of owned objects. 
 
-If the User chooses to submit the dual signed transaction to the Gas Station/Sponsor rather than a FullNode, the tx may be subject to the Gas Station/Sponsor's censorship. Namely, the Gas Station/Sponsor may choose not to submit the transaction to the network, or delay the submission. 
+### Censorship risk
 
-This risk can be mitigated by the User submitting the transaction to a Full Node by themselves.
+If you chooses to submit the dual-signed transaction to the sponsor or gas station rather than a Full node, the transaction might be subject to sponsor or gas station censorship. Namely, the sponsor might choose not to submit the transaction to the network, or delay the submission. 
+
+You can mitigate this risk by submitting the transaction directly to a Full node.
