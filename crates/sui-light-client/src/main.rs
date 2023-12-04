@@ -65,12 +65,12 @@ fn read_checkpoint_list(config: &Config) -> CheckpointsList {
     let mut checkpoints_path = config.checkpoint_summary_dir.clone();
     checkpoints_path.push("checkpoints.yaml");
     // Read the resulting file and parse the yaml checkpoint list
-    let reader = fs::File::open(checkpoints_path.clone()).unwrap_or_else(|_|
+    let reader = fs::File::open(checkpoints_path.clone()).unwrap_or_else(|_| {
         panic!(
             "Unable to load checkpoints from {}",
             checkpoints_path.display()
         )
-    );
+    });
     serde_yaml::from_reader(reader).unwrap()
 }
 
@@ -81,12 +81,12 @@ fn read_checkpoint(
     // Read the resulting file and parse the yaml checkpoint list
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
     checkpoint_path.push(format!("{}.yaml", seq));
-    let mut reader = fs::File::open(checkpoint_path.clone()).unwrap_or_else(|_| 
+    let mut reader = fs::File::open(checkpoint_path.clone()).unwrap_or_else(|_| {
         panic!(
             "Unable to load checkpoint from {}",
             checkpoint_path.display()
         )
-    );
+    });
     let metadata = fs::metadata(&checkpoint_path).expect("unable to read metadata");
     let mut buffer = vec![0; metadata.len() as usize];
     reader.read_exact(&mut buffer).expect("buffer overflow");
@@ -100,12 +100,12 @@ fn write_checkpoint(
     // Write the checkpoint summary to a file
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
     checkpoint_path.push(format!("{}.yaml", summary.sequence_number));
-    let mut writer = fs::File::create(checkpoint_path.clone()).unwrap_or_else(|_|
+    let mut writer = fs::File::create(checkpoint_path.clone()).unwrap_or_else(|_| {
         panic!(
             "Unable to create checkpoint file {}",
             checkpoint_path.display()
         )
-    );
+    });
     let bytes = bcs::to_bytes(&summary).unwrap();
     writer.write_all(&bytes).unwrap();
 }
@@ -114,12 +114,12 @@ fn write_checkpoint_list(config: &Config, checkpoints_list: &CheckpointsList) {
     // Write the checkpoint list to a file
     let mut checkpoints_path = config.checkpoint_summary_dir.clone();
     checkpoints_path.push("checkpoints.yaml");
-    let mut writer = fs::File::create(checkpoints_path.clone()).unwrap_or_else(|_|
+    let mut writer = fs::File::create(checkpoints_path.clone()).unwrap_or_else(|_| {
         panic!(
             "Unable to create checkpoint file {}",
             checkpoints_path.display()
         )
-    );
+    });
     let bytes = serde_yaml::to_vec(&checkpoints_list).unwrap();
     writer.write_all(&bytes).unwrap();
 }
@@ -330,7 +330,9 @@ pub async fn main() {
     // Command line arguments and config loading
     let args = Args::parse();
 
-    let path = args.config.unwrap_or_else(|| panic!("Need a config file path"));
+    let path = args
+        .config
+        .unwrap_or_else(|| panic!("Need a config file path"));
     let reader = fs::File::open(path.clone())
         .unwrap_or_else(|_| panic!("Unable to load config from {}", path.display()));
     let config: Config = serde_yaml::from_reader(reader).unwrap();
