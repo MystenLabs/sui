@@ -106,7 +106,7 @@ Each command is then executed in order. First, let's look a the rules around arg
 - The `GasCoin` has special restrictions on being used by-value (moved). It can only be used by-value with the `TransferObjects` command.
 - Shared objects also have restrictions on being used by-value. These restrictions exist to ensure that at the end of the transaction the shared object is either still shared or has been deleted. A shared object cannot be unshared, i.e. having the owner changed, and it cannot be wrapped.
   - A shared object marked as not `mutable`, that is it was marked as being used read-only, cannot be used by value.
-  - A shared object cannot be transferred or frozen. The command `TransferObjects` and the related Move functions will fail when used with a shared object.
+  - A shared object cannot be transferred or frozen. These checks are _not_ done dynamically however. Only at the end of the transaction. For example, `TransferObjects` will succeed if passed a shared object, but at the end of execution, the transaction will fail.
   - A shared object can be wrapped and can become a dynamic field transiently, but by the end of the transaction, it must be re-shared or deleted.
 - Pure values are not type checked until their usage.
   - When checking if a pure value has type `T`, it is checked whether `T` is a valid type for a pure value (see the list above). If it is, the bytes are then validated.
@@ -193,7 +193,21 @@ The command has the form `Upgrade(ModuleBytes, TransitiveDependencies, Package, 
 
 ### End of Execution
 
-TODO
+At the end of execution, the remaining values are checked and effects for the transaction are calculated.
+
+- For inputs, the following checks are done:
+  - Any remaining immutable or readonly input objects are skipped since no modifications have been made to them.
+  - Any remaining mutable input objects are returned to their original owners--if they were shared they remain shared, if they were owned they remain owned.
+  - Any remaining pure input values are dropped. Note that pure input values must have `copy` and `drop` since all permissible types for those values have `copy` and `drop`.
+  - For any shared object we must also check that it has only been deleted or re-shared. Any other operation (wrap, transfer, freezing, etc) results in an error.
+- For results, the following checks are done:
+  - Any remaining result with the `drop` ability is dropped.
+  - If the value has `copy` but not `drop`, it's last usage must have been by-value. In that way, it's last usage is treated as a move.
+  - Otherwise, an error is given because there is an unused value without `drop`.
+- Any remaining gas is returned to the gas coin, even if the owner has changed.
+  - Note that since the gas coin can only be taken by-value with `TransferObjects`, it will not have been wrapped or deleted.
+
+The total effects (which contain the created, mutated, and deleted objects) are then passed out of the execution layer and are applied by the Sui network.
 
 ## Examples
 
