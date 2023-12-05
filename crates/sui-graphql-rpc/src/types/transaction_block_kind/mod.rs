@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::transaction_block_kind::authenticator_state_update::AuthenticatorStateUpdateTransaction;
+
 use self::{
     change_epoch::ChangeEpochTransaction,
     consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
@@ -9,6 +11,7 @@ use self::{
 use async_graphql::*;
 use sui_types::transaction::TransactionKind as NativeTransactionKind;
 
+pub(crate) mod authenticator_state_update;
 pub(crate) mod change_epoch;
 pub(crate) mod consensus_commit_prologue;
 pub(crate) mod genesis;
@@ -28,12 +31,6 @@ pub(crate) enum TransactionBlockKind {
 // TODO: flesh out the programmable transaction block type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct ProgrammableTransactionBlock {
-    pub value: String,
-}
-
-// TODO: flesh out the authenticator state update type
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-pub(crate) struct AuthenticatorStateUpdateTransaction {
     pub value: String,
 }
 
@@ -67,11 +64,8 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
 
             K::ConsensusCommitPrologueV2(ccp) => T::ConsensusCommitPrologue(ccp.into()),
 
-            // TODO: flesh out type
             K::AuthenticatorStateUpdate(asu) => {
-                T::AuthenticatorState(AuthenticatorStateUpdateTransaction {
-                    value: format!("{asu:?}"),
-                })
+                T::AuthenticatorState(AuthenticatorStateUpdateTransaction(asu))
             }
 
             // TODO: flesh out type
