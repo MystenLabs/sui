@@ -837,29 +837,6 @@ impl HeaderV2 {
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
-        // Ensure system messages are valid.
-        let mut has_dkg_message = false;
-        let mut has_dkg_confirmation = false;
-        for m in self.system_messages.iter() {
-            match m {
-                SystemMessage::DkgMessage(_) => {
-                    // A header must have no more than one DkgMessage.
-                    ensure!(!has_dkg_message, DagError::DuplicateSystemMessage);
-                    has_dkg_message = true;
-                }
-                SystemMessage::DkgConfirmation(_) => {
-                    // A header must have no more than one DkgConfirmation.
-                    ensure!(!has_dkg_confirmation, DagError::DuplicateSystemMessage);
-                    has_dkg_confirmation = true;
-                }
-                SystemMessage::RandomnessSignature(_round, _sig) => {
-                    // NOTE: correctness of the randomness signature is verified during header
-                    // voting. Security here relies on honest validators refusing to sign a
-                    // header with invalid randomness signature.
-                }
-            }
-        }
-
         Ok(())
     }
 }
