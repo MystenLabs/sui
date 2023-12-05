@@ -27,6 +27,7 @@ use sui_types::error::SuiError;
 use sui_types::object::Object;
 use sui_types::storage::ObjectStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
@@ -221,19 +222,30 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
     /// Advances the epoch.
     ///
-    /// This creates and executes an EpochChange transaction which advances the chain into the next
-    /// epoch. Since the EpochChange transaction is required to be the final transaction in an
-    /// epoch, the final checkpoint in the epoch is also created.
+    /// This creates and executes an EndOfEpoch transaction which advances the chain into the next
+    /// epoch. Since it is required to be the final transaction in an epoch, the final checkpoint in
+    /// the epoch is also created.
+    ///
+    /// create_random_state controls whether a `RandomStateCreate` end of epoch transaction is
+    /// included as part of this epoch change (to initialise on-chain randomness for the first
+    /// time).
     ///
     /// NOTE: This function does not currently support updating the protocol version or the system
     /// packages
-    pub fn advance_epoch(&mut self) {
+    pub fn advance_epoch(&mut self, create_random_state: bool) {
         let next_epoch = self.epoch_state.epoch() + 1;
         let next_epoch_protocol_version = self.epoch_state.protocol_version();
         let gas_cost_summary = self.checkpoint_builder.epoch_rolling_gas_cost_summary();
         let epoch_start_timestamp_ms = self.store.get_clock().timestamp_ms();
         let next_epoch_system_package_bytes = vec![];
-        let tx = VerifiedTransaction::new_change_epoch(
+
+        let mut kinds = vec![];
+
+        if create_random_state {
+            kinds.push(EndOfEpochTransactionKind::new_randomness_state_create());
+        }
+
+        kinds.push(EndOfEpochTransactionKind::new_change_epoch(
             next_epoch,
             next_epoch_protocol_version,
             gas_cost_summary.storage_cost,
@@ -242,8 +254,9 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             gas_cost_summary.non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             next_epoch_system_package_bytes,
-        );
+        ));
 
+        let tx = VerifiedTransaction::new_end_of_epoch_transaction(kinds);
         self.execute_transaction(tx.into())
             .expect("advancing the epoch cannot fail");
 
@@ -463,7 +476,7 @@ mod tests {
 
         let start_epoch = chain.store.get_highest_checkpint().unwrap().epoch;
         for i in 0..steps {
-            chain.advance_epoch();
+            chain.advance_epoch(/* create_random_state */ false);
             chain.advance_clock(Duration::from_millis(1));
             chain.create_checkpoint();
             println!("{i}");
