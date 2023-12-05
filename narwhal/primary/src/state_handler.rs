@@ -88,6 +88,7 @@ struct RandomnessState {
 
     // State for DKG.
     party: dkg::Party<PkG, EncG>,
+    has_sent_confirmation: bool, // enables re-sending Confirmation after crash recovery
     vss_key_output: Arc<OnceLock<PublicVssKey>>,
     dkg_output: Option<dkg::Output<PkG, EncG>>,
 
@@ -186,6 +187,7 @@ impl RandomnessState {
             store,
             tx_system_messages,
             party,
+            has_sent_confirmation: false,
             vss_key_output,
             dkg_output: None,
             authority_id,
@@ -268,7 +270,7 @@ impl RandomnessState {
     // possible, and sends it to the proposer.
     async fn advance_dkg(&mut self) {
         // Once we have enough ProcessedMessages, send a Confirmation.
-        if !self.store.has_used_messages() {
+        if !self.store.has_used_messages() || !self.has_sent_confirmation {
             match self.party.merge(&self.store.processed_messages()) {
                 Ok((conf, used_msgs)) => {
                     info!(
@@ -276,6 +278,7 @@ impl RandomnessState {
                         conf.complaints.len()
                     );
                     self.store.set_used_messages(used_msgs);
+                    self.has_sent_confirmation = true;
                     let _ = self
                         .tx_system_messages
                         .send(SystemMessage::DkgConfirmation(
