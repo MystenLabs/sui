@@ -4,18 +4,9 @@
 #[cfg(feature = "gas-profiler")]
 use move_vm_config::runtime::{VMProfilerConfig, DEFAULT_PROFILE_OUTPUT_PATH};
 #[cfg(feature = "gas-profiler")]
-use once_cell::sync::Lazy;
-#[cfg(feature = "gas-profiler")]
 use serde::Serialize;
 #[cfg(feature = "gas-profiler")]
 use std::collections::BTreeMap;
-
-#[cfg(feature = "gas-profiler")]
-const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
-
-#[cfg(feature = "gas-profiler")]
-static PROFILER_ENABLED: Lazy<bool> =
-    Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
 #[cfg(feature = "gas-profiler")]
 #[derive(Debug, Clone, Serialize)]
@@ -114,7 +105,11 @@ impl GasProfiler {
     }
 
     pub fn init_default_cfg(name: String, start_gas: u64) -> Self {
-        Self::init(&Some(VMProfilerConfig::default()), name, start_gas)
+        Self::init(
+            &VMProfilerConfig::get_default_config_if_enabled(),
+            name,
+            start_gas,
+        )
     }
 
     fn profile_name(&self) -> String {
@@ -154,7 +149,7 @@ impl GasProfiler {
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
-        if !(self.config.is_some() || *PROFILER_ENABLED) || self.start_gas == 0 {
+        if !self.config.is_some() || self.start_gas == 0 {
             return;
         }
 
@@ -169,7 +164,7 @@ impl GasProfiler {
     }
 
     pub fn close_frame(&mut self, frame_name: String, metadata: String, gas_end: u64) {
-        if !(self.config.is_some() || *PROFILER_ENABLED) || self.start_gas == 0 {
+        if !self.config.is_some() || self.start_gas == 0 {
             return;
         }
         let frame_idx = self.add_frame(metadata.clone(), frame_name, metadata);

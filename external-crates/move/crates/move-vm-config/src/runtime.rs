@@ -6,6 +6,13 @@ use move_binary_format::file_format_common::VERSION_MAX;
 use once_cell::sync::Lazy;
 use std::path::PathBuf;
 
+#[cfg(feature = "gas-profiler")]
+const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
+
+#[cfg(feature = "gas-profiler")]
+static PROFILER_ENABLED: Lazy<bool> =
+    Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
+
 pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
 
 pub static DEFAULT_PROFILE_OUTPUT_PATH: Lazy<PathBuf> = Lazy::new(|| std::path::PathBuf::from("."));
@@ -72,6 +79,17 @@ pub struct VMProfilerConfig {
     pub track_bytecode_instructions: bool,
     /// Whether or not to use the long name for functions
     pub use_long_function_name: bool,
+}
+
+#[cfg(feature = "gas-profiler")]
+impl VMProfilerConfig {
+    pub fn get_default_config_if_enabled() -> Option<VMProfilerConfig> {
+        if *PROFILER_ENABLED {
+            Some(VMProfilerConfig::default())
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(feature = "gas-profiler")]

@@ -28,7 +28,7 @@ sui-indexer.workspace = true
 sui-faucet.workspace = true
 sui-graphql-rpc.workspace = true
 sui-swarm.workspace = true
-sui.workspace = true
+sui = {workspace = true, default-features = false}
 sui-swarm-config.workspace = true
 sui-json-rpc-types.workspace = true
 sui-sdk.workspace = true

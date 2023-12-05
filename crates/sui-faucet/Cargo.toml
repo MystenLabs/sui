@@ -29,7 +29,7 @@ rocksdb.workspace = true
 tempfile.workspace = true
 parking_lot.workspace = true
 
-sui.workspace = true
+sui = {workspace = true, default-features = false}
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true
 sui-config.workspace = true

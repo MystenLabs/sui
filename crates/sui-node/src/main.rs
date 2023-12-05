@@ -105,6 +105,12 @@ fn main() {
         config.metrics_address
     );
 
+    #[cfg(feature = "gas-profiler")]
+    warn!(
+        "The gas profiler feature is enabled, this feature is not recommended to be enabled for \
+    validator or fullnode binaries"
+    );
+
     {
         let _enter = runtimes.metrics.enter();
         metrics::start_metrics_push_task(&config, registry_service.clone());

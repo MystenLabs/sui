@@ -91,19 +91,16 @@ mod checked {
         _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
         #[cfg(feature = "gas-profiler")]
-        let vm_profiler_config = match _enable_profiler {
-            None => None,
-            Some(_) => Some(VMProfilerConfig {
-                full_path: _enable_profiler.filter(|p| {
-                    !matches!(
-                        p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
-                        Some(std::cmp::Ordering::Equal)
-                    )
-                }),
-                track_bytecode_instructions: false,
-                use_long_function_name: false,
+        let vm_profiler_config = _enable_profiler.map(|_| VMProfilerConfig {
+            full_path: _enable_profiler.filter(|p| {
+                !matches!(
+                    p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),
+                    Some(std::cmp::Ordering::Equal)
+                )
             }),
-        };
+            track_bytecode_instructions: false,
+            use_long_function_name: false,
+        });
         MoveVM::new_with_config(
             natives,
             VMConfig {
@@ -125,8 +122,6 @@ mod checked {
                 error_execution_state: false,
                 #[cfg(feature = "gas-profiler")]
                 profiler_config: vm_profiler_config,
-                #[cfg(not(feature = "gas-profiler"))]
-                profiler_config: None,
             },
         )
         .map_err(|_| SuiError::ExecutionInvariantViolation)
