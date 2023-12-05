@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{date_time::DateTime, epoch::Epoch, sui_address::SuiAddress};
+use self::genesis::GenesisTransaction;
+
+use super::{date_time::DateTime, epoch::Epoch};
 use crate::{
     context_data::db_data_provider::PgManager,
     types::transaction_block_kind::change_epoch::ChangeEpochTransaction,
 };
 use async_graphql::*;
-use sui_types::transaction::{GenesisObject, TransactionKind as NativeTransactionKind};
+use sui_types::transaction::TransactionKind as NativeTransactionKind;
 
 pub(crate) mod change_epoch;
+pub(crate) mod genesis;
 
 #[derive(Union, PartialEq, Clone, Eq)]
 pub(crate) enum TransactionBlockKind {
@@ -61,11 +64,6 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
     pub(crate) timestamp: Option<DateTime>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-pub(crate) struct GenesisTransaction {
-    pub(crate) objects: Option<Vec<SuiAddress>>,
-}
-
 #[ComplexObject]
 impl ConsensusCommitPrologueTransaction {
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
@@ -92,9 +90,7 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
 
             K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction(ce)),
 
-            K::Genesis(g) => T::Genesis(GenesisTransaction {
-                objects: Some(g.objects.iter().cloned().map(SuiAddress::from).collect()),
-            }),
+            K::Genesis(g) => T::Genesis(GenesisTransaction(g)),
 
             K::ConsensusCommitPrologue(ccp) => {
                 T::ConsensusCommitPrologue(ConsensusCommitPrologueTransaction {
@@ -128,17 +124,6 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
             K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction {
                 value: format!("{rsu:?}"),
             }),
-        }
-    }
-}
-
-// TODO fix this GenesisObject
-impl From<GenesisObject> for SuiAddress {
-    fn from(value: GenesisObject) -> Self {
-        match value {
-            GenesisObject::RawObject { data, owner: _ } => {
-                SuiAddress::from_bytes(data.id().to_vec()).unwrap()
-            }
         }
     }
 }

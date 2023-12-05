@@ -607,7 +607,10 @@ type GasInput {
 }
 
 type GenesisTransaction {
-	objects: [SuiAddress!]
+	"""
+	Objects to be created during genesis.
+	"""
+	objectConnection(first: Int, after: String, last: Int, before: String): ObjectConnection!
 }
 
 
