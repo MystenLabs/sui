@@ -170,7 +170,7 @@
                 __typename
                 ... on ChangeEpochTransaction {
                     epoch { epochId }
-                    timestamp
+                    startTimestamp
                     storageCharge
                     computationCharge
                     storageRebate
