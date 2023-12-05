@@ -77,6 +77,14 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .limit(1)
             .into_boxed()
     }
+
+    fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
+        checkpoints::dsl::checkpoints
+            .order_by(checkpoints::dsl::sequence_number.asc())
+            .limit(1)
+            .into_boxed()
+    }
+
     fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,
