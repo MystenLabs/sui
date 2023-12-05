@@ -9,12 +9,22 @@ use chrono::{
     ParseError as ChronoParseError,
 };
 
-// ISO-8601 Date and Time: RFC3339 in UTC
-// YYYY-MM-DDTHH:MM:SS.mmmZ
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DateTime(ChronoDateTime<ChronoUtc>);
 
-#[Scalar]
+impl DateTime {
+    pub fn from_ms(timestamp_ms: i64) -> Option<Self> {
+        // TODO: `timestamp_millis_opt` returns an optional to handle ambiguous time conversions
+        // which UTC does not have, so this should be converted to return a Result, with an
+        // `InternalError`.
+        ChronoUtc
+            .timestamp_millis_opt(timestamp_ms)
+            .single()
+            .map(Self)
+    }
+}
+
+#[Scalar(use_type_description = true)]
 impl ScalarType for DateTime {
     fn parse(value: Value) -> InputValueResult<Self> {
         match value {
@@ -30,15 +40,9 @@ impl ScalarType for DateTime {
     }
 }
 
-impl DateTime {
-    pub fn from_ms(timestamp_ms: i64) -> Option<Self> {
-        // TODO: `timestamp_millis_opt` returns an optional to handle ambiguous time conversions
-        // which UTC does not have, so this should be converted to return a Result, with an
-        // `InternalError`.
-        ChronoUtc
-            .timestamp_millis_opt(timestamp_ms)
-            .single()
-            .map(Self)
+impl Description for DateTime {
+    fn description() -> &'static str {
+        "ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ"
     }
 }
 
