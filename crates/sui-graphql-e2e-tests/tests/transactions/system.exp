@@ -7,9 +7,7 @@ Response: {
       "nodes": [
         {
           "digest": "4maneZK422m9xLj5tELwFN3tSm1ZxA33hnM9dwffH6eb",
-          "sender": {
-            "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-          },
+          "sender": null,
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
           ],
@@ -252,9 +250,7 @@ Response: {
       "nodes": [
         {
           "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn",
-          "sender": {
-            "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-          },
+          "sender": null,
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
           ],
@@ -334,9 +330,7 @@ Response: {
       "nodes": [
         {
           "digest": "fvUnamxVj1m1M4DZ8dryuzqrjYRvLDHNjexNwxc6HA7",
-          "sender": {
-            "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-          },
+          "sender": null,
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
           ],

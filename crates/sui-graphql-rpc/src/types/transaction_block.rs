@@ -3,8 +3,11 @@
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer::models_v2::transactions::StoredTransaction;
-use sui_types::transaction::{
-    SenderSignedData as NativeSenderSignedData, TransactionDataAPI, TransactionExpiration,
+use sui_types::{
+    base_types::SuiAddress as NativeSuiAddress,
+    transaction::{
+        SenderSignedData as NativeSenderSignedData, TransactionDataAPI, TransactionExpiration,
+    },
 };
 
 use crate::{context_data::db_data_provider::PgManager, error::Error};
@@ -61,10 +64,11 @@ impl TransactionBlock {
         Base58::encode(&self.stored.transaction_digest)
     }
 
-    /// The address corresponding to the public key that signed this transaction.
+    /// The address corresponding to the public key that signed this transaction. System
+    /// transactions do not have senders.
     async fn sender(&self) -> Option<Address> {
         let sender = self.native.transaction_data().sender();
-        Some(Address {
+        (sender != NativeSuiAddress::ZERO).then(|| Address {
             address: SuiAddress::from(sender),
         })
     }
