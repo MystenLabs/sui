@@ -1670,7 +1670,7 @@ type TransactionBlock {
 	"""
 	gasInput: GasInput
 	"""
-	The type of transaction this is as well as the commmands and/or parameters comprising the
+	The type of this transaction as well as the commmands and/or parameters comprising the
 	transaction of this kind.
 	"""
 	kind: TransactionBlockKind
