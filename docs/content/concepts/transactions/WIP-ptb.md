@@ -1,19 +1,19 @@
 # Programmable Transactions Blocks
 
-Programmable transaction blocks are used to define all user transactions on Sui. These transactions allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move module! Additionally, the structure of programmable transaction blocks was designed with automation and transaction builders in mind. In other words, they are designed to be a lightweight and flexible way of generating transactions. That being said, more intricate programming patterns, such as loops, are not supported, and in those cases, a new Move module should be published.
+Programmable transaction blocks are used to define all user transactions on Sui. These transactions allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move package! Additionally, the structure of programmable transaction blocks was designed with automation and transaction builders in mind. In other words, they are designed to be a lightweight and flexible way of generating transactions. That being said, more intricate programming patterns, such as loops, are not supported, and in those cases, a new Move package should be published.
 
-Each programmable transaction block is consists of a block that is comprised of individual transaction commands (sometimes referred to themselves as transactions). Each transaction command is executed in order, and the results from a transaction command can be used in any subsequent transaction command. The effects, i.e. object modifications or transfers, of all transaction commands in a block are applied atomically at the end of the transaction, and if one transaction command fails, the entire block fails and no effects from the commands are applied.
+Each programmable transaction block is comprised of individual transaction commands (sometimes referred to themselves as transactions). Each transaction command is executed in order, and the results from a transaction command can be used in any subsequent transaction command. The effects, i.e. object modifications or transfers, of all transaction commands in a block are applied atomically at the end of the transaction, and if one transaction command fails, the entire block fails and no effects from the commands are applied.
 
 This document will cover the semantics of the execution of the transaction commands. Note that it will assume familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents: (TODO LINKS)
 
 ## Transaction Type
 
-In this document, we will be looking at the two parts of a programmable transaction block that are relevant to the exectuion semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are not out of scope. The programmable transaction block consists of two components
+In this document, we will be looking at the two parts of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The programmable transaction block consists of two components
 
 - The inputs, `Vec<CallArg>`, is a vector of arguments, either objects or pure values, that can be used in the transaction commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
 - The commands, `Vec<Command>`, is a vector of transaction commands. The possible commands are:
   - `TransferObjects` sends multiple (1 or more) objects to a specified address.
-  - `SplitCoins` splits off mutliple (1 or more) coins from a single coin. It can be any `sui::coin::Coin` object.
+  - `SplitCoins` splits off multiple (1 or more) coins from a single coin. It can be any `sui::coin::Coin` object.
   - `MergeCoins` merges multiple (1 or more) coins into a single coin. Any `sui::coin::Coin` objects can be merged, as long as they are all of the same type.
   - `MakeMoveVec` creates a vector (potentially empty) of Move values. This is used primarily to construct vectors of Move values to be used as arguments to `MoveCall`.
   - `MoveCall` invokes either an `entry` or a `public` Move function in a published package.
@@ -30,7 +30,7 @@ The inputs and results can be seen as populating an array of values. For inputs,
 
 Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `Vec<CallArg>`. Where each `CallArg` is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `CallArg::Pure(PureArg)`, which contains the bytes of the value.
 
-For object inputs, there is a different set of metadata needed differs depending on the type ownership of the object. The rules for authentication of these objects is described elsewhere (TODO LINK), but below is the actual data in the `ObjectArg` enum.
+For object inputs, the metadata needed differs depending on the type ownership of the object. The rules for authentication of these objects is described elsewhere (TODO LINK), but below is the actual data in the `ObjectArg` enum.
 
 - If the object is owned by an address (or it is immutable), then `ObjectArg::ImmOrOwnedObject(ObjectRef)` is used. The `ObjectRef` is a triple `(ObjectID, SequenceNumber, ObjectDigest)` which respectively specifies the object's ID, it's version or sequence number, and the digest of the object's data.
 - If an object is shared, then `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }` is used. Unlike `ImmOrOwnedObject`, a shared's objects version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object will be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
@@ -67,7 +67,7 @@ Each command takes `Argument`s, which specify the input or result being used. Th
 
 - `Input(u16)` is an input argument, where the `u16` is the index of the input in the input vector.
   - For example, given an input vector of `[Object1, Object2, Pure1, Object3]`, `Object1` would be accessed with `Input(0)` and `Pure1` would be accessed with `Input(2)`.
-- `GasCoin` is a special input argument representing the object for the GasCoin. It is kept separate from the other inputs because the gas coin is always present in each transaction and has special restrictions not present for other inputs. Additionally, the gas coin being separate makes its usage very explicit, which is helpful for sponsored transactions where the sponsor might not want the sender to use the gas coin for anything other than gas.
+- `GasCoin` is a special input argument representing the object for the `SUI` coin used to pay for gas. It is kept separate from the other inputs because the gas coin is always present in each transaction and has special restrictions (see below) not present for other inputs. Additionally, the gas coin being separate makes its usage very explicit, which is helpful for sponsored transactions where the sponsor might not want the sender to use the gas coin for anything other than gas.
   - The gas coin cannot be taken by-value except with the `TransferObjects` command. If you need an owned version of the gas coin, you can first use `SplitCoins` to split off a single coin.
   - This limitation exists to make it easy for the remaining gas to be returned to the coin at the beginning of execution. In other words, if the gas coin was wrapped or deleted, then there would not be an obvious spot for the excess gas to be returned. See the execution section for more details.
 - `NestedResult(u16, u16)` uses the value from a previous command. The first `u16` is the index of the command in the command vector, and the second `u16` is the index of the result in the result vector of that command.
@@ -177,8 +177,8 @@ The command has the form `Publish(ModuleBytes, TransitiveDependencies)` where `M
 
 - When the transaction is signed, the network verifies that the `ModuleBytes` are not empty.
 - The module bytes `ModuleBytes: Vec<Vec<u8>>` contain the bytes of the modules being published. Each element in the vector is a module.
-- The transitive dependencies `TransitiveDependencies: Vec<ObjectID>` are the Object IDs of the packages that the new package depends on. While the modules themselves indicate the packages used as dependencies, the transitive object IDs must be provided to select the version of those packages. In other words, these object IDs are used to select the version of the packages marked as dependencies in the modules.
-- After the modules are verified, the `init` function of each module is called in same order as the module byte vector `ModuleBytes`.
+- The transitive dependencies `TransitiveDependencies: Vec<ObjectID>` are the Object IDs of the packages that the new package depends on. While each module indicates the packages used as dependencies, the transitive object IDs must be provided to select the version of those packages. In other words, these object IDs are used to select the version of the packages marked as dependencies in the modules.
+- After the modules in the package are verified, the `init` function of each module is called in same order as the module byte vector `ModuleBytes`.
 - The command produces a single result of type `sui::package::UpgradeCap`, which is the upgrade capability for the newly published package.
 
 #### `Upgrade`
