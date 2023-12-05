@@ -10,8 +10,8 @@ This document will cover the semantics of the execution of the transaction comma
 
 In this document, we will be looking at the two parts of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The programmable transaction block consists of two components
 
-- The inputs, `Vec<CallArg>`, is a vector of arguments, either objects or pure values, that can be used in the transaction commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
-- The commands, `Vec<Command>`, is a vector of transaction commands. The possible commands are:
+- The inputs, `[CallArg]`, is a vector of arguments, either objects or pure values, that can be used in the transaction commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
+- The commands, `[Command]`, is a vector of transaction commands. The possible commands are:
   - `TransferObjects` sends multiple (1 or more) objects to a specified address.
   - `SplitCoins` splits off multiple (1 or more) coins from a single coin. It can be any `sui::coin::Coin` object.
   - `MergeCoins` merges multiple (1 or more) coins into a single coin. Any `sui::coin::Coin` objects can be merged, as long as they are all of the same type.
@@ -28,13 +28,13 @@ The inputs and results can be seen as populating an array of values. For inputs,
 
 ### Inputs
 
-Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `Vec<CallArg>`. Where each `CallArg` is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `CallArg::Pure(PureArg)`, which contains the bytes of the value.
+Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `[CallArg]`. Where each `CallArg` is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `CallArg::Pure(PureArg)`, which contains the bytes of the value.
 
 For object inputs, the metadata needed differs depending on the type ownership of the object. The rules for authentication of these objects is described elsewhere (TODO LINK), but below is the actual data in the `ObjectArg` enum.
 
-- If the object is owned by an address (or it is immutable), then `ObjectArg::ImmOrOwnedObject(ObjectRef)` is used. The `ObjectRef` is a triple `(ObjectID, SequenceNumber, ObjectDigest)` which respectively specifies the object's ID, it's version or sequence number, and the digest of the object's data.
+- If the object is owned by an address (or it is immutable), then `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)` is used. The triple respectively specifies the object's ID, it's version or sequence number, and the digest of the object's data.
 - If an object is shared, then `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }` is used. Unlike `ImmOrOwnedObject`, a shared's objects version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object will be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
-- If the object is owned by another object, i.e. it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then `ObjectArg::Receiving(ObjectRef)` is used. The data in the `ObjectRef` is the same as for the `ImmOrOwnedObject` case.
+- If the object is owned by another object, i.e. it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then `ObjectArg::Receiving(ObjectID, SequenceNumber, ObjectDigest)` is used. The object data the same as for the `ImmOrOwnedObject` case.
 
 For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes are not validated until the type is specified in a transaction command, e.g. in `MoveCall` or `MakeMoveVec`. Not all Move values can be constructed from BCS bytes. The following types are supported:
 
@@ -117,7 +117,7 @@ Each command is then executed in order. First, let's look a the rules around arg
 
 The command has the form `TransferObjects(ObjectArgs, AddressArg)` where `ObjectArgs` is a vector of objects and `AddressArg` is the address the objects are sent to.
 
-- Each argument `ObjectArgs: Vec<Argument>` must be an object. However, the objects do not have the same type.
+- Each argument `ObjectArgs: [Argument]` must be an object. However, the objects do not have the same type.
 - The address argument `AddressArg: Argument` must be an address, which could come from a `Pure` input or a result.
 - All arguments, objects and address, are taken by value.
 - The command does not produce any results (an empty result vector).
@@ -129,7 +129,7 @@ The command has the form `SplitCoins(CoinArg, AmountArgs)` where `CoinArg` is th
 
 - When the transaction is signed, the network verifies that the AmountArgs is non-empty.
 - The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being split. It can be any coin type and is not limited to `SUI` coins.
-- The amount arguments `AmountArgs: Vec<Argument>` must be `u64` values, which could come from a `Pure` input or a result.
+- The amount arguments `AmountArgs: [Argument]` must be `u64` values, which could come from a `Pure` input or a result.
 - The coin argument `CoinArg` is taken by mutable reference.
 - The amount arguments `AmountArgs` are taken by value (copied).
 - The result of the command is a vector of coins, `sui::coin::Coin<T>`. The coin type `T` is the same as the coin being split, and the number of results matches the number of arguments
@@ -141,7 +141,7 @@ The command has the form `MergeCoins(CoinArg, ToMergeArgs)` where the `CoinArg` 
 
 - When the transaction is signed, the network verifies that the AmountArgs is non-empty.
 - The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being merged. It can be any coin type and is not limited to `SUI` coins.
-- The coin arguments `ToMergeArgs: Vec<Argument>` must be `sui::coin::Coin<T>` values where the `T` is the same type as the `CoinArg`.
+- The coin arguments `ToMergeArgs: [Argument]` must be `sui::coin::Coin<T>` values where the `T` is the same type as the `CoinArg`.
 - The coin argument `CoinArg` is taken by mutable reference.
 - The merge arguments `ToMergeArgs` are taken by value (moved).
 - The command does not produce any results (an empty result vector).
@@ -155,7 +155,7 @@ The command has the form `MakeMoveVec(VecTypeOption, Args)` where `VecTypeOption
 - The type `VecTypeOption: Option<TypeTag>` is an optional argument specifying the type of the elements in the vector being constructed. The `TypeTag` is a Move type for the elements in the vector, i.e. the `T` in the produced `vector<T>`.
   - The type does not not have to be specified for an object vector--when `T: key`.
   - The type _must_ be specified if the type is not an object type or when the vector is empty.
-- The arguments `Args: Vec<Argument>` are the elements of the vector. The arguments can be any type, including objects, pure values, or results from previous commands.
+- The arguments `Args: [Argument]` are the elements of the vector. The arguments can be any type, including objects, pure values, or results from previous commands.
 - The arguments `Args` are taken by value. Copied if `T: copy` and moved otherwise.
 - The command produces a _single_ result of type `vector<T>`. The elements of the vector cannot then be accessed individually using `NestedResult`. Instead, the entire vector must be used as an argument to another command. If you wish to access the elements individually, you can use the `MoveCall` command and do so inside of Move code.
 - While the signature of this command cannot be expressed in Move, you can think of it roughly as having the signature `(T...): vector<T>` where `T...` indicates a variadic number of arguments of type `T`.
@@ -167,8 +167,8 @@ This command has the form `MoveCall(Package, Module, Function, TypeArgs, Args)` 
 - The package `Package: ObjectID` is the Object ID of the package containing the module being called.
 - The module `Module: String` is the name of the module containing the function being called.
 - The function `Function: String` is the name of the function being called.
-- The type arguments `TypeArgs: Vec<TypeTag>` are the type arguments to the function being called. They must satisfy the constraints of the type parameters for the function.
-- The arguments `Args: Vec<Argument>` are the arguments to the function being called. The arguments must be valid for the parameters as specified in the function's signature.
+- The type arguments `TypeArgs: [TypeTag]` are the type arguments to the function being called. They must satisfy the constraints of the type parameters for the function.
+- The arguments `Args: [Argument]` are the arguments to the function being called. The arguments must be valid for the parameters as specified in the function's signature.
 - Unlike the other commands, the usage of the arguments and the number of results are dynamic--in that they both depend on the signature of the Move function being called.
 
 #### `Publish`
@@ -176,8 +176,8 @@ This command has the form `MoveCall(Package, Module, Function, TypeArgs, Args)` 
 The command has the form `Publish(ModuleBytes, TransitiveDependencies)` where `ModuleBytes` are the bytes of the module being published and `TransitiveDependencies` is a vector of package Object ID dependencies to link against.
 
 - When the transaction is signed, the network verifies that the `ModuleBytes` are not empty.
-- The module bytes `ModuleBytes: Vec<Vec<u8>>` contain the bytes of the modules being published. Each element in the vector is a module.
-- The transitive dependencies `TransitiveDependencies: Vec<ObjectID>` are the Object IDs of the packages that the new package depends on. While each module indicates the packages used as dependencies, the transitive object IDs must be provided to select the version of those packages. In other words, these object IDs are used to select the version of the packages marked as dependencies in the modules.
+- The module bytes `ModuleBytes: [[u8]]` contain the bytes of the modules being published. Each `[u8]` element is a module.
+- The transitive dependencies `TransitiveDependencies: [ObjectID]` are the Object IDs of the packages that the new package depends on. While each module indicates the packages used as dependencies, the transitive object IDs must be provided to select the version of those packages. In other words, these object IDs are used to select the version of the packages marked as dependencies in the modules.
 - After the modules in the package are verified, the `init` function of each module is called in same order as the module byte vector `ModuleBytes`.
 - The command produces a single result of type `sui::package::UpgradeCap`, which is the upgrade capability for the newly published package.
 
