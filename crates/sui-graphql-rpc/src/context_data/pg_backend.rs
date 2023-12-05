@@ -339,23 +339,24 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                         parts[1].clone()
                     )));
                 } else if parts.len() >= 3 {
-                    let validate_type = parse_sui_struct_tag(&object_type)
+                    let validated_type = parse_sui_struct_tag(&object_type)
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
 
-                    if validate_type.type_params.is_empty() {
+                    if validated_type.type_params.is_empty() {
                         query = query.filter(
                             objects::dsl::object_type
                                 .like(format!(
                                     "{}<%",
-                                    validate_type.to_canonical_string(/* with_prefix */ true)
+                                    validated_type.to_canonical_string(/* with_prefix */ true)
                                 ))
                                 .or(objects::dsl::object_type
-                                    .eq(validate_type
+                                    .eq(validated_type
                                         .to_canonical_string(/* with_prefix */ true))),
                         );
                     } else {
                         query = query.filter(
-                            objects::dsl::object_type.eq(validate_type.to_canonical_string(true)),
+                            objects::dsl::object_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
                         );
                     }
                 }
