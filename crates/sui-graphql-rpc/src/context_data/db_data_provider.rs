@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::db_backend::{CursorBound, GenericQueryBuilder, OrderBy};
+use super::db_backend::GenericQueryBuilder;
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -111,65 +111,6 @@ pub enum DbValidationError {
     QueryCostExceeded(u64, u64),
     #[error("Page size exceeded - requested: {0}, limit: {1}")]
     PageSizeExceeded(u64, u64),
-}
-
-pub(crate) struct CursorBounds<T> {
-    pub before: Option<CursorBound<T>>,
-    pub after: Option<CursorBound<T>>,
-}
-
-impl<T> CursorBounds<T> {
-    pub(crate) fn new(order_by: OrderBy, before: Option<T>, after: Option<T>) -> Self {
-        Self {
-            after: after.map(|a| match order_by {
-                OrderBy::Asc => CursorBound::Gt(a),
-                OrderBy::Desc => CursorBound::Lt(a),
-            }),
-            before: before.map(|b| match order_by {
-                OrderBy::Asc => CursorBound::Lt(b),
-                OrderBy::Desc => CursorBound::Gt(b),
-            }),
-        }
-    }
-}
-
-pub(crate) struct PaginationParams<T> {
-    pub order_by: OrderBy,
-    pub before: Option<CursorBound<T>>,
-    pub after: Option<CursorBound<T>>,
-    pub requires_invert: bool,
-}
-
-impl<T> PaginationParams<T> {
-    /// Translates graphql cursor arguments to db pagination logic.
-    /// There are two types of pagination, queries with 'first', and queries with 'last'.
-    /// 'First' queries do not require inverting the result set, while 'last' queries do.
-    /// This method returns the sort order, whether the result set needs to be inverted,
-    /// and the pagination logic for 'before' and 'after' cursors.
-    /// A query defaults to 'first' if neither 'first' nor 'last' is provided.
-    pub(crate) fn new(
-        order_by: Option<OrderBy>,
-        first: Option<u64>,
-        after: Option<T>,
-        last: Option<u64>,
-        before: Option<T>,
-    ) -> Self {
-        let order_by = order_by.unwrap_or(OrderBy::Asc);
-        let (new_order_by, requires_invert) = match (first, last) {
-            (None, Some(_)) => (order_by.invert(), true),
-            _ => (order_by, false),
-        };
-
-        // Note that we use the original order_by - the cursor bounding logic is consistent with 'first' queries
-        let cursors = CursorBounds::new(order_by, before, after);
-
-        PaginationParams {
-            order_by: new_order_by,
-            requires_invert,
-            before: cursors.before,
-            after: cursors.after,
-        }
-    }
 }
 
 pub(crate) struct PgManager {
@@ -469,7 +410,7 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
-        validate_cursor_pagination_post_fix(&first, &last)?;
+        validate_cursor_pagination(&first, &after, &last, &before)?;
         let limit = self.validate_page_limit(first, last)?;
         let before = before
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
@@ -478,15 +419,12 @@ impl PgManager {
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
 
-        let pagination_params = PaginationParams::new(None, first, after, last, before);
-
         let result: Option<Vec<StoredCheckpoint>> = self
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
-                        pagination_params.order_by,
-                        pagination_params.before,
-                        pagination_params.after,
+                        before,
+                        after,
                         limit,
                         epoch.map(|e| e as i64),
                     ))
@@ -502,7 +440,7 @@ impl PgManager {
                     stored_checkpoints.pop();
                 }
 
-                if pagination_params.requires_invert {
+                if last.is_some() {
                     stored_checkpoints.reverse();
                 }
 
@@ -1753,17 +1691,6 @@ pub(crate) fn validate_cursor_pagination(
         return Err(Error::CursorNoBeforeAfter);
     }
 
-    if first.is_some() && last.is_some() {
-        return Err(Error::CursorNoFirstLast);
-    }
-
-    Ok(())
-}
-
-pub(crate) fn validate_cursor_pagination_post_fix(
-    first: &Option<u64>,
-    last: &Option<u64>,
-) -> Result<(), Error> {
     if first.is_some() && last.is_some() {
         return Err(Error::CursorNoFirstLast);
     }

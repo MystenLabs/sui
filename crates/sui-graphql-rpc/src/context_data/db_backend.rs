@@ -16,30 +16,6 @@ use diesel::{
     sql_types::Text,
 };
 
-/// An enum that determines whether to select rows that are greater than or less than the cursor.
-#[derive(Clone, Copy, PartialEq)]
-pub(crate) enum CursorBound<T> {
-    Gt(T),
-    Lt(T),
-}
-
-/// Controls whether the query is in ascending or descending order.
-#[allow(dead_code)]
-#[derive(Clone, Copy, PartialEq)]
-pub(crate) enum OrderBy {
-    Asc,
-    Desc,
-}
-
-impl OrderBy {
-    pub fn invert(&self) -> Self {
-        match self {
-            OrderBy::Asc => OrderBy::Desc,
-            OrderBy::Desc => OrderBy::Asc,
-        }
-    }
-}
-
 pub(crate) type BalanceQuery<'a, DB> = BoxedSelectStatement<
     'a,
     (
@@ -91,9 +67,8 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
-        order_by: OrderBy,
-        before: Option<CursorBound<i64>>,
-        after: Option<CursorBound<i64>>,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;

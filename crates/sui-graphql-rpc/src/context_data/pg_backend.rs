@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    db_backend::{BalanceQuery, CursorBound, Explain, Explained, GenericQueryBuilder, OrderBy},
+    db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
     db_data_provider::DbValidationError,
 };
 use crate::context_data::db_data_provider::PgManager;
@@ -344,44 +344,22 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
     fn multi_get_checkpoints(
-        order_by: OrderBy,
-        before: Option<CursorBound<i64>>,
-        after: Option<CursorBound<i64>>,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
-        // TODO (wlmyng): Reduce redundancy when other multi-gets are refactored
-        match order_by {
-            OrderBy::Asc => {
-                query = query.order(checkpoints::dsl::sequence_number.asc());
-            }
-            OrderBy::Desc => {
-                query = query.order(checkpoints::dsl::sequence_number.desc());
-            }
-        }
-
+        // The following assumes that the data is always requested in ascending order
         if let Some(after) = after {
-            match after {
-                CursorBound::Gt(after) => {
-                    query = query.filter(checkpoints::dsl::sequence_number.gt(after));
-                }
-                CursorBound::Lt(after) => {
-                    query = query.filter(checkpoints::dsl::sequence_number.lt(after));
-                }
-            }
-        }
-
-        if let Some(before) = before {
-            match before {
-                CursorBound::Gt(before) => {
-                    query = query.filter(checkpoints::dsl::sequence_number.gt(before));
-                }
-                CursorBound::Lt(before) => {
-                    query = query.filter(checkpoints::dsl::sequence_number.lt(before));
-                }
-            }
+            query = query
+                .filter(checkpoints::dsl::sequence_number.gt(after))
+                .order(checkpoints::dsl::sequence_number.asc());
+        } else if let Some(before) = before {
+            query = query
+                .filter(checkpoints::dsl::sequence_number.lt(before))
+                .order(checkpoints::dsl::sequence_number.desc());
         }
 
         if let Some(epoch) = epoch {
