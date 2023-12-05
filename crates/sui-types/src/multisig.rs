@@ -185,6 +185,13 @@ impl AuthenticatorTrait for MultiSig {
                 CompressedSignature::ZkLogin(z) => {
                     let authenticator = ZkLoginAuthenticator::from_bytes(&z.0)
                         .map_err(|_| SuiError::InvalidAuthenticator)?;
+
+                    // Check PublicKey defined in MultisigPublicKey vs the authenticator derivation is consistent.
+                    if SuiAddress::try_from(&authenticator)? != SuiAddress::from(pk) {
+                        return Err(SuiError::InvalidSignature {
+                            error: "Inconsistent pk with authenticator".to_string(),
+                        });
+                    }
                     // Author is already verified against multisig pk, do not verify author within zkLogin authenticator where self.check_author() is evaluated to false for multisig.
                     authenticator
                         .verify_claims(value, author, verify_params, self.check_author())
