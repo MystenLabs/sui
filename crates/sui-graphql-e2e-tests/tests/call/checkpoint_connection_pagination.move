@@ -8,10 +8,10 @@
 // Assuming checkpoints 0 through 12
 // first: 4, after: "6" -> checkpoints 7, 8, 9, 10
 // first: 4, after: "6", before: "8" -> checkpoints 7
-// first: 4, before: "6" -> checkpoints 0, 1, 2, 3
-// last: 4, after: "6" -> checkpoints 9, 10, 11, 12
+// first: 4, before: "6" -> error
+// last: 4, after: "6" -> error
 // last: 4, before: "6" -> checkpoints 2, 3, 4, 5
-// last: 4, before: "6", after: "3" -> checkpoints 4, 5
+// last: 4, before: "6", after: "3" -> error
 
 //# init --addresses Test=0x0 --simulator
 
