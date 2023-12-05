@@ -2,6 +2,66 @@
 source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
+type ActiveJwk {
+	"""
+	The string (Issuing Authority) that identifies the OIDC provider.
+	"""
+	iss: String!
+	"""
+	The string (Key ID) that identifies the JWK among a set of JWKs, (RFC 7517, Section 4.5).
+	"""
+	kid: String!
+	"""
+	The JWK key type parameter, (RFC 7517, Section 4.1).
+	"""
+	kty: String!
+	"""
+	The JWK RSA public exponent, (RFC 7517, Section 9.3).
+	"""
+	e: String!
+	"""
+	The JWK RSA modulus, (RFC 7517, Section 9.3).
+	"""
+	n: String!
+	"""
+	The JWK algorithm parameter, (RFC 7517, Section 4.4).
+	"""
+	alg: String!
+	"""
+	The most recent epoch in which the JWK was validated.
+	"""
+	epoch: Epoch!
+}
+
+type ActiveJwkConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ActiveJwkEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ActiveJwk!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ActiveJwkEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ActiveJwk!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Address implements ObjectOwner {
 	"""
 	Similar behavior to the `transactionBlockConnection` in Query but
@@ -42,7 +102,22 @@ enum AddressTransactionBlockRelationship {
 }
 
 type AuthenticatorStateUpdateTransaction {
-	value: String!
+	"""
+	Epoch of the authenticator state update transaction.
+	"""
+	epoch: Epoch!
+	"""
+	Consensus round of the authenticator state update.
+	"""
+	round: Int!
+	"""
+	Newly active JWKs (JSON Web Keys).
+	"""
+	newActiveJwkConnection(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	"""
+	The initial version of the authenticator object that it was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: Int!
 }
 
 type Balance {
