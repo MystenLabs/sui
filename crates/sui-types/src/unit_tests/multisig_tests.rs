@@ -987,7 +987,7 @@ fn multisig_zklogin_scenarios() {
         .verify_authenticator(intent_msg, zklogin_addr, Some(10), &aux_verify_data)
         .is_err());
 
-    // an inconsistent multisig public key (consists of 3 ed25519 pubkeys) fails to verify zklogin sig inside multisig. 
+    // an inconsistent multisig public key (consists of 3 ed25519 pubkeys) fails to verify zklogin sig inside multisig.
     let keys = keys();
     let pk1 = keys[0].public();
     let pk2 = keys[1].public();
@@ -1009,7 +1009,7 @@ fn multisig_zklogin_scenarios() {
     assert!(multisig_2
         .verify_authenticator(&intent_msg, bad_addr, None, &aux_verify_data)
         .is_err());
-    
+
     // zkLogin sig + traditional sig combined verifies. see consistency test in /sdk/typescript/test/e2e/multisig.test.ts
     let multisig_2 =
         MultiSig::combine(vec![sig1.clone(), zklogin_sig.clone()], multisig_pk.clone()).unwrap();
