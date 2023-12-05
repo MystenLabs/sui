@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Creates an event Test::M1::EventA, Test::M1::EventB<Object>, Test::M2::EventA, Test::M2::EventB<Object>
+// Verifies all 4 events show up when filtered on sender
+// Verifies all 4 events show up when filtered on sender and package
+// Verifies 2 events show up when filtered on sender, package and module
+// Verifies correct event when filtered for Test::M1::EventA
+// Verifies correct event when filtered for Test::M1::EventB
+// Verifies error when filtered on sender, package, module and event type with generics and <
+
 //# init --addresses Test=0x0 --accounts A B --simulator
 
 //# publish
@@ -9,7 +17,6 @@ module Test::M1 {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
     use sui::transfer;
-    use sui::coin::Coin;
 
     struct EventA has copy, drop {
         new_value: u64
@@ -47,7 +54,6 @@ module Test::M2 {
     use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
     use sui::transfer;
-    use sui::coin::Coin;
 
     struct EventA has copy, drop {
         new_value: u64

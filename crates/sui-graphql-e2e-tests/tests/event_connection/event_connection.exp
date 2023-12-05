@@ -3,61 +3,45 @@ processed 15 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 6-81:
-warning[W09001]: unused alias
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmp2Q5oZe:12:20
-   │
-12 │     use sui::coin::Coin;
-   │                    ^^^^ Unused 'use' of alias 'Coin'. Consider removing it
-   │
-   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09001]: unused alias
-   ┌─ /var/folders/bl/pv03zc_15mnc90n4k7n7ygk80000gn/T/.tmp2Q5oZe:43:20
-   │
-43 │     use sui::coin::Coin;
-   │                    ^^^^ Unused 'use' of alias 'Coin'. Consider removing it
-   │
-   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
+task 1 'publish'. lines 14-87:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 11263200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 83-83:
+task 2 'run'. lines 89-89:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 85-85:
+task 3 'run'. lines 91-91:
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 4 'run'. lines 87-87:
+task 4 'run'. lines 93-93:
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("Object"), type_params: [] })] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 5 'run'. lines 89-89:
+task 5 'run'. lines 95-95:
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'run'. lines 91-91:
+task 6 'run'. lines 97-97:
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 7 'run'. lines 93-93:
+task 7 'run'. lines 99-99:
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M2"), name: Identifier("Object"), type_params: [] })] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 8 'create-checkpoint'. lines 95-95:
+task 8 'create-checkpoint'. lines 101-101:
 Checkpoint created: 1
 
-task 9 'run-graphql'. lines 97-116:
+task 9 'run-graphql'. lines 103-122:
 Response: {
   "data": {
     "eventConnection": {
@@ -135,7 +119,7 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 118-137:
+task 10 'run-graphql'. lines 124-143:
 Response: {
   "data": {
     "eventConnection": {
@@ -213,7 +197,7 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 139-158:
+task 11 'run-graphql'. lines 145-164:
 Response: {
   "data": {
     "eventConnection": {
@@ -257,7 +241,7 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 160-179:
+task 12 'run-graphql'. lines 166-185:
 Response: {
   "data": {
     "eventConnection": {
@@ -284,7 +268,7 @@ Response: {
   }
 }
 
-task 13 'run-graphql'. lines 181-200:
+task 13 'run-graphql'. lines 187-206:
 Response: {
   "data": {
     "eventConnection": {
@@ -311,7 +295,7 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 202-221:
+task 14 'run-graphql'. lines 208-227:
 Response: {
   "data": null,
   "errors": [
