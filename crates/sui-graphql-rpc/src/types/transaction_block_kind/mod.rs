@@ -1,17 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::genesis::GenesisTransaction;
-
-use super::{date_time::DateTime, epoch::Epoch};
-use crate::{
-    context_data::db_data_provider::PgManager,
-    types::transaction_block_kind::change_epoch::ChangeEpochTransaction,
+use self::{
+    change_epoch::ChangeEpochTransaction,
+    consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
 };
 use async_graphql::*;
 use sui_types::transaction::TransactionKind as NativeTransactionKind;
 
 pub(crate) mod change_epoch;
+pub(crate) mod consensus_commit_prologue;
 pub(crate) mod genesis;
 
 #[derive(Union, PartialEq, Clone, Eq)]
@@ -54,29 +52,6 @@ pub(crate) struct TxBlockKindNotImplementedYet {
     pub(crate) text: String,
 }
 
-// TODO: add ConsensusCommitPrologueTransactionV2 for TransactionKind::ConsensusCommitPrologueV2.
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-#[graphql(complex)]
-pub(crate) struct ConsensusCommitPrologueTransaction {
-    #[graphql(skip)]
-    pub(crate) epoch_id: u64,
-    pub(crate) round: Option<u64>,
-    pub(crate) timestamp: Option<DateTime>,
-}
-
-#[ComplexObject]
-impl ConsensusCommitPrologueTransaction {
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.epoch_id)
-            .await
-            .extend()?;
-
-        Ok(Some(epoch))
-    }
-}
-
 impl From<NativeTransactionKind> for TransactionBlockKind {
     fn from(kind: NativeTransactionKind) -> Self {
         use NativeTransactionKind as K;
@@ -92,21 +67,9 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
 
             K::Genesis(g) => T::Genesis(GenesisTransaction(g)),
 
-            K::ConsensusCommitPrologue(ccp) => {
-                T::ConsensusCommitPrologue(ConsensusCommitPrologueTransaction {
-                    epoch_id: ccp.epoch,
-                    round: Some(ccp.round),
-                    timestamp: DateTime::from_ms(ccp.commit_timestamp_ms as i64),
-                })
-            }
+            K::ConsensusCommitPrologue(ccp) => T::ConsensusCommitPrologue(ccp.into()),
 
-            K::ConsensusCommitPrologueV2(ccp) => {
-                T::ConsensusCommitPrologue(ConsensusCommitPrologueTransaction {
-                    epoch_id: ccp.epoch,
-                    round: Some(ccp.round),
-                    timestamp: DateTime::from_ms(ccp.commit_timestamp_ms as i64),
-                })
-            }
+            K::ConsensusCommitPrologueV2(ccp) => T::ConsensusCommitPrologue(ccp.into()),
 
             // TODO: flesh out type
             K::AuthenticatorStateUpdate(asu) => {

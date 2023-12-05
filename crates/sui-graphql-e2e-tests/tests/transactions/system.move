@@ -115,7 +115,8 @@
                 ... on ConsensusCommitPrologueTransaction {
                     epoch { epochId }
                     round
-                    timestamp
+                    commitTimestamp
+                    consensusCommitDigest
                 }
             }
 

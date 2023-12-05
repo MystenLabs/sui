@@ -307,9 +307,23 @@ type CommitteeMember {
 }
 
 type ConsensusCommitPrologueTransaction {
-	round: Int
-	timestamp: DateTime
-	epoch: Epoch
+	"""
+	Epoch of the commit prologue transaction.
+	"""
+	epoch: Epoch!
+	"""
+	Consensus round of the commit.
+	"""
+	round: Int!
+	"""
+	Unix timestamp from consensus.
+	"""
+	commitTimestamp: DateTime
+	"""
+	Digest of consensus output, encoded as a Base58 string (only available from V2 of the
+	transaction).
+	"""
+	consensusCommitDigest: String
 }
 
 scalar DateTime
