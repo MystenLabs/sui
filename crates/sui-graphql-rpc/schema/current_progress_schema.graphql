@@ -1670,9 +1670,10 @@ type TransactionBlock {
 	gasInput: GasInput
 	kind: TransactionBlockKind
 	"""
-	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
+	A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
+	this is a sponsored transaction.
 	"""
-	signatures: [TransactionSignature]
+	signatures: [Base64!]
 	"""
 	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
 	This serves as a unique id for the block on chain
@@ -1790,10 +1791,6 @@ union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransac
 enum TransactionBlockKindInput {
 	SYSTEM_TX
 	PROGRAMMABLE_TX
-}
-
-type TransactionSignature {
-	base64Sig: Base64!
 }
 
 """

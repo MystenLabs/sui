@@ -22,9 +22,7 @@ Response: {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
-            {
-              "base64Sig": "ALxehdof/0TFQ35cRMrzRWIxwzxSoKQ33zBVPflpqidGNaD/4yfX7zVn/BkFAaxYlWXI9CgoxH/fAyoR8IM/5wx/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
-            }
+            "ALxehdof/0TFQ35cRMrzRWIxwzxSoKQ33zBVPflpqidGNaD/4yfX7zVn/BkFAaxYlWXI9CgoxH/fAyoR8IM/5wx/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
@@ -141,9 +139,7 @@ Response: {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
-            {
-              "base64Sig": "AEWUWhBOgtZBhMGn7ZzOe6wSa/QEoO+X/UUyPu2RLc2wCdGmVdbv49UX2z/In2QkIIHUYG5sFiZj1jbKyv7aHAl/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
-            }
+            "AEWUWhBOgtZBhMGn7ZzOe6wSa/QEoO+X/UUyPu2RLc2wCdGmVdbv49UX2z/In2QkIIHUYG5sFiZj1jbKyv7aHAl/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
@@ -263,9 +259,7 @@ Response: {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
-            {
-              "base64Sig": "AP4uiNHdqgSzjEg0+D9wXhC4mFyc9qi27IKe8fxQUNXgpRLsZzoKhmc4vcyKpnC/9pXKLy7Dqba4wiSDQca52wh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
-            }
+            "AP4uiNHdqgSzjEg0+D9wXhC4mFyc9qi27IKe8fxQUNXgpRLsZzoKhmc4vcyKpnC/9pXKLy7Dqba4wiSDQca52wh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
@@ -421,9 +415,7 @@ Response: {
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "signatures": [
-            {
-              "base64Sig": "ABEU1SEQq9GN9ursCTI1enOMryNzFDiumEuOx5Qck1VvdnLuyM8YTvRLV3+1pfNvFkju7+Qp1y0PrRcYTa1lpwh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
-            }
+            "ABEU1SEQq9GN9ursCTI1enOMryNzFDiumEuOx5Qck1VvdnLuyM8YTvRLV3+1pfNvFkju7+Qp1y0PrRcYTa1lpwh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
           ],
           "gasInput": {
             "gasSponsor": {
