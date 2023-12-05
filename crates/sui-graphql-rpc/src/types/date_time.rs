@@ -32,6 +32,9 @@ impl ScalarType for DateTime {
 
 impl DateTime {
     pub fn from_ms(timestamp_ms: i64) -> Option<Self> {
+        // TODO: `timestamp_millis_opt` returns an optional to handle ambiguous time conversions
+        // which UTC does not have, so this should be converted to return a Result, with an
+        // `InternalError`.
         ChronoUtc
             .timestamp_millis_opt(timestamp_ms)
             .single()
