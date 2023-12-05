@@ -14,7 +14,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
-use super::storage::*;
+use crate::types::WritableObjectStore;
 
 pub struct MemoryBackedStore {
     pub objects: RefCell<HashMap<ObjectID, (ObjectRef, Object)>>,

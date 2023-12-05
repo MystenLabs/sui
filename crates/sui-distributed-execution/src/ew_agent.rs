@@ -2,6 +2,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 
 use super::agents::*;
@@ -83,7 +84,11 @@ impl Agent<SailfishMessage> for EWAgent {
                 0
             }
         };
-        let working_directory = {
+
+        let duration_secs = my_attrs["duration"].parse::<u64>().unwrap();
+        let duration = Duration::from_secs(duration_secs);
+
+        let _working_directory = {
             if my_attrs["mode"] == "channel" {
                 my_attrs.get("working_dir").unwrap().parse().unwrap()
             } else {
@@ -115,7 +120,7 @@ impl Agent<SailfishMessage> for EWAgent {
             .run(
                 metrics,
                 tx_count,
-                working_directory,
+                duration,
                 &mut self.in_channel,
                 &self.out_channel,
                 ew_ids,

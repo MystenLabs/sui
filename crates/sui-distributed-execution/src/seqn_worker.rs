@@ -21,7 +21,6 @@ use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
 use sui_node::metrics;
-use sui_single_node_benchmark::command::{Component, WorkloadKind};
 use sui_types::digests::ChainIdentifier;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -34,12 +33,9 @@ use tokio::{
 };
 use typed_store::rocks::default_db_options;
 
-use crate::{metrics::Metrics, storage::import_from_files};
+use crate::{metrics::Metrics, setup::generate_benchmark_data};
 
 use super::types::*;
-
-pub const WORKLOAD: WorkloadKind = WorkloadKind::NoMove;
-pub const COMPONENT: Component = Component::PipeTxsToChannel;
 
 pub struct SequenceWorkerState {
     pub config: NodeConfig,
@@ -484,10 +480,11 @@ impl SequenceWorkerState {
         out_to_network: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
         tx_count: u64,
-        _duration: Duration,
-        working_dir: PathBuf,
+        duration: Duration,
+        _working_dir: PathBuf,
     ) {
-        let (_, _, transactions) = import_from_files(working_dir);
+        // let (_, _, transactions) = import_from_files(working_dir);
+        let (_, transactions) = generate_benchmark_data(tx_count, duration).await;
 
         const PRECISION: u64 = 20;
         let burst_duration = 1000 / PRECISION;

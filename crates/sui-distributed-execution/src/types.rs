@@ -364,3 +364,9 @@ pub fn get_ews_for_tx(tx: &TransactionWithEffects, ew_ids: &Vec<UniqueId>) -> Ha
         .map(|obj_id| get_ew_owner_for_object(obj_id, ew_ids))
         .collect()
 }
+
+pub trait WritableObjectStore {
+    fn insert(&self, k: ObjectID, v: (ObjectRef, Object)) -> Option<(ObjectRef, Object)>;
+
+    fn remove(&self, k: ObjectID) -> Option<(ObjectRef, Object)>;
+}

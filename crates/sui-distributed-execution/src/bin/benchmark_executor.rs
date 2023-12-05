@@ -4,15 +4,10 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 use std::{fs, net::SocketAddr};
 use std::{path::PathBuf, sync::Arc};
-use sui_distributed_execution::seqn_worker::{COMPONENT, WORKLOAD};
-use sui_distributed_execution::storage::export_to_files;
 use sui_distributed_execution::sw_agent::*;
 use sui_distributed_execution::types::*;
 use sui_distributed_execution::{ew_agent::*, prometheus::start_prometheus_server};
 use sui_distributed_execution::{metrics::Metrics, server::*};
-use sui_single_node_benchmark::benchmark_context::BenchmarkContext;
-use sui_single_node_benchmark::workload::Workload;
-use sui_types::transaction::Transaction;
 use tokio::task::{JoinError, JoinHandle};
 
 /// Top-level executor shard structure.
@@ -170,47 +165,15 @@ async fn main() {
             tracing::info!("Generated configs.json");
 
             // now generate accounts and txs and dump them to a file
-            let (ctx, transactions) = generate_benchmark_data(tx_count, duration).await;
-            export_to_files(
-                ctx.get_accounts(),
-                ctx.get_genesis_objects(),
-                &transactions,
-                working_directory,
-            );
+            // let (ctx, transactions) = generate_benchmark_data(tx_count, duration).await;
+            // export_to_files(
+            //     ctx.get_accounts(),
+            //     ctx.get_genesis_objects(),
+            //     &transactions,
+            //     working_directory,
+            // );
         }
     }
-}
-
-async fn generate_benchmark_data(
-    tx_count: u64,
-    duration: Duration,
-) -> (BenchmarkContext, Vec<Transaction>) {
-    let workload = Workload::new(tx_count * duration.as_secs(), WORKLOAD);
-    println!(
-        "Setting up benchmark...{tx_count} txs per second for {} seconds",
-        duration.as_secs()
-    );
-    let start_time = std::time::Instant::now();
-    let mut ctx = BenchmarkContext::new(workload, COMPONENT, 0).await;
-    let elapsed = start_time.elapsed().as_millis() as f64;
-    println!(
-        "Benchmark setup finished in {}ms at a rate of {} accounts/s",
-        elapsed,
-        1000f64 * workload.num_accounts() as f64 / elapsed
-    );
-
-    let start_time = std::time::Instant::now();
-    let tx_generator = workload.create_tx_generator(&mut ctx).await;
-    let transactions = ctx.generate_transactions(tx_generator).await;
-    let elapsed = start_time.elapsed().as_millis() as f64;
-    println!(
-        "{} txs generated in {}ms at a rate of {} TPS",
-        transactions.len(),
-        elapsed,
-        1000f64 * workload.tx_count as f64 / elapsed,
-    );
-
-    (ctx, transactions)
 }
 
 /// Deploy a local testbed of executor shards.
@@ -244,7 +207,7 @@ async fn deploy_testbed(tx_count: u64, execution_workers: usize) -> GlobalConfig
 mod test {
     use std::{fs, time::Duration};
 
-    use sui_distributed_execution::{storage::import_from_files, sw_agent::SWAgent};
+    use sui_distributed_execution::{setup::import_from_files, sw_agent::SWAgent};
     use tokio::time::sleep;
 
     use crate::deploy_testbed;

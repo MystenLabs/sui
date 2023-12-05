@@ -4,7 +4,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
 use sui_config::genesis::Genesis;
@@ -34,8 +33,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 
-use crate::storage::import_from_files;
-use crate::{metrics::Metrics, storage::WritableObjectStore};
+use crate::setup::generate_benchmark_data;
+use crate::{metrics::Metrics, types::WritableObjectStore};
 
 use super::types::*;
 
@@ -516,8 +515,10 @@ impl<
     //     }
     // }
 
-    fn init_genesis_objects(&self, working_directory: PathBuf) {
-        let (_, objects, _) = import_from_files(working_directory);
+    async fn init_genesis_objects(&self, tx_count: u64, duration: Duration) {
+        // let (_, objects, _) = import_from_files(working_directory);
+        let (ctx, _) = generate_benchmark_data(tx_count, duration).await;
+        let objects = ctx.get_genesis_objects();
         for obj in objects {
             self.memory_store
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
@@ -528,8 +529,8 @@ impl<
     pub async fn run(
         &mut self,
         metrics: Arc<LimitsMetrics>,
-        _tx_count: u64,
-        working_directory: PathBuf,
+        tx_count: u64,
+        duration: Duration,
         in_channel: &mut mpsc::Receiver<NetworkMessage>,
         out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
@@ -556,7 +557,7 @@ impl<
 
         if self.mode == ExecutionMode::Channel {
             // self.process_genesis_objects(in_channel).await;
-            self.init_genesis_objects(working_directory);
+            self.init_genesis_objects(tx_count, duration).await;
         }
         // Start timer for TPS computation
         let mut num_tx: u64 = 0;

@@ -7,7 +7,7 @@ pub mod mutex_store;
 pub mod prometheus;
 pub mod seqn_worker;
 pub mod server;
+pub mod setup;
 pub mod simple_store;
-pub mod storage;
 pub mod sw_agent;
 pub mod types;
