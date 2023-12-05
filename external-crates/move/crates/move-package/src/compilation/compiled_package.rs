@@ -4,6 +4,7 @@
 
 use crate::{
     compilation::package_layout::CompiledPackageLayout,
+    lock_file::{self, schema::ToolchainVersion},
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
         layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
@@ -35,8 +36,12 @@ use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::Write,
+    ffi::OsStr,
+    fs::{self, File},
+    io::{Cursor, Write},
+    os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 #[derive(Debug, Clone)]
@@ -452,6 +457,102 @@ impl CompiledPackage {
             &resolved_package,
             transitive_dependencies,
         )?;
+
+        let example_package_name = deps_package_paths[0].clone();
+        let example_source_path = example_package_name.paths[0].as_str();
+        let path_buf = PathBuf::from(example_source_path);
+        let root = SourcePackageLayout::try_find_root(path_buf.as_path())?;
+        let lock_file = root.join("Move.lock");
+
+        println!(
+            "Dep package path to compile: {:#?}",
+            deps_package_paths[0].name,
+        );
+
+        println!("Root: {}", root.display(),);
+
+        // how to get platform of "this" binary?
+
+        if !lock_file.exists() {
+            println!("No lock file found for {:#?}", example_package_name);
+        // use newest or legacy?
+        // compile here / bail / handle, whatever.
+        } else {
+            let mut lock_path = File::open(lock_file)?;
+            let toolchain_version = lock_file::schema::ToolchainVersion::read(&mut lock_path)?;
+            println!("see toolchain version {:#?}", toolchain_version);
+            // XXX if there is no toolchain version, we need to use legacy!
+            println!("this version: {}", env!("CARGO_PKG_VERSION"));
+            // check this version good or not
+            // download version if not exists, to `.sui/binaries.
+
+            let mut url = OsStr::new("https://github.com/MystenLabs/sui/releases/download/mainnet-v1.14.2/sui-mainnet-v1.14.2-macos-arm64.tgz");
+            let release_url;
+
+            if toolchain_version.is_none() {
+                // Use legacy compiler if no versioning info.
+                println!("Using legacy compiler v1.14.2 hardcoded");
+                url = OsStr::new("https://github.com/MystenLabs/sui/releases/download/mainnet-v1.14.2/sui-mainnet-v1.14.2-macos-arm64.tgz");
+            } else if let Some(ToolchainVersion {
+                compiler_version, ..
+            }) = toolchain_version
+            {
+                println!("Using compiler version {}", compiler_version);
+                release_url = format!("https://github.com/MystenLabs/sui/releases/download/mainnet-v{}/sui-mainnet-v{}-macos-arm64.tgz", compiler_version, compiler_version);
+                url = OsStr::new(release_url.as_str());
+            };
+
+            let out_tarball = OsStr::new("/Users/rijnard/.move/binaries/RENAME_ME.tgz");
+            let out_binary_dir = OsStr::new("/Users/rijnard/.move/binaries");
+            let out_binary =
+                OsStr::new("/Users/rijnard/.move/binaries/target/release/sui-macos-arm64");
+
+            let out_binary_path = Path::new(out_binary);
+
+            if !out_binary_path.exists() {
+                println!("curling");
+                Command::new("curl")
+                    .args([
+                        OsStr::new("-L"),
+                        OsStr::new("--create-dirs"),
+                        OsStr::new("-o"),
+                        out_tarball,
+                        url,
+                    ])
+                    .output()?;
+
+                println!("untarring");
+                Command::new("tar")
+                    .args([
+                        OsStr::new("-xzf"),
+                        out_tarball,
+                        OsStr::new("-C"),
+                        OsStr::new(out_binary_dir),
+                    ])
+                    .output()?;
+
+                println!("setting perms");
+                let mut perms = fs::metadata(out_binary)?.permissions();
+                perms.set_mode(0o755);
+                fs::set_permissions(out_binary, perms)?;
+                println!("done");
+            } else {
+                println!("binary exists");
+            }
+
+            println!("invoking compiler");
+            Command::new(out_binary)
+                .args([
+                    OsStr::new("move"),
+                    OsStr::new("build"),
+                    OsStr::new("-p"),
+                    OsStr::new(root.as_path()),
+                ]) // Add flags
+                .output()?;
+
+            println!("done")
+        };
+
         let flags = resolution_graph.build_options.compiler_flags();
         // invoke the compiler
         let mut paths = deps_package_paths.clone();
