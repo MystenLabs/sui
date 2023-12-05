@@ -38,7 +38,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -128,7 +128,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -209,7 +209,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -291,7 +291,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }

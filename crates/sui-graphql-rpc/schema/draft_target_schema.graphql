@@ -754,6 +754,9 @@ union TransactionBlockKind =
   | GenesisTransaction
   | ChangeEpochTransaction
   | ProgrammableTransactionBlock
+  | AuthenticatorStateUpdateTransaction
+  | RandomnessStateUpdateTransaction
+  | EndOfEpochTransaction
 
 type ConsensusCommitPrologueTransaction {
   epoch: Epoch
