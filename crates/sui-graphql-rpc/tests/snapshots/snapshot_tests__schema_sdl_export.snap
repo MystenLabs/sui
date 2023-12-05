@@ -1658,7 +1658,8 @@ type TransactionBlock {
 	"""
 	digest: String!
 	"""
-	The address corresponding to the public key that signed this transaction.
+	The address corresponding to the public key that signed this transaction. System
+	transactions do not have senders.
 	"""
 	sender: Address
 	"""
