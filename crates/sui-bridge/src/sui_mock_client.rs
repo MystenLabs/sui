@@ -3,7 +3,6 @@
 
 //! A mock implementation of Sui JSON-RPC client.
 
-use crate::sui_client::SuiClientInner;
 use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -12,6 +11,9 @@ use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::Identifier;
+
+use crate::sui_client::SuiClientInner;
+use crate::types::BridgeCommittee;
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -113,5 +115,9 @@ impl SuiClientInner for SuiMockClient {
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {
         Ok(self.latest_checkpoint_sequence_number)
+    }
+
+    async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error> {
+        unimplemented!()
     }
 }

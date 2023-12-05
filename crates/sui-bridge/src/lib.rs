@@ -7,9 +7,11 @@ pub mod eth_client;
 pub mod eth_syncer;
 pub mod events;
 pub mod handler;
+pub mod orchestrator;
 pub mod server;
 pub mod sui_client;
 pub mod sui_syncer;
+pub mod types;
 
 #[cfg(test)]
 pub(crate) mod eth_mock_provider;
