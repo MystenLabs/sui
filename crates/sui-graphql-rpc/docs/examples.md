@@ -1266,7 +1266,9 @@
 >          storageRebate
 >        }
 >        ... on GenesisTransaction {
->          objects
+>          objectConnection {
+>            nodes { address }
+>          }
 >        }
 >      }
 >    }

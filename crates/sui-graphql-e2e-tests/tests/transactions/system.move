@@ -24,7 +24,24 @@
             kind {
                 __typename
                 ... on GenesisTransaction {
-                    objects
+                    objectConnection {
+                        nodes {
+                            location
+
+                            asMoveObject {
+                                contents {
+                                    type { repr }
+                                    json
+                                }
+                            }
+
+                            asMovePackage {
+                                moduleConnection {
+                                    nodes { name }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
