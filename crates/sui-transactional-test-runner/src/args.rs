@@ -156,6 +156,18 @@ pub struct CreateCheckpointCommand {
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
+    #[clap(long = "create-random-state")]
+    pub create_random_state: bool,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct SetRandomStateCommand {
+    #[clap(long = "randomness-round")]
+    pub randomness_round: u64,
+    #[clap(long = "random-bytes")]
+    pub random_bytes: String,
+    #[clap(long = "randomness-initial-version")]
+    pub randomness_initial_version: u64,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -180,6 +192,8 @@ pub enum SuiSubcommand {
     AdvanceEpoch(AdvanceEpochCommand),
     #[clap(name = "advance-clock")]
     AdvanceClock(AdvanceClockCommand),
+    #[clap(name = "set-random-state")]
+    SetRandomState(SetRandomStateCommand),
     #[clap(name = "view-checkpoint")]
     ViewCheckpoint,
     #[clap(name = "run-graphql")]

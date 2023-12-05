@@ -186,12 +186,8 @@
 
             kind {
                 __typename
-                ... on ChangeEpochTransaction {
-                    epoch { epochId }
-                    startTimestamp
-                    storageCharge
-                    computationCharge
-                    storageRebate
+                ... on EndOfEpochTransaction {
+                    value
                 }
             }
 

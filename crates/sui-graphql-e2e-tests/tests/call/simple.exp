@@ -26,7 +26,7 @@ task 6 'advance-epoch'. lines 39-39:
 Epoch advanced: 5
 
 task 7 'view-checkpoint'. lines 41-41:
-CheckpointSummary { epoch: 5, seq: 10, content_digest: 61bEMkkiRg8f9wrnsiJr41Q5wBH1jmNZHQDkNmPYw5NM,
+CheckpointSummary { epoch: 5, seq: 10, content_digest: E8F7PJ9CSU8i8pSr6d3HXKdMxdyTb6NLdnc32dQAg9P3,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
 task 8 'run-graphql'. lines 43-49:
