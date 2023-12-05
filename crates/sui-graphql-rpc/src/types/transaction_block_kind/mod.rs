@@ -4,6 +4,7 @@
 use self::{
     change_epoch::ChangeEpochTransaction,
     consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
+    randomness_state_update::RandomnessStateUpdateTransaction,
 };
 use async_graphql::*;
 use sui_types::transaction::TransactionKind as NativeTransactionKind;
@@ -11,6 +12,7 @@ use sui_types::transaction::TransactionKind as NativeTransactionKind;
 pub(crate) mod change_epoch;
 pub(crate) mod consensus_commit_prologue;
 pub(crate) mod genesis;
+pub(crate) mod randomness_state_update;
 
 #[derive(Union, PartialEq, Clone, Eq)]
 pub(crate) enum TransactionBlockKind {
@@ -32,12 +34,6 @@ pub(crate) struct ProgrammableTransactionBlock {
 // TODO: flesh out the authenticator state update type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct AuthenticatorStateUpdateTransaction {
-    pub value: String,
-}
-
-// TODO: flesh out the randomness state update type
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-pub(crate) struct RandomnessStateUpdateTransaction {
     pub value: String,
 }
 
@@ -83,10 +79,7 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
                 value: format!("{eoe:?}"),
             }),
 
-            // TODO: flesh out type
-            K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction {
-                value: format!("{rsu:?}"),
-            }),
+            K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction(rsu)),
         }
     }
 }

@@ -1441,8 +1441,26 @@ type Query {
 	coinMetadata(coinType: String!): CoinMetadata
 }
 
+"""
+System transaction to update the source of on-chain randomness.
+"""
 type RandomnessStateUpdateTransaction {
-	value: String!
+	"""
+	Epoch of the randomness state update transaction.
+	"""
+	epoch: Epoch!
+	"""
+	Randomness round of the update.
+	"""
+	randomnessRound: Int!
+	"""
+	Updated random bytes, encoded as Base64.
+	"""
+	randomBytes: Base64!
+	"""
+	The initial version the randomness object was shared at.
+	"""
+	randomnessObjInitialSharedVersion: Int!
 }
 
 """

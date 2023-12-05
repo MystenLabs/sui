@@ -26,7 +26,7 @@ Response: {
             "objectConnection": {
               "nodes": [
                 {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
                   "asMoveObject": null,
                   "asMovePackage": {
                     "moduleConnection": {
@@ -69,7 +69,7 @@ Response: {
                   }
                 },
                 {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
                   "asMoveObject": null,
                   "asMovePackage": {
                     "moduleConnection": {
@@ -139,7 +139,7 @@ Response: {
                   }
                 },
                 {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
                   "asMoveObject": null,
                   "asMovePackage": {
                     "moduleConnection": {
@@ -182,7 +182,7 @@ Response: {
                   }
                 },
                 {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -197,7 +197,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -212,7 +212,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -227,7 +227,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
                   "asMoveObject": null,
                   "asMovePackage": {
                     "moduleConnection": {
@@ -258,7 +258,7 @@ Response: {
                   }
                 },
                 {
-                  "location": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
+                  "address": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -277,7 +277,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
+                  "address": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -292,7 +292,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
+                  "address": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -311,7 +311,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
+                  "address": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -332,7 +332,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
+                  "address": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -350,7 +350,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -732,7 +732,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
+                  "address": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -749,7 +749,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                  "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -768,7 +768,7 @@ Response: {
                   "asMovePackage": null
                 },
                 {
-                  "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                  "address": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
                   "asMoveObject": {
                     "contents": {
                       "type": {
@@ -1069,13 +1069,13 @@ Response: {
 task 6 'advance-epoch'. lines 169-169:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 171-240:
+task 7 'run-graphql'. lines 171-236:
 Response: {
   "data": {
     "transactionBlockConnection": {
       "nodes": [
         {
-          "digest": "fvUnamxVj1m1M4DZ8dryuzqrjYRvLDHNjexNwxc6HA7",
+          "digest": "GKoYFakg3kNVzzFVWyLUTTYw4h29b2g4Mw2qMWCRsPZe",
           "sender": null,
           "signatures": [
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
@@ -1091,14 +1091,8 @@ Response: {
             "gasBudget": "0"
           },
           "kind": {
-            "__typename": "ChangeEpochTransaction",
-            "epoch": {
-              "epochId": 1
-            },
-            "startTimestamp": "1970-01-01T00:01:25Z",
-            "storageCharge": "0",
-            "computationCharge": "0",
-            "storageRebate": "0"
+            "__typename": "EndOfEpochTransaction",
+            "value": "[ChangeEpoch(ChangeEpoch { epoch: 1, protocol_version: ProtocolVersion(32), storage_charge: 0, computation_charge: 0, storage_rebate: 0, non_refundable_storage_fee: 0, epoch_start_timestamp_ms: 85000, system_packages: [] })]"
           },
           "effects": {
             "status": "SUCCESS",
@@ -1117,7 +1111,7 @@ Response: {
                 "idDeleted": false,
                 "outputState": {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
-                  "digest": "5jzahJer9cg4yJaBZhjpEAbLtzHcKguzMtFBc1poL5fS"
+                  "digest": "J1C81xskJaop96EsuSZXSxgvodwmMnD9tdDfocXxzrFg"
                 }
               },
               {
@@ -1126,7 +1120,7 @@ Response: {
                 "idDeleted": false,
                 "outputState": {
                   "address": "0x19d32e729fa9b502bb1c9cd043465a42d341d75aa952be050355b94918530bd7",
-                  "digest": "8mEa8WX4KAN54tQ8QeTeiKeDE9YWKtxV5wD9ArYyif3q"
+                  "digest": "Gx3QAxbL3mhy8iMs7eeoak3sexsofThp5vQ2nXQKA7Hz"
                 }
               },
               {
@@ -1135,7 +1129,7 @@ Response: {
                 "idDeleted": false,
                 "outputState": {
                   "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
-                  "digest": "4t3qXxnURzPoMNEYZVeCtdGnj7jKbSLRa6aDRuVeUgiW"
+                  "digest": "31jjBqQsbj1ngB5DHiUa2m3TQmZf1pDSVfd1BXWAPovo"
                 }
               },
               {
@@ -1162,7 +1156,7 @@ Response: {
               "sequenceNumber": 2
             },
             "transactionBlock": {
-              "digest": "fvUnamxVj1m1M4DZ8dryuzqrjYRvLDHNjexNwxc6HA7"
+              "digest": "GKoYFakg3kNVzzFVWyLUTTYw4h29b2g4Mw2qMWCRsPZe"
             }
           },
           "expiration": null
