@@ -294,6 +294,17 @@ impl Object {
     }
 }
 
+impl Object {
+    /// Construct a GraphQL object from a native object, without its stored (indexed) counterpart.
+    pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
+        Object {
+            address,
+            stored: None,
+            native,
+        }
+    }
+}
+
 impl TryFrom<StoredObject> for Object {
     type Error = Error;
 
