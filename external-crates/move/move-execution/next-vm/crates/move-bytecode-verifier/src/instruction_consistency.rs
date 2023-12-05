@@ -97,38 +97,38 @@ impl<'a> InstructionConsistency<'a> {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
-                MutBorrowGlobal(idx) => {
+                MutBorrowGlobalDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
-                MutBorrowGlobalGeneric(idx) => {
+                MutBorrowGlobalGenericDeprecated(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
-                ImmBorrowGlobal(idx) => {
+                ImmBorrowGlobalDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
-                ImmBorrowGlobalGeneric(idx) => {
+                ImmBorrowGlobalGenericDeprecated(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
-                Exists(idx) => {
+                ExistsDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
-                ExistsGeneric(idx) => {
+                ExistsGenericDeprecated(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
-                MoveFrom(idx) => {
+                MoveFromDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
-                MoveFromGeneric(idx) => {
+                MoveFromGenericDeprecated(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }
-                MoveTo(idx) => {
+                MoveToDeprecated(idx) => {
                     self.check_type_op(offset, *idx, /* generic */ false)?;
                 }
-                MoveToGeneric(idx) => {
+                MoveToGenericDeprecated(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     self.check_type_op(offset, struct_inst.def, /* generic */ true)?;
                 }

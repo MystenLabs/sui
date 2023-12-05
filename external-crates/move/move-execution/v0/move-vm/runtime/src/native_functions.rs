@@ -18,8 +18,7 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
-    data_store::DataStore, loaded_data::runtime_types::Type, natives::function::NativeResult,
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use std::{
     cell::RefCell,
@@ -96,7 +95,6 @@ impl NativeFunctions {
 
 pub struct NativeContext<'a, 'b> {
     interpreter: &'a mut Interpreter,
-    data_store: &'a mut dyn DataStore,
     resolver: &'a Resolver<'a>,
     extensions: &'a mut NativeContextExtensions<'b>,
     gas_left: RefCell<InternalGas>,
@@ -106,14 +104,12 @@ pub struct NativeContext<'a, 'b> {
 impl<'a, 'b> NativeContext<'a, 'b> {
     pub(crate) fn new(
         interpreter: &'a mut Interpreter,
-        data_store: &'a mut dyn DataStore,
         resolver: &'a Resolver<'a>,
         extensions: &'a mut NativeContextExtensions<'b>,
         gas_budget: InternalGas,
     ) -> Self {
         Self {
             interpreter,
-            data_store,
             resolver,
             extensions,
             gas_left: RefCell::new(gas_budget),
@@ -131,24 +127,6 @@ impl<'a, 'b> NativeContext<'a, 'b> {
     pub fn print_stack_trace<B: Write>(&self, buf: &mut B) -> PartialVMResult<()> {
         self.interpreter
             .debug_print_stack_trace(buf, self.resolver.loader())
-    }
-
-    pub fn save_event(
-        &mut self,
-        guid: Vec<u8>,
-        seq_num: u64,
-        ty: Type,
-        val: Value,
-    ) -> PartialVMResult<bool> {
-        match self.data_store.emit_event(guid, seq_num, ty, val) {
-            Ok(()) => Ok(true),
-            Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
-            Err(_) => Ok(false),
-        }
-    }
-
-    pub fn events(&self) -> &Vec<(Vec<u8>, u64, Type, R::MoveTypeLayout, Value)> {
-        self.data_store.events()
     }
 
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
