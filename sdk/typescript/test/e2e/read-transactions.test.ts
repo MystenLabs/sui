@@ -117,13 +117,14 @@ describe('Transaction Reading API', () => {
 		};
 		const {
 			// comparing checkpoint causes a race condition resulting in flaky tests
-			data: [{ checkpoint: _, ...response1 }],
+			// timestamp is only available after indexing, causing flaky tests
+			data: [{ checkpoint: _, timestampMs: __, ...response1 }],
 		} = await toolbox.client.queryTransactionBlocks({
 			options,
 			limit: 1,
 		});
 
-		const { checkpoint, ...response2 } = await toolbox.client.getTransactionBlock({
+		const { checkpoint, timestampMs, ...response2 } = await toolbox.client.getTransactionBlock({
 			digest: response1.digest,
 			options,
 		});
