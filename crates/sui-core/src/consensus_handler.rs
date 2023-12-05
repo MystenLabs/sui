@@ -355,10 +355,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                     ) = &transaction.kind
                     {
                         if self.epoch_store.randomness_state_enabled() {
-                            debug!("adding RandomnessStateUpdate tx for round {round:?}");
+                            debug!("adding RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}");
                             let randomness_state_update_transaction = self
                                 .randomness_state_update_transaction(
-                                    round,
                                     *randomness_round,
                                     bytes.clone(),
                                 );
@@ -371,7 +370,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                                 consensus_output.leader_author_index(),
                             ));
                         } else {
-                            debug!("ignoring RandomnessStateUpdate tx for round {round:?}: randomness state is not enabled on this node")
+                            debug!("ignoring RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}: randomness state is not enabled on this node")
                         }
                     } else {
                         let transaction = SequencedConsensusTransactionKind::External(transaction);
@@ -592,14 +591,12 @@ impl<T, C> ConsensusHandler<T, C> {
 
     fn randomness_state_update_transaction(
         &self,
-        round: u64,
         randomness_round: u64,
         random_bytes: Vec<u8>,
     ) -> VerifiedExecutableTransaction {
         assert!(self.epoch_store.randomness_state_enabled());
         let transaction = VerifiedTransaction::new_randomness_state_update(
             self.epoch(),
-            round,
             randomness_round,
             random_bytes,
             self.epoch_store
@@ -767,6 +764,13 @@ impl SequencedConsensusTransaction {
         } else {
             false
         }
+    }
+
+    pub fn is_system(&self) -> bool {
+        matches!(
+            self.transaction,
+            SequencedConsensusTransactionKind::System(_)
+        )
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {

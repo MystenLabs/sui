@@ -364,7 +364,7 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
-#[derive(Default, Copy, Clone, Serialize, Debug)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
 pub enum ConsensusTransactionOrdering {
     /// No ordering. Transactions are processed in the order they appear in the consensus output.
     #[default]

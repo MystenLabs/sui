@@ -297,6 +297,7 @@ impl RandomnessState {
             // Don't go backwards.
             return;
         }
+        debug!("random beacon: updating local randomness round to {round:?}");
         self.randomness_round = round;
         self.partial_sigs
             .retain(|&(round, _), _| round >= self.randomness_round);
@@ -508,6 +509,11 @@ impl StateHandler {
     }
 
     async fn handle_sequenced(&mut self, commit_round: Round, certificates: Vec<Certificate>) {
+        debug!(
+            "state handler: received {:?} sequenced certificates at round {commit_round}",
+            certificates.len()
+        );
+
         // Now we are going to signal which of our own batches have been committed.
         let own_rounds_committed: Vec<_> = certificates
             .iter()

@@ -63,13 +63,14 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
+        assert!(self.sub_dag.certificates.len() == self.batches.len());
         self.sub_dag
             .certificates
             .iter()
             .zip(&self.batches)
             .map(|(cert, batches)| {
                 assert_eq!(cert.header().payload().len(), batches.len());
-                let transactions: Vec<(&[u8], ConsensusTransaction)> =  cert.header().system_messages().iter().filter_map(|msg| {
+                let transactions: Vec<(&[u8], ConsensusTransaction)> = cert.header().system_messages().iter().filter_map(|msg| {
                     // Generate transactions to write new randomness.
                     if let SystemMessage::RandomnessSignature(round, bytes) = msg {
                         Some(([0u8; 0].as_slice(), ConsensusTransaction{

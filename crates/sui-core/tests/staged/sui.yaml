@@ -750,7 +750,6 @@ PublicKey:
 RandomnessStateUpdate:
   STRUCT:
     - epoch: U64
-    - round: U64
     - randomness_round: U64
     - random_bytes:
         SEQ: U8

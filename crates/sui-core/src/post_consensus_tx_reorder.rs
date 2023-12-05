@@ -34,8 +34,8 @@ impl PostConsensusTxReorder {
                         tracking_id: _,
                         kind: ConsensusTransactionKind::UserTransaction(cert),
                     }) => cert.gas_price(),
-                    // Non-user transactions are considered to have gas price of MAX u64 and are put to the beginning.
-                    // This way consensus commit prologue transactions will stay at the beginning.
+                    // Non-user transactions are considered to have gas price of MAX u64 and are
+                    // put to the beginning.
                     _ => u64::MAX,
                 }
             })
