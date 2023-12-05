@@ -193,15 +193,7 @@ const concepts = [
 		},
 		items: [
 			'concepts/sui-architecture/high-level',
-			{
-				type: 'category',
-				label: 'Lifetime of a Transaction',
-				link: {
-					type: 'doc',
-					id: 'concepts/transactions/transaction-lifecycle',
-				},
-				items: ['concepts/transactions/transaction-things'],
-			},
+			'concepts/transactions/transaction-lifecycle',
 			'concepts/sui-architecture/certification-overview',
 			'concepts/sui-architecture/consensus',
 			'concepts/sui-architecture/confirmation',
@@ -209,7 +201,7 @@ const concepts = [
 			'concepts/sui-architecture/epochs',
 			'concepts/sui-architecture/protocol-upgrades',
 			'concepts/sui-architecture/data-management-things',
-			'concepts/sui-architecture/staking-rewards'
+			'concepts/sui-architecture/staking-rewards',
 		],
 	},
 	{
