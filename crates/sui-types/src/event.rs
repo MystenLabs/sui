@@ -41,7 +41,7 @@ pub struct EventEnvelope {
 /// Unique ID of a Sui Event, the ID is a combination of tx seq number and event seq number,
 /// the ID is local to this particular fullnode and will be different from other fullnode.
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct EventID {
     pub tx_digest: TransactionDigest,

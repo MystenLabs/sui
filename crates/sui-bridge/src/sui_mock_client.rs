@@ -78,10 +78,10 @@ impl SuiClientInner for SuiMockClient {
                 self.past_event_query_params.lock().unwrap().push_back((
                     package,
                     module.clone(),
-                    cursor.clone(),
+                    cursor,
                 ));
                 Ok(events
-                    .get(&(package, module.clone(), cursor.clone()))
+                    .get(&(package, module.clone(), cursor))
                     .cloned()
                     .unwrap_or_else(|| {
                         panic!(

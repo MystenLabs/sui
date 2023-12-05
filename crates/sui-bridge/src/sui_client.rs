@@ -24,7 +24,7 @@ use tap::TapFallible;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
 
-pub(crate) struct SuiClient<P> {
+pub struct SuiClient<P> {
     inner: P,
 }
 
@@ -84,10 +84,7 @@ where
         let mut is_first_page = true;
         let mut all_events: Vec<sui_json_rpc_types::SuiEvent> = vec![];
         loop {
-            let events = self
-                .inner
-                .query_events(filter.clone(), cursor.clone())
-                .await?;
+            let events = self.inner.query_events(filter.clone(), cursor).await?;
             if events.data.is_empty() {
                 return Ok(Page {
                     data: all_events,
@@ -97,7 +94,7 @@ where
             }
 
             // unwrap safe: we just checked data is not empty
-            let new_cursor = events.data.last().unwrap().id.clone();
+            let new_cursor = events.data.last().unwrap().id;
 
             // Now check if we need to query more events for the sake of
             // paginating in transaction granularity
@@ -328,7 +325,7 @@ mod tests {
         let event_1 = SuiEvent::random_for_testing();
         let events_page_1 = EventPage {
             data: vec![event_1.clone()],
-            next_cursor: Some(event_1.id.clone()),
+            next_cursor: Some(event_1.id),
             has_next_page: true,
         };
         mock_client.add_event_response(
@@ -346,10 +343,10 @@ mod tests {
         event_2.id.event_seq = event_1.id.event_seq + 1;
         let events_page_2 = EventPage {
             data: vec![event_2.clone()],
-            next_cursor: Some(event_2.id.clone()),
+            next_cursor: Some(event_2.id),
             has_next_page: true,
         };
-        mock_client.add_event_response(package, module.clone(), event_1.id.clone(), events_page_2);
+        mock_client.add_event_response(package, module.clone(), event_1.id, events_page_2);
         // page 3 (event 3, event 4, different tx_digest)
         let mut event_3 = SuiEvent::random_for_testing();
         event_3.id.tx_digest = event_2.id.tx_digest;
@@ -358,10 +355,10 @@ mod tests {
         assert_ne!(event_3.id.tx_digest, event_4.id.tx_digest);
         let events_page_3 = EventPage {
             data: vec![event_3.clone(), event_4.clone()],
-            next_cursor: Some(event_4.id.clone()),
+            next_cursor: Some(event_4.id),
             has_next_page: true,
         };
-        mock_client.add_event_response(package, module.clone(), event_2.id.clone(), events_page_3);
+        mock_client.add_event_response(package, module.clone(), event_2.id, events_page_3);
         let page: Page<SuiEvent, TransactionDigest> = sui_client
             .query_events_by_module(package, module.clone(), cursor)
             .await
@@ -390,12 +387,12 @@ mod tests {
         // second page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package, module.clone(), event_1.id.clone())
+            (package, module.clone(), event_1.id)
         );
         // third page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package, module.clone(), event_2.id.clone())
+            (package, module.clone(), event_2.id)
         );
         // no more
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
@@ -403,10 +400,10 @@ mod tests {
         // Case 4, modify page 3 in case 3 to return event_4 only
         let events_page_3 = EventPage {
             data: vec![event_4.clone()],
-            next_cursor: Some(event_4.id.clone()),
+            next_cursor: Some(event_4.id),
             has_next_page: true,
         };
-        mock_client.add_event_response(package, module.clone(), event_2.id.clone(), events_page_3);
+        mock_client.add_event_response(package, module.clone(), event_2.id, events_page_3);
         let page: Page<SuiEvent, TransactionDigest> = sui_client
             .query_events_by_module(package, module.clone(), cursor)
             .await
@@ -434,12 +431,12 @@ mod tests {
         // second page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package, module.clone(), event_1.id.clone())
+            (package, module.clone(), event_1.id)
         );
         // third page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package, module.clone(), event_2.id.clone())
+            (package, module.clone(), event_2.id)
         );
         // no more
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
@@ -447,10 +444,10 @@ mod tests {
         // Case 5, modify page 2 in case 3 to mark has_next_page as false
         let events_page_2 = EventPage {
             data: vec![event_2.clone()],
-            next_cursor: Some(event_2.id.clone()),
+            next_cursor: Some(event_2.id),
             has_next_page: false,
         };
-        mock_client.add_event_response(package, module.clone(), event_1.id.clone(), events_page_2);
+        mock_client.add_event_response(package, module.clone(), event_1.id, events_page_2);
         let page: Page<SuiEvent, TransactionDigest> = sui_client
             .query_events_by_module(package, module.clone(), cursor)
             .await
@@ -478,7 +475,7 @@ mod tests {
         // second page
         assert_eq!(
             mock_client.pop_front_past_event_query_params().unwrap(),
-            (package, module.clone(), event_1.id.clone())
+            (package, module.clone(), event_1.id)
         );
         // no more
         assert_eq!(mock_client.pop_front_past_event_query_params(), None);
