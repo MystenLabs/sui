@@ -530,7 +530,7 @@ type Epoch {
   netInflow: BigInt
   fundInflow: BigInt
   fundOutflow: BigInt
-  
+
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
   checkpointConnection(
@@ -736,7 +736,7 @@ type TransactionBlock {
   senders: [Address]
   gasInput: GasInput
   kind: TransactionBlockKind
-  signatures: [TransactionSignature]
+  signatures: [Base64!]
   effects: TransactionBlockEffects
 
   expiration: Epoch
@@ -840,10 +840,6 @@ type MakeMoveVecTransaction {
   type: MoveType
   elements: [TransactionArgument]
 }
-
-# Omitting for brevity -- there's a lot of structure here, but it's
-# not very "connected" (i.e. no edges to other types).
-type TransactionSignature
 
 type TransactionBlockEffects {
   transactionBlock: TransactionBlock!

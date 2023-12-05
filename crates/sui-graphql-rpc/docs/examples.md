@@ -1227,9 +1227,7 @@
 >    kind {
 >      __typename
 >    }
->    signatures {
->      base64Sig
->    }
+>    signatures
 >    digest
 >    expiration {
 >      epochId
