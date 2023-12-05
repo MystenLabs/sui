@@ -40,7 +40,6 @@ use crate::{
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
             RandomnessStateUpdate, TransactionBlockKind,
         },
-        transaction_signature::TransactionSignature,
         validator::Validator,
         validator_credentials::ValidatorCredentials,
         validator_set::ValidatorSet,
@@ -1560,15 +1559,11 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
 
         // TODO Finish implementing all types of transaction kinds
         let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
-        let signatures = sender_signed_data
+        let signatures: Vec<_> = sender_signed_data
             .tx_signatures()
             .iter()
-            .map(|s| {
-                Some(TransactionSignature {
-                    base64_sig: Base64::from(s.as_ref()),
-                })
-            })
-            .collect::<Vec<_>>();
+            .map(|s| Base64::from(s.as_ref()))
+            .collect();
 
         Ok(Self {
             digest,

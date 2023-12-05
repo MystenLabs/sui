@@ -12,7 +12,7 @@
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }
@@ -84,7 +84,7 @@
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }
@@ -157,7 +157,7 @@
         nodes {
             digest
             sender { location }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { location }

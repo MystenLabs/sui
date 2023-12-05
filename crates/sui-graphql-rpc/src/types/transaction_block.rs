@@ -4,7 +4,7 @@
 use super::{
     address::Address, base64::Base64, digest::Digest, epoch::Epoch, gas::GasInput,
     sui_address::SuiAddress, transaction_block_effects::TransactionBlockEffects,
-    transaction_block_kind::TransactionBlockKind, transaction_signature::TransactionSignature,
+    transaction_block_kind::TransactionBlockKind,
 };
 use crate::context_data::db_data_provider::PgManager;
 use async_graphql::*;
@@ -29,8 +29,9 @@ pub(crate) struct TransactionBlock {
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
-    /// A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
-    pub signatures: Option<Vec<Option<TransactionSignature>>>,
+    /// A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
+    /// this is a sponsored transaction.
+    pub signatures: Option<Vec<Base64>>,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
