@@ -804,7 +804,7 @@ module deepbook::clob_v2 {
             });
         };
 
-        return (base_balance_filled, quote_balance_left)
+        (base_balance_filled, quote_balance_left)
     }
 
     fun match_bid<BaseAsset, QuoteAsset>(
@@ -950,7 +950,7 @@ module deepbook::clob_v2 {
                 orders_canceled: canceled_order_events,
             });
         };
-        return (base_balance_filled, quote_balance_left)
+        (base_balance_filled, quote_balance_left)
     }
 
     fun match_ask<BaseAsset, QuoteAsset>(
@@ -1097,7 +1097,7 @@ module deepbook::clob_v2 {
             });
         };
 
-        return (base_balance_left, quote_balance_filled)
+        (base_balance_left, quote_balance_filled)
     }
 
     /// Place a market order to the order book.
@@ -1236,7 +1236,7 @@ module deepbook::clob_v2 {
         };
         linked_table::push_back(borrow_mut(&mut pool.usr_open_orders, owner), order_id, price);
 
-        return order_id
+        order_id
     }
 
     /// Place a limit order to the order book.
@@ -1377,12 +1377,12 @@ module deepbook::clob_v2 {
                 );
                 return (base_quantity_filled, quote_quantity_filled, true, order_id)
             };
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+            (base_quantity_filled, quote_quantity_filled, false, 0)
         }
     }
 
     fun order_is_bid(order_id: u64): bool {
-        return order_id < MIN_ASK_ORDER_ID
+        order_id < MIN_ASK_ORDER_ID
     }
 
     fun emit_order_canceled<BaseAsset, QuoteAsset>(
@@ -1744,7 +1744,7 @@ module deepbook::clob_v2 {
         } else {
             option::none<u64>()
         };
-        return (bid_price, ask_price)
+        (bid_price, ask_price)
     }
 
     /// Enter a price range and return the level2 order depth of all valid prices within this price range in bid side
@@ -2071,7 +2071,7 @@ module deepbook::clob_v2 {
             return false
         };
         let order = linked_table::borrow(tree, expected_order.order_id);
-        return order_equal(order, expected_order)
+        order_equal(order, expected_order)
     }
 
     #[test_only]
@@ -2159,7 +2159,7 @@ module deepbook::clob_v2 {
         let quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
         balance::destroy_for_testing(base_balance_filled);
         balance::destroy_for_testing(quote_balance_left);
-        return (base_quantity_filled, quote_quantity_filled)
+        (base_quantity_filled, quote_quantity_filled)
     }
 
     #[test_only]
@@ -2185,7 +2185,7 @@ module deepbook::clob_v2 {
         let quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
         balance::destroy_for_testing(base_balance_filled);
         balance::destroy_for_testing(quote_balance_left);
-        return (base_quantity_filled, quote_quantity_filled)
+        (base_quantity_filled, quote_quantity_filled)
     }
 
     #[test_only]
@@ -2209,7 +2209,7 @@ module deepbook::clob_v2 {
         let quote_quantity_filled = balance::value(&quote_balance_filled);
         balance::destroy_for_testing(base_balance_left);
         balance::destroy_for_testing(quote_balance_filled);
-        return (base_quantity_filled, quote_quantity_filled)
+        (base_quantity_filled, quote_quantity_filled)
     }
 
     #[test_only]

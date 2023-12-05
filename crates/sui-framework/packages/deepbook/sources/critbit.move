@@ -76,7 +76,7 @@ module deepbook::critbit {
     public fun min_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
         assert!(!is_empty(tree), ELeafNotExist);
         let min_leaf = table::borrow(&tree.leaves, tree.min_leaf);
-        return (min_leaf.key, tree.min_leaf)
+        (min_leaf.key, tree.min_leaf)
     }
 
     // Return (key, index) the leaf with maximum value.
@@ -84,7 +84,7 @@ module deepbook::critbit {
     public fun max_leaf<V: store>(tree: &CritbitTree<V>): (u64, u64) {
         assert!(!is_empty(tree), ELeafNotExist);
         let max_leaf = table::borrow(&tree.leaves, tree.max_leaf);
-        return (max_leaf.key, tree.max_leaf)
+        (max_leaf.key, tree.max_leaf)
     }
 
     // Return the previous leaf (key, index) of the input leaf.
@@ -104,7 +104,7 @@ module deepbook::critbit {
         };
         index = MAX_U64 - right_most_leaf(tree, table::borrow(&tree.internal_nodes, parent).left_child);
         let key = table::borrow(&tree.leaves, index).key;
-        return (key, index)
+        (key, index)
     }
 
     // Return the next leaf (key, index) of the input leaf.
@@ -124,7 +124,7 @@ module deepbook::critbit {
         };
         index = MAX_U64 - left_most_leaf(tree, table::borrow(&tree.internal_nodes, parent).right_child);
         let key = table::borrow(&tree.leaves, index).key;
-        return (key, index)
+        (key, index)
     }
 
     fun left_most_leaf<V: store>(tree: &CritbitTree<V>, root: u64): u64 {
@@ -234,11 +234,10 @@ module deepbook::critbit {
         };
         let closest_leaf_index = get_closest_leaf_index_by_key(tree, key);
         let closeset_leaf = table::borrow(&tree.leaves, closest_leaf_index);
-        if (closeset_leaf.key != key){
+        if (closeset_leaf.key != key) {
             return (false, PARTITION_INDEX)
-        } else{
-            return (true, closest_leaf_index)
-        }
+        };
+        (true, closest_leaf_index)
     }
 
     public(friend) fun find_closest_key<V: store>(tree: & CritbitTree<V>, key: u64): u64 {
@@ -363,7 +362,7 @@ module deepbook::critbit {
                 ptr = node.right_child;
             }
         };
-        return (MAX_U64 - ptr)
+        MAX_U64 - ptr
     }
 
     // new_child can be either internal node or leaf
