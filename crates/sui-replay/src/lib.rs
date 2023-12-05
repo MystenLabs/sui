@@ -64,7 +64,7 @@ pub enum ReplayToolCommand {
         path: PathBuf,
     },
 
-    /// Replay transaction
+    /// Profile transaction
     #[command(name = "rp")]
     ProfileTransaction {
         #[arg(long, short)]
@@ -408,8 +408,8 @@ pub async fn execute_replay_command(
             tx_digest,
             show_effects,
             diag,
-            executor_version: executor_version_override,
-            protocol_version: protocol_version_override,
+            executor_version,
+            protocol_version,
         } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
@@ -419,8 +419,8 @@ pub async fn execute_replay_command(
                 tx_digest,
                 safety,
                 use_authority,
-                executor_version_override,
-                protocol_version_override,
+                executor_version,
+                protocol_version,
                 None,
             )
             .await?;

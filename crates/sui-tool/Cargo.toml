@@ -55,17 +55,8 @@ workspace-hack.workspace = true
 git-version.workspace = true
 const-str = "0.5.6"
 move-vm-profiler.workspace = true
-sui-execution = { path = "../../sui-execution" , optional = true}
 
 [[bin]]
 name = "sui-tool"
 path = "src/main.rs"
 
-
-[features]
-default = ["gas-profiler"]
-gas-profiler = [
-    "sui-types/gas-profiler",
-    "sui-execution/gas-profiler",
-    "move-vm-profiler/gas-profiler",
-]

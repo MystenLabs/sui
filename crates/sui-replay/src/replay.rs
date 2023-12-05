@@ -232,11 +232,11 @@ pub struct LocalExec {
     pub diag: DiagInfo,
     // One can optionally override the executor version
     // -1 implies use latest version
-    pub executor_version_override: Option<i64>,
+    pub executor_version: Option<i64>,
     // One can optionally override the protocol version
     // -1 implies use latest version
     // None implies use the protocol version at the time of execution
-    pub protocol_version_override: Option<i64>,
+    pub protocol_version: Option<i64>,
     // Whether or not to enable the gas profiler, the PathBuf contains either a user specified
     // filepath or DEFAULT_PROFILE_OUTPUT_PATH for the profile output
     pub enable_profiler: Option<PathBuf>,
@@ -321,8 +321,8 @@ impl LocalExec {
         tx_digest: TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
-        executor_version_override: Option<i64>,
-        protocol_version_override: Option<i64>,
+        executor_version: Option<i64>,
+        protocol_version: Option<i64>,
         enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         async fn inner_exec(
@@ -330,8 +330,8 @@ impl LocalExec {
             tx_digest: TransactionDigest,
             expensive_safety_check_config: ExpensiveSafetyCheckConfig,
             use_authority: bool,
-            executor_version_override: Option<i64>,
-            protocol_version_override: Option<i64>,
+            executor_version: Option<i64>,
+            protocol_version: Option<i64>,
             enable_profiler: Option<PathBuf>,
         ) -> Result<ExecutionSandboxState, ReplayEngineError> {
             LocalExec::new_from_fn_url(&rpc_url)
@@ -342,8 +342,8 @@ impl LocalExec {
                     &tx_digest,
                     expensive_safety_check_config,
                     use_authority,
-                    executor_version_override,
-                    protocol_version_override,
+                    executor_version,
+                    protocol_version,
                     enable_profiler,
                 )
                 .await
@@ -356,8 +356,8 @@ impl LocalExec {
                 tx_digest,
                 expensive_safety_check_config.clone(),
                 use_authority,
-                executor_version_override,
-                protocol_version_override,
+                executor_version,
+                protocol_version,
                 enable_profiler.clone(),
             )
             .await
@@ -383,8 +383,8 @@ impl LocalExec {
                 tx_digest,
                 expensive_safety_check_config.clone(),
                 use_authority,
-                executor_version_override,
-                protocol_version_override,
+                executor_version,
+                protocol_version,
                 enable_profiler.clone(),
             )
             .await
@@ -443,8 +443,8 @@ impl LocalExec {
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
             diag: Default::default(),
-            executor_version_override: None,
-            protocol_version_override: None,
+            executor_version: None,
+            protocol_version: None,
             enable_profiler: None,
         })
     }
@@ -486,8 +486,8 @@ impl LocalExec {
             num_retries_for_timeout: RPC_TIMEOUT_ERR_NUM_RETRIES,
             sleep_period_for_timeout: RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
             diag: Default::default(),
-            executor_version_override: None,
-            protocol_version_override: None,
+            executor_version: None,
+            protocol_version: None,
             enable_profiler: None,
         })
     }
@@ -741,7 +741,7 @@ impl LocalExec {
             .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
             .await?;
 
-        let ov = self.executor_version_override;
+        let ov = self.executor_version;
 
         // We could probably cache the executor per protocol config
         let executor = get_executor(
@@ -1002,12 +1002,12 @@ impl LocalExec {
         tx_digest: &TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
-        executor_version_override: Option<i64>,
-        protocol_version_override: Option<i64>,
+        executor_version: Option<i64>,
+        protocol_version: Option<i64>,
         enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        self.executor_version_override = executor_version_override;
-        self.protocol_version_override = protocol_version_override;
+        self.executor_version = executor_version;
+        self.protocol_version = protocol_version;
         self.enable_profiler = enable_profiler;
         if use_authority {
             self.certificate_execute(tx_digest, expensive_safety_check_config.clone())
@@ -1336,7 +1336,7 @@ impl LocalExec {
         epoch_id: EpochId,
         chain: Chain,
     ) -> Result<ProtocolConfig, ReplayEngineError> {
-        match self.protocol_version_override {
+        match self.protocol_version {
             Some(x) if x < 0 => Ok(ProtocolConfig::get_for_max_version_UNSAFE()),
             Some(v) => Ok(ProtocolConfig::get_for_version((v as u64).into(), chain)),
             None => self
