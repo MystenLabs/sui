@@ -1,6 +1,6 @@
 processed 8 tasks
 
-task 1 'run-graphql'. lines 8-73:
+task 1 'run-graphql'. lines 8-90:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -23,24 +23,769 @@ Response: {
           },
           "kind": {
             "__typename": "GenesisTransaction",
-            "objects": [
-              "0x0000000000000000000000000000000000000000000000000000000000000001",
-              "0x0000000000000000000000000000000000000000000000000000000000000002",
-              "0x0000000000000000000000000000000000000000000000000000000000000003",
-              "0x0000000000000000000000000000000000000000000000000000000000000005",
-              "0x0000000000000000000000000000000000000000000000000000000000000006",
-              "0x0000000000000000000000000000000000000000000000000000000000000007",
-              "0x000000000000000000000000000000000000000000000000000000000000dee9",
-              "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
-              "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
-              "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
-              "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
-              "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
-              "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
-              "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
-              "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
-              "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d"
-            ]
+            "objectConnection": {
+              "nodes": [
+                {
+                  "location": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "asMoveObject": null,
+                  "asMovePackage": {
+                    "moduleConnection": {
+                      "nodes": [
+                        {
+                          "name": "address"
+                        },
+                        {
+                          "name": "ascii"
+                        },
+                        {
+                          "name": "bcs"
+                        },
+                        {
+                          "name": "bit_vector"
+                        },
+                        {
+                          "name": "debug"
+                        },
+                        {
+                          "name": "fixed_point32"
+                        },
+                        {
+                          "name": "hash"
+                        },
+                        {
+                          "name": "option"
+                        },
+                        {
+                          "name": "string"
+                        },
+                        {
+                          "name": "type_name"
+                        },
+                        {
+                          "name": "vector"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "location": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "asMoveObject": null,
+                  "asMovePackage": {
+                    "moduleConnection": {
+                      "nodes": [
+                        {
+                          "name": "address"
+                        },
+                        {
+                          "name": "authenticator_state"
+                        },
+                        {
+                          "name": "bag"
+                        },
+                        {
+                          "name": "balance"
+                        },
+                        {
+                          "name": "bcs"
+                        },
+                        {
+                          "name": "bls12381"
+                        },
+                        {
+                          "name": "borrow"
+                        },
+                        {
+                          "name": "clock"
+                        },
+                        {
+                          "name": "coin"
+                        },
+                        {
+                          "name": "display"
+                        },
+                        {
+                          "name": "dynamic_field"
+                        },
+                        {
+                          "name": "dynamic_object_field"
+                        },
+                        {
+                          "name": "ecdsa_k1"
+                        },
+                        {
+                          "name": "ecdsa_r1"
+                        },
+                        {
+                          "name": "ecvrf"
+                        },
+                        {
+                          "name": "ed25519"
+                        },
+                        {
+                          "name": "event"
+                        },
+                        {
+                          "name": "groth16"
+                        },
+                        {
+                          "name": "hash"
+                        },
+                        {
+                          "name": "hex"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "location": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                  "asMoveObject": null,
+                  "asMovePackage": {
+                    "moduleConnection": {
+                      "nodes": [
+                        {
+                          "name": "genesis"
+                        },
+                        {
+                          "name": "stake_subsidy"
+                        },
+                        {
+                          "name": "staking_pool"
+                        },
+                        {
+                          "name": "storage_fund"
+                        },
+                        {
+                          "name": "sui_system"
+                        },
+                        {
+                          "name": "sui_system_state_inner"
+                        },
+                        {
+                          "name": "validator"
+                        },
+                        {
+                          "name": "validator_cap"
+                        },
+                        {
+                          "name": "validator_set"
+                        },
+                        {
+                          "name": "validator_wrapper"
+                        },
+                        {
+                          "name": "voting_power"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system::SuiSystemState"
+                      },
+                      "json": {
+                        "id": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                        "version": "1"
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                      },
+                      "json": {
+                        "id": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                        "timestamp_ms": "0"
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorState"
+                      },
+                      "json": {
+                        "id": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                        "version": "1"
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                  "asMoveObject": null,
+                  "asMovePackage": {
+                    "moduleConnection": {
+                      "nodes": [
+                        {
+                          "name": "clob"
+                        },
+                        {
+                          "name": "clob_v2"
+                        },
+                        {
+                          "name": "critbit"
+                        },
+                        {
+                          "name": "custodian"
+                        },
+                        {
+                          "name": "custodian_v2"
+                        },
+                        {
+                          "name": "math"
+                        },
+                        {
+                          "name": "order_query"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "location": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
+                        "decimals": 9,
+                        "name": "Sui",
+                        "symbol": "SUI",
+                        "description": "",
+                        "icon_url": null
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
+                      },
+                      "json": {
+                        "id": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
+                        "authorizer_validator_address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                      },
+                      "json": {
+                        "id": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
+                        "name": "0",
+                        "value": {
+                          "sui_amount": "0",
+                          "pool_token_amount": "0"
+                        }
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                      },
+                      "json": {
+                        "id": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
+                        "pool_id": {
+                          "bytes": "0x3d2bc3f7cb83adf1a807be2eec60a0ab05a57a7757ec2cdf68cc8adb2c87028b"
+                        },
+                        "stake_activation_epoch": "0",
+                        "principal": {
+                          "value": "20000000000000000"
+                        }
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::object::ID,address>"
+                      },
+                      "json": {
+                        "id": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
+                        "name": {
+                          "bytes": "0x3d2bc3f7cb83adf1a807be2eec60a0ab05a57a7757ec2cdf68cc8adb2c87028b"
+                        },
+                        "value": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::sui_system_state_inner::SuiSystemStateInner>"
+                      },
+                      "json": {
+                        "id": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                        "name": "1",
+                        "value": {
+                          "epoch": "0",
+                          "protocol_version": "32",
+                          "system_state_version": "1",
+                          "validators": {
+                            "total_stake": "20000000000000000",
+                            "active_validators": [
+                              {
+                                "metadata": {
+                                  "sui_address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+                                  "protocol_pubkey_bytes": [
+                                    181,
+                                    204,
+                                    219,
+                                    247,
+                                    152,
+                                    28,
+                                    246,
+                                    166,
+                                    166,
+                                    55,
+                                    97,
+                                    206,
+                                    205,
+                                    200,
+                                    164,
+                                    209,
+                                    239,
+                                    197,
+                                    175,
+                                    237,
+                                    254,
+                                    42,
+                                    204,
+                                    57,
+                                    23,
+                                    77,
+                                    4,
+                                    13,
+                                    248,
+                                    229,
+                                    243,
+                                    165,
+                                    113,
+                                    150,
+                                    21,
+                                    63,
+                                    67,
+                                    83,
+                                    57,
+                                    18,
+                                    166,
+                                    137,
+                                    44,
+                                    248,
+                                    183,
+                                    244,
+                                    122,
+                                    36,
+                                    4,
+                                    77,
+                                    194,
+                                    217,
+                                    26,
+                                    5,
+                                    133,
+                                    238,
+                                    76,
+                                    132,
+                                    112,
+                                    77,
+                                    62,
+                                    149,
+                                    117,
+                                    58,
+                                    29,
+                                    178,
+                                    172,
+                                    249,
+                                    17,
+                                    179,
+                                    207,
+                                    213,
+                                    199,
+                                    243,
+                                    162,
+                                    152,
+                                    239,
+                                    166,
+                                    169,
+                                    17,
+                                    254,
+                                    52,
+                                    86,
+                                    24,
+                                    220,
+                                    6,
+                                    57,
+                                    176,
+                                    195,
+                                    246,
+                                    167,
+                                    168,
+                                    199,
+                                    37,
+                                    41,
+                                    240
+                                  ],
+                                  "network_pubkey_bytes": [
+                                    222,
+                                    193,
+                                    56,
+                                    253,
+                                    223,
+                                    140,
+                                    108,
+                                    228,
+                                    161,
+                                    246,
+                                    151,
+                                    172,
+                                    42,
+                                    190,
+                                    219,
+                                    243,
+                                    212,
+                                    210,
+                                    59,
+                                    152,
+                                    5,
+                                    6,
+                                    236,
+                                    134,
+                                    82,
+                                    53,
+                                    90,
+                                    224,
+                                    105,
+                                    93,
+                                    152,
+                                    85
+                                  ],
+                                  "worker_pubkey_bytes": [
+                                    172,
+                                    116,
+                                    152,
+                                    220,
+                                    228,
+                                    127,
+                                    173,
+                                    148,
+                                    84,
+                                    44,
+                                    112,
+                                    162,
+                                    74,
+                                    125,
+                                    50,
+                                    95,
+                                    124,
+                                    147,
+                                    55,
+                                    36,
+                                    241,
+                                    143,
+                                    223,
+                                    60,
+                                    129,
+                                    224,
+                                    221,
+                                    102,
+                                    15,
+                                    35,
+                                    217,
+                                    101
+                                  ],
+                                  "proof_of_possession": [
+                                    128,
+                                    107,
+                                    74,
+                                    121,
+                                    76,
+                                    94,
+                                    1,
+                                    108,
+                                    22,
+                                    203,
+                                    69,
+                                    136,
+                                    24,
+                                    193,
+                                    194,
+                                    47,
+                                    140,
+                                    0,
+                                    140,
+                                    222,
+                                    97,
+                                    14,
+                                    177,
+                                    180,
+                                    60,
+                                    215,
+                                    201,
+                                    205,
+                                    116,
+                                    217,
+                                    249,
+                                    252,
+                                    64,
+                                    249,
+                                    177,
+                                    121,
+                                    185,
+                                    95,
+                                    201,
+                                    175,
+                                    255,
+                                    44,
+                                    236,
+                                    83,
+                                    92,
+                                    26,
+                                    136,
+                                    38
+                                  ],
+                                  "name": "validator-0",
+                                  "description": "",
+                                  "image_url": {
+                                    "url": ""
+                                  },
+                                  "project_url": {
+                                    "url": ""
+                                  },
+                                  "net_address": "/ip4/127.0.0.1/tcp/8000/http",
+                                  "p2p_address": "/ip4/127.0.0.1/udp/8001/http",
+                                  "primary_address": "/ip4/127.0.0.1/udp/8004/http",
+                                  "worker_address": "/ip4/127.0.0.1/udp/8005/http",
+                                  "next_epoch_protocol_pubkey_bytes": null,
+                                  "next_epoch_proof_of_possession": null,
+                                  "next_epoch_network_pubkey_bytes": null,
+                                  "next_epoch_worker_pubkey_bytes": null,
+                                  "next_epoch_net_address": null,
+                                  "next_epoch_p2p_address": null,
+                                  "next_epoch_primary_address": null,
+                                  "next_epoch_worker_address": null,
+                                  "extra_fields": {
+                                    "id": "0x54027b223aa8152c309e0b0a3c8e0bcbac3b389eff8e121b6e898d90586305d8",
+                                    "size": "0"
+                                  }
+                                },
+                                "voting_power": "10000",
+                                "operation_cap_id": {
+                                  "bytes": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9"
+                                },
+                                "gas_price": "1000",
+                                "staking_pool": {
+                                  "id": "0x3d2bc3f7cb83adf1a807be2eec60a0ab05a57a7757ec2cdf68cc8adb2c87028b",
+                                  "activation_epoch": "0",
+                                  "deactivation_epoch": null,
+                                  "sui_balance": "20000000000000000",
+                                  "rewards_pool": {
+                                    "value": "0"
+                                  },
+                                  "pool_token_balance": "20000000000000000",
+                                  "exchange_rates": {
+                                    "id": "0x548248f423c9382161d4d9f150f08bffeb708445cdd3f7092fe11c531bdbdfbd",
+                                    "size": "1"
+                                  },
+                                  "pending_stake": "0",
+                                  "pending_total_sui_withdraw": "0",
+                                  "pending_pool_token_withdraw": "0",
+                                  "extra_fields": {
+                                    "id": "0xc1c77dba7bc13534576848bc29832be075c66446bc9b171f2384924fa3aec3f0",
+                                    "size": "0"
+                                  }
+                                },
+                                "commission_rate": "200",
+                                "next_epoch_stake": "20000000000000000",
+                                "next_epoch_gas_price": "1000",
+                                "next_epoch_commission_rate": "200",
+                                "extra_fields": {
+                                  "id": "0x710de17de3940b29905ace239c5f07cb551d2739a27199b479a137ae5321b90c",
+                                  "size": "0"
+                                }
+                              }
+                            ],
+                            "pending_active_validators": {
+                              "contents": {
+                                "id": "0x90bb3f5f83f3787a28f174a43d2be5e66aa20297e97484b44dd3253f052bd67f",
+                                "size": "0"
+                              }
+                            },
+                            "pending_removals": [],
+                            "staking_pool_mappings": {
+                              "id": "0xdc259519bc1aa939806262fa3df3f4ab0283988e9087ccc319679601d9f82bc3",
+                              "size": "1"
+                            },
+                            "inactive_validators": {
+                              "id": "0x20d5ea398a0922e555c1f579d0c78cdcef5a3250505c04356b22b1b03611c115",
+                              "size": "0"
+                            },
+                            "validator_candidates": {
+                              "id": "0xb05d8037f8fe1fb14a14af912a700cfa286a987ba8ac3d08fca12e30ad240b07",
+                              "size": "0"
+                            },
+                            "at_risk_validators": {
+                              "contents": []
+                            },
+                            "extra_fields": {
+                              "id": "0x956c636002453d43cfe082432bcbf5632cce372d3f51dff7ddfa2a0ab6a40db9",
+                              "size": "0"
+                            }
+                          },
+                          "storage_fund": {
+                            "total_object_storage_rebates": {
+                              "value": "0"
+                            },
+                            "non_refundable_balance": {
+                              "value": "0"
+                            }
+                          },
+                          "parameters": {
+                            "epoch_duration_ms": "86400000",
+                            "stake_subsidy_start_epoch": "0",
+                            "max_validator_count": "150",
+                            "min_validator_joining_stake": "30000000000000000",
+                            "validator_low_stake_threshold": "20000000000000000",
+                            "validator_very_low_stake_threshold": "15000000000000000",
+                            "validator_low_stake_grace_period": "7",
+                            "extra_fields": {
+                              "id": "0x27918e2d1886f52d8d71f38a86dfa8822448b198cbd3747ca3b0b4b0b7048c55",
+                              "size": "0"
+                            }
+                          },
+                          "reference_gas_price": "1000",
+                          "validator_report_records": {
+                            "contents": []
+                          },
+                          "stake_subsidy": {
+                            "balance": {
+                              "value": "9949700000000000000"
+                            },
+                            "distribution_counter": "0",
+                            "current_distribution_amount": "1000000000000000",
+                            "stake_subsidy_period_length": "10",
+                            "stake_subsidy_decrease_rate": 1000,
+                            "extra_fields": {
+                              "id": "0xe6250fcf8d17ed01e73cdfeb4aa592f12d8816a4b70129f6dfcf78d13b40ce68",
+                              "size": "0"
+                            }
+                          },
+                          "safe_mode": false,
+                          "safe_mode_storage_rewards": {
+                            "value": "0"
+                          },
+                          "safe_mode_computation_rewards": {
+                            "value": "0"
+                          },
+                          "safe_mode_storage_rebates": "0",
+                          "safe_mode_non_refundable_storage_fee": "0",
+                          "epoch_start_timestamp_ms": "0",
+                          "extra_fields": {
+                            "id": "0x6b05914bf755eddf80fb9e1714ddb2c7c5f7714cac47434ed18e282fdca60bbd",
+                            "size": "0"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
+                        "balance": {
+                          "value": "30000000000000000"
+                        }
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorStateInner>"
+                      },
+                      "json": {
+                        "id": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                        "name": "1",
+                        "value": {
+                          "version": "1",
+                          "active_jwks": []
+                        }
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                },
+                {
+                  "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                        "balance": {
+                          "value": "300000000000000"
+                        }
+                      }
+                    }
+                  },
+                  "asMovePackage": null
+                }
+              ]
+            }
           },
           "effects": {
             "status": "SUCCESS",
@@ -240,10 +985,10 @@ Response: {
   }
 }
 
-task 3 'create-checkpoint'. lines 77-77:
+task 3 'create-checkpoint'. lines 94-94:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 79-147:
+task 4 'run-graphql'. lines 96-164:
 Response: {
   "data": {
     "transactionBlockConnection": {
@@ -320,10 +1065,10 @@ Response: {
   }
 }
 
-task 6 'advance-epoch'. lines 151-151:
+task 6 'advance-epoch'. lines 168-168:
 Epoch advanced: 0
 
-task 7 'run-graphql'. lines 153-222:
+task 7 'run-graphql'. lines 170-239:
 Response: {
   "data": {
     "transactionBlockConnection": {
