@@ -15,6 +15,7 @@ use diesel::{
     pg::Pg,
     query_builder::{AstPass, QueryFragment},
     BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
+    TextExpressionMethods,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -24,6 +25,7 @@ use sui_indexer::{
     },
     types_v2::OwnerType,
 };
+use sui_types::parse_sui_struct_tag;
 
 pub(crate) struct PgQueryBuilder;
 
@@ -305,8 +307,25 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                 }
             }
 
-            if let Some(object_type) = filter.ty {
-                query = query.filter(objects::dsl::object_type.eq(object_type));
+            if let Some(object_type) = filter.type_ {
+                let validate_type = parse_sui_struct_tag(&object_type)
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                if validate_type.type_params.is_empty() {
+                    query = query.filter(
+                        objects::dsl::object_type
+                            .like(format!(
+                                "{}<%",
+                                validate_type.to_canonical_string(/* with_prefix */ true)
+                            ))
+                            .or(objects::dsl::object_type
+                                .eq(validate_type.to_canonical_string(/* with_prefix */ true))),
+                    );
+                } else {
+                    query = query.filter(
+                        objects::dsl::object_type.eq(validate_type.to_canonical_string(true)),
+                    );
+                }
             }
         }
 
