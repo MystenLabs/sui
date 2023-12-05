@@ -11,12 +11,12 @@
     transactionBlockConnection(first: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -35,7 +35,7 @@
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -44,11 +44,11 @@
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -81,12 +81,12 @@
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -107,7 +107,7 @@
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -116,11 +116,11 @@
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -152,12 +152,12 @@
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -180,7 +180,7 @@
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -189,11 +189,11 @@
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost

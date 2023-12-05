@@ -26,12 +26,12 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -50,7 +50,7 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -59,11 +59,11 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -114,12 +114,12 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -138,7 +138,7 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -147,11 +147,11 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -193,12 +193,12 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -217,7 +217,7 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -227,7 +227,7 @@ module P0::m {
                     idDeleted
 
                     outputState {
-                        location
+                        address
                         digest
                         asMoveObject {
                             contents {
@@ -239,7 +239,7 @@ module P0::m {
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -273,12 +273,12 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
+            sender { address }
             signatures { base64Sig }
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -297,7 +297,7 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
@@ -306,11 +306,11 @@ module P0::m {
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost

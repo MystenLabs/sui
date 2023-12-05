@@ -4,7 +4,7 @@
   ) {
     previousTransactionBlock {
       sender {
-        location
+        address
       }
       kind {
         __typename

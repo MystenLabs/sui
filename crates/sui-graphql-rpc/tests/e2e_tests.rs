@@ -157,8 +157,8 @@ mod tests {
         )
         .await;
 
-        let query = r#"{obj1: object(address: $framework_addr) {location}
-            obj2: object(address: $deepbook_addr) {location}}"#;
+        let query = r#"{obj1: object(address: $framework_addr) {address}
+            obj2: object(address: $deepbook_addr) {address}}"#;
         let variables = vec![
             GraphqlQueryVariable {
                 name: "framework_addr".to_string(),
@@ -179,11 +179,11 @@ mod tests {
 
         assert!(res.errors().is_empty());
         let data = res.response_body().data.clone().into_json().unwrap();
-        data.get("obj1").unwrap().get("location").unwrap();
+        data.get("obj1").unwrap().get("address").unwrap();
         assert_eq!(
             data.get("obj1")
                 .unwrap()
-                .get("location")
+                .get("address")
                 .unwrap()
                 .as_str()
                 .unwrap(),
@@ -192,7 +192,7 @@ mod tests {
         assert_eq!(
             data.get("obj2")
                 .unwrap()
-                .get("location")
+                .get("address")
                 .unwrap()
                 .as_str()
                 .unwrap(),
@@ -313,7 +313,7 @@ mod tests {
             {
                 transactionBlock(digest: $dig){
                     sender {
-                        location
+                        address
                     }
                 }
             }
@@ -336,7 +336,7 @@ mod tests {
             .unwrap()
             .get("sender")
             .unwrap()
-            .get("location")
+            .get("address")
             .unwrap()
             .as_str()
             .unwrap();

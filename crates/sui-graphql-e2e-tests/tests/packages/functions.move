@@ -49,7 +49,7 @@ module P0::m {
 
 # Get the signature of a function published in a third-party package
 fragment Signature on MoveFunction {
-    module { package { asObject { location } } }
+    module { package { asObject { address } } }
     name
     visibility
     isEntry
@@ -61,7 +61,7 @@ fragment Signature on MoveFunction {
 }
 
 fragment Functions on Object {
-    location
+    address
     asMovePackage {
         module(name: "m") {
             function(name: "f") { ...Signature }
@@ -96,7 +96,7 @@ module P0::m {
 
 # Get the signature of a function published in a third-party package
 fragment Signature on MoveFunction {
-    module { package { asObject { location } } }
+    module { package { asObject { address } } }
     name
     visibility
     isEntry
@@ -108,7 +108,7 @@ fragment Signature on MoveFunction {
 }
 
 fragment Functions on Object {
-    location
+    address
     asMovePackage {
         module(name: "m") {
             f: function(name: "f") { ...Signature }
