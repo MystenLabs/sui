@@ -463,7 +463,7 @@ impl PgIndexerStore {
         page_limit -= 1;
         let has_next_page = sui_event_vec.len() > page_limit;
         sui_event_vec.truncate(page_limit);
-        let next_cursor = sui_event_vec.last().map(|e| e.id.clone());
+        let next_cursor = sui_event_vec.last().map(|e| e.id);
         Ok(EventPage {
             data: sui_event_vec,
             next_cursor,

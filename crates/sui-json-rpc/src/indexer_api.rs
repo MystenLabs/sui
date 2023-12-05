@@ -257,7 +257,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .query_events(
                     &self.transaction_kv_store,
                     query,
-                    cursor.clone(),
+                    cursor,
                     limit + 1,
                     descending,
                 )
@@ -265,7 +265,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .map_err(Error::from)?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
-            let next_cursor = data.last().map_or(cursor, |e| Some(e.id.clone()));
+            let next_cursor = data.last().map_or(cursor, |e| Some(e.id));
             self.metrics
                 .query_events_result_size
                 .report(data.len() as u64);
