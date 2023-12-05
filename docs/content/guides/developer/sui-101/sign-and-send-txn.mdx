@@ -101,7 +101,7 @@ The full code example below can be found under [crates/sui-sdk](https://github.c
 
 There are various ways to instantiate a `SuiKeyPair` and to derive its public key and Sui address using the Sui Rust SDK.
 
-```Rust
+```rust
     // deterministically generate a keypair, testing only, do not use for mainnet, use the next section to randomly generate a keypair instead.
     let skp_determ_0 =
         SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
@@ -170,7 +170,7 @@ Next, sign transaction data constructed using an example programmable transactio
 
 Commit a signature to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). 
 
-```Rust
+```rust
     // derive the digest that the keypair should sign on, i.e. the blake2b hash of `intent || tx_data`.
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data);
     let raw_tx = bcs::to_bytes(&intent_msg).expect("bcs should not fail");
@@ -192,7 +192,7 @@ Commit a signature to the Blake2b hash digest of the intent message (`intent || 
 
 Finally, submit the transaction with the signature. 
 
-```Rust
+```rust
     let transaction_response = sui_client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -211,7 +211,7 @@ Finally, submit the transaction with the signature.
 
 <TabItem value="cli" label="Sui CLI">
 
-When using the Sui CLI for the first time, it creates a local file in `~/.sui/keystore` on your machine with a list of private keys (encoded as Base64 encoded `flag || 32-byte-private-key`). You can use any key to sign transactions by specifying its address. Use `sui keytool list` to see a list of addresses.
+When using the [Sui CLI](/references/cli.mdx) for the first time, it creates a local file in `~/.sui/keystore` on your machine with a list of private keys (encoded as Base64 encoded `flag || 32-byte-private-key`). You can use any key to sign transactions by specifying its address. Use `sui keytool list` to see a list of addresses.
 
 There are three ways to initialize a key:
 
