@@ -3,9 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer::errors::IndexerError;
 use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::types_v2::OwnerType;
 use sui_json_rpc::name_service::NameServiceConfig;
 use sui_types::dynamic_field::DynamicFieldType;
 
@@ -20,14 +18,14 @@ use super::{
 use crate::context_data::db_data_provider::PgManager;
 use crate::error::Error;
 use crate::types::base64::Base64;
-use sui_types::object::Object as NativeObject;
+use sui_types::object::{Object as NativeObject, Owner as NativeOwner};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
 
     /// Representation of an Object in the Indexer's Store.
-    pub stored: StoredObject,
+    pub stored: Option<StoredObject>,
 
     /// Deserialized representation of `stored_object.serialized_object`.
     pub native: NativeObject,
@@ -61,12 +59,16 @@ pub(crate) struct ObjectKey {
 #[Object]
 impl Object {
     async fn version(&self) -> u64 {
-        self.stored.object_version as u64
+        self.native.version().value()
     }
 
     /// 32-byte hash that identifies the object's current contents, encoded as a Base58 string.
     async fn digest(&self) -> String {
-        Base58::encode(&self.stored.object_digest)
+        if let Some(stored) = &self.stored {
+            Base58::encode(&stored.object_digest)
+        } else {
+            self.native.digest().base58_encode()
+        }
     }
 
     /// The amount of SUI we would rebate if this object gets deleted or mutated.
@@ -76,8 +78,21 @@ impl Object {
     }
 
     /// The Base64 encoded bcs serialization of the object's content.
-    async fn bcs(&self) -> Option<Base64> {
-        Some(Base64::from(&self.stored.serialized_object))
+    async fn bcs(&self) -> Result<Option<Base64>> {
+        if let Some(stored) = &self.stored {
+            Ok(Some(Base64::from(&stored.serialized_object)))
+        } else {
+            let bytes = bcs::to_bytes(&self.native)
+                .map_err(|e| {
+                    Error::Internal(format!(
+                        "Failed to serialize object at {}: {e}",
+                        self.address,
+                    ))
+                })
+                .extend()?;
+
+            Ok(Some(Base64::from(&bytes)))
+        }
     }
 
     /// The transaction block that created this version of the object.
@@ -94,31 +109,27 @@ impl Object {
 
     /// Objects can either be immutable, shared, owned by an address,
     /// or are child objects (part of a dynamic field)
-    async fn kind(&self) -> Result<Option<ObjectKind>> {
-        let owner_type: OwnerType = self
-            .stored
-            .owner_type
-            .try_into()
-            .map_err(|e: IndexerError| Error::Internal(e.to_string()))
-            .extend()?;
-
-        Ok(Some(match owner_type {
-            OwnerType::Immutable => ObjectKind::Immutable,
-            OwnerType::Address => ObjectKind::Owned,
-            OwnerType::Object => ObjectKind::Child,
-            OwnerType::Shared => ObjectKind::Shared,
-        }))
+    async fn kind(&self) -> Option<ObjectKind> {
+        use NativeOwner as O;
+        use ObjectKind as K;
+        Some(match self.native.owner {
+            O::AddressOwner(_) => K::Owned,
+            O::ObjectOwner(_) => K::Child,
+            O::Shared { .. } => K::Shared,
+            O::Immutable => K::Immutable,
+        })
     }
 
     /// The Address or Object that owns this Object.  Immutable and Shared Objects do not have
     /// owners.
-    async fn owner(&self) -> Result<Option<Owner>> {
-        let Some(owner_id) = &self.stored.owner_id else {
-            return Ok(None);
+    async fn owner(&self) -> Option<Owner> {
+        use NativeOwner as O;
+        let (O::AddressOwner(address) | O::ObjectOwner(address)) = self.native.owner else {
+            return None;
         };
 
-        let address = addr(owner_id).extend()?;
-        Ok(Some(Owner { address }))
+        let address = SuiAddress::from(address);
+        Some(Owner { address })
     }
 
     /// Attempts to convert the object into a MoveObject
@@ -293,7 +304,7 @@ impl TryFrom<StoredObject> for Object {
 
         Ok(Self {
             address,
-            stored: stored_object,
+            stored: Some(stored_object),
             native: native_object,
         })
     }
