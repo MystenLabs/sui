@@ -19,7 +19,7 @@ use crate::{
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
-        gas::{GasCostSummary, GasInput},
+        gas::GasCostSummary,
         move_module::MoveModule,
         move_object::MoveObject,
         move_package::MovePackage,
@@ -34,7 +34,6 @@ use crate::{
         sui_system_state_summary::SuiSystemStateSummary,
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
-        transaction_block_effects::TransactionBlockEffects,
         transaction_block_kind::{
             AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
@@ -69,8 +68,7 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    base_types::{MoveObjectType, ObjectID},
+    base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     digests::ChainIdentifier,
     digests::TransactionDigest,
@@ -85,9 +83,7 @@ use sui_types::{
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
-    transaction::{
-        GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
-    },
+    transaction::{GenesisObject, TransactionKind},
     Identifier, TypeTag,
 };
 
@@ -1522,58 +1518,6 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
             }),
             epoch_id: c.epoch as u64,
             end_of_epoch,
-        })
-    }
-}
-
-impl TryFrom<StoredTransaction> for TransactionBlock {
-    type Error = Error;
-
-    fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
-        let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
-
-        let sender_signed_data: SenderSignedData =
-            bcs::from_bytes(&tx.raw_transaction).map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert raw_transaction into SenderSignedData. Error: {e}",
-                ))
-            })?;
-
-        let sender = Address {
-            address: SuiAddress::from_array(
-                sender_signed_data
-                    .intent_message()
-                    .value
-                    .sender()
-                    .to_inner(),
-            ),
-        };
-
-        let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
-        let effects = Some(TransactionBlockEffects::try_from(tx.clone())?);
-
-        let epoch_id = match sender_signed_data.intent_message().value.expiration() {
-            TransactionExpiration::None => None,
-            TransactionExpiration::Epoch(epoch_id) => Some(*epoch_id),
-        };
-
-        // TODO Finish implementing all types of transaction kinds
-        let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
-        let signatures: Vec<_> = sender_signed_data
-            .tx_signatures()
-            .iter()
-            .map(|s| Base64::from(s.as_ref()))
-            .collect();
-
-        Ok(Self {
-            digest,
-            effects,
-            sender: Some(sender),
-            bcs: Some(Base64::from(&tx.raw_transaction)),
-            gas_input: Some(gas_input),
-            epoch_id,
-            kind: Some(kind),
-            signatures: Some(signatures),
         })
     }
 }

@@ -35,18 +35,8 @@ pub enum ExecutionStatus {
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
-    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<TransactionBlock> {
-        let digest = self.native.transaction_digest().to_string();
-        ctx.data_unchecked::<PgManager>()
-            .fetch_tx(digest.as_str())
-            .await
-            .extend()?
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Failed to get transaction {digest} from its effects"
-                ))
-            })
-            .extend()
+    async fn transaction_block(&self) -> Result<TransactionBlock> {
+        TransactionBlock::try_from(self.stored.clone()).extend()
     }
 
     /// Whether the transaction executed successfully or not.

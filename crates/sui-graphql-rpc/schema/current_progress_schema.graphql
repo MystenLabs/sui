@@ -1649,25 +1649,26 @@ type SystemParameters {
 
 type TransactionBlock {
 	"""
-	The effects field captures the results to the chain of executing this transaction
+	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
+	This serves as a unique id for the block on chain.
 	"""
-	effects: TransactionBlockEffects
+	digest: String!
 	"""
-	The address of the user sending this transaction block
+	The address corresponding to the public key that signed this transaction.
 	"""
 	sender: Address
 	"""
-	The transaction block data in BCS format.
-	This includes data on the sender, inputs, sponsor, gas inputs, individual transactions, and user signatures.
-	"""
-	bcs: Base64
-	"""
-	The gas input field provides information on what objects were used as gas
-	As well as the owner of the gas object(s) and information on the gas price and budget
-	If the owner of the gas object(s) is not the same as the sender,
-	the transaction block is a sponsored transaction block.
+	The gas input field provides information on what objects were used as gas as well as the
+	owner of the gas object(s) and information on the gas price and budget.
+	
+	If the owner of the gas object(s) is not the same as the sender, the transaction block is a
+	sponsored transaction block.
 	"""
 	gasInput: GasInput
+	"""
+	The type of this transaction as well as the commmands and/or parameters comprising the
+	transaction of this kind.
+	"""
 	kind: TransactionBlockKind
 	"""
 	A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
@@ -1675,16 +1676,19 @@ type TransactionBlock {
 	"""
 	signatures: [Base64!]
 	"""
-	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
-	This serves as a unique id for the block on chain
+	The effects field captures the results to the chain of executing this transaction.
 	"""
-	digest: String!
+	effects: TransactionBlockEffects
 	"""
-	This field is set by senders of a transaction block
-	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
-	By default, there is no deadline for when a transaction must execute
+	This field is set by senders of a transaction block. It is an epoch reference that sets a
+	deadline after which validators will no longer consider the transaction valid. By default,
+	there is no deadline for when a transaction must execute.
 	"""
 	expiration: Epoch
+	"""
+	Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+	"""
+	bcs: Base64
 }
 
 type TransactionBlockConnection {
