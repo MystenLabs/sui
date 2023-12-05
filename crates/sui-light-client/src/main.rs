@@ -185,8 +185,8 @@ async fn pre_sync_checkpoints_to_latest(config: &Config) {
         }
 
         if let Some(summary) = found_summary {
-            // Write summary to file
-            write_checkpoint(config, &summary);
+            // Note: Do not write summary to file, since we must only persist
+            //       checkpoints that have been verified by the previous committee
 
             // Add to the list
             checkpoints_list.checkpoints.push(summary.sequence_number);
@@ -274,8 +274,10 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
         .filter(|ckp_id| **ckp_id < seq)
         .last()
         .unwrap();
+
     // Read it from the store
     let prev_ckp = read_checkpoint(config, *prev_ckp_id);
+
     // Get the committee from the previous checkpoint
     let prev_committee = prev_ckp
         .end_of_epoch_data
@@ -285,8 +287,10 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
         .iter()
         .cloned()
         .collect();
+
     // Make a commitee object using this
     let committee = Committee::new(prev_ckp.epoch().saturating_add(1), prev_committee);
+
     // Verify the checkpoint summary using the committee
     summary
         .clone()
@@ -307,22 +311,27 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
         .collect();
 
     println!("Valid: {}", !found.is_empty());
+    assert!(
+        found.len() == 1,
+        "Transaction not found in checkpoint contents"
+    );
+    let exec_digests = found.first().unwrap();
 
-    for exec_digests in found {
-        println!(
-            "Executed TID: {} Effects: {}",
-            exec_digests.1.transaction, exec_digests.1.effects
-        );
+    println!(
+        "Executed TID: {} Effects: {}",
+        exec_digests.1.transaction, exec_digests.1.effects
+    );
 
-        // Find the entry in the checkpoint.transactions
-        full_check_point
-            .transactions
-            .iter()
-            .filter(|tx| &tx.effects.execution_digests() == exec_digests.1)
-            .for_each(|_tx| {
-                // TDOD: print more info on Effects
-            });
-    }
+    // Find the entry in the checkpoint.transactions
+    full_check_point
+        .transactions
+        .iter()
+        // Note that we get the digest of the effects to ensure this is
+        // indeed the correct effects that are authenticated in the contents.
+        .filter(|tx| &tx.effects.execution_digests() == exec_digests.1)
+        .for_each(|_tx| {
+            // TDOD: print more info on Effects
+        });
 }
 
 #[tokio::main]
