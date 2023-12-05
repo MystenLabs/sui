@@ -1,16 +1,23 @@
+use async_trait::async_trait;
+use move_core_types::account_address::AccountAddress;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use sui_rest_api::Client;
 use sui_types::{
+    base_types::SequenceNumber,
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
     message_envelope::Envelope,
     messages_checkpoint::{CheckpointSummary, EndOfEpochData},
 };
 
+use sui_json::SuiJsonValue;
+
+use sui_package_resolver::{Package, PackageStore, Resolver, Result};
+
 use clap::{Parser, Subcommand};
-use std::io::Read;
 use std::{fs, io::Write, path::PathBuf};
+use std::{io::Read, sync::Arc};
 
 /// A light client for the Sui blockchain
 #[derive(Parser, Debug)]
@@ -22,6 +29,32 @@ struct Args {
 
     #[command(subcommand)]
     command: Option<SCommands>,
+}
+
+struct RemotePackageStore {
+    client: Client,
+}
+
+impl RemotePackageStore {
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+}
+
+#[async_trait]
+impl PackageStore for RemotePackageStore {
+    /// Latest version of the object at `id`.
+    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
+        Ok(self.client.get_object(id.into()).await.unwrap().version())
+    }
+    /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
+    /// some way.
+    async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        // println!("Download Package: {}", id);
+        let object = self.client.get_object(id.into()).await.unwrap();
+        let package = Package::read(&object).unwrap();
+        Ok(Arc::new(package))
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -322,16 +355,34 @@ async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
         exec_digests.1.transaction, exec_digests.1.effects
     );
 
-    // Find the entry in the checkpoint.transactions
-    full_check_point
+    let matching_tx = full_check_point
         .transactions
         .iter()
         // Note that we get the digest of the effects to ensure this is
         // indeed the correct effects that are authenticated in the contents.
-        .filter(|tx| &tx.effects.execution_digests() == exec_digests.1)
-        .for_each(|_tx| {
-            // TDOD: print more info on Effects
-        });
+        .find(|tx| &tx.effects.execution_digests() == exec_digests.1)
+        .unwrap();
+
+    for event in matching_tx.events.as_ref().unwrap().data.iter() {
+        let client = Client::new(config.full_node_url.as_str());
+        let remote_package_store = RemotePackageStore::new(client);
+        let resolver = Resolver::new(remote_package_store);
+
+        let type_layout = resolver
+            .type_layout(event.type_.clone().into())
+            .await
+            .unwrap();
+
+        let json_val = SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
+
+        println!(
+            "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n{}",
+            event.package_id,
+            event.transaction_module,
+            event.sender,
+            serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+        );
+    }
 }
 
 #[tokio::main]

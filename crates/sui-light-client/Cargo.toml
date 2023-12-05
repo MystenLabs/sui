@@ -42,6 +42,7 @@ tempfile.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
+sui-json.workspace = true
 sui-storage.workspace = true
 typed-store-derive.workspace = true
 typed-store.workspace = true
@@ -50,3 +51,4 @@ move-bytecode-utils.workspace = true
 sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
 workspace-hack.workspace = true
+
