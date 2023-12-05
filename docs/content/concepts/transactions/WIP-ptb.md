@@ -103,6 +103,7 @@ Each command is then executed in order. First, let's look a the rules around arg
   - If an argument is immutably borrowed, there must be no outstanding _mutable_ borrows. Duplicate immutable borrows are allowed.
   - If an argument is moved, there must be no outstanding borrows. Moving a borrowed value would make those outstanding borrows unsafe.
   - If an argument is copied, there must be no outstanding _mutable_ borrows. It is safe and allowed to copy a value that is immutably borrowed.
+- Object inputs have the type of their object `T` as you might expect. However, for `ObjectArg::Receiving` inputs, the object type `T` is instead wrapped as `sui::transfer::Receiving<T>`. This is because the object is not owned by the sender, but instead by another object. And to prove ownership with that parent object, you call the `sui::transfer::receive` function which removes the wrapper.
 - The `GasCoin` has special restrictions on being used by-value (moved). It can only be used by-value with the `TransferObjects` command.
 - Shared objects also have restrictions on being used by-value. These restrictions exist to ensure that at the end of the transaction the shared object is either still shared or has been deleted. A shared object cannot be unshared, i.e. having the owner changed, and it cannot be wrapped.
   - A shared object marked as not `mutable`, that is it was marked as being used read-only, cannot be used by value.
