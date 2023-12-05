@@ -24,7 +24,6 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
-        move_value::MoveValue,
         object::{Object, ObjectFilter},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -65,9 +64,7 @@ use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
-use sui_json_rpc_types::{
-    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as RpcStakedSui,
-};
+use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -76,8 +73,6 @@ use sui_types::{
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
-    effects::TransactionEffects,
-    event::EventID,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
@@ -90,7 +85,7 @@ use sui_types::{
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
-    Identifier, TypeTag,
+    TypeTag,
 };
 
 use super::db_backend::GenericQueryBuilder;
@@ -146,25 +141,6 @@ impl PgManager {
     ) -> Result<IndexerReader, Error> {
         let mut config = PgConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
-        IndexerReader::new_with_config(db_url, config)
-            .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
-    }
-}
-
-pub(crate) struct PgManager {
-    pub inner: IndexerReader,
-    pub limits: Limits,
-}
-
-impl PgManager {
-    pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
-        Self { inner, limits }
-    }
-
-    /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
-        let mut config = PgConnectionPoolConfig::default();
-        config.set_pool_size(3);
         IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
@@ -426,12 +402,12 @@ impl PgManager {
         before: Option<String>,
         filter: Option<EventFilter>,
     ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
         let descending_order = last.is_some();
         let cursor = after
             .or(before)
             .map(|cursor| self.parse_event_cursor(&cursor))
             .transpose()?;
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let query =
             move || QueryBuilder::multi_get_events(cursor, descending_order, limit, filter.clone());
@@ -1294,88 +1270,7 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
-    ) -> Result<Option<Connection<String, Event>>, Error> {
-        let event_filter: Result<RpcEventFilter, Error> = if let Some(sender) = filter.sender {
-            let sender = NativeSuiAddress::from_bytes(sender.into_array())
-                .map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::Sender(sender))
-        } else if let Some(digest) = filter.transaction_digest {
-            let digest = TransactionDigest::from_str(&digest).map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::Transaction(digest))
-        } else if let Some(package) = filter.emitting_package {
-            if let Some(module) = filter.emitting_module {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::MoveModule { package, module })
-            } else {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::Package(package))
-            }
-        } else if let Some(event_type) = filter.event_type {
-            let event_type = StructTag::from_str(&event_type).map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::MoveEventType(event_type))
-        } else if let Some(package) = filter.event_package {
-            if let Some(module) = filter.event_module {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::MoveModule { package, module })
-            } else {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::Package(package))
-            }
-        } else {
-            return Err(Error::InvalidFilter);
-        };
-
-        let descending_order = before.is_some();
-        let limit = self.validate_page_limit(first, last)? as usize;
-        let cursor = after
-            .or(before)
-            .map(|c| self.parse_event_cursor(c))
-            .transpose()?;
-        if let Ok(event_filter) = event_filter {
-            let results = self
-                .inner
-                .query_events_in_blocking_task(event_filter, cursor, limit, descending_order)
-                .await?;
-
-            let has_next_page = results.len() > limit;
-
-            let mut connection = Connection::new(false, has_next_page);
-            connection.edges.extend(results.into_iter().map(|e| {
-                let cursor = String::from(e.id);
-                let event = Event {
-                    sending_package: SuiAddress::from(e.package_id),
-                    sending_module: e.transaction_module.to_string(),
-                    event_type: Some(MoveType::new(TypeTag::from(e.type_.clone()))),
-                    senders: Some(vec![Address {
-                        address: SuiAddress::from_array(e.sender.to_inner()),
-                    }]),
-                    timestamp: e.timestamp_ms.and_then(|t| DateTime::from_ms(t as i64)),
-                    json: Some(e.parsed_json.to_string()),
-                    bcs: Some(Base64::from(e.bcs)),
-                };
-
-                Edge::new(cursor, event)
-            }));
-            Ok(Some(connection))
-        } else {
-            Err(Error::InvalidFilter)
-        }
-    }
-
-    pub(crate) async fn fetch_events_v2(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>, Error> {
         let events = self
             .multi_get_events(first, after, last, before, filter)
@@ -1385,11 +1280,7 @@ impl PgManager {
             let mut connection = Connection::new(false, has_next_page);
             connection.edges.extend(stored_events.into_iter().map(|e| {
                 let cursor = self.build_event_cursor(&e);
-                let contents = MoveValue::new(e.event_type.clone(), Base64::from(e.bcs.clone()));
-                let event = Event {
-                    stored: e,
-                    contents,
-                };
+                let event = Event { stored: e };
                 Edge::new(cursor, event)
             }));
             Ok(Some(connection))

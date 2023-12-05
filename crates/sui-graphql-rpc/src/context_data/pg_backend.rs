@@ -421,6 +421,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                 query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
             }
 
+            // Filters on the package and/ or module that emitted some event
             if let Some(p) = filter.emitting_package {
                 query = query.filter(events::dsl::package.eq(p.into_vec()));
 
@@ -429,6 +430,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                 }
             }
 
+            // Filters on the event type
             if let Some(p) = filter.event_package {
                 if let Some(m) = filter.event_module {
                     if let Some(t) = filter.event_type {
