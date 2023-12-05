@@ -1,4 +1,4 @@
-processed 13 tasks
+processed 17 tasks
 
 init:
 C: object(0,0)
@@ -80,7 +80,18 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "type": {
-                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorState"
                 }
               }
             }
@@ -103,6 +114,94 @@ Response: {
               "contents": {
                 "type": {
                   "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::object::ID,address>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::sui_system_state_inner::SuiSystemStateInnerV2>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorStateInner>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
                 }
               }
             }
@@ -113,7 +212,61 @@ Response: {
   }
 }
 
-task 9 'run-graphql'. lines 56-72:
+task 9 'run-graphql'. lines 56-71:
+Response: {
+  "data": {
+    "objectConnection": {
+      "edges": [
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 73-88:
 Response: {
   "data": {
     "objectConnection": {
@@ -156,7 +309,50 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 74-90:
+task 11 'run-graphql'. lines 90-106:
+Response: {
+  "data": {
+    "objectConnection": {
+      "edges": [
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        },
+        {
+          "node": {
+            "asMoveObject": {
+              "contents": {
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 108-124:
 Response: {
   "data": null,
   "errors": [
@@ -178,7 +374,7 @@ Response: {
   ]
 }
 
-task 11 'run-graphql'. lines 92-108:
+task 13 'run-graphql'. lines 126-142:
 Response: {
   "data": null,
   "errors": [
@@ -200,7 +396,7 @@ Response: {
   ]
 }
 
-task 12 'run-graphql'. lines 110-126:
+task 14 'run-graphql'. lines 144-160:
 Response: {
   "data": null,
   "errors": [
@@ -220,4 +416,35 @@ Response: {
       }
     }
   ]
+}
+
+task 15 'run-graphql'. lines 162-178:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Invalid type provided as filter: Empty strings are not allowed",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "objectConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 16 'run-graphql'. lines 180-196:
+Response: {
+  "data": {
+    "objectConnection": {
+      "edges": []
+    }
+  }
 }

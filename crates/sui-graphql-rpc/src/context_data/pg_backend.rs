@@ -5,7 +5,7 @@ use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
     db_data_provider::DbValidationError,
 };
-use crate::context_data::db_data_provider::PgManager;
+use crate::{context_data::db_data_provider::PgManager, types::sui_address::SuiAddress};
 use crate::{
     error::Error,
     types::{digest::Digest, object::ObjectFilter, transaction_block::TransactionBlockFilter},
@@ -308,23 +308,56 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             }
 
             if let Some(object_type) = filter.type_ {
-                let validate_type = parse_sui_struct_tag(&object_type)
-                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                let parts: Vec<String> = object_type.split("::").map(|s| s.to_string()).collect();
 
-                if validate_type.type_params.is_empty() {
-                    query = query.filter(
-                        objects::dsl::object_type
-                            .like(format!(
-                                "{}<%",
-                                validate_type.to_canonical_string(/* with_prefix */ true)
-                            ))
-                            .or(objects::dsl::object_type
-                                .eq(validate_type.to_canonical_string(/* with_prefix */ true))),
-                    );
-                } else {
-                    query = query.filter(
-                        objects::dsl::object_type.eq(validate_type.to_canonical_string(true)),
-                    );
+                for part in &parts {
+                    if part.is_empty() {
+                        return Err(DbValidationError::InvalidType(
+                            "Empty strings are not allowed".to_string(),
+                        ))?;
+                    }
+                }
+
+                if parts.len() == 1 {
+                    // We check for a leading 0x to determine if it is an address
+                    // And otherwise process it as a primitive type
+                    if parts[0].starts_with("0x") {
+                        let package = SuiAddress::from_str(&parts[0])
+                            .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                        query =
+                            query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
+                    } else {
+                        query = query.filter(objects::dsl::object_type.eq(parts[0].clone()));
+                    }
+                } else if parts.len() == 2 {
+                    // Only package addresses are allowed if there are two or more parts
+                    let package = SuiAddress::from_str(&parts[0])
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                    query = query.filter(objects::dsl::object_type.like(format!(
+                        "{}::{}::%",
+                        package,
+                        parts[1].clone()
+                    )));
+                } else if parts.len() >= 3 {
+                    let validate_type = parse_sui_struct_tag(&object_type)
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                    if validate_type.type_params.is_empty() {
+                        query = query.filter(
+                            objects::dsl::object_type
+                                .like(format!(
+                                    "{}<%",
+                                    validate_type.to_canonical_string(/* with_prefix */ true)
+                                ))
+                                .or(objects::dsl::object_type
+                                    .eq(validate_type
+                                        .to_canonical_string(/* with_prefix */ true))),
+                        );
+                    } else {
+                        query = query.filter(
+                            objects::dsl::object_type.eq(validate_type.to_canonical_string(true)),
+                        );
+                    }
                 }
             }
         }

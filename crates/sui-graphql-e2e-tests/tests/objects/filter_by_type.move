@@ -38,6 +38,40 @@
 
 //# run-graphql
 {
+  objectConnection(filter: {type: "0x2"}) {
+    edges {
+      node {
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  objectConnection(filter: {type: "0x2::coin"}) {
+    edges {
+      node {
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
   objectConnection(filter: {type: "0x2::coin::Coin"}) {
     edges {
       node {
@@ -111,6 +145,42 @@
 # Package, module, and name must be valid addresses and identifiers
 {
   objectConnection(filter: {type: "0x2::a%::B&"}) {
+    edges {
+      node {
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+# Empty strings are invalid inputs
+{
+  objectConnection(filter: {type: "::::"}) {
+    edges {
+      node {
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+# Should run successfully but return an empty result
+{
+  objectConnection(filter: {type: "u64"}) {
     edges {
       node {
         asMoveObject {
