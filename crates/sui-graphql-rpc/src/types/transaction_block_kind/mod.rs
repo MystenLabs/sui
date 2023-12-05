@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{big_int::BigInt, date_time::DateTime, epoch::Epoch, sui_address::SuiAddress};
-use crate::context_data::db_data_provider::PgManager;
+use super::{date_time::DateTime, epoch::Epoch, sui_address::SuiAddress};
+use crate::{
+    context_data::db_data_provider::PgManager,
+    types::transaction_block_kind::change_epoch::ChangeEpochTransaction,
+};
 use async_graphql::*;
 use sui_types::transaction::{GenesisObject, TransactionKind as NativeTransactionKind};
+
+pub(crate) mod change_epoch;
 
 #[derive(Union, PartialEq, Clone, Eq)]
 pub(crate) enum TransactionBlockKind {
@@ -61,32 +66,8 @@ pub(crate) struct GenesisTransaction {
     pub(crate) objects: Option<Vec<SuiAddress>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-#[graphql(complex)]
-pub(crate) struct ChangeEpochTransaction {
-    #[graphql(skip)]
-    pub(crate) epoch_id: u64,
-    pub(crate) timestamp: Option<DateTime>,
-    pub(crate) storage_charge: Option<BigInt>,
-    pub(crate) computation_charge: Option<BigInt>,
-    pub(crate) storage_rebate: Option<BigInt>,
-}
-
 #[ComplexObject]
 impl ConsensusCommitPrologueTransaction {
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.epoch_id)
-            .await
-            .extend()?;
-
-        Ok(Some(epoch))
-    }
-}
-
-#[ComplexObject]
-impl ChangeEpochTransaction {
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         let epoch = ctx
             .data_unchecked::<PgManager>()
@@ -109,13 +90,7 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
                 value: format!("{pt:?}"),
             }),
 
-            K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction {
-                epoch_id: ce.epoch,
-                timestamp: DateTime::from_ms(ce.epoch_start_timestamp_ms as i64),
-                storage_charge: Some(BigInt::from(ce.storage_charge)),
-                computation_charge: Some(BigInt::from(ce.computation_charge)),
-                storage_rebate: Some(BigInt::from(ce.storage_rebate)),
-            }),
+            K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction(ce)),
 
             K::Genesis(g) => T::Genesis(GenesisTransaction {
                 objects: Some(g.objects.iter().cloned().map(SuiAddress::from).collect()),

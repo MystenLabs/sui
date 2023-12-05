@@ -71,7 +71,8 @@ impl GasInput {
             .extend()
     }
 
-    /// An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+    /// An unsigned integer specifying the number of native tokens per gas unit this transaction
+    /// will pay (in MIST).
     async fn gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.price))
     }
@@ -84,25 +85,25 @@ impl GasInput {
 
 #[Object]
 impl GasCostSummary {
-    /// Gas paid for executing this transaction.
+    /// Gas paid for executing this transaction (in MIST).
     async fn computation_cost(&self) -> Option<BigInt> {
         Some(BigInt::from(self.computation_cost))
     }
 
-    /// Gas paid for the data stored on-chain by this transaction.
+    /// Gas paid for the data stored on-chain by this transaction (in MIST).
     async fn storage_cost(&self) -> Option<BigInt> {
         Some(BigInt::from(self.storage_cost))
     }
 
     /// Part of storage cost that can be reclaimed by cleaning up data created by this transaction
-    /// (when objects are deleted or an object is modified, whch is treated as a deletion followed
-    /// by a creation).
+    /// (when objects are deleted or an object is modified, which is treated as a deletion followed
+    /// by a creation) (in MIST).
     async fn storage_rebate(&self) -> Option<BigInt> {
         Some(BigInt::from(self.storage_rebate))
     }
 
     /// Part of storage cost that is not reclaimed when data created by this transaction is cleaned
-    /// up.
+    /// up (in MIST).
     async fn non_refundable_storage_fee(&self) -> Option<BigInt> {
         Some(BigInt::from(self.non_refundable_storage_fee))
     }

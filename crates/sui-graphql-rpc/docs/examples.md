@@ -1262,7 +1262,7 @@
 >        ... on ChangeEpochTransaction {
 >          computationCharge
 >          storageCharge
->          timestamp
+>          startTimestamp
 >          storageRebate
 >        }
 >        ... on GenesisTransaction {
