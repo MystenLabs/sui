@@ -1,6 +1,6 @@
 #[test_only]
 module scratch_off::test_game {
-    use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, Ticket,
+    use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket,
      winning_tickets_left, losing_tickets_left, prize_pool_balance};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
@@ -25,7 +25,8 @@ module scratch_off::test_game {
                 value_of_prizes,
                 max_tickets_issued,
                 b"key", // Fake public key
-                ts::ctx(scenario),
+                1,
+                ts::ctx(scenario)
             );
             burn_for_testing<SUI>(leftover_coin);
         }
@@ -58,16 +59,20 @@ module scratch_off::test_game {
         {
             // Send 3 tickets to alice
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            game::send_ticket(alice, &mut store, ts::ctx(&mut test));
-            game::send_ticket(alice, &mut store, ts::ctx(&mut test));
-            game::send_ticket(alice, &mut store, ts::ctx(&mut test));
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
         ts::next_tx(&mut test, owner);
         {
             // Try to send one more ticket and fail
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            game::send_ticket(alice, &mut store, ts::ctx(&mut test));
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
         test_scenario::end(test);
@@ -95,9 +100,11 @@ module scratch_off::test_game {
         };
         ts::next_tx(&mut test, owner);
         {
-            // Send 3 tickets to alice
+            // Send 1 tickets to alice
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            game::send_ticket(alice, &mut store, ts::ctx(&mut test));
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
         ts::next_tx(&mut test, alice);

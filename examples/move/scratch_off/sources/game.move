@@ -24,6 +24,7 @@ module scratch_off::game {
     const EInvalidInputs: u64 = 0;
     const EInvalidBlsSig: u64 = 1;
     const ENoTicketsLeft: u64 = 2;
+    const ENotAuthorizedEmployee: u64 = 3;
 
     // --------------- Events ---------------
     struct NewDrawing<phantom T> has copy, drop {
@@ -60,6 +61,12 @@ module scratch_off::game {
         max_players: u64,
         leaderboard_players: vector<address>,
         leaderboard_player_metadata: Table<address, Metadata>,
+    }
+
+    /// Capability for the cap to manage the store id
+    struct StoreCap has key, store {
+        id: UID,
+        store_id: ID
     }
 
     struct ConvenienceStore<phantom Asset> has key {
@@ -154,7 +161,6 @@ module scratch_off::game {
         };
 
         assert!(max_tickets_issued == winning_ticket_count, EInvalidInputs);
-
         let new_store = ConvenienceStore<Asset> {
             id: object::new(ctx),
             creator: tx_context::sender(ctx),
@@ -173,19 +179,23 @@ module scratch_off::game {
             },
             public_key,
         };
+        transfer::public_transfer(StoreCap {
+            id: object::new(ctx),
+            store_id: object::id(&new_store)
+        }, tx_context::sender(ctx));
 
         transfer::share_object(new_store);
         coin
     }
 
     /// Initializes a ticket and sends it to someone.
-    /// TODO: decide how to do this besides sending a ticket
-    /// TODO: add capability to this
     public fun send_ticket<Asset>(
+        store_cap: &StoreCap,
         player: address,
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
+        assert!(store_cap.store_id == object::uid_to_inner(&store.id), ENotAuthorizedEmployee);
         assert!(store.tickets_issued < store.original_ticket_count, ENoTicketsLeft);
         store.tickets_issued = store.tickets_issued + 1;
         let ticket = Ticket {
@@ -338,7 +348,7 @@ module scratch_off::game {
                     let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
                     let data = table::borrow(&store.leaderboard.leaderboard_player_metadata, *current_player);
                     let current_min = data.amount_won;
-                    
+
                     idx = idx + 1;
                     while (idx < store.leaderboard.max_players) {
                         let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
