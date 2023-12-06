@@ -50,7 +50,8 @@ impl PackageStore for RemotePackageStore {
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        // println!("Download Package: {}", id);
+        // TODO(SECURITY):  here we also need to authenticate the transaction that wrote this objects,
+        //                  and ensure it wrote this object by hash.
         let object = self.client.get_object(id.into()).await.unwrap();
         let package = Package::read(&object).unwrap();
         Ok(Arc::new(package))
