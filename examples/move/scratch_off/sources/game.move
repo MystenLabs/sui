@@ -46,7 +46,7 @@ module scratch_off::game {
         player: address,
 	}
 
-    struct PrizeStruct has store {
+    struct PrizeStruct has store, drop {
         ticket_amount: u64,
         prize_value: u64,
     }
@@ -98,6 +98,10 @@ module scratch_off::game {
 
     public fun leaderboard_players(leaderboard: &LeaderBoard): vector<address> {
         leaderboard.leaderboard_players
+    }
+
+    public fun winning_tickets<Asset>(store: &ConvenienceStore<Asset>): &vector<PrizeStruct> {
+        &store.winning_tickets
     }
 
     public fun table_contains_player(player_metadata: &Table<address, Metadata>, target_address: address): bool {
@@ -288,20 +292,25 @@ module scratch_off::game {
             };
 
             // Update the ticket count in prizes and the total number
-            let prize = vector::borrow_mut(&mut store.winning_tickets, winning_tickets_index);
+            let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
             let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
             prize.ticket_amount = prize.ticket_amount - 1;
+            let value_won = prize.prize_value;
+            if (prize.ticket_amount > 0) {
+                vector::push_back(&mut store.winning_tickets, prize);
+            };
+
             store.winning_tickets_left = store.winning_tickets_left - 1;
             transfer::public_transfer(prize_coin, player);
             // Update player mapping to metadata
             if (table_contains_player(&store.player_metadata, player)) {
                 let player_metadata = get_player_metadata_mut(&mut store.player_metadata, player);
                 player_metadata.tickets_claimed = player_metadata.tickets_claimed + 1;
-                player_metadata.amount_won = player_metadata.amount_won + prize.prize_value;
+                player_metadata.amount_won = player_metadata.amount_won + value_won;
             } else {
                 table::add(&mut store.player_metadata, player, Metadata {
                     tickets_claimed: 1, 
-                    amount_won: prize.prize_value
+                    amount_won: value_won
                 });
             };
 
@@ -352,7 +361,6 @@ module scratch_off::game {
                 // Only need to update the minimum if we are at capacity
                 if (table::length(&store.leaderboard.leaderboard_player_metadata) == store.leaderboard.max_players) {
                     let idx = 0;
-                    let min_index = 0;
                     let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
                     let data = table::borrow(&store.leaderboard.leaderboard_player_metadata, *current_player);
                     let current_min = data.amount_won;
@@ -373,12 +381,10 @@ module scratch_off::game {
                 };
             };
 
-
-
             event::emit(DrawingResult<Asset> { 
                 ticket_id,
                 player: tx_context::sender(ctx),
-                amount_won: prize.prize_value,
+                amount_won: value_won,
             });
         } else {
             store.losing_tickets_left = store.losing_tickets_left - 1;
@@ -419,7 +425,7 @@ module scratch_off::game {
         // verify BLS sig
         // let msg_vec = object::uid_to_bytes(&id);
         // assert!(
-        //     bls12381_min_sig_verify(
+        //     bls12381_min_pk_verify(
         //         &bls_sig, &store.public_key, &msg_vec,
         //     ),
         //     EInvalidBlsSig
@@ -450,16 +456,99 @@ module scratch_off::game {
             };
 
             // Update the ticket count in prizes and the total number
-            let prize = vector::borrow_mut(&mut store.winning_tickets, winning_tickets_index);
+            let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
             let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
             prize.ticket_amount = prize.ticket_amount - 1;
+            let value_won = prize.prize_value;
+            if (prize.ticket_amount > 0) {
+                vector::push_back(&mut store.winning_tickets, prize);
+            };
+
             store.winning_tickets_left = store.winning_tickets_left - 1;
             transfer::public_transfer(prize_coin, player);
+            // Update player mapping to metadata
+            if (table_contains_player(&store.player_metadata, player)) {
+                let player_metadata = get_player_metadata_mut(&mut store.player_metadata, player);
+                player_metadata.tickets_claimed = player_metadata.tickets_claimed + 1;
+                player_metadata.amount_won = player_metadata.amount_won + value_won;
+            } else {
+                table::add(&mut store.player_metadata, player, Metadata {
+                    tickets_claimed: 1, 
+                    amount_won: value_won
+                });
+            };
+
+            // Update leaderboard 
+            let leaderboard_updated = false;
+            let player_metadata = get_player_metadata(&mut store.player_metadata, player);
+            // Case where player is already on leaderboard
+            if (table_contains_player(&mut store.leaderboard.leaderboard_player_metadata, player)) {
+                table::remove(&mut store.leaderboard.leaderboard_player_metadata, player);
+                table::add(&mut store.leaderboard.leaderboard_player_metadata, player, *player_metadata);
+            } else {
+                // Case where player is a new player
+                if (store.leaderboard.lowest_sui_won < player_metadata.amount_won) {
+                    table::add(&mut store.leaderboard.leaderboard_player_metadata, player, *player_metadata);
+                    leaderboard_updated = true;
+                };
+                vector::push_back(&mut store.leaderboard.leaderboard_players, player);
+            };
+
+            // Update minimum amount_won in leaderboard
+            // If the length of the leaderboard is greater than the minimum pop the lowest
+            if (table::length(&store.leaderboard.leaderboard_player_metadata) > store.leaderboard.max_players) {
+                let idx = 0;
+                let min_index = 0;
+                let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
+                let data = table::borrow(&store.leaderboard.leaderboard_player_metadata, *current_player);
+                let current_min = data.amount_won;
+                let min_player = *current_player;
+                idx = idx + 1;
+                while (idx < store.leaderboard.max_players) {
+
+                    let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
+                    let data = table::borrow(&store.leaderboard.leaderboard_player_metadata, *current_player);
+                    if (current_min > data.amount_won) {
+                        current_min = data.amount_won;
+                        min_index = idx;
+                        min_player = *current_player;
+                    };
+                    idx = idx + 1;
+                };
+
+                vector::remove(&mut store.leaderboard.leaderboard_players, min_index);
+                table::remove(&mut store.leaderboard.leaderboard_player_metadata, min_player);
+            };
+
+            // Update the minimum sui won if leaderboard updated
+            if (leaderboard_updated) {
+                // Only need to update the minimum if we are at capacity
+                if (table::length(&store.leaderboard.leaderboard_player_metadata) == store.leaderboard.max_players) {
+                    let idx = 0;
+                    let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
+                    let data = table::borrow(&store.leaderboard.leaderboard_player_metadata, *current_player);
+                    let current_min = data.amount_won;
+
+                    idx = idx + 1;
+                    while (idx < store.leaderboard.max_players) {
+                        let current_player = vector::borrow(&store.leaderboard.leaderboard_players, idx);
+                        let data = table::borrow(&store.leaderboard.leaderboard_player_metadata, *current_player);
+
+                        if (current_min > data.amount_won) {
+                            current_min = data.amount_won;
+                        };
+                        idx = idx + 1;
+                    };
+
+                    // Update the minimum
+                    store.leaderboard.lowest_sui_won = current_min;
+                };
+            };
 
             event::emit(DrawingResult<Asset> { 
                 ticket_id,
                 player: tx_context::sender(ctx),
-                amount_won: prize.prize_value,
+                amount_won: value_won,
             });
         } else {
             store.losing_tickets_left = store.losing_tickets_left - 1;
@@ -469,5 +558,5 @@ module scratch_off::game {
                 amount_won: 0,
             });
         };
-    }    
+    }
 }

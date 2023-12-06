@@ -1,7 +1,7 @@
 #[test_only]
 module scratch_off::test_game {
     use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket,
-     winning_tickets_left, leaderboard, prize_pool_balance, leaderboard_players};
+     winning_tickets_left, leaderboard, prize_pool_balance, leaderboard_players, winning_tickets};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
     #[test_only] use sui::coin::{mint_for_testing, burn_for_testing};
@@ -9,8 +9,8 @@ module scratch_off::test_game {
     use sui::sui::SUI;
     use std::vector;
 
-    const ALICE_ADDRESS: address = @0xACE;
-    const BOB_ADDRESS: address = @0xACEB;
+    const ALICE_ADDRESS: address = @0xAAAA;
+    const BOB_ADDRESS: address = @0xBBBB;
     const OWNER_ADDRESS: address = @123;
     const MAX_LEADERBOARD_SIZE: u64 = 1;
 
@@ -87,20 +87,25 @@ module scratch_off::test_game {
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            std::debug::print(&prize_pool_balance(&store));
+            std::debug::print(winning_tickets(&store));
+            let leaderboard = leaderboard<SUI>(&store);
+            let players_list = leaderboard_players(leaderboard);
+            std::debug::print(&players_list);
+            assert!(vector::length(&players_list) == 1, 0);
             ts::return_shared(store);
         };
         ts::next_tx(&mut test, BOB_ADDRESS);
         {
             let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            std::debug::print(&ticket);
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard<SUI>(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
-            
             ts::return_shared(store);
-
         };
         test_scenario::end(test);
 
