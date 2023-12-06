@@ -150,7 +150,7 @@ function App() {
 }
 
 function ConnectedAccount() {
-	const { account } = useCurrentAccount();
+	const account = useCurrentAccount();
 
 	if (!account) {
 		return null;
@@ -168,7 +168,7 @@ Now that you have the account to connect to, you can query for objects the conne
 import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
 
 function ConnectedAccount() {
-	const { account } = useCurrentAccount();
+	const account = useCurrentAccount();
 
 	if (!account) {
 		return null;
