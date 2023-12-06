@@ -278,11 +278,11 @@ impl AuthenticatorStateExpireTransaction {
 }
 
 impl From<NativeEndOfEpochTransactionKind> for EndOfEpochTransactionKind {
-    fn from(eoek: NativeEndOfEpochTransactionKind) -> Self {
+    fn from(kind: NativeEndOfEpochTransactionKind) -> Self {
         use EndOfEpochTransactionKind as K;
         use NativeEndOfEpochTransactionKind as N;
 
-        match eoek {
+        match kind {
             N::ChangeEpoch(ce) => K::ChangeEpoch(ChangeEpochTransaction(ce)),
             N::AuthenticatorStateCreate => {
                 K::AuthenticatorStateCreate(AuthenticatorStateCreateTransaction { dummy: None })
