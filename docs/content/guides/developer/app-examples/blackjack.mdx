@@ -2,9 +2,9 @@
 title: Blackjack
 ---
 
-The following documentation goes through an example implementation of the popular casino game blackjack on Sui. This guide will walk through its components, providing a detailed look at the module's functions, structures, constants, and their significance in the overall gameplay mechanism.
+The following documentation goes through an example implementation of the popular casino game blackjack on Sui. This guide walks through its components, providing a detailed look at the module's functions, structures, constants, and their significance in the overall gameplay mechanism.
 
-Building an on-chain blackjack game shares a lot of similarities with a coin flip game, For that reason, this example will only cover the smart contracts (Move modules) and frontend logic.
+Building an on-chain blackjack game shares a lot of similarities with a coin flip game. For that reason, this example covers only the smart contracts (Move modules) and frontend logic.
 
 :::info
 
@@ -17,7 +17,7 @@ You can also find the [full repository for this example here](https://github.com
 ## Gameplay
 In this single-player version of blackjack, the player competes against a dealer, which is automated by the system. The dealer is equipped with a public BLS key that plays a central role in the game's mechanics. Players generate randomness for the game by interacting with their mouse on the screen, after which they place their bet to start the game. Upon initiating the game, the dealer's backend, actively listening for the start transaction, processes it by signing and subsequently dealing two cards to the player and one to itself.
 
-The player has the options to 'Hit' or 'Stand.' Selecting 'Stand' triggers the dealer to draw cards until the total reaches 17 or higher. Once the dealer stops, typically at a sum of 17 or more, the smart contract steps in to compare the totals and declare the winner. On the other hand, choosing 'Hit' prompts the dealer to draw an additional card for the player.
+The player has the options to 'Hit' or 'Stand.' Selecting 'Stand' triggers the dealer to draw cards until the total reaches 17 or higher. After the dealer stops, typically at a sum of 17 or more, the smart contract steps in to compare the totals and declare the winner. On the other hand, choosing 'Hit' prompts the dealer to draw an additional card for the player.
 
 ## Smart contracts
 
@@ -76,7 +76,7 @@ The [`BlackjackBoard` component](https://github.com/MystenLabs/blackjack-sui/blo
 
 - **Blockchain-Based Logic:** Both games are built on Sui, leveraging its capabilities for decentralized applications. The core game logic for each resides in Move modules, ensuring secure and verifiable gameplay.
 
-- **State Management:** In both games, state management is crucial. For Blackjack, this involves managing the player and dealer's hands and scores using React state hooks. In Satoshi Coin Flip, the state is managed through Move structs like `HouseData`, which track the house's balance and other game-related details.
+- **State Management:** In both games, state management is crucial. For blackjack, this involves managing the player and dealer's hands and scores using React state hooks. In Satoshi Coin Flip, the state is managed through Move structs like `HouseData`, which track the house's balance and other game-related details.
 
 - **Randomness and Fair Play:** Both games emphasize randomness for fairness. Blackjack uses a Counter NFT and player mouse movements to generate randomness, while Satoshi Coin Flip only uses a Counter NFT as a unique input for the [Verifiable Random Function (VRF)](../cryptography/ecvrf.mdx) in each game.
 
@@ -90,12 +90,12 @@ The [`BlackjackBoard` component](https://github.com/MystenLabs/blackjack-sui/blo
 
 - **Backend Processing:** In Blackjack, the dealer is automated (the machine), and the player's actions directly influence game outcomes. In the Coin Flip game, the house (smart contract) plays a more passive role, primarily in initializing and finalizing the game based on the player's guess.
 
-- **Module Structure and Focus:** Blackjack game focuses more on frontend interactions and real-time updates. The Satoshi Coin Flip game, however, delves deeper into backend logic, with structures like `HouseCap` and `house_data` for initializing and managing game data securely on the blockchain.
+- **Module Structure and Focus:** The Blackjack game focuses more on frontend interactions and real-time updates. The Satoshi Coin Flip game, however, delves deeper into backend logic, with structures like `HouseCap` and `house_data` for initializing and managing game data securely on the blockchain.
 
 - **Multi-Version Implementation:** The Satoshi Coin Flip game mentions two versions – one susceptible to MEV attacks and another that is resistant, indicating a focus on security and user experience variations. Such variations aren't implemented in Blackjack.
 
 :::info
 
-The complete app example can be found in [the repo here](https://github.com/MystenLabs/blackjack-sui).
+The complete app example can be found in [the balackjack-sui repo](https://github.com/MystenLabs/blackjack-sui).
 
 :::
