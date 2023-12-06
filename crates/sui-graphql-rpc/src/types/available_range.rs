@@ -5,7 +5,6 @@ use super::checkpoint::Checkpoint;
 use crate::context_data::db_data_provider::PgManager;
 use async_graphql::*;
 
-/// Information about whether epoch changes are using safe mode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AvailableRange;
 
