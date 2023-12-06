@@ -52,6 +52,7 @@ pub struct ValidatorGenesisConfig {
     pub consensus_internal_worker_address: Option<Multiaddr>,
     #[serde(default = "default_stake")]
     pub stake: u64,
+    pub name: Option<String>,
 }
 
 impl ValidatorGenesisConfig {
@@ -208,6 +209,7 @@ impl ValidatorGenesisConfigBuilder {
             consensus_address,
             consensus_internal_worker_address: None,
             stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
+            name: None,
         }
     }
 }
