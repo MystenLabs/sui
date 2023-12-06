@@ -89,7 +89,7 @@ pub struct CustomDepInfo {
     /// The package's name (i.e. the dependency name).
     pub package_name: Symbol,
     /// The path under this repo where the move package can be found
-    pub subdir: PathBuf,
+    pub subdir: PathBuf, // XXX can I use this with pre-compiled .mv files?
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]

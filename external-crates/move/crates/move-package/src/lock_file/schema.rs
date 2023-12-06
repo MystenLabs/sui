@@ -65,7 +65,7 @@ pub struct Dependency {
     pub digest: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ToolchainVersion {
     /// The Move compiler version used to compile this package.
     #[serde(rename = "compiler-version")]

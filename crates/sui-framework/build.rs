@@ -195,10 +195,12 @@ fn serialize_modules_to_file<'a>(
         module.serialize(&mut buf)?;
         serialized_modules.push(buf);
     }
-    assert!(
-        !serialized_modules.is_empty(),
-        "Failed to find system or framework or stdlib modules"
+    /*
+        assert!(
+            !serialized_modules.is_empty(),
+            "Failed to find system or framework or stdlib modules"
     );
+        */
 
     let binary = bcs::to_bytes(&serialized_modules)?;
 

@@ -38,7 +38,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
     fs::{self, File},
-    io::{Cursor, Write},
+    io::Write,
     os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
@@ -465,14 +465,15 @@ impl CompiledPackage {
         let lock_file = root.join("Move.lock");
 
         println!(
-            "Dep package path to compile: {:#?}",
-            deps_package_paths[0].name,
+            "====== Building Root: {} {}",
+            root_package_name,
+            root.display(),
         );
-
-        println!("Root: {}", root.display(),);
+        println!("Dep package paths compile: {:#?}", deps_package_paths);
 
         // how to get platform of "this" binary?
 
+        println!("looking for lock file {:#?}", lock_file);
         if !lock_file.exists() {
             println!("No lock file found for {:#?}", example_package_name);
         // use newest or legacy?
@@ -502,6 +503,8 @@ impl CompiledPackage {
                 url = OsStr::new(release_url.as_str());
             };
 
+            // use local_path in external-crates/move/crates/move-package/src/resolution/mod.rs
+            // to resolve .move
             let out_tarball = OsStr::new("/Users/rijnard/.move/binaries/RENAME_ME.tgz");
             let out_binary_dir = OsStr::new("/Users/rijnard/.move/binaries");
             let out_binary =
@@ -540,7 +543,10 @@ impl CompiledPackage {
                 println!("binary exists");
             }
 
-            println!("invoking compiler");
+            println!(
+                "invoking compiler `move build -p {}`",
+                root.as_path().display()
+            );
             Command::new(out_binary)
                 .args([
                     OsStr::new("move"),
@@ -555,12 +561,19 @@ impl CompiledPackage {
 
         let flags = resolution_graph.build_options.compiler_flags();
         // invoke the compiler
-        let mut paths = deps_package_paths.clone();
+        // let mut paths = deps_package_paths.clone(); // somehow ensure we can compile with existing build artifacts
+        let mut paths = vec![];
         paths.push(sources_package_paths.clone());
 
-        let compiler = Compiler::from_package_paths(paths, vec![])
+        println!("source is {:#?}", paths);
+        println!("deps is {:#?}", deps_package_paths);
+
+        let compiler = Compiler::from_package_paths(paths, deps_package_paths.clone()) // should I just fill in deps here?
             .unwrap()
             .set_flags(flags);
+        // let compiler = Compiler::from_package_paths(paths, vec![]) // should I just fill in deps here?
+        //    .unwrap()
+        //    .set_flags(flags);
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
@@ -612,6 +625,7 @@ impl CompiledPackage {
 
         compiled_package.save_to_disk(project_root.join(CompiledPackageLayout::Root.path()))?;
 
+        println!("BUILD SUCCESSFUL");
         Ok(compiled_package)
     }
 
