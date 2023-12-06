@@ -207,7 +207,7 @@ impl DBWithThreadModeWrapper {
         metric_conf: MetricConf,
         db_path: PathBuf,
     ) -> Self {
-        DBMetrics::get().increment_num_active_dbs();
+        DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
         Self {
             underlying,
             metric_conf,
@@ -218,7 +218,7 @@ impl DBWithThreadModeWrapper {
 
 impl Drop for DBWithThreadModeWrapper {
     fn drop(&mut self) {
-        DBMetrics::get().decrement_num_active_dbs();
+        DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
     }
 }
 
@@ -235,7 +235,7 @@ impl OptimisticTransactionDBWrapper {
         metric_conf: MetricConf,
         db_path: PathBuf,
     ) -> Self {
-        DBMetrics::get().increment_num_active_dbs();
+        DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
         Self {
             underlying,
             metric_conf,
@@ -246,7 +246,7 @@ impl OptimisticTransactionDBWrapper {
 
 impl Drop for OptimisticTransactionDBWrapper {
     fn drop(&mut self) {
-        DBMetrics::get().decrement_num_active_dbs();
+        DBMetrics::get().decrement_num_active_dbs(&self.metric_conf.db_name);
     }
 }
 
@@ -558,22 +558,15 @@ impl RocksDB {
     }
 
     pub fn db_name(&self) -> String {
-        match self {
-            Self::DBWithThreadMode(d) => d
-                .metric_conf
-                .db_name_override
-                .clone()
-                .unwrap_or_else(|| self.default_db_name()),
-            Self::OptimisticTransactionDB(d) => d
-                .metric_conf
-                .db_name_override
-                .clone()
-                .unwrap_or_else(|| self.default_db_name()),
+        let name = match self {
+            Self::DBWithThreadMode(d) => &d.metric_conf.db_name,
+            Self::OptimisticTransactionDB(d) => &d.metric_conf.db_name,
+        };
+        if name.is_empty() {
+            self.default_db_name()
+        } else {
+            name.clone()
         }
-    }
-
-    pub fn live_files(&self) -> Result<Vec<LiveFile>, Error> {
-        delegate_call!(self.live_files())
     }
 
     fn default_db_name(&self) -> String {
@@ -582,6 +575,10 @@ impl RocksDB {
             .and_then(|f| f.to_str())
             .unwrap_or("unknown")
             .to_string()
+    }
+
+    pub fn live_files(&self) -> Result<Vec<LiveFile>, Error> {
+        delegate_call!(self.live_files())
     }
 }
 
@@ -679,24 +676,28 @@ impl RocksDBBatch {
 
 #[derive(Debug, Default)]
 pub struct MetricConf {
-    pub db_name_override: Option<String>,
+    pub db_name: String,
     pub read_sample_interval: SamplingInterval,
     pub write_sample_interval: SamplingInterval,
     pub iter_sample_interval: SamplingInterval,
 }
 
 impl MetricConf {
-    pub fn with_db_name(db_name: &str) -> Self {
+    pub fn new(db_name: &str) -> Self {
+        if db_name.is_empty() {
+            error!("A meaningful db name should be used for metrics reporting.")
+        }
         Self {
-            db_name_override: Some(db_name.to_string()),
+            db_name: db_name.to_string(),
             read_sample_interval: SamplingInterval::default(),
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
         }
     }
-    pub fn with_sampling(read_interval: SamplingInterval) -> Self {
+
+    pub fn with_sampling(self, read_interval: SamplingInterval) -> Self {
         Self {
-            db_name_override: None,
+            db_name: self.db_name,
             read_sample_interval: read_interval,
             write_sample_interval: SamplingInterval::default(),
             iter_sample_interval: SamplingInterval::default(),
