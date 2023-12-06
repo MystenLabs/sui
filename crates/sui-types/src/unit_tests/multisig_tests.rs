@@ -1007,7 +1007,7 @@ fn multisig_zklogin_scenarios() {
         bytes: OnceCell::new(),
     };
     assert!(multisig_2
-        .verify_authenticator(&intent_msg, bad_addr, None, &aux_verify_data)
+        .verify_authenticator(intent_msg, bad_addr, None, &aux_verify_data)
         .is_err());
 
     // zkLogin sig + traditional sig combined verifies. see consistency test in /sdk/typescript/test/e2e/multisig.test.ts
