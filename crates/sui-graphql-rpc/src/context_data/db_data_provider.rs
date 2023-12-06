@@ -1536,23 +1536,16 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
 impl TryFrom<StoredEpochInfo> for Epoch {
     type Error = Error;
     fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
-        let validators: Vec<SuiValidatorSummary> = e
-            .validators
-            .into_iter()
-            .flatten()
-            .map(|v| {
-                bcs::from_bytes(&v).map_err(|e| {
-                    Error::Internal(format!(
-                        "Can't convert validator into Validator. Error: {e}",
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let system_state: NativeSuiSystemStateSummary =
+            bcs::from_bytes(&e.system_state).map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert system_state into SystemState. Error: {e}",
+                ))
+            })?;
 
-        let active_validators = convert_to_validators(validators, None);
-
+        let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
-            total_stake: e.new_total_stake.map(|s| BigInt::from(s as u64)),
+            total_stake: Some(BigInt::from(e.total_stake as u64)),
             active_validators: Some(active_validators),
             ..Default::default()
         };
@@ -1577,7 +1570,7 @@ impl TryFrom<StoredEpochInfo> for Epoch {
             total_gas_fees: e.total_gas_fees.map(BigInt::from),
             total_stake_rewards: e.total_stake_rewards_distributed.map(BigInt::from),
             total_stake_subsidies: e.stake_subsidy_amount.map(BigInt::from),
-            fund_size: e.storage_fund_balance.map(BigInt::from),
+            fund_size: Some(BigInt::from(e.storage_fund_balance as u64)),
             net_inflow,
             fund_inflow: e.storage_charge.map(BigInt::from),
             fund_outflow: e.storage_rebate.map(BigInt::from),

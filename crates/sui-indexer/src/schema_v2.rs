@@ -74,26 +74,24 @@ diesel::table! {
 diesel::table! {
     epochs (epoch) {
         epoch -> Int8,
-        validators -> Array<Nullable<Bytea>>,
         first_checkpoint_id -> Int8,
         epoch_start_timestamp -> Int8,
         reference_gas_price -> Int8,
         protocol_version -> Int8,
+        total_stake -> Int8,
+        storage_fund_balance -> Int8,
+        system_state -> Bytea,
         epoch_total_transactions -> Nullable<Int8>,
         last_checkpoint_id -> Nullable<Int8>,
         epoch_end_timestamp -> Nullable<Int8>,
         storage_fund_reinvestment -> Nullable<Int8>,
         storage_charge -> Nullable<Int8>,
         storage_rebate -> Nullable<Int8>,
-        storage_fund_balance -> Nullable<Int8>,
         stake_subsidy_amount -> Nullable<Int8>,
         total_gas_fees -> Nullable<Int8>,
         total_stake_rewards_distributed -> Nullable<Int8>,
         leftover_storage_fund_inflow -> Nullable<Int8>,
-        new_total_stake -> Nullable<Int8>,
         epoch_commitments -> Nullable<Bytea>,
-        next_epoch_reference_gas_price -> Nullable<Int8>,
-        next_epoch_protocol_version -> Nullable<Int8>,
     }
 }
 
