@@ -113,7 +113,7 @@ module Test::M2 {
         repr
       }
       senders {
-        location
+        address
       }
       json
       bcs
@@ -134,7 +134,7 @@ module Test::M2 {
         repr
       }
       senders {
-        location
+        address
       }
       json
       bcs
@@ -155,7 +155,7 @@ module Test::M2 {
         repr
       }
       senders {
-        location
+        address
       }
       json
       bcs
@@ -176,7 +176,7 @@ module Test::M2 {
         repr
       }
       senders {
-        location
+        address
       }
       json
       bcs
@@ -197,7 +197,7 @@ module Test::M2 {
         repr
       }
       senders {
-        location
+        address
       }
       json
       bcs
@@ -218,7 +218,7 @@ module Test::M2 {
         repr
       }
       senders {
-        location
+        address
       }
       json
       bcs

@@ -55,7 +55,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -72,7 +72,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -89,7 +89,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -106,7 +106,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -133,7 +133,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -150,7 +150,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -167,7 +167,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -184,7 +184,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -211,7 +211,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -228,7 +228,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -255,7 +255,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
@@ -282,7 +282,7 @@ Response: {
           },
           "senders": [
             {
-              "location": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ],
           "json": {
