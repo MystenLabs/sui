@@ -47,7 +47,7 @@ impl PackageStoreTables {
     pub fn new(path: &Path) -> Arc<Self> {
         Arc::new(Self::open_tables_read_write(
             path.to_path_buf(),
-            MetricConf::default(),
+            MetricConf::new("package"),
             None,
             None,
         ))

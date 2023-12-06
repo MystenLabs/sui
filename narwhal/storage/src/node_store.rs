@@ -58,7 +58,7 @@ impl NodeStorage {
         certificate_store_cache_metrics: Option<CertificateStoreCacheMetrics>,
     ) -> Self {
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
-        let mut metrics_conf = MetricConf::with_db_name("consensus_epoch");
+        let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
         let cf_options = db_options.options.clone();
         let column_family_options = vec![

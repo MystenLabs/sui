@@ -497,7 +497,7 @@ async fn test_deferral_key_sort_order() {
 
     let db = TestDB::open_tables_read_write(
         tempdir.path().to_owned(),
-        MetricConf::with_db_name("test_db"),
+        MetricConf::new("test_db"),
         None,
         None,
     );
@@ -565,7 +565,7 @@ impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_transactional(
             Self::path(epoch, parent_path),
-            MetricConf::with_db_name("epoch"),
+            MetricConf::new("epoch"),
             db_options,
             None,
         )
@@ -576,7 +576,7 @@ impl AuthorityEpochTables {
             Self::path(epoch, parent_path),
             None,
             None,
-            MetricConf::with_db_name("epoch"),
+            MetricConf::new("epoch_readonly"),
         )
     }
 
