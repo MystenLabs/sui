@@ -40,7 +40,7 @@ module Test::M1 {
           repr
         }
         senders {
-          location
+          address
         }
         json
         bcs
@@ -62,7 +62,7 @@ module Test::M1 {
           repr
         }
         senders {
-          location
+          address
         }
         json
         bcs
@@ -84,7 +84,7 @@ module Test::M1 {
           repr
         }
         senders {
-          location
+          address
         }
         json
         bcs
