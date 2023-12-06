@@ -8,13 +8,19 @@ module scratch_off::test_game {
     use sui::test_scenario as ts;
     use sui::sui::SUI;
 
+    const ALICE_ADDRESS: address = @0xACE;
+    const BOB_ADDRESS: address = @0xACEB;
+    const OWNER_ADDRESS: address = @123;
+    const MAX_LEADERBOARD_SIZE: u64 = 1;
+
     #[test_only]
     public fun setup_test_sui_store(
         scenario: &mut Scenario,
         creator: address,
         number_of_prizes: vector<u64>,
         value_of_prizes: vector<u64>,
-        max_tickets_issued: u64
+        max_tickets_issued: u64,
+        max_leaderboard_size: u64,
     ) {
         ts::next_tx(scenario, creator);
         {
@@ -25,7 +31,7 @@ module scratch_off::test_game {
                 value_of_prizes,
                 max_tickets_issued,
                 b"key", // Fake public key
-                1,
+                max_leaderboard_size,
                 ts::ctx(scenario)
             );
             burn_for_testing<SUI>(leftover_coin);
@@ -40,74 +46,113 @@ module scratch_off::test_game {
         test_no_more_tickets_(scenario());
     }
 
-    fun test_no_more_tickets_(test: Scenario) {
-        let owner: address = @0xF;
-        let alice: address = @0xAAAA;
-        ts::next_tx(&mut test, owner);
+    #[test]
+    fun test_play_and_evaluate() {
+        test_play_and_evaluate_(scenario());
+    }
+
+    #[test]
+    fun test_leaderboard_max_size() {
+        test_leaderboard_max_size_(scenario());
+    }
+
+    fun test_leaderboard_max_size_(test: Scenario) {
+        ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             let number_of_prizes = vector<u64>[1, 1, 1];
             let value_of_prizes = vector<u64>[1,2,5];
             setup_test_sui_store(
                 &mut test,
-                owner,
+                OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                3
+                3,
+                MAX_LEADERBOARD_SIZE
             )
         };
-        ts::next_tx(&mut test, owner);
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            // Send 1 ticket to alice and 1 ticket to bob
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, ts::ctx(&mut test));
+            ts::return_to_sender(&test, store_cap);
+            ts::return_shared(store);
+        };
+        ts::next_tx(&mut test, ALICE_ADDRESS);
+        {
+            let ticket: Ticket = ts::take_from_sender(&test);
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            ts::return_shared(store);
+        };
+        test_scenario::end(test);
+
+    }
+
+    fun test_no_more_tickets_(test: Scenario) {
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            let number_of_prizes = vector<u64>[1, 1, 1];
+            let value_of_prizes = vector<u64>[1,2,5];
+            setup_test_sui_store(
+                &mut test,
+                OWNER_ADDRESS,
+                number_of_prizes,
+                value_of_prizes,
+                3,
+                MAX_LEADERBOARD_SIZE
+            )
+        };
+        ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 3 tickets to alice
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
-            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
-            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
-            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
-        ts::next_tx(&mut test, owner);
+        ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Try to send one more ticket and fail
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
-            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
         test_scenario::end(test);
     }
 
-    #[test]
-    fun test_play_and_evaluate() {
-        test_play_and_evaluate_(scenario());
-    }
-
     fun test_play_and_evaluate_(test: Scenario) {
-        let owner: address = @0xF;
-        let alice: address = @0xAAAA;
-        ts::next_tx(&mut test, owner);
+        ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             let number_of_prizes = vector<u64>[1, 1, 1];
             let value_of_prizes = vector<u64>[1, 1, 1];
             setup_test_sui_store(
                 &mut test,
-                owner,
+                OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                3
+                3,
+                MAX_LEADERBOARD_SIZE
             )
         };
-        ts::next_tx(&mut test, owner);
+        ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             // Send 1 tickets to alice
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
             let store_cap: StoreCap = ts::take_from_sender(&test);
-            game::send_ticket(&store_cap, alice, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
-        ts::next_tx(&mut test, alice);
+        ts::next_tx(&mut test, ALICE_ADDRESS);
         {
             let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
