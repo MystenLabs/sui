@@ -154,17 +154,8 @@ impl BuildConfig {
     }
 
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
-        use move_compiler::editions::Flavor;
-
-        let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
-        if flavor != &Flavor::Sui {
-            return Err(SuiError::ModuleBuildFailure {
-                error: format!(
-                    "The flavor of the Move compiler cannot be overridden with anything but \
-                        \"{}\", but the default override was set to: \"{flavor}\"",
-                    Flavor::Sui,
-                ),
-            });
+        if let Some(err_msg) = set_sui_flavor(&mut self.config) {
+            return Err(SuiError::ModuleBuildFailure { error: err_msg });
         }
 
         if self.print_diags_to_stderr {
@@ -195,6 +186,22 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceT
     if filtered_diags_num > 0 {
         eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
     }
+}
+
+/// Sets build config's default flavor to `Flavor::Sui`. Returns error message if the flavor was
+/// previously set to something else than `Flavor::Sui`.
+pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
+    use move_compiler::editions::Flavor;
+
+    let flavor = build_config.default_flavor.get_or_insert(Flavor::Sui);
+    if flavor != &Flavor::Sui {
+        return Some(format!(
+            "The flavor of the Move compiler cannot be overridden with anything but \
+                 \"{}\", but the default override was set to: \"{flavor}\"",
+            Flavor::Sui,
+        ));
+    }
+    None
 }
 
 pub fn build_from_resolution_graph(

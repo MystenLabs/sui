@@ -8,6 +8,7 @@ use move_package::BuildConfig;
 #[cfg(feature = "unit_test")]
 use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
+use sui_move_build::set_sui_flavor;
 
 #[cfg(feature = "build")]
 pub mod build;
@@ -48,9 +49,8 @@ pub fn execute_move_command(
     mut build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {
-    if build_config.default_flavor.is_none() {
-        // set the compilation flavor to Sui unless user already set it to another flavor
-        build_config.default_flavor = Some(move_compiler::editions::Flavor::Sui);
+    if let Some(err_msg) = set_sui_flavor(&mut build_config) {
+        anyhow::bail!(err_msg);
     }
     match command {
         #[cfg(feature = "build")]
