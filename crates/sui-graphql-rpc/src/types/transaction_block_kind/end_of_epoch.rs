@@ -6,8 +6,13 @@ use async_graphql::*;
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::CompiledModule;
 use sui_types::{
-    digests::TransactionDigest, object::Object as NativeObject,
-    transaction::ChangeEpoch as NativeChangeEpochTransaction,
+    digests::TransactionDigest,
+    object::Object as NativeObject,
+    transaction::{
+        AuthenticatorStateExpire as NativeAuthenticatorStateExpireTransaction,
+        ChangeEpoch as NativeChangeEpochTransaction,
+        EndOfEpochTransactionKind as NativeEndOfEpochTransactionKind,
+    },
 };
 
 use crate::context_data::db_data_provider::validate_cursor_pagination;
@@ -22,7 +27,104 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq)]
+pub(crate) struct EndOfEpochTransaction(pub Vec<NativeEndOfEpochTransactionKind>);
+
+#[derive(Union, Clone, PartialEq, Eq)]
+pub(crate) enum EndOfEpochTransactionKind {
+    ChangeEpoch(ChangeEpochTransaction),
+    AuthenticatorStateCreate(AuthenticatorStateCreateTransaction),
+    AuthenticatorStateExpire(AuthenticatorStateExpireTransaction),
+    RandomnessStateCreate(RandomnessStateCreateTransaction),
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct ChangeEpochTransaction(pub NativeChangeEpochTransaction);
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct AuthenticatorStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct AuthenticatorStateExpireTransaction(
+    pub NativeAuthenticatorStateExpireTransaction,
+);
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct RandomnessStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+#[Object]
+impl EndOfEpochTransaction {
+    /// The list of system transactions that are allowed to run at the end of the epoch.
+    async fn transaction_connection(
+        &self,
+        first: Option<u64>,
+        before: Option<String>,
+        last: Option<u64>,
+        after: Option<String>,
+    ) -> Result<Connection<String, EndOfEpochTransactionKind>> {
+        // TODO: make cursor opaque (currently just an offset).
+        validate_cursor_pagination(&first, &after, &last, &before).extend()?;
+
+        let total = self.0.len();
+        let mut lo = if let Some(after) = after {
+            1 + after
+                .parse::<usize>()
+                .map_err(|_| Error::InvalidCursor("Failed to parse 'after' cursor.".to_string()))
+                .extend()?
+        } else {
+            0
+        };
+
+        let mut hi = if let Some(before) = before {
+            before
+                .parse::<usize>()
+                .map_err(|_| Error::InvalidCursor("Failed to parse 'before' cursor.".to_string()))
+                .extend()?
+        } else {
+            total
+        };
+
+        let mut connection = Connection::new(false, false);
+        if hi <= lo {
+            return Ok(connection);
+        }
+
+        // If there's a `first` limit, bound the upperbound to be at most `first` away from the
+        // lowerbound.
+        if let Some(first) = first {
+            let first = first as usize;
+            if hi - lo > first {
+                hi = lo + first;
+            }
+        }
+
+        // If there's a `last` limit, bound the lowerbound to be at most `last` away from the
+        // upperbound.  NB. This applies after we bounded the upperbound, using `first`.
+        if let Some(last) = last {
+            let last = last as usize;
+            if hi - lo > last {
+                lo = hi - last;
+            }
+        }
+
+        connection.has_previous_page = 0 < lo;
+        connection.has_next_page = hi < total;
+
+        for (idx, tx) in self.0.iter().enumerate().skip(lo).take(hi - lo) {
+            let tx = EndOfEpochTransactionKind::from(tx.clone());
+            connection.edges.push(Edge::new(idx.to_string(), tx));
+        }
+
+        Ok(connection)
+    }
+}
 
 #[Object]
 impl ChangeEpochTransaction {
@@ -156,5 +258,41 @@ impl ChangeEpochTransaction {
         }
 
         Ok(connection)
+    }
+}
+
+#[Object]
+impl AuthenticatorStateExpireTransaction {
+    /// Expire JWKs that have a lower epoch than this.
+    async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Epoch> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_epoch_strict(self.0.min_epoch)
+            .await
+            .extend()
+    }
+
+    /// The initial version that the AuthenticatorStateUpdate was shared at.
+    async fn authenticator_obj_initial_shared_version(&self) -> u64 {
+        self.0.authenticator_obj_initial_shared_version.value()
+    }
+}
+
+impl From<NativeEndOfEpochTransactionKind> for EndOfEpochTransactionKind {
+    fn from(kind: NativeEndOfEpochTransactionKind) -> Self {
+        use EndOfEpochTransactionKind as K;
+        use NativeEndOfEpochTransactionKind as N;
+
+        match kind {
+            N::ChangeEpoch(ce) => K::ChangeEpoch(ChangeEpochTransaction(ce)),
+            N::AuthenticatorStateCreate => {
+                K::AuthenticatorStateCreate(AuthenticatorStateCreateTransaction { dummy: None })
+            }
+            N::AuthenticatorStateExpire(ase) => {
+                K::AuthenticatorStateExpire(AuthenticatorStateExpireTransaction(ase))
+            }
+            N::RandomnessStateCreate => {
+                K::RandomnessStateCreate(RandomnessStateCreateTransaction { dummy: None })
+            }
+        }
     }
 }
