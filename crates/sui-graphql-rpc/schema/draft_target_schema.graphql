@@ -518,7 +518,6 @@ type Epoch {
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
 
-  validatorSet: ValidatorSet
   startTimestamp: DateTime
   endTimestamp: DateTime
 
@@ -532,6 +531,7 @@ type Epoch {
   fundOutflow: BigInt
 
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
+  systemState: SystemState
 
   checkpointConnection(
     first: Int,
@@ -550,11 +550,8 @@ type Epoch {
   ): TransactionBlockConnection
 }
 
-type SuiSystemStateSummary {
-  epoch: Epoch
-  protocolConfigs: ProtocolConfigs
-  systemStateVersion: Int
-  referenceGasPrice: BigInt
+type SystemState {
+  version: Int
 
   systemParameters: SystemParameters
   stakeSubsidy: StakeSubsidy
