@@ -308,14 +308,12 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             }
 
             if let Some(object_type) = filter.type_ {
-                let parts: Vec<String> = object_type.split("::").map(|s| s.to_string()).collect();
+                let parts: Vec<_> = object_type.splitn(3, "::").collect();
 
-                for part in &parts {
-                    if part.is_empty() {
-                        return Err(DbValidationError::InvalidType(
-                            "Empty strings are not allowed".to_string(),
-                        ))?;
-                    }
+                if parts.iter().any(|&part| part.is_empty()) {
+                    return Err(DbValidationError::InvalidType(
+                        "Empty strings are not allowed".to_string(),
+                    ))?;
                 }
 
                 if parts.len() == 1 {
@@ -327,7 +325,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                         query =
                             query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
                     } else {
-                        query = query.filter(objects::dsl::object_type.eq(parts[0].clone()));
+                        query = query.filter(objects::dsl::object_type.eq(parts[0].to_string()));
                     }
                 } else if parts.len() == 2 {
                     // Only package addresses are allowed if there are two or more parts
@@ -336,9 +334,9 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     query = query.filter(objects::dsl::object_type.like(format!(
                         "{}::{}::%",
                         package,
-                        parts[1].clone()
+                        parts[1].to_string()
                     )));
-                } else if parts.len() >= 3 {
+                } else if parts.len() == 3 {
                     let validated_type = parse_sui_struct_tag(&object_type)
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
 
@@ -359,6 +357,10 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                                 .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
                         );
                     }
+                } else {
+                    return Err(Error::Internal(
+                        "Invalid type. Type must have 3 or less parts".to_string(),
+                    ));
                 }
             }
         }
