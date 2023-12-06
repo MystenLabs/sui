@@ -20,7 +20,7 @@ use super::{
 pub(crate) struct TransactionBlockEffects {
     /// Representation of transaction effects in the Indexer's Store.  The indexer stores the
     /// transaction data and its effects together, in one table.
-    pub stored: StoredTransaction,
+    pub stored: Option<StoredTransaction>,
 
     /// Deserialized representation of `stored.raw_effects`.
     pub native: NativeTransactionEffects,
@@ -35,8 +35,21 @@ pub enum ExecutionStatus {
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
-    async fn transaction_block(&self) -> Result<TransactionBlock> {
-        TransactionBlock::try_from(self.stored.clone()).extend()
+    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<TransactionBlock> {
+        if let Some(stored_tx) = &self.stored {
+            Ok(TransactionBlock::try_from(stored_tx.clone()).extend()?)
+        } else {
+            let digest = self.native.transaction_digest().to_string();
+            ctx.data_unchecked::<PgManager>()
+                .fetch_tx(&digest)
+                .await
+                .transpose()
+                .ok_or(Error::Internal(format!(
+                    "Unable to fetch known transaction with digest {}",
+                    digest
+                )))?
+                .extend()
+        }
     }
 
     /// Whether the transaction executed successfully or not.
@@ -110,17 +123,23 @@ impl TransactionBlockEffects {
     /// The effect this transaction had on the balances (sum of coin values per coin type) of
     /// addresses and objects.
     async fn balance_changes(&self) -> Result<Option<Vec<BalanceChange>>> {
-        let mut changes = Vec::with_capacity(self.stored.balance_changes.len());
-        for change in self.stored.balance_changes.iter().flatten() {
-            changes.push(BalanceChange::read(change).extend()?);
-        }
+        if let Some(stored_tx) = &self.stored {
+            let mut changes = Vec::with_capacity(stored_tx.balance_changes.len());
+            for change in stored_tx.balance_changes.iter().flatten() {
+                changes.push(BalanceChange::read(change).extend()?);
+            }
 
-        Ok(Some(changes))
+            Ok(Some(changes))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     async fn timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.stored.timestamp_ms)
+        self.stored
+            .as_ref()
+            .and_then(|stored| DateTime::from_ms(stored.timestamp_ms))
     }
 
     /// The epoch this transaction was finalized in.
@@ -135,18 +154,24 @@ impl TransactionBlockEffects {
 
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        let checkpoint = self.stored.checkpoint_sequence_number as u64;
-        ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoint(None, Some(checkpoint))
-            .await
-            .extend()
+        if let Some(stored_tx) = &self.stored {
+            Ok(ctx
+                .data_unchecked::<PgManager>()
+                .fetch_checkpoint(None, Some(stored_tx.checkpoint_sequence_number as u64))
+                .await
+                .extend()?)
+        } else {
+            Ok(None)
+        }
     }
 
     // TODO: event_connection: EventConnection
 
     /// Base64 encoded bcs serialization of the on-chain transaction effects.
-    async fn bcs(&self) -> Option<Base64> {
-        Some(Base64::from(&self.stored.raw_effects))
+    async fn bcs(&self) -> Result<Option<Base64>, Error> {
+        let bytes = bcs::to_bytes(&self.native)
+            .map_err(|e| Error::Internal(format!("Error serializiing transaction effects: {e}")))?;
+        Ok(Some(Base64::from(&bytes)))
     }
 }
 
@@ -158,6 +183,9 @@ impl TryFrom<StoredTransaction> for TransactionBlockEffects {
             Error::Internal(format!("Error deserializing transaction effects: {e}"))
         })?;
 
-        Ok(TransactionBlockEffects { stored, native })
+        Ok(TransactionBlockEffects {
+            stored: Some(stored),
+            native,
+        })
     }
 }

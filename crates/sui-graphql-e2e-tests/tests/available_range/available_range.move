@@ -57,3 +57,14 @@
   }
 }
 
+
+
+
+// Handle unions specially; use the max
+// For connections, recurse. Check if edge or node
+
+// Then we rework arrays
+
+// rollback explain cost & observe: mention in RPC chat to descope
+
+// add devx prog to code owners for graphql
