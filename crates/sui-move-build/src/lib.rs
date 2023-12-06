@@ -24,7 +24,7 @@ use move_compiler::{
     },
     expansion::ast::{AttributeName_, Attributes},
     shared::known_attributes::KnownAttribute,
-    sui_mode::linters::{known_filters, linter_visitors, LINT_WARNING_PREFIX},
+    sui_mode::linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -112,21 +112,12 @@ impl BuildConfig {
 
     fn compile_package<W: Write>(
         resolution_graph: ResolvedGraph,
-        lint: bool,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
         let build_plan = BuildPlan::create(resolution_graph)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = if lint {
-                let (filter_attr_name, filters) = known_filters();
-                compiler
-                    .add_visitors(linter_visitors())
-                    .add_custom_known_filters(filters, filter_attr_name)
-                    .build()?
-            } else {
-                compiler.build()?
-            };
+            let (files, units_res) = compiler.build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
                     decorate_warnings(warning_diags, Some(&files));
@@ -138,7 +129,7 @@ impl BuildConfig {
                     // clutter
                     assert!(!error_diags.is_empty());
                     let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
-                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
+                    if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
                     }
                     anyhow::bail!("Compilation error");
@@ -151,7 +142,6 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        let lint = !self.config.no_lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -160,7 +150,6 @@ impl BuildConfig {
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
-            lint,
         )
     }
 
@@ -213,14 +202,13 @@ pub fn build_from_resolution_graph(
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
-    lint: bool,
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::stderr())
+        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::sink())
+        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.

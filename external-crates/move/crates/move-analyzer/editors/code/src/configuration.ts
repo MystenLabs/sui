@@ -137,4 +137,9 @@ export class Configuration {
 
         return true;
     }
+
+}
+
+export function lint(): boolean {
+    return vscode.workspace.getConfiguration('move').get('lint') ?? true;
 }

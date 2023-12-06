@@ -156,6 +156,7 @@ fn main() {
         )
         .expect("could not finish connection initialization");
 
+    let mut shutdown_req_received = false;
     loop {
         select! {
             recv(diag_receiver) -> message => {
@@ -197,7 +198,9 @@ fn main() {
             },
             recv(context.connection.receiver) -> message => {
                 match message {
-                    Ok(Message::Request(request)) => on_request(&context, &request),
+                    Ok(Message::Request(request)) => {
+                        shutdown_req_received = on_request(&context, &request, shutdown_req_received);
+                    }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
                         match notification.method.as_str() {
@@ -221,7 +224,22 @@ fn main() {
     eprintln!("Shut down language server '{}'.", exe);
 }
 
-fn on_request(context: &Context, request: &Request) {
+fn on_request(context: &Context, request: &Request, shutdown_request_received: bool) -> bool {
+    if shutdown_request_received {
+        let response = lsp_server::Response::new_err(
+            request.id.clone(),
+            lsp_server::ErrorCode::InvalidRequest as i32,
+            "a shutdown request already received by the server".to_string(),
+        );
+        if let Err(err) = context
+            .connection
+            .sender
+            .send(lsp_server::Message::Response(response))
+        {
+            eprintln!("could not send shutdown response: {:?}", err);
+        }
+        return true;
+    }
     match request.method.as_str() {
         lsp_types::request::Completion::METHOD => {
             on_completion_request(context, request, &context.symbols.lock().unwrap())
@@ -241,8 +259,22 @@ fn on_request(context: &Context, request: &Request) {
         lsp_types::request::DocumentSymbolRequest::METHOD => {
             symbols::on_document_symbol_request(context, request, &context.symbols.lock().unwrap());
         }
+        lsp_types::request::Shutdown::METHOD => {
+            eprintln!("Shutdown request received");
+            let response =
+                lsp_server::Response::new_ok(request.id.clone(), serde_json::Value::Null);
+            if let Err(err) = context
+                .connection
+                .sender
+                .send(lsp_server::Message::Response(response))
+            {
+                eprintln!("could not send shutdown response: {:?}", err);
+            }
+            return true;
+        }
         _ => eprintln!("handle request '{}' from client", request.method),
     }
+    false
 }
 
 fn on_response(_context: &Context, _response: &Response) {

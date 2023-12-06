@@ -1374,7 +1374,6 @@ fn compile_package_simple(
         resolution_graph,
         false,
         false,
-        false,
     )?)
 }
 
@@ -1396,7 +1395,6 @@ async fn compile_package(
     let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
     let run_bytecode_verifier = true;
     let print_diags_to_stderr = true;
-    let lint = !config.no_lint;
     let config = BuildConfig {
         config,
         run_bytecode_verifier,
@@ -1413,7 +1411,6 @@ async fn compile_package(
         resolution_graph,
         run_bytecode_verifier,
         print_diags_to_stderr,
-        lint,
     )?;
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
