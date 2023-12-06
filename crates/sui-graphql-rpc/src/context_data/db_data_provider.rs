@@ -528,6 +528,10 @@ impl PgManager {
                 owner_type,
             )
         };
+
+        let result: Option<Vec<StoredObject>> = self
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
+            .await?;
         result
             .map(|mut stored_objs| {
                 let has_next_page = stored_objs.len() as i64 > limit;
