@@ -595,26 +595,42 @@ type Epoch {
 
 type Event {
 	"""
-	Package, module, and type of the event
+	The Move module containing some function that when called by
+	a programmable transaction block (PTB) emitted this event.
+	For example, if a PTB invokes A::m1::foo, which internally
+	calls A::m2::emit_event to emit an event,
+	the sending module would be A::m1.
 	"""
-	eventType: MoveType
+	sendingModule: MoveModule
+	"""
+	Addresses of the senders of the event
+	"""
 	senders: [Address!]
 	"""
 	UTC timestamp in milliseconds since epoch (1/1/1970)
 	"""
 	timestamp: DateTime
+	type: MoveType!
+	bcs: Base64!
 	"""
-	JSON string representation of the event
+	Structured contents of a Move value.
 	"""
-	json: String
+	data: MoveData!
 	"""
-	Base64 encoded bcs bytes of the Move event
+	Representation of a Move value in JSON, where:
+	
+	- Addresses and UIDs are represented in canonical form, as JSON strings.
+	- Bools are represented by JSON boolean literals.
+	- u8, u16, and u32 are represented as JSON numbers.
+	- u64, u128, and u256 are represented as JSON strings.
+	- Vectors are represented by JSON arrays.
+	- Structs are represented by JSON objects.
+	- Empty optional values are represented by `null`.
+	
+	This form is offered as a less verbose convenience in cases where the layout of the type is
+	known by the client.
 	"""
-	bcs: Base64
-	"""
-	The Move module that the event was emitted in.
-	"""
-	sendingModule: MoveModule
+	json: JSON!
 }
 
 type EventConnection {
@@ -649,7 +665,20 @@ type EventEdge {
 input EventFilter {
 	sender: SuiAddress
 	transactionDigest: String
+	"""
+	Events emitted by a particular package.
+	An event is emitted by a particular package
+	if some function in the package is called
+	by a PTB and emits an event.
+	"""
 	emittingPackage: SuiAddress
+	"""
+	Events emitted by a particular Move module.
+	An event is emitted by a particular module
+	if some function in the module is called
+	by a PTB and emits an event.
+	Requires `emitting_package` to be set.
+	"""
 	emittingModule: String
 	eventPackage: SuiAddress
 	eventModule: String
@@ -1571,7 +1600,7 @@ type Query {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
-	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
+	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""

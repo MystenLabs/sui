@@ -30,6 +30,8 @@
 #### &emsp;&emsp;[With Tx Block Connection Latest Epoch](#458749)
 ### [Event Connection](#8)
 #### &emsp;&emsp;[Event Connection](#524280)
+#### &emsp;&emsp;[Filter By Emitting Package Module And Event Type](#524281)
+#### &emsp;&emsp;[Filter By Sender](#524282)
 ### [Name Service](#9)
 #### &emsp;&emsp;[Name Service](#589815)
 ### [Object](#10)
@@ -721,9 +723,7 @@
 
 ><pre>{
 >  eventConnection(
->    filter: {
->      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
->    }
+>    filter: {eventPackage: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13", eventModule: "Market", eventType: "ChangePriceEvent<0x2::sui::SUI>"}
 >  ) {
 >    nodes {
 >      sendingModule {
@@ -734,7 +734,66 @@
 >          }
 >        }
 >      }
->      eventType {
+>      type {
+>        repr
+>      }
+>      senders {
+>        address
+>      }
+>      timestamp
+>      json
+>      bcs
+>    }
+>  }
+>}</pre>
+
+### <a id=524281></a>
+### Filter By Emitting Package Module And Event Type
+
+><pre>query byEmittingPackageModuleAndEventType {
+>  eventConnection(
+>    first: 1
+>    after: "85173:0"
+>    filter: {emittingPackage: "0x3", emittingModule: "sui_system", eventPackage: "0x3", eventModule: "validator", eventType: "StakingRequestEvent"}
+>  ) {
+>    pageInfo {
+>      hasNextPage
+>      endCursor
+>    }
+>    nodes {
+>      sendingModule {
+>        name
+>      }
+>      type {
+>        repr
+>      }
+>      senders {
+>        address
+>      }
+>      timestamp
+>      json
+>      bcs
+>    }
+>  }
+>}</pre>
+
+### <a id=524282></a>
+### Filter By Sender
+
+><pre>query byTxSender {
+>  eventConnection(
+>    first: 1
+>    filter: {sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"}
+>  ) {
+>    pageInfo {
+>      hasNextPage
+>      endCursor
+>    }
+>    nodes {
+>      sendingModule {
+>        name
+>      }
+>      type {
 >        repr
 >      }
 >      senders {

@@ -42,14 +42,13 @@ use crate::{
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
-        transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, events::StoredEvent,
+        objects::StoredObject, transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -59,9 +58,7 @@ use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
-use sui_json_rpc_types::{
-    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as RpcStakedSui,
-};
+use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
@@ -69,7 +66,6 @@ use sui_types::{
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
-    event::EventID,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
@@ -79,7 +75,7 @@ use sui_types::{
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
-    Identifier, TypeTag,
+    TypeTag,
 };
 
 #[cfg(feature = "pg_backend")]
@@ -114,7 +110,6 @@ pub enum DbValidationError {
     #[error("Invalid type provided as filter: {0}")]
     InvalidType(String),
 }
-
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
@@ -451,6 +446,63 @@ impl PgManager {
             .transpose()
     }
 
+    pub(crate) fn parse_event_cursor(&self, cursor: &str) -> Result<(i64, i64), Error> {
+        let mut parts = cursor.split(':');
+        let tx_sequence_number = parts
+            .next()
+            .ok_or_else(|| {
+                Error::InvalidCursor(
+                    "Failed to parse tx_sequence_number from event cursor".to_string(),
+                )
+            })?
+            .parse::<i64>()
+            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
+        let event_sequence_number = parts
+            .next()
+            .ok_or_else(|| {
+                Error::InvalidCursor(
+                    "Failed to parse event_sequence_number from event cursor".to_string(),
+                )
+            })?
+            .parse::<i64>()
+            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
+        Ok((tx_sequence_number, event_sequence_number))
+    }
+
+    async fn multi_get_events(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<EventFilter>,
+    ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
+        let descending_order = last.is_some();
+        let cursor = after
+            .or(before)
+            .map(|cursor| self.parse_event_cursor(&cursor))
+            .transpose()?;
+
+        let query =
+            move || QueryBuilder::multi_get_events(cursor, descending_order, limit, filter.clone());
+
+        let result: Option<Vec<StoredEvent>> = self
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
+            .await?;
+
+        result
+            .map(|mut stored_events| {
+                let has_next_page = stored_events.len() as i64 > limit;
+                if has_next_page {
+                    stored_events.pop();
+                }
+
+                Ok((stored_events, has_next_page))
+            })
+            .transpose()
+    }
+
     async fn multi_get_objs(
         &self,
         first: Option<u64>,
@@ -508,8 +560,11 @@ impl PgManager {
             .into_vec())
     }
 
-    pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
-        EventID::try_from(cursor).map_err(|_| Error::InvalidCursor("event".to_string()))
+    pub(crate) fn build_event_cursor(&self, event: &StoredEvent) -> String {
+        format!(
+            "{}:{}",
+            event.tx_sequence_number, event.event_sequence_number
+        )
     }
 
     pub(crate) fn validate_package_dependencies(
@@ -1222,73 +1277,17 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>, Error> {
-        let event_filter: Result<RpcEventFilter, Error> = if let Some(sender) = filter.sender {
-            let sender = NativeSuiAddress::from_bytes(sender.into_array())
-                .map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::Sender(sender))
-        } else if let Some(digest) = filter.transaction_digest {
-            let digest = TransactionDigest::from_str(&digest).map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::Transaction(digest))
-        } else if let Some(package) = filter.emitting_package {
-            if let Some(module) = filter.emitting_module {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::MoveModule { package, module })
-            } else {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::Package(package))
-            }
-        } else if let Some(event_type) = filter.event_type {
-            let event_type = StructTag::from_str(&event_type).map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::MoveEventType(event_type))
-        } else if let Some(package) = filter.event_package {
-            if let Some(module) = filter.event_module {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::MoveModule { package, module })
-            } else {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::Package(package))
-            }
-        } else {
-            return Err(Error::InvalidFilter);
-        };
+        let events = self
+            .multi_get_events(first, after, last, before, filter)
+            .await?;
 
-        let descending_order = before.is_some();
-        let limit = self.validate_page_limit(first, last)? as usize;
-        let cursor = after
-            .or(before)
-            .map(|c| self.parse_event_cursor(c))
-            .transpose()?;
-        if let Ok(event_filter) = event_filter {
-            let results = self
-                .inner
-                .query_events_in_blocking_task(event_filter, cursor, limit, descending_order)
-                .await?;
-
-            let has_next_page = results.len() > limit;
-
+        if let Some((stored_events, has_next_page)) = events {
             let mut connection = Connection::new(false, has_next_page);
-            connection.edges.extend(results.into_iter().map(|e| {
-                let cursor = String::from(e.id);
-                let event = Event {
-                    sending_package: SuiAddress::from(e.package_id),
-                    sending_module: e.transaction_module.to_string(),
-                    event_type: Some(MoveType::new(TypeTag::from(e.type_.clone()))),
-                    senders: Some(vec![Address {
-                        address: SuiAddress::from_array(e.sender.to_inner()),
-                    }]),
-                    timestamp: e.timestamp_ms.and_then(|t| DateTime::from_ms(t as i64)),
-                    json: Some(e.parsed_json.to_string()),
-                    bcs: Some(Base64::from(e.bcs)),
-                };
-
+            connection.edges.extend(stored_events.into_iter().map(|e| {
+                let cursor = self.build_event_cursor(&e);
+                let event = Event { stored: e };
                 Edge::new(cursor, event)
             }));
             Ok(Some(connection))

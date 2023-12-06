@@ -5,10 +5,13 @@ use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
     db_data_provider::DbValidationError,
 };
-use crate::{context_data::db_data_provider::PgManager, types::sui_address::SuiAddress};
 use crate::{
+    context_data::db_data_provider::PgManager,
     error::Error,
-    types::{digest::Digest, object::ObjectFilter, transaction_block::TransactionBlockFilter},
+    types::{
+        digest::Digest, event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
+        transaction_block::TransactionBlockFilter,
+    },
 };
 use async_trait::async_trait;
 use diesel::{
@@ -20,8 +23,8 @@ use diesel::{
 use std::str::FromStr;
 use sui_indexer::{
     schema_v2::{
-        checkpoints, epochs, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
-        tx_recipients, tx_senders,
+        checkpoints, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
+        tx_input_objects, tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
 };
@@ -422,6 +425,107 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query = query.limit(limit + 1);
 
         query
+    }
+    fn multi_get_events(
+        cursor: Option<(i64, i64)>,
+        descending_order: bool,
+        limit: i64,
+        filter: Option<EventFilter>,
+    ) -> Result<events::BoxedQuery<'static, Pg>, Error> {
+        let mut query = events::dsl::events.into_boxed();
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(
+                    events::dsl::tx_sequence_number.lt(cursor.0).or(
+                        events::dsl::tx_sequence_number
+                            .eq(cursor.0)
+                            .and(events::dsl::event_sequence_number.lt(cursor.1)),
+                    ),
+                );
+            } else {
+                query = query.filter(
+                    events::dsl::tx_sequence_number.gt(cursor.0).or(
+                        events::dsl::tx_sequence_number
+                            .eq(cursor.0)
+                            .and(events::dsl::event_sequence_number.gt(cursor.1)),
+                    ),
+                );
+            }
+        }
+        if descending_order {
+            query = query
+                .order(events::dsl::tx_sequence_number.desc())
+                .then_order_by(events::dsl::event_sequence_number.desc());
+        } else {
+            query = query
+                .order(events::dsl::tx_sequence_number.asc())
+                .then_order_by(events::dsl::event_sequence_number.asc());
+        }
+
+        query = query.limit(limit + 1);
+        let Some(filter) = filter else {
+            return Ok(query);
+        };
+
+        if let Some(sender) = filter.sender {
+            // Construct a subquery to filter on senders - this is because we do not have an index on the senders column.
+            let subquery = tx_senders::dsl::tx_senders
+                .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
+                .select(tx_senders::dsl::tx_sequence_number);
+
+            query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
+        }
+
+        if let Some(digest) = filter.transaction_digest {
+            let tx_digest = Digest::from_str(&digest)?.into_vec();
+            let subquery = transactions::dsl::transactions
+                .filter(transactions::dsl::transaction_digest.eq(tx_digest))
+                .select(transactions::dsl::tx_sequence_number);
+
+            query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
+        }
+
+        // Filters on the package and/ or module that emitted some event
+        if let Some(p) = filter.emitting_package {
+            query = query.filter(events::dsl::package.eq(p.into_vec()));
+
+            if let Some(m) = filter.emitting_module {
+                query = query.filter(events::dsl::module.eq(m));
+            }
+        }
+
+        // Filters on the event type
+        if let Some(p) = filter.event_package {
+            if let Some(m) = filter.event_module {
+                if let Some(t) = filter.event_type {
+                    let event_type = format!("{}::{}::{}", p, m, t);
+                    let validated_type = parse_sui_struct_tag(&event_type)
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                    if validated_type.type_params.is_empty() {
+                        query = query.filter(
+                            events::dsl::event_type
+                                .like(format!(
+                                    "{}<%",
+                                    validated_type.to_canonical_string(/* with_prefix */ true)
+                                ))
+                                .or(events::dsl::event_type
+                                    .eq(validated_type
+                                        .to_canonical_string(/* with_prefix */ true))),
+                        );
+                    } else {
+                        query = query.filter(
+                            events::dsl::event_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
+                        );
+                    }
+                }
+                query = query.filter(events::dsl::event_type.like(format!("{}::{}::%", p, m)));
+            }
+            query = query.filter(events::dsl::event_type.like(format!("{}::%", p)));
+        }
+
+        Ok(query)
     }
 }
 

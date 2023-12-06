@@ -1,0 +1,318 @@
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 14-87:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 11263200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 89-89:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 91-91:
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 4 'run'. lines 93-93:
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("Object"), type_params: [] })] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5 'run'. lines 95-95:
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6 'run'. lines 97-97:
+events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7 'run'. lines 99-99:
+events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M2"), name: Identifier("Object"), type_params: [] })] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 8 'create-checkpoint'. lines 101-101:
+Checkpoint created: 1
+
+task 9 'run-graphql'. lines 103-122:
+Response: {
+  "data": {
+    "eventConnection": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventA"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "0"
+          },
+          "bcs": "AAAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventB<0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::Object>"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "1"
+          },
+          "bcs": "AQAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M2"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M2::EventA"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M2"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M2::EventB<0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M2::Object>"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "3"
+          },
+          "bcs": "AwAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 124-143:
+Response: {
+  "data": {
+    "eventConnection": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventA"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "0"
+          },
+          "bcs": "AAAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventB<0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::Object>"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "1"
+          },
+          "bcs": "AQAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M2"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M2::EventA"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M2"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M2::EventB<0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M2::Object>"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "3"
+          },
+          "bcs": "AwAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 145-164:
+Response: {
+  "data": {
+    "eventConnection": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventA"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "0"
+          },
+          "bcs": "AAAAAAAAAAA="
+        },
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventB<0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::Object>"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "1"
+          },
+          "bcs": "AQAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 166-185:
+Response: {
+  "data": {
+    "eventConnection": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventA"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "0"
+          },
+          "bcs": "AAAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 187-206:
+Response: {
+  "data": {
+    "eventConnection": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M1"
+          },
+          "type": {
+            "repr": "0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventB<0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::Object>"
+          },
+          "senders": [
+            {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          ],
+          "json": {
+            "new_value": "1"
+          },
+          "bcs": "AQAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 14 'run-graphql'. lines 208-227:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Invalid type provided as filter: Invalid struct type: 0xac55824326a2371a96d5b1ab394e17f1f59a8286ab0938698bf18b8ce0d00749::M1::EventB<. Got error: unexpected end of tokens",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "eventConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
