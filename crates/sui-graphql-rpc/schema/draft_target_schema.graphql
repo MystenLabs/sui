@@ -704,9 +704,6 @@ type Checkpoint {
 
   epoch: Epoch
 
-  # Only available on the final checkpoint in an epoch
-  endOfEpoch: EndOfEpochData
-
   transactionBlockConnection(
     first: Int,
     after: String,
@@ -718,16 +715,6 @@ type Checkpoint {
 
   # NB. Will be moved into a private, explorer-specific extension.
   addressMetrics: AddressMetrics
-}
-
-type EndOfEpochData {
-  newCommittee: [CommitteeMember]
-  nextProtocolVersion: Int
-}
-
-type CommitteeMember {
-  authorityName: String
-  stakeUnit: Int
 }
 
 type TransactionBlock {
