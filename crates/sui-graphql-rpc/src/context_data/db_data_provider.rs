@@ -111,6 +111,8 @@ pub enum DbValidationError {
     QueryCostExceeded(u64, u64),
     #[error("Page size exceeded - requested: {0}, limit: {1}")]
     PageSizeExceeded(u64, u64),
+    #[error("Invalid type provided as filter: {0}")]
+    InvalidType(String),
 }
 
 pub(crate) struct PgManager {
@@ -549,9 +551,6 @@ impl PgManager {
     }
 
     pub(crate) fn validate_obj_filter(&self, filter: &ObjectFilter) -> Result<(), Error> {
-        if filter.package.is_some() || filter.module.is_some() || filter.ty.is_some() {
-            return Err(DbValidationError::UnsupportedPMT.into());
-        }
         if filter.object_keys.is_some() {
             return Err(DbValidationError::UnsupportedObjectKeys.into());
         }
@@ -1139,9 +1138,7 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<Connection<String, StakedSui>>, Error> {
         let obj_filter = ObjectFilter {
-            package: None,
-            module: None,
-            ty: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
+            type_: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
             owner: Some(address),
             object_ids: None,
             object_keys: None,

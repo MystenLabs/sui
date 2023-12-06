@@ -5,7 +5,7 @@ use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
     db_data_provider::DbValidationError,
 };
-use crate::context_data::db_data_provider::PgManager;
+use crate::{context_data::db_data_provider::PgManager, types::sui_address::SuiAddress};
 use crate::{
     error::Error,
     types::{digest::Digest, object::ObjectFilter, transaction_block::TransactionBlockFilter},
@@ -15,6 +15,7 @@ use diesel::{
     pg::Pg,
     query_builder::{AstPass, QueryFragment},
     BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
+    TextExpressionMethods,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -24,6 +25,7 @@ use sui_indexer::{
     },
     types_v2::OwnerType,
 };
+use sui_types::parse_sui_struct_tag;
 
 pub(crate) struct PgQueryBuilder;
 
@@ -313,8 +315,59 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                 }
             }
 
-            if let Some(object_type) = filter.ty {
-                query = query.filter(objects::dsl::object_type.eq(object_type));
+            if let Some(object_type) = filter.type_ {
+                let parts: Vec<_> = object_type.splitn(3, "::").collect();
+
+                if parts.iter().any(|&part| part.is_empty()) {
+                    return Err(DbValidationError::InvalidType(
+                        "Empty strings are not allowed".to_string(),
+                    ))?;
+                }
+
+                if parts.len() == 1 {
+                    // We check for a leading 0x to determine if it is an address
+                    // And otherwise process it as a primitive type
+                    if parts[0].starts_with("0x") {
+                        let package = SuiAddress::from_str(parts[0])
+                            .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                        query =
+                            query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
+                    } else {
+                        query = query.filter(objects::dsl::object_type.eq(parts[0].to_string()));
+                    }
+                } else if parts.len() == 2 {
+                    // Only package addresses are allowed if there are two or more parts
+                    let package = SuiAddress::from_str(parts[0])
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                    query = query.filter(
+                        objects::dsl::object_type.like(format!("{}::{}::%", package, parts[1])),
+                    );
+                } else if parts.len() == 3 {
+                    let validated_type = parse_sui_struct_tag(&object_type)
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                    if validated_type.type_params.is_empty() {
+                        query = query.filter(
+                            objects::dsl::object_type
+                                .like(format!(
+                                    "{}<%",
+                                    validated_type.to_canonical_string(/* with_prefix */ true)
+                                ))
+                                .or(objects::dsl::object_type
+                                    .eq(validated_type
+                                        .to_canonical_string(/* with_prefix */ true))),
+                        );
+                    } else {
+                        query = query.filter(
+                            objects::dsl::object_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
+                        );
+                    }
+                } else {
+                    return Err(Error::Internal(
+                        "Invalid type. Type must have 3 or less parts".to_string(),
+                    ));
+                }
             }
         }
 
