@@ -259,7 +259,7 @@ fn mysticeti_parameters(committee: &narwhal_config::Committee) -> Parameters {
         leader_timeout: Duration::from_millis(2000),
         enable_cleanup: true,
         synchronizer_parameters: SynchronizerParameters {
-            sample_precision: Duration::from_millis(100),
+            sample_precision: Duration::from_millis(10_000),
             batch_size: 20,
             ..Default::default()
         },
