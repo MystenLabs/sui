@@ -12057,6 +12057,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-package-resolver",
  "sui-rest-api",
+ "sui-sdk",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",

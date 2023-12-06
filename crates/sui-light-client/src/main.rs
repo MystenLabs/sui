@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use sui_rest_api::Client;
@@ -7,17 +8,20 @@ use sui_types::{
     base_types::SequenceNumber,
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
+    digests::TransactionDigest,
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
 };
 
 use sui_json::SuiJsonValue;
-
 use sui_package_resolver::{Package, PackageStore, Resolver, Result};
+use sui_sdk::SuiClientBuilder;
 
 use clap::{Parser, Subcommand};
 use std::{fs, io::Write, path::PathBuf};
 use std::{io::Read, sync::Arc};
+
+use std::str::FromStr;
 
 /// A light client for the Sui blockchain
 #[derive(Parser, Debug)]
@@ -65,10 +69,6 @@ enum SCommands {
 
     /// Checks a specific transaction using the light client
     Check {
-        /// Checkpoint sequence number
-        #[arg(short, long, value_name = "SEQ")]
-        seq: u64,
-
         /// Transaction hash
         #[arg(short, long, value_name = "TID")]
         tid: String,
@@ -287,7 +287,27 @@ async fn check_and_sync_checkpoints(config: &Config) {
     }
 }
 
-async fn check_transaction_tid(config: &Config, seq: u64, tid: String) {
+async fn check_transaction_tid(config: &Config, tid: String) {
+    let sui_mainnet: Arc<sui_sdk::SuiClient> = Arc::new(
+        SuiClientBuilder::default()
+            .build("http://ord-mnt-rpcbig-06.mainnet.sui.io:9000")
+            .await
+            .unwrap(),
+    );
+    let read_api = sui_mainnet.read_api();
+
+    // Lookup the transaction id and get the checkpoint sequence number
+    let options = SuiTransactionBlockResponseOptions::new();
+    let seq = read_api
+        .get_transaction_with_options(
+            TransactionDigest::from_str(tid.clone().as_str()).unwrap(),
+            options,
+        )
+        .await
+        .unwrap()
+        .checkpoint
+        .unwrap();
+
     // Download the full checkpoint for this sequence number
     let client = Client::new(config.full_node_url.as_str());
     let full_check_point = client.get_full_checkpoint(seq).await.unwrap();
@@ -401,8 +421,8 @@ pub async fn main() {
     );
 
     match args.command {
-        Some(SCommands::Check { seq, tid }) => {
-            check_transaction_tid(&config, seq, tid).await;
+        Some(SCommands::Check { tid }) => {
+            check_transaction_tid(&config, tid).await;
         }
         Some(SCommands::Sync {}) => {
             check_and_sync_checkpoints(&config).await;
