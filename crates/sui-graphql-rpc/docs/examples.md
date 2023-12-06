@@ -738,7 +738,7 @@
 >        repr
 >      }
 >      senders {
->        location
+>        address
 >      }
 >      timestamp
 >      json
@@ -797,7 +797,7 @@
 >        repr
 >      }
 >      senders {
->        address
+>        location
 >      }
 >      timestamp
 >      json
