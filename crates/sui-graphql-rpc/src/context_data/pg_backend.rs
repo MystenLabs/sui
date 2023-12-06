@@ -344,28 +344,28 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
     fn multi_get_checkpoints(
-        cursor: Option<i64>,
-        descending_order: bool,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(checkpoints::dsl::sequence_number.lt(cursor));
-            } else {
-                query = query.filter(checkpoints::dsl::sequence_number.gt(cursor));
-            }
+        // The following assumes that the data is always requested in ascending order
+        if let Some(after) = after {
+            query = query
+                .filter(checkpoints::dsl::sequence_number.gt(after))
+                .order(checkpoints::dsl::sequence_number.asc());
+        } else if let Some(before) = before {
+            query = query
+                .filter(checkpoints::dsl::sequence_number.lt(before))
+                .order(checkpoints::dsl::sequence_number.desc());
         }
-        if descending_order {
-            query = query.order(checkpoints::dsl::sequence_number.desc());
-        } else {
-            query = query.order(checkpoints::dsl::sequence_number.asc());
-        }
+
         if let Some(epoch) = epoch {
             query = query.filter(checkpoints::dsl::epoch.eq(epoch));
         }
+
         query = query.limit(limit + 1);
 
         query

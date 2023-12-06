@@ -67,14 +67,14 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
-        cursor: Option<i64>,
-        descending_order: bool,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
 }
 
-/// Struct for custom diesel function
+/// The struct returned for query.explain()
 #[derive(Debug, Clone, Copy)]
 pub struct Explained<T> {
     pub query: T,

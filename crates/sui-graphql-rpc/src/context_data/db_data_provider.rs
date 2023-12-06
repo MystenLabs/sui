@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::db_backend::GenericQueryBuilder;
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -80,8 +81,6 @@ use sui_types::{
     },
     Identifier, TypeTag,
 };
-
-use super::db_backend::GenericQueryBuilder;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
@@ -396,6 +395,13 @@ impl PgManager {
             .transpose()
     }
 
+    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        let sequence_number = cursor.parse::<i64>().map_err(|e| {
+            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {}", e))
+        })?;
+        Ok(sequence_number)
+    }
+
     async fn multi_get_checkpoints(
         &self,
         first: Option<u64>,
@@ -404,10 +410,12 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        validate_cursor_pagination(&first, &after, &last, &before)?;
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_checkpoint_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
 
@@ -415,8 +423,8 @@ impl PgManager {
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
-                        cursor,
-                        descending_order,
+                        before,
+                        after,
                         limit,
                         epoch.map(|e| e as i64),
                     ))
@@ -430,6 +438,10 @@ impl PgManager {
                 let has_next_page = stored_checkpoints.len() as i64 > limit;
                 if has_next_page {
                     stored_checkpoints.pop();
+                }
+
+                if last.is_some() {
+                    stored_checkpoints.reverse();
                 }
 
                 Ok((stored_checkpoints, has_next_page))
@@ -492,13 +504,6 @@ impl PgManager {
         Ok(SuiAddress::from_str(cursor)
             .map_err(|e| Error::InvalidCursor(e.to_string()))?
             .into_vec())
-    }
-
-    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        let sequence_number = cursor
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("checkpoint".to_string()))?;
-        Ok(sequence_number)
     }
 
     pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
@@ -873,7 +878,6 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
-        validate_cursor_pagination(&first, &after, &last, &before)?;
         let checkpoints = self
             .multi_get_checkpoints(first, after, last, before, epoch)
             .await?;
