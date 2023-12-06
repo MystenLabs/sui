@@ -1,5 +1,16 @@
 # @mysten/sui.js
 
+## 0.48.0
+
+### Minor Changes
+
+- cdcfa76c43: Add a new client method for retrieving epoch metrics (suix_getEpochMetrics)
+
+### Patch Changes
+
+- Updated dependencies [fce0a08d0f]
+  - @mysten/bcs@0.9.0
+
 ## 0.47.0
 
 ### Minor Changes

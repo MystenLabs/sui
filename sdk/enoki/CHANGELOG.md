@@ -1,5 +1,14 @@
 # @mysten/enoki
 
+## 0.0.7
+
+### Patch Changes
+
+- dd485449a7: Update to new two-step API
+- Updated dependencies [cdcfa76c43]
+  - @mysten/sui.js@0.48.0
+  - @mysten/zklogin@0.3.9
+
 ## 0.0.6
 
 ### Patch Changes

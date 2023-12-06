@@ -1,6 +1,6 @@
 {
 	"name": "@mysten/wallet-kit-core",
-	"version": "0.6.13",
+	"version": "0.6.14",
 	"description": "TODO: Write description",
 	"license": "Apache-2.0",
 	"author": "Mysten Labs <build@mystenlabs.com>",
