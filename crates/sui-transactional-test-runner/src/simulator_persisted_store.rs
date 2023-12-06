@@ -97,7 +97,7 @@ impl PersistedStore {
                 self.path.clone(),
                 None,
                 None,
-                MetricConf::new("persisted_read").with_sampling(samp),
+                MetricConf::new("persisted_readonly").with_sampling(samp),
             ),
         }
     }
@@ -674,7 +674,7 @@ impl Clone for PersistedStoreInnerReadOnlyWrapper {
                 self.path.clone(),
                 None,
                 None,
-                MetricConf::new("persisted_read").with_sampling(samp),
+                MetricConf::new("persisted_readonly").with_sampling(samp),
             ),
         }
     }

@@ -558,10 +558,23 @@ impl RocksDB {
     }
 
     pub fn db_name(&self) -> String {
-        match self {
-            Self::DBWithThreadMode(d) => d.metric_conf.db_name.clone(),
-            Self::OptimisticTransactionDB(d) => d.metric_conf.db_name.clone(),
+        let name = match self {
+            Self::DBWithThreadMode(d) => &d.metric_conf.db_name,
+            Self::OptimisticTransactionDB(d) => &d.metric_conf.db_name,
+        };
+        if name.is_empty() {
+            self.default_db_name()
+        } else {
+            name.clone()
         }
+    }
+
+    fn default_db_name(&self) -> String {
+        self.path()
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("unknown")
+            .to_string()
     }
 
     pub fn live_files(&self) -> Result<Vec<LiveFile>, Error> {
@@ -671,6 +684,9 @@ pub struct MetricConf {
 
 impl MetricConf {
     pub fn new(db_name: &str) -> Self {
+        if db_name.is_empty() {
+            error!("A meaningful db name should be used for metrics reporting.")
+        }
         Self {
             db_name: db_name.to_string(),
             read_sample_interval: SamplingInterval::default(),
