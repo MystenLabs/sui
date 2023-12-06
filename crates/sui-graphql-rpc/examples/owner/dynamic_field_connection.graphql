@@ -6,7 +6,6 @@ fragment DynamicFieldValueSelection on DynamicFieldValue {
     data
   }
   ... on MoveObject {
-    hasPublicTransfer
     contents {
       type {
         repr

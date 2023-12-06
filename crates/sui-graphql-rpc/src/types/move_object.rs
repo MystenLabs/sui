@@ -34,11 +34,6 @@ impl MoveObject {
         Some(MoveValue::new(type_, self.native.contents().into()))
     }
 
-    /// Determines whether a tx can transfer this object
-    async fn has_public_transfer(&self) -> Option<bool> {
-        Some(self.native.has_public_transfer())
-    }
-
     /// Attempts to convert the Move object into an Object
     /// This provides additional information such as version and digest on the top-level
     async fn as_object(&self) -> &Object {

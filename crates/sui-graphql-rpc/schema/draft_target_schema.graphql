@@ -467,7 +467,6 @@ interface IObject {
 
 interface IMoveObject {
   contents: MoveValue
-  hasPublicTransfer: Boolean
 }
 
 # Returned by Object.owner, where we can't disambiguate between
@@ -530,7 +529,7 @@ type Epoch {
   netInflow: BigInt
   fundInflow: BigInt
   fundOutflow: BigInt
-  
+
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
 
   checkpointConnection(

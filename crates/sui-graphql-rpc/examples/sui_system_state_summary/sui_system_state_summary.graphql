@@ -20,7 +20,6 @@
             bcs
             kind
           }
-          hasPublicTransfer
         }
         exchangeRatesSize
         stakingPoolActivationEpoch

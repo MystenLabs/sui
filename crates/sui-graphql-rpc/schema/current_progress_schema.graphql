@@ -788,10 +788,6 @@ type MoveObject {
 	"""
 	contents: MoveValue
 	"""
-	Determines whether a tx can transfer this object
-	"""
-	hasPublicTransfer: Boolean
-	"""
 	Attempts to convert the Move object into an Object
 	This provides additional information such as version and digest on the top-level
 	"""

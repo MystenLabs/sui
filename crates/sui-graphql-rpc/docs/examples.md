@@ -493,9 +493,6 @@
 >    description
 >    iconUrl
 >    supply
->    asMoveObject {
->      hasPublicTransfer
->    }
 >  }
 >}</pre>
 
@@ -531,7 +528,6 @@
 >            bcs
 >            kind
 >          }
->          hasPublicTransfer
 >        }
 >        exchangeRatesSize
 >        stakingPoolActivationEpoch
@@ -583,7 +579,6 @@
 >            bcs
 >            kind
 >          }
->          hasPublicTransfer
 >        }
 >        exchangeRatesSize
 >        stakingPoolActivationEpoch
@@ -928,7 +923,6 @@
 >    data
 >  }
 >  ... on MoveObject {
->    hasPublicTransfer
 >    contents {
 >      type {
 >        repr
@@ -986,7 +980,6 @@
 >    __typename
 >  }
 >  ... on MoveObject {
->    hasPublicTransfer
 >    contents {
 >      type {
 >        repr
@@ -1179,7 +1172,6 @@
 >            bcs
 >            kind
 >          }
->          hasPublicTransfer
 >        }
 >        exchangeRatesSize
 >        stakingPoolActivationEpoch
