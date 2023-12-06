@@ -320,7 +320,7 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     // We check for a leading 0x to determine if it is an address
                     // And otherwise process it as a primitive type
                     if parts[0].starts_with("0x") {
-                        let package = SuiAddress::from_str(&parts[0])
+                        let package = SuiAddress::from_str(parts[0])
                             .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
                         query =
                             query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
@@ -329,13 +329,11 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                     }
                 } else if parts.len() == 2 {
                     // Only package addresses are allowed if there are two or more parts
-                    let package = SuiAddress::from_str(&parts[0])
+                    let package = SuiAddress::from_str(parts[0])
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                    query = query.filter(objects::dsl::object_type.like(format!(
-                        "{}::{}::%",
-                        package,
-                        parts[1].to_string()
-                    )));
+                    query = query.filter(
+                        objects::dsl::object_type.like(format!("{}::{}::%", package, parts[1])),
+                    );
                 } else if parts.len() == 3 {
                     let validated_type = parse_sui_struct_tag(&object_type)
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
