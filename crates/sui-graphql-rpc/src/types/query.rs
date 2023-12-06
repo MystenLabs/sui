@@ -6,6 +6,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
+    available_range::AvailableRange,
     checkpoint::{Checkpoint, CheckpointId},
     coin::Coin,
     coin_metadata::CoinMetadata,
@@ -35,6 +36,12 @@ impl Query {
             .fetch_chain_identifier()
             .await
             .extend()
+    }
+
+    /// Range of checkpoints that the RPC has data available for (for data
+    /// that can be tied to a particular checkpoint).
+    async fn available_range(&self) -> Result<AvailableRange> {
+        Ok(AvailableRange)
     }
 
     /// Configuration for this RPC service

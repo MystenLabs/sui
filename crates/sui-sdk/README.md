@@ -151,8 +151,8 @@ See the programmable transactions [example](https://github.com/MystenLabs/sui/bl
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> new-game
       ```
-        This will create a game for the first two addresses in your keystore by default. If you want to specify the identity of each player, 
-use the following command and replace the variables with the actual player's addresses:
+      This will create a game for the first two addresses in your keystore by default. If you want to specify the identity of each player,
+      use the following command and replace the variables with the actual player's addresses:
       ```shell
       cargo run --example tic-tac-toe -- --game-package-id <<games package object ID>> new-game --player-x <<player X address>> --player-o <<player O address>>
       ```

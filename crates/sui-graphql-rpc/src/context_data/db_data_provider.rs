@@ -19,7 +19,7 @@ use crate::{
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
-        gas::{GasCostSummary, GasInput},
+        gas::GasCostSummary,
         move_module::MoveModule,
         move_object::MoveObject,
         move_package::MovePackage,
@@ -34,13 +34,6 @@ use crate::{
         sui_system_state_summary::SuiSystemStateSummary,
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
-        transaction_block_effects::TransactionBlockEffects,
-        transaction_block_kind::{
-            AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
-            EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
-            RandomnessStateUpdate, TransactionBlockKind,
-        },
-        transaction_signature::TransactionSignature,
         validator::Validator,
         validator_credentials::ValidatorCredentials,
         validator_set::ValidatorSet,
@@ -70,8 +63,7 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    base_types::{MoveObjectType, ObjectID},
+    base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     digests::ChainIdentifier,
     digests::TransactionDigest,
@@ -85,9 +77,6 @@ use sui_types::{
     object::Object as NativeObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
-    },
-    transaction::{
-        GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
     Identifier, TypeTag,
 };
@@ -213,6 +202,14 @@ impl PgManager {
             })
         };
 
+        self.run_query_async_with_cost(query, |query| {
+            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
+        })
+        .await
+    }
+
+    async fn get_earliest_complete_checkpoint(&self) -> Result<Option<StoredCheckpoint>, Error> {
+        let query = move || Ok(QueryBuilder::get_earliest_complete_checkpoint());
         self.run_query_async_with_cost(query, |query| {
             move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
         })
@@ -644,6 +641,15 @@ impl PgManager {
             )
             .await?;
         stored_checkpoint.map(Checkpoint::try_from).transpose()
+    }
+
+    pub(crate) async fn fetch_earliest_complete_checkpoint(
+        &self,
+    ) -> Result<Option<Checkpoint>, Error> {
+        self.get_earliest_complete_checkpoint()
+            .await?
+            .map(Checkpoint::try_from)
+            .transpose()
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
@@ -1527,62 +1533,6 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
     }
 }
 
-impl TryFrom<StoredTransaction> for TransactionBlock {
-    type Error = Error;
-
-    fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
-        let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
-
-        let sender_signed_data: SenderSignedData =
-            bcs::from_bytes(&tx.raw_transaction).map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert raw_transaction into SenderSignedData. Error: {e}",
-                ))
-            })?;
-
-        let sender = Address {
-            address: SuiAddress::from_array(
-                sender_signed_data
-                    .intent_message()
-                    .value
-                    .sender()
-                    .to_inner(),
-            ),
-        };
-
-        let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
-        let effects = Some(TransactionBlockEffects::try_from(tx.clone())?);
-
-        let epoch_id = match sender_signed_data.intent_message().value.expiration() {
-            TransactionExpiration::None => None,
-            TransactionExpiration::Epoch(epoch_id) => Some(*epoch_id),
-        };
-
-        // TODO Finish implementing all types of transaction kinds
-        let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
-        let signatures = sender_signed_data
-            .tx_signatures()
-            .iter()
-            .map(|s| {
-                Some(TransactionSignature {
-                    base64_sig: Base64::from(s.as_ref()),
-                })
-            })
-            .collect::<Vec<_>>();
-
-        Ok(Self {
-            digest,
-            effects,
-            sender: Some(sender),
-            bcs: Some(Base64::from(&tx.raw_transaction)),
-            gas_input: Some(gas_input),
-            epoch_id,
-            kind: Some(kind),
-            signatures: Some(signatures),
-        })
-    }
-}
-
 impl TryFrom<StoredEpochInfo> for Epoch {
     type Error = Error;
     fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
@@ -1715,88 +1665,6 @@ impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
             protocol_version: system_state.protocol_version,
             start_timestamp: Some(start_timestamp),
         })
-    }
-}
-
-impl From<&TransactionKind> for TransactionBlockKind {
-    fn from(value: &TransactionKind) -> Self {
-        match value {
-            TransactionKind::ChangeEpoch(x) => {
-                let change = ChangeEpochTransaction {
-                    epoch_id: x.epoch,
-                    timestamp: DateTime::from_ms(x.epoch_start_timestamp_ms as i64),
-                    storage_charge: Some(BigInt::from(x.storage_charge)),
-                    computation_charge: Some(BigInt::from(x.computation_charge)),
-                    storage_rebate: Some(BigInt::from(x.storage_rebate)),
-                };
-                TransactionBlockKind::ChangeEpochTransaction(change)
-            }
-            TransactionKind::ConsensusCommitPrologue(x) => {
-                let consensus = ConsensusCommitPrologueTransaction {
-                    epoch_id: x.epoch,
-                    round: Some(x.round),
-                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
-                };
-                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
-            }
-            TransactionKind::ConsensusCommitPrologueV2(x) => {
-                let consensus = ConsensusCommitPrologueTransaction {
-                    epoch_id: x.epoch,
-                    round: Some(x.round),
-                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
-                };
-                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
-            }
-            TransactionKind::Genesis(x) => {
-                let genesis = GenesisTransaction {
-                    objects: Some(
-                        x.objects
-                            .clone()
-                            .into_iter()
-                            .map(SuiAddress::from)
-                            .collect::<Vec<_>>(),
-                    ),
-                };
-                TransactionBlockKind::GenesisTransaction(genesis)
-            }
-            // TODO: flesh out type
-            TransactionKind::ProgrammableTransaction(pt) => {
-                TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
-                    value: format!("{:?}", pt),
-                })
-            }
-            // TODO: flesh out type
-            TransactionKind::AuthenticatorStateUpdate(asu) => {
-                TransactionBlockKind::AuthenticatorStateUpdateTransaction(
-                    AuthenticatorStateUpdate {
-                        value: format!("{:?}", asu),
-                    },
-                )
-            }
-            // TODO: flesh out type
-            TransactionKind::RandomnessStateUpdate(rsu) => {
-                TransactionBlockKind::RandomnessStateUpdateTransaction(RandomnessStateUpdate {
-                    value: format!("{:?}", rsu),
-                })
-            }
-            // TODO: flesh out type
-            TransactionKind::EndOfEpochTransaction(et) => {
-                TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
-                    value: format!("{:?}", et),
-                })
-            }
-        }
-    }
-}
-
-// TODO fix this GenesisObject
-impl From<GenesisObject> for SuiAddress {
-    fn from(value: GenesisObject) -> Self {
-        match value {
-            GenesisObject::RawObject { data, owner: _ } => {
-                SuiAddress::from_bytes(data.id().to_vec()).unwrap()
-            }
-        }
     }
 }
 

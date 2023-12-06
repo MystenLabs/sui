@@ -27,7 +27,7 @@ module P0::m {
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -38,7 +38,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -56,6 +56,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -115,7 +117,7 @@ module P0::m {
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -126,7 +128,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -144,6 +146,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -194,7 +198,7 @@ module P0::m {
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -205,7 +209,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -223,6 +227,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -274,7 +280,7 @@ module P0::m {
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -285,7 +291,7 @@ module P0::m {
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -303,6 +309,8 @@ module P0::m {
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 

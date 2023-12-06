@@ -1,0 +1,63 @@
+processed 7 tasks
+
+task 1 'create-checkpoint'. lines 6-6:
+Checkpoint created: 1
+
+task 2 'advance-epoch'. lines 8-8:
+Epoch advanced: 0
+
+task 3 'run-graphql'. lines 10-30:
+Response: {
+  "data": {
+    "latestSuiSystemState": {
+      "protocolConfigs": {
+        "protocolVersion": 32,
+        "randomBeacon": {
+          "value": true
+        }
+      }
+    },
+    "object": {
+      "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+      "version": 2,
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
+          },
+          "json": {
+            "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
+            "inner": {
+              "id": "0x25629a1397e4822d51639dd612de1377cdb8d09fb30263af5a1632b38427f554",
+              "version": "1"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 5 'create-checkpoint'. lines 36-36:
+Checkpoint created: 3
+
+task 6 'run-graphql'. lines 38-53:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "kind": {
+            "__typename": "RandomnessStateUpdateTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "randomnessRound": 1,
+            "randomBytes": "SGVsbG8gU3Vp",
+            "randomnessObjInitialSharedVersion": 2
+          }
+        }
+      ]
+    }
+  }
+}

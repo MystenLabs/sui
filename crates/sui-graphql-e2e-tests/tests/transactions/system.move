@@ -12,7 +12,7 @@
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -24,7 +24,24 @@
             kind {
                 __typename
                 ... on GenesisTransaction {
-                    objects
+                    objectConnection {
+                        nodes {
+                            address
+
+                            asMoveObject {
+                                contents {
+                                    type { repr }
+                                    json
+                                }
+                            }
+
+                            asMovePackage {
+                                moduleConnection {
+                                    nodes { name }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -41,6 +58,8 @@
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -82,7 +101,7 @@
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -96,7 +115,8 @@
                 ... on ConsensusCommitPrologueTransaction {
                     epoch { epochId }
                     round
-                    timestamp
+                    commitTimestamp
+                    consensusCommitDigest
                 }
             }
 
@@ -113,6 +133,8 @@
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
@@ -153,7 +175,7 @@
         nodes {
             digest
             sender { address }
-            signatures { base64Sig }
+            signatures
 
             gasInput {
                 gasSponsor { address }
@@ -164,12 +186,8 @@
 
             kind {
                 __typename
-                ... on ChangeEpochTransaction {
-                    epoch { epochId }
-                    timestamp
-                    storageCharge
-                    computationCharge
-                    storageRebate
+                ... on EndOfEpochTransaction {
+                    value
                 }
             }
 
@@ -186,6 +204,8 @@
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 

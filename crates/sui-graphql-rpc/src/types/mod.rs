@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod address;
+pub(crate) mod available_range;
 pub(crate) mod balance;
 pub(crate) mod balance_change;
 pub(crate) mod base64;
@@ -44,7 +45,6 @@ pub(crate) mod system_parameters;
 pub(crate) mod transaction_block;
 pub(crate) mod transaction_block_effects;
 pub(crate) mod transaction_block_kind;
-pub(crate) mod transaction_signature;
 pub(crate) mod validator;
 pub(crate) mod validator_credentials;
 pub(crate) mod validator_set;

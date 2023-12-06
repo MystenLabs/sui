@@ -604,7 +604,10 @@ impl<T, C> ConsensusHandler<T, C> {
                 .randomness_obj_initial_shared_version()
                 .expect("randomness state obj must exist"),
         );
-        debug!("created randomness state update transaction: {transaction:?}");
+        debug!(
+            "created randomness state update transaction: {:?}",
+            transaction.digest()
+        );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 

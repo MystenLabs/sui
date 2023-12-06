@@ -1227,9 +1227,7 @@
 >    kind {
 >      __typename
 >    }
->    signatures {
->      base64Sig
->    }
+>    signatures
 >    digest
 >    expiration {
 >      epochId
@@ -1254,21 +1252,24 @@
 >      kind {
 >        __typename
 >        ... on ConsensusCommitPrologueTransaction {
->          timestamp
->          round
 >          epoch {
 >            epochId
 >            referenceGasPrice
 >          }
+>          round
+>          commitTimestamp
+>          consensusCommitDigest
 >        }
 >        ... on ChangeEpochTransaction {
 >          computationCharge
 >          storageCharge
->          timestamp
+>          startTimestamp
 >          storageRebate
 >        }
 >        ... on GenesisTransaction {
->          objects
+>          objectConnection {
+>            nodes { address }
+>          }
 >        }
 >      }
 >    }

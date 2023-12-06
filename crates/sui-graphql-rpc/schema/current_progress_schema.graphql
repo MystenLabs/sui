@@ -1,3 +1,63 @@
+type ActiveJwk {
+	"""
+	The string (Issuing Authority) that identifies the OIDC provider.
+	"""
+	iss: String!
+	"""
+	The string (Key ID) that identifies the JWK among a set of JWKs, (RFC 7517, Section 4.5).
+	"""
+	kid: String!
+	"""
+	The JWK key type parameter, (RFC 7517, Section 4.1).
+	"""
+	kty: String!
+	"""
+	The JWK RSA public exponent, (RFC 7517, Section 9.3).
+	"""
+	e: String!
+	"""
+	The JWK RSA modulus, (RFC 7517, Section 9.3).
+	"""
+	n: String!
+	"""
+	The JWK algorithm parameter, (RFC 7517, Section 4.4).
+	"""
+	alg: String!
+	"""
+	The most recent epoch in which the JWK was validated.
+	"""
+	epoch: Epoch!
+}
+
+type ActiveJwkConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ActiveJwkEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ActiveJwk!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ActiveJwkEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ActiveJwk!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Address implements ObjectOwner {
 	"""
 	Similar behavior to the `transactionBlockConnection` in Query but
@@ -37,8 +97,28 @@ enum AddressTransactionBlockRelationship {
 	PAID
 }
 
-type AuthenticatorStateUpdate {
-	value: String!
+type AuthenticatorStateUpdateTransaction {
+	"""
+	Epoch of the authenticator state update transaction.
+	"""
+	epoch: Epoch!
+	"""
+	Consensus round of the authenticator state update.
+	"""
+	round: Int!
+	"""
+	Newly active JWKs (JSON Web Keys).
+	"""
+	newActiveJwkConnection(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	"""
+	The initial version of the authenticator object that it was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: Int!
+}
+
+type AvailableRange {
+	first: Checkpoint
+	last: Checkpoint
 }
 
 type Balance {
@@ -109,11 +189,41 @@ scalar BigInt
 
 
 type ChangeEpochTransaction {
-	timestamp: DateTime
-	storageCharge: BigInt
-	computationCharge: BigInt
-	storageRebate: BigInt
-	epoch: Epoch
+	"""
+	The next (to become) epoch.
+	"""
+	epoch: Epoch!
+	"""
+	The protocol version in effect in the new epoch.
+	"""
+	protocolVersion: Int!
+	"""
+	The total amount of gas charged for storage during the previous epoch (in MIST).
+	"""
+	storageCharge: BigInt!
+	"""
+	The total amount of gas charged for computation during the previous epoch (in MIST).
+	"""
+	computationCharge: BigInt!
+	"""
+	The SUI returned to transaction senders for cleaning up objects (in MIST).
+	"""
+	storageRebate: BigInt!
+	"""
+	The total gas retained from storage fees, that will not be returned by storage rebates when
+	the relevant objects are cleaned up (in MIST).
+	"""
+	nonRefundableStorageFee: BigInt!
+	"""
+	Time at which the next epoch will start.
+	"""
+	startTimestamp: DateTime
+	"""
+	System packages (specifically framework and move stdlib) that are written before the new
+	epoch starts, to upgrade them on-chain. Validators write these packages out when running the
+	transaction.
+	"""
+	systemPackageConnection(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 type Checkpoint {
@@ -273,9 +383,23 @@ type CommitteeMember {
 }
 
 type ConsensusCommitPrologueTransaction {
-	round: Int
-	timestamp: DateTime
-	epoch: Epoch
+	"""
+	Epoch of the commit prologue transaction.
+	"""
+	epoch: Epoch!
+	"""
+	Consensus round of the commit.
+	"""
+	round: Int!
+	"""
+	Unix timestamp from consensus.
+	"""
+	commitTimestamp: DateTime
+	"""
+	Digest of consensus output, encoded as a Base58 string (only available from V2 of the
+	transaction).
+	"""
+	consensusCommitDigest: String
 }
 
 scalar DateTime
@@ -531,22 +655,22 @@ enum Feature {
 
 type GasCostSummary {
 	"""
-	Gas paid for executing this transaction.
+	Gas paid for executing this transaction (in MIST).
 	"""
 	computationCost: BigInt
 	"""
-	Gas paid for the data stored on-chain by this transaction.
+	Gas paid for the data stored on-chain by this transaction (in MIST).
 	"""
 	storageCost: BigInt
 	"""
 	Part of storage cost that can be reclaimed by cleaning up data created by this transaction
-	(when objects are deleted or an object is modified, whch is treated as a deletion followed
-	by a creation).
+	(when objects are deleted or an object is modified, which is treated as a deletion followed
+	by a creation) (in MIST).
 	"""
 	storageRebate: BigInt
 	"""
 	Part of storage cost that is not reclaimed when data created by this transaction is cleaned
-	up.
+	up (in MIST).
 	"""
 	nonRefundableStorageFee: BigInt
 }
@@ -566,7 +690,8 @@ type GasInput {
 	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
 	"""
-	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay
+	An unsigned integer specifying the number of native tokens per gas unit this transaction
+	will pay (in MIST).
 	"""
 	gasPrice: BigInt
 	"""
@@ -576,7 +701,10 @@ type GasInput {
 }
 
 type GenesisTransaction {
-	objects: [SuiAddress!]
+	"""
+	Objects to be created during genesis.
+	"""
+	objectConnection(first: Int, after: String, last: Int, before: String): ObjectConnection!
 }
 
 
@@ -836,6 +964,35 @@ type MovePackage {
 	asObject: Object!
 }
 
+type MovePackageConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MovePackageEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MovePackage!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MovePackageEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MovePackage!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 Description of a type, defined in a Move module.
 """
@@ -1089,7 +1246,15 @@ Effect on an individual Object (keyed by its ID).
 """
 type ObjectChange {
 	"""
-	The contents of the object at the end of the transaction.
+	The address of the object that has changed.
+	"""
+	location: SuiAddress!
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
 	"""
 	outputState: Object
 	"""
@@ -1268,7 +1433,7 @@ type PageInfo {
 	endCursor: String
 }
 
-type ProgrammableTransaction {
+type ProgrammableTransactionBlock {
 	value: String!
 }
 
@@ -1327,6 +1492,11 @@ type Query {
 	"""
 	chainIdentifier: String!
 	"""
+	Range of checkpoints that the RPC has data available for (for data
+	that can be tied to a particular checkpoint).
+	"""
+	availableRange: AvailableRange!
+	"""
 	Configuration for this RPC service
 	"""
 	serviceConfig: ServiceConfig!
@@ -1356,8 +1526,26 @@ type Query {
 	coinMetadata(coinType: String!): CoinMetadata
 }
 
-type RandomnessStateUpdate {
-	value: String!
+"""
+System transaction to update the source of on-chain randomness.
+"""
+type RandomnessStateUpdateTransaction {
+	"""
+	Epoch of the randomness state update transaction.
+	"""
+	epoch: Epoch!
+	"""
+	Randomness round of the update.
+	"""
+	randomnessRound: Int!
+	"""
+	Updated random bytes, encoded as Base64.
+	"""
+	randomBytes: Base64!
+	"""
+	The initial version the randomness object was shared at.
+	"""
+	randomnessObjInitialSharedVersion: Int!
 }
 
 """
@@ -1641,41 +1829,47 @@ type SystemParameters {
 
 type TransactionBlock {
 	"""
-	The effects field captures the results to the chain of executing this transaction
-	"""
-	effects: TransactionBlockEffects
-	"""
-	The address of the user sending this transaction block
-	"""
-	sender: Address
-	"""
-	The transaction block data in BCS format.
-	This includes data on the sender, inputs, sponsor, gas inputs, individual transactions, and user signatures.
-	"""
-	bcs: Base64
-	"""
-	The gas input field provides information on what objects were used as gas
-	As well as the owner of the gas object(s) and information on the gas price and budget
-	If the owner of the gas object(s) is not the same as the sender,
-	the transaction block is a sponsored transaction block.
-	"""
-	gasInput: GasInput
-	kind: TransactionBlockKind
-	"""
-	A list of signatures of all signers, senders, and potentially the gas owner if this is a sponsored transaction.
-	"""
-	signatures: [TransactionSignature]
-	"""
 	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
-	This serves as a unique id for the block on chain
+	This serves as a unique id for the block on chain.
 	"""
 	digest: String!
 	"""
-	This field is set by senders of a transaction block
-	It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid
-	By default, there is no deadline for when a transaction must execute
+	The address corresponding to the public key that signed this transaction. System
+	transactions do not have senders.
+	"""
+	sender: Address
+	"""
+	The gas input field provides information on what objects were used as gas as well as the
+	owner of the gas object(s) and information on the gas price and budget.
+	
+	If the owner of the gas object(s) is not the same as the sender, the transaction block is a
+	sponsored transaction block.
+	"""
+	gasInput: GasInput
+	"""
+	The type of this transaction as well as the commmands and/or parameters comprising the
+	transaction of this kind.
+	"""
+	kind: TransactionBlockKind
+	"""
+	A list of all signatures, Base64-encoded, from senders, and potentially the gas owner if
+	this is a sponsored transaction.
+	"""
+	signatures: [Base64!]
+	"""
+	The effects field captures the results to the chain of executing this transaction.
+	"""
+	effects: TransactionBlockEffects
+	"""
+	This field is set by senders of a transaction block. It is an epoch reference that sets a
+	deadline after which validators will no longer consider the transaction valid. By default,
+	there is no deadline for when a transaction must execute.
 	"""
 	expiration: Epoch
+	"""
+	Serialized form of this transaction's `SenderSignedData`, BCS serialized and Base64 encoded.
+	"""
+	bcs: Base64
 }
 
 type TransactionBlockConnection {
@@ -1777,15 +1971,11 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | RandomnessStateUpdate | EndOfEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX
 	PROGRAMMABLE_TX
-}
-
-type TransactionSignature {
-	base64Sig: Base64!
 }
 
 """
