@@ -121,6 +121,8 @@ pub enum ConsensusCertificateResult {
     Defered(DeferralKey),
     /// Everything else, e.g. AuthorityCapabilities, CheckpointSignatures, etc.
     ConsensusMessage,
+    /// A system message in consensus was ignored (e.g. because of end of epoch).
+    IgnoredSystem,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -2320,7 +2322,8 @@ impl AuthorityPerEpochStore {
                         .push(tx.clone());
                 }
                 ConsensusCertificateResult::ConsensusMessage => notifications.push(key.clone()),
-                // Note: ignored transactions must not be recorded as processed. Otherwise
+                ConsensusCertificateResult::IgnoredSystem => (),
+                // Note: ignored external transactions must not be recorded as processed. Otherwise
                 // they may not get reverted after restart during epoch change.
                 ConsensusCertificateResult::Ignored => ignored = true,
             }
@@ -2580,15 +2583,6 @@ impl AuthorityPerEpochStore {
                 panic!("process_consensus_transaction called with external RandomnessStateUpdate");
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
-                if let TransactionKind::RandomnessStateUpdate(rsu) =
-                    &system_transaction.data().intent_message().value.kind()
-                {
-                    batch.insert_batch(
-                        &self.tables.randomness_rounds_written,
-                        [(RandomnessRound(rsu.randomness_round), ())],
-                    )?;
-                }
-
                 if !self
                     .get_reconfig_state_read_lock_guard()
                     .should_accept_consensus_certs()
@@ -2597,7 +2591,16 @@ impl AuthorityPerEpochStore {
                         "Ignoring system transaction {:?} because of end of epoch",
                         system_transaction.digest()
                     );
-                    return Ok(ConsensusCertificateResult::Ignored);
+                    return Ok(ConsensusCertificateResult::IgnoredSystem);
+                }
+
+                if let TransactionKind::RandomnessStateUpdate(rsu) =
+                    &system_transaction.data().intent_message().value.kind()
+                {
+                    batch.insert_batch(
+                        &self.tables.randomness_rounds_written,
+                        [(RandomnessRound(rsu.randomness_round), ())],
+                    )?;
                 }
 
                 // If needed we can support owned object system transactions as well...
