@@ -481,18 +481,16 @@ impl CompiledPackage {
             .build_options
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
-        let compiler = if lint && sui_mode {
+
+        let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
+            .unwrap()
+            .set_flags(flags);
+        if lint && sui_mode {
             let (filter_attr_name, filters) = known_filters();
-            Compiler::from_package_paths(paths, bytecode_deps)
-                .unwrap()
-                .set_flags(flags)
+            compiler = compiler
                 .add_visitors(linter_visitors())
-                .add_custom_known_filters(filters, filter_attr_name)
-        } else {
-            Compiler::from_package_paths(paths, bytecode_deps)
-                .unwrap()
-                .set_flags(flags)
-        };
+                .add_custom_known_filters(filters, filter_attr_name);
+        }
         let (file_map, all_compiled_units) = compiler_driver(compiler)?;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];

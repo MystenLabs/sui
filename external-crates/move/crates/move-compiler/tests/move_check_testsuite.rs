@@ -182,22 +182,19 @@ pub fn run_test(
 
     let flags = flags.set_sources_shadow_deps(true);
 
-    let (files, comments_and_compiler_res) = if lint {
+    let mut compiler = Compiler::from_package_paths(targets, deps)
+        .unwrap()
+        .set_flags(flags)
+        .set_default_config(default_config);
+
+    if lint {
         let (filter_attr_name, filters) = known_filters();
-        Compiler::from_package_paths(targets, deps)
-            .unwrap()
-            .set_flags(flags)
-            .set_default_config(default_config)
+        compiler = compiler
             .add_visitors(linter_visitors())
-            .add_custom_known_filters(filters, filter_attr_name)
-            .run::<PASS_PARSER>()?
-    } else {
-        Compiler::from_package_paths(targets, deps)
-            .unwrap()
-            .set_flags(flags)
-            .set_default_config(default_config)
-            .run::<PASS_PARSER>()?
-    };
+            .add_custom_known_filters(filters, filter_attr_name);
+    }
+
+    let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();
