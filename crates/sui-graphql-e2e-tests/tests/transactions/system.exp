@@ -814,7 +814,7 @@ Response: {
             ],
             "objectChanges": [
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -823,7 +823,7 @@ Response: {
                 }
               },
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -832,7 +832,7 @@ Response: {
                 }
               },
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -841,7 +841,7 @@ Response: {
                 }
               },
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -850,7 +850,7 @@ Response: {
                 }
               },
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -859,7 +859,7 @@ Response: {
                 }
               },
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -868,7 +868,7 @@ Response: {
                 }
               },
               {
-                "location": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -877,7 +877,7 @@ Response: {
                 }
               },
               {
-                "location": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
+                "address": "0x10ebc52efb0030f390024d7d46dfc340c713e0b07cbfdb0524aa2fa3a08443bf",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -886,7 +886,7 @@ Response: {
                 }
               },
               {
-                "location": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
+                "address": "0x4e767a54549f18e62922823c142e344c998ed34caffb8aeba4bdee93af49b6e9",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -895,7 +895,7 @@ Response: {
                 }
               },
               {
-                "location": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
+                "address": "0x5060328168fd436e112c70ac65584035e5fda67373ce437baf5be1bbba2d6074",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -904,7 +904,7 @@ Response: {
                 }
               },
               {
-                "location": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
+                "address": "0x63a24458c9b9ffa14bcc4822ce364fcc8c3b6249b9d4f7e89bb6db57ffa94b17",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -913,7 +913,7 @@ Response: {
                 }
               },
               {
-                "location": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
+                "address": "0x6769518afaa2e5fac47543ffaed3debb4c751d0a6dda69ec0ebb34c98bc71f98",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -922,7 +922,7 @@ Response: {
                 }
               },
               {
-                "location": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -931,7 +931,7 @@ Response: {
                 }
               },
               {
-                "location": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
+                "address": "0xbe39b51af15a81f0e37a42b85187e649955a8e7774f3d35884b5aa20f604e9f9",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -940,7 +940,7 @@ Response: {
                 }
               },
               {
-                "location": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -949,7 +949,7 @@ Response: {
                 }
               },
               {
-                "location": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
+                "address": "0xd904de69f0dfbe023c29f1635451fe45cbec244da66292c0977e06904134830d",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -1030,7 +1030,7 @@ Response: {
             "balanceChanges": [],
             "objectChanges": [
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
@@ -1121,7 +1121,7 @@ Response: {
             "balanceChanges": [],
             "objectChanges": [
               {
-                "location": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
                 "idCreated": false,
                 "idDeleted": false,
                 "outputState": {
@@ -1130,7 +1130,7 @@ Response: {
                 }
               },
               {
-                "location": "0x19d32e729fa9b502bb1c9cd043465a42d341d75aa952be050355b94918530bd7",
+                "address": "0x19d32e729fa9b502bb1c9cd043465a42d341d75aa952be050355b94918530bd7",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -1139,7 +1139,7 @@ Response: {
                 }
               },
               {
-                "location": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
+                "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
                 "idCreated": true,
                 "idDeleted": false,
                 "outputState": {
@@ -1148,7 +1148,7 @@ Response: {
                 }
               },
               {
-                "location": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
                 "idCreated": false,
                 "idDeleted": true,
                 "outputState": null

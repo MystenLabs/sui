@@ -24,7 +24,7 @@ module P0::m {
 # Query for the publish transaction
 
 fragment ObjectContent on Object {
-    location
+    address
     version
     digest
     asMoveObject {
@@ -39,20 +39,20 @@ fragment TxInput on TransactionInput {
     __typename
 
     ... on OwnedOrImmutable {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
     }
 
     ... on SharedInput {
-        location
+        address
         initialSharedVersion
         mutable
     }
 
     ... on Receiving {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
@@ -154,7 +154,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted
@@ -211,7 +211,7 @@ module P0::m {
 # Query for the upgrade transaction
 
 fragment ObjectContent on Object {
-    location
+    address
     version
     digest
     asMoveObject {
@@ -226,20 +226,20 @@ fragment TxInput on TransactionInput {
     __typename
 
     ... on OwnedOrImmutable {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
     }
 
     ... on SharedInput {
-        location
+        address
         initialSharedVersion
         mutable
     }
 
     ... on Receiving {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
@@ -341,7 +341,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted
@@ -389,7 +389,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 # Query for the programmable transaction
 
 fragment ObjectContent on Object {
-    location
+    address
     version
     digest
     asMoveObject {
@@ -404,20 +404,20 @@ fragment TxInput on TransactionInput {
     __typename
 
     ... on OwnedOrImmutable {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
     }
 
     ... on SharedInput {
-        location
+        address
         initialSharedVersion
         mutable
     }
 
     ... on Receiving {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
@@ -519,7 +519,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted
@@ -568,7 +568,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 # Query for the programmable transaction, which failed.
 
 fragment ObjectContent on Object {
-    location
+    address
     version
     digest
     asMoveObject {
@@ -583,20 +583,20 @@ fragment TxInput on TransactionInput {
     __typename
 
     ... on OwnedOrImmutable {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
     }
 
     ... on SharedInput {
-        location
+        address
         initialSharedVersion
         mutable
     }
 
     ... on Receiving {
-        location
+        address
         version
         digest
         object { ...ObjectContent }
@@ -698,7 +698,7 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted

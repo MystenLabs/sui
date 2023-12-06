@@ -1379,7 +1379,7 @@ type ObjectChange {
 	"""
 	The address of the object that has changed.
 	"""
-	location: SuiAddress!
+	address: SuiAddress!
 	"""
 	The contents of the object immediately before the transaction.
 	"""
@@ -1505,7 +1505,7 @@ scalar OpenMoveTypeSignature
 A Move object, either immutable, or owned mutable.
 """
 type OwnedOrImmutable {
-	location: SuiAddress!
+	address: SuiAddress!
 	version: Int!
 	digest: String!
 	object: Object
@@ -1765,7 +1765,7 @@ type RandomnessStateUpdateTransaction {
 A Move object that can be received in this transaction.
 """
 type Receiving {
-	location: SuiAddress!
+	address: SuiAddress!
 	version: Int!
 	digest: String!
 	object: Object
@@ -1846,7 +1846,7 @@ type ServiceConfig {
 A Move object that's shared.
 """
 type SharedInput {
-	location: SuiAddress!
+	address: SuiAddress!
 	"""
 	The version that this this object was shared at.
 	"""

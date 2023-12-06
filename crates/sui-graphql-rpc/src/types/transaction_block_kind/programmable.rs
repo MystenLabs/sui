@@ -35,7 +35,7 @@ enum TransactionInput {
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
 struct OwnedOrImmutable {
-    location: SuiAddress,
+    address: SuiAddress,
     version: u64,
     digest: String,
 }
@@ -43,7 +43,7 @@ struct OwnedOrImmutable {
 /// A Move object that's shared.
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 struct SharedInput {
-    location: SuiAddress,
+    address: SuiAddress,
     /// The version that this this object was shared at.
     initial_shared_version: u64,
     /// Controls whether the transaction block can reference the shared object as a mutable
@@ -55,7 +55,7 @@ struct SharedInput {
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
 struct Receiving {
-    location: SuiAddress,
+    address: SuiAddress,
     version: u64,
     digest: String,
 }
@@ -324,7 +324,7 @@ impl ProgrammableTransactionBlock {
 impl OwnedOrImmutable {
     async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.location, Some(self.version))
+            .fetch_obj(self.address, Some(self.version))
             .await
             .extend()
     }
@@ -334,7 +334,7 @@ impl OwnedOrImmutable {
 impl Receiving {
     async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.location, Some(self.version))
+            .fetch_obj(self.address, Some(self.version))
             .await
             .extend()
     }
@@ -401,7 +401,7 @@ impl From<NativeCallArg> for TransactionInput {
             }),
 
             N::Object(O::ImmOrOwnedObject((id, v, d))) => I::OwnedOrImmutable(OwnedOrImmutable {
-                location: id.into(),
+                address: id.into(),
                 version: v.value(),
                 digest: d.base58_encode(),
             }),
@@ -411,13 +411,13 @@ impl From<NativeCallArg> for TransactionInput {
                 initial_shared_version,
                 mutable,
             }) => I::SharedInput(SharedInput {
-                location: id.into(),
+                address: id.into(),
                 initial_shared_version: initial_shared_version.value(),
                 mutable,
             }),
 
             N::Object(O::Receiving((id, v, d))) => I::Receiving(Receiving {
-                location: id.into(),
+                address: id.into(),
                 version: v.value(),
                 digest: d.base58_encode(),
             }),
