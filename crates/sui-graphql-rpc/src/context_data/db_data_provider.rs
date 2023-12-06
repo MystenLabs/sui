@@ -478,14 +478,14 @@ impl PgManager {
         filter: Option<EventFilter>,
     ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_event_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_event_cursor(&cursor))
             .transpose()?;
 
-        let query =
-            move || QueryBuilder::multi_get_events(cursor, descending_order, limit, filter.clone());
+        let query = move || QueryBuilder::multi_get_events(before, after, limit, filter.clone());
 
         let result: Option<Vec<StoredEvent>> = self
             .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
