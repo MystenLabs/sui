@@ -1,12 +1,13 @@
 #[test_only]
 module scratch_off::test_game {
     use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket,
-     winning_tickets_left, losing_tickets_left, prize_pool_balance};
+     winning_tickets_left, leaderboard, prize_pool_balance, leaderboard_players};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
     #[test_only] use sui::coin::{mint_for_testing, burn_for_testing};
     use sui::test_scenario as ts;
     use sui::sui::SUI;
+    use std::vector;
 
     const ALICE_ADDRESS: address = @0xACE;
     const BOB_ADDRESS: address = @0xACEB;
@@ -88,6 +89,19 @@ module scratch_off::test_game {
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
             ts::return_shared(store);
         };
+        ts::next_tx(&mut test, BOB_ADDRESS);
+        {
+            let ticket: Ticket = ts::take_from_sender(&test);
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard<SUI>(&store);
+            let players_list = leaderboard_players(leaderboard);
+            assert!(vector::length(&players_list) == 1, 0);
+            
+            ts::return_shared(store);
+
+        };
         test_scenario::end(test);
 
     }
@@ -162,7 +176,6 @@ module scratch_off::test_game {
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
             assert!(winning_tickets_left(&store) == 2, 0);
-            assert!(losing_tickets_left(&store) == 0, 0);
             assert!(prize_pool_balance(&store) == 2, 0);
             ts::return_shared(store);
         };

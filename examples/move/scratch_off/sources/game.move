@@ -92,6 +92,14 @@ module scratch_off::game {
         public_key: vector<u8>,
     }     
 
+    public fun leaderboard<Asset>(store: &ConvenienceStore<Asset>): &LeaderBoard {
+       &store.leaderboard 
+    }
+
+    public fun leaderboard_players(leaderboard: &LeaderBoard): vector<address> {
+        leaderboard.leaderboard_players
+    }
+
     public fun table_contains_player(player_metadata: &Table<address, Metadata>, target_address: address): bool {
         table::contains(player_metadata, target_address)
     }
