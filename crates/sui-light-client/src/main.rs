@@ -8,7 +8,7 @@ use sui_types::{
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
     message_envelope::Envelope,
-    messages_checkpoint::{CheckpointSummary, EndOfEpochData},
+    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
 };
 
 use sui_json::SuiJsonValue;
@@ -158,14 +158,10 @@ fn write_checkpoint_list(config: &Config, checkpoints_list: &CheckpointsList) {
     writer.write_all(&bytes).unwrap();
 }
 
-async fn download_checkpoint_summary(
-    config: &Config,
-    seq: u64,
-) -> Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>> {
+async fn download_checkpoint_summary(config: &Config, seq: u64) -> CertifiedCheckpointSummary {
     // Download the checkpoint from the server
     let client = Client::new(config.full_node_url.as_str());
-    let full_check_point = client.get_full_checkpoint(seq).await.unwrap();
-    full_check_point.checkpoint_summary
+    client.get_checkpoint_summary(seq).await.unwrap()
 }
 
 /// Run binary search to for each end of epoch checkpoint that is missing
