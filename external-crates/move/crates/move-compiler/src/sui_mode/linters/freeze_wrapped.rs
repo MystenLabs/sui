@@ -7,9 +7,12 @@
 
 use std::collections::BTreeMap;
 
-use move_compiler::{
+use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::{
+        codes::{custom, DiagnosticInfo, Severity},
+        WarningFilters,
+    },
     expansion::ast as E,
     naming::ast as N,
     parser::ast::{self as P, Ability_},
@@ -125,7 +128,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         false
     }
 
-    fn add_warning_filter_scope(&mut self, filter: move_compiler::diagnostics::WarningFilters) {
+    fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
         self.env.add_warning_filter_scope(filter)
     }
 

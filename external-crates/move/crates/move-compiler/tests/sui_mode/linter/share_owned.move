@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module 0x42::test1 {
+module a::test1 {
     use sui::transfer;
     use sui::object::UID;
 
@@ -16,8 +16,7 @@ module 0x42::test1 {
     }
 }
 
-
-module 0x42::test2 {
+module a::test2 {
     use sui::transfer;
     use sui::object::{Self, UID};
 
@@ -51,6 +50,19 @@ module 0x42::test2 {
     // a linter suppression should not work for regular compiler warnings
     #[linter_allow(category_suppression_should_not_work)]
     fun another_private_fun_should_not_be_suppressed() {}
+}
 
+module sui::object {
+    struct UID has store {
+        id: address,
+    }
+    public fun delete(_: UID) {
+        abort 0
+    }
+}
 
+module sui::transfer {
+    public fun public_share_object<T: key>(_: T) {
+        abort 0
+    }
 }

@@ -98,6 +98,10 @@ pub struct BuildConfig {
     /// Additional named address mapping. Useful for tools in rust
     #[clap(skip)]
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
+
+    /// If `true`, disable linters
+    #[clap(long, global = true)]
+    pub no_lint: bool,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]

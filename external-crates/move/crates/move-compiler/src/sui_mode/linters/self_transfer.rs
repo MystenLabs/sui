@@ -6,7 +6,7 @@
 
 use move_ir_types::location::*;
 
-use move_compiler::{
+use crate::{
     cfgir::{
         absint::JoinResult,
         ast::Program,

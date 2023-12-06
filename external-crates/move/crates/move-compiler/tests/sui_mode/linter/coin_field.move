@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[allow(unused_field)]
-module 0x42::test1 {
+module a::test1 {
     use sui::coin::Coin;
     use sui::object::UID;
 
@@ -15,7 +15,7 @@ module 0x42::test1 {
 }
 
 #[allow(unused_field)]
-module 0x42::test2 {
+module a::test2 {
     use sui::coin::Coin as Balance;
     use sui::object::UID;
 
@@ -29,7 +29,7 @@ module 0x42::test2 {
 }
 
 #[allow(unused_field)]
-module 0x42::test3 {
+module a::test3 {
     use sui::coin::TreasuryCap;
     use sui::object::UID;
 
@@ -41,4 +41,22 @@ module 0x42::test3 {
         id: UID,
         cap: TreasuryCap<S1>,
     }
+}
+
+module sui::object {
+    struct UID has store {
+        id: address,
+    }
+}
+
+module sui::coin {
+    use sui::object::UID;
+    struct Coin<phantom T> has key, store {
+        id: UID
+    }
+
+    struct TreasuryCap<phantom T> has key, store {
+        id: UID
+    }
+
 }

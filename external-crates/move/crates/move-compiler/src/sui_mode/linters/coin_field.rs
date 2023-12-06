@@ -4,7 +4,7 @@
 //! This analysis flags uses of the sui::coin::Coin struct in fields of other structs. In most cases
 //! it's preferable to use sui::balance::Balance instead to save space.
 
-use move_compiler::{
+use crate::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast as N,

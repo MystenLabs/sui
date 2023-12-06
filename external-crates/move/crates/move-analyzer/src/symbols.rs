@@ -78,6 +78,7 @@ use url::Url;
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
+    editions::Flavor,
     expansion::ast::{Address, Fields, ModuleIdent, ModuleIdent_},
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_},
     parser::ast::StructName,
@@ -613,6 +614,8 @@ impl Symbolicator {
         let build_config = move_package::BuildConfig {
             test_mode: true,
             install_dir: Some(tempdir().unwrap().path().to_path_buf()),
+            default_flavor: Some(Flavor::Sui),
+            no_lint: false,
             ..Default::default()
         };
 
