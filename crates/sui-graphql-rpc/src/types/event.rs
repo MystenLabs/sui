@@ -25,9 +25,16 @@ pub(crate) struct EventFilter {
     // Enhancement (post-MVP)
     // after_checkpoint
     // before_checkpoint
-
-    // Cascading
+    /// Events emitted by a particular package.
+    /// An event is emitted by a particular package
+    /// if some function in the package is called
+    /// by a PTB and emits an event.
     pub emitting_package: Option<SuiAddress>,
+    /// Events emitted by a particular Move module.
+    /// An event is emitted by a particular module
+    /// if some function in the module is called
+    /// by a PTB and emits an event.
+    /// Requires `emitting_package` to be set.
     pub emitting_module: Option<String>,
 
     pub event_package: Option<SuiAddress>,
@@ -45,7 +52,11 @@ pub(crate) struct EventFilter {
 
 #[Object]
 impl Event {
-    /// The Move module that the event was emitted in.
+    /// The Move module containing some function that when called by
+    /// a programmable transaction block (PTB) emitted this event.
+    /// For example, if a PTB invokes A::m1::foo, which internally
+    /// calls A::m2::emit_event to emit an event,
+    /// the sending module would be A::m1.
     async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
         let sending_package = SuiAddress::from_bytes(&self.stored.package)
             .map_err(|e| Error::Internal(e.to_string()))
@@ -57,24 +68,16 @@ impl Event {
     }
 
     /// Addresses of the senders of the event
-    async fn senders(&self) -> Option<Vec<Address>> {
-        let result: Option<Vec<Address>> = self
-            .stored
-            .senders
-            .iter()
-            .filter_map(|sender| {
-                sender.as_ref().map(|sender| {
-                    SuiAddress::from_bytes(sender)
-                        .map(|sui_address| Address {
-                            address: sui_address,
-                        })
-                        .map_err(|e| eprintln!("Unexpected None value in senders array: {}", e))
-                        .ok()
-                })
-            })
-            .collect();
-
-        result
+    async fn senders(&self) -> Result<Option<Vec<Address>>> {
+        let mut addrs = Vec::with_capacity(self.stored.senders.len());
+        for sender in &self.stored.senders {
+            let Some(sender) = &sender else { continue };
+            let address = SuiAddress::from_bytes(sender)
+                .map_err(|e| Error::Internal(format!("Failed to deserialize address: {e}")))
+                .extend()?;
+            addrs.push(Address { address });
+        }
+        Ok(Some(addrs))
     }
 
     /// UTC timestamp in milliseconds since epoch (1/1/1970)

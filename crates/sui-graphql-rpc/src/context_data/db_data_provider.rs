@@ -75,7 +75,7 @@ use sui_types::{
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
-    Identifier, TypeTag,
+    TypeTag,
 };
 
 #[cfg(feature = "pg_backend")]
