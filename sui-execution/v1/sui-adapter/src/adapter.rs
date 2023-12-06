@@ -90,7 +90,7 @@ mod checked {
         _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
         #[cfg(feature = "gas-profiler")]
-        let vm_profiler_config = _enable_profiler.map(|_| VMProfilerConfig {
+        let vm_profiler_config = _enable_profiler.clone().map(|_| VMProfilerConfig {
             full_path: _enable_profiler.filter(|p| {
                 !matches!(
                     p.partial_cmp(&*DEFAULT_PROFILE_OUTPUT_PATH),

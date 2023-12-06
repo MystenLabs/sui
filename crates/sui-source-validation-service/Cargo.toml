@@ -49,7 +49,7 @@ expect-test = "1.4.0"
 fs_extra = "1.3.0"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 
-sui = {workspace = true, default-features = false}
+sui.workspace = true
 sui-move = { workspace = true, features = ["all"] }
 sui-json-rpc-types.workspace = true
 test-cluster.workspace = true
