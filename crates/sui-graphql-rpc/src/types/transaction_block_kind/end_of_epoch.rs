@@ -59,6 +59,9 @@ pub(crate) struct RandomnessStateCreateTransaction {
     dummy: Option<bool>,
 }
 
+/// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
+/// at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
+/// optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
     /// The list of system transactions that are allowed to run at the end of the epoch.
@@ -126,6 +129,11 @@ impl EndOfEpochTransaction {
     }
 }
 
+/// A system transaction that updates epoch information on-chain (increments the current epoch).
+/// Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
+/// submitted by users, because validators will refuse to sign them.
+///
+/// This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
 #[Object]
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
