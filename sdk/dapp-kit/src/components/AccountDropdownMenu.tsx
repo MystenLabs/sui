@@ -56,7 +56,7 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 							className={clsx(styles.menuItem)}
 							onSelect={() => disconnectWallet()}
 						>
-							Disconnect elloooo
+							Disconnect
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</StyleMarker>
