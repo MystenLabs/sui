@@ -120,6 +120,11 @@ type AuthenticatorStateUpdateTransaction {
 	authenticatorObjInitialSharedVersion: Int!
 }
 
+type AvailableRange {
+	first: Checkpoint
+	last: Checkpoint
+}
+
 type Balance {
 	"""
 	Coin type for the balance, such as 0x2::sui::SUI
@@ -1490,6 +1495,11 @@ type Query {
 	network).
 	"""
 	chainIdentifier: String!
+	"""
+	Range of checkpoints that the RPC has data available for (for data
+	that can be tied to a particular checkpoint).
+	"""
+	availableRange: AvailableRange!
 	"""
 	Configuration for this RPC service
 	"""
