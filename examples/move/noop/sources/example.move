@@ -5,6 +5,7 @@ module noop::example{
     use sui::event::emit;
     use sui::tx_context;
     use sui::tx_context::TxContext;
+    use sui::clock::{Self, Clock};
  
     /// Struct to be used to emit an event with metadata.
     struct MetadataEvent has copy, drop{
@@ -14,7 +15,8 @@ module noop::example{
 
     struct Metadata has key, store {
         id: UID,
-        metadata: vector<u8>
+        metadata: vector<u8>,
+        created_at: u64
     }
     
     /// Empty heartbeat call.
@@ -35,13 +37,21 @@ module noop::example{
     }
 
     /// Function to store metadata in an NFT.
-    /// Returns the newlly created metadata object.
-    public fun add_metadata(metadata: vector<u8>, ctx: &mut TxContext): Metadata {
+    /// Returns the newly created metadata object.
+    public fun add_metadata(metadata: vector<u8>, clock: &Clock, ctx: &mut TxContext): Metadata {
+        let created_at = clock::timestamp_ms(clock);
+
         let metadata = Metadata {
             id: object::new(ctx),
-            metadata
+            metadata,
+            created_at
         };
 
         metadata
+    }
+
+    /// Function to check the time since the last heartbeat
+    public fun time_since_last_heartbeat(metadata: &Metadata, clock: &Clock): u64 {
+        clock::timestamp_ms(clock) - metadata.created_at
     }
 }
