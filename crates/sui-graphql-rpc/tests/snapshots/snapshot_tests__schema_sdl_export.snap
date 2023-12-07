@@ -816,8 +816,7 @@ type GasInput {
 }
 
 """
-System transaction that initialises the network and the writes the initial set of objects
-on-chain.
+System transaction that initializes the network and writes the initial set of objects on-chain.
 """
 type GenesisTransaction {
 	"""
