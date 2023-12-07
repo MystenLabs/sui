@@ -56,7 +56,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		// This used to consume all gas in old EVM versions, but not anymore.
 		// It is often a good idea to use 'require' to check if functions are called correctly.
 		// As a second argument, you can also provide an explanation about what went wrong.
-		require(paused == false, 'Bridge is not Running');
+		require(!paused, 'Bridge is not Running');
 		_;
 	}
 
@@ -67,7 +67,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		// This used to consume all gas in old EVM versions, but not anymore.
 		// It is often a good idea to use 'require' to check if functions are called correctly.
 		// As a second argument, you can also provide an explanation about what went wrong.
-		require(paused == true, 'Bridge is Paused');
+		require(paused, 'Bridge is Paused');
 		_;
 	}
 
