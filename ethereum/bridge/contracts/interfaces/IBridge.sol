@@ -91,6 +91,8 @@ interface IBridge {
 		uint64 indexed sequence
 	);
 
+	event BridgeEvent(BridgeMessage message, bytes message_bytes);
+
 	// FUNCTIONS
 
 	/**

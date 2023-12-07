@@ -39,8 +39,6 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	// Mapping of user address to nonce
 	mapping(address => uint256) public nonces;
 
-	event BridgeEvent(BridgeMessage message, bytes message_bytes);
-
 	// Function to pause the bridge
 	function pauseBridge() private isRunning {
 		paused = true;
@@ -83,27 +81,6 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			addValidator(_validators[i].addr, _validators[i].weight);
 			emit ValidatorAdded(_validators[i].addr, _validators[i].weight);
 		}
-	}
-
-	// constructor() {
-	//     _disableInitializers();
-	// }
-
-	// /// @custom:oz-upgrades-unsafe-allow constructor
-	// constructor() initializer {}
-
-	function testBridgeMessage(
-		BridgeMessage calldata bridgeMessage
-	) public pure returns (uint8, uint8, ChainID, uint64, address, uint8, address) {
-		return (
-			bridgeMessage.messageType,
-			bridgeMessage.version,
-			bridgeMessage.sourceChain,
-			bridgeMessage.bridgeSeqNum,
-			bridgeMessage.senderAddress,
-			bridgeMessage.targetChain,
-			bridgeMessage.targetAddress
-		);
 	}
 
 	function approveBridgeMessage(
@@ -227,9 +204,6 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			)
 		);
 		return MessageHashUtils.toEthSignedMessageHash(hash);
-
-		// address signer = ECDSA.recover(message, signature);
-		// return signer;
 	}
 
 	function ethSignedMessageHash(string memory message) public pure returns (bytes32) {
