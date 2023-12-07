@@ -4,11 +4,14 @@ import { Callout } from 'nextra/components';
 
 <Callout type="info">Sui Owned Object Pools (SuiOOP) is an experimental library.</Callout>
 
-ADD A MORE DETAILED INSTALLATION GUIDE. HOW WOULD A USER INSTALL IF THEY WERE STARTING FROM SCRATCH?
-CLONE PROJECT, INSTALL SUI, TS SDK, ETC. USE LINKS TO MAIN DOC SITE INSTEAD OF RECREATING STEPS IF
-APPLICABLE.
-
 ## Installing the library
+
+If you would like to extend the library by developing on your local machine,
+first you need to clone the repository.
+
+```sh
+git clone https://github.com/MystenLabs/Sui_Owned_Object_Pools.git
+```  
 
 Use a package manager to install dependencies from the root of the project.
 
@@ -16,44 +19,62 @@ Use a package manager to install dependencies from the root of the project.
 npm install
 ```
 
-## Code consistency
-
-Before committing your changes, run the linter to check for code style consistency.
-
-```sh npm2yarn
-npm run lint
-```
-
 ## Testing
 
-Tests are a great way to get familiar with the library. For each test scenario, there is a small
-description of the test's purpose and the library's commands to achieve that.
+Tests, apart from checking if your changes break the existing codebase,
+they are also a great way to get familiar with the library. 
+For each test scenario, there is a small description of the 
+test's purpose and the library's commands to achieve that.
 
-To set up the tests environment use `./test/initial_setup.sh`.
+In order to be able to run the tests, first you need to:
+1. Publish the package in the `move_examples/nft_app/` folder. 
+2. Have an account that will be used as an Admin account that will create and execute transactions,
+from coin transfers to NFT minting. 
+3. Have a test user account that will be used as a receiver of the transactions. 
 
-The script creates a `.test.env` file in the `test` folder. When the script is complete, you need to
+You can fulfill the requirements above either manually or automatically.
+For your convenience, we have created a script `./test/initial_setup.sh` that does the above for you.
+
+Before proceeding make sure that you are using the `testnet` environment:
+
+```sh
+sui client switch --env testnet && sui client envs
+```
+
+Also make sure that you have a decent SUI amount to your admin account (i.e. the account from `sui client active-address`).
+Remember that you can get testnet SUI from the (Sui faucet)[https://docs.sui.io/guides/developer/getting-started/get-coins].
+
+Next we proceed by running the setup script:
+
+```sh
+cd test && chmod u+x test/initial_setup.sh # give the user the right to execute the setup script
+./initial_setup.sh testnet  # create a setup for testnet
+```
+
+The script creates a `.test.env` file in the `test/` folder. When the script is complete, you need to
 add a `ADMIN_SECRET_KEY` and a `TEST_USER_SECRET` to the `.env`.
 
-Usually we use the testnet network for testing. Switch to testnet with: sui client switch --env
-testnet
+Usually we use the testnet network for testing. Switch to testnet with: 
+`sui client switch --env testnet`
 
 At the end of the setup your `.env` should look like the template
 [`.test.env.example.`](https://github.com/MystenLabs/coin_management_system/blob/main/test/.env.example):
 
 ```ts
 # The Admin should also be the publisher of the nft_app smart contract
-ADMIN_SECRET_KEY=
+ADMIN_ADDRESS= ...
+ADMIN_SECRET_KEY= ...
 
 # A user address that is used as a receiver of txbs. Used for testing.
-TEST_USER_ADDRESS=
-TEST_USER_SECRET=
+TEST_USER_ADDRESS= ...
+TEST_USER_SECRET= ...
 
 # Used for testing. Get this by publishing the move_examples/nft_app/
-NFT_APP_PACKAGE_ID=
-NFT_APP_ADMIN_CAP=
+NFT_APP_PACKAGE_ID= ...
+NFT_APP_ADMIN_CAP= ...
 
 # Example: "https://fullnode.testnet.sui.io:443"
-SUI_NODE=
+SUI_NODE= ...
 
 GET_WORKER_TIMEOUT_MS=1000
 ```
@@ -74,3 +95,11 @@ packages with `npm install`, you can run the tests by either:
   [test-driven development](https://en.wikipedia.org/wiki/Test-driven_development).
 
 - [Best for CI/CD] Run `npm run test` from the command line.
+
+## Code consistency
+
+Before committing your changes, run the linter to check for code style consistency.
+
+```sh npm2yarn
+npm run lint
+```
