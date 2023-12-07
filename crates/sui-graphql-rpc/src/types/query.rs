@@ -76,6 +76,7 @@ impl Query {
         Some(Address { address })
     }
 
+    /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
         if let Some(epoch_id) = id {
             ctx.data_unchecked::<PgManager>()
@@ -92,6 +93,8 @@ impl Query {
         }
     }
 
+    /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
+    /// checkpoint).
     async fn checkpoint(
         &self,
         ctx: &Context<'_>,
@@ -116,6 +119,7 @@ impl Query {
         }
     }
 
+    /// Fetch a transaction block by its transaction digest.
     async fn transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -205,6 +209,8 @@ impl Query {
             .extend()
     }
 
+    /// Fetch the protocl config by protocol version (defaults to the latest protocol
+    /// version known to the GraphQL)
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,

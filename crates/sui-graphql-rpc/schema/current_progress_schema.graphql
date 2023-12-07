@@ -206,6 +206,9 @@ type BalanceEdge {
 
 scalar Base64
 
+"""
+String representation of an arbitrary width, possibly signed integer.
+"""
 scalar BigInt
 
 
@@ -332,6 +335,9 @@ type CheckpointEdge {
 	cursor: String!
 }
 
+"""
+Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
+"""
 input CheckpointId {
 	digest: String
 	sequenceNumber: Int
@@ -434,6 +440,9 @@ type ConsensusCommitPrologueTransaction {
 	consensusCommitDigest: String
 }
 
+"""
+ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ
+"""
 scalar DateTime
 
 type DynamicField {
@@ -685,18 +694,14 @@ input EventFilter {
 	sender: SuiAddress
 	transactionDigest: String
 	"""
-	Events emitted by a particular package.
-	An event is emitted by a particular package
-	if some function in the package is called
-	by a PTB and emits an event.
+	Events emitted by a particular package. An event is emitted by a particular package if some
+	function in the package is called by a PTB and emits an event.
 	"""
 	emittingPackage: SuiAddress
 	"""
-	Events emitted by a particular Move module.
-	An event is emitted by a particular module
-	if some function in the module is called
-	by a PTB and emits an event.
-	Requires `emitting_package` to be set.
+	Events emitted by a particular Move module. An event is emitted by a particular module if
+	some function in the module is called by a PTB and emits an event. Requires
+	`emitting_package` to be set.
 	"""
 	emittingModule: String
 	eventPackage: SuiAddress
@@ -1480,14 +1485,26 @@ type ObjectEdge {
 
 input ObjectFilter {
 	"""
-	This field is used to specify the type of objects that should be included
-	in the query results. Generic types can be queried by either the generic
-	type name, e.g. `0x2::coin::Coin`, or by the full type name, such as
-	`0x2::coin::Coin<0x2::sui::SUI>`.
+	This field is used to specify the type of objects that should be include in the query
+	results.
+	
+	Type can be filtered by their package, package::module, or their fuly qualified type name.
+	
+	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
+	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
 	"""
 	type: String
+	"""
+	Filter for live objects by their current owners.
+	"""
 	owner: SuiAddress
+	"""
+	Filter for live objects by their IDs.
+	"""
 	objectIds: [SuiAddress!]
+	"""
+	Filter for live or potentially historical objects by their ID and version.
+	"""
 	objectKeys: [ObjectKey!]
 }
 
@@ -1524,11 +1541,11 @@ type OpenMoveType {
 	"""
 	Structured representation of the type signature.
 	"""
-	signature: OpenMoveTypeSignature
+	signature: OpenMoveTypeSignature!
 	"""
 	Flat representation of the type signature, as a displayable string.
 	"""
-	repr: String
+	repr: String!
 }
 
 """
@@ -1772,8 +1789,18 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
+	"""
+	Fetch epoch information by ID (defaults to the latest epoch).
+	"""
 	epoch(id: Int): Epoch
+	"""
+	Fetch checkpoint information by sequence number or digest (defaults to the latest available
+	checkpoint).
+	"""
 	checkpoint(id: CheckpointId): Checkpoint
+	"""
+	Fetch a transaction block by its transaction digest.
+	"""
 	transactionBlock(digest: String!): TransactionBlock
 	"""
 	The coin objects that exist in the network.
@@ -1786,6 +1813,10 @@ type Query {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	Fetch the protocl config by protocol version (defaults to the latest protocol
+	version known to the GraphQL)
+	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
 	Resolves the owner address of the provided domain name
@@ -1890,15 +1921,15 @@ type ServiceConfig {
 	"""
 	Default number of elements allowed on a single page of a connection.
 	"""
-	defaultPageSize: BigInt!
+	defaultPageSize: Int!
 	"""
 	Maximum number of elements allowed on a single page of a connection.
 	"""
-	maxPageSize: BigInt!
+	maxPageSize: Int!
 	"""
 	Maximum time in milliseconds that will be spent to serve one request.
 	"""
-	requestTimeoutMs: BigInt!
+	requestTimeoutMs: Int!
 	"""
 	Maximum length of a query payload string.
 	"""
@@ -2065,6 +2096,9 @@ type StorageFund {
 }
 
 
+"""
+String containing 32B hex-encoded address, with a leading "0x". Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+"""
 scalar SuiAddress
 
 """

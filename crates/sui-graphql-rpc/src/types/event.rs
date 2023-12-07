@@ -25,16 +25,12 @@ pub(crate) struct EventFilter {
     // Enhancement (post-MVP)
     // after_checkpoint
     // before_checkpoint
-    /// Events emitted by a particular package.
-    /// An event is emitted by a particular package
-    /// if some function in the package is called
-    /// by a PTB and emits an event.
+    /// Events emitted by a particular package. An event is emitted by a particular package if some
+    /// function in the package is called by a PTB and emits an event.
     pub emitting_package: Option<SuiAddress>,
-    /// Events emitted by a particular Move module.
-    /// An event is emitted by a particular module
-    /// if some function in the module is called
-    /// by a PTB and emits an event.
-    /// Requires `emitting_package` to be set.
+    /// Events emitted by a particular Move module. An event is emitted by a particular module if
+    /// some function in the module is called by a PTB and emits an event. Requires
+    /// `emitting_package` to be set.
     pub emitting_module: Option<String>,
 
     pub event_package: Option<SuiAddress>,
