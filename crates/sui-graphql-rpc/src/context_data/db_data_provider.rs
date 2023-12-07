@@ -660,17 +660,14 @@ impl PgManager {
             .await?
             .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
 
-        Epoch::try_from(result)
+        Ok(Epoch::from(result))
     }
 
     // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
     pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
         let epoch_id = i64::try_from(epoch_id)
             .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        self.get_epoch(Some(epoch_id))
-            .await?
-            .map(Epoch::try_from)
-            .transpose()
+        Ok(self.get_epoch(Some(epoch_id)).await?.map(Epoch::from))
     }
 
     // To be used in scenarios where epoch is expected to exist

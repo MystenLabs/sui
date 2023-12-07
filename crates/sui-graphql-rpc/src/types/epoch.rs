@@ -13,14 +13,10 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_indexer::models_v2::epoch::StoredEpochInfo;
-use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 
-// #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-// #[graphql(complex)]
 #[derive(Clone, Debug)]
 pub(crate) struct Epoch {
     pub stored_epoch_info: StoredEpochInfo,
-    pub validators_summary: Vec<SuiValidatorSummary>,
 }
 
 #[Object]
@@ -31,7 +27,7 @@ impl Epoch {
         self.stored_epoch_info.protocol_version as u64
     }
 
-    /// The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
+    /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
     async fn epoch_id(&self) -> u64 {
         self.stored_epoch_info.epoch as u64
     }
@@ -44,8 +40,23 @@ impl Epoch {
     }
 
     /// Validator related properties, including the active validators
-    async fn validator_set(&self) -> Option<ValidatorSet> {
-        let active_validators = convert_to_validators(self.validators_summary.clone(), None);
+    async fn validator_set(&self) -> Result<Option<ValidatorSet>> {
+        let validators = self
+            .stored_epoch_info
+            .validators
+            .clone()
+            .into_iter()
+            .flatten()
+            .map(|v| {
+                bcs::from_bytes(&v).map_err(|e| {
+                    Error::Internal(format!(
+                        "Can't convert validator into Validator. Error: {e}",
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        let active_validators = convert_to_validators(validators, None);
         let validator_set = ValidatorSet {
             total_stake: self
                 .stored_epoch_info
@@ -54,7 +65,7 @@ impl Epoch {
             active_validators: Some(active_validators),
             ..Default::default()
         };
-        Some(validator_set)
+        Ok(Some(validator_set))
     }
 
     /// The epoch's starting timestamp
@@ -98,7 +109,6 @@ impl Epoch {
         self.stored_epoch_info
             .storage_fund_balance
             .map(BigInt::from)
-        //             fund_outflow: e.storage_rebate.map(BigInt::from),
     }
     /// The difference between the fund inflow and outflow, representing
     /// the net amount of storage fees accumulated in this epoch.
@@ -177,25 +187,10 @@ impl Epoch {
     }
 }
 
-impl TryFrom<StoredEpochInfo> for Epoch {
-    type Error = Error;
-    fn try_from(e: StoredEpochInfo) -> Result<Self, Error> {
-        let stored_epoch_info = e.clone();
-        let validators_summary: Vec<SuiValidatorSummary> = e
-            .validators
-            .into_iter()
-            .flatten()
-            .map(|v| {
-                bcs::from_bytes(&v).map_err(|e| {
-                    Error::Internal(format!(
-                        "Can't convert validator into Validator. Error: {e}",
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        Ok(Epoch {
-            stored_epoch_info,
-            validators_summary,
-        })
+impl From<StoredEpochInfo> for Epoch {
+    fn from(e: StoredEpochInfo) -> Self {
+        Epoch {
+            stored_epoch_info: e,
+        }
     }
 }
