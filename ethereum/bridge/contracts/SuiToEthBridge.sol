@@ -2,6 +2,10 @@
 pragma solidity ^0.8.20;
 
 contract SuiToEthBridge {
+	function getVersion() public pure returns (uint256) {
+		return 1;
+	}
+
 	// The address of the implementation contract
 	address public implementation;
 
