@@ -10,11 +10,10 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import {ERC721Upgradeable} from '@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol';
 
-import './ChainIDs.sol';
-import './TokenIDs.sol';
+import './interfaces/ICommon.sol';
 
 // Bridge contract
-contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, ChainIDs {
+contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, ICommon {
 	using SafeERC20 for IERC20;
 	using MessageHashUtils for bytes32;
 
@@ -30,35 +29,6 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, ChainIDs {
 	uint16 public constant MAX_TOTAL_WEIGHT = 10000;
 	uint256 public constant MAX_SINGLE_VALIDATOR_WEIGHT = 1000;
 	uint256 public constant APPROVAL_THRESHOLD = 3333;
-
-	// A struct to represent a validator
-	struct Validator {
-		address addr; // The address of the validator
-		uint256 weight; // The weight of the validator
-	}
-
-	struct ApprovedBridgeMessage {
-		BridgeMessage message;
-		uint64 approvedEpoch;
-		bytes[] signatures;
-	}
-
-	struct BridgeMessageKey {
-		uint8 sourceChain;
-		uint64 bridgeSeqNum;
-	}
-
-	struct BridgeMessage {
-		// 0: token , 1: object ? TBD
-		uint8 messageType;
-		uint8 version;
-		ChainID sourceChain;
-		uint64 bridgeSeqNum;
-		address senderAddress;
-		uint8 targetChain;
-		address targetAddress;
-		// bytes payload;
-	}
 
 	// A mapping from address to validator index
 	mapping(address => uint256) public validatorIndex;
@@ -293,3 +263,30 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, ChainIDs {
 		return ECDSA.recover(hash, signature);
 	}
 }
+
+// // The factory contract that deploys and upgrades proxies
+// contract Factory {
+//     address public implementation;
+
+//     constructor() {
+//         // Deploy a new implementation contract
+//         implementation = address(new Bridge());
+//     }
+
+//     function createProxy(uint256 _x) public returns (address) {
+//         // Deploy a new proxy using the implementation address
+//         ERC1967Proxy proxy = new ERC1967Proxy(
+//             implementation,
+//             abi.encodeWithSelector(Bridge(address(0)).initialize.selector, _x)
+//         );
+//         return address(proxy);
+//     }
+
+//     function upgradeProxy(address proxy, uint256 _x) public {
+//         // Upgrade the proxy to a new implementation
+//         ERC1967UpgradeUpgradeable(proxy).upgradeToAndCall(
+//             implementation,
+//             abi.encodeWithSelector(MyContract(address(0)).initialize.selector, _x)
+//         );
+//     }
+// }
