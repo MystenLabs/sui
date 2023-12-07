@@ -1,9 +1,16 @@
+// import config before anything else
+import { config as dotEnvConfig } from "dotenv";
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-toolbox";
 import "@openzeppelin/hardhat-upgrades";
-// import "@openzeppelin/hardhat-defender";
 import { HardhatUserConfig } from "hardhat/config";
-import { alchemyApiKey, mnemonic } from "./secrets.json";
+
+dotEnvConfig();
+
+// read MNEMONIC from file or from env variable
+let mnemonic = process.env.MNEMONIC!;
+// read ALCHEMY_API_KEY from file or from env variable
+let alchemyApiKey = process.env.ALCHEMY_API_KEY!;
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -36,7 +43,7 @@ const config: HardhatUserConfig = {
     },
     sepoliasui: {
       url: `https://eth-rpc.testnet.sui.io:443`,
-      accounts: { mnemonic: mnemonic },
+      accounts: { mnemonic: process.env.MNEMONIC! },
     },
     goerlihh: {
       url: "https://rpc.ankr.com/eth_goerli",
