@@ -5,25 +5,18 @@ use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
 use crate::config::ServerConfig;
 use crate::server::graphiql_server::start_graphiql_server;
-use mysten_metrics::init_metrics;
-use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_indexer::errors::IndexerError;
-use sui_indexer::indexer_v2::IndexerV2;
-use sui_indexer::metrics::IndexerMetrics;
-use sui_indexer::new_pg_connection_pool_impl;
 use sui_indexer::store::indexer_store_v2::IndexerStoreV2;
 use sui_indexer::store::PgIndexerStoreV2;
-use sui_indexer::utils::reset_database;
-use sui_indexer::IndexerConfig;
+use sui_indexer::test_utils::start_test_indexer_v2;
 use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
-use tracing::info;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -168,77 +161,6 @@ async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16
             test_cluster_builder.with_fullnode_rpc_port(internal_data_source_rpc_port);
     };
     test_cluster_builder.build().await
-}
-
-pub async fn start_test_indexer_v2(
-    db_url: Option<String>,
-    rpc_url: String,
-    reader_mode_rpc_url: Option<String>,
-    use_indexer_experimental_methods: bool,
-) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 20 for testing
-    // to prevent maxing out
-    info!("Setting DB_POOL_SIZE to 20");
-    std::env::set_var("DB_POOL_SIZE", "20");
-
-    let db_url = db_url.unwrap_or_else(|| {
-        let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
-        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
-        let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
-        format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
-    });
-
-    let migrated_methods = if use_indexer_experimental_methods {
-        IndexerConfig::all_implemented_methods()
-    } else {
-        vec![]
-    };
-
-    // Default weiter mode
-    let mut config = IndexerConfig {
-        db_url: Some(db_url.clone()),
-        rpc_client_url: rpc_url,
-        migrated_methods,
-        reset_db: true,
-        fullnode_sync_worker: true,
-        rpc_server_worker: false,
-        use_v2: true,
-        ..Default::default()
-    };
-
-    if let Some(reader_mode_rpc_url) = &reader_mode_rpc_url {
-        let reader_mode_rpc_url = reader_mode_rpc_url
-            .parse::<SocketAddr>()
-            .expect("Unable to parse fullnode address");
-        config.fullnode_sync_worker = false;
-        config.rpc_server_worker = true;
-        config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
-        config.rpc_server_port = reader_mode_rpc_url.port();
-    }
-
-    let parsed_url = config.get_db_url().unwrap();
-    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
-    if config.reset_db && reader_mode_rpc_url.is_none() {
-        reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
-    }
-
-    let registry = prometheus::Registry::default();
-
-    init_metrics(&registry);
-
-    let indexer_metrics = IndexerMetrics::new(&registry);
-
-    let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
-    let store_clone = store.clone();
-    let handle = if reader_mode_rpc_url.is_some() {
-        tokio::spawn(async move { IndexerV2::start_reader(&config, &registry, db_url).await })
-    } else {
-        tokio::spawn(
-            async move { IndexerV2::start_writer(&config, store_clone, indexer_metrics).await },
-        )
-    };
-
-    (store, handle)
 }
 
 impl ExecutorCluster {
