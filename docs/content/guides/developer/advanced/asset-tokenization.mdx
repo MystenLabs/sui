@@ -14,7 +14,7 @@ The concept is to divide high-value assets into smaller, more affordable units, 
 
 This strategy enables wider participation from investors who might want to mitigate risk by investing in a portion of a digital asset rather than being the sole owner, thereby expanding accessibility to a broader range of investors.
 
-This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) Multi-token standard with additional functionality. This makes it a suitable choice for Solidity based use cases that one might want to implement on Sui.
+This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) multi-token standard with additional functionality. This makes it a suitable choice for Solidity based use cases that one might want to implement on Sui.
 
 - **Asset creation**
     
@@ -170,7 +170,7 @@ When it receives a new [one-time witness](concepts/sui-move-concepts/one-time-wi
     
 - `split`
 
-    This function, is provided with a tokenized asset of the FT type and a balance greater than 1, along with a value less than the object's balance, and performs a split operation on the tokenized asset. The operation divides the existing tokenized asset into two separate tokenized assets. The newly created tokenized asset will have a balance equal to the given value, while the balance of the provided object is reduced by the specified value. Upon completion, the function returns the newly created tokenized asset. This function does not accept or operate on TAs of the NFT (Non-Fungible Token) type.
+    This function, is provided with a tokenized asset of the FT type and a balance greater than 1, along with a value less than the object's balance, and performs a split operation on the tokenized asset. The operation divides the existing tokenized asset into two separate tokenized assets. The newly created tokenized asset will have a balance equal to the given value, while the balance of the provided object is reduced by the specified value. Upon completion, the function returns the newly created tokenized asset. This function does not accept or operate on tokenized assets of the NFT type.
     
     ```rust
     public fun split<T>(
@@ -183,6 +183,7 @@ When it receives a new [one-time witness](concepts/sui-move-concepts/one-time-wi
 - `join`
 
     This function is given two tokenized assets of the FT type and executes a merge operation on the tokenized assets. The operation involves increasing the balance of the first tokenized asset by the balance of the second one. Subsequently, the second tokenized asset will be burned or removed from circulation. After the process concludes, the function returns the ID of the burned tokenized asset.
+
     This function does not accept or operate on tokenized assets of the NFT type.
     
     ```rust
@@ -242,7 +243,7 @@ When it receives a new [one-time witness](concepts/sui-move-concepts/one-time-wi
 
 <TabItem label="proxy" value="proxy">
 
-The `proxy` module comprises methods that the type owner utilizes to execute Publisher-related operations. 
+The `proxy` module comprises methods that the type owner utilizes to execute publisher-related operations. 
 
 **Structs**
 
@@ -256,7 +257,7 @@ The `proxy` module comprises methods that the type owner utilizes to execute Pub
     
 - `Registry`
 
-    This is a shared object serves as a repository for the publisher object, specifically intended to control and restrict access to the creation and management of Transfer Policies for Tokenized Assets. Mutable access to this object is exclusively granted to the actual Publisher.
+    This is a shared object serves as a repository for the Publisher object, specifically intended to control and restrict access to the creation and management of transfer policies for tokenized assets. Mutable access to this object is exclusively granted to the actual publisher.
     
     ```rust
     struct Registry has key {
@@ -289,8 +290,9 @@ The `proxy` module comprises methods that the type owner utilizes to execute Pub
     
 - `setup_tp`
 
-    This function leverages the Publisher nested within the registry and the sender's Publisher. It generates and returns a Transfer Policy and the associated Transfer Policy Cap specific to the `TokenizedAsset<T>`. This type 'T' is derived from the Publisher object. 
-    It also generates an empty TP (Transfer Policy) wrapped in a `ProtectedTP<T>` object which is shared. This functionality can be utilized under specific conditions to override the kiosk lock rule.
+    This function leverages the publisher nested within the registry and the sender's publisher. It generates and returns a transfer policy and the associated transfer policy cap specific to the `TokenizedAsset<T>`. This type 'T' is derived from the Publisher object. 
+
+    It also generates an empty transfer policy wrapped in a `ProtectedTP<T>` object, which is shared. You can use this functionality under specific conditions to override the kiosk lock rule.
     
     ```rust
     public fun setup_tp<T: drop>(
@@ -303,7 +305,7 @@ The `proxy` module comprises methods that the type owner utilizes to execute Pub
     
 - `new_display`
 
-    This function utilizes the Publisher nested within the registry in and the sender's Publisher to generate and return an empty Display for the type `TokenizedAsset<T>`, where 'T' is encapsulated within the Publisher object.
+    This function utilizes the publisher nested within the registry in and the sender's publisher to generate and return an empty Display for the type `TokenizedAsset<T>`, where 'T' is encapsulated within the Publisher object.
     
     ```rust
     public fun new_display<T: drop>(
@@ -427,7 +429,7 @@ It allows tokenized asset type creators to enable these operations for Kiosk ass
 ### template package
 
 An example use case package, that enables utilization of Rust WASM functionality to support seamless asset creation on the browser.
-This is similar to the launchpad approach and will serve as the template package whenever a new asset requires representation as a Tokenized Asset.
+This is similar to the launchpad approach and will serve as the template package whenever a new asset requires representation as a tokenized asset.
 Effectively allowing users to edit fields of this template contract on the fly and publish it with the edits included.
 This package implements two essential modules, each catering to distinct functionalities required for asset tokenization.
 More details regarding how Rust WASM was implemented can be found in the [Web Assembly](#webassembly-wasm-and-template-package) section.
@@ -451,7 +453,7 @@ More details regarding how Rust WASM was implemented can be found in the [Web As
         
     - genesis
         
-        A genesis type of module that should include a OTW so that the sender can claim the Publisher.
+        A genesis type of module that should include a OTW so that the sender can claim the publisher.
 
 ### Publish and mint tokenized sequence diagram
 
@@ -638,7 +640,7 @@ public fun mint_burn_ticket<T>(
 ): BurnTicket 
 ```
 
-Burning on the user side requires for them to access the shared `Treasury` object. This function burns the Tokenized Asset and decreases the supply. 
+Burning on the user side requires for them to access the shared `Treasury` object. This function burns the tokenized asset and decreases the supply. 
 
 ```rust
 public fun burn_with_ticket<T>(
@@ -768,7 +770,7 @@ The process of automatic deployment for the template package refers to publishin
 - Ensure that the `asset_tokenization` package address is the same as the original deployment (if upgraded otherwise same as published-at).
 - Make any changes to the template fields by changing the input parameters of the `publishNewAsset` function.
 - Run `npm run publish-template`.
-- You should choose and store the *Template Package ID*, *asset metadata ID*, *asset cap ID* and the *Publisher ID* from the created objects in the respective fields within your **.env** file.
+- You should choose and store the *Template Package ID*, *asset metadata ID*, *asset cap ID* and the *publisher ID* from the created objects in the respective fields within your **.env** file.
 
 For more details regarding this process, please consult the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
 
@@ -1020,7 +1022,7 @@ In a terminal or console within the project's setup directory, utilize the follo
     
     Upon executing the command `npm run call lock`, your newly minted tokenized asset is secured within your kiosk.
 
-    Before running the command, please ensure that the field TOKENIZED_ASSET within your .env file is populated with the object you intend to lock.
+    Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to lock.
     
 - **Mint and Lock**
     
@@ -1064,11 +1066,11 @@ In a terminal or console within the project's setup directory, utilize the follo
     
 - **Join**
     
-    When you execute the command `npm run call join`, two specified tokenized assets of the FT type are merged together. Before running the command, please ensure that the fields FT1 and FT2 within your .env file are populated with the objects you intend to merge.
+    When you execute the command `npm run call join`, two specified tokenized assets of the FT type are merged together. Before running the command, make sure that the fields `FT1` and `FT2` within your `.env` file are populated with the objects you intend to merge.
     
 - **Burn**
     
-    When you intend to burn a tokenized asset, execute the command `npm run call burn`. Following this action, the specified asset is destroyed. Before running the command, please ensure that the field TOKENIZED_ASSET within your .env file is populated with the object you intend to burn.
+    When you intend to burn a tokenized asset, execute the command `npm run call burn`. Following this action, the specified asset is destroyed. Before running the command, make sure that the field `TOKENIZED_ASSET` within your `.env` file is populated with the object you intend to burn.
     
 - **Get Balance**
     
