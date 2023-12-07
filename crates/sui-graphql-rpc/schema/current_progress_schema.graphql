@@ -734,6 +734,17 @@ enum Feature {
 }
 
 
+"""
+Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be
+used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
+"""
+type GasCoin {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 type GasCostSummary {
 	"""
 	Gas paid for executing this transaction (in MIST).
@@ -789,6 +800,16 @@ type GenesisTransaction {
 }
 
 
+"""
+One of the input objects or primitive values to the programmable transaction block.
+"""
+type Input {
+	"""
+	Index of the programmable transaction block input (0-indexed).
+	"""
+	ix: Int!
+}
+
 
 """
 Arbitrary JSON data.
@@ -813,11 +834,69 @@ type Linkage {
 	version: Int!
 }
 
+"""
+Create a vector (possibly empty).
+"""
+type MakeMoveVecTransaction {
+	"""
+	If the elements are not objects, or the vector is empty, a type must be supplied.
+	"""
+	type: MoveType
+	"""
+	The values to pack into the vector, all of the same type.
+	"""
+	elements: [TransactionArgument!]!
+}
+
+"""
+Merges `coins` into the first `coin` (produces no results).
+"""
+type MergeCoinsTransaction {
+	"""
+	The coin to merge into.
+	"""
+	coin: TransactionArgument!
+	"""
+	The coins to be merged.
+	"""
+	coins: [TransactionArgument!]!
+}
+
 enum MoveAbility {
 	COPY
 	DROP
 	KEY
 	STORE
+}
+
+"""
+A call to either an entry or a public Move function.
+"""
+type MoveCallTransaction {
+	"""
+	The storage ID of the package the function being called is defined in.
+	"""
+	package: SuiAddress!
+	"""
+	The name of the module the function being called is defined in.
+	"""
+	module: String!
+	"""
+	The name of the function being called.
+	"""
+	functionName: String!
+	"""
+	The function being called, resolved.
+	"""
+	function: MoveFunction
+	"""
+	The actual type parameters passed in for this move call.
+	"""
+	typeArguments: [MoveType!]!
+	"""
+	The actual function parameters passed in for this move call.
+	"""
+	arguments: [TransactionArgument!]!
 }
 
 """
@@ -1329,7 +1408,7 @@ type ObjectChange {
 	"""
 	The address of the object that has changed.
 	"""
-	location: SuiAddress!
+	address: SuiAddress!
 	"""
 	The contents of the object immediately before the transaction.
 	"""
@@ -1455,6 +1534,20 @@ type OpenMoveTypeSignatureBody =
 """
 scalar OpenMoveTypeSignature
 
+"""
+A Move object, either immutable, or owned mutable.
+"""
+type OwnedOrImmutable {
+	address: SuiAddress!
+	version: Int!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
+	digest: String!
+	object: Object
+}
+
 type Owner implements ObjectOwner {
 	asAddress: Address
 	asObject: Object
@@ -1518,8 +1611,49 @@ type PageInfo {
 	endCursor: String
 }
 
+"""
+A single transaction, or command, in the programmable transaction block.
+"""
+union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
+
 type ProgrammableTransactionBlock {
-	value: String!
+	"""
+	Input objects or primitive values.
+	"""
+	inputConnection(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	transactionConnection(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+}
+
+type ProgrammableTransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ProgrammableTransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ProgrammableTransaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ProgrammableTransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ProgrammableTransaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -1568,6 +1702,30 @@ type ProtocolConfigs {
 	Query for the state of the feature flag with name `key`.
 	"""
 	featureFlag(key: String!): ProtocolConfigFeatureFlag
+}
+
+"""
+Publishes a Move Package.
+"""
+type PublishTransaction {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]!
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]!
+}
+
+"""
+BCS encoded primitive value (not an object or Move struct).
+"""
+type Pure {
+	"""
+	BCS serialized and Base64 encoded primitive value.
+	"""
+	bytes: Base64!
 }
 
 type Query {
@@ -1641,6 +1799,31 @@ type RandomnessStateUpdateTransaction {
 }
 
 """
+A Move object that can be received in this transaction.
+"""
+type Receiving {
+	address: SuiAddress!
+	version: Int!
+	digest: String!
+	object: Object
+}
+
+"""
+The result of another transaction command.
+"""
+type Result {
+	"""
+	The index of the previous command (0-indexed) that returned this result.
+	"""
+	cmd: Int!
+	"""
+	If the previous command returns multiple values, this is the index of the individual result
+	among the multiple results from that command (also 0-indexed).
+	"""
+	ix: Int
+}
+
+"""
 Information about whether epoch changes are using safe mode.
 """
 type SafeMode {
@@ -1694,6 +1877,37 @@ type ServiceConfig {
 	Maximum length of a query payload string.
 	"""
 	maxQueryPayloadSize: Int!
+}
+
+"""
+A Move object that's shared.
+"""
+type SharedInput {
+	address: SuiAddress!
+	"""
+	The version that this this object was shared at.
+	"""
+	initialSharedVersion: Int!
+	"""
+	Controls whether the transaction block can reference the shared object as a mutable
+	reference or by value.
+	"""
+	mutable: Boolean!
+}
+
+"""
+Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as
+many as there are amounts.)
+"""
+type SplitCoinsTransaction {
+	"""
+	The coin to split.
+	"""
+	coin: TransactionArgument!
+	"""
+	The denominations to split off from the coin.
+	"""
+	amounts: [TransactionArgument!]!
 }
 
 enum StakeStatus {
@@ -1919,6 +2133,11 @@ type SystemParameters {
 	validatorLowStakeGracePeriod: BigInt
 }
 
+"""
+An argument to a programmable transaction command.
+"""
+union TransactionArgument = GasCoin | Input | Result
+
 type TransactionBlock {
 	"""
 	A 32-byte hash that uniquely identifies the transaction block contents, encoded in Base58.
@@ -2070,6 +2289,52 @@ enum TransactionBlockKindInput {
 	PROGRAMMABLE_TX
 }
 
+union TransactionInput = OwnedOrImmutable | SharedInput | Receiving | Pure
+
+type TransactionInputConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionInputEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionInput!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionInputEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public
+transfer) and must not be previously immutable or shared.
+"""
+type TransferObjectsTransaction {
+	"""
+	The objects to transfer.
+	"""
+	inputs: [TransactionArgument!]!
+	"""
+	The address to transfer to.
+	"""
+	address: TransactionArgument!
+}
+
 """
 Information about which previous versions of a package introduced its types.
 """
@@ -2086,6 +2351,28 @@ type TypeOrigin {
 	The storage ID of the package that first defined this type.
 	"""
 	definingId: SuiAddress!
+}
+
+"""
+Upgrades a Move Package.
+"""
+type UpgradeTransaction {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]!
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]!
+	"""
+	ID of the package being upgraded.
+	"""
+	currentPackage: SuiAddress!
+	"""
+	The `UpgradeTicket` authorizing the upgrade.
+	"""
+	upgradeTicket: TransactionArgument!
 }
 
 type Validator {

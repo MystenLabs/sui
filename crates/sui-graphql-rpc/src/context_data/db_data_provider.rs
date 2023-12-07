@@ -21,6 +21,7 @@ use crate::{
         epoch::Epoch,
         event::{Event, EventFilter},
         gas::GasCostSummary,
+        move_function::MoveFunction,
         move_module::MoveModule,
         move_object::MoveObject,
         move_package::MovePackage,
@@ -872,6 +873,19 @@ impl PgManager {
         };
 
         package.module_impl(name)
+    }
+
+    pub(crate) async fn fetch_move_function(
+        &self,
+        address: SuiAddress,
+        module: &str,
+        function: &str,
+    ) -> Result<Option<MoveFunction>, Error> {
+        let Some(module) = self.fetch_move_module(address, module).await? else {
+            return Ok(None);
+        };
+
+        module.function_impl(function.to_string())
     }
 
     pub(crate) async fn fetch_owned_objs(

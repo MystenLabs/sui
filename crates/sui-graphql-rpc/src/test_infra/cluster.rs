@@ -3,7 +3,9 @@
 
 use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
+use crate::config::Limits;
 use crate::config::ServerConfig;
+use crate::config::ServiceConfig;
 use crate::server::graphiql_server::start_graphiql_server;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -132,6 +134,13 @@ pub async fn start_graphql_server_with_fn_rpc(
 ) -> JoinHandle<()> {
     let mut server_config = ServerConfig {
         connection: graphql_connection_config,
+        service: ServiceConfig {
+            limits: Limits {
+                max_query_nodes: 500,
+                ..Limits::default()
+            },
+            ..ServiceConfig::default()
+        },
         ..ServerConfig::default()
     };
     if let Some(fn_rpc_url) = fn_rpc_url {
