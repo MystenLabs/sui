@@ -1675,10 +1675,10 @@ impl ProtocolConfig {
                         cfg.feature_flags.receive_objects = true;
                     }
                     // Only enable random beacon on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.narwhal_header_v2 = true;
-                        cfg.feature_flags.random_beacon = true;
-                    }
+                    // if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    //     cfg.feature_flags.narwhal_header_v2 = true;
+                    //     cfg.feature_flags.random_beacon = true;
+                    // }
                     // Only enable consensus digest in consensus commit prologue in devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.include_consensus_digest_in_prologue = true;
