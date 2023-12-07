@@ -1145,7 +1145,7 @@ async fn sync_checkpoint_contents_from_archive<S>(
                     info!("State sync from archive is complete. Checkpoints downloaded = {:?}, Txns downloaded = {:?}", checkpoint_counter.load(Ordering::Relaxed), txn_counter.load(Ordering::Relaxed));
                 }
             } else {
-                error!("Failed to find an archive reader to complete the state sync request");
+                debug!("Failed to find an archive reader to complete the state sync request");
             }
         }
         tokio::time::sleep(Duration::from_secs(5)).await;

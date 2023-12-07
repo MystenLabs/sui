@@ -360,6 +360,8 @@ pub struct PrimaryMetrics {
     pub fetched_certificates_verified_directly: IntCounter,
     // Total number of fetched certificates verified indirectly.
     pub fetched_certificates_verified_indirectly: IntCounter,
+    // Outcomes of leader elections.
+    pub leader_election_outcome: IntCounterVec,
 }
 
 impl PrimaryMetrics {
@@ -553,6 +555,12 @@ impl PrimaryMetrics {
             fetched_certificates_verified_indirectly: register_int_counter_with_registry!(
                 "fetched_certificates_verified_indirectly",
                 "Total number of fetched certificates verified indirectly.",
+                registry
+            ).unwrap(),
+            leader_election_outcome: register_int_counter_vec_with_registry!(
+                "narwhalceti_exp_leader_election_outcome",
+                "Number of leader election outcomes.",
+                &["outcome"],
                 registry
             ).unwrap(),
         }

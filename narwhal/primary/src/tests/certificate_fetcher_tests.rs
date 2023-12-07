@@ -15,6 +15,7 @@ use itertools::Itertools;
 use network::client::NetworkClient;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use storage::NodeStorage;
@@ -26,12 +27,16 @@ use tokio::{
     },
     time::sleep,
 };
+use types::FetchHeadersRequest;
+use types::FetchHeadersResponse;
+use types::SendHeaderRequest;
+use types::SendHeaderResponse;
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV2, Metadata,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV2,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SendRandomnessPartialSignaturesRequest, SignatureVerificationState, SystemMessage,
+    SendRandomnessPartialSignaturesRequest, SignatureVerificationState, SystemMessage, TimestampMs,
 };
 
 pub struct NetworkProxy {
@@ -76,6 +81,20 @@ impl PrimaryToPrimary for NetworkProxy {
         Ok(anemo::Response::new(
             self.response.lock().await.recv().await.unwrap(),
         ))
+    }
+
+    async fn send_header(
+        &self,
+        _request: anemo::Request<SendHeaderRequest>,
+    ) -> Result<anemo::Response<SendHeaderResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn fetch_headers(
+        &self,
+        _request: anemo::Request<FetchHeadersRequest>,
+    ) -> Result<anemo::Response<FetchHeadersResponse>, anemo::rpc::Status> {
+        unimplemented!()
     }
 }
 
@@ -176,17 +195,21 @@ fn verify_certificates_not_in_store(
 }
 
 // Used below to construct malformed Headers
-// Note: this should always mimic the Header struct, only changing the visibility of the id field to public
+// Note: this should always mimic the Header struct,
+// only changing the visibility of the digest field to public
 #[allow(dead_code)]
+#[derive(Serialize, Deserialize)]
 struct BadHeader {
     pub author: AuthorityIdentifier,
     pub round: Round,
     pub epoch: Epoch,
-    pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub created_at: TimestampMs,
+    #[serde(with = "indexmap::serde_seq")]
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub system_messages: Vec<SystemMessage>,
     pub parents: BTreeSet<CertificateDigest>,
-    pub id: OnceCell<HeaderDigest>,
-    pub metadata: Metadata,
+    #[serde(skip)]
+    pub digest: OnceCell<HeaderDigest>,
 }
 
 // TODO: Remove after network has moved to CertificateV2
@@ -441,15 +464,6 @@ async fn fetch_certificates_v1_basic() {
     // Add cert missing parent info.
     let mut cert = certificates[num_written].clone();
     cert.header_mut().clear_parents();
-    certs.push(cert);
-    // Add cert with incorrect digest.
-    let mut cert = certificates[num_written].clone();
-    // This is a bit tedious to craft
-    let cert_header =
-        unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert.header().clone().unwrap_v2()) };
-    let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(wrong_header) };
-    cert.update_header(wolf_header.into());
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());
@@ -739,12 +753,15 @@ async fn fetch_certificates_v2_basic() {
     cert.header_mut().clear_parents();
     certs.push(cert);
     // Add cert with incorrect digest.
+    // This is a bit tedious to craft.
     let mut cert = certificates[num_written].clone();
-    // This is a bit tedious to craft
-    let cert_header =
-        unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert.header().clone().unwrap_v2()) };
-    let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(wrong_header) };
+    let Header::V2(cert_header) = cert.header().clone() else {
+        panic!("Expected V2 header");
+    };
+    let mut bad_header = unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert_header) };
+    bad_header.digest = OnceCell::default();
+    bad_header.digest.set(HeaderDigest::default()).unwrap();
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(bad_header) };
     cert.update_header(Header::from(wolf_header));
     certs.push(cert);
     // Add cert without all parents in storage.

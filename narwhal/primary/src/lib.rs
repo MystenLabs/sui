@@ -9,13 +9,18 @@
 )]
 
 mod aggregators;
+mod broadcaster;
 mod certificate_fetcher;
 mod certifier;
 pub mod consensus;
+mod core;
+mod fetcher;
 mod primary;
+mod producer;
 mod proposer;
 mod state_handler;
 mod synchronizer;
+mod verifier;
 
 #[cfg(test)]
 #[path = "tests/common.rs"]
@@ -26,6 +31,7 @@ mod metrics;
 #[path = "tests/certificate_tests.rs"]
 mod certificate_tests;
 
+mod dag_state;
 #[cfg(test)]
 #[path = "tests/rpc_tests.rs"]
 mod rpc_tests;

@@ -288,7 +288,6 @@ impl BatchMaker {
 
             // Now save it to disk
             let digest = batch.digest();
-
             if let Err(e) = store.insert(&digest, &batch) {
                 error!("Store failed with error: {:?}", e);
                 return;

@@ -4,12 +4,15 @@
 use crate::{NodeStorage, StoreResult};
 use config::AuthorityIdentifier;
 use std::collections::HashMap;
-use store::rocks::{open_cf, DBMap, MetricConf, ReadWriteOptions};
+use store::rocks::{open_cf, DBBatch, DBMap, MetricConf, ReadWriteOptions};
 use store::{reopen, Map, TypedStoreError};
 use tracing::debug;
-use types::{CommittedSubDag, ConsensusCommit, ConsensusCommitV2, Round, SequenceNumber};
+use types::{
+    CommittedSubDag, ConsensusCommit, ConsensusCommitAPI, ConsensusCommitV2, Round, SequenceNumber,
+};
 
 /// The persistent storage of the sequencer.
+#[derive(Clone)]
 pub struct ConsensusStore {
     /// The latest committed round of each validator.
     last_committed: DBMap<AuthorityIdentifier, Round>,
@@ -48,6 +51,26 @@ impl ConsensusStore {
     pub fn clear(&self) -> StoreResult<()> {
         self.last_committed.unsafe_clear()?;
         self.committed_sub_dags_by_index_v2.unsafe_clear()?;
+        Ok(())
+    }
+
+    /// Persist the consensus state.
+    pub fn update<'a>(
+        &self,
+        last_committed: impl Iterator<Item = (AuthorityIdentifier, Round)>,
+        sub_dag: impl Iterator<Item = &'a CommittedSubDag>,
+        batch: &mut DBBatch,
+    ) -> Result<(), TypedStoreError> {
+        batch.insert_batch(&self.last_committed, last_committed)?;
+        batch.insert_batch(
+            &self.committed_sub_dags_by_index_v2,
+            sub_dag.map(|sub_dag| {
+                (
+                    sub_dag.sub_dag_index,
+                    ConsensusCommit::V2(ConsensusCommitV2::from_sub_dag(sub_dag)),
+                )
+            }),
+        )?;
         Ok(())
     }
 
@@ -144,7 +167,7 @@ mod test {
     use crate::ConsensusStore;
     use std::collections::HashMap;
     use test_utils::{latest_protocol_version, CommitteeFixture};
-    use types::{Certificate, CommittedSubDag, ReputationScores};
+    use types::{Certificate, CommittedSubDag, ConsensusCommitAPI, ReputationScores};
 
     #[tokio::test]
     async fn test_read_latest_final_reputation_scores() {

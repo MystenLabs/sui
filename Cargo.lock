@@ -7368,6 +7368,7 @@ dependencies = [
  "proptest",
  "rand 0.8.5",
  "reqwest",
+ "serde",
  "sui-macros",
  "sui-protocol-config",
  "tap",

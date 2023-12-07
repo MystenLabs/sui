@@ -333,6 +333,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     narwhal_certificate_v2: bool,
 
+    // If true, run mysticeti in narwhal.
+    #[serde(skip_serializing_if = "is_false")]
+    narwhalceti: bool,
+
     // If true, allow verify with legacy zklogin address
     #[serde(skip_serializing_if = "is_false")]
     verify_legacy_zklogin_address: bool,
@@ -856,6 +860,9 @@ pub struct ProtocolConfig {
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
+
+    /// Narwhalceti
+    narwhalceti_leaders_per_round: Option<u64>,
 }
 
 // feature flags
@@ -1041,6 +1048,10 @@ impl ProtocolConfig {
 
     pub fn narwhal_certificate_v2(&self) -> bool {
         self.feature_flags.narwhal_certificate_v2
+    }
+
+    pub fn narwhalceti(&self) -> bool {
+        self.feature_flags.narwhalceti
     }
 
     pub fn verify_legacy_zklogin_address(&self) -> bool {
@@ -1434,6 +1445,8 @@ impl ProtocolConfig {
 
             random_beacon_reduction_allowed_delta: None,
 
+            narwhalceti_leaders_per_round: None,
+
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1663,6 +1676,11 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
+                    // Only enable narwhalceti on private testnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhalceti = true;
+                        cfg.narwhalceti_leaders_per_round = Some(5);
+                    }
                 }
                 32 => {
                     // enable zklogin in multisig in devnet and testnet
@@ -1765,6 +1783,9 @@ impl ProtocolConfig {
     }
     pub fn set_narwhal_certificate_v2(&mut self, val: bool) {
         self.feature_flags.narwhal_certificate_v2 = val
+    }
+    pub fn set_narwhalceti(&mut self, val: bool) {
+        self.feature_flags.narwhalceti = val
     }
     pub fn set_verify_legacy_zklogin_address(&mut self, val: bool) {
         self.feature_flags.verify_legacy_zklogin_address = val

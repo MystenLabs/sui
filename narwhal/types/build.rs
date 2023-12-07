@@ -88,6 +88,24 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("send_header")
+                .route_name("SendHeader")
+                .request_type("crate::SendHeaderRequest")
+                .response_type("crate::SendHeaderResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("fetch_headers")
+                .route_name("FetchHeaders")
+                .request_type("crate::FetchHeadersRequest")
+                .response_type("crate::FetchHeadersResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     let primary_to_worker = anemo_build::manual::Service::builder()

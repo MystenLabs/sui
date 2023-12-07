@@ -187,12 +187,7 @@ impl RandomnessState {
 
     async fn start_dkg(&self) {
         let msg = self.party.create_message(&mut rand::thread_rng());
-        info!(
-            "random beacon: sending DKG Message with sender={}, vss_pk.degree={}, encrypted_shares.len()={}",
-            msg.sender,
-            msg.vss_pk.degree(),
-            msg.encrypted_shares.len(),
-        );
+        // info!("random beacon: sending DKG Message: {msg:?}");
         let _ = self
             .tx_system_messages
             .send(SystemMessage::DkgMessage(
