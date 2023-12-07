@@ -5,22 +5,26 @@ use std::str::FromStr;
 
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
-use ethers::types::{Address as EthAddress, U256};
+use crate::types::TokenId;
+use ethers::types::Address as EthAddress;
 use move_core_types::language_storage::StructTag;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
+use sui_types::digests::TransactionDigest;
 
 // TODO: Placeholder, this will need to match the actual event types defined in Move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct SuiToEthBridgeEventV1 {
     pub nonce: u64,
-    pub source_address: SuiAddress,
-    pub destination_address: EthAddress,
-    pub coin_name: String,
-    // this is probably not the right type here
-    pub amount: U256,
+    pub sui_tx_digest: TransactionDigest,
+    // The index of the event in the transaction
+    pub sui_tx_event_index: u64,
+    pub sui_address: SuiAddress,
+    pub eth_address: EthAddress,
+    pub token_id: TokenId,
+    pub amount: u128,
 }
 
 crate::declare_events!(
@@ -33,7 +37,7 @@ crate::declare_events!(
 macro_rules! declare_events {
     ($($variant:ident($type:path) => $tag:expr),* $(,)?) => {
 
-        #[derive(Debug, Eq, PartialEq, Clone)]
+        #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
         pub enum SuiBridgeEvent {
             $($variant($type),)*
         }

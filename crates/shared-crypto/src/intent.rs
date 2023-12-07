@@ -64,6 +64,7 @@ pub enum IntentScope {
     SenderSignedTransaction = 4, // Used for an authority signature on a user signed transaction.
     ProofOfPossession = 5, // Used as a signature representing an authority's proof of possession of its authority protocol key.
     HeaderDigest = 6,      // Used for narwhal authority signature on header digest.
+    BridgeEvent = 7,       // Used for bridge related messages.
 }
 
 impl TryFrom<u8> for IntentScope {

@@ -33,6 +33,7 @@ axum.workspace = true
 anyhow.workspace = true
 reqwest.workspace = true
 fastcrypto.workspace = true
+shared-crypto.workspace = true
 tap.workspace = true
 workspace-hack.workspace = true
 

@@ -228,7 +228,7 @@ impl SuiClientInner for SuiSdkClient {
 
 #[cfg(test)]
 mod tests {
-    use crate::sui_mock_client::SuiMockClient;
+    use crate::{sui_mock_client::SuiMockClient, types::TokenId};
     use ethers::types::{
         Address, Block, BlockNumber, Filter, FilterBlockOption, Log, ValueOrArray, U64,
     };
@@ -509,10 +509,12 @@ mod tests {
         init_all_struct_tags();
         let event_1 = SuiToEthBridgeEventV1 {
             nonce: 1,
-            source_address: SuiAddress::random_for_testing_only(),
-            destination_address: Address::random(),
-            coin_name: "SUI".to_string(),
-            amount: U256::from(100),
+            sui_address: SuiAddress::random_for_testing_only(),
+            eth_address: Address::random(),
+            sui_tx_digest: TransactionDigest::random(),
+            sui_tx_event_index: 1,
+            token_id: TokenId::Sui,
+            amount: 100,
         };
         let mut sui_event_1 = SuiEvent::random_for_testing();
         sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();

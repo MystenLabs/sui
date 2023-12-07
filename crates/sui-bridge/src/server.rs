@@ -14,8 +14,9 @@ use axum::{
 
 pub const APPLICATION_JSON: &str = "application/json";
 
-pub const ETH_TO_SUI_TX_PATH: &str = "/eth/sui/:tx_hash";
-pub const SUI_TO_ETH_TX_PATH: &str = "/sui/eth/:tx_digest";
+// Important, these paths need to match the ones in client.rs
+pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/:tx_digest/:event_index";
+pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/:tx_digest/:event_index";
 
 pub async fn run_server(socket_address: &SocketAddr) {
     axum::Server::bind(socket_address)
