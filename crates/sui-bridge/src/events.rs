@@ -3,17 +3,19 @@
 
 use std::str::FromStr;
 
-use once_cell::sync::OnceCell;
-
+use crate::error::BridgeError;
+use crate::error::BridgeResult;
 use ethers::types::{Address as EthAddress, U256};
 use move_core_types::language_storage::StructTag;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
 
 // TODO: Placeholder, this will need to match the actual event types defined in Move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct SuiToEthBridgeEvent {
+pub struct SuiToEthBridgeEventV1 {
+    pub nonce: u64,
     pub source_address: SuiAddress,
     pub destination_address: EthAddress,
     pub coin_name: String,
@@ -23,7 +25,7 @@ pub struct SuiToEthBridgeEvent {
 
 crate::declare_events!(
     // TODO: Placeholder, use right struct tag
-    SuiToEthTokenBridge(SuiToEthBridgeEvent) => "0x01::SuiToEthTokenBridge::SuiToEthTokenBridge",
+    SuiToEthTokenBridgeV1(SuiToEthBridgeEventV1) => "0x01::SuiToEthTokenBridge::SuiToEthTokenBridge",
     // Add new event types here. Format: EnumVariantName(Struct) => "StructTagString",
 );
 
@@ -47,13 +49,14 @@ macro_rules! declare_events {
 
         // Try to convert a SuiEvent into SuiBridgeEvent
         impl SuiBridgeEvent {
-            pub fn try_from_sui_event(event: &SuiEvent) -> anyhow::Result<Option<SuiBridgeEvent>> {
+            pub fn try_from_sui_event(event: &SuiEvent) -> BridgeResult<Option<SuiBridgeEvent>> {
                 init_all_struct_tags(); // Ensure all tags are initialized
 
                 // Unwrap safe: we inited above
                 $(
                     if &event.type_ == $variant.get().unwrap() {
-                        return Ok(Some(SuiBridgeEvent::$variant(bcs::from_bytes(&event.bcs)?)));
+                        return Ok(Some(SuiBridgeEvent::$variant(bcs::from_bytes(&event.bcs).map_err(|e| BridgeError::InternalError(format!("Failed to deserialize event to SuiBridgeEvent: {:?}", e)))
+                        ?)));
                     }
                 )*
                 Ok(None)

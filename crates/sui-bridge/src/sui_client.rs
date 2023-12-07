@@ -23,6 +23,7 @@ use tap::TapFallible;
 
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::SuiBridgeEvent;
+use crate::types::BridgeCommittee;
 
 pub struct SuiClient<P> {
     inner: P,
@@ -158,6 +159,13 @@ where
         }
         Ok(bridge_events)
     }
+
+    pub async fn get_bridge_committee(&self) -> BridgeResult<BridgeCommittee> {
+        self.inner
+            .get_bridge_committee()
+            .await
+            .map_err(|e| BridgeError::InternalError(format!("Can't get bridge committee: {e}")))
+    }
 }
 
 /// Use a trait to abstract over the SuiSDKClient and SuiMockClient for testing.
@@ -178,6 +186,8 @@ pub trait SuiClientInner: Send + Sync {
     async fn get_chain_identifier(&self) -> Result<String, Self::Error>;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error>;
+
+    async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error>;
 }
 
 #[async_trait]
@@ -210,6 +220,10 @@ impl SuiClientInner for SuiSdkClient {
             .get_latest_checkpoint_sequence_number()
             .await
     }
+
+    async fn get_bridge_committee(&self) -> Result<BridgeCommittee, Self::Error> {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]
@@ -222,7 +236,7 @@ mod tests {
     use std::{collections::HashSet, str::FromStr};
 
     use super::*;
-    use crate::events::{init_all_struct_tags, SuiToEthBridgeEvent, SuiToEthTokenBridge};
+    use crate::events::{init_all_struct_tags, SuiToEthBridgeEventV1, SuiToEthTokenBridgeV1};
 
     #[tokio::test]
     async fn test_query_events_by_module() {
@@ -493,14 +507,15 @@ mod tests {
 
         // Ensure all struct tags are inited
         init_all_struct_tags();
-        let event_1 = SuiToEthBridgeEvent {
+        let event_1 = SuiToEthBridgeEventV1 {
+            nonce: 1,
             source_address: SuiAddress::random_for_testing_only(),
             destination_address: Address::random(),
             coin_name: "SUI".to_string(),
             amount: U256::from(100),
         };
         let mut sui_event_1 = SuiEvent::random_for_testing();
-        sui_event_1.type_ = SuiToEthTokenBridge.get().unwrap().clone();
+        sui_event_1.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
         sui_event_1.bcs = bcs::to_bytes(&event_1).unwrap();
         mock_client.add_events_by_tx_digest(tx_digest, vec![sui_event_1.clone()]);
         assert_eq!(
@@ -508,7 +523,7 @@ mod tests {
                 .get_bridge_events_by_tx_digest(&tx_digest)
                 .await
                 .unwrap(),
-            vec![SuiBridgeEvent::SuiToEthTokenBridge(event_1.clone())],
+            vec![SuiBridgeEvent::SuiToEthTokenBridgeV1(event_1.clone())],
         );
 
         #[derive(Serialize, Deserialize)]
@@ -534,13 +549,13 @@ mod tests {
                 .await
                 .unwrap(),
             vec![
-                SuiBridgeEvent::SuiToEthTokenBridge(event_1.clone()),
-                SuiBridgeEvent::SuiToEthTokenBridge(event_1)
+                SuiBridgeEvent::SuiToEthTokenBridgeV1(event_1.clone()),
+                SuiBridgeEvent::SuiToEthTokenBridgeV1(event_1)
             ],
         );
 
         // if the StructTag matches with unparsable bcs, it returns an error
-        sui_event_2.type_ = SuiToEthTokenBridge.get().unwrap().clone();
+        sui_event_2.type_ = SuiToEthTokenBridgeV1.get().unwrap().clone();
         mock_client.add_events_by_tx_digest(tx_digest, vec![sui_event_2]);
         sui_client
             .get_bridge_events_by_tx_digest(&tx_digest)
