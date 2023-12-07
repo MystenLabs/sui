@@ -44,6 +44,8 @@ mod checked {
         protocol_config: &ProtocolConfig,
         _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
+        #[cfg(not(feature = "gas-profiler"))]
+        let vm_profiler_config = None;
         #[cfg(feature = "gas-profiler")]
         let vm_profiler_config = _enable_profiler.clone().map(|_| VMProfilerConfig {
             full_path: _enable_profiler.filter(|p| {
@@ -72,7 +74,6 @@ mod checked {
                     .disable_invariant_violation_check_in_swap_loc(),
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
-                #[cfg(feature = "gas-profiler")]
                 profiler_config: vm_profiler_config,
                 // Don't augment errors with execution state on-chain
                 error_execution_state: false,

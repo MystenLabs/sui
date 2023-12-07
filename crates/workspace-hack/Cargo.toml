@@ -493,14 +493,14 @@ move-stdlib-v1 = { path = "../../external-crates/move/move-execution/v1/crates/m
 move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/crates/move-transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/crates/move-unit-test", default-features = false }
-move-vm-config = { path = "../../external-crates/move/crates/move-vm-config", default-features = false }
-move-vm-profiler = { path = "../../external-crates/move/crates/move-vm-profiler", default-features = false }
-move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["testing"] }
-move-vm-runtime-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime" }
-move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime" }
-move-vm-runtime-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
-move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["tiered-gas"] }
-move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
+move-vm-config = { path = "../../external-crates/move/crates/move-vm-config", default-features = false, features = ["gas-profiler"] }
+move-vm-profiler = { path = "../../external-crates/move/crates/move-vm-profiler", default-features = false, features = ["gas-profiler"] }
+move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["gas-profiler", "testing"] }
+move-vm-runtime-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime", features = ["gas-profiler"] }
+move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime", features = ["gas-profiler"] }
+move-vm-runtime-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-vm-runtime", features = ["gas-profiler"] }
+move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["gas-profiler", "tiered-gas"] }
+move-vm-types = { path = "../../external-crates/move/crates/move-vm-types", features = ["gas-profiler"] }
 multer = { version = "2" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
@@ -1397,14 +1397,14 @@ move-stdlib-v1 = { path = "../../external-crates/move/move-execution/v1/crates/m
 move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "../../external-crates/move/crates/move-transactional-test-runner", default-features = false }
 move-unit-test = { path = "../../external-crates/move/crates/move-unit-test", default-features = false }
-move-vm-config = { path = "../../external-crates/move/crates/move-vm-config", default-features = false }
-move-vm-profiler = { path = "../../external-crates/move/crates/move-vm-profiler", default-features = false }
-move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["testing"] }
-move-vm-runtime-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime" }
-move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime" }
-move-vm-runtime-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
-move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["tiered-gas"] }
-move-vm-types = { path = "../../external-crates/move/crates/move-vm-types" }
+move-vm-config = { path = "../../external-crates/move/crates/move-vm-config", default-features = false, features = ["gas-profiler"] }
+move-vm-profiler = { path = "../../external-crates/move/crates/move-vm-profiler", default-features = false, features = ["gas-profiler"] }
+move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime", features = ["gas-profiler", "testing"] }
+move-vm-runtime-next-vm = { path = "../../external-crates/move/move-execution/next-vm/crates/move-vm-runtime", features = ["gas-profiler"] }
+move-vm-runtime-v0 = { path = "../../external-crates/move/move-execution/v0/move-vm/runtime", features = ["gas-profiler"] }
+move-vm-runtime-v1 = { path = "../../external-crates/move/move-execution/v1/crates/move-vm-runtime", features = ["gas-profiler"] }
+move-vm-test-utils = { path = "../../external-crates/move/crates/move-vm-test-utils", features = ["gas-profiler", "tiered-gas"] }
+move-vm-types = { path = "../../external-crates/move/crates/move-vm-types", features = ["gas-profiler"] }
 multer = { version = "2" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }

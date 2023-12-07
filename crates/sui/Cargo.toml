@@ -98,7 +98,6 @@ name = "sui"
 path = "src/main.rs"
 
 [features]
-
 gas-profiler = [
     "sui-types/gas-profiler",
     "sui-execution/gas-profiler",
