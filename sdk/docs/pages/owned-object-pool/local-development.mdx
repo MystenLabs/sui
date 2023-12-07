@@ -2,11 +2,11 @@
 
 import { Callout } from 'nextra/components';
 
-<Callout type="info">
-Sui Owned Object Pools (SuiOOP) is an experimental library.
-</Callout>
+<Callout type="info">Sui Owned Object Pools (SuiOOP) is an experimental library.</Callout>
 
-ADD A MORE DETAILED INSTALLATION GUIDE. HOW WOULD A USER INSTALL IF THEY WERE STARTING FROM SCRATCH? CLONE PROJECT, INSTALL SUI, TS SDK, ETC. USE LINKS TO MAIN DOC SITE INSTEAD OF RECREATING STEPS IF APPLICABLE.
+ADD A MORE DETAILED INSTALLATION GUIDE. HOW WOULD A USER INSTALL IF THEY WERE STARTING FROM SCRATCH?
+CLONE PROJECT, INSTALL SUI, TS SDK, ETC. USE LINKS TO MAIN DOC SITE INSTEAD OF RECREATING STEPS IF
+APPLICABLE.
 
 ## Installing the library
 
@@ -26,15 +26,19 @@ npm run lint
 
 ## Testing
 
-Tests are a great way to get familiar with the library. For each test scenario, there is a small description of the test's purpose and the library's commands to achieve that.
+Tests are a great way to get familiar with the library. For each test scenario, there is a small
+description of the test's purpose and the library's commands to achieve that.
 
 To set up the tests environment use `./test/initial_setup.sh`.
 
-The script creates a `.test.env` file in the `test` folder. When the script is complete, you need to add a `ADMIN_SECRET_KEY` and a `TEST_USER_SECRET` to the `.env`.
+The script creates a `.test.env` file in the `test` folder. When the script is complete, you need to
+add a `ADMIN_SECRET_KEY` and a `TEST_USER_SECRET` to the `.env`.
 
-Usually we use the testnet network for testing. Switch to testnet with: sui client switch --env testnet
+Usually we use the testnet network for testing. Switch to testnet with: sui client switch --env
+testnet
 
-At the end of the setup your `.env` should look like the template [`.test.env.example.`](https://github.com/MystenLabs/coin_management_system/blob/main/test/.env.example):
+At the end of the setup your `.env` should look like the template
+[`.test.env.example.`](https://github.com/MystenLabs/coin_management_system/blob/main/test/.env.example):
 
 ```ts
 # The Admin should also be the publisher of the nft_app smart contract
@@ -55,13 +59,18 @@ GET_WORKER_TIMEOUT_MS=1000
 ```
 
 <Callout type="default">
-You can run `cat ~/.sui/sui_config/sui.keystore` to see your addresses' secret keys. Each secret's corresponding address is in the same row line that appears in `sui client addresses`.
+	You can run `cat ~/.sui/sui_config/sui.keystore` to see your addresses' secret keys. Each secret's
+	corresponding address is in the same row line that appears in `sui client addresses`.
 </Callout>
 
-The [jest framework](https://jestjs.io/) is recommended for testing. Having installed the project's packages with `npm install`, you can run the tests by either:
+The [jest framework](https://jestjs.io/) is recommended for testing. Having installed the project's
+packages with `npm install`, you can run the tests by either:
 
 - [Recommended] The vscode `jest` extension (Extension ID: **Orta.vscode-jest**)
 
-  The extension provides a flask to the IDE sidebar where you run the tests (altogether or one-by-one) and shows the results in the editor. You can also run the tests in debug mode and set breakpoints in the code. Useful when performing [test-driven development](https://en.wikipedia.org/wiki/Test-driven_development).
+  The extension provides a flask to the IDE sidebar where you run the tests (altogether or
+  one-by-one) and shows the results in the editor. You can also run the tests in debug mode and set
+  breakpoints in the code. Useful when performing
+  [test-driven development](https://en.wikipedia.org/wiki/Test-driven_development).
 
-- [Best for CI/CD] Run `npm run test` from the command line. 
+- [Best for CI/CD] Run `npm run test` from the command line.
