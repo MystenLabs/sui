@@ -210,6 +210,191 @@ At the end of execution, the remaining values are checked and effects for the tr
 
 The total effects (which contain the created, mutated, and deleted objects) are then passed out of the execution layer and are applied by the Sui network.
 
-## Examples
+## Example
 
-TODO
+Let's walk through an example of a programmable transaction block's execution. While this example will not be exhaustive in demonstrating all the rules, it will show the general flow of execution.
+
+Let's say we want to buy two items from a marketplace costing `100 MIST`. We keep one for ourselves, and and then send the object and the remaining coin to a friend at address `0x808`. We can do that all in one programmable transaction block:
+```
+{
+  inputs: [
+    Pure(/* @0x808 BCS bytes */ ...),
+    Object(SharedObject { /* Marketplace shared object */ id: market_id, ... }),
+    Pure(/* 100u64 BCS bytes */ ...),
+  ]
+  commands: [
+    SplitCoins(GasCoin, [Input(2)]),
+    MoveCall("some_package", "some_marketplace", "buy_two", [], [Input(1), NestedResult(0, 0)]),
+    TransferObjects([GasCoin, NestedResult(1, 0)], Input(0)),
+    MoveCall("sui", "tx_context", "sender", [], []),
+    TransferObjects([NestedResult(1, 1)], NestedResult(3, 0)),
+  ]
+}
+```
+
+Looking at the inputs, we have the friend's address, the marketplace object, and the value for our coin split. For the commands, we split off the coin, call the market place function, send the gas coin and one object, grab our address (via `sui::tx_context::sender`), and then send the remaining object to ourselves. For simplicity, we are referring to the package names by name, but note, that in reality they would be referenced by the package's Object ID.
+
+To walk through this let's first look at the our memory locations, for the gas object, inputs, and results
+```
+Gas Coin: sui::coin::Coin<SUI> { id: gas_coin, balance: sui::balance::Balance<SUI> { value: 1_000_000u64 } }
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  some_package::some_marketplace::Marketplace { id: market_id, ... },
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: []
+```
+
+Here we we have two objects loaded so far, the gas coin with a value of `1_000_000u64` and the marketplace object of type `some_package::some_marketplace::Marketplace`. (We will shorten these names and representations for simplicity going forward). The pure arguments are not loaded, and are present as BCS bytes.
+
+Note that while gas is deducted at each command, we will not be looking at that aspect of execution in detail.
+
+### Before Commands: Start of Execution
+Before execution, we remove the gas budget from the gas coin. Let's assume a gas budget of `500_000` so the gas coin now has a value of `500_000u64`.
+```
+Gas Coin: Coin<SUI> { id: gas_coin, ... value: 500_000u64 ... } // The maximum gas is deducted
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  Marketplace { id: market_id, ... },
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: []
+```
+Now we can execute the commands.
+
+### Command 0: `SplitCoins`
+
+The first command `SplitCoins(GasCoin, [Input(2)])` accesses the gas coin by mutable reference and loads the pure argument at `Input(2)` as a `u64` value of `100u64`. Since `u64` has the `copy` ability, we do not move the `Pure` input at `Input(2)`. Instead, the bytes are copied out.
+For the result, a new coin object is made.
+
+This gives us updated memory locations of
+```
+Gas Coin: Coin<SUI> { id: gas_coin, ... value: 499_900u64 ... }
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  Marketplace { id: market_id, ... },
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: [
+  [Coin<SUI> { id: new_coin, value: 100u64 ... }], // The result of SplitCoins
+],
+```
+
+
+### Command 1: `MoveCall`
+
+Now the command, `MoveCall("some_package", "some_marketplace", "buy_two", [], [Input(1), NestedResult(0, 0)])`. We call the function `some_package::some_marketplace::buy_two` with the arguments `Input(1)` and `NestedResult(0, 0)`. To determine how they are used we need to look at the function's signature. For this example, we will assume the signature is
+```
+entry fun buy_two(
+    marketplace: &mut Marketplace,
+    coin: Coin<Sui>,
+    ctx: &mut TxContext,
+): (Item, Item)
+```
+where `Item` is the type of the two objects being sold.
+
+Since the `marketplace` parameter has type `&mut Marketplace`, we will use `Input(1)` by mutable reference. We will assume some modifications are being made into the value of the `Marketplace` object. However, the `coin` parameter has type `Coin<Sui>`, so we will use `NestedResult(0, 0)` by value. The `TxContext` input is automatically provided by the runtime.
+
+This gives us updated memory locations, where `_` indicates the object has been moved.
+```
+Gas Coin: Coin<SUI> { id: gas_coin, ... value: 499_900u64 ... }
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  Marketplace { id: market_id, ...  }, // Any mutations are applied
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: [
+  [ _ ], // The coin was moved
+  [Item { id: id1 }, Item { id: id2 }], // The results from the Move call
+],
+```
+We will assume that `buy_two` deletes its `Coin<SUI>` object argument and transfers the `Balance<SUI>` into the `Marketplace` object.
+
+### Command 2: `TransferObjects`
+
+`TransferObjects([GasCoin, NestedResult(1, 0)], Input(0))` transfers the gas coin and first item to the address at `Input(0)`. All inputs are by value, and the objects do not have `copy` so they are moved. While no results are given, the ownership of the objects is changed. This cannot be seen in the memory locations, but rather in the transaction effects.
+
+We have the updated memory locations of
+```
+Gas Coin: _ // The gas coin is moved
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  Marketplace { id: market_id, ... },
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: [
+  [ _ ],
+  [ _ , Item { id: id2 }], // One item was moved
+  [], // No results from TransferObjects
+],
+```
+
+### Command 3: `MoveCall`
+
+We make another Move call, this one to `sui::tx_context::sender` with the signature
+```
+public fun sender(ctx: &TxContext): address
+```
+While we could have simply passed in the sender's address as a `Pure` input, we wanted to demonstrate calling some of the additional utility of Programmable Transaction Blocks; while this function is not an `entry` function, we can call the `public` function too since we can provide all of the arguments. In this case, the only argument, the `TxContext`, is provided by the runtime. The result of the function is the sender's address. Note that this value is _not_ treated like the `Pure` inputs--the type is fixed to `address` and it cannot be deserialized into a different type, even if it has a compatible BCS representation.
+
+This gives us updated memory locations of
+```
+Gas Coin: _
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  Marketplace { id: market_id, ... },
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: [
+  [ _ ],
+  [ _ , Item { id: id2 }],
+  [],
+  [/* senders address */ ...], // The result of the Move call
+],
+```
+
+### Command 4: `TransferObjects`
+
+Finally, we will transfer the remaining item to ourselves. This is similar to the previous `TransferObjects` command. We are using the last `Item` by-value and the sender's address by-value. The item is moved since `Item` does not have `copy`, and the address is copied since `address` does.
+
+The final memory locations are
+```
+Gas Coin: _
+Inputs: [
+  Pure(/* @0x808 BCS bytes */ ...),
+  Marketplace { id: market_id, ... },
+  Pure(/* 100u64 BCS bytes */ ...),
+]
+Results: [
+  [ _ ],
+  [ _ , _ ],
+  [],
+  [/* senders address */ ...],
+  [], // No results from TransferObjects
+],
+```
+
+### After Commands: End of Execution
+
+At the end of execution, the runtime checks the remaining values, which are the 3 inputs and
+the sender's address. The following summarizes the checks performed before effects are given:
+
+- Any remaining input objects are marked as being returned to their original owners.
+  - The gas coin has been Moved. And the `Marketplace` will keep the same owner, which is shared.
+- All remaining values must have `drop`.
+  - The Pure inputs have `drop` since any type they can instantiate has `drop`.
+  - The sender's address has `drop` since it the primitive type `address` has `drop`.
+  - All other results have been moved.
+- Any remaining shared objects must have been deleted or re-shared.
+  - The `Marketplace` object was not moved, so the owner remains as shared.
+
+After these checks are performed, we generate the effects.
+
+- The coin split off from the gas coin, `new_coin`, does _not_ appear in the effects since it was created and deleted in the same transaction.
+- The gas coin and the item with `id1` are transferred to `0x808`.
+  - The gas coin is mutated to update its balance. The remaining gas of the maximum budget of `500_000` is returned the gas coin even though the owner has changed.
+  - The `Item` with `id1` is a newly created object.
+- The item with `id2` is transferred to the sender's address.
+  - The `Item` with `id2` is a newly created object.
+- The `Marketplace` object is returned remains shared and its mutated.
+  - The object remains shared but its contents are mutated.
