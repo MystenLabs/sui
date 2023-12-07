@@ -9,21 +9,24 @@
 
 /* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #4ca2ff;
+  --ifm-color-primary: #4DA2FF;
   --ifm-color-primary-dark: #2b91ff;
   --ifm-color-primary-darker: #1a88ff;
   --ifm-color-primary-darkest: #006fe8;
   --ifm-color-primary-light: #6db3ff;
   --ifm-color-primary-lighter: #7ebcff;
   --ifm-color-primary-lightest: #afd6ff;
+  --ifm-menu-color-active: #4DA2FF;
+  --ifm-link-color: #4DA2FF;
+  --ifm-font-family-base: Inter Tight;
   --ifm-code-font-size: 95%;
   --ifm-background-color-dark: #1b1b1d;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
-  --sui-black: #090B1A;
+  --sui-black: #010D1A;
   --sui-blue: #6fbcf0;
   --sui-blue-bright: #00f9fb;
   --sui-blue-light: #e1f3ff;
-  --sui-blue-lighter: #B4C2D0;
+  --sui-blue-lighter: #ABBDCC;
   --sui-blue-dark: 52 99 151;
   --sui-blue-darker: #303846;
   --sui-hero: #0284AD;

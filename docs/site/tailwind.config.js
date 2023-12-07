@@ -73,6 +73,8 @@ module.exports = {
         "sui-white": "rgb(var(--sui-white)/<alpha-value>)",
         "sui-card-dark": "rgb(var(--sui-card-dark)/<alpha-value>)",
         "sui-card-darker": "rgb(var(--sui-card-darker)/<alpha-value>)",
+        "ifm-menu-color-active": "var(--ifm-menu-color-active)",
+        "ifm-link-color": "var(--ifm-link-color)",
       },
       borderRadius: {
         sui: "40px",
