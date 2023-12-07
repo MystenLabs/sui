@@ -2,16 +2,16 @@
 
 Programmable transaction blocks are used to define all user transactions on Sui. These transactions allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move package! Additionally, the structure of programmable transaction blocks was designed with automation and transaction builders in mind. In other words, they are designed to be a lightweight and flexible way of generating transactions. That being said, more intricate programming patterns, such as loops, are not supported, and in those cases, a new Move package should be published.
 
-Each programmable transaction block is comprised of individual transaction commands (sometimes referred to themselves as transactions). Each transaction command is executed in order, and the results from a transaction command can be used in any subsequent transaction command. The effects, i.e. object modifications or transfers, of all transaction commands in a block are applied atomically at the end of the transaction, and if one transaction command fails, the entire block fails and no effects from the commands are applied.
+Each programmable transaction block is comprised of individual transaction commands (sometimes referred to themselves as transactions). Each command is executed in order, and the results from a command can be used in any subsequent command. The effects, i.e. object modifications or transfers, of all commands in a block are applied atomically at the end of the transaction, and if one command fails, the entire block fails and no effects from the commands are applied.
 
-This document will cover the semantics of the execution of the transaction commands. Note that it will assume familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents: (TODO LINKS)
+This document will cover the semantics of the execution of the commands. Note that it will assume familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents: (TODO LINKS)
 
 ## Transaction Type
 
 In this document, we will be looking at the two parts of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The programmable transaction block consists of two components
 
-- The inputs, `[CallArg]`, is a vector of arguments, either objects or pure values, that can be used in the transaction commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
-- The commands, `[Command]`, is a vector of transaction commands. The possible commands are:
+- The inputs, `[CallArg]`, is a vector of arguments, either objects or pure values, that can be used in the commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
+- The commands, `[Command]`, is a vector of commands. The possible commands are:
   - `TransferObjects` sends multiple (1 or more) objects to a specified address.
   - `SplitCoins` splits off multiple (1 or more) coins from a single coin. It can be any `sui::coin::Coin` object.
   - `MergeCoins` merges multiple (1 or more) coins into a single coin. Any `sui::coin::Coin` objects can be merged, as long as they are all of the same type.
@@ -22,9 +22,9 @@ In this document, we will be looking at the two parts of a programmable transact
 
 ## Arguments and Results
 
-Inputs and Results are the two types of values that can be used in transaction commands. Inputs are the values that are provided to the transaction block, and results are the values that are produced by the transaction block's commands. The inputs are either objects or simple Move values, and the results are arbitrary Move values (including objects).
+Inputs and Results are the two types of values that can be used in commands. Inputs are the values that are provided to the transaction block, and results are the values that are produced by the transaction block's commands. The inputs are either objects or simple Move values, and the results are arbitrary Move values (including objects).
 
-The inputs and results can be seen as populating an array of values. For inputs, there is a single array, but for results, there is an array for each individual transaction command, creating a 2D-array of result values. These values can be accessed by borrowing (mutably or immutably), by copying (if the type permits), or by moving (which takes the value out of the array without re-indexing). First, we will look at the shape of each array, and then we will look at the semantics of each access type.
+The inputs and results can be seen as populating an array of values. For inputs, there is a single array, but for results, there is an array for each individual command, creating a 2D-array of result values. These values can be accessed by borrowing (mutably or immutably), by copying (if the type permits), or by moving (which takes the value out of the array without re-indexing). First, we will look at the shape of each array, and then we will look at the semantics of each access type.
 
 ### Inputs
 
@@ -36,7 +36,7 @@ For object inputs, the metadata needed differs depending on the type ownership o
 - If an object is shared, then `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }` is used. Unlike `ImmOrOwnedObject`, a shared's objects version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object will be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
 - If the object is owned by another object, i.e. it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then `ObjectArg::Receiving(ObjectID, SequenceNumber, ObjectDigest)` is used. The object data the same as for the `ImmOrOwnedObject` case.
 
-For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes are not validated until the type is specified in a transaction command, e.g. in `MoveCall` or `MakeMoveVec`. Not all Move values can be constructed from BCS bytes. The following types are supported:
+For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes are not validated until the type is specified in a command, e.g. in `MoveCall` or `MakeMoveVec`. Not all Move values can be constructed from BCS bytes. The following types are supported:
 
 - All primitive types:
   - `u8`
@@ -54,7 +54,7 @@ For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes 
 
 ### Results
 
-Each transaction command produces a (possibly empty) array of values. The type of the value can be any arbitrary Move type, so unlike inputs, the values are not limited to objects or pure values. The number of results generated and their types is specific to each transaction command. The specifics for each command can be found in the section for that command, but in summary:
+Each command produces a (possibly empty) array of values. The type of the value can be any arbitrary Move type, so unlike inputs, the values are not limited to objects or pure values. The number of results generated and their types is specific to each command. The specifics for each command can be found in the section for that command, but in summary:
 
 - `MoveCall`: the number of results and their types are determined by the Move function being called. Note that Move functions that return references are not supported at this time.
 - `SplitCoins`: produces (1 or more) coins from a single coin. The type of each coin is `sui::coin::Coin<T>` where the specific coin type `T` matches the coin being split.
