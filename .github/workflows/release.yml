@@ -143,3 +143,77 @@ jobs:
           tag_name: ${{ env.sui_tag }}
           files: |
             ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+
+  update-homebrew-formula:
+    needs: release-build
+    runs-on: ubuntu-latest
+    if: ${{ contains(github.event.inputs.sui_tag, 'mainnet') }}
+    steps:
+      # Checkout MystenLabs/homebrew-tap
+      - name: Checkout Target Repository
+        uses: actions/checkout@v2
+        with:
+          repository: MystenLabs/homebrew-tap
+          # @john's PAT, needs to be rotated jan 5 2024
+          token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Clean up tag name ${{ env.TAG_NAME }}
+        shell: bash
+        run: | 
+          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+
+      # Download all artifacts from the previous job
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
+        shell: bash
+        run: |
+          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${sui_tag}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${sui_tag}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
+          echo "sha256_macos_arm_release$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${sui_tag}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+          
+    # Install Jinja2 for templating
+      - name: Install Jinja2
+        run: pip install jinja2
+
+      - name: Apply Jinja2 Template and Update Formula
+        run: |
+          python3 - <<EOF
+          import jinja2
+          import os
+
+          # Load the template
+          template_loader = jinja2.FileSystemLoader(searchpath="./template")
+          template_env = jinja2.Environment(loader=template_loader)
+          template = template_env.get_template("sui.rb.j2")
+
+          version = "${{ env.sui_tag }}".removeprefix("mainnet-v")
+
+          # Render the template with variables
+          output = template.render(
+              version=version,
+              linux_sha256="${sha256_ubuntu_release}",
+              macos_intel_sha256="${sha256_macos_x86_release}",
+              macos_arm_sha256="${sha256_macos_arm_release}"
+          )
+
+          # Write the output to the formula file
+          with open("Formula/sui.rb", "w") as file:
+            file.write(output)
+          EOF
+
+      # Commit and Push to Target Repository
+      - name: Commit and Push to Target Repository
+        uses: github-actions-x/commit@v2.9
+        with:
+          github-token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
+          commit-message: "Update Homebrew formula for release ${{ env.sui_tag }}"
+          files: Formula/sui.rb
+          push-branch: main
+          rebase: 'true'
+          force-add: 'true'
+          name: ${{ github.triggering_actor }}
+          email: ${{ github.triggering_actor }}@users.noreply.github.com
