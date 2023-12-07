@@ -47,10 +47,6 @@ const config: HardhatUserConfig = {
       url: "http://127.0.0.1:8555",
     },
   },
-  // defender: {
-  //   apiKey: process.env.API_KEY,
-  //   apiSecret: process.env.API_SECRET,
-  // },
 };
 
 export default config;
