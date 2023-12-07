@@ -1511,6 +1511,10 @@ A Move object, either immutable, or owned mutable.
 type OwnedOrImmutable {
 	address: SuiAddress!
 	version: Int!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
 	digest: String!
 	object: Object
 }

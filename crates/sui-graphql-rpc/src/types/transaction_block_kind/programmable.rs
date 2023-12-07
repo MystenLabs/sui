@@ -37,6 +37,8 @@ enum TransactionInput {
 struct OwnedOrImmutable {
     address: SuiAddress,
     version: u64,
+    /// 32-byte hash that identifies the object's contents at this version, encoded as a Base58
+    /// string.
     digest: String,
 }
 
