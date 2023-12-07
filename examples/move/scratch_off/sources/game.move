@@ -395,7 +395,6 @@ module scratch_off::game {
             });
         };
     }
-    }
 
     // --------------- House Accessors ---------------
 
