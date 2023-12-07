@@ -28,7 +28,6 @@ pub struct VMConfig {
     // deserializing and check for no metadata bytes
     pub check_no_extraneous_bytes_during_deserialization: bool,
     // Configs for profiling VM
-    #[cfg(feature = "gas-profiler")]
     pub profiler_config: Option<VMProfilerConfig>,
     // When this flag is set to true, errors from the VM will be augmented with execution state
     // (stacktrace etc.)
@@ -43,7 +42,6 @@ impl Default for VMConfig {
             runtime_limits_config: VMRuntimeLimitsConfig::default(),
             enable_invariant_violation_check_in_swap_loc: true,
             check_no_extraneous_bytes_during_deserialization: false,
-            #[cfg(feature = "gas-profiler")]
             profiler_config: None,
             error_execution_state: true,
         }
@@ -70,7 +68,6 @@ impl Default for VMRuntimeLimitsConfig {
     }
 }
 
-#[cfg(feature = "gas-profiler")]
 #[derive(Clone, Debug)]
 pub struct VMProfilerConfig {
     /// User configured full path override

@@ -13,6 +13,8 @@ mod checked {
     use move_bytecode_verifier::meter::Meter;
     use move_bytecode_verifier::verify_module_with_config_metered;
     use move_core_types::account_address::AccountAddress;
+    #[cfg(feature = "gas-profiler")]
+    use move_vm_config::runtime::{VMProfilerConfig, DEFAULT_PROFILE_OUTPUT_PATH};
     use move_vm_config::{
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
@@ -87,6 +89,8 @@ mod checked {
         protocol_config: &ProtocolConfig,
         _enable_profiler: Option<PathBuf>,
     ) -> Result<MoveVM, SuiError> {
+        #[cfg(not(feature = "gas-profiler"))]
+        let vm_profiler_config = None;
         #[cfg(feature = "gas-profiler")]
         let vm_profiler_config = match _enable_profiler {
             None => None,
@@ -118,7 +122,7 @@ mod checked {
                     .disable_invariant_violation_check_in_swap_loc(),
                 check_no_extraneous_bytes_during_deserialization: protocol_config
                     .no_extraneous_module_bytes(),
-                #[cfg(feature = "gas-profiler")]
+
                 profiler_config: vm_profiler_config,
 
                 // Don't augment errors with execution state on-chain
