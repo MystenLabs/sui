@@ -121,6 +121,8 @@ export async function activate(extensionContext: Readonly<vscode.ExtensionContex
     context.registerCommand('textDocumentHover', commands.textDocumentHover);
     context.registerCommand('textDocumentCompletion', commands.textDocumentCompletion);
 
+    context.registerOnDidChangeConfiguration();
+
     if (updateGlobalExtVersion) {
         await extensionContext.globalState.update(globalMoveVersionKey, extension.version);
     }
