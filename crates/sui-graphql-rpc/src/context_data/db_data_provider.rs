@@ -498,6 +498,10 @@ impl PgManager {
                     stored_events.pop();
                 }
 
+                if last.is_some() {
+                    stored_events.reverse();
+                }
+
                 Ok((stored_events, has_next_page))
             })
             .transpose()
