@@ -9,8 +9,6 @@ dotEnvConfig();
 
 // read MNEMONIC from file or from env variable
 let mnemonic = process.env.MNEMONIC!;
-// read ALCHEMY_API_KEY from file or from env variable
-let alchemyApiKey = process.env.ALCHEMY_API_KEY!;
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -35,10 +33,6 @@ const config: HardhatUserConfig = {
     hardhat: {},
     sepolia: {
       url: "https://sepolia.infura.io/v3/<key>",
-      accounts: { mnemonic: mnemonic },
-    },
-    goerli: {
-      url: `https://eth-goerli.alchemyapi.io/v2/${alchemyApiKey}`,
       accounts: { mnemonic: mnemonic },
     },
     sepoliasui: {
