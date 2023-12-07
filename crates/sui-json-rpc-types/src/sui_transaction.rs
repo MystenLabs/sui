@@ -25,7 +25,7 @@ use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::crypto::SuiSignature;
-use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
+use sui_types::digests::{ConsensusCommitDigest, ObjectDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
@@ -382,6 +382,7 @@ pub enum SuiTransactionBlockKind {
     RandomnessStateUpdate(SuiRandomnessStateUpdate),
     /// The transaction which occurs only at the end of the epoch
     EndOfEpochTransaction(SuiEndOfEpochTransaction),
+    ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2),
     // .. more transaction types go here
 }
 
@@ -406,6 +407,14 @@ impl Display for SuiTransactionBlockKind {
                     writer,
                     "Epoch: {}, Round: {}, Timestamp : {}",
                     p.epoch, p.round, p.commit_timestamp_ms
+                )?;
+            }
+            Self::ConsensusCommitPrologueV2(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V2")?;
+                writeln!(
+                    writer,
+                    "Epoch: {}, Round: {}, Timestamp : {}, ConsensusCommitDigest : {}",
+                    p.epoch, p.round, p.commit_timestamp_ms, p.consensus_commit_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -440,6 +449,14 @@ impl SuiTransactionBlockKind {
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
+            TransactionKind::ConsensusCommitPrologueV2(p) => {
+                Self::ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                })
+            }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
@@ -457,7 +474,6 @@ impl SuiTransactionBlockKind {
             TransactionKind::RandomnessStateUpdate(update) => {
                 Self::RandomnessStateUpdate(SuiRandomnessStateUpdate {
                     epoch: update.epoch,
-                    round: update.round,
                     randomness_round: update.randomness_round,
                     random_bytes: update.random_bytes,
                 })
@@ -502,6 +518,7 @@ impl SuiTransactionBlockKind {
             Self::ChangeEpoch(_) => "ChangeEpoch",
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
+            Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1291,6 +1308,21 @@ pub struct SuiConsensusCommitPrologue {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiConsensusCommitPrologueV2 {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub round: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub commit_timestamp_ms: u64,
+    pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiAuthenticatorStateUpdate {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
@@ -1308,9 +1340,6 @@ pub struct SuiRandomnessStateUpdate {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub epoch: u64,
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub round: u64,
 
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]

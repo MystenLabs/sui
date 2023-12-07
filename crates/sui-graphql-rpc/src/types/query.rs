@@ -6,6 +6,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
+    available_range::AvailableRange,
     checkpoint::{Checkpoint, CheckpointId},
     coin::Coin,
     coin_metadata::CoinMetadata,
@@ -18,10 +19,13 @@ use super::{
     sui_system_state_summary::SuiSystemStateSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
-use crate::{config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error};
+use crate::{
+    config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
+    mutation::Mutation,
+};
 
 pub(crate) struct Query;
-pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
+pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;
 
 #[Object]
 impl Query {
@@ -32,6 +36,12 @@ impl Query {
             .fetch_chain_identifier()
             .await
             .extend()
+    }
+
+    /// Range of checkpoints that the RPC has data available for (for data
+    /// that can be tied to a particular checkpoint).
+    async fn available_range(&self) -> Result<AvailableRange> {
+        Ok(AvailableRange)
     }
 
     /// Configuration for this RPC service
@@ -172,7 +182,7 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_events(first, after, last, before, filter)

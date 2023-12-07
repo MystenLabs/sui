@@ -1,0 +1,31 @@
+name: Docs CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  build:
+    name: Lint, Build, and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - uses: pnpm/action-setup@v2.4.0
+        with:
+          version: 8
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ./docs/site
+      - name: Build
+        run: pnpm build
+        working-directory: ./docs/site

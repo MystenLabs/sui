@@ -3,8 +3,9 @@
 
 use crate::consensus_types::AuthorityIndex;
 use fastcrypto::hash::Hash;
-use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI, SystemMessage};
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI, SystemMessage};
 use std::fmt::Display;
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 
 /// A list of tuples of:
@@ -25,6 +26,9 @@ pub(crate) trait ConsensusOutputAPI: Display {
 
     /// Returns all transactions in the commit.
     fn transactions(&self) -> ConsensusOutputTransactions<'_>;
+
+    /// Returns the digest of consensus output.
+    fn consensus_digest(&self) -> ConsensusCommitDigest;
 }
 
 impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
@@ -59,13 +63,14 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
+        assert!(self.sub_dag.certificates.len() == self.batches.len());
         self.sub_dag
             .certificates
             .iter()
             .zip(&self.batches)
             .map(|(cert, batches)| {
                 assert_eq!(cert.header().payload().len(), batches.len());
-                let transactions: Vec<(&[u8], ConsensusTransaction)> =  cert.header().system_messages().iter().filter_map(|msg| {
+                let transactions: Vec<(&[u8], ConsensusTransaction)> = cert.header().system_messages().iter().filter_map(|msg| {
                     // Generate transactions to write new randomness.
                     if let SystemMessage::RandomnessSignature(round, bytes) = msg {
                         Some(([0u8; 0].as_slice(), ConsensusTransaction{
@@ -97,6 +102,13 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                 })).collect();
                 (cert.origin().0, transactions)
             }).collect()
+    }
+
+    fn consensus_digest(&self) -> ConsensusCommitDigest {
+        // We port ConsensusOutputDigest, a narwhal space object, into ConsensusCommitDigest, a sui-core space object.
+        // We assume they always have the same format.
+        static_assertions::assert_eq_size!(ConsensusCommitDigest, ConsensusOutputDigest);
+        ConsensusCommitDigest::new(self.digest().into_inner())
     }
 }
 
@@ -148,5 +160,10 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
                 (author, transactions)
             })
             .collect()
+    }
+
+    fn consensus_digest(&self) -> ConsensusCommitDigest {
+        // TODO(mysticeti): implement consensus output digest.
+        ConsensusCommitDigest::default()
     }
 }

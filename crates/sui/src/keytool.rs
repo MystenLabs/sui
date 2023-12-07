@@ -95,7 +95,12 @@ pub enum KeyToolCommand {
     /// the key scheme flag {ed25519 | secp256k1 | secp256r1} and an optional derivation path,
     /// default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
     /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
+    /// Set an alias for the key with the --alias flag. If no alias is provided,
+    /// the tool will automatically generate one.
     Import {
+        /// Sets an alias for this address
+        #[clap(long)]
+        alias: Option<String>,
         input_string: String,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
@@ -273,6 +278,7 @@ pub struct DecodedMultiSigOutput {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Key {
+    alias: Option<String>,
     sui_address: SuiAddress,
     public_base64_key: String,
     key_scheme: String,
@@ -482,6 +488,7 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{sui_address}.key");
                     write_authority_keypair_to_file(&kp, file_name)?;
                     CommandOutput::Generate(Key {
+                        alias: None,
                         sui_address,
                         public_base64_key: kp.public().encode_base64(),
                         key_scheme: key_scheme.to_string(),
@@ -502,6 +509,7 @@ impl KeyToolCommand {
             },
 
             KeyToolCommand::Import {
+                alias,
                 input_string,
                 key_scheme,
                 derivation_path,
@@ -527,7 +535,7 @@ impl KeyToolCommand {
                         _ => return Err(anyhow!("Unsupported scheme")),
                     };
                     let key = Key::from(&skp);
-                    keystore.add_key(skp)?;
+                    keystore.add_key(alias, skp)?;
                     CommandOutput::Import(key)
                 } else {
                     let sui_address = keystore.import_from_mnemonic(
@@ -545,9 +553,12 @@ impl KeyToolCommand {
                 let keys = keystore
                     .keys()
                     .into_iter()
-                    .map(Key::from)
-                    .collect::<Vec<_>>();
-
+                    .map(|pk| {
+                        let mut key = Key::from(pk);
+                        key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
+                        key
+                    })
+                    .collect();
                 CommandOutput::List(keys)
             }
 
@@ -661,6 +672,7 @@ impl KeyToolCommand {
                         Ok(keypair) => {
                             let public_base64_key = keypair.public().encode_base64();
                             CommandOutput::Show(Key {
+                                alias: None, // alias does not get stored in key files
                                 sui_address: (keypair.public()).into(),
                                 public_base64_key,
                                 key_scheme: SignatureScheme::BLS12381.to_string(),
@@ -821,7 +833,7 @@ impl KeyToolCommand {
                 let pk = skp.public();
                 let ephemeral_key_identifier: SuiAddress = (&skp.public()).into();
                 println!("Ephemeral key identifier: {ephemeral_key_identifier}");
-                keystore.add_key(skp)?;
+                keystore.add_key(None, skp)?;
 
                 let mut eph_pk_bytes = vec![pk.flag()];
                 eph_pk_bytes.extend(pk.as_ref());
@@ -1040,7 +1052,8 @@ impl From<&SuiKeyPair> for Key {
 impl From<PublicKey> for Key {
     fn from(key: PublicKey) -> Self {
         Key {
-            sui_address: Into::<SuiAddress>::into(&key),
+            alias: None, // this is retrieved later
+            sui_address: SuiAddress::from(&key),
             public_base64_key: key.encode_base64(),
             key_scheme: key.scheme().to_string(),
             mnemonic: None,

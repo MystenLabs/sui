@@ -55,7 +55,7 @@ impl TransactionInputLoader {
         );
 
         let mut input_results = vec![None; input_object_kinds.len()];
-        let mut object_keys = Vec::with_capacity(input_object_kinds.len());
+        let mut object_refs = Vec::with_capacity(input_object_kinds.len());
         let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
 
         for (i, kind) in input_object_kinds.iter().enumerate() {
@@ -89,19 +89,17 @@ impl TransactionInputLoader {
                     }
                 },
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    object_keys.push(ObjectKey::from(objref));
+                    object_refs.push(*objref);
                     fetch_indices.push(i);
                 }
             }
         }
 
-        let objects = self.store.multi_get_object_by_key(&object_keys)?;
-        assert_eq!(objects.len(), object_keys.len());
+        let objects = self
+            .store
+            .multi_get_object_with_more_accurate_error_return(&object_refs)?;
+        assert_eq!(objects.len(), object_refs.len());
         for (index, object) in fetch_indices.into_iter().zip(objects.into_iter()) {
-            let object = object.ok_or_else(|| {
-                SuiError::from(input_object_kinds[index].object_not_found_error())
-            })?;
-
             input_results[index] = Some(ObjectReadResult {
                 input_object_kind: input_object_kinds[index],
                 object: ObjectReadResultKind::Object(object),

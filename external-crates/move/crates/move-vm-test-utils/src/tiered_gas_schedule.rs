@@ -627,62 +627,6 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.charge(1, 1, 2, Type::Bool.size().into(), size_reduction.into())
     }
 
-    fn charge_load_resource(
-        &mut self,
-        _loaded: Option<(NumBytes, impl ValueView)>,
-    ) -> PartialVMResult<()> {
-        // We don't have resource loading so don't need to account for it.
-        Ok(())
-    }
-
-    fn charge_borrow_global(
-        &mut self,
-        _is_mut: bool,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
-        self.charge(1, 1, 1, REFERENCE_SIZE.into(), Type::Address.size().into())
-    }
-
-    fn charge_exists(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        // TODO(Gas): see if we can get rid of this param
-        _exists: bool,
-    ) -> PartialVMResult<()> {
-        self.charge(
-            1,
-            1,
-            1,
-            Type::Bool.size().into(),
-            Type::Address.size().into(),
-        )
-    }
-
-    fn charge_move_from(
-        &mut self,
-        _is_generic: bool,
-        ty: impl TypeView,
-        val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
-        let size = val
-            .map(|val| val.legacy_abstract_memory_size())
-            .unwrap_or_else(|| ty.to_type_tag().abstract_size_for_gas_metering());
-        self.charge(1, 1, 1, size.into(), Type::Address.size().into())
-    }
-
-    fn charge_move_to(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _val: impl ValueView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
-        self.charge(1, 0, 2, 0, Type::Address.size().into())
-    }
-
     fn charge_vec_pack<'a>(
         &mut self,
         _ty: impl TypeView + 'a,

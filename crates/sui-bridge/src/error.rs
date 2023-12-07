@@ -13,6 +13,8 @@ pub enum BridgeError {
     NoBridgeEventsInTx,
     // Internal Bridge error
     InternalError(String),
+    // Transient Ethereum provider error
+    TransientProviderError(String),
     // Uncategorized error
     Generic(anyhow::Error),
 }

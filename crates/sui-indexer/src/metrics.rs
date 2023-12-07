@@ -56,6 +56,7 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_transactions_chunks: Histogram,
     pub checkpoint_db_commit_latency_transactions_chunks_transformation: Histogram,
     pub checkpoint_db_commit_latency_objects: Histogram,
+    pub checkpoint_db_commit_latency_objects_history: Histogram,
     pub checkpoint_db_commit_latency_objects_chunks: Histogram,
     pub checkpoint_db_commit_latency_events: Histogram,
     pub checkpoint_db_commit_latency_events_chunks: Histogram,
@@ -63,7 +64,7 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_tx_indices: Histogram,
     pub checkpoint_db_commit_latency_tx_indices_chunks: Histogram,
     pub checkpoint_db_commit_latency_checkpoints: Histogram,
-    pub checkpoint_db_commit_latency_epochs: Histogram,
+    pub checkpoint_db_commit_latency_epoch: Histogram,
     // average latency of committing 1000 transactions.
     // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
@@ -319,6 +320,12 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_db_commit_latency_objects_history: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_history",
+                "Time spent commiting objects history",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             checkpoint_db_commit_latency_objects_chunks: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_objects_chunks",
                 "Time spent commiting objects chunks",
@@ -369,7 +376,7 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            checkpoint_db_commit_latency_epochs: register_histogram_with_registry!(
+            checkpoint_db_commit_latency_epoch: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_epochs",
                 "Time spent commiting epochs",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),

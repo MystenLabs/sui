@@ -222,11 +222,21 @@ CompressedSignature:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginAuthenticatorAsBytes
+ConsensusCommitDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 ConsensusCommitPrologue:
   STRUCT:
     - epoch: U64
     - round: U64
     - commit_timestamp_ms: U64
+ConsensusCommitPrologueV2:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
 Data:
   ENUM:
     0:
@@ -409,7 +419,7 @@ ExecutionFailureStatus:
     30:
       SuiMoveVerificationTimedout: UNIT
     31:
-      SharedObjectWrapped: UNIT
+      SharedObjectOperationNotAllowed: UNIT
     32:
       InputObjectDeleted: UNIT
 ExecutionStatus:
@@ -740,7 +750,6 @@ PublicKey:
 RandomnessStateUpdate:
   STRUCT:
     - epoch: U64
-    - round: U64
     - randomness_round: U64
     - random_bytes:
         SEQ: U8
@@ -955,6 +964,10 @@ TransactionKind:
       RandomnessStateUpdate:
         NEWTYPE:
           TYPENAME: RandomnessStateUpdate
+    7:
+      ConsensusCommitPrologueV2:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV2
 TypeArgumentError:
   ENUM:
     0:

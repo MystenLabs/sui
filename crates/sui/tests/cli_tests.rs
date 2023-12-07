@@ -26,7 +26,7 @@ use sui::{
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
-    SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
+    SUI_KEYSTORE_ALIASES_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -82,13 +82,13 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(9, files.len());
+    assert_eq!(10, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
     assert!(files.contains(&SUI_GENESIS_FILENAME.to_string()));
-
     assert!(files.contains(&SUI_KEYSTORE_FILENAME.to_string()));
+    assert!(files.contains(&SUI_KEYSTORE_ALIASES_FILENAME.to_string()));
 
     // Check network config
     let network_conf =
@@ -131,7 +131,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
     }
 
     // Print all addresses
@@ -384,7 +384,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -606,7 +605,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -674,7 +672,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -782,7 +779,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -909,7 +905,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1036,7 +1031,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1165,7 +1159,6 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1234,7 +1227,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1281,7 +1273,6 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1337,7 +1328,6 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1380,7 +1370,6 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1424,7 +1413,6 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1480,7 +1468,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1553,7 +1540,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1836,6 +1822,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Create a new address
     let os = SuiClientCommands::NewAddress {
         key_scheme: SignatureScheme::ED25519,
+        alias: None,
         derivation_path: None,
         word_length: None,
     }
@@ -1888,6 +1875,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 
     SuiClientCommands::NewAddress {
         key_scheme: SignatureScheme::Secp256k1,
+        alias: None,
         derivation_path: None,
         word_length: None,
     }

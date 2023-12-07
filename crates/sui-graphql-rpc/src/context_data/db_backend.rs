@@ -3,13 +3,13 @@
 
 use diesel::backend::Backend;
 use sui_indexer::{
-    schema_v2::{checkpoints, epochs, objects, transactions},
+    schema_v2::{checkpoints, epochs, events, objects, transactions},
     types_v2::OwnerType,
 };
 
 use crate::{
     error::Error,
-    types::{object::ObjectFilter, transaction_block::TransactionBlockFilter},
+    types::{event::EventFilter, object::ObjectFilter, transaction_block::TransactionBlockFilter},
 };
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryId},
@@ -38,6 +38,9 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_checkpoint_by_sequence_number(
         sequence_number: i64,
     ) -> checkpoints::BoxedQuery<'static, DB>;
+    /// This gets the earliest checkpoint for which we can satisfy all queries
+    /// related to that checkpoint.
+    fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn multi_get_txs(
         cursor: Option<i64>,
@@ -64,14 +67,20 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn multi_get_balances(address: Vec<u8>) -> BalanceQuery<'static, DB>;
     fn get_balance(address: Vec<u8>, coin_type: String) -> BalanceQuery<'static, DB>;
     fn multi_get_checkpoints(
-        cursor: Option<i64>,
-        descending_order: bool,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
+    fn multi_get_events(
+        before: Option<(i64, i64)>,
+        after: Option<(i64, i64)>,
+        limit: i64,
+        filter: Option<EventFilter>,
+    ) -> Result<events::BoxedQuery<'static, DB>, Error>;
 }
 
-/// Struct for custom diesel function
+/// The struct returned for query.explain()
 #[derive(Debug, Clone, Copy)]
 pub struct Explained<T> {
     pub query: T,

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[macro_use(sp)]
 extern crate move_ir_types;
 
 use std::{
@@ -19,12 +18,13 @@ use move_binary_format::{
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
-    cfgir::visitor::AbstractInterpreterVisitor,
     compiled_unit::AnnotatedCompiledModule,
-    diagnostics::{report_diagnostics_to_color_buffer, report_warnings},
+    diagnostics::{
+        report_diagnostics_to_color_buffer, report_warnings, Diagnostics, FilesSourceText,
+    },
     expansion::ast::{AttributeName_, Attributes},
     shared::known_attributes::KnownAttribute,
-    typing::visitor::TypingVisitor,
+    sui_mode::linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -52,18 +52,9 @@ use sui_types::{
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-use crate::linters::{
-    coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
-    custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
-    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
-    LINT_WARNING_PREFIX,
-};
-
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
-
-pub mod linters;
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 #[derive(Debug)]
@@ -85,8 +76,6 @@ pub struct BuildConfig {
     pub run_bytecode_verifier: bool,
     /// If true, print build diagnostics to stderr--no printing if false
     pub print_diags_to_stderr: bool,
-    /// If true, run linters
-    pub lint: bool,
 }
 
 impl BuildConfig {
@@ -97,6 +86,7 @@ impl BuildConfig {
         let lock_file = install_dir.join("Move.lock");
         build_config.config.install_dir = Some(install_dir);
         build_config.config.lock_file = Some(lock_file);
+        build_config.config.no_lint = true;
         build_config
     }
 
@@ -122,58 +112,25 @@ impl BuildConfig {
 
     fn compile_package<W: Write>(
         resolution_graph: ResolvedGraph,
-        lint: bool,
         writer: &mut W,
     ) -> anyhow::Result<(MoveCompiledPackage, FnInfoMap)> {
         let build_plan = BuildPlan::create(resolution_graph)?;
         let mut fn_info = None;
         let compiled_pkg = build_plan.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = if lint {
-                let lint_visitors = vec![
-                    ShareOwnedVerifier.visitor(),
-                    SelfTransferVerifier.visitor(),
-                    CustomStateChangeVerifier.visitor(),
-                    CoinFieldVisitor.visitor(),
-                    FreezeWrappedVisitor.visitor(),
-                    CollectionEqualityVisitor.visitor(),
-                ];
-                let (filter_attr_name, filters) = known_filters();
-                compiler
-                    .add_visitors(lint_visitors)
-                    .add_custom_known_filters(filters, filter_attr_name)
-                    .build()?
-            } else {
-                compiler.build()?
-            };
+            let (files, units_res) = compiler.build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
-                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-                    let (filtered_diags_num, filtered_categories) =
-                        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
-                    report_warnings(&files, warning_diags);
-                    if any_linter_warnings {
-                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
-                    }
-                    if filtered_diags_num > 0 {
-                        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
-                    }
+                    decorate_warnings(warning_diags, Some(&files));
                     fn_info = Some(Self::fn_info(&units));
                     Ok((files, units))
                 }
                 Err(error_diags) => {
+                    // with errors present don't even try decorating warnings output to avoid
+                    // clutter
                     assert!(!error_diags.is_empty());
-                    let any_linter_warnings = error_diags.any_with_prefix(LINT_WARNING_PREFIX);
-                    let (filtered_diags_num, filtered_categories) =
-                        error_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
                     let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
                     if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-                    }
-                    if any_linter_warnings {
-                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
-                    }
-                    if filtered_diags_num > 0 {
-                        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
                     }
                     anyhow::bail!("Compilation error");
                 }
@@ -185,7 +142,6 @@ impl BuildConfig {
     /// Given a `path` and a `build_config`, build the package in that path, including its dependencies.
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: PathBuf) -> SuiResult<CompiledPackage> {
-        let lint = self.lint;
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
@@ -194,22 +150,12 @@ impl BuildConfig {
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
-            lint,
         )
     }
 
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
-        use move_compiler::editions::Flavor;
-
-        let flavor = self.config.default_flavor.get_or_insert(Flavor::Sui);
-        if flavor != &Flavor::Sui {
-            return Err(SuiError::ModuleBuildFailure {
-                error: format!(
-                    "The flavor of the Move compiler cannot be overridden with anything but \
-                        \"{}\", but the default override was set to: \"{flavor}\"",
-                    Flavor::Sui,
-                ),
-            });
+        if let Some(err_msg) = set_sui_flavor(&mut self.config) {
+            return Err(SuiError::ModuleBuildFailure { error: err_msg });
         }
 
         if self.print_diags_to_stderr {
@@ -225,19 +171,51 @@ impl BuildConfig {
     }
 }
 
+/// There may be additional information that needs to be displayed after diagnostics are reported
+/// (optionally report diagnostics themselves if files argument is provided).
+pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
+    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
+    let (filtered_diags_num, filtered_categories) =
+        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
+    if let Some(f) = files {
+        report_warnings(f, warning_diags);
+    }
+    if any_linter_warnings {
+        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
+    }
+    if filtered_diags_num > 0 {
+        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+    }
+}
+
+/// Sets build config's default flavor to `Flavor::Sui`. Returns error message if the flavor was
+/// previously set to something else than `Flavor::Sui`.
+pub fn set_sui_flavor(build_config: &mut MoveBuildConfig) -> Option<String> {
+    use move_compiler::editions::Flavor;
+
+    let flavor = build_config.default_flavor.get_or_insert(Flavor::Sui);
+    if flavor != &Flavor::Sui {
+        return Some(format!(
+            "The flavor of the Move compiler cannot be overridden with anything but \
+                 \"{}\", but the default override was set to: \"{flavor}\"",
+            Flavor::Sui,
+        ));
+    }
+    None
+}
+
 pub fn build_from_resolution_graph(
     path: PathBuf,
     resolution_graph: ResolvedGraph,
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
-    lint: bool,
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::stderr())
+        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, lint, &mut std::io::sink())
+        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
     };
     // write build failure diagnostics to stderr, convert `error` to `String` using `Debug`
     // format to include anyhow's error context chain.
@@ -572,7 +550,6 @@ impl Default for BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
-            lint: false,
         }
     }
 }

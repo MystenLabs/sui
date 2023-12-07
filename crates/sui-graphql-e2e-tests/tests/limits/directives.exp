@@ -1,0 +1,42 @@
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1 'run-graphql'. lines 6-10:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Fields with directives are not supported",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
+}
+
+task 2 'run-graphql'. lines 12-40:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Fragments with directives are not supported",
+      "locations": [
+        {
+          "line": 1,
+          "column": 1
+        }
+      ],
+      "extensions": {
+        "code": "INTERNAL_SERVER_ERROR"
+      }
+    }
+  ]
+}

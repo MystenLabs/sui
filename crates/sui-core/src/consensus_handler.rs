@@ -28,6 +28,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::digests::ConsensusCommitDigest;
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
@@ -267,7 +268,18 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
             self.epoch_store.epoch(),
         );
 
-        let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
+        let prologue_transaction = match self
+            .epoch_store
+            .protocol_config()
+            .include_consensus_digest_in_prologue()
+        {
+            true => self.consensus_commit_prologue_v2_transaction(
+                round,
+                timestamp,
+                consensus_output.consensus_digest(),
+            ),
+            false => self.consensus_commit_prologue_transaction(round, timestamp),
+        };
         let empty_bytes = vec![];
         transactions.push((
             empty_bytes.as_slice(),
@@ -343,10 +355,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                     ) = &transaction.kind
                     {
                         if self.epoch_store.randomness_state_enabled() {
-                            debug!("adding RandomnessStateUpdate tx for round {round:?}");
+                            debug!("adding RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}");
                             let randomness_state_update_transaction = self
                                 .randomness_state_update_transaction(
-                                    round,
                                     *randomness_round,
                                     bytes.clone(),
                                 );
@@ -359,7 +370,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync>
                                 consensus_output.leader_author_index(),
                             ));
                         } else {
-                            debug!("ignoring RandomnessStateUpdate tx for round {round:?}: randomness state is not enabled on this node")
+                            debug!("ignoring RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}: randomness state is not enabled on this node")
                         }
                     } else {
                         let transaction = SequencedConsensusTransactionKind::External(transaction);
@@ -542,6 +553,21 @@ impl<T, C> ConsensusHandler<T, C> {
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 
+    fn consensus_commit_prologue_v2_transaction(
+        &self,
+        round: u64,
+        commit_timestamp_ms: u64,
+        consensus_digest: ConsensusCommitDigest,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+            self.epoch(),
+            round,
+            commit_timestamp_ms,
+            consensus_digest,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
+    }
+
     fn authenticator_state_update_transaction(
         &self,
         round: u64,
@@ -565,14 +591,12 @@ impl<T, C> ConsensusHandler<T, C> {
 
     fn randomness_state_update_transaction(
         &self,
-        round: u64,
         randomness_round: u64,
         random_bytes: Vec<u8>,
     ) -> VerifiedExecutableTransaction {
         assert!(self.epoch_store.randomness_state_enabled());
         let transaction = VerifiedTransaction::new_randomness_state_update(
             self.epoch(),
-            round,
             randomness_round,
             random_bytes,
             self.epoch_store
@@ -580,7 +604,10 @@ impl<T, C> ConsensusHandler<T, C> {
                 .randomness_obj_initial_shared_version()
                 .expect("randomness state obj must exist"),
         );
-        debug!("created randomness state update transaction: {transaction:?}");
+        debug!(
+            "created randomness state update transaction: {:?}",
+            transaction.digest()
+        );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
 
@@ -740,6 +767,13 @@ impl SequencedConsensusTransaction {
         } else {
             false
         }
+    }
+
+    pub fn is_system(&self) -> bool {
+        matches!(
+            self.transaction,
+            SequencedConsensusTransactionKind::System(_)
+        )
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {

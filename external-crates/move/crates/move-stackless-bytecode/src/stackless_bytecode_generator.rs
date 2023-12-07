@@ -984,7 +984,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                     _ => {}
                 }
             }
-            MoveBytecode::Exists(struct_index) => {
+            MoveBytecode::ExistsDeprecated(struct_index) => {
                 let operand_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
                 self.local_types.push(Type::Primitive(PrimitiveType::Bool));
@@ -1001,7 +1001,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::ExistsGeneric(idx) => {
+            MoveBytecode::ExistsGenericDeprecated(idx) => {
                 let struct_instantiation = self.module.struct_instantiation_at(*idx);
                 let operand_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
@@ -1021,9 +1021,9 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MutBorrowGlobal(idx) | MoveBytecode::ImmBorrowGlobal(idx) => {
+            MoveBytecode::MutBorrowGlobalDeprecated(idx) | MoveBytecode::ImmBorrowGlobalDeprecated(idx) => {
                 let struct_env = self.func_env.module_env.get_struct_by_def_idx(*idx);
-                let is_mut = matches!(bytecode, MoveBytecode::MutBorrowGlobal(..));
+                let is_mut = matches!(bytecode, MoveBytecode::MutBorrowGlobalDeprecated(..));
                 let operand_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
                 self.local_types.push(Type::Reference(
@@ -1047,10 +1047,10 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MutBorrowGlobalGeneric(idx)
-            | MoveBytecode::ImmBorrowGlobalGeneric(idx) => {
+            MoveBytecode::MutBorrowGlobalGenericDeprecated(idx)
+            | MoveBytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
                 let struct_instantiation = self.module.struct_instantiation_at(*idx);
-                let is_mut = matches!(bytecode, MoveBytecode::MutBorrowGlobalGeneric(..));
+                let is_mut = matches!(bytecode, MoveBytecode::MutBorrowGlobalGenericDeprecated(..));
                 let struct_env = self
                     .func_env
                     .module_env
@@ -1082,7 +1082,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MoveFrom(idx) => {
+            MoveBytecode::MoveFromDeprecated(idx) => {
                 let struct_env = self.func_env.module_env.get_struct_by_def_idx(*idx);
                 let operand_index = self.temp_stack.pop().unwrap();
                 let temp_index = self.temp_count;
@@ -1104,7 +1104,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MoveFromGeneric(idx) => {
+            MoveBytecode::MoveFromGenericDeprecated(idx) => {
                 let struct_instantiation = self.module.struct_instantiation_at(*idx);
                 let struct_env = self
                     .func_env
@@ -1133,7 +1133,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MoveTo(idx) => {
+            MoveBytecode::MoveToDeprecated(idx) => {
                 let value_operand_index = self.temp_stack.pop().unwrap();
                 let signer_operand_index = self.temp_stack.pop().unwrap();
                 self.code.push(mk_call(
@@ -1147,7 +1147,7 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 ));
             }
 
-            MoveBytecode::MoveToGeneric(idx) => {
+            MoveBytecode::MoveToGenericDeprecated(idx) => {
                 let struct_instantiation = self.module.struct_instantiation_at(*idx);
                 let value_operand_index = self.temp_stack.pop().unwrap();
                 let signer_operand_index = self.temp_stack.pop().unwrap();

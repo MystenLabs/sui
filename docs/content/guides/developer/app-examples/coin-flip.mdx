@@ -388,13 +388,18 @@ Now take a look at the main function in this game, `finish_game`:
 
         // Step 3: Distribute funds based on result.
         let status = if (player_won) {
+            // Step 3.a: If player wins transfer the game balance as a coin to the player.
+            // Calculate the fee and transfer it to the house.
             let stake_amount = balance::value(&total_stake);
             let fee_amount = fee_amount(stake_amount, fee_bp);
             let fees = balance::split(&mut total_stake, fee_amount);
             balance::join(hd::borrow_fees_mut(house_data), fees);
+
+            // Calculate the rewards and take it from the game stake.
             transfer::public_transfer(coin::from_balance(total_stake, ctx), player);
             PLAYER_WON_STATE
-        } else {house_data.house_balance (no fees are taken).
+        } else {
+            // Step 3.b: If house wins, then add the game stake to the house_data.house_balance (no fees are taken).
             balance::join(hd::borrow_balance_mut(house_data), total_stake);
             HOUSE_WON_STATE
         };

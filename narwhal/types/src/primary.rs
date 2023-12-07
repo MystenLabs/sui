@@ -95,6 +95,10 @@ impl RandomnessRound {
         Self(round)
     }
 
+    pub fn checked_add(self, rhs: u64) -> Option<Self> {
+        self.0.checked_add(rhs).map(Self)
+    }
+
     pub fn signature_message(&self) -> Vec<u8> {
         format!("random_beacon round {}", self.0).into()
     }

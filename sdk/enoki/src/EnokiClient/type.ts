@@ -49,8 +49,14 @@ export interface CreateSponsoredTransactionBlockApiInput {
 
 export interface CreateSponsoredTransactionBlockApiResponse {
 	bytes: string;
-	signature: string;
 	digest: string;
-	expireAtTime: number;
-	expireAfterEpoch: number;
+}
+
+export interface ExecuteSponsoredTransactionBlockApiInput {
+	digest: string;
+	signature: string;
+}
+
+export interface ExecuteSponsoredTransactionBlockApiResponse {
+	digest: string;
 }

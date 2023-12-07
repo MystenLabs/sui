@@ -24,16 +24,16 @@ fn verify_global_storage_access(module: &CompiledModule) -> Result<(), Execution
         let mut invalid_bytecode = vec![];
         for bytecode in code {
             match bytecode {
-                Bytecode::MoveFrom(_)
-                | Bytecode::MoveFromGeneric(_)
-                | Bytecode::MoveTo(_)
-                | Bytecode::MoveToGeneric(_)
-                | Bytecode::ImmBorrowGlobal(_)
-                | Bytecode::MutBorrowGlobal(_)
-                | Bytecode::ImmBorrowGlobalGeneric(_)
-                | Bytecode::MutBorrowGlobalGeneric(_)
-                | Bytecode::Exists(_)
-                | Bytecode::ExistsGeneric(_) => {
+                Bytecode::MoveFromDeprecated(_)
+                | Bytecode::MoveFromGenericDeprecated(_)
+                | Bytecode::MoveToDeprecated(_)
+                | Bytecode::MoveToGenericDeprecated(_)
+                | Bytecode::ImmBorrowGlobalDeprecated(_)
+                | Bytecode::MutBorrowGlobalDeprecated(_)
+                | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
+                | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+                | Bytecode::ExistsDeprecated(_)
+                | Bytecode::ExistsGenericDeprecated(_) => {
                     invalid_bytecode.push(bytecode);
                 }
                 Bytecode::Pop

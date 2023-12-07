@@ -5,7 +5,7 @@ description: On Sui, you can use shared objects, owned objects, or both in your 
 
 Objects on Sui can be shared (accessible for reads and writes by any transaction) or owned (accessible for reads and writes by transactions signed by their owner).  Many applications can be built using a solution that either uses shared objects or only owned objects, with trade-offs for each that need to be weighed.
 
-Transactions that use only owned objects benefit from very low latency to finality, because they do not need to go through consensus.  On the other hand, the fact that only the owner of the the object can access it complicates processes that need to work with objects owned by multiple parties, and access to very hot objects needs to be coordinated off-chain.
+Transactions that use only owned objects benefit from very low latency to finality, because they do not need to go through consensus.  On the other hand, the fact that only the owner of the object can access it complicates processes that need to work with objects owned by multiple parties, and access to very hot objects needs to be coordinated off-chain.
 
 Transactions that access one or more shared objects require consensus to sequence reads and written to those objects.  This comes at a slightly higher gas cost and increases latency and transactions that access more shared objects or particularly popular objects may see increases in latency due to contention, but the expressivity of allowing multiple addresses to access the same shared object, and the simplicity of allowing the chain to coordinate access to hot objects are benefits.
 

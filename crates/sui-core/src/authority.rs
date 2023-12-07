@@ -195,7 +195,7 @@ pub struct AuthorityMetrics {
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
-    handle_transaction_latency: Histogram,
+    authority_state_handle_transaction_latency: Histogram,
 
     execute_certificate_latency_single_writer: Histogram,
     execute_certificate_latency_shared_object: Histogram,
@@ -351,7 +351,7 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            handle_transaction_latency: register_histogram_with_registry!(
+            authority_state_handle_transaction_latency: register_histogram_with_registry!(
                 "authority_state_handle_transaction_latency",
                 "Latency of handling transactions",
                 LATENCY_SEC_BUCKETS.to_vec(),
@@ -790,8 +790,10 @@ impl AuthorityState {
             SuiError::InvalidSystemTransaction
         );
 
-        let _metrics_guard = self.metrics.handle_transaction_latency.start_timer();
-
+        let _metrics_guard = self
+            .metrics
+            .authority_state_handle_transaction_latency
+            .start_timer();
         self.metrics.tx_orders.inc();
 
         // The should_accept_user_certs check here is best effort, because
@@ -2675,18 +2677,8 @@ impl AuthorityState {
         digest: &TransactionDigest,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        if epoch_store.per_epoch_finalized_txns_enabled() {
-            epoch_store.get_transaction_checkpoint(digest)
-        } else {
-            match self
-                .database
-                .deprecated_get_transaction_checkpoint(digest)?
-            {
-                Some((epoch_id, seq_num)) if epoch_id == epoch_store.epoch() => Ok(Some(seq_num)),
-                Some(_) => Ok(None),
-                None => Ok(None),
-            }
-        }
+        assert!(epoch_store.per_epoch_finalized_txns_enabled());
+        epoch_store.get_transaction_checkpoint(digest)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -3031,20 +3023,8 @@ impl AuthorityState {
         digests: &[TransactionDigest],
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
-        if epoch_store.per_epoch_finalized_txns_enabled() {
-            epoch_store.multi_get_transaction_checkpoint(digests)
-        } else {
-            Ok(self
-                .database
-                .deprecated_multi_get_transaction_checkpoint(digests)?
-                .iter()
-                .map(|opt| match opt {
-                    Some((epoch_id, seq_num)) if *epoch_id == epoch_store.epoch() => Some(*seq_num),
-                    Some(_) => None,
-                    None => None,
-                })
-                .collect())
-        }
+        assert!(epoch_store.per_epoch_finalized_txns_enabled());
+        epoch_store.multi_get_transaction_checkpoint(digests)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -4220,16 +4200,9 @@ impl AuthorityState {
             pending_certificates.len(),
             pending_certificates,
         );
+        assert!(epoch_store.per_epoch_finalized_txns_enabled());
         for digest in pending_certificates {
-            if epoch_store.per_epoch_finalized_txns_enabled() {
-                if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
-                    info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
-                    continue;
-                }
-            } else if self
-                .database
-                .deprecated_is_transaction_executed_in_checkpoint(&digest)?
-            {
+            if epoch_store.is_transaction_executed_in_checkpoint(&digest)? {
                 info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
                 continue;
             }
@@ -4410,9 +4383,9 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> SuiResult<Option<CheckpointSequenceNumber>> {
-        self.database
-            .deprecated_get_transaction_checkpoint(&digest)
-            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        assert!(epoch_store.per_epoch_finalized_txns_enabled());
+        epoch_store.get_transaction_checkpoint(&digest)
     }
 
     async fn get_object(
@@ -4427,14 +4400,9 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
-        let res = self
-            .database
-            .deprecated_multi_get_transaction_checkpoint(digests)?;
-
-        Ok(res
-            .into_iter()
-            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
-            .collect())
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        assert!(epoch_store.per_epoch_finalized_txns_enabled());
+        epoch_store.multi_get_transaction_checkpoint(digests)
     }
 }
 

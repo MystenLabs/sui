@@ -43,20 +43,20 @@ mod checked {
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
-        Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
-        TransactionKind,
+        Command, EndOfEpochTransactionKind, GenesisObject, GenesisTransaction, ObjectArg,
+        ProgrammableTransaction, TransactionKind,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
-        object::{Object, ObjectInner},
+        object::Object,
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
@@ -521,14 +521,12 @@ mod checked {
 
                 for genesis_object in objects {
                     match genesis_object {
-                        sui_types::transaction::GenesisObject::RawObject { data, owner } => {
-                            let object = ObjectInner {
+                        GenesisObject::RawObject { data, owner } => {
+                            temporary_store.create_object(Object::new_from_genesis(
                                 data,
                                 owner,
-                                previous_transaction: tx_ctx.digest(),
-                                storage_rebate: 0,
-                            };
-                            temporary_store.create_object(object.into());
+                                tx_ctx.digest(),
+                            ));
                         }
                     }
                 }
@@ -536,7 +534,20 @@ mod checked {
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
-                    prologue,
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -892,7 +903,7 @@ mod checked {
     /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
     ///   consensus.
     fn setup_consensus_commit(
-        prologue: ConsensusCommitPrologue,
+        consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
@@ -909,7 +920,7 @@ mod checked {
                 vec![],
                 vec![
                     CallArg::CLOCK_MUT,
-                    CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&consensus_commit_timestamp_ms).unwrap()),
                 ],
             );
             assert_invariant!(

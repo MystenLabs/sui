@@ -42,6 +42,14 @@ impl TestTransactionBuilder {
         }
     }
 
+    pub fn sender(&self) -> SuiAddress {
+        self.sender
+    }
+
+    pub fn gas_object(&self) -> ObjectRef {
+        self.gas_object
+    }
+
     pub fn move_call(
         mut self,
         package_id: ObjectID,

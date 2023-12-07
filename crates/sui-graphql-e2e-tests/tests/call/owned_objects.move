@@ -44,7 +44,7 @@ module Test::M1 {
         node {
           kind
           owner {
-            location
+            address
           }
         }
       }
@@ -66,7 +66,7 @@ module Test::M1 {
         node {
           kind
           owner {
-            location
+            address
           }
         }
       }
@@ -82,7 +82,7 @@ module Test::M1 {
         node {
           kind
           owner {
-            location
+            address
           }
         }
       }
@@ -98,7 +98,7 @@ module Test::M1 {
         node {
           kind
           owner {
-            location
+            address
           }
         }
       }
@@ -114,7 +114,7 @@ module Test::M1 {
         node {
           kind
           owner {
-            location
+            address
           }
         }
       }
@@ -130,7 +130,7 @@ module Test::M1 {
         node {
           kind
           owner {
-            location
+            address
           }
         }
       }

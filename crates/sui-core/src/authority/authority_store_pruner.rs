@@ -691,7 +691,7 @@ mod tests {
         let perpetual_db = typed_store::rocks::open_cf(
             perpetual_db_path,
             Some(db_options),
-            MetricConf::default(),
+            MetricConf::new("perpetual_pruning"),
             &cfs,
         );
 

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
 use move_core_types::{annotated_value as A, language_storage::TypeTag};
@@ -11,12 +9,9 @@ use sui_package_resolver::Resolver;
 
 use crate::error::Error;
 
-/// Represents concrete types (no type parameters, no references)
-#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
-#[graphql(complex)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MoveType {
-    /// Flat representation of the type signature, as a displayable string.
-    repr: String,
+    native: TypeTag,
 }
 
 scalar!(
@@ -96,8 +91,14 @@ pub(crate) struct MoveFieldLayout {
     layout: MoveTypeLayout,
 }
 
-#[ComplexObject]
+/// Represents concrete types (no type parameters, no references)
+#[Object]
 impl MoveType {
+    /// Flat representation of the type signature, as a displayable string.
+    async fn repr(&self) -> String {
+        self.native.to_canonical_string(/* with_prefix */ true)
+    }
+
     /// Structured representation of the type signature.
     async fn signature(&self) -> Result<MoveTypeSignature> {
         // Factor out into its own non-GraphQL, non-async function for better testability
@@ -116,12 +117,12 @@ impl MoveType {
 }
 
 impl MoveType {
-    pub(crate) fn new(repr: String) -> MoveType {
-        Self { repr }
+    pub(crate) fn new(native: TypeTag) -> MoveType {
+        Self { native }
     }
 
     fn signature_impl(&self) -> Result<MoveTypeSignature, Error> {
-        MoveTypeSignature::try_from(self.native_type_tag()?)
+        MoveTypeSignature::try_from(self.native.clone())
     }
 
     pub(crate) async fn layout_impl(
@@ -129,16 +130,14 @@ impl MoveType {
         resolver: &Resolver<PackageCache>,
     ) -> Result<A::MoveTypeLayout, Error> {
         resolver
-            .type_layout(self.native_type_tag()?)
+            .type_layout(self.native.clone())
             .await
             .map_err(|e| {
-                Error::Internal(format!("Error calculating layout for {}: {e}", self.repr))
+                Error::Internal(format!(
+                    "Error calculating layout for {}: {e}",
+                    self.native.to_canonical_display(/* with_prefix */ true),
+                ))
             })
-    }
-
-    fn native_type_tag(&self) -> Result<TypeTag, Error> {
-        TypeTag::from_str(&self.repr)
-            .map_err(|e| Error::Internal(format!("Error parsing type '{}': {e}", self.repr)))
     }
 }
 
@@ -227,12 +226,15 @@ pub(crate) fn unexpected_signer_error() -> Error {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     use expect_test::expect;
 
     fn signature(repr: impl Into<String>) -> Result<MoveTypeSignature, Error> {
-        MoveType::new(repr.into()).signature_impl()
+        let tag = TypeTag::from_str(repr.into().as_str()).unwrap();
+        MoveType::new(tag).signature_impl()
     }
 
     #[test]
@@ -253,15 +255,6 @@ mod tests {
                 },
             )"#]];
         expect.assert_eq(&format!("{sig:#?}"));
-    }
-
-    #[test]
-    fn tag_parse_error() {
-        let err = signature("not_a_type").unwrap_err();
-        let expect = expect![[
-            r#"Internal("Error parsing type 'not_a_type': unexpected token Name(\"not_a_type\"), expected type tag")"#
-        ]];
-        expect.assert_eq(&format!("{err:?}"));
     }
 
     #[test]

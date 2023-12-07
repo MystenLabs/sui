@@ -16,6 +16,7 @@ pub(crate) mod module_resolver_v2;
 mod pg_indexer_analytical_store;
 mod pg_indexer_store;
 mod pg_indexer_store_v2;
+mod pg_partition_manager;
 mod query;
 
 pub(crate) mod diesel_macro {

@@ -87,7 +87,7 @@ To run a validator successfully it is critical that ports 8080-8084 are open as 
 
 ## Storage
 
-All Sui Node related data is stored by default under `/opt/sui/db/`. This is controlled in the Sui Node configuration file.
+All Sui Node-related data is stored by default under `/opt/sui/db/`. This is controlled in the Sui Node configuration file.
 
 ```shell
 $ cat /opt/sui/config/validator.yaml | grep db-path
@@ -307,7 +307,7 @@ sui client call --package 0x3 --module sui_system --function request_add_validat
 {p2p_address} {primary_address} {worker_address} {gas_price} {commission_rate} --gas-budget 10000
 ```
 
-After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. Refer to our dedicated staking FAQ on how staking works. Once a candidate's staking pool has accumulated at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially add themselves to next epoch's active validator set:
+After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. Refer to our dedicated staking FAQ on how staking works. Once a candidate's staking pool has accumulated at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially add themselves to the next epoch's active validator set:
 
 ```
 sui client call --package 0x3 --module sui_system --function request_add_validator --args 0x5 --gas-budget 10000000
@@ -315,7 +315,7 @@ sui client call --package 0x3 --module sui_system --function request_add_validat
 
 ### Leaving the Validator Set
 
-To leave the validator set starting next epoch, the sender needs to be an active validator in the current epoch and should call `sui_system::request_remove_validator`:
+To leave the validator set starting the next epoch, the sender needs to be an active validator in the current epoch and should call `sui_system::request_remove_validator`:
 
 ```
 sui client call --package 0x3 --module sui_system --function request_remove_validator --args 0x5 --gas-budget 10000
@@ -330,12 +330,12 @@ There may be instances where urgent security fixes need to be rolled out before 
 This release process will be different and we expect us to announce the directory for such binaries out of band.
 Our public key to verify these binaries would be stored [here](https://sui-private.s3.us-west-2.amazonaws.com/sui_security_release.pem)
 
-We will also release a script that downloads all the necessary signed binaries and docker artifacts incorporating the security fixes.
+You can download all the necessary signed binaries and docker artifacts incorporating the security fixes by using the [download_private.sh](https://github.com/MystenLabs/sui/blob/main/nre/download_private.sh)
 
 Usage
 `./download_private.sh <directory-name>`
 
-You can also download and verify specific binaries that may not be included by the above script using the `download_and_verify_private_binary.sh` script.
+You can also download and verify specific binaries that may not be included by the above script using the [download_and_verify_private_binary.sh](https://github.com/MystenLabs/sui/blob/main/nre/download_and_verify_private_binary.sh) script.
 
 Usage:
 `./download_and_verify_private_binary.sh <directory-name> <binary-name>`

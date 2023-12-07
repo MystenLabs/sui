@@ -22,6 +22,10 @@ use tabled::settings::Style as TableStyle;
 
 use crate::{type_and_fields_from_move_struct, Page};
 use sui_types::sui_serde::SuiStructTag;
+
+#[cfg(any(feature = "test-utils", test))]
+use std::str::FromStr;
+
 pub type EventPage = Page<SuiEvent, EventID>;
 
 #[serde_as]
@@ -150,6 +154,25 @@ impl Display for SuiEvent {
     }
 }
 
+#[cfg(any(feature = "test-utils", test))]
+impl SuiEvent {
+    pub fn random_for_testing() -> Self {
+        Self {
+            id: EventID {
+                tx_digest: TransactionDigest::random(),
+                event_seq: 0,
+            },
+            package_id: ObjectID::random(),
+            transaction_module: Identifier::from_str("random_for_testing").unwrap(),
+            sender: SuiAddress::random_for_testing_only(),
+            type_: StructTag::from_str("0x6666::random_for_testing::RandomForTesting").unwrap(),
+            parsed_json: json!({}),
+            bcs: vec![],
+            timestamp_ms: None,
+        }
+    }
+}
+
 /// Convert a json array of bytes to Base64
 fn bytes_array_to_base64(v: &mut Value) {
     match v {
@@ -190,6 +213,9 @@ pub enum EventFilter {
     /// Return events emitted in a specified Package.
     Package(ObjectID),
     /// Return events emitted in a specified Move module.
+    /// If the event is defined in Module A but emitted in a tx with Module B,
+    /// query `MoveModule` by module B returns the event.
+    /// Query `MoveEventModule` by module A returns the event too.
     MoveModule {
         /// the Move package ID
         package: ObjectID,
@@ -198,13 +224,18 @@ pub enum EventFilter {
         #[serde_as(as = "DisplayFromStr")]
         module: Identifier,
     },
-    /// Return events with the given move event struct name
+    /// Return events with the given Move event struct name (struct tag).
+    /// For example, if the event is defined in `0xabcd::MyModule`, and named
+    /// `Foo`, then the struct tag is `0xabcd::MyModule::Foo`.
     MoveEventType(
         #[schemars(with = "String")]
         #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
-    /// Return events with the given move event module name
+    /// Return events with the given Move module name where the event struct is defined.
+    /// If the event is defined in Module A but emitted in a tx with Module B,
+    /// query `MoveEventModule` by module A returns the event.
+    /// Query `MoveModule` by module B returns the event too.
     MoveEventModule {
         /// the Move package ID
         package: ObjectID,

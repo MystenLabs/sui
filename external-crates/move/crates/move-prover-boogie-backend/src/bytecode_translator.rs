@@ -15,8 +15,9 @@ use itertools::Itertools;
 use log::{debug, info, log, warn, Level};
 
 use move_core_types::language_storage::StructTag;
+use move_compiler::interface_generator::NATIVE_INTERFACE;
 use move_model::{
-    ast::{TempIndex, TraceKind},
+    ast::{Attribute, TempIndex, TraceKind},
     code_writer::CodeWriter,
     emit, emitln,
     model::{FieldId, GlobalEnv, Loc, NodeId, QualifiedInstId, StructEnv, StructId},
@@ -1292,6 +1293,26 @@ impl<'env> FunctionTranslator<'env> {
                         // regular path
                         if !processed {
                             let targeted = self.fun_target.module_env().is_target();
+                            // If the callee has been generated from a native interface, return an error
+                            if callee_env.is_native() && targeted {
+                                for attr in callee_env.get_attributes() {
+                                    if let Attribute::Apply(_, name, _) = attr {
+                                        if self
+                                            .fun_target
+                                            .module_env()
+                                            .symbol_pool()
+                                            .string(*name)
+                                            .as_str()
+                                            == NATIVE_INTERFACE
+                                        {
+                                            let loc = self.fun_target.get_bytecode_loc(attr_id);
+                                            self.parent
+                                                .env
+                                                .error(&loc, "Unknown native function is called");
+                                        }
+                                    }
+                                }
+                            }
                             let caller_mid = self.fun_target.module_env().get_id();
                             let caller_fid = self.fun_target.get_id();
                             let fun_verified =

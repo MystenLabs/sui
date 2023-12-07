@@ -1382,24 +1382,6 @@ pub enum Bytecode {
     ///
     /// ```..., reference -> ..., field_reference```
     ImmBorrowFieldGeneric(FieldInstantiationIndex),
-    /// Return a mutable reference to an instance of type `StructDefinitionIndex` published at the
-    /// address passed as argument. Abort execution if such an object does not exist or if a
-    /// reference has already been handed out.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., reference_value```
-    MutBorrowGlobal(StructDefinitionIndex),
-    MutBorrowGlobalGeneric(StructDefInstantiationIndex),
-    /// Return an immutable reference to an instance of type `StructDefinitionIndex` published at
-    /// the address passed as argument. Abort execution if such an object does not exist or if a
-    /// reference has already been handed out.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., reference_value```
-    ImmBorrowGlobal(StructDefinitionIndex),
-    ImmBorrowGlobalGeneric(StructDefInstantiationIndex),
     /// Add the 2 u64 at the top of the stack and pushes the result on the stack.
     /// The operation aborts the transaction in case of overflow.
     ///
@@ -1526,31 +1508,6 @@ pub enum Bytecode {
     ///
     /// Stack transition: none
     Nop,
-    /// Returns whether or not a given address has an object of type StructDefinitionIndex
-    /// published already
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., bool_value```
-    Exists(StructDefinitionIndex),
-    ExistsGeneric(StructDefInstantiationIndex),
-    /// Move the instance of type StructDefinitionIndex, at the address at the top of the stack.
-    /// Abort execution if such an object does not exist.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., address_value -> ..., value```
-    MoveFrom(StructDefinitionIndex),
-    MoveFromGeneric(StructDefInstantiationIndex),
-    /// Move the instance at the top of the stack to the address of the `Signer` on the stack below
-    /// it
-    /// Abort execution if an object of type StructDefinitionIndex already exists in address.
-    ///
-    /// Stack transition:
-    ///
-    /// ```..., signer_value, value -> ...```
-    MoveTo(StructDefinitionIndex),
-    MoveToGeneric(StructDefInstantiationIndex),
     /// Shift the (second top value) left (top value) bits and pushes the result on the stack.
     ///
     /// Stack transition:
@@ -1651,6 +1608,18 @@ pub enum Bytecode {
     ///
     /// ```..., integer_value -> ..., u256_value```
     CastU256,
+
+    // ******** DEPRECATED BYTECODES ********
+    ExistsDeprecated(StructDefinitionIndex),
+    ExistsGenericDeprecated(StructDefInstantiationIndex),
+    MoveFromDeprecated(StructDefinitionIndex),
+    MoveFromGenericDeprecated(StructDefInstantiationIndex),
+    MoveToDeprecated(StructDefinitionIndex),
+    MoveToGenericDeprecated(StructDefInstantiationIndex),
+    MutBorrowGlobalDeprecated(StructDefinitionIndex),
+    MutBorrowGlobalGenericDeprecated(StructDefInstantiationIndex),
+    ImmBorrowGlobalDeprecated(StructDefinitionIndex),
+    ImmBorrowGlobalGenericDeprecated(StructDefInstantiationIndex),
 }
 
 impl ::std::fmt::Debug for Bytecode {
@@ -1694,10 +1663,10 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::MutBorrowFieldGeneric(a) => write!(f, "MutBorrowFieldGeneric({:?})", a),
             Bytecode::ImmBorrowField(a) => write!(f, "ImmBorrowField({:?})", a),
             Bytecode::ImmBorrowFieldGeneric(a) => write!(f, "ImmBorrowFieldGeneric({:?})", a),
-            Bytecode::MutBorrowGlobal(a) => write!(f, "MutBorrowGlobal({:?})", a),
-            Bytecode::MutBorrowGlobalGeneric(a) => write!(f, "MutBorrowGlobalGeneric({:?})", a),
-            Bytecode::ImmBorrowGlobal(a) => write!(f, "ImmBorrowGlobal({:?})", a),
-            Bytecode::ImmBorrowGlobalGeneric(a) => write!(f, "ImmBorrowGlobalGeneric({:?})", a),
+            Bytecode::MutBorrowGlobalDeprecated(a) => write!(f, "MutBorrowGlobal({:?})", a),
+            Bytecode::MutBorrowGlobalGenericDeprecated(a) => write!(f, "MutBorrowGlobalGeneric({:?})", a),
+            Bytecode::ImmBorrowGlobalDeprecated(a) => write!(f, "ImmBorrowGlobal({:?})", a),
+            Bytecode::ImmBorrowGlobalGenericDeprecated(a) => write!(f, "ImmBorrowGlobalGeneric({:?})", a),
             Bytecode::Add => write!(f, "Add"),
             Bytecode::Sub => write!(f, "Sub"),
             Bytecode::Mul => write!(f, "Mul"),
@@ -1719,12 +1688,12 @@ impl ::std::fmt::Debug for Bytecode {
             Bytecode::Ge => write!(f, "Ge"),
             Bytecode::Abort => write!(f, "Abort"),
             Bytecode::Nop => write!(f, "Nop"),
-            Bytecode::Exists(a) => write!(f, "Exists({:?})", a),
-            Bytecode::ExistsGeneric(a) => write!(f, "ExistsGeneric({:?})", a),
-            Bytecode::MoveFrom(a) => write!(f, "MoveFrom({:?})", a),
-            Bytecode::MoveFromGeneric(a) => write!(f, "MoveFromGeneric({:?})", a),
-            Bytecode::MoveTo(a) => write!(f, "MoveTo({:?})", a),
-            Bytecode::MoveToGeneric(a) => write!(f, "MoveToGeneric({:?})", a),
+            Bytecode::ExistsDeprecated(a) => write!(f, "Exists({:?})", a),
+            Bytecode::ExistsGenericDeprecated(a) => write!(f, "ExistsGeneric({:?})", a),
+            Bytecode::MoveFromDeprecated(a) => write!(f, "MoveFrom({:?})", a),
+            Bytecode::MoveFromGenericDeprecated(a) => write!(f, "MoveFromGeneric({:?})", a),
+            Bytecode::MoveToDeprecated(a) => write!(f, "MoveTo({:?})", a),
+            Bytecode::MoveToGenericDeprecated(a) => write!(f, "MoveToGeneric({:?})", a),
             Bytecode::VecPack(a, n) => write!(f, "VecPack({}, {})", a, n),
             Bytecode::VecLen(a) => write!(f, "VecLen({})", a),
             Bytecode::VecImmBorrow(a) => write!(f, "VecImmBorrow({})", a),

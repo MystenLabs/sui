@@ -164,9 +164,9 @@ type Mutation {
   # `signatures` are a list of `flag || signature || pubkey` bytes,
   #     Base64-encoded.
   #
-  # Waits until the transaction has been finalised on chain to return
+  # Waits until the transaction has been finalized on chain to return
   # its transaction digest.  If the transaction could not be
-  # finalised, returns the errors that prevented it, instead.
+  # finalized, returns the errors that prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
     signatures: [Base64!]!,
@@ -387,7 +387,7 @@ enum Feature {
 }
 
 interface IOwner {
-  location: SuiAddress!
+  address: SuiAddress!
 
   objectConnection(
     first: Int,
@@ -518,11 +518,20 @@ type Epoch {
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
 
-  validatorSet: ValidatorSet
   startTimestamp: DateTime
   endTimestamp: DateTime
 
+  totalCheckpoints: BigInt
+  totalGasFees: BigInt
+  totalStakeRewards: BigInt
+  totalStakeSubsidies: BigInt
+  fundSize: BigInt
+  netInflow: BigInt
+  fundInflow: BigInt
+  fundOutflow: BigInt
+
   # TODO: Identify non-duplicate fields in `EndOfEpochInfo`
+  systemState: SystemState
 
   checkpointConnection(
     first: Int,
@@ -541,11 +550,8 @@ type Epoch {
   ): TransactionBlockConnection
 }
 
-type SuiSystemStateSummary {
-  epoch: Epoch
-  protocolConfigs: ProtocolConfigs
-  systemStateVersion: Int
-  referenceGasPrice: BigInt
+type SystemState {
+  version: Int
 
   systemParameters: SystemParameters
   stakeSubsidy: StakeSubsidy
@@ -695,9 +701,6 @@ type Checkpoint {
 
   epoch: Epoch
 
-  # Only available on the final checkpoint in an epoch
-  endOfEpoch: EndOfEpochData
-
   transactionBlockConnection(
     first: Int,
     after: String,
@@ -711,23 +714,13 @@ type Checkpoint {
   addressMetrics: AddressMetrics
 }
 
-type EndOfEpochData {
-  newCommittee: [CommitteeMember]
-  nextProtocolVersion: Int
-}
-
-type CommitteeMember {
-  authorityName: String
-  stakeUnit: Int
-}
-
 type TransactionBlock {
   digest: String!
 
   senders: [Address]
   gasInput: GasInput
   kind: TransactionBlockKind
-  signatures: [TransactionSignature]
+  signatures: [Base64!]
   effects: TransactionBlockEffects
 
   expiration: Epoch
@@ -745,6 +738,9 @@ union TransactionBlockKind =
   | GenesisTransaction
   | ChangeEpochTransaction
   | ProgrammableTransactionBlock
+  | AuthenticatorStateUpdateTransaction
+  | RandomnessStateUpdateTransaction
+  | EndOfEpochTransaction
 
 type ConsensusCommitPrologueTransaction {
   epoch: Epoch
@@ -832,22 +828,18 @@ type MakeMoveVecTransaction {
   elements: [TransactionArgument]
 }
 
-# Omitting for brevity -- there's a lot of structure here, but it's
-# not very "connected" (i.e. no edges to other types).
-type TransactionSignature
-
 type TransactionBlockEffects {
-  status: ExecutionStatus!
+  transactionBlock: TransactionBlock!
+  status: ExecutionStatus
 
   errors: String
-  transactionBlock: TransactionBlock
-  dependencies: [TransactionBlock]
+  dependencies: [TransactionBlock!]
 
   lamportVersion: Int
   gasEffects: GasEffects
-  objectReads: [Object]
-  objectChanges: [ObjectChange]
-  balanceChanges: [BalanceChange]
+  objectReads: [Object!]
+  objectChanges: [ObjectChange!]
+  balanceChanges: [BalanceChange!]
   timestamp: DateTime
   epoch: Epoch
   checkpoint: Checkpoint
@@ -890,6 +882,8 @@ type GasCostSummary {
 }
 
 type ObjectChange {
+  location: SuiAddress!
+
   inputState: Object
   outputState: Object
 
@@ -907,14 +901,13 @@ type Event {
   # Module that the event was emitted by
   sendingModule: MoveModule
 
-  # Type of the event being sent
-  eventType: MoveType
-
   senders: [Address]
   timestamp: DateTime
 
-  json: String
-  bcs: Base64
+  type: MoveType!
+  bcs: Base64!
+  data: MoveData!
+  json: JSON!
 }
 
 type Balance {

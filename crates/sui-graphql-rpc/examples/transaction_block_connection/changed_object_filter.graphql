@@ -7,7 +7,7 @@
   ) {
     nodes {
       sender {
-        location
+        address
       }
       gasInput {
         gasPrice

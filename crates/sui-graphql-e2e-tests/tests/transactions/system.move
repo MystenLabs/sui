@@ -11,12 +11,12 @@
     transactionBlockConnection(first: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -24,7 +24,24 @@
             kind {
                 __typename
                 ... on GenesisTransaction {
-                    objects
+                    objectConnection {
+                        nodes {
+                            address
+
+                            asMoveObject {
+                                contents {
+                                    type { repr }
+                                    json
+                                }
+                            }
+
+                            asMovePackage {
+                                moduleConnection {
+                                    nodes { name }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -35,21 +52,22 @@
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -82,12 +100,12 @@
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
@@ -97,7 +115,8 @@
                 ... on ConsensusCommitPrologueTransaction {
                     epoch { epochId }
                     round
-                    timestamp
+                    commitTimestamp
+                    consensusCommitDigest
                 }
             }
 
@@ -108,21 +127,22 @@
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -154,24 +174,33 @@
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
             kind {
                 __typename
-                ... on ChangeEpochTransaction {
-                    epoch { epochId }
-                    timestamp
-                    storageCharge
-                    computationCharge
-                    storageRebate
+                ... on EndOfEpochTransaction {
+                    transactionConnection {
+                        nodes {
+                            __typename
+                            ... on ChangeEpochTransaction {
+                                epoch { epochId }
+                                protocolVersion
+                                storageCharge
+                                computationCharge
+                                storageRebate
+                                nonRefundableStorageFee
+                                startTimestamp
+                            }
+                        }
+                    }
                 }
             }
 
@@ -182,21 +211,22 @@
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost

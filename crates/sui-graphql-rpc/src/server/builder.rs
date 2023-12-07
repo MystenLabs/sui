@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config::{MAX_CONCURRENT_REQUESTS, RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD};
 use crate::context_data::package_cache::DbPackageStore;
+use crate::mutation::Mutation;
 use crate::{
     config::ServerConfig,
     context_data::db_data_provider::PgManager,
@@ -16,21 +18,28 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
+use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
-use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::http::HeaderMap;
-use axum::routing::{post, MethodRouter};
+use axum::response::IntoResponse;
+use axum::routing::{post, MethodRouter, Route};
 use axum::{
     extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
     middleware,
 };
 use axum::{headers::Header, Router};
+use http::Request;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
+use hyper::Body;
 use hyper::Server as HyperServer;
+use std::convert::Infallible;
 use std::{any::Any, net::SocketAddr, sync::Arc, time::Instant};
 use sui_package_resolver::{PackageStoreWithLruCache, Resolver};
+use sui_sdk::SuiClientBuilder;
 use tokio::sync::OnceCell;
+use tower::{Layer, Service};
+use tracing::warn;
 
 pub struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
@@ -49,9 +58,7 @@ pub(crate) struct ServerBuilder {
     port: u16,
     host: String,
 
-    schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
-    ide_title: Option<String>,
-
+    schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
 }
 
@@ -60,8 +67,7 @@ impl ServerBuilder {
         Self {
             port,
             host,
-            schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
-            ide_title: None,
+            schema: async_graphql::Schema::build(Query, Mutation, EmptySubscription),
             router: None,
         }
     }
@@ -90,35 +96,15 @@ impl ServerBuilder {
         self
     }
 
-    fn ide_title(mut self, name: String) -> Self {
-        self.ide_title = Some(name);
-        self
-    }
-
-    fn build_schema(self) -> Schema<Query, EmptyMutation, EmptySubscription> {
+    fn build_schema(self) -> Schema<Query, Mutation, EmptySubscription> {
         self.schema.finish()
     }
 
-    fn build_components(
-        self,
-    ) -> (
-        String,
-        Option<String>,
-        Schema<Query, EmptyMutation, EmptySubscription>,
-        Router,
-    ) {
+    fn build_components(self) -> (String, Schema<Query, Mutation, EmptySubscription>, Router) {
         let address = self.address();
-        let ServerBuilder {
-            schema,
-            // TODO: remove this once we have expose layer in builder.
-            // This should be set in the builder.
-            ide_title,
-            router,
-            ..
-        } = self;
+        let ServerBuilder { schema, router, .. } = self;
         (
             address,
-            ide_title,
             schema.finish(),
             router.expect("Router not initialized"),
         )
@@ -142,14 +128,23 @@ impl ServerBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Server, Error> {
-        let (address, ide_title, schema, router) = self.build_components();
+    pub fn layer<L>(mut self, layer: L) -> Self
+    where
+        L: Layer<Route> + Clone + Send + 'static,
+        L::Service: Service<Request<Body>> + Clone + Send + 'static,
+        <L::Service as Service<Request<Body>>>::Response: IntoResponse + 'static,
+        <L::Service as Service<Request<Body>>>::Error: Into<Infallible> + 'static,
+        <L::Service as Service<Request<Body>>>::Future: Send + 'static,
+    {
+        self.init_router();
+        self.router = self.router.map(|router| router.layer(layer));
+        self
+    }
 
-        let app = router
-            .layer(axum::extract::Extension(schema))
-            // TODO: remove this once we have expose layer in builder.
-            // This should be set in the builder.
-            .layer(axum::extract::Extension(ide_title));
+    pub fn build(self) -> Result<Server, Error> {
+        let (address, schema, router) = self.build_components();
+
+        let app = router.layer(axum::extract::Extension(schema));
 
         Ok(Server {
             server: axum::Server::bind(
@@ -161,9 +156,11 @@ impl ServerBuilder {
         })
     }
 
-    pub async fn from_yaml_config(path: &str) -> Result<Self, Error> {
+    pub async fn from_yaml_config(path: &str) -> Result<(Self, ServerConfig), Error> {
         let config = ServerConfig::from_yaml(path)?;
-        Self::from_config(&config).await
+        Self::from_config(&config)
+            .await
+            .map(|builder| (builder, config))
     }
 
     pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
@@ -179,6 +176,22 @@ impl ServerBuilder {
         let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_store = DbPackageStore(reader);
         let package_cache = PackageStoreWithLruCache::new(package_store);
+
+        // SDK for talking to fullnode. Used for executing transactions only
+        // TODO: fail fast if no url, once we enable mutations fully
+        let sui_sdk_client = if let Some(url) = &config.tx_exec_full_node.node_rpc_url {
+            Some(
+                SuiClientBuilder::default()
+                    .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+                    .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+                    .build(url)
+                    .await
+                    .map_err(|e| Error::Internal(format!("Failed to create SuiClient: {}", e)))?,
+            )
+        } else {
+            warn!("No fullnode url found in config. Mutations will not work");
+            None
+        };
 
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -203,8 +216,8 @@ impl ServerBuilder {
             .context_data(config.service.clone())
             .context_data(pg_conn_pool)
             .context_data(Resolver::new(package_cache))
+            .context_data(sui_sdk_client)
             .context_data(name_service_config)
-            .ide_title(config.ide.ide_title.clone())
             .context_data(Arc::new(metrics))
             .context_data(config.clone());
 

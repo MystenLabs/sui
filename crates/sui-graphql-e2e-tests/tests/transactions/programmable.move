@@ -26,19 +26,19 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -50,21 +50,22 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -115,19 +116,19 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -139,21 +140,22 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -195,19 +197,19 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -219,18 +221,19 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
                     outputState {
-                        location
+                        address
                         digest
                         asMoveObject {
                             contents {
@@ -242,7 +245,7 @@ module P0::m {
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -276,19 +279,19 @@ module P0::m {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
             kind {
                 __typename
-                ... on ProgrammableTransaction {
+                ... on ProgrammableTransactionBlock {
                     value
                 }
             }
@@ -300,21 +303,22 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    location
+
                     idCreated
                     idDeleted
 
-                    inputState { location digest }
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
