@@ -183,7 +183,7 @@ async fn commit_checkpoints<S>(
             .tap_err(|e| {
                 error!("Failed to advance epoch with error: {}", e.to_string());
             })
-            .expect("Persisting data into DB should not fail.");
+            .expect("Advancing epochs in DB should not fail.");
         metrics.total_epoch_committed.inc();
     }
 

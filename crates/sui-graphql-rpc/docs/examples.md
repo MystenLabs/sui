@@ -30,14 +30,18 @@
 #### &emsp;&emsp;[With Tx Block Connection Latest Epoch](#458749)
 ### [Event Connection](#8)
 #### &emsp;&emsp;[Event Connection](#524280)
+#### &emsp;&emsp;[Filter By Emitting Package Module And Event Type](#524281)
+#### &emsp;&emsp;[Filter By Sender](#524282)
 ### [Name Service](#9)
 #### &emsp;&emsp;[Name Service](#589815)
 ### [Object](#10)
 #### &emsp;&emsp;[Object](#655350)
 ### [Object Connection](#11)
 #### &emsp;&emsp;[Filter Object Ids](#720885)
-#### &emsp;&emsp;[Filter Owner](#720886)
-#### &emsp;&emsp;[Object Connection](#720887)
+#### &emsp;&emsp;[Filter On Generic Type](#720886)
+#### &emsp;&emsp;[Filter On Type](#720887)
+#### &emsp;&emsp;[Filter Owner](#720888)
+#### &emsp;&emsp;[Object Connection](#720889)
 ### [Owner](#12)
 #### &emsp;&emsp;[Dynamic Field](#786420)
 #### &emsp;&emsp;[Dynamic Field Connection](#786421)
@@ -719,9 +723,7 @@
 
 ><pre>{
 >  eventConnection(
->    filter: {
->      eventType: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"
->    }
+>    filter: {eventPackage: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13", eventModule: "Market", eventType: "ChangePriceEvent<0x2::sui::SUI>"}
 >  ) {
 >    nodes {
 >      sendingModule {
@@ -732,7 +734,66 @@
 >          }
 >        }
 >      }
->      eventType {
+>      type {
+>        repr
+>      }
+>      senders {
+>        address
+>      }
+>      timestamp
+>      json
+>      bcs
+>    }
+>  }
+>}</pre>
+
+### <a id=524281></a>
+### Filter By Emitting Package Module And Event Type
+
+><pre>query byEmittingPackageModuleAndEventType {
+>  eventConnection(
+>    first: 1
+>    after: "85173:0"
+>    filter: {emittingPackage: "0x3", emittingModule: "sui_system", eventPackage: "0x3", eventModule: "validator", eventType: "StakingRequestEvent"}
+>  ) {
+>    pageInfo {
+>      hasNextPage
+>      endCursor
+>    }
+>    nodes {
+>      sendingModule {
+>        name
+>      }
+>      type {
+>        repr
+>      }
+>      senders {
+>        address
+>      }
+>      timestamp
+>      json
+>      bcs
+>    }
+>  }
+>}</pre>
+
+### <a id=524282></a>
+### Filter By Sender
+
+><pre>query byTxSender {
+>  eventConnection(
+>    first: 1
+>    filter: {sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"}
+>  ) {
+>    pageInfo {
+>      hasNextPage
+>      endCursor
+>    }
+>    nodes {
+>      sendingModule {
+>        name
+>      }
+>      type {
 >        repr
 >      }
 >      senders {
@@ -816,6 +877,44 @@
 >}</pre>
 
 ### <a id=720886></a>
+### Filter On Generic Type
+
+><pre>{
+>  objectConnection(filter: {type: "0x2::coin::Coin"}) {
+>    edges {
+>      node {
+>        asMoveObject {
+>          contents {
+>            type {
+>              repr
+>            }
+>          }
+>        }
+>      }
+>    }
+>  }
+>}</pre>
+
+### <a id=720887></a>
+### Filter On Type
+
+><pre>{
+>  objectConnection(filter: {type: "0x3::staking_pool::StakedSui"}) {
+>    edges {
+>      node {
+>        asMoveObject {
+>          contents {
+>            type {
+>              repr
+>            }
+>          }
+>        }
+>      }
+>    }
+>  }
+>}</pre>
+
+### <a id=720888></a>
 ### Filter Owner
 ####  Filter on owner
 
@@ -834,7 +933,7 @@
 >  }
 >}</pre>
 
-### <a id=720887></a>
+### <a id=720889></a>
 ### Object Connection
 
 ><pre>{

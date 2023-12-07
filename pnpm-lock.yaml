@@ -145,7 +145,7 @@ importers:
         version: 18.2.15
       '@vanilla-extract/vite-plugin':
         specifier: ^3.9.0
-        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
+        version: 3.9.0(vite@4.4.4)
       postcss:
         specifier: ^8.4.31
         version: 8.4.31
@@ -203,9 +203,6 @@ importers:
       '@mysten/ui':
         specifier: workspace:*
         version: link:../ui
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@radix-ui/react-collapsible':
         specifier: ^1.0.3
         version: 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
@@ -239,9 +236,6 @@ importers:
       '@types/throttle-debounce':
         specifier: ^5.0.0
         version: 5.0.0
-      '@vanilla-extract/css':
-        specifier: ^1.13.0
-        version: 1.13.0
       '@visx/axis':
         specifier: ^3.3.0
         version: 3.3.0(react@18.2.0)
@@ -384,9 +378,6 @@ importers:
       '@types/topojson-client':
         specifier: ^3.1.1
         version: 3.1.1
-      '@vanilla-extract/vite-plugin':
-        specifier: ^3.9.0
-        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
       '@vitejs/plugin-react':
         specifier: ^4.0.3
         version: 4.0.3(vite@4.4.4)
@@ -911,15 +902,15 @@ importers:
       '@headlessui/react':
         specifier: ^1.7.15
         version: 1.7.15(react-dom@18.2.0)(react@18.2.0)
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@18.2.0)(react@18.2.0)
@@ -1042,12 +1033,12 @@ importers:
         specifier: ^3.21.4
         version: 3.21.4
     devDependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@tailwindcss/forms':
         specifier: ^0.5.4
         version: 0.5.4(tailwindcss@3.3.3)
@@ -1084,6 +1075,9 @@ importers:
 
   dapps/sponsored-transactions:
     dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.0.0(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -1091,12 +1085,12 @@ importers:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
     devDependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../sdk/dapp-kit
       '@mysten/sui.js':
         specifier: workspace:*
         version: link:../../sdk/typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../../sdk/wallet-kit/react
       '@types/react':
         specifier: ^18.2.15
         version: 18.2.15
@@ -1701,93 +1695,6 @@ importers:
       ws:
         specifier: ^8.14.2
         version: 8.14.2
-
-  sdk/wallet-kit/core:
-    dependencies:
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../../typescript
-      '@mysten/wallet-standard':
-        specifier: workspace:*
-        version: link:../../wallet-standard
-    devDependencies:
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
-
-  sdk/wallet-kit/example:
-    dependencies:
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../../typescript
-      '@mysten/wallet-kit':
-        specifier: workspace:*
-        version: link:../react
-      '@types/node':
-        specifier: ^20.4.2
-        version: 20.4.2
-      '@types/react':
-        specifier: ^18.2.15
-        version: 18.2.15
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.2.7
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.2.0(react@18.2.0)
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
-    devDependencies:
-      '@vitejs/plugin-react':
-        specifier: ^4.0.3
-        version: 4.0.3(vite@4.4.4)
-      vite:
-        specifier: ^4.4.4
-        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
-
-  sdk/wallet-kit/react:
-    dependencies:
-      '@headlessui/react':
-        specifier: ^1.7.15
-        version: 1.7.15(react-dom@18.2.0)(react@18.2.0)
-      '@mysten/sui.js':
-        specifier: workspace:*
-        version: link:../../typescript
-      '@mysten/wallet-kit-core':
-        specifier: workspace:*
-        version: link:../core
-      '@mysten/wallet-standard':
-        specifier: workspace:*
-        version: link:../../wallet-standard
-      '@stitches/react':
-        specifier: ^1.2.8
-        version: 1.2.8(react@18.2.0)
-    devDependencies:
-      '@types/react':
-        specifier: ^18.2.15
-        version: 18.2.15
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.2.7
-      react:
-        specifier: ^18.2.0
-        version: 18.2.0
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.2.0(react@18.2.0)
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
-      typescript:
-        specifier: ^5.1.6
-        version: 5.1.6
 
   sdk/wallet-standard:
     dependencies:
@@ -8083,14 +7990,6 @@ packages:
       size-limit: 8.2.6
     dev: true
 
-  /@stitches/react@1.2.8(react@18.2.0):
-    resolution: {integrity: sha512-9g9dWI4gsSVe8bNLlb+lMkBYsnIKCZTmvqvDG+Avnn69XfmHZKiaMrx7cgTaddq7aTPPmXiTsbFcUy0xgI4+wA==}
-    peerDependencies:
-      react: '>= 16.3.0'
-    dependencies:
-      react: 18.2.0
-    dev: false
-
   /@storybook/addon-a11y@7.1.0(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-omKNbkE5m2KglFD8HLBmmpLP7ZdiDDPwb29vkBBkNRAWw4xqwMN/TEAavTTdQdmGr3zvbANZc+LgIlnS5oiwLg==}
     peerDependencies:
@@ -10741,7 +10640,7 @@ packages:
       '@vanilla-extract/css': 1.13.0
     dev: false
 
-  /@vanilla-extract/vite-plugin@3.9.0(@types/node@20.4.2)(vite@4.4.4):
+  /@vanilla-extract/vite-plugin@3.9.0(vite@4.4.11):
     resolution: {integrity: sha512-Q2HYAyEJ93Uy7GHQPPiP8SXwPMHGpd4d0YnrIQqB0YZccYbGJR/WFIln9Dmbzx2pdngQUoOfhwEg6kJF8sQrog==}
     peerDependencies:
       vite: ^2.2.3 || ^3.0.0 || ^4.0.3
@@ -10750,7 +10649,7 @@ packages:
       outdent: 0.8.0
       postcss: 8.4.31
       postcss-load-config: 3.1.4(postcss@8.4.31)
-      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+      vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -10763,7 +10662,7 @@ packages:
       - ts-node
     dev: true
 
-  /@vanilla-extract/vite-plugin@3.9.0(vite@4.4.11):
+  /@vanilla-extract/vite-plugin@3.9.0(vite@4.4.4):
     resolution: {integrity: sha512-Q2HYAyEJ93Uy7GHQPPiP8SXwPMHGpd4d0YnrIQqB0YZccYbGJR/WFIln9Dmbzx2pdngQUoOfhwEg6kJF8sQrog==}
     peerDependencies:
       vite: ^2.2.3 || ^3.0.0 || ^4.0.3
@@ -10772,7 +10671,7 @@ packages:
       outdent: 0.8.0
       postcss: 8.4.31
       postcss-load-config: 3.1.4(postcss@8.4.31)
-      vite: 4.4.11(@types/node@20.4.2)(sass@1.63.6)
+      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -23952,6 +23851,7 @@ packages:
     resolution: {integrity: sha512-zaWCozRZ6DLEWAWFrVDz1H6FVXzUSfTy5FUMWsQlU8Ym5JP9eO4xkTIROFCQvhQf61z6O/G6ugw3SgAnvvm+HA==}
     engines: {node: '>=14.17'}
     hasBin: true
+    dev: true
 
   /ufo@1.1.2:
     resolution: {integrity: sha512-TrY6DsjTQQgyS3E3dBaOXf0TpPD8u9FVrVYmKVegJuFw51n/YB9XPt+U6ydzFG5ZIN7+DIjPbNmXoBj9esYhgQ==}

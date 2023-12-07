@@ -343,7 +343,7 @@ mod tests {
         let db_a = open_cf(
             input_path,
             None,
-            MetricConf::default(),
+            MetricConf::new("test_db_hard_link_1"),
             &[FIRST_CF, SECOND_CF],
         )
         .unwrap();
@@ -361,7 +361,7 @@ mod tests {
         let db_b = open_cf(
             output_path,
             None,
-            MetricConf::default(),
+            MetricConf::new("test_db_hard_link_2"),
             &[FIRST_CF, SECOND_CF],
         )
         .unwrap();

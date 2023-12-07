@@ -40,7 +40,7 @@ impl WriteAheadLog {
     pub(crate) fn open(path: &Path) -> Self {
         Self::open_tables_read_write(
             path.to_path_buf(),
-            typed_store::rocks::MetricConf::default(),
+            typed_store::rocks::MetricConf::new("faucet_write_ahead_log"),
             None,
             None,
         )

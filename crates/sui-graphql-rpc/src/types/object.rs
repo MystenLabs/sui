@@ -41,10 +41,11 @@ pub(crate) enum ObjectKind {
 
 #[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
-    pub package: Option<SuiAddress>,
-    pub module: Option<String>,
-    pub ty: Option<String>,
-
+    /// This field is used to specify the type of objects that should be included
+    /// in the query results. Generic types can be queried by either the generic
+    /// type name, e.g. `0x2::coin::Coin`, or by the full type name, such as
+    /// `0x2::coin::Coin<0x2::sui::SUI>`.
+    pub type_: Option<String>,
     pub owner: Option<SuiAddress>,
     pub object_ids: Option<Vec<SuiAddress>>,
     pub object_keys: Option<Vec<ObjectKey>>,

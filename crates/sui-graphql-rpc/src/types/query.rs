@@ -182,7 +182,7 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_events(first, after, last, before, filter)

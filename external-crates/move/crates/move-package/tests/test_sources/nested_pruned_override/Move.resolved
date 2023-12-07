@@ -95,6 +95,7 @@ ResolvedGraph {
         silence_warnings: false,
         warnings_are_errors: false,
         additional_named_addresses: {},
+        no_lint: false,
     },
     package_table: {
         "A": Package {

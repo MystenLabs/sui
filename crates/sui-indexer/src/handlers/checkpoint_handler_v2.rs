@@ -238,6 +238,7 @@ where
                 new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                     system_state,
                     0, //first_checkpoint_id
+                    None,
                 ),
             }));
         }
@@ -286,6 +287,7 @@ where
             new_epoch: IndexedEpochInfo::from_new_system_state_summary(
                 system_state,
                 checkpoint_summary.sequence_number + 1, // first_checkpoint_id
+                Some(&event),
             ),
         }))
     }

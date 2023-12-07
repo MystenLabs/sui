@@ -22,7 +22,6 @@ mod checked {
     };
     use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
-    use move_core_types::runtime_value::MoveTypeLayout;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
         account_address::AccountAddress,
@@ -40,7 +39,7 @@ mod checked {
     #[cfg(debug_assertions)]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use move_vm_types::values::{GlobalValue, Value as VMValue};
+    use move_vm_types::values::GlobalValue;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
@@ -1453,20 +1452,6 @@ mod checked {
             _ty: &Type,
         ) -> PartialVMResult<(&mut GlobalValue, Option<Option<NumBytes>>)> {
             panic!("load_resource should never be called for LinkageView")
-        }
-
-        fn emit_event(
-            &mut self,
-            _guid: Vec<u8>,
-            _seq_num: u64,
-            _ty: Type,
-            _val: VMValue,
-        ) -> PartialVMResult<()> {
-            panic!("emit_event should never be called for LinkageView")
-        }
-
-        fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, VMValue)> {
-            panic!("events should never be called for LinkageView")
         }
 
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {

@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::types::transaction_block_kind::authenticator_state_update::AuthenticatorStateUpdateTransaction;
-
 use self::{
-    change_epoch::ChangeEpochTransaction,
-    consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
+    consensus_commit_prologue::ConsensusCommitPrologueTransaction,
+    end_of_epoch::ChangeEpochTransaction, genesis::GenesisTransaction,
     randomness_state_update::RandomnessStateUpdateTransaction,
+};
+use crate::types::transaction_block_kind::{
+    authenticator_state_update::AuthenticatorStateUpdateTransaction,
+    end_of_epoch::EndOfEpochTransaction,
 };
 use async_graphql::*;
 use sui_types::transaction::TransactionKind as NativeTransactionKind;
 
 pub(crate) mod authenticator_state_update;
-pub(crate) mod change_epoch;
 pub(crate) mod consensus_commit_prologue;
+pub(crate) mod end_of_epoch;
 pub(crate) mod genesis;
 pub(crate) mod randomness_state_update;
 
@@ -31,12 +33,6 @@ pub(crate) enum TransactionBlockKind {
 // TODO: flesh out the programmable transaction block type
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct ProgrammableTransactionBlock {
-    pub value: String,
-}
-
-// TODO: flesh out the end of epoch transaction type
-#[derive(SimpleObject, Clone, Eq, PartialEq)]
-pub(crate) struct EndOfEpochTransaction {
     pub value: String,
 }
 
@@ -68,10 +64,7 @@ impl From<NativeTransactionKind> for TransactionBlockKind {
                 T::AuthenticatorState(AuthenticatorStateUpdateTransaction(asu))
             }
 
-            // TODO: flesh out type
-            K::EndOfEpochTransaction(eoe) => T::EndOfEpoch(EndOfEpochTransaction {
-                value: format!("{eoe:?}"),
-            }),
+            K::EndOfEpochTransaction(eoe) => T::EndOfEpoch(EndOfEpochTransaction(eoe)),
 
             K::RandomnessStateUpdate(rsu) => T::Randomness(RandomnessStateUpdateTransaction(rsu)),
         }

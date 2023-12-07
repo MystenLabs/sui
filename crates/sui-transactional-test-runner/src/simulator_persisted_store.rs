@@ -78,7 +78,7 @@ impl PersistedStore {
         let samp: SamplingInterval = SamplingInterval::new(Duration::from_secs(60), 0);
         let read_write = PersistedStoreInner::open_tables_read_write(
             path.clone(),
-            MetricConf::with_sampling(samp.clone()),
+            MetricConf::new("persisted").with_sampling(samp.clone()),
             None,
             None,
         );
@@ -97,7 +97,7 @@ impl PersistedStore {
                 self.path.clone(),
                 None,
                 None,
-                MetricConf::with_sampling(samp),
+                MetricConf::new("persisted_readonly").with_sampling(samp),
             ),
         }
     }
@@ -674,7 +674,7 @@ impl Clone for PersistedStoreInnerReadOnlyWrapper {
                 self.path.clone(),
                 None,
                 None,
-                MetricConf::with_sampling(samp),
+                MetricConf::new("persisted_readonly").with_sampling(samp),
             ),
         }
     }

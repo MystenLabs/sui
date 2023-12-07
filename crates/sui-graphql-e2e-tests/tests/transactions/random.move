@@ -27,6 +27,19 @@
             }
         }
     }
+
+    transactionBlockConnection(last: 1) {
+        nodes {
+            kind {
+                __typename
+                ... on EndOfEpochTransaction {
+                    transactionConnection {
+                        nodes { __typename }
+                    }
+                }
+            }
+        }
+    }
 }
 
 

@@ -14,13 +14,5 @@
 	"bcs": {
 		"title": "BCS",
 		"type": "page"
-	},
-	"wallet-kit": {
-		"title": "Wallet Kit",
-		"type": "page"
-	},
-	"owned-object-pool": {
-		"title": "Owned Object Pool",
-		"type": "page"
 	}
 }

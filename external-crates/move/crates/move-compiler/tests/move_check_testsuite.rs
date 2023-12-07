@@ -13,6 +13,7 @@ use move_compiler::{
     diagnostics::*,
     editions::{Edition, Flavor},
     shared::{Flags, NumericalAddress, PackageConfig, PackagePaths},
+    sui_mode::linters::{known_filters, linter_visitors},
     Compiler, PASS_PARSER,
 };
 
@@ -23,6 +24,7 @@ const TEST_EXT: &str = "unit_test";
 const VERIFICATION_EXT: &str = "verification";
 const UNUSED_EXT: &str = "unused";
 
+const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
 const MOVE_2024_DIR: &str = "move_2024";
 
@@ -48,6 +50,7 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
 }
 
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
+    let lint = path.components().any(|c| c.as_os_str() == LINTER_DIR);
     let flavor = if path.components().any(|c| c.as_os_str() == SUI_MODE_DIR) {
         Flavor::Sui
     } else {
@@ -63,10 +66,10 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
         edition,
         ..PackageConfig::default()
     };
-    testsuite(path, config)
+    testsuite(path, config, lint)
 }
 
-fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<()> {
+fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_stable::Result<()> {
     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
     // file.
     if path.with_extension(TEST_EXT).exists() {
@@ -90,6 +93,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             Path::new(&test_out_path),
             Flags::testing(),
             config,
+            lint,
         )?;
     }
 
@@ -116,6 +120,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             Path::new(&verification_out_path),
             Flags::verification(),
             config,
+            lint,
         )?;
     }
 
@@ -137,6 +142,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
             Path::new(&unused_out_path),
             Flags::testing(),
             config.clone(),
+            lint,
         )?;
     }
 
@@ -148,7 +154,7 @@ fn testsuite(path: &Path, mut config: PackageConfig) -> datatest_stable::Result<
     config
         .warning_filter
         .union(&WarningFilters::unused_warnings_filter_for_test());
-    run_test(path, &exp_path, &out_path, flags, config)?;
+    run_test(path, &exp_path, &out_path, flags, config, lint)?;
     Ok(())
 }
 
@@ -159,6 +165,7 @@ pub fn run_test(
     out_path: &Path,
     flags: Flags,
     default_config: PackageConfig,
+    lint: bool,
 ) -> anyhow::Result<()> {
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
     let named_address_map = default_testing_addresses(default_config.flavor);
@@ -174,11 +181,20 @@ pub fn run_test(
     }];
 
     let flags = flags.set_sources_shadow_deps(true);
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(targets, deps)
+
+    let mut compiler = Compiler::from_package_paths(targets, deps)
         .unwrap()
         .set_flags(flags)
-        .set_default_config(default_config)
-        .run::<PASS_PARSER>()?;
+        .set_default_config(default_config);
+
+    if lint {
+        let (filter_attr_name, filters) = known_filters();
+        compiler = compiler
+            .add_visitors(linter_visitors())
+            .add_custom_known_filters(filters, filter_attr_name);
+    }
+
+    let (files, comments_and_compiler_res) = compiler.run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();

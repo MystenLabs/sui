@@ -4,6 +4,7 @@
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 
 import { useWallets } from '../../../hooks/wallet/useWallets.js';
+import { getWalletUniqueIdentifier } from '../../../utils/walletUtils.js';
 import { SuiIcon } from '../../icons/SuiIcon.js';
 import * as styles from './WalletList.css.js';
 import { WalletListItem } from './WalletListItem.js';
@@ -21,10 +22,10 @@ export function WalletList({ selectedWalletName, onPlaceholderClick, onSelect }:
 			{wallets.length > 0 ? (
 				wallets.map((wallet) => (
 					<WalletListItem
-						key={wallet.name}
+						key={getWalletUniqueIdentifier(wallet)}
 						name={wallet.name}
 						icon={wallet.icon}
-						isSelected={wallet.name === selectedWalletName}
+						isSelected={getWalletUniqueIdentifier(wallet) === selectedWalletName}
 						onClick={() => onSelect(wallet)}
 					/>
 				))

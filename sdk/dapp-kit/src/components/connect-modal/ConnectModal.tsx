@@ -8,6 +8,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
+import { getWalletUniqueIdentifier } from '../../utils/walletUtils.js';
 import { BackIcon } from '../icons/BackIcon.js';
 import { CloseIcon } from '../icons/CloseIcon.js';
 import { StyleMarker } from '../styling/StyleMarker.js';
@@ -112,10 +113,13 @@ export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: Conne
 										<Heading as="h2">Connect a Wallet</Heading>
 									</Dialog.Title>
 									<WalletList
-										selectedWalletName={selectedWallet?.name}
+										selectedWalletName={getWalletUniqueIdentifier(selectedWallet)}
 										onPlaceholderClick={() => setCurrentView('getting-started')}
 										onSelect={(wallet) => {
-											if (selectedWallet?.name !== wallet.name) {
+											if (
+												getWalletUniqueIdentifier(selectedWallet) !==
+												getWalletUniqueIdentifier(wallet)
+											) {
 												setSelectedWallet(wallet);
 												connectWallet(wallet);
 											}

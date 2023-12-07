@@ -278,7 +278,7 @@ fn coin_index_table_default_config() -> DBOptions {
 impl IndexStore {
     pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
         let tables =
-            IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
+            IndexStoreTables::open_tables_read_write(path, MetricConf::new("index"), None, None);
         let metrics = IndexStoreMetrics::new(registry);
         let caches = IndexStoreCaches {
             per_coin_type_balance: ShardedLruCache::new(1_000_000, 1000),
