@@ -20,6 +20,8 @@ use std::collections::VecDeque;
 use std::ops::Mul;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
+pub const EMPTY_INPUT: u64 = 1;
+
 
 #[derive(Clone)]
 pub struct PoseidonBN254CostParams {
@@ -64,6 +66,10 @@ pub fn poseidon_bn254(
     // The input is a reference to a vector of vector<u8>'s
     let inputs = pop_arg!(args, VectorRef);
     let length = inputs.len(&Type::U256)?.value_as::<u64>()?;
+
+    if length == 0 {
+        return Ok(NativeResult::err(context.gas_used(), EMPTY_INPUT));
+    }
 
     // Charge the msg dependent costs
     native_charge_gas_early_exit!(

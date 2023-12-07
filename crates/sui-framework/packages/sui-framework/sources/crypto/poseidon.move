@@ -8,6 +8,10 @@ module sui::poseidon {
     /// Error if any of the inputs are larger than or equal to the BN254 field size.
     const ENonCanonicalInput: u64 = 0;
 
+    #[allow(unused_const)]
+    /// Error if an empty vector is passed as input.
+    const EEmptyInput: u64 = 1;
+
     /// @param data: Vector of BN254 field elements to hash.
     ///
     /// Hash the inputs using poseidon_bn254 and returns a BN254 field element.
