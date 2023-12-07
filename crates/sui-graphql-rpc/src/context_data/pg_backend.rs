@@ -228,25 +228,13 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         Ok(query)
     }
     fn multi_get_coins(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
+        before: Option<Vec<u8>>,
+        after: Option<Vec<u8>>,
         limit: i64,
         address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, Pg> {
-        let mut query = objects::dsl::objects.into_boxed();
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(objects::dsl::object_id.lt(cursor));
-            } else {
-                query = query.filter(objects::dsl::object_id.gt(cursor));
-            }
-        }
-        if descending_order {
-            query = query.order(objects::dsl::object_id.desc());
-        } else {
-            query = query.order(objects::dsl::object_id.asc());
-        }
+        let mut query = order_objs(before, after);
         query = query.limit(limit + 1);
 
         if let Some(address) = address {
@@ -260,117 +248,101 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query
     }
     fn multi_get_objs(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
+        before: Option<Vec<u8>>,
+        after: Option<Vec<u8>>,
         limit: i64,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,
     ) -> Result<objects::BoxedQuery<'static, Pg>, Error> {
-        let mut query = objects::dsl::objects.into_boxed();
-
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(objects::dsl::object_id.lt(cursor));
-            } else {
-                query = query.filter(objects::dsl::object_id.gt(cursor));
-            }
-        }
-
-        if descending_order {
-            query = query.order(objects::dsl::object_id.desc());
-        } else {
-            query = query.order(objects::dsl::object_id.asc());
-        }
-
+        let mut query = order_objs(before, after);
         query = query.limit(limit + 1);
 
-        if let Some(filter) = filter {
-            if let Some(object_ids) = filter.object_ids {
-                query = query.filter(
-                    objects::dsl::object_id.eq_any(
-                        object_ids
-                            .into_iter()
-                            .map(|id| id.into_vec())
-                            .collect::<Vec<_>>(),
-                    ),
-                );
+        let Some(filter) = filter else {
+            return Ok(query);
+        };
+
+        if let Some(object_ids) = filter.object_ids {
+            query = query.filter(
+                objects::dsl::object_id.eq_any(
+                    object_ids
+                        .into_iter()
+                        .map(|id| id.into_vec())
+                        .collect::<Vec<_>>(),
+                ),
+            );
+        }
+
+        if let Some(owner) = filter.owner {
+            query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
+
+            match owner_type {
+                Some(OwnerType::Address) => {
+                    query = query.filter(objects::dsl::owner_type.eq(OwnerType::Address as i16));
+                }
+                Some(OwnerType::Object) => {
+                    query = query.filter(objects::dsl::owner_type.eq(OwnerType::Object as i16));
+                }
+                None => {
+                    query = query.filter(
+                        objects::dsl::owner_type
+                            .eq(OwnerType::Address as i16)
+                            .or(objects::dsl::owner_type.eq(OwnerType::Object as i16)),
+                    );
+                }
+                _ => Err(DbValidationError::InvalidOwnerType)?,
+            }
+        }
+
+        if let Some(object_type) = filter.type_ {
+            let parts: Vec<_> = object_type.splitn(3, "::").collect();
+
+            if parts.iter().any(|&part| part.is_empty()) {
+                return Err(DbValidationError::InvalidType(
+                    "Empty strings are not allowed".to_string(),
+                ))?;
             }
 
-            if let Some(owner) = filter.owner {
-                query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
-
-                match owner_type {
-                    Some(OwnerType::Address) => {
-                        query =
-                            query.filter(objects::dsl::owner_type.eq(OwnerType::Address as i16));
-                    }
-                    Some(OwnerType::Object) => {
-                        query = query.filter(objects::dsl::owner_type.eq(OwnerType::Object as i16));
-                    }
-                    None => {
-                        query = query.filter(
-                            objects::dsl::owner_type
-                                .eq(OwnerType::Address as i16)
-                                .or(objects::dsl::owner_type.eq(OwnerType::Object as i16)),
-                        );
-                    }
-                    _ => Err(DbValidationError::InvalidOwnerType)?,
-                }
-            }
-
-            if let Some(object_type) = filter.type_ {
-                let parts: Vec<_> = object_type.splitn(3, "::").collect();
-
-                if parts.iter().any(|&part| part.is_empty()) {
-                    return Err(DbValidationError::InvalidType(
-                        "Empty strings are not allowed".to_string(),
-                    ))?;
-                }
-
-                if parts.len() == 1 {
-                    // We check for a leading 0x to determine if it is an address
-                    // And otherwise process it as a primitive type
-                    if parts[0].starts_with("0x") {
-                        let package = SuiAddress::from_str(parts[0])
-                            .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                        query =
-                            query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
-                    } else {
-                        query = query.filter(objects::dsl::object_type.eq(parts[0].to_string()));
-                    }
-                } else if parts.len() == 2 {
-                    // Only package addresses are allowed if there are two or more parts
+            if parts.len() == 1 {
+                // We check for a leading 0x to determine if it is an address
+                // And otherwise process it as a primitive type
+                if parts[0].starts_with("0x") {
                     let package = SuiAddress::from_str(parts[0])
                         .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-                    query = query.filter(
-                        objects::dsl::object_type.like(format!("{}::{}::%", package, parts[1])),
-                    );
-                } else if parts.len() == 3 {
-                    let validated_type = parse_sui_struct_tag(&object_type)
-                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
-
-                    if validated_type.type_params.is_empty() {
-                        query = query.filter(
-                            objects::dsl::object_type
-                                .like(format!(
-                                    "{}<%",
-                                    validated_type.to_canonical_string(/* with_prefix */ true)
-                                ))
-                                .or(objects::dsl::object_type
-                                    .eq(validated_type
-                                        .to_canonical_string(/* with_prefix */ true))),
-                        );
-                    } else {
-                        query = query.filter(
-                            objects::dsl::object_type
-                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
-                        );
-                    }
+                    query = query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
                 } else {
-                    return Err(Error::Internal(
-                        "Invalid type. Type must have 3 or less parts".to_string(),
-                    ));
+                    query = query.filter(objects::dsl::object_type.eq(parts[0].to_string()));
                 }
+            } else if parts.len() == 2 {
+                // Only package addresses are allowed if there are two or more parts
+                let package = SuiAddress::from_str(parts[0])
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                query = query.filter(
+                    objects::dsl::object_type.like(format!("{}::{}::%", package, parts[1])),
+                );
+            } else if parts.len() == 3 {
+                let validated_type = parse_sui_struct_tag(&object_type)
+                    .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                if validated_type.type_params.is_empty() {
+                    query = query.filter(
+                        objects::dsl::object_type
+                            .like(format!(
+                                "{}<%",
+                                validated_type.to_canonical_string(/* with_prefix */ true)
+                            ))
+                            .or(objects::dsl::object_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true))),
+                    );
+                } else {
+                    query = query.filter(
+                        objects::dsl::object_type
+                            .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
+                    );
+                }
+            } else {
+                return Err(Error::Internal(
+                    "Invalid type. Type must have 3 or less parts".to_string(),
+                ));
             }
         }
 
@@ -643,6 +615,22 @@ pub fn extract_cost(explain_result: &str) -> Result<f64, Error> {
             "Failed to get cost from query plan".to_string(),
         ))
     }
+}
+
+fn order_objs(before: Option<Vec<u8>>, after: Option<Vec<u8>>) -> objects::BoxedQuery<'static, Pg> {
+    let mut query = objects::dsl::objects.into_boxed();
+    if let Some(after) = after {
+        query = query
+            .filter(objects::dsl::object_id.gt(after))
+            .order(objects::dsl::object_id.asc());
+    } else if let Some(before) = before {
+        query = query
+            .filter(objects::dsl::object_id.lt(before))
+            .order(objects::dsl::object_id.desc());
+    } else {
+        query = query.order(objects::dsl::object_id.asc());
+    }
+    query
 }
 
 pub(crate) type QueryBuilder = PgQueryBuilder;

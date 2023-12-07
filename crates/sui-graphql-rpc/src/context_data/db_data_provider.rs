@@ -237,9 +237,10 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_obj_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
         let coin_type = parse_to_type_tag(Some(coin_type))
@@ -249,8 +250,8 @@ impl PgManager {
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_coins(
-                        cursor.clone(),
-                        descending_order,
+                        before.clone(),
+                        after.clone(),
                         limit,
                         address.clone(),
                         coin_type.clone(),
@@ -516,16 +517,17 @@ impl PgManager {
         owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_obj_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
 
         let query = move || {
             QueryBuilder::multi_get_objs(
-                cursor.clone(),
-                descending_order,
+                before.clone(),
+                after.clone(),
                 limit,
                 filter.clone(),
                 owner_type,
