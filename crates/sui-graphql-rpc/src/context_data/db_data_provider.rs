@@ -268,6 +268,10 @@ impl PgManager {
                     stored_objs.pop();
                 }
 
+                if last.is_some() {
+                    stored_objs.reverse();
+                }
+
                 Ok((stored_objs, has_next_page))
             })
             .transpose()
@@ -537,11 +541,16 @@ impl PgManager {
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
             .await?;
+
         result
             .map(|mut stored_objs| {
                 let has_next_page = stored_objs.len() as i64 > limit;
                 if has_next_page {
                     stored_objs.pop();
+                }
+
+                if last.is_some() {
+                    stored_objs.reverse();
                 }
 
                 Ok((stored_objs, has_next_page))
