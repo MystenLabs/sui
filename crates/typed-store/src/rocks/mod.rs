@@ -1897,10 +1897,9 @@ where
             .op_metrics
             .rocksdb_iter_keys
             .with_label_values(&[&self.cf]);
-        let mut db_iter = self
+        let db_iter = self
             .rocksdb
             .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        db_iter.seek_to_first();
         SafeIter::new(
             self.cf.clone(),
             db_iter,
