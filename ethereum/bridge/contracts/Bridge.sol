@@ -93,7 +93,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		for (uint256 i = 0; i < signatures.length; i++) {
 			address recoveredPK = recoverSigner(hash, signatures[i]);
 			// Check if the address is not zero
-			require(recoveredPK != address(0), 'Zero address.');
+			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
 			uint256 index = validatorIndex[recoveredPK] - 1;
 			require(index < validators.length, 'Index out of bounds');
 
@@ -117,7 +117,7 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		for (uint256 i = 0; i < signatures.length; i++) {
 			address recoveredPK = recoverSigner(hash, signatures[i]);
 			// Check if the address is not zero
-			require(recoveredPK != address(0), 'Zero address.');
+			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
 			uint256 index = validatorIndex[recoveredPK] - 1;
 			require(index < validators.length, 'Index out of bounds');
 
