@@ -184,7 +184,7 @@ The command has the form `Publish(ModuleBytes, TransitiveDependencies)` where `M
 
 #### `Upgrade`
 
-The command has the form `Upgrade(ModuleBytes, TransitiveDependencies, Package, UpgradeTicket)`, where the `Package` indicates the bject ID of the package being upgraded.  The `ModuleBytes` and `TransitiveDependencies` work similarly as the `Publish` command.
+The command has the form `Upgrade(ModuleBytes, TransitiveDependencies, Package, UpgradeTicket)`, where the `Package` indicates the object ID of the package being upgraded.  The `ModuleBytes` and `TransitiveDependencies` work similarly as the `Publish` command.
 
 - For details on the `ModuleBytes` and `TransitiveDependencies`, see the `Publish` command. Note though, that no `init` functions are called for the upgraded modules.
 - The `Package: ObjectID` is the Object ID of the package being upgraded. The package must exist and be the latest version.
