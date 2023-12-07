@@ -43,12 +43,12 @@ Response: {
   "data": {
     "epoch": {
       "validatorSet": {
-        "totalStake": "20000010003000000"
+        "totalStake": "20000010002000000"
       },
       "totalGasFees": "1000000",
       "totalStakeRewards": "1000000",
       "totalStakeSubsidies": "0",
-      "fundSize": "16096040",
+      "fundSize": "15098160",
       "fundInflow": "1976000",
       "fundOutflow": "978120",
       "netInflow": "997880"
