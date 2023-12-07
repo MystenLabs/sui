@@ -317,6 +317,7 @@ module scratch_off::game {
             // Update leaderboard 
             let leaderboard_updated = false;
             let player_metadata = get_player_metadata(&mut store.player_metadata, player);
+
             // Case where player is already on leaderboard
             if (table_contains_player(&mut store.leaderboard.leaderboard_player_metadata, player)) {
                 table::remove(&mut store.leaderboard.leaderboard_player_metadata, player);
@@ -326,8 +327,8 @@ module scratch_off::game {
                 if (store.leaderboard.lowest_sui_won < player_metadata.amount_won) {
                     table::add(&mut store.leaderboard.leaderboard_player_metadata, player, *player_metadata);
                     leaderboard_updated = true;
+                    vector::push_back(&mut store.leaderboard.leaderboard_players, player);
                 };
-                vector::push_back(&mut store.leaderboard.leaderboard_players, player);
             };
 
             // Update minimum amount_won in leaderboard
@@ -351,7 +352,6 @@ module scratch_off::game {
                     };
                     idx = idx + 1;
                 };
-
                 vector::remove(&mut store.leaderboard.leaderboard_players, min_index);
                 table::remove(&mut store.leaderboard.leaderboard_player_metadata, min_player);
             };
@@ -394,6 +394,7 @@ module scratch_off::game {
                 amount_won: 0,
             });
         };
+    }
     }
 
     // --------------- House Accessors ---------------
@@ -481,6 +482,7 @@ module scratch_off::game {
             // Update leaderboard 
             let leaderboard_updated = false;
             let player_metadata = get_player_metadata(&mut store.player_metadata, player);
+
             // Case where player is already on leaderboard
             if (table_contains_player(&mut store.leaderboard.leaderboard_player_metadata, player)) {
                 table::remove(&mut store.leaderboard.leaderboard_player_metadata, player);
@@ -490,8 +492,8 @@ module scratch_off::game {
                 if (store.leaderboard.lowest_sui_won < player_metadata.amount_won) {
                     table::add(&mut store.leaderboard.leaderboard_player_metadata, player, *player_metadata);
                     leaderboard_updated = true;
+                    vector::push_back(&mut store.leaderboard.leaderboard_players, player);
                 };
-                vector::push_back(&mut store.leaderboard.leaderboard_players, player);
             };
 
             // Update minimum amount_won in leaderboard
@@ -515,7 +517,6 @@ module scratch_off::game {
                     };
                     idx = idx + 1;
                 };
-
                 vector::remove(&mut store.leaderboard.leaderboard_players, min_index);
                 table::remove(&mut store.leaderboard.leaderboard_player_metadata, min_player);
             };

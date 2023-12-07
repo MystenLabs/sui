@@ -61,7 +61,7 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             let number_of_prizes = vector<u64>[1, 1, 1];
-            let value_of_prizes = vector<u64>[1,2,5];
+            let value_of_prizes = vector<u64>[1, 1, 1];
             setup_test_sui_store(
                 &mut test,
                 OWNER_ADDRESS,
@@ -78,6 +78,7 @@ module scratch_off::test_game {
             let store_cap: StoreCap = ts::take_from_sender(&test);
             game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
             game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, ts::ctx(&mut test));
             ts::return_to_sender(&test, store_cap);
             ts::return_shared(store);
         };
@@ -87,11 +88,11 @@ module scratch_off::test_game {
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            std::debug::print(&prize_pool_balance(&store));
-            std::debug::print(winning_tickets(&store));
+            // std::debug::print(&prize_pool_balance(&store));
+            // std::debug::print(winning_tickets(&store));
             let leaderboard = leaderboard<SUI>(&store);
             let players_list = leaderboard_players(leaderboard);
-            std::debug::print(&players_list);
+            // std::debug::print(&players_list);
             assert!(vector::length(&players_list) == 1, 0);
             ts::return_shared(store);
         };
@@ -99,16 +100,29 @@ module scratch_off::test_game {
         {
             let ticket: Ticket = ts::take_from_sender(&test);
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
-            std::debug::print(&ticket);
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
             let leaderboard = leaderboard<SUI>(&store);
             let players_list = leaderboard_players(leaderboard);
             assert!(vector::length(&players_list) == 1, 0);
+            // This is because owner should not change as bob would be the second person to climb to the leaderboard
+            assert!(*vector::borrow(&players_list, 0) == ALICE_ADDRESS, 0);
+            ts::return_shared(store);
+        };
+        ts::next_tx(&mut test, BOB_ADDRESS);
+        {
+            let ticket: Ticket = ts::take_from_sender(&test);
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard<SUI>(&store);
+            let players_list = leaderboard_players(leaderboard);
+            assert!(vector::length(&players_list) == 1, 0);
+            // This is because owner should not change
+            assert!(*vector::borrow(&players_list, 0) == BOB_ADDRESS, 0);
             ts::return_shared(store);
         };
         test_scenario::end(test);
-
     }
 
     fun test_no_more_tickets_(test: Scenario) {
