@@ -189,6 +189,8 @@ struct TxResult {
     ix: Option<u16>,
 }
 
+/// A user transaction that allows the interleaving of native commands (like transfer, split coins,
+/// merge coins, etc) and move calls, executed atomically.
 #[Object]
 impl ProgrammableTransactionBlock {
     /// Input objects or primitive values.

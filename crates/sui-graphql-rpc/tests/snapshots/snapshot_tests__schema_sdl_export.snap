@@ -119,6 +119,9 @@ type AuthenticatorStateExpireTransaction {
 	authenticatorObjInitialSharedVersion: Int!
 }
 
+"""
+System transaction for updating the on-chain state used by zkLogin.
+"""
 type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
@@ -210,6 +213,13 @@ scalar Base64
 scalar BigInt
 
 
+"""
+A system transaction that updates epoch information on-chain (increments the current epoch).
+Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
+submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+"""
 type ChangeEpochTransaction {
 	"""
 	The next (to become) epoch.
@@ -404,6 +414,10 @@ type CommitteeMember {
 	stakeUnit: Int
 }
 
+"""
+System transaction that runs at the beginning of a checkpoint, and is responsible for setting
+the current value of the clock, based on the timestamp from consensus.
+"""
 type ConsensusCommitPrologueTransaction {
 	"""
 	Epoch of the commit prologue transaction.
@@ -488,6 +502,11 @@ type EndOfEpochData {
 	nextProtocolVersion: Int
 }
 
+"""
+System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
+at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
+optional transactions to run at the end of the epoch.
+"""
 type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
@@ -796,6 +815,9 @@ type GasInput {
 	gasBudget: BigInt
 }
 
+"""
+System transaction that initializes the network and writes the initial set of objects on-chain.
+"""
 type GenesisTransaction {
 	"""
 	Objects to be created during genesis.
@@ -1620,6 +1642,10 @@ A single transaction, or command, in the programmable transaction block.
 """
 union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
 
+"""
+A user transaction that allows the interleaving of native commands (like transfer, split coins,
+merge coins, etc) and move calls, executed atomically.
+"""
 type ProgrammableTransactionBlock {
 	"""
 	Input objects or primitive values.
