@@ -755,40 +755,40 @@ impl PrimaryReceiverHandler {
         );
 
         // Verify any system messages present in the header.
-        type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
-        for m in header.system_messages().iter() {
-            match m {
-                SystemMessage::DkgMessage(bytes) => {
-                    let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> =
-                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
-                    ensure!(
-                        msg.sender == header.author().0,
-                        DagError::InvalidSystemMessage
-                    );
-                }
-                SystemMessage::DkgConfirmation(bytes) => {
-                    let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> =
-                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
-                    ensure!(
-                        conf.sender == header.author().0,
-                        DagError::InvalidSystemMessage
-                    );
-                }
-                SystemMessage::RandomnessSignature(round, bytes) => {
-                    let sig: RandomnessSignature =
-                        bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
-                    fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
-                        self.randomness_vss_key_lock
-                            .get()
-                            .ok_or(DagError::RandomnessUnavailable)?
-                            .c0(),
-                        &round.signature_message(),
-                        &sig,
-                    )
-                    .map_err(|_| DagError::InvalidRandomnessSignature)?;
-                }
-            }
-        }
+        // type DkgG = <ThresholdBls12381MinSig as ThresholdBls>::Public;
+        // for m in header.system_messages().iter() {
+        //     match m {
+        //         SystemMessage::DkgMessage(bytes) => {
+        //             let msg: fastcrypto_tbls::dkg::Message<DkgG, DkgG> =
+        //                 bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+        //             ensure!(
+        //                 msg.sender == header.author().0,
+        //                 DagError::InvalidSystemMessage
+        //             );
+        //         }
+        //         SystemMessage::DkgConfirmation(bytes) => {
+        //             let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> =
+        //                 bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+        //             ensure!(
+        //                 conf.sender == header.author().0,
+        //                 DagError::InvalidSystemMessage
+        //             );
+        //         }
+        //         SystemMessage::RandomnessSignature(round, bytes) => {
+        //             let sig: RandomnessSignature =
+        //                 bcs::from_bytes(bytes).map_err(|_| DagError::InvalidSystemMessage)?;
+        //             fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
+        //                 self.randomness_vss_key_lock
+        //                     .get()
+        //                     .ok_or(DagError::RandomnessUnavailable)?
+        //                     .c0(),
+        //                 &round.signature_message(),
+        //                 &sig,
+        //             )
+        //             .map_err(|_| DagError::InvalidRandomnessSignature)?;
+        //         }
+        //     }
+        // }
 
         // Synchronize all batches referenced in the header.
         self.synchronizer
