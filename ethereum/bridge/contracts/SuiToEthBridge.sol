@@ -51,16 +51,17 @@ contract SuiToEthBridge {
 	}
 
 	// The modifier that delegates all calls to the implementation contract
-	// modifier delegated {
-	//     (bool success, bytes memory data) = implementation.delegatecall(msg.data);
-	//     require(success, "Delegatecall failed");
-	//     assembly {
-	//         return(add(data, 0x20), mload(data))
-	//     }
-	// }
+	modifier delegated() {
+		(bool success, bytes memory data) = implementation.delegatecall(msg.data);
+		require(success, 'Delegatecall failed');
+		assembly {
+			return(add(data, 0x20), mload(data))
+		}
+		_;
+	}
 
 	// The fallback function that delegates all calls to the implementation contract
-	// fallback() external payable delegated {}
+	fallback() external payable delegated {}
 
 	// The function that allows anyone to submit an upgrade proposal, along with their signature
 	function submitProposal(Proposal memory proposal, bytes memory signature) public {
