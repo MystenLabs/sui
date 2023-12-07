@@ -1485,10 +1485,11 @@ type ObjectEdge {
 
 input ObjectFilter {
 	"""
-	This field is used to specify the type of objects that should be include in the query
+	This field is used to specify the type of objects that should be included in the query
 	results.
 	
-	Type can be filtered by their package, package::module, or their fuly qualified type name.
+	Objects can be filtered by their type's package, package::module, or their fully qualified
+	type name.
 	
 	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
 	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
