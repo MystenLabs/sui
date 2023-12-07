@@ -1660,9 +1660,9 @@ impl ProtocolConfig {
                 31 => {
                     cfg.execution_version = Some(2);
                     // Only enable shared object deletion on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.shared_object_deletion = true;
-                    }
+                    // if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    //     cfg.feature_flags.shared_object_deletion = true;
+                    // }
                 }
                 32 => {
                     // enable zklogin in multisig in devnet and testnet
