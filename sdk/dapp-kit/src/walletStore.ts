@@ -6,6 +6,8 @@ import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { getWalletUniqueIdentifier } from './utils/walletUtils.js';
+
 type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
 export type WalletActions = {
@@ -56,7 +58,7 @@ export function createWalletStore({
 			(set, get) => ({
 				autoConnectEnabled,
 				wallets,
-				accounts: [],
+				accounts: [] as WalletAccount[],
 				currentWallet: null,
 				currentAccount: null,
 				lastConnectedAccountAddress: null,
@@ -72,7 +74,7 @@ export function createWalletStore({
 						accounts: connectedAccounts,
 						currentWallet: wallet,
 						currentAccount: selectedAccount,
-						lastConnectedWalletName: wallet.name,
+						lastConnectedWalletName: getWalletUniqueIdentifier(wallet),
 						lastConnectedAccountAddress: selectedAccount?.address,
 						connectionStatus: 'connected',
 					}));

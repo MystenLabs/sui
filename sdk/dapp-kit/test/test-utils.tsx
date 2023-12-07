@@ -35,20 +35,18 @@ export function createWalletProviderContextWrapper(
 }
 
 export function registerMockWallet({
+	id,
 	walletName,
 	accounts = [createMockAccount()],
 	features = {},
 }: {
+	id?: string | null;
 	walletName: string;
 	accounts?: ReadonlyWalletAccount[];
 	features?: IdentifierRecord<unknown>;
 }) {
 	const walletsApi = getWallets();
-	const mockWallet = new MockWallet(walletName, accounts, features);
-
-	if (walletsApi.get().find((wallet) => wallet.name === walletName)) {
-		throw new Error('Wallet already registered, must call `unregister` before the test ends.');
-	}
+	const mockWallet = new MockWallet(id ?? crypto.randomUUID(), walletName, accounts, features);
 
 	return {
 		unregister: walletsApi.register(mockWallet),
