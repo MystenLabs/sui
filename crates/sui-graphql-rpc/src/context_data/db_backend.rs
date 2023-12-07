@@ -73,8 +73,8 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, DB>;
     fn multi_get_events(
-        cursor: Option<(i64, i64)>,
-        descending_order: bool,
+        before: Option<(i64, i64)>,
+        after: Option<(i64, i64)>,
         limit: i64,
         filter: Option<EventFilter>,
     ) -> Result<events::BoxedQuery<'static, DB>, Error>;

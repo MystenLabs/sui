@@ -427,33 +427,32 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query
     }
     fn multi_get_events(
-        cursor: Option<(i64, i64)>,
-        descending_order: bool,
+        before: Option<(i64, i64)>,
+        after: Option<(i64, i64)>,
         limit: i64,
         filter: Option<EventFilter>,
     ) -> Result<events::BoxedQuery<'static, Pg>, Error> {
         let mut query = events::dsl::events.into_boxed();
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(
-                    events::dsl::tx_sequence_number.lt(cursor.0).or(
-                        events::dsl::tx_sequence_number
-                            .eq(cursor.0)
-                            .and(events::dsl::event_sequence_number.lt(cursor.1)),
-                    ),
-                );
-            } else {
-                query = query.filter(
-                    events::dsl::tx_sequence_number.gt(cursor.0).or(
-                        events::dsl::tx_sequence_number
-                            .eq(cursor.0)
-                            .and(events::dsl::event_sequence_number.gt(cursor.1)),
-                    ),
-                );
-            }
-        }
-        if descending_order {
+        if let Some(after) = after {
             query = query
+                .filter(
+                    events::dsl::tx_sequence_number
+                        .gt(after.0)
+                        .or(events::dsl::tx_sequence_number
+                            .eq(after.0)
+                            .and(events::dsl::event_sequence_number.gt(after.1))),
+                )
+                .order(events::dsl::tx_sequence_number.asc())
+                .then_order_by(events::dsl::event_sequence_number.asc());
+        } else if let Some(before) = before {
+            query = query
+                .filter(
+                    events::dsl::tx_sequence_number.lt(before.0).or(
+                        events::dsl::tx_sequence_number
+                            .eq(before.0)
+                            .and(events::dsl::event_sequence_number.lt(before.1)),
+                    ),
+                )
                 .order(events::dsl::tx_sequence_number.desc())
                 .then_order_by(events::dsl::event_sequence_number.desc());
         } else {
