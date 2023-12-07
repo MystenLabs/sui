@@ -14,6 +14,8 @@ The concept is to divide high-value assets into smaller, more affordable units, 
 
 This strategy enables wider participation from investors who might want to mitigate risk by investing in a portion of a digital asset rather than being the sole owner, thereby expanding accessibility to a broader range of investors.
 
+This pattern is similar to the [ERC1155](https://eips.ethereum.org/EIPS/eip-1155) Multi-token standard with additional functionality. This makes it a suitable choice for Solidity based use cases that one might want to implement on Sui.
+
 - **Asset creation**
     
     Each asset is fractionalized into a total supply, with each fraction represented as either a non-fungible token (NFT) or fungible token (FT) type collectible. This ensures that each individual fraction maintains a balance equal to or greater than one, and when combined, all fractions collectively reach the total supply of the asset.
@@ -41,6 +43,13 @@ This strategy enables wider participation from investors who might want to mitig
 As with all smart contracts on Sui, Move provides the logic that powers asset tokenization.
 
 ### asset_tokenization package
+
+:::info
+
+This reference implementation uses the Kiosk primitive to ensure that TAs created operate within their creator's defined policy. We recommend you use the implementation as it is in order to have marketable TAs that support Rules (e.g: royalties, commissions etc).
+If operating within the Kiosk primitive is not a requirement, then the unlock module & some of the proxy's methods related to Transfer Policies can be excluded.
+
+:::
 
 Select a module to view its details:
 
@@ -423,18 +432,22 @@ It allows tokenized asset type creators to enable these operations for Kiosk ass
 
 </Tabs>
 
-### fnft_template package
+### template package
 
-An example package utilizing the launchpad approach serves as the template package utilized whenever a new asset requires representation as a `tokenized_asset`. This package should implement two essential modules, each catering to distinct functionalities or aspects required for asset tokenization.
+An example use case package, that enables utilization of Rust WASM functionality to support seamless asset creation on the browser.
+This is similar to the launchpad approach and will serve as the template package whenever a new asset requires representation as a Tokenized Asset.
+Effectively allowing users to edit fields of this template contract on the fly and publish it with the edits included.
+This package implements two essential modules, each catering to distinct functionalities required for asset tokenization.
+More details regarding how Rust WASM was implemented can be found in the [Web Assembly](#webassembly-wasm-and-template-package) section.
 
 - **Modules**
-    - fnft_template
+    - template
         
         This is the module where a new asset can be defined.
         
-        When there's a necessity to represent a new asset as a fractional asset, this module will undergo modification to `fnft_<asset name>`, with the `<asset name>` (in capitals) being the OTW of this new asset.
+        When there's a necessity to represent a new asset as a fractional asset, this module will undergo modification to `<template>::<TEMPLATE>`, with the `<template>` (in capitals) being the OTW of this new asset.
         
-        This module is designed to call the `asset_tokenization::tokenized_asset::new_asset()` method, which facilitates the declaration of new fields for the asset:
+        This module is designed to call the `asset_tokenization::tokenized_asset::new_asset(...)` method, which facilitates the declaration of new fields for the asset:
         
         - `witness` The OTW `NEW_ASSET`
         - `total_supply` The total supply allowed to exist at any time
@@ -444,7 +457,7 @@ An example package utilizing the launchpad approach serves as the template packa
         - `icon_url` The URL for the asset logo (optional)
         - `burnable` Boolean: defines if the asset can be burned by an admin
         
-    - fnft_genesis
+    - genesis
         
         A genesis type of module that should include a OTW so that the sender can claim the Publisher.
 
@@ -452,36 +465,36 @@ An example package utilizing the launchpad approach serves as the template packa
 
 ```mermaid
 sequenceDiagram
-    participant Platform Admin;
-    participant Asset Creator;
-    participant Kiosk;
-    participant tokenized_asset;
-    participant proxy;
-    participant template;
-    participant genesis;
-    participant genesis;
-    participant Blockchain;
-    Platform Admin->>Blockchain: Publish asset_tokenization package (tokenized_asset, proxy, unlock modules);
-    Blockchain-->>tokenized_asset: tokenized_asset module is published;
-    Blockchain-->>proxy: proxy module is published;
-    tokenized_asset->>Platform Admin: Send Platform Cap (owned object);
-    proxy->>Blockchain: Share Registry (shared object);
-    Asset Creator->>template: Pass Asset Info, AssetOTW as input;
-    Asset Creator->>genesis: Pass PublisherOTW as input;
-    Asset Creator->>Blockchain: Publish template package (template, genesis modules);
-    Blockchain-->>genesis: genesis module is published;
-    Blockchain-->>template: template module is published;
-    genesis->>Asset Creator: Send Publisher (owned object);
-    template->>tokenized_asset: Create new asset using Asset Info as input;
-    tokenized_asset-->>Asset Creator: Send Asset Cap (owned object);
-    tokenized_asset-->>Blockchain: Share Asset Metadata (shared object);
-    Asset Creator->>proxy: Use Publisher as input to setup_tp;
-    Blockchain->>proxy: Use Registry as input to setup_tp;
-    proxy-->>Blockchain: Share created Transfer Policy, ProtectedTP (shared objects);
-    proxy-->>Asset Creator: Send created Transfer Policy Cap (owned object);
-    Asset Creator->>tokenized_asset: Define type of tokenized asset (FT, NFT) to mint;
-    tokenized_asset-->>Asset Creator: Return minted Tokenized Asset;
-    Asset Creator->>Kiosk: Place Tokenized Asset;
+    participant Platform Admin
+    participant Asset Creator
+    participant Kiosk
+    participant tokenized_asset
+    participant proxy
+    participant template
+    participant genesis
+    participant genesis
+    participant Blockchain
+    Platform Admin->>Blockchain: Publish asset_tokenization package (tokenized_asset, proxy, unlock modules)
+    Blockchain-->>tokenized_asset: tokenized_asset module is published
+    Blockchain-->>proxy: proxy module is published
+    tokenized_asset->>Platform Admin: Send Platform Cap (owned object)
+    proxy->>Blockchain: Share Registry (shared object)
+    Asset Creator->>template: Pass Asset Info, AssetOTW as input
+    Asset Creator->>genesis: Pass PublisherOTW as input
+    Asset Creator->>Blockchain: Publish template package (template, genesis modules)
+    Blockchain-->>genesis: genesis module is published
+    Blockchain-->>template: template module is published
+    genesis->>Asset Creator: Send Publisher (owned object)
+    template->>tokenized_asset: Create new asset using Asset Info as input
+    tokenized_asset-->>Asset Creator: Send Asset Cap (owned object)
+    tokenized_asset-->>Blockchain: Share Asset Metadata (shared object)
+    Asset Creator->>proxy: Use Publisher as input to setup_tp
+    Blockchain->>proxy: Use Registry as input to setup_tp
+    proxy-->>Blockchain: Share created Transfer Policy, ProtectedTP (shared objects)
+    proxy-->>Asset Creator: Send created Transfer Policy Cap (owned object)
+    Asset Creator->>tokenized_asset: Define type of tokenized asset (FT, NFT) to mint
+    tokenized_asset-->>Asset Creator: Return minted Tokenized Asset
+    Asset Creator->>Kiosk: Place Tokenized Asset
 ```
 
 ### Join sequence diagram
@@ -494,23 +507,26 @@ The following sequence diagram presenting how the join flow would take place. Th
 
 ```mermaid
 sequenceDiagram
-    participant User;
-    participant User's Kiosk;
-    participant kiosk module;
-    participant unlock module;
-    participant tokenized asset module;
-    participant blockchain;
+    participant User
+    participant User's Kiosk
+    participant kiosk module
+    participant unlock module
+    participant tokenized asset module
+    participant blockchain
     
-User's Kiosk->>+kiosk module: List Tokenized Asset for zero price;
-User's Kiosk->>+kiosk module: Purchase Tokenized Asset;
-kiosk module-->>+User: Returns Transfer Request, Tokenized Asset Object;
-User->>+unlock module: Use Transfer Request, Tokenized Asset Object, Asset Cap as input to asset_from_kiosk_to_burn;
-blockchain->>+unlock module: Use Protected TP as Input to asset_from_kiosk_to_burn;
-unlock module-->>+User: Returns Burn Promise, Tokenized Asset Object, Asset Cap;
-User->>+tokenized asset module: Use Tokenized Asset Object, Asset Cap as input to burn;
-tokenized asset module-->>+User: Returns Asset Cap;
-User->>+unlock module: Use Burn Proof, Asset Cap as input to prove_burn;
-unlock module-->>+User: Returns Asset Cap;
+User's Kiosk->>kiosk module: Borrow Tokenized Asset X
+kiosk module-->>User: Returns Promise, Tokenized Asset X
+User's Kiosk->>kiosk module: List Tokenized Asset Y for zero price
+User's Kiosk->>kiosk module: Purchase Tokenized Asset Y
+kiosk module-->>User: Returns Transfer Request, Tokenized Asset Y
+User->>unlock module: Use Transfer Request, Tokenized Asset X, Y as input to asset_from_kiosk_to_join
+blockchain->>unlock module: Use Protected TP as input to asset_from_kiosk_to_join
+unlock module-->>User: Returns Join Promise, Tokenized Asset X,Y Objects
+User->>tokenized asset module: Use Tokenized Asset X,Y as input to join
+tokenized asset module-->>User: Return Burn Proof, Tokenized Asset X
+User->>unlock module: Use Burn Proof, Join Promise, Tokenized Asset X as input to prove_join
+unlock module-->>User: Return Tokenized Asset X
+User->>User's Kiosk: Resolve Promise by returning Tokenized Asset X in user's Kiosk
 ```
 
 ### Burn sequence diagram
@@ -523,23 +539,23 @@ The following sequence diagram shows the burn flow and assumes that:
 
 ```mermaid
 sequenceDiagram
-    participant User;
-    participant User's Kiosk;
-    participant kiosk module;
-    participant unlock module;
-    participant tokenized asset module;
-    participant blockchain;
+    participant User
+    participant User's Kiosk
+    participant kiosk module
+    participant unlock module
+    participant tokenized asset module
+    participant blockchain
     
-User's Kiosk->>+kiosk module: List Tokenized Asset for zero price;
-User's Kiosk->>+kiosk module: Purchase Tokenized Asset;
-kiosk module-->>+User: Returns Transfer Request, Tokenized Asset Object;
-User->>+unlock module: Use Transfer Request, Tokenized Asset Object, Asset Cap as input to asset_from_kiosk_to_burn;
-blockchain->>+unlock module: Use Protected TP as Input to asset_from_kiosk_to_burn;
-unlock module-->>+User: Returns Burn Promise, Tokenized Asset Object, Asset Cap;
-User->>+tokenized asset module: Use Tokenized Asset Object, Asset Cap as input to burn;
-tokenized asset module-->>+User: Returns Asset Cap;
-User->>+unlock module: Use Burn Proof, Asset Cap as input to prove_burn;
-unlock module-->>+User: Returns Asset Cap;
+User's Kiosk->>kiosk module: List Tokenized Asset for zero price
+User's Kiosk->>kiosk module: Purchase Tokenized Asset
+kiosk module-->>User: Returns Transfer Request, Tokenized Asset Object
+User->>unlock module: Use Transfer Request, Tokenized Asset Object, Asset Cap as input to asset_from_kiosk_to_burn
+blockchain->>unlock module: Use Protected TP as Input to asset_from_kiosk_to_burn
+unlock module-->>User: Returns Burn Promise, Tokenized Asset Object, Asset Cap
+User->>tokenized asset module: Use Tokenized Asset Object, Asset Cap as input to burn
+tokenized asset module-->>User: Returns Asset Cap
+User->>unlock module: Use Burn Proof, Asset Cap as input to prove_burn
+unlock module-->>User: Returns Asset Cap
 ```
 
 ## Variations
@@ -617,37 +633,26 @@ struct AdminCap<phantom T> has key, store {
 }
 ```
 
-**Methods**
+**Method Signatures**
 
 The `AdminCap` here acts both as an admin capability and a type insurance. Encoding the information of both the asset type that is allowed to be deleted with this ticket.
+This function should assert that the asset T is burnable and return a `BurnTicket<T>`.
 
 ```rust
 public fun mint_burn_ticket<T>(
 	cap: &AdminCap<T>,
 	tokenized_asset_id: ID,
 	ctx: &mut TxContext
-): BurnTicket {
-	assert!(cap.burnable == true, ENonBurnable);
-
-	BurnTicket<T> {
-		id: object::new(ctx),
-		tokenized_asset_id
-	}
-}
+): BurnTicket 
 ```
 
-Burning on the user side requires for them to access the shared `Treasury` object. 
+Burning on the user side requires for them to access the shared `Treasury` object. This function burns the Tokenized Asset and decreases the supply. 
 
 ```rust
 public fun burn_with_ticket<T>(
 	treasury: &mut Treasury<T>,
 	self: TokenizedAsset<T>,
-	ticket: BurnTicket<T>) {
-
-  let TokenizedAsset { id, balance, metadata: _, image_url: _} = self;
-  balance::decrease_supply(&mut cap.supply, balance);
-  object::delete(id);
-}
+	ticket: BurnTicket<T>)
 ```
 
 # Deployment
@@ -656,7 +661,9 @@ public fun burn_with_ticket<T>(
 
 ## Publishing
 
-At this stage, you can choose to manually deploy the contracts or utilize the publish bash script that automatically deploys the contracts and sets up most of the `.env` asset tokenization related fields for you. The `.env.template` file denotes variables that the script automatically fills in. You can see a reference here:
+At this stage, you can choose to manually deploy the contracts or utilize the publish bash script that automatically deploys the contracts and sets up most of the `.env` Asset Tokenization related fields for you.
+The `.env.template` file denotes variables that the script automatically fills in.
+You can see a reference here:
 
 ```
 SUI_NETWORK = rpc endpoint of the network of your choice | auto filled by publish script
@@ -681,6 +688,7 @@ TOKENIZED_ASSET = tokenized asset id (created by minting)
 FT1 = tokenized asset id (to be joined)
 FT2 = tokenized asset id (to be joined)
 ```
+For more details on publishing, please check the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
 
 ### Publishing packages
 
@@ -689,6 +697,8 @@ Select a package for specific instructions.
 <Tabs>
 
 <TabItem label="asset_tokenization" value="asset_tokenization">
+
+### Manually
 
 In a terminal or console at the `move/asset_tokenization` directory of the project enter:
 
@@ -714,11 +724,28 @@ You should choose and store the `package ID` and the `registry ID` from the crea
 
 Afterward, it's necessary to modify the `Move.toml` file. Under the `[package]` section, add `published-at = <package ID>`. Additionally, under the `[addresses]` section, replace `0x0` with the same `package ID`.
 
+### Automatically
+
+The fields that are automatically filled are: `SUI_NETWORK`, `ASSET_TOKENIZATION_PACKAGE_ID` and `REGISTRY`. 
+
+To publish with the bash script run:
+
+```bash
+npm run publish-asset-tokenization
+```
+
+After publishing, you can now edit the `Move.toml` file like described in the Manual flow.
+
+For more details regarding this process, please consult the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
+
+
 </TabItem>
 
-<TabItem label="fnft_template" value="fnft_template">
+<TabItem label="template" value="template">
 
-In a terminal or console at the `move/fnft_template` directory of the project enter:
+### Manually
+
+In a terminal or console at the `move/template` directory of the project enter:
 
 ```bash
 sui client publish --gas-budget <GAS-BUDGET>
@@ -733,7 +760,7 @@ UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY asset_tokenization
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
-BUILDING fnft_template
+BUILDING template
 Successfully verified dependencies on-chain against source.
 ```
 
@@ -741,11 +768,23 @@ You can also view a multitude of information and transactional effects.
 
 You should choose and store the `package ID`, asset `metadata ID`, `asset cap ID` and the `Publisher ID` from the created objects in the respective fields within your .env file.
 
+### Automatically
+
+The process of automatic deployment for the template package refers to publishing a new asset via the WASM library. Quick start steps:
+
+- Make sure that the `asset_tokenization/Move.toml` file has its published-at field uncommented and populated with the latest deployment of the package.
+- Ensure that the `asset_tokenization` package address is the same as the original deployment (if upgraded otherwise same as published-at).
+- Make any changes to the template fields by changing the input parameters of the `publishNewAsset` function.
+- Run `npm run publish-template`.
+- You should choose and store the *Template Package ID*, *asset metadata ID*, *asset cap ID* and the *Publisher ID* from the created objects in the respective fields within your **.env** file.
+
+For more details regarding this process, please consult the setup folder's [README](https://github.com/MystenLabs/asset-tokenization/tree/main/setup).
+
 </TabItem>
 
 </Tabs>
 
-## WebAssembly (WASM) and template package
+## WebAssembly (WASM) and template package {#webassembly-wasm-and-template-package}
 
 :::tip
 
@@ -938,7 +977,7 @@ In a terminal or console within the project's setup directory, utilize the follo
     
 - **Select Kiosk**
     
-    You must place the tokenized assets within a kiosk. Subsequently, you can list and sell them to other users. It's imperative to lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
+    You must place the tokenized assets within a kiosk if marketable assets are desired. Subsequently, you can list and sell them to other users. It's imperative to lock the objects in the kiosk to prevent any future unauthorized usage outside the defined policy that you set.
     
     Best practices recommend a single, comprehensive kiosk for all operations. However, this might not always be the case. Therefore, this project requires the use of only one personal kiosk to ensure consistency and better management, even if you own multiple kiosks.
     
