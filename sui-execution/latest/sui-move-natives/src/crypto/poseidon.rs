@@ -22,7 +22,6 @@ use std::ops::Mul;
 pub const NON_CANONICAL_INPUT: u64 = 0;
 pub const EMPTY_INPUT: u64 = 1;
 
-
 #[derive(Clone)]
 pub struct PoseidonBN254CostParams {
     /// Base cost for invoking the `poseidon_bn254` function
