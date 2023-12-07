@@ -202,14 +202,13 @@ const concepts = [
 				},
 				items: ['concepts/transactions/transaction-things'],
 			},
-			'concepts/sui-architecture/certification-overview',
 			'concepts/sui-architecture/consensus',
 			'concepts/sui-architecture/confirmation',
 			'concepts/sui-architecture/indexer-functions',
 			'concepts/sui-architecture/epochs',
 			'concepts/sui-architecture/protocol-upgrades',
 			'concepts/sui-architecture/data-management-things',
-			'concepts/sui-architecture/staking-rewards'
+			'concepts/sui-architecture/staking-rewards',
 		],
 	},
 	{
