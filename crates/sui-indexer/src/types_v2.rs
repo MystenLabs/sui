@@ -19,9 +19,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
 use sui_types::sui_serde::SuiStructTag;
-use sui_types::sui_system_state::sui_system_state_summary::{
-    SuiSystemStateSummary, SuiValidatorSummary,
-};
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::SenderSignedData;
 
 pub type IndexerResult<T> = Result<T, IndexerError>;
@@ -85,40 +83,44 @@ impl IndexedCheckpoint {
 #[derive(Clone, Debug, Default)]
 pub struct IndexedEpochInfo {
     pub epoch: u64,
-    pub validators: Vec<SuiValidatorSummary>,
     pub first_checkpoint_id: u64,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
     pub protocol_version: u64,
+    pub total_stake: u64,
+    pub storage_fund_balance: u64,
+    pub system_state: Vec<u8>,
     pub epoch_total_transactions: Option<u64>,
     pub last_checkpoint_id: Option<u64>,
     pub epoch_end_timestamp: Option<u64>,
     pub storage_fund_reinvestment: Option<u64>,
     pub storage_charge: Option<u64>,
     pub storage_rebate: Option<u64>,
-    pub storage_fund_balance: Option<u64>,
     pub stake_subsidy_amount: Option<u64>,
     pub total_gas_fees: Option<u64>,
     pub total_stake_rewards_distributed: Option<u64>,
     pub leftover_storage_fund_inflow: Option<u64>,
-    pub new_total_stake: Option<u64>,
     pub epoch_commitments: Option<Vec<CheckpointCommitment>>,
-    pub next_epoch_reference_gas_price: Option<u64>,
-    pub next_epoch_protocol_version: Option<u64>,
 }
 
 impl IndexedEpochInfo {
     pub fn from_new_system_state_summary(
         new_system_state_summary: SuiSystemStateSummary,
         first_checkpoint_id: u64,
+        event: Option<&SystemEpochInfoEvent>,
     ) -> IndexedEpochInfo {
         Self {
             epoch: new_system_state_summary.epoch,
-            validators: new_system_state_summary.active_validators,
             first_checkpoint_id,
             epoch_start_timestamp: new_system_state_summary.epoch_start_timestamp_ms,
             reference_gas_price: new_system_state_summary.reference_gas_price,
             protocol_version: new_system_state_summary.protocol_version,
+            // NOTE: total_stake and storage_fund_balance are about new epoch,
+            // although the event is generated at the end of the previous epoch,
+            // the event is optional b/c no such event for the first epoch.
+            total_stake: event.map(|e| e.total_stake).unwrap_or(0),
+            storage_fund_balance: event.map(|e| e.storage_fund_balance).unwrap_or(0),
+            system_state: bcs::to_bytes(&new_system_state_summary).unwrap(),
             ..Default::default()
         }
     }
@@ -136,29 +138,26 @@ impl IndexedEpochInfo {
             ),
             last_checkpoint_id: Some(*last_checkpoint_summary.sequence_number()),
             epoch_end_timestamp: Some(last_checkpoint_summary.timestamp_ms),
-            next_epoch_protocol_version: Some(event.protocol_version),
-            next_epoch_reference_gas_price: Some(event.reference_gas_price),
-            new_total_stake: Some(event.total_stake),
             storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
             storage_charge: Some(event.storage_charge),
             storage_rebate: Some(event.storage_rebate),
             leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
             stake_subsidy_amount: Some(event.stake_subsidy_amount),
-            storage_fund_balance: Some(event.storage_fund_balance),
             total_gas_fees: Some(event.total_gas_fees),
             total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
             epoch_commitments: last_checkpoint_summary
                 .end_of_epoch_data
                 .as_ref()
                 .map(|e| e.epoch_commitments.clone()),
-
             // The following felds will not and shall not be upserted
             // into DB. We have them below to make compiler and diesel happy
-            validators: vec![],
             first_checkpoint_id: 0,
             epoch_start_timestamp: 0,
             reference_gas_price: 0,
             protocol_version: 0,
+            total_stake: 0,
+            storage_fund_balance: 0,
+            system_state: vec![],
         }
     }
 }
