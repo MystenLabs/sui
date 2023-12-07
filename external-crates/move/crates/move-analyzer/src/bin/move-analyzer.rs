@@ -206,6 +206,10 @@ fn main() {
             recv(context.connection.receiver) -> message => {
                 match message {
                     Ok(Message::Request(request)) => {
+                        // the server should not quit after receiving the shutdown request to give itself
+                        // a chance of completing pending requests (but should not accept new requests
+                        // either which is handled inside on_requst) - instead it quits after receiving
+                        // the exit notification from the client, which is handled below
                         shutdown_req_received = on_request(&context, &request, shutdown_req_received);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
@@ -231,6 +235,10 @@ fn main() {
     eprintln!("Shut down language server '{}'.", exe);
 }
 
+/// This function returns `true` if shutdown request has been received, and `false` otherwise.
+/// The reason why this information is also passed as an argument is that according to the LSP
+/// spec, if any additional requests are received after shutdownd then the LSP implementation
+/// should respond with a particular type of error.
 fn on_request(context: &Context, request: &Request, shutdown_request_received: bool) -> bool {
     if shutdown_request_received {
         let response = lsp_server::Response::new_err(

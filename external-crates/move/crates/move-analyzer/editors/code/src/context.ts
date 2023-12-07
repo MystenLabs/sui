@@ -159,7 +159,7 @@ export class Context {
     }
 
     /**
-     * Deactivates the cliend interacting with the language server.
+     * Deactivates the client interacting with the language server.
      */
     async stopClient(): Promise<void> {
         log.info('Stopping client...');
