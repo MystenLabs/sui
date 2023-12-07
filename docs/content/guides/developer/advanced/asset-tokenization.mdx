@@ -289,8 +289,8 @@ The `proxy` module comprises methods that the type owner utilizes to execute Pub
     
 - `setup_tp`
 
-    This function leverages the Publisher nested within the registry and the sender's Publisher. It generates and returns a Transfer Policy and the associated Transfer Policy Cap specific to the TokenizedAsset<T>. This type 'T' is derived from the Publisher object.
-    It also generates an empty TP (Transfer Policy) wrapped in a ProtectedTP<T> object which is shared. This functionality can be utilized under specific conditions to override the kiosk lock rule.
+    This function leverages the Publisher nested within the registry and the sender's Publisher. It generates and returns a Transfer Policy and the associated Transfer Policy Cap specific to the `TokenizedAsset<T>`. This type 'T' is derived from the Publisher object. 
+    It also generates an empty TP (Transfer Policy) wrapped in a `ProtectedTP<T>` object which is shared. This functionality can be utilized under specific conditions to override the kiosk lock rule.
     
     ```rust
     public fun setup_tp<T: drop>(
