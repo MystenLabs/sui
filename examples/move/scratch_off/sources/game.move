@@ -7,6 +7,7 @@
 /// A ticket object that is transferable and can be passed into be evaluated.
 module scratch_off::game {
 
+
     use std::vector;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
@@ -19,6 +20,7 @@ module scratch_off::game {
     use sui::hash::blake2b256;
     use scratch_off::math;
     use sui::table::{Self, Table};
+    use sui::package;
 
     // --------------- Constants ---------------
     const EInvalidInputs: u64 = 0;
@@ -55,6 +57,14 @@ module scratch_off::game {
         tickets_claimed: u64,
         amount_won: u64,
     }
+
+    public fun tickets_claimed(metadata: &Metadata): u64 {
+        metadata.tickets_claimed
+    } 
+
+    public fun amount_won(metadata: &Metadata): u64 {
+        metadata.amount_won
+    } 
 
     struct LeaderBoard has store {
         lowest_sui_won: u64,
@@ -108,7 +118,11 @@ module scratch_off::game {
         table::contains(player_metadata, target_address)
     }
 
-    public fun get_player_metadata(player_metadata: &mut Table<address, Metadata>, target_address: address): &Metadata {
+    public fun player_metadata<Asset>(store: &ConvenienceStore<Asset>): &Table<address, Metadata> {
+        &store.player_metadata
+    }
+
+    public fun get_target_player_metadata(player_metadata: &Table<address, Metadata>, target_address: address): &Metadata {
         table::borrow(player_metadata, target_address)
     }
 
@@ -128,8 +142,20 @@ module scratch_off::game {
         store.losing_tickets_left
     }
 
+    public fun tickets_issued<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        store.tickets_issued
+    }
+
     public fun prize_pool_balance<Asset>(store: &ConvenienceStore<Asset>): u64 {
         balance::value(&store.prize_pool)
+    }
+
+    /// OTW to claim Publisher object, in order to create Display.
+    struct GAME has drop {}
+
+    /// We claim the cap for updating display
+    fun init(otw: GAME, ctx: &mut TxContext){
+        package::claim_and_keep(otw, ctx);
     }
 
     /// Initializes the store with all of the lottery tickets.
@@ -172,7 +198,7 @@ module scratch_off::game {
             idx = idx + 1;
         };
 
-        assert!(max_tickets_issued == winning_ticket_count, EInvalidInputs);
+        assert!(max_tickets_issued >= winning_ticket_count, EInvalidInputs);
         let new_store = ConvenienceStore<Asset> {
             id: object::new(ctx),
             creator: tx_context::sender(ctx),
@@ -316,10 +342,10 @@ module scratch_off::game {
 
             // Update leaderboard 
             let leaderboard_updated = false;
-            let player_metadata = get_player_metadata(&mut store.player_metadata, player);
+            let player_metadata = get_target_player_metadata(&store.player_metadata, player);
 
             // Case where player is already on leaderboard
-            if (table_contains_player(&mut store.leaderboard.leaderboard_player_metadata, player)) {
+            if (table_contains_player(&store.leaderboard.leaderboard_player_metadata, player)) {
                 table::remove(&mut store.leaderboard.leaderboard_player_metadata, player);
                 table::add(&mut store.leaderboard.leaderboard_player_metadata, player, *player_metadata);
             } else {
@@ -414,7 +440,7 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-        // get the game obj
+// get the game obj
         if (!ticket_exists<Asset>(store, ticket_id)) return;
         let Ticket {
             id,
@@ -480,10 +506,10 @@ module scratch_off::game {
 
             // Update leaderboard 
             let leaderboard_updated = false;
-            let player_metadata = get_player_metadata(&mut store.player_metadata, player);
+            let player_metadata = get_target_player_metadata(&store.player_metadata, player);
 
             // Case where player is already on leaderboard
-            if (table_contains_player(&mut store.leaderboard.leaderboard_player_metadata, player)) {
+            if (table_contains_player(&store.leaderboard.leaderboard_player_metadata, player)) {
                 table::remove(&mut store.leaderboard.leaderboard_player_metadata, player);
                 table::add(&mut store.leaderboard.leaderboard_player_metadata, player, *player_metadata);
             } else {

@@ -1,7 +1,9 @@
 #[test_only]
 module scratch_off::test_game {
-    use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket,
-     winning_tickets_left, leaderboard, prize_pool_balance, leaderboard_players, winning_tickets};
+    
+    use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket, player_metadata,
+     winning_tickets_left, leaderboard, prize_pool_balance, leaderboard_players, get_target_player_metadata,
+     tickets_claimed, amount_won, tickets_issued};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
     #[test_only] use sui::coin::{mint_for_testing, burn_for_testing};
@@ -53,9 +55,100 @@ module scratch_off::test_game {
     }
 
     #[test]
+    /// Checks that we never go past the sizing limit on leaderboard and that players are 
+    /// evicted from the leaderboard as expected
     fun test_leaderboard_max_size() {
         test_leaderboard_max_size_(scenario());
     }
+
+    #[test]
+    fun test_player_metadata() {
+        test_player_metadata_(scenario());
+    }
+
+    fun test_player_metadata_(test: Scenario) {
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            let number_of_prizes = vector<u64>[1, 1, 1, 1];
+            let value_of_prizes = vector<u64>[1, 1, 1, 1];
+            setup_test_sui_store(
+                &mut test,
+                OWNER_ADDRESS,
+                number_of_prizes,
+                value_of_prizes,
+                4,
+                MAX_LEADERBOARD_SIZE
+            )
+        };
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            // Send 1 ticket to alice and 1 ticket to bob
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, ts::ctx(&mut test));
+            game::send_ticket(&store_cap, BOB_ADDRESS, &mut store, ts::ctx(&mut test));
+            let tickets_issued = tickets_issued(&store);
+            assert!(tickets_issued == 4, 0);
+            ts::return_to_sender(&test, store_cap);
+            ts::return_shared(store);
+        };
+        ts::next_tx(&mut test, ALICE_ADDRESS);
+        {
+            let ticket: Ticket = ts::take_from_sender(&test);
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard<SUI>(&store);
+            let players_list = leaderboard_players(leaderboard);
+            assert!(vector::length(&players_list) == 1, 0);
+            ts::return_shared(store);
+        };
+        ts::next_tx(&mut test, BOB_ADDRESS);
+        {
+            let ticket: Ticket = ts::take_from_sender(&test);
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            let leaderboard = leaderboard<SUI>(&store);
+            let players_list = leaderboard_players(leaderboard);
+            assert!(vector::length(&players_list) == 1, 0);
+            // This is because owner should not change as bob would be the second person to climb to the leaderboard
+            assert!(*vector::borrow(&players_list, 0) == ALICE_ADDRESS, 0);
+            ts::return_shared(store);
+        };
+        ts::next_tx(&mut test, BOB_ADDRESS);
+        {
+            let ticket_2: Ticket = ts::take_from_sender(&test);
+            let ticket_3: Ticket = ts::take_from_sender(&test);
+
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let id = game::evaluate_ticket<SUI>(ticket_2, &mut store, ts::ctx(&mut test));
+            let id_2 = game::evaluate_ticket<SUI>(ticket_3, &mut store, ts::ctx(&mut test));
+
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id_2, b"test", &mut store, ts::ctx(&mut test));
+
+            let leaderboard = leaderboard<SUI>(&store);
+            let players_list = leaderboard_players(leaderboard);
+            assert!(vector::length(&players_list) == 1, 0);
+            // This is because owner should not change
+            assert!(*vector::borrow(&players_list, 0) == BOB_ADDRESS, 0);
+
+            // Assert that bob has 3 sui win and alice has 1 sui win
+            let player_table = player_metadata(&store);
+            let bob_meta = get_target_player_metadata(player_table, BOB_ADDRESS);
+            let alice_meta = get_target_player_metadata(player_table, ALICE_ADDRESS);
+            assert!(amount_won(bob_meta) == 3, 0);
+            assert!(tickets_claimed(bob_meta) == 3, 0);
+            assert!(amount_won(alice_meta) == 1, 0);
+            assert!(tickets_claimed(alice_meta) == 1, 0);
+            ts::return_shared(store);
+        };
+        test_scenario::end(test);
+    }
+
 
     fun test_leaderboard_max_size_(test: Scenario) {
         ts::next_tx(&mut test, OWNER_ADDRESS);
@@ -88,11 +181,8 @@ module scratch_off::test_game {
             let store: ConvenienceStore<SUI> = ts::take_shared(&test);
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            // std::debug::print(&prize_pool_balance(&store));
-            // std::debug::print(winning_tickets(&store));
             let leaderboard = leaderboard<SUI>(&store);
             let players_list = leaderboard_players(leaderboard);
-            // std::debug::print(&players_list);
             assert!(vector::length(&players_list) == 1, 0);
             ts::return_shared(store);
         };
