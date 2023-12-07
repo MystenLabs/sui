@@ -1112,6 +1112,31 @@ module deepbook::clob_v2 {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
+        place_market_order_int(
+            pool,
+            account_cap,
+            client_order_id,
+            quantity,
+            is_bid,
+            base_coin,
+            quote_coin,
+            clock,
+            ctx
+        )
+    }
+
+    /// Place a market order to the order book.
+    fun place_market_order_int<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        quantity: u64,
+        is_bid: bool,
+        base_coin: Coin<BaseAsset>,
+        quote_coin: Coin<QuoteAsset>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
         // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
         // Take market bid order for example.
         // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
@@ -1245,6 +1270,39 @@ module deepbook::clob_v2 {
     /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
     /// So please check that boolean value first before using the order id.
     public fun place_limit_order<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        price: u64,
+        quantity: u64,
+        self_matching_prevention: u8,
+        is_bid: bool,
+        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        restriction: u8,
+        clock: &Clock,
+        account_cap: &AccountCap,
+        ctx: &mut TxContext
+    ): (u64, u64, bool, u64) {
+        place_limit_order_int(
+            pool,
+            client_order_id,
+            price,
+            quantity,
+            self_matching_prevention,
+            is_bid,
+            expire_timestamp, // Expiration timestamp in ms in absolute value inclusive.
+            restriction,
+            clock,
+            account_cap,
+            ctx
+        )
+    }
+
+    /// Place a limit order to the order book.
+    /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order).
+    /// When the limit order is not successfully placed, we return false to indicate that and also returns a meaningless order_id 0.
+    /// When the limit order is successfully placed, we return true to indicate that and also the corresponding order_id.
+    /// So please check that boolean value first before using the order id.
+    fun place_limit_order_int<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
         price: u64,
