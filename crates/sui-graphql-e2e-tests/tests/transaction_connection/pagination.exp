@@ -1,0 +1,108 @@
+processed 15 tasks
+
+init:
+A: object(0,0)
+
+task 1 'programmable'. lines 6-8:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'create-checkpoint'. lines 10-10:
+Checkpoint created: 1
+
+task 3 'programmable'. lines 12-14:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'create-checkpoint'. lines 16-16:
+Checkpoint created: 2
+
+task 5 'programmable'. lines 18-20:
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6 'create-checkpoint'. lines 22-22:
+Checkpoint created: 3
+
+task 7 'programmable'. lines 24-26:
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8 'create-checkpoint'. lines 28-28:
+Checkpoint created: 4
+
+task 9 'programmable'. lines 30-32:
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10 'create-checkpoint'. lines 34-34:
+Checkpoint created: 5
+
+task 11 'run-graphql'. lines 36-43:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "edges": [
+        {
+          "cursor": "2"
+        },
+        {
+          "cursor": "3"
+        }
+      ]
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 45-52:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "edges": [
+        {
+          "cursor": "0"
+        },
+        {
+          "cursor": "1"
+        },
+        {
+          "cursor": "2"
+        }
+      ]
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 54-61:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "edges": [
+        {
+          "cursor": "2"
+        }
+      ]
+    }
+  }
+}
+
+task 14 'run-graphql'. lines 63-74:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "edges": [
+        {
+          "cursor": "1"
+        },
+        {
+          "cursor": "2"
+        }
+      ]
+    }
+  }
+}
