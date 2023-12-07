@@ -334,9 +334,10 @@ impl PgManager {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_tx_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_tx_cursor(&cursor))
             .transpose()?;
 
@@ -381,8 +382,8 @@ impl PgManager {
 
         let query = move || {
             QueryBuilder::multi_get_txs(
-                cursor,
-                descending_order,
+                before,
+                after,
                 limit,
                 filter.clone(),
                 after_tx_seq_num,
@@ -399,6 +400,10 @@ impl PgManager {
                 let has_next_page = stored_txs.len() as i64 > limit;
                 if has_next_page {
                     stored_txs.pop();
+                }
+
+                if last.is_some() {
+                    stored_txs.reverse();
                 }
 
                 Ok((stored_txs, has_next_page))

@@ -43,8 +43,8 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
     fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn get_latest_checkpoint() -> checkpoints::BoxedQuery<'static, DB>;
     fn multi_get_txs(
-        cursor: Option<i64>,
-        descending_order: bool,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         filter: Option<TransactionBlockFilter>,
         after_tx_seq_num: Option<i64>,
