@@ -133,6 +133,11 @@ fn update_alias_test() {
     assert_eq!(1, aliases.len());
     assert_eq!(vec!["my_alias_test"], aliases);
 
+    // read the alias file again and check if it was saved
+    let keystore1 = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let aliases1 = keystore1.alias_names();
+    assert_eq!(vec!["my_alias_test"], aliases1);
+
     let update = keystore.update_alias("alias_does_not_exist", None);
     assert!(update.is_err());
 

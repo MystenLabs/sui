@@ -71,6 +71,38 @@ pub trait AccountKeystore: Send + Sync {
         new_alias: Option<&str>,
     ) -> Result<String, anyhow::Error>;
 
+    // Internal function. Use update_alias instead
+    fn update_alias_value(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        if !self.alias_exists(old_alias) {
+            bail!("The provided alias {old_alias} does not exist");
+        } else {
+            let new_alias_name = match new_alias {
+                Some(x) => x.to_string(),
+                None => random_name(
+                    &self
+                        .alias_names()
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect::<HashSet<_>>(),
+                ),
+            };
+            for a in self.aliases_mut() {
+                if a.alias == old_alias {
+                    let pk = &a.public_key_base64;
+                    *a = Alias {
+                        alias: new_alias_name.clone(),
+                        public_key_base64: pk.clone(),
+                    };
+                }
+            }
+            Ok(new_alias_name)
+        }
+    }
+
     fn generate_and_add_new_key(
         &mut self,
         key_scheme: SignatureScheme,
@@ -245,44 +277,23 @@ impl AccountKeystore for FileBasedKeystore {
         }
     }
 
-    /// Updates an old alias to the new alias
-    fn update_alias(
-        &mut self,
-        old_alias: &str,
-        new_alias: Option<&str>,
-    ) -> Result<String, anyhow::Error> {
-        if !self.alias_exists(old_alias) {
-            bail!("The provided alias {old_alias} does not exist");
-        } else {
-            let new_alias_name = match new_alias {
-                Some(x) => x.to_string(),
-                None => random_name(
-                    &self
-                        .alias_names()
-                        .into_iter()
-                        .map(|x| x.to_string())
-                        .collect::<HashSet<_>>(),
-                ),
-            };
-            for a in self.aliases.values_mut() {
-                if a.alias == old_alias {
-                    let pk = &a.public_key_base64;
-                    *a = Alias {
-                        alias: new_alias_name.clone(),
-                        public_key_base64: pk.clone(),
-                    };
-                }
-            }
-            self.save_aliases()?;
-            Ok(new_alias_name)
-        }
-    }
-
     fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
         match self.keys.get(address) {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
         }
+    }
+
+    /// Updates an old alias to the new alias and saves it to the alias file.
+    /// If the new_alias is None, it will generate a new random alias.
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        let new_alias_name = self.update_alias_value(old_alias, new_alias)?;
+        self.save_aliases()?;
+        Ok(new_alias_name)
     }
 }
 
@@ -531,35 +542,14 @@ impl AccountKeystore for InMemKeystore {
         self.aliases.values_mut().collect()
     }
 
+    /// Updates an old alias to the new alias. If the new_alias is None,
+    /// it will generate a new random alias.
     fn update_alias(
         &mut self,
         old_alias: &str,
         new_alias: Option<&str>,
     ) -> Result<String, anyhow::Error> {
-        if !self.alias_exists(old_alias) {
-            bail!("The provided alias {old_alias} does not exist");
-        } else {
-            let new_alias_name = match new_alias {
-                Some(x) => x.to_string(),
-                None => random_name(
-                    &self
-                        .alias_names()
-                        .into_iter()
-                        .map(|x| x.to_string())
-                        .collect::<HashSet<_>>(),
-                ),
-            };
-            for a in self.aliases.values_mut() {
-                if a.alias == old_alias {
-                    let pk = &a.public_key_base64;
-                    *a = Alias {
-                        alias: new_alias_name.clone(),
-                        public_key_base64: pk.clone(),
-                    };
-                }
-            }
-            Ok(new_alias_name)
-        }
+        self.update_alias_value(old_alias, new_alias)
     }
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -60,14 +60,12 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Update an alias by its old alias name or the address, and the new alias name
-    /// If a new alias name is not provided, a new one will be randomly generated.
+    /// Update an old alias to a new one.
+    /// If a new alias is not provided, a random one will be generated.
+    #[clap(name = "update-alias")]
     Alias {
-        /// Update the old alias name. Requires the old alias name to be the first value,
-        /// followed by the new alias name. If the new alias name is not provided, it
-        /// will be automatically generated.
-        #[clap(long, value_delimiter = ' ', num_args = 1..)]
-        update: Vec<String>,
+        old_alias: String,
+        new_alias: Option<String>,
     },
     /// Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format
     /// (base64 of 33 byte flag || private key) or vice versa.
@@ -430,29 +428,16 @@ pub enum CommandOutput {
 impl KeyToolCommand {
     pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
         let cmd_result = Ok(match self {
-            KeyToolCommand::Alias { update } => {
-                match update.len() {
-                    0 =>  bail!("Please provide at least the old alias name"),
-                    1 => {
-                        let old_alias = update.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?;
-                        let new_alias = keystore.update_alias(old_alias, None)?;
-                        CommandOutput::Alias(AliasUpdate { old_alias: old_alias.to_string() , new_alias})
-                    },
-                    2 => {
-                        let old_alias = update.get(0).ok_or_else(|| anyhow!("Expected the old alias, but did not get any value."))?; 
-                        let new_alias = update.get(1).ok_or_else(|| anyhow!("Expected the new alias, but did not get any value."))?; 
-                        keystore.update_alias(old_alias, Some(new_alias))?;
-                        CommandOutput::Alias(
-                            AliasUpdate {
-                                old_alias: old_alias.to_string(),
-                                new_alias: new_alias.to_string()
-                            }
-                        )
-                    },
-                   _ => bail!("The command expects only an old and a new alias name, but instead got {} inputs", update.len())
-                }
+            KeyToolCommand::Alias {
+                old_alias,
+                new_alias,
+            } => {
+                let new_alias = keystore.update_alias(&old_alias, new_alias.as_deref())?;
+                CommandOutput::Alias(AliasUpdate {
+                    old_alias,
+                    new_alias,
+                })
             }
-
             KeyToolCommand::Convert { value } => {
                 let result = convert_private_key_to_base64(value)?;
                 CommandOutput::Convert(result)
