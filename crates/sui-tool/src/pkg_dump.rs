@@ -88,7 +88,6 @@ fn query_packages(pool: &PgPool) -> Result<Vec<StoredPackage>> {
 }
 
 fn dump_package(output_dir: &Path, id: SuiAddress, pkg: &[u8]) -> Result<()> {
-
     let package = bcs::from_bytes::<MovePackage>(pkg).context("Deserializing")?;
     let origins: BTreeMap<_, _> = package
         .type_origin_table()
