@@ -147,26 +147,6 @@ Response: {
     "eventConnection": {
       "edges": [
         {
-          "cursor": "3:0",
-          "node": {
-            "sendingModule": {
-              "name": "M1"
-            },
-            "type": {
-              "repr": "0x855f03ee5425477994bf848d764a292cdc48432e4583ddcc80cc960e637ee811::M1::EventA"
-            },
-            "senders": [
-              {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            ],
-            "json": {
-              "new_value": "1"
-            },
-            "bcs": "AQAAAAAAAAA="
-          }
-        },
-        {
           "cursor": "2:0",
           "node": {
             "sendingModule": {
@@ -184,6 +164,26 @@ Response: {
               "new_value": "0"
             },
             "bcs": "AAAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "3:0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0x855f03ee5425477994bf848d764a292cdc48432e4583ddcc80cc960e637ee811::M1::EventA"
+            },
+            "senders": [
+              {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            ],
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
           }
         }
       ]
