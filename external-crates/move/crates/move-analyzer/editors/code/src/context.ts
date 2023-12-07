@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Configuration } from './configuration';
+import { lint } from './configuration';
 import * as vscode from 'vscode';
 import * as lc from 'vscode-languageclient';
 import { log } from './log';
@@ -13,12 +14,26 @@ import { IndentAction } from 'vscode';
 export class Context {
     private client: lc.LanguageClient | undefined;
 
+    private lintOpt: boolean;
+
+    // The vscode-languageclient module reads a configuration option named
+    // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
+    // channel is specified, these messages are printed there, otherwise they appear in the
+    // output channel that it automatically created by the `LanguageClient` (in this extension,
+    // that is 'Move Language Server'). For more information, see:
+    // https://code.visualstudio.com/api/language-extensions/language-server-extension-guide#logging-support-for-language-server
+    private readonly traceOutputChannel: vscode.OutputChannel;
+
     private constructor(
         private readonly extensionContext: Readonly<vscode.ExtensionContext>,
         readonly configuration: Readonly<Configuration>,
         client: lc.LanguageClient | undefined = undefined,
     ) {
         this.client = client;
+        this.lintOpt = lint();
+        this.traceOutputChannel = vscode.window.createOutputChannel(
+            'Move Language Server Trace',
+        );
     }
 
     static create(
@@ -109,18 +124,13 @@ export class Context {
             debug: executable,
         };
 
-        // The vscode-languageclient module reads a configuration option named
-        // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
-        // channel is specified, these messages are printed there, otherwise they appear in the
-        // output channel that it automatically created by the `LanguageClient` (in this extension,
-        // that is 'Move Language Server'). For more information, see:
-        // https://code.visualstudio.com/api/language-extensions/language-server-extension-guide#logging-support-for-language-server
-        const traceOutputChannel = vscode.window.createOutputChannel(
-            'Move Language Server Trace',
-        );
+        this.traceOutputChannel.clear();
         const clientOptions: lc.LanguageClientOptions = {
             documentSelector: [{ scheme: 'file', language: 'move' }],
-            traceOutputChannel,
+            traceOutputChannel: this.traceOutputChannel,
+            initializationOptions: {
+                lintOpt: this.lintOpt,
+            },
         };
 
         const client = new lc.LanguageClient(
@@ -146,5 +156,38 @@ export class Context {
      */
     getClient(): lc.LanguageClient | undefined {
         return this.client;
+    }
+
+    /**
+     * Deactivates the client interacting with the language server.
+     */
+    async stopClient(): Promise<void> {
+        log.info('Stopping client...');
+        if (this.client) {
+            await this.client.stop();
+        }
+    }
+
+    /**
+     * Registers a handler to be executed when user/workspace configuration gets changed.
+     */
+    registerOnDidChangeConfiguration(): void {
+        vscode.workspace.onDidChangeConfiguration(async event => {
+            const changed = event.affectsConfiguration('move.lint');
+            if (changed) {
+                const newLintFlag = lint();
+                if (this.lintOpt !== newLintFlag) {
+                    this.lintOpt = newLintFlag;
+                    try {
+                        await this.stopClient();
+                        await this.startClient();
+                    } catch (err) {
+                        // Handle error
+                        log.info(String(err));
+                    }
+                }
+            }
+        });
+
     }
 } // Context

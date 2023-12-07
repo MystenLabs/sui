@@ -376,6 +376,7 @@ impl SymbolicatorRunner {
     pub fn new(
         symbols: Arc<Mutex<Symbols>>,
         sender: Sender<Result<BTreeMap<Symbol, Vec<Diagnostic>>>>,
+        lint: bool,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -433,7 +434,7 @@ impl SymbolicatorRunner {
                             continue;
                         }
                         eprintln!("symbolication started");
-                        match Symbolicator::get_symbols(root_dir.unwrap().as_path()) {
+                        match Symbolicator::get_symbols(root_dir.unwrap().as_path(), lint) {
                             Ok((symbols_opt, lsp_diagnostics)) => {
                                 eprintln!("symbolication finished");
                                 if let Some(new_symbols) = symbols_opt {
@@ -610,12 +611,13 @@ impl Symbolicator {
     /// be retained even if it's getting out-of-date.
     pub fn get_symbols(
         pkg_path: &Path,
+        lint: bool,
     ) -> Result<(Option<Symbols>, BTreeMap<Symbol, Vec<Diagnostic>>)> {
         let build_config = move_package::BuildConfig {
             test_mode: true,
             install_dir: Some(tempdir().unwrap().path().to_path_buf()),
             default_flavor: Some(Flavor::Sui),
-            no_lint: false,
+            no_lint: !lint,
             ..Default::default()
         };
 
@@ -2452,7 +2454,7 @@ fn docstring_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = Symbolicator::get_symbols(path.as_path()).unwrap();
+    let (symbols_opt, _) = Symbolicator::get_symbols(path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
@@ -2676,7 +2678,7 @@ fn symbols_test() {
 
     path.push("tests/symbols");
 
-    let (symbols_opt, _) = Symbolicator::get_symbols(path.as_path()).unwrap();
+    let (symbols_opt, _) = Symbolicator::get_symbols(path.as_path(), false).unwrap();
     let symbols = symbols_opt.unwrap();
 
     let mut fpath = path.clone();
