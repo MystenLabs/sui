@@ -6,12 +6,12 @@ import { Callout } from 'nextra/components';
 
 ## Installing the library
 
-If you would like to extend the library by developing on your local machine,
-first you need to clone the repository.
+If you would like to extend the library by developing on your local machine, first you need to clone
+the repository.
 
 ```sh
 git clone https://github.com/MystenLabs/Sui_Owned_Object_Pools.git
-```  
+```
 
 Use a package manager to install dependencies from the root of the project.
 
@@ -21,18 +21,19 @@ npm install
 
 ## Testing
 
-Tests, apart from checking if your changes break the existing codebase,
-are also a great way to get familiar with the library. 
-For each test scenario, there is a small description of the 
-test's purpose and the library's commands to achieve that.
+Tests, apart from checking if your changes break the existing codebase, are also a great way to get
+familiar with the library. For each test scenario, there is a small description of the test's
+purpose and the library's commands to achieve that.
 
 To be able to run the tests, first you need to:
-1. Publish the package in the `move_examples/nft_app/` folder. 
-1. Have an account to use as an Admin account to create and execute transactions,
-from coin transfers to NFT minting. 
-1. Have a test user account to use as a receiver of the transactions. 
 
-You can run the `./test/initial_setup.sh` script to perform these steps for you, or perform them manually.
+1. Publish the package in the `move_examples/nft_app/` folder.
+1. Have an account to use as an Admin account to create and execute transactions, from coin
+   transfers to NFT minting.
+1. Have a test user account to use as a receiver of the transactions.
+
+You can run the `./test/initial_setup.sh` script to perform these steps for you, or perform them
+manually.
 
 Before proceeding make sure that you are using the `testnet` environment:
 
@@ -40,8 +41,9 @@ Before proceeding make sure that you are using the `testnet` environment:
 sui client switch --env testnet && sui client envs
 ```
 
-Also, make sure that your admin account (the account `sui client active-address` identifies) owns enough SUI.
-You can get SUI for a test network from the [Sui faucet](https://docs.sui.io/guides/developer/getting-started/get-coins).
+Also, make sure that your admin account (the account `sui client active-address` identifies) owns
+enough SUI. You can get SUI for a test network from the
+[Sui faucet](https://docs.sui.io/guides/developer/getting-started/get-coins).
 
 Next, run the setup script:
 
@@ -50,10 +52,10 @@ cd test && chmod u+x test/initial_setup.sh # give the user the right to execute 
 ./initial_setup.sh testnet  # create a setup for testnet
 ```
 
-The script creates a `.test.env` file in the `test/` folder. When the script is complete, you need to
-add an `ADMIN_SECRET_KEY` and a `TEST_USER_SECRET` to the `.env`.
+The script creates a `.test.env` file in the `test/` folder. When the script is complete, you need
+to add an `ADMIN_SECRET_KEY` and a `TEST_USER_SECRET` to the `.env`.
 
-The Testnet network is typically used for testing. Switch to Testnet with: 
+The Testnet network is typically used for testing. Switch to Testnet with:
 `sui client switch --env testnet`
 
 At the end of the setup, your `.env` should look like the template
