@@ -24,7 +24,7 @@ pub async fn start_test_indexer_v2(
     reader_mode_rpc_url: Option<String>,
     use_indexer_experimental_methods: bool,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 20 for testing
+    // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     info!("Setting DB_POOL_SIZE to 10");
     std::env::set_var("DB_POOL_SIZE", "10");
@@ -42,7 +42,7 @@ pub async fn start_test_indexer_v2(
         vec![]
     };
 
-    // Default weiter mode
+    // Default writer mode
     let mut config = IndexerConfig {
         db_url: Some(db_url.clone()),
         rpc_client_url: rpc_url,
