@@ -181,11 +181,7 @@ pub enum Opcodes {
     GE                          = 0x26,
     ABORT                       = 0x27,
     NOP                         = 0x28,
-    EXISTS                      = 0x29,
-    MUT_BORROW_GLOBAL           = 0x2A,
-    IMM_BORROW_GLOBAL           = 0x2B,
-    MOVE_FROM                   = 0x2C,
-    MOVE_TO                     = 0x2D,
+    // gap for deprecated bytecodes, see bottom of enum
     FREEZE_REF                  = 0x2E,
     SHL                         = 0x2F,
     SHR                         = 0x30,
@@ -199,11 +195,6 @@ pub enum Opcodes {
     CALL_GENERIC                = 0x38,
     PACK_GENERIC                = 0x39,
     UNPACK_GENERIC              = 0x3A,
-    EXISTS_GENERIC              = 0x3B,
-    MUT_BORROW_GLOBAL_GENERIC   = 0x3C,
-    IMM_BORROW_GLOBAL_GENERIC   = 0x3D,
-    MOVE_FROM_GENERIC           = 0x3E,
-    MOVE_TO_GENERIC             = 0x3F,
     VEC_PACK                    = 0x40,
     VEC_LEN                     = 0x41,
     VEC_IMM_BORROW              = 0x42,
@@ -218,6 +209,19 @@ pub enum Opcodes {
     CAST_U16                    = 0x4B,
     CAST_U32                    = 0x4C,
     CAST_U256                   = 0x4D,
+
+    // ******** DEPRECATED BYTECODES ********
+    // global storage opcodes are unused and deprecated
+    EXISTS_DEPRECATED                       = 0x29,
+    MUT_BORROW_GLOBAL_DEPRECATED            = 0x2A,
+    IMM_BORROW_GLOBAL_DEPRECATED            = 0x2B,
+    MOVE_FROM_DEPRECATED                    = 0x2C,
+    MOVE_TO_DEPRECATED                      = 0x2D,
+    EXISTS_GENERIC_DEPRECATED               = 0x3B,
+    MUT_BORROW_GLOBAL_GENERIC_DEPRECATED    = 0x3C,
+    IMM_BORROW_GLOBAL_GENERIC_DEPRECATED    = 0x3D,
+    MOVE_FROM_GENERIC_DEPRECATED            = 0x3E,
+    MOVE_TO_GENERIC_DEPRECATED              = 0x3F,
 }
 
 /// Upper limit on the binary size
@@ -610,10 +614,6 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         MutBorrowFieldGeneric(_) => Opcodes::MUT_BORROW_FIELD_GENERIC,
         ImmBorrowField(_) => Opcodes::IMM_BORROW_FIELD,
         ImmBorrowFieldGeneric(_) => Opcodes::IMM_BORROW_FIELD_GENERIC,
-        MutBorrowGlobal(_) => Opcodes::MUT_BORROW_GLOBAL,
-        MutBorrowGlobalGeneric(_) => Opcodes::MUT_BORROW_GLOBAL_GENERIC,
-        ImmBorrowGlobal(_) => Opcodes::IMM_BORROW_GLOBAL,
-        ImmBorrowGlobalGeneric(_) => Opcodes::IMM_BORROW_GLOBAL_GENERIC,
         Add => Opcodes::ADD,
         Sub => Opcodes::SUB,
         Mul => Opcodes::MUL,
@@ -635,12 +635,6 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         Ge => Opcodes::GE,
         Abort => Opcodes::ABORT,
         Nop => Opcodes::NOP,
-        Exists(_) => Opcodes::EXISTS,
-        ExistsGeneric(_) => Opcodes::EXISTS_GENERIC,
-        MoveFrom(_) => Opcodes::MOVE_FROM,
-        MoveFromGeneric(_) => Opcodes::MOVE_FROM_GENERIC,
-        MoveTo(_) => Opcodes::MOVE_TO,
-        MoveToGeneric(_) => Opcodes::MOVE_TO_GENERIC,
         VecPack(..) => Opcodes::VEC_PACK,
         VecLen(_) => Opcodes::VEC_LEN,
         VecImmBorrow(_) => Opcodes::VEC_IMM_BORROW,
@@ -655,6 +649,17 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         CastU16 => Opcodes::CAST_U16,
         CastU32 => Opcodes::CAST_U32,
         CastU256 => Opcodes::CAST_U256,
+        // ******** DEPRECATED BYTECODES ********
+        ExistsDeprecated(_) => Opcodes::EXISTS_DEPRECATED,
+        ExistsGenericDeprecated(_) => Opcodes::EXISTS_GENERIC_DEPRECATED,
+        MoveFromDeprecated(_) => Opcodes::MOVE_FROM_DEPRECATED,
+        MoveFromGenericDeprecated(_) => Opcodes::MOVE_FROM_GENERIC_DEPRECATED,
+        MoveToDeprecated(_) => Opcodes::MOVE_TO_DEPRECATED,
+        MoveToGenericDeprecated(_) => Opcodes::MOVE_TO_GENERIC_DEPRECATED,
+        MutBorrowGlobalDeprecated(_) => Opcodes::MUT_BORROW_GLOBAL_DEPRECATED,
+        MutBorrowGlobalGenericDeprecated(_) => Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED,
+        ImmBorrowGlobalDeprecated(_) => Opcodes::IMM_BORROW_GLOBAL_DEPRECATED,
+        ImmBorrowGlobalGenericDeprecated(_) => Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED,
     };
     opcode as u8
 }

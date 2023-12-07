@@ -1554,24 +1554,6 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             Opcodes::GE => Bytecode::Ge,
             Opcodes::ABORT => Bytecode::Abort,
             Opcodes::NOP => Bytecode::Nop,
-            Opcodes::EXISTS => Bytecode::Exists(load_struct_def_index(cursor)?),
-            Opcodes::EXISTS_GENERIC => Bytecode::ExistsGeneric(load_struct_def_inst_index(cursor)?),
-            Opcodes::MUT_BORROW_GLOBAL => Bytecode::MutBorrowGlobal(load_struct_def_index(cursor)?),
-            Opcodes::MUT_BORROW_GLOBAL_GENERIC => {
-                Bytecode::MutBorrowGlobalGeneric(load_struct_def_inst_index(cursor)?)
-            }
-            Opcodes::IMM_BORROW_GLOBAL => Bytecode::ImmBorrowGlobal(load_struct_def_index(cursor)?),
-            Opcodes::IMM_BORROW_GLOBAL_GENERIC => {
-                Bytecode::ImmBorrowGlobalGeneric(load_struct_def_inst_index(cursor)?)
-            }
-            Opcodes::MOVE_FROM => Bytecode::MoveFrom(load_struct_def_index(cursor)?),
-            Opcodes::MOVE_FROM_GENERIC => {
-                Bytecode::MoveFromGeneric(load_struct_def_inst_index(cursor)?)
-            }
-            Opcodes::MOVE_TO => Bytecode::MoveTo(load_struct_def_index(cursor)?),
-            Opcodes::MOVE_TO_GENERIC => {
-                Bytecode::MoveToGeneric(load_struct_def_inst_index(cursor)?)
-            }
             Opcodes::FREEZE_REF => Bytecode::FreezeRef,
             Opcodes::VEC_PACK => {
                 Bytecode::VecPack(load_signature_index(cursor)?, read_u64_internal(cursor)?)
@@ -1600,6 +1582,25 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
             Opcodes::CAST_U16 => Bytecode::CastU16,
             Opcodes::CAST_U32 => Bytecode::CastU32,
             Opcodes::CAST_U256 => Bytecode::CastU256,
+            // ******** DEPRECATED BYTECODES ********
+            Opcodes::EXISTS_DEPRECATED => Bytecode::ExistsDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::EXISTS_GENERIC_DEPRECATED => Bytecode::ExistsGenericDeprecated(load_struct_def_inst_index(cursor)?),
+            Opcodes::MUT_BORROW_GLOBAL_DEPRECATED => Bytecode::MutBorrowGlobalDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED => {
+                Bytecode::MutBorrowGlobalGenericDeprecated(load_struct_def_inst_index(cursor)?)
+            }
+            Opcodes::IMM_BORROW_GLOBAL_DEPRECATED => Bytecode::ImmBorrowGlobalDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED => {
+                Bytecode::ImmBorrowGlobalGenericDeprecated(load_struct_def_inst_index(cursor)?)
+            }
+            Opcodes::MOVE_FROM_DEPRECATED => Bytecode::MoveFromDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::MOVE_FROM_GENERIC_DEPRECATED => {
+                Bytecode::MoveFromGenericDeprecated(load_struct_def_inst_index(cursor)?)
+            }
+            Opcodes::MOVE_TO_DEPRECATED => Bytecode::MoveToDeprecated(load_struct_def_index(cursor)?),
+            Opcodes::MOVE_TO_GENERIC_DEPRECATED => {
+                Bytecode::MoveToGenericDeprecated(load_struct_def_inst_index(cursor)?)
+            }
         };
         code.push(bytecode);
     }
@@ -1743,11 +1744,11 @@ impl Opcodes {
             0x26 => Ok(Opcodes::GE),
             0x27 => Ok(Opcodes::ABORT),
             0x28 => Ok(Opcodes::NOP),
-            0x29 => Ok(Opcodes::EXISTS),
-            0x2A => Ok(Opcodes::MUT_BORROW_GLOBAL),
-            0x2B => Ok(Opcodes::IMM_BORROW_GLOBAL),
-            0x2C => Ok(Opcodes::MOVE_FROM),
-            0x2D => Ok(Opcodes::MOVE_TO),
+            0x29 => Ok(Opcodes::EXISTS_DEPRECATED),
+            0x2A => Ok(Opcodes::MUT_BORROW_GLOBAL_DEPRECATED),
+            0x2B => Ok(Opcodes::IMM_BORROW_GLOBAL_DEPRECATED),
+            0x2C => Ok(Opcodes::MOVE_FROM_DEPRECATED),
+            0x2D => Ok(Opcodes::MOVE_TO_DEPRECATED),
             0x2E => Ok(Opcodes::FREEZE_REF),
             0x2F => Ok(Opcodes::SHL),
             0x30 => Ok(Opcodes::SHR),
@@ -1761,11 +1762,11 @@ impl Opcodes {
             0x38 => Ok(Opcodes::CALL_GENERIC),
             0x39 => Ok(Opcodes::PACK_GENERIC),
             0x3A => Ok(Opcodes::UNPACK_GENERIC),
-            0x3B => Ok(Opcodes::EXISTS_GENERIC),
-            0x3C => Ok(Opcodes::MUT_BORROW_GLOBAL_GENERIC),
-            0x3D => Ok(Opcodes::IMM_BORROW_GLOBAL_GENERIC),
-            0x3E => Ok(Opcodes::MOVE_FROM_GENERIC),
-            0x3F => Ok(Opcodes::MOVE_TO_GENERIC),
+            0x3B => Ok(Opcodes::EXISTS_GENERIC_DEPRECATED),
+            0x3C => Ok(Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED),
+            0x3D => Ok(Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED),
+            0x3E => Ok(Opcodes::MOVE_FROM_GENERIC_DEPRECATED),
+            0x3F => Ok(Opcodes::MOVE_TO_GENERIC_DEPRECATED),
             0x40 => Ok(Opcodes::VEC_PACK),
             0x41 => Ok(Opcodes::VEC_LEN),
             0x42 => Ok(Opcodes::VEC_IMM_BORROW),

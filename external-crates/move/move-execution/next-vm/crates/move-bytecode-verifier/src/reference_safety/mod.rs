@@ -242,34 +242,34 @@ fn execute_inner(
             verifier.push(value)?
         }
 
-        Bytecode::MutBorrowGlobal(idx) => {
+        Bytecode::MutBorrowGlobalDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let value = state.borrow_global(offset, true, *idx)?;
             verifier.push(value)?
         }
-        Bytecode::MutBorrowGlobalGeneric(idx) => {
+        Bytecode::MutBorrowGlobalGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let value = state.borrow_global(offset, true, struct_inst.def)?;
             verifier.push(value)?
         }
-        Bytecode::ImmBorrowGlobal(idx) => {
+        Bytecode::ImmBorrowGlobalDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let value = state.borrow_global(offset, false, *idx)?;
             verifier.push(value)?
         }
-        Bytecode::ImmBorrowGlobalGeneric(idx) => {
+        Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let value = state.borrow_global(offset, false, struct_inst.def)?;
             verifier.push(value)?
         }
-        Bytecode::MoveFrom(idx) => {
+        Bytecode::MoveFromDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let value = state.move_from(offset, *idx)?;
             verifier.push(value)?
         }
-        Bytecode::MoveFromGeneric(idx) => {
+        Bytecode::MoveFromGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let value = state.move_from(offset, struct_inst.def)?;
@@ -305,13 +305,13 @@ fn execute_inner(
         | Bytecode::CastU128
         | Bytecode::CastU256
         | Bytecode::Not
-        | Bytecode::Exists(_)
-        | Bytecode::ExistsGeneric(_) => (),
+        | Bytecode::ExistsDeprecated(_)
+        | Bytecode::ExistsGenericDeprecated(_) => (),
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) | Bytecode::Abort => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
         }
-        Bytecode::MoveTo(_) | Bytecode::MoveToGeneric(_) => {
+        Bytecode::MoveToDeprecated(_) | Bytecode::MoveToGenericDeprecated(_) => {
             // resource value
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
             // signer reference

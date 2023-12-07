@@ -29,7 +29,7 @@ use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
     values::{
-        self, GlobalValue, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
+        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
         Vector, VectorRef,
     },
     views::TypeView,
@@ -151,7 +151,6 @@ impl Interpreter {
             let return_values = interpreter
                 .call_native_return_values(
                     &resolver,
-                    data_store,
                     gas_meter,
                     extensions,
                     function.clone(),
@@ -215,7 +214,7 @@ impl Interpreter {
             let resolver = current_frame.resolver(link_context, loader);
             let exit_code =
                 current_frame //self
-                    .execute_code(&resolver, &mut self, data_store, gas_meter)
+                    .execute_code(&resolver, &mut self, gas_meter)
                     .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
@@ -272,7 +271,6 @@ impl Interpreter {
                     if func.is_native() {
                         self.call_native(
                             &resolver,
-                            data_store,
                             gas_meter,
                             extensions,
                             func,
@@ -331,9 +329,7 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(
-                            &resolver, data_store, gas_meter, extensions, func, ty_args,
-                        )?;
+                        self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
                         profile_close_frame!(gas_meter, func_name);
@@ -433,7 +429,6 @@ impl Interpreter {
     fn call_native(
         &mut self,
         resolver: &Resolver,
-        data_store: &mut dyn DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         function: Arc<Function>,
@@ -442,7 +437,6 @@ impl Interpreter {
         // Note: refactor if native functions push a frame on the stack
         self.call_native_impl(
             resolver,
-            data_store,
             gas_meter,
             extensions,
             function.clone(),
@@ -469,7 +463,6 @@ impl Interpreter {
     fn call_native_impl(
         &mut self,
         resolver: &Resolver,
-        data_store: &mut dyn DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         function: Arc<Function>,
@@ -477,7 +470,6 @@ impl Interpreter {
     ) -> PartialVMResult<()> {
         let return_values = self.call_native_return_values(
             resolver,
-            data_store,
             gas_meter,
             extensions,
             function.clone(),
@@ -501,7 +493,6 @@ impl Interpreter {
     fn call_native_return_values(
         &mut self,
         resolver: &Resolver,
-        data_store: &mut dyn DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
         function: Arc<Function>,
@@ -525,7 +516,6 @@ impl Interpreter {
 
         let mut native_context = NativeContext::new(
             self,
-            data_store,
             resolver,
             extensions,
             gas_meter.remaining_gas(),
@@ -639,147 +629,6 @@ impl Interpreter {
         F: FnOnce(T, T) -> PartialVMResult<bool>,
     {
         self.binop(|lhs, rhs| Ok(Value::bool(f(lhs, rhs)?)))
-    }
-
-    /// Loads a resource from the data store and return the number of bytes read from the storage.
-    fn load_resource<'b>(
-        gas_meter: &mut impl GasMeter,
-        data_store: &'b mut impl DataStore,
-        addr: AccountAddress,
-        ty: &Type,
-    ) -> PartialVMResult<&'b mut GlobalValue> {
-        match data_store.load_resource(addr, ty) {
-            Ok((gv, load_res)) => {
-                if let Some(loaded) = load_res {
-                    let opt = match loaded {
-                        Some(num_bytes) => {
-                            let view = gv.view().ok_or_else(|| {
-                                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                                    .with_message(
-                                        "Failed to create view for global value".to_owned(),
-                                    )
-                            })?;
-
-                            Some((num_bytes, view))
-                        }
-                        None => None,
-                    };
-                    gas_meter.charge_load_resource(opt)?;
-                }
-                Ok(gv)
-            }
-            Err(e) => {
-                error!(
-                    "[VM] error loading resource at ({}, {:?}): {:?} from data store",
-                    addr, ty, e
-                );
-                Err(e)
-            }
-        }
-    }
-
-    /// BorrowGlobal (mutable and not) opcode.
-    fn borrow_global(
-        &mut self,
-        is_mut: bool,
-        is_generic: bool,
-        loader: &Loader,
-        gas_meter: &mut impl GasMeter,
-        data_store: &mut impl DataStore,
-        addr: AccountAddress,
-        ty: &Type,
-    ) -> PartialVMResult<()> {
-        let res = Self::load_resource(gas_meter, data_store, addr, ty)?.borrow_global();
-        gas_meter.charge_borrow_global(
-            is_mut,
-            is_generic,
-            TypeWithLoader { ty, loader },
-            res.is_ok(),
-        )?;
-        self.operand_stack.push(res?)?;
-        Ok(())
-    }
-
-    /// Exists opcode.
-    fn exists(
-        &mut self,
-        is_generic: bool,
-        loader: &Loader,
-        gas_meter: &mut impl GasMeter,
-        data_store: &mut impl DataStore,
-        addr: AccountAddress,
-        ty: &Type,
-    ) -> PartialVMResult<()> {
-        let gv = Self::load_resource(gas_meter, data_store, addr, ty)?;
-        let exists = gv.exists()?;
-        gas_meter.charge_exists(is_generic, TypeWithLoader { ty, loader }, exists)?;
-        self.operand_stack.push(Value::bool(exists))?;
-        Ok(())
-    }
-
-    /// MoveFrom opcode.
-    fn move_from(
-        &mut self,
-        is_generic: bool,
-        loader: &Loader,
-        gas_meter: &mut impl GasMeter,
-        data_store: &mut impl DataStore,
-        addr: AccountAddress,
-        ty: &Type,
-    ) -> PartialVMResult<()> {
-        let resource = match Self::load_resource(gas_meter, data_store, addr, ty)?.move_from() {
-            Ok(resource) => {
-                gas_meter.charge_move_from(
-                    is_generic,
-                    TypeWithLoader { ty, loader },
-                    Some(&resource),
-                )?;
-                resource
-            }
-            Err(err) => {
-                let val: Option<&Value> = None;
-                gas_meter.charge_move_from(is_generic, TypeWithLoader { ty, loader }, val)?;
-                return Err(err);
-            }
-        };
-        self.operand_stack.push(resource)?;
-        Ok(())
-    }
-
-    /// MoveTo opcode.
-    fn move_to(
-        &mut self,
-        is_generic: bool,
-        loader: &Loader,
-        gas_meter: &mut impl GasMeter,
-        data_store: &mut impl DataStore,
-        addr: AccountAddress,
-        ty: &Type,
-        resource: Value,
-    ) -> PartialVMResult<()> {
-        let gv = Self::load_resource(gas_meter, data_store, addr, ty)?;
-        // NOTE(Gas): To maintain backward compatibility, we need to charge gas after attempting
-        //            the move_to operation.
-        match gv.move_to(resource) {
-            Ok(()) => {
-                gas_meter.charge_move_to(
-                    is_generic,
-                    TypeWithLoader { ty, loader },
-                    gv.view().unwrap(),
-                    true,
-                )?;
-                Ok(())
-            }
-            Err((err, resource)) => {
-                gas_meter.charge_move_to(
-                    is_generic,
-                    TypeWithLoader { ty, loader },
-                    &resource,
-                    false,
-                )?;
-                Err(err)
-            }
-        }
     }
 
     //
@@ -1151,10 +1000,9 @@ impl Frame {
         &mut self,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
-        data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<ExitCode> {
-        self.execute_code_impl(resolver, interpreter, data_store, gas_meter)
+        self.execute_code_impl(resolver, interpreter, gas_meter)
             .map_err(|e| {
                 let e = if resolver.loader().vm_config().error_execution_state {
                     e.with_exec_state(interpreter.get_internal_state())
@@ -1253,16 +1101,16 @@ impl Frame {
             | Bytecode::Ge
             | Bytecode::Eq
             | Bytecode::Neq
-            | Bytecode::MutBorrowGlobal(_)
-            | Bytecode::ImmBorrowGlobal(_)
-            | Bytecode::MutBorrowGlobalGeneric(_)
-            | Bytecode::ImmBorrowGlobalGeneric(_)
-            | Bytecode::Exists(_)
-            | Bytecode::ExistsGeneric(_)
-            | Bytecode::MoveTo(_)
-            | Bytecode::MoveToGeneric(_)
-            | Bytecode::MoveFrom(_)
-            | Bytecode::MoveFromGeneric(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
             | Bytecode::FreezeRef
             | Bytecode::Nop
             | Bytecode::Not
@@ -1574,92 +1422,17 @@ impl Frame {
                 check_ability(resolver.loader().abilities(&lhs)?.has_drop())?;
                 interpreter.operand_stack.push_ty(Type::Bool)?;
             }
-            Bytecode::MutBorrowGlobal(idx) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                let ty = resolver.get_struct_type(*idx);
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-                interpreter
-                    .operand_stack
-                    .push_ty(Type::MutableReference(Box::new(ty)))?;
-            }
-            Bytecode::ImmBorrowGlobal(idx) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                let ty = resolver.get_struct_type(*idx);
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-                interpreter
-                    .operand_stack
-                    .push_ty(Type::Reference(Box::new(ty)))?;
-            }
-            Bytecode::MutBorrowGlobalGeneric(idx) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                let ty = resolver.instantiate_generic_type(*idx, ty_args)?;
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-                interpreter
-                    .operand_stack
-                    .push_ty(Type::MutableReference(Box::new(ty)))?;
-            }
-            Bytecode::ImmBorrowGlobalGeneric(idx) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                let ty = resolver.instantiate_generic_type(*idx, ty_args)?;
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-                interpreter
-                    .operand_stack
-                    .push_ty(Type::Reference(Box::new(ty)))?;
-            }
-            Bytecode::Exists(_) | Bytecode::ExistsGeneric(_) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                interpreter.operand_stack.push_ty(Type::Bool)?;
-            }
-            Bytecode::MoveTo(idx) => {
-                let ty = interpreter.operand_stack.pop_ty()?;
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Reference(Box::new(Type::Signer)))?;
-                ty.check_eq(&resolver.get_struct_type(*idx))?;
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-            }
-            Bytecode::MoveToGeneric(idx) => {
-                let ty = interpreter.operand_stack.pop_ty()?;
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Reference(Box::new(Type::Signer)))?;
-                ty.check_eq(&resolver.instantiate_generic_type(*idx, ty_args)?)?;
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-            }
-            Bytecode::MoveFrom(idx) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                let ty = resolver.get_struct_type(*idx);
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-                interpreter.operand_stack.push_ty(ty)?;
-            }
-            Bytecode::MoveFromGeneric(idx) => {
-                interpreter
-                    .operand_stack
-                    .pop_ty()?
-                    .check_eq(&Type::Address)?;
-                let ty = resolver.instantiate_generic_type(*idx, ty_args)?;
-                check_ability(resolver.loader().abilities(&ty)?.has_key())?;
-                interpreter.operand_stack.push_ty(ty)?;
+            Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_) => {
+                unreachable!("Global bytecodes deprecated")
             }
             Bytecode::FreezeRef => {
                 match interpreter.operand_stack.pop_ty()? {
@@ -1773,7 +1546,6 @@ impl Frame {
         function: &Arc<Function>,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
-        data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
         instruction: &Bytecode,
     ) -> PartialVMResult<InstrRet> {
@@ -2132,99 +1904,17 @@ impl Frame {
                     .operand_stack
                     .push(Value::bool(!lhs.equals(&rhs)?))?;
             }
-            Bytecode::MutBorrowGlobal(sd_idx) | Bytecode::ImmBorrowGlobal(sd_idx) => {
-                let is_mut = matches!(instruction, Bytecode::MutBorrowGlobal(_));
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.get_struct_type(*sd_idx);
-                interpreter.borrow_global(
-                    is_mut,
-                    false,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                )?;
-            }
-            Bytecode::MutBorrowGlobalGeneric(si_idx) | Bytecode::ImmBorrowGlobalGeneric(si_idx) => {
-                let is_mut = matches!(instruction, Bytecode::MutBorrowGlobalGeneric(_));
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                interpreter.borrow_global(
-                    is_mut,
-                    true,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                )?;
-            }
-            Bytecode::Exists(sd_idx) => {
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.get_struct_type(*sd_idx);
-                interpreter.exists(false, resolver.loader(), gas_meter, data_store, addr, &ty)?;
-            }
-            Bytecode::ExistsGeneric(si_idx) => {
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                interpreter.exists(true, resolver.loader(), gas_meter, data_store, addr, &ty)?;
-            }
-            Bytecode::MoveFrom(sd_idx) => {
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.get_struct_type(*sd_idx);
-                interpreter.move_from(
-                    false,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                )?;
-            }
-            Bytecode::MoveFromGeneric(si_idx) => {
-                let addr = interpreter.operand_stack.pop_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                interpreter.move_from(true, resolver.loader(), gas_meter, data_store, addr, &ty)?;
-            }
-            Bytecode::MoveTo(sd_idx) => {
-                let resource = interpreter.operand_stack.pop()?;
-                let signer_reference = interpreter.operand_stack.pop_as::<StructRef>()?;
-                let addr = signer_reference
-                    .borrow_field(0)?
-                    .value_as::<Reference>()?
-                    .read_ref()?
-                    .value_as::<AccountAddress>()?;
-                let ty = resolver.get_struct_type(*sd_idx);
-                // REVIEW: Can we simplify Interpreter::move_to?
-                interpreter.move_to(
-                    false,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                    resource,
-                )?;
-            }
-            Bytecode::MoveToGeneric(si_idx) => {
-                let resource = interpreter.operand_stack.pop()?;
-                let signer_reference = interpreter.operand_stack.pop_as::<StructRef>()?;
-                let addr = signer_reference
-                    .borrow_field(0)?
-                    .value_as::<Reference>()?
-                    .read_ref()?
-                    .value_as::<AccountAddress>()?;
-                let ty = resolver.instantiate_generic_type(*si_idx, ty_args)?;
-                interpreter.move_to(
-                    true,
-                    resolver.loader(),
-                    gas_meter,
-                    data_store,
-                    addr,
-                    &ty,
-                    resource,
-                )?;
+            Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_) => {
+                unreachable!("Global bytecodes deprecated")
             }
             Bytecode::FreezeRef => {
                 gas_meter.charge_simple_instr(S::FreezeRef)?;
@@ -2315,11 +2005,11 @@ impl Frame {
 
         Ok(InstrRet::Ok)
     }
+
     fn execute_code_impl(
         &mut self,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
-        data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
     ) -> PartialVMResult<ExitCode> {
         let code = self.function.code();
@@ -2371,7 +2061,6 @@ impl Frame {
                     &self.function,
                     resolver,
                     interpreter,
-                    data_store,
                     gas_meter,
                     instruction,
                 )?;

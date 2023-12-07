@@ -142,18 +142,18 @@ impl<'a> StackUsageVerifier<'a> {
             Bytecode::Not
             | Bytecode::FreezeRef
             | Bytecode::ReadRef
-            | Bytecode::Exists(_)
-            | Bytecode::ExistsGeneric(_)
-            | Bytecode::MutBorrowGlobal(_)
-            | Bytecode::MutBorrowGlobalGeneric(_)
-            | Bytecode::ImmBorrowGlobal(_)
-            | Bytecode::ImmBorrowGlobalGeneric(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(_)
             | Bytecode::MutBorrowField(_)
             | Bytecode::MutBorrowFieldGeneric(_)
             | Bytecode::ImmBorrowField(_)
             | Bytecode::ImmBorrowFieldGeneric(_)
-            | Bytecode::MoveFrom(_)
-            | Bytecode::MoveFromGeneric(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveFromGenericDeprecated(_)
             | Bytecode::CastU8
             | Bytecode::CastU16
             | Bytecode::CastU32
@@ -191,8 +191,8 @@ impl<'a> StackUsageVerifier<'a> {
             Bytecode::VecImmBorrow(_) | Bytecode::VecMutBorrow(_) => (2, 1),
 
             // MoveTo, WriteRef, and VecPushBack pop twice but do not push
-            Bytecode::MoveTo(_)
-            | Bytecode::MoveToGeneric(_)
+            Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
             | Bytecode::WriteRef
             | Bytecode::VecPushBack(_) => (2, 0),
 

@@ -93,12 +93,12 @@ impl<'a> AcquiresVerifier<'a> {
                 let fi = self.module.function_instantiation_at(*idx);
                 self.call_acquire(fi.handle, offset)
             }
-            Bytecode::MoveFrom(idx)
-            | Bytecode::MutBorrowGlobal(idx)
-            | Bytecode::ImmBorrowGlobal(idx) => self.struct_acquire(*idx, offset),
-            Bytecode::MoveFromGeneric(idx)
-            | Bytecode::MutBorrowGlobalGeneric(idx)
-            | Bytecode::ImmBorrowGlobalGeneric(idx) => {
+            Bytecode::MoveFromDeprecated(idx)
+            | Bytecode::MutBorrowGlobalDeprecated(idx)
+            | Bytecode::ImmBorrowGlobalDeprecated(idx) => self.struct_acquire(*idx, offset),
+            Bytecode::MoveFromGenericDeprecated(idx)
+            | Bytecode::MutBorrowGlobalGenericDeprecated(idx)
+            | Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
                 let si = self.module.struct_instantiation_at(*idx);
                 self.struct_acquire(si.def, offset)
             }
@@ -160,10 +160,10 @@ impl<'a> AcquiresVerifier<'a> {
             | Bytecode::Gt
             | Bytecode::Le
             | Bytecode::Ge
-            | Bytecode::Exists(_)
-            | Bytecode::ExistsGeneric(_)
-            | Bytecode::MoveTo(_)
-            | Bytecode::MoveToGeneric(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::ExistsGenericDeprecated(_)
+            | Bytecode::MoveToDeprecated(_)
+            | Bytecode::MoveToGenericDeprecated(_)
             | Bytecode::VecPack(..)
             | Bytecode::VecLen(_)
             | Bytecode::VecImmBorrow(_)
