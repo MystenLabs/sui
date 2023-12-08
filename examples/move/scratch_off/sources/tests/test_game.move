@@ -2,7 +2,7 @@
 module scratch_off::test_game {
     
     use scratch_off::game::{Self, ConvenienceStore, ENoTicketsLeft, StoreCap, Ticket, player_metadata,
-     winning_tickets_left, leaderboard, prize_pool_balance, leaderboard_players, get_target_player_metadata,
+     tickets_left, leaderboard, prize_pool_balance, leaderboard_players, get_target_player_metadata,
      tickets_claimed, amount_won, tickets_issued};
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
@@ -22,7 +22,6 @@ module scratch_off::test_game {
         creator: address,
         number_of_prizes: vector<u64>,
         value_of_prizes: vector<u64>,
-        max_tickets_issued: u64,
         max_leaderboard_size: u64,
     ) {
         ts::next_tx(scenario, creator);
@@ -32,7 +31,6 @@ module scratch_off::test_game {
                 coin,
                 number_of_prizes,
                 value_of_prizes,
-                max_tickets_issued,
                 b"key", // Fake public key
                 max_leaderboard_size,
                 ts::ctx(scenario)
@@ -81,7 +79,6 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                4,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -165,7 +162,6 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                3,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -230,7 +226,6 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                3,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -267,7 +262,6 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                3,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -289,7 +283,7 @@ module scratch_off::test_game {
 
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            assert!(winning_tickets_left(&store) == 2, 0);
+            assert!(tickets_left(&store) == 2, 0);
             assert!(prize_pool_balance(&store) == 2, 0);
             ts::return_shared(store);
         };
@@ -307,7 +301,6 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
-                1760,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -329,7 +322,7 @@ module scratch_off::test_game {
 
             let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
             game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
-            assert!(winning_tickets_left(&store) == 1759, 0);
+            assert!(tickets_left(&store) == 1759, 0);
 
             assert!(prize_pool_balance(&store) == 5499, 0);
             ts::return_shared(store);
