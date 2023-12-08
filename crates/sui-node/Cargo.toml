@@ -51,6 +51,7 @@ telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 workspace-hack.workspace = true
+move-vm-profiler.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true
