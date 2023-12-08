@@ -185,6 +185,27 @@ module deepbook::clob_v2 {
         /// owner ID of the `AccountCap` that withdrew the asset
         owner: address
     }
+
+    /// Returned as metadata only when a maker order is filled from place order functions.
+    struct MatchedOrderMetadata<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+        /// object ID of the pool the order was placed on
+        pool_id: ID,
+        /// ID of the order within the pool
+        order_id: u64,
+        /// Direction of order.
+        is_bid: bool,
+        /// owner ID of the `AccountCap` that filled the order
+        taker_address: address,
+        /// owner ID of the `AccountCap` that placed the order
+        maker_address: address,
+        /// qty of base asset filled.
+        base_asset_quantity_filled: u64,
+        /// price at which basset asset filled.
+        price: u64,
+        taker_commission: u64,
+        maker_rebates: u64
+    }
+
     // <<<<<<<<<<<<<<<<<<<<<<<< Events <<<<<<<<<<<<<<<<<<<<<<<<
 
     struct Order has store, drop {
@@ -595,6 +616,35 @@ module deepbook::clob_v2 {
     }
 
     // for smart routing
+    public fun swap_exact_base_for_quote_with_metadata<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        account_cap: &AccountCap,
+        quantity: u64,
+        base_coin: Coin<BaseAsset>,
+        quote_coin: Coin<QuoteAsset>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
+        assert!(quantity > 0, EInvalidQuantity);
+        assert!(coin::value(&base_coin) >= quantity, EInsufficientBaseCoin);
+        let original_val = coin::value(&quote_coin);
+        let (ret_base_coin, ret_quote_coin, matched_order_metadata) = place_market_order_int(
+            pool,
+            account_cap,
+            client_order_id,
+            quantity,
+            false,
+            base_coin,
+            quote_coin,
+            clock,
+            ctx
+        );
+        let ret_val = coin::value(&ret_quote_coin);
+        (ret_base_coin, ret_quote_coin, ret_val - original_val, matched_order_metadata)
+    }
+
+    // for smart routing
     public fun swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         client_order_id: u64,
@@ -606,7 +656,7 @@ module deepbook::clob_v2 {
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         assert!(quantity > 0, EInvalidQuantity);
         assert!(coin::value(&quote_coin) >= quantity, EInsufficientQuoteCoin);
-        let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
+        let (base_asset_balance, quote_asset_balance, _matched_order_metadata) = match_bid_with_quote_quantity(
             pool,
             account_cap,
             client_order_id,
@@ -619,6 +669,30 @@ module deepbook::clob_v2 {
         (coin::from_balance(base_asset_balance, ctx), coin::from_balance(quote_asset_balance, ctx), val)
     }
 
+    public fun swap_exact_quote_for_base_with_metadata<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        account_cap: &AccountCap,
+        quantity: u64,
+        clock: &Clock,
+        quote_coin: Coin<QuoteAsset>,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
+        assert!(quantity > 0, EInvalidQuantity);
+        assert!(coin::value(&quote_coin) >= quantity, EInsufficientQuoteCoin);
+        let (base_asset_balance, quote_asset_balance, matched_order_metadata) = match_bid_with_quote_quantity(
+            pool,
+            account_cap,
+            client_order_id,
+            quantity,
+            MAX_PRICE,
+            clock::timestamp_ms(clock),
+            coin::into_balance(quote_coin)
+        );
+        let val = balance::value(&base_asset_balance);
+        (coin::from_balance(base_asset_balance, ctx), coin::from_balance(quote_asset_balance, ctx), val, matched_order_metadata)
+    }
+
     fun match_bid_with_quote_quantity<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         account_cap: &AccountCap,
@@ -627,7 +701,7 @@ module deepbook::clob_v2 {
         price_limit: u64,
         current_timestamp: u64,
         quote_balance: Balance<QuoteAsset>,
-    ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
+    ): (Balance<BaseAsset>, Balance<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         // Base balance received by taker, taking into account of taker commission.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
         let pool_id = *object::uid_as_inner(&pool.id);
@@ -635,8 +709,9 @@ module deepbook::clob_v2 {
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
+        let matched_order_metadata = vector::empty<MatchedOrderMetadata<BaseAsset, QuoteAsset>>();
         if (critbit::is_empty(all_open_orders)) {
-            return (base_balance_filled, quote_balance_left)
+            return (base_balance_filled, quote_balance_left, matched_order_metadata)
         };
         let (tick_price, tick_index) = min_leaf(all_open_orders);
         let terminate_loop = false;
@@ -763,7 +838,20 @@ module deepbook::clob_v2 {
                         // This guarantees that the subtraction will not underflow
                         filled_quote_quantity - filled_quote_quantity_without_commission,
                         maker_rebate
-                    )
+                    );
+                    vector::push_back(
+                        &mut matched_order_metadata, 
+                        matched_order_metadata(
+                            *object::uid_as_inner(&pool.id),
+                            account_owner(account_cap),
+                            maker_order,
+                            filled_base_quantity,
+                            // taker_commission = filled_quote_quantity - filled_quote_quantity_without_commission
+                            // This guarantees that the subtraction will not underflow
+                            filled_quote_quantity - filled_quote_quantity_without_commission,
+                            maker_rebate
+                        )
+                    );
                 };
 
                 if (skip_order || maker_base_quantity == 0) {
@@ -804,7 +892,7 @@ module deepbook::clob_v2 {
             });
         };
 
-        return (base_balance_filled, quote_balance_left)
+        return (base_balance_filled, quote_balance_left, matched_order_metadata)
     }
 
     fun match_bid<BaseAsset, QuoteAsset>(
@@ -815,7 +903,7 @@ module deepbook::clob_v2 {
         price_limit: u64,
         current_timestamp: u64,
         quote_balance: Balance<QuoteAsset>,
-    ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
+    ): (Balance<BaseAsset>, Balance<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         let pool_id = *object::uid_as_inner(&pool.id);
         // Base balance received by taker.
         // Need to individually keep track of the remaining base quantity to be filled to avoid infinite loop.
@@ -823,8 +911,9 @@ module deepbook::clob_v2 {
         let base_balance_filled = balance::zero<BaseAsset>();
         let quote_balance_left = quote_balance;
         let all_open_orders = &mut pool.asks;
+        let matched_order_metadata = vector::empty<MatchedOrderMetadata<BaseAsset, QuoteAsset>>();
         if (critbit::is_empty(all_open_orders)) {
-            return (base_balance_filled, quote_balance_left)
+            return (base_balance_filled, quote_balance_left, matched_order_metadata)
         };
         let (tick_price, tick_index) = min_leaf(all_open_orders);
         let canceled_order_events = vector[];
@@ -911,6 +1000,17 @@ module deepbook::clob_v2 {
                         taker_commission,
                         maker_rebate
                     );
+                    vector::push_back(
+                        &mut matched_order_metadata, 
+                        matched_order_metadata(
+                            *object::uid_as_inner(&pool.id),
+                            account_owner(account_cap),
+                            maker_order,
+                            filled_base_quantity,
+                            taker_commission,
+                            maker_rebate
+                        )
+                    );
                 };
 
                 if (skip_order || maker_base_quantity == 0) {
@@ -950,7 +1050,7 @@ module deepbook::clob_v2 {
                 orders_canceled: canceled_order_events,
             });
         };
-        return (base_balance_filled, quote_balance_left)
+        return (base_balance_filled, quote_balance_left, matched_order_metadata)
     }
 
     fun match_ask<BaseAsset, QuoteAsset>(
@@ -960,14 +1060,15 @@ module deepbook::clob_v2 {
         price_limit: u64,
         current_timestamp: u64,
         base_balance: Balance<BaseAsset>,
-    ): (Balance<BaseAsset>, Balance<QuoteAsset>) {
+    ): (Balance<BaseAsset>, Balance<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         let pool_id = *object::uid_as_inner(&pool.id);
         let base_balance_left = base_balance;
         // Base balance received by taker, taking into account of taker commission.
         let quote_balance_filled = balance::zero<QuoteAsset>();
         let all_open_orders = &mut pool.bids;
+        let matched_order_metadata = vector::empty<MatchedOrderMetadata<BaseAsset, QuoteAsset>>();
         if (critbit::is_empty(all_open_orders)) {
-            return (base_balance_left, quote_balance_filled)
+            return (base_balance_left, quote_balance_filled, matched_order_metadata)
         };
         let (tick_price, tick_index) = max_leaf(all_open_orders);
         let canceled_order_events = vector[];
@@ -1057,6 +1158,17 @@ module deepbook::clob_v2 {
                         taker_commission,
                         maker_rebate
                     );
+                    vector::push_back(
+                        &mut matched_order_metadata, 
+                        matched_order_metadata(
+                            *object::uid_as_inner(&pool.id),
+                            account_owner(account_cap),
+                            maker_order,
+                            filled_base_quantity,
+                            taker_commission,
+                            maker_rebate
+                        )
+                    );
                 };
 
                 if (skip_order || maker_base_quantity == 0) {
@@ -1097,7 +1209,7 @@ module deepbook::clob_v2 {
             });
         };
 
-        return (base_balance_left, quote_balance_filled)
+        return (base_balance_left, quote_balance_filled, matched_order_metadata)
     }
 
     /// Place a market order to the order book.
@@ -1112,6 +1224,31 @@ module deepbook::clob_v2 {
         clock: &Clock,
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
+        let (base_coin, quote_coin, _metadata) = place_market_order_int(
+            pool,
+            account_cap,
+            client_order_id,
+            quantity,
+            is_bid,
+            base_coin,
+            quote_coin,
+            clock,
+            ctx
+        );
+        (base_coin, quote_coin)
+    }
+
+    public fun place_market_order_with_metadata<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        quantity: u64,
+        is_bid: bool,
+        base_coin: Coin<BaseAsset>,
+        quote_coin: Coin<QuoteAsset>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         place_market_order_int(
             pool,
             account_cap,
@@ -1136,7 +1273,7 @@ module deepbook::clob_v2 {
         quote_coin: Coin<QuoteAsset>,
         clock: &Clock,
         ctx: &mut TxContext,
-    ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
+    ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         // If market bid order, match against the open ask orders. Otherwise, match against the open bid orders.
         // Take market bid order for example.
         // We first retrieve the PriceLevel with the lowest price by calling min_leaf on the asks Critbit Tree.
@@ -1155,8 +1292,9 @@ module deepbook::clob_v2 {
         // Then iterate over the price levels in descending order until the market order is completely filled.
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(quantity != 0, EInvalidQuantity);
+        let metadata;
         if (is_bid) {
-            let (base_balance_filled, quote_balance_left) = match_bid(
+            let (base_balance_filled, quote_balance_left, matched_order_metadata) = match_bid(
                 pool,
                 account_cap,
                 client_order_id,
@@ -1170,10 +1308,11 @@ module deepbook::clob_v2 {
                 coin::from_balance(base_balance_filled, ctx),
             );
             quote_coin = coin::from_balance(quote_balance_left, ctx);
+            metadata = matched_order_metadata;
         } else {
             assert!(quantity <= coin::value(&base_coin), EInsufficientBaseCoin);
             let base_coin_to_sell = coin::split(&mut base_coin, quantity, ctx);
-            let (base_balance_left, quote_balance_filled) = match_ask(
+            let (base_balance_left, quote_balance_filled, matched_order_metadata) = match_ask(
                 pool,
                 account_cap,
                 client_order_id,
@@ -1188,8 +1327,9 @@ module deepbook::clob_v2 {
                 &mut quote_coin,
                 coin::from_balance(quote_balance_filled, ctx),
             );
+            metadata = matched_order_metadata;
         };
-        (base_coin, quote_coin)
+        (base_coin, quote_coin, metadata)
     }
 
     /// Injects a maker order to the order book.
@@ -1282,7 +1422,7 @@ module deepbook::clob_v2 {
         account_cap: &AccountCap,
         ctx: &mut TxContext
     ): (u64, u64, bool, u64) {
-        place_limit_order_int(
+        let (base_quantity_filled, quote_quantity_filled, is_success, order_id, _meta_data) = place_limit_order_int(
             pool,
             client_order_id,
             price,
@@ -1294,7 +1434,37 @@ module deepbook::clob_v2 {
             clock,
             account_cap,
             ctx
-        )
+        );
+        (base_quantity_filled, quote_quantity_filled, is_success, order_id)
+    }
+
+    public fun place_limit_order_with_metadata<BaseAsset, QuoteAsset>(
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        client_order_id: u64,
+        price: u64,
+        quantity: u64,
+        self_matching_prevention: u8,
+        is_bid: bool,
+        expire_timestamp: u64, // Expiration timestamp in ms in absolute value inclusive.
+        restriction: u8,
+        clock: &Clock,
+        account_cap: &AccountCap,
+        ctx: &mut TxContext
+    ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
+        let (base_quantity_filled, quote_quantity_filled, is_success, order_id, meta_data) = place_limit_order_int(
+            pool,
+            client_order_id,
+            price,
+            quantity,
+            self_matching_prevention,
+            is_bid,
+            expire_timestamp, // Expiration timestamp in ms in absolute value inclusive.
+            restriction,
+            clock,
+            account_cap,
+            ctx
+        );
+        (base_quantity_filled, quote_quantity_filled, is_success, order_id, meta_data)
     }
 
     /// Place a limit order to the order book.
@@ -1314,7 +1484,7 @@ module deepbook::clob_v2 {
         clock: &Clock,
         account_cap: &AccountCap,
         ctx: &mut TxContext
-    ): (u64, u64, bool, u64) {
+    ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
         // If limit bid order, check whether the price is lower than the lowest ask order by checking the min_leaf of asks Critbit Tree.
         // If so, assign the sequence id of the order to be next_bid_order_id and increment next_bid_order_id by 1.
         // Inject the new order to the bids Critbit Tree according to the price and order id.
@@ -1332,6 +1502,7 @@ module deepbook::clob_v2 {
         let original_quantity = quantity;
         let base_quantity_filled;
         let quote_quantity_filled;
+        let meta_data: vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>;
 
         if (is_bid) {
             let quote_quantity_original = custodian::account_available_balance<QuoteAsset>(
@@ -1343,7 +1514,7 @@ module deepbook::clob_v2 {
                 account_cap,
                 quote_quantity_original,
             );
-            let (base_balance_filled, quote_balance_left) = match_bid(
+            let (base_balance_filled, quote_balance_left, matched_order_metadata) = match_bid(
                 pool,
                 account_cap,
                 client_order_id,
@@ -1354,6 +1525,7 @@ module deepbook::clob_v2 {
             );
             base_quantity_filled = balance::value(&base_balance_filled);
             quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
+            meta_data = matched_order_metadata;
 
             custodian::increase_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
@@ -1371,7 +1543,7 @@ module deepbook::clob_v2 {
                 account_cap,
                 quantity,
             );
-            let (base_balance_left, quote_balance_filled) = match_ask(
+            let (base_balance_left, quote_balance_filled, matched_order_metadata) = match_ask(
                 pool,
                 account_cap,
                 client_order_id,
@@ -1382,6 +1554,7 @@ module deepbook::clob_v2 {
 
             base_quantity_filled = quantity - balance::value(&base_balance_left);
             quote_quantity_filled = balance::value(&quote_balance_filled);
+            meta_data = matched_order_metadata;
 
             custodian::increase_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
@@ -1397,11 +1570,11 @@ module deepbook::clob_v2 {
 
         let order_id;
         if (restriction == IMMEDIATE_OR_CANCEL) {
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
         };
         if (restriction == FILL_OR_KILL) {
             assert!(base_quantity_filled == quantity, EOrderCannotBeFullyFilled);
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
         };
         if (restriction == POST_OR_ABORT) {
             assert!(base_quantity_filled == 0, EOrderCannotBeFullyPassive);
@@ -1417,7 +1590,7 @@ module deepbook::clob_v2 {
                 account_cap,
                 ctx
             );
-            return (base_quantity_filled, quote_quantity_filled, true, order_id)
+            return (base_quantity_filled, quote_quantity_filled, true, order_id, meta_data)
         } else {
             assert!(restriction == NO_RESTRICTION, EInvalidRestriction);
             if (quantity > base_quantity_filled) {
@@ -1433,9 +1606,9 @@ module deepbook::clob_v2 {
                     account_cap,
                     ctx
                 );
-                return (base_quantity_filled, quote_quantity_filled, true, order_id)
+                return (base_quantity_filled, quote_quantity_filled, true, order_id, meta_data)
             };
-            return (base_quantity_filled, quote_quantity_filled, false, 0)
+            return (base_quantity_filled, quote_quantity_filled, false, 0, meta_data)
         }
     }
 
@@ -1927,6 +2100,43 @@ module deepbook::clob_v2 {
         order
     }
 
+    fun matched_order_metadata<BaseAsset, QuoteAsset>(
+        pool_id: ID,
+        taker_address: address,
+        order: &Order,
+        base_asset_quantity_filled: u64,
+        taker_commission: u64,
+        maker_rebates: u64
+    ): MatchedOrderMetadata<BaseAsset, QuoteAsset>{
+        MatchedOrderMetadata<BaseAsset, QuoteAsset> {
+            pool_id,
+            order_id: order.order_id,
+            is_bid: order.is_bid,
+            taker_address,
+            maker_address: order.owner,
+            base_asset_quantity_filled,
+            price: order.price,
+            taker_commission,
+            maker_rebates
+        }
+    }
+
+    public fun matched_order_metadata_info<BaseAsset, QuoteAsset>(
+        matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
+    ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
+        (
+            matched_order_metadata.pool_id, 
+            matched_order_metadata.order_id,
+            matched_order_metadata.is_bid, 
+            matched_order_metadata.taker_address,
+            matched_order_metadata.maker_address, 
+            matched_order_metadata.base_asset_quantity_filled,
+            matched_order_metadata.price, 
+            matched_order_metadata.taker_commission, 
+            matched_order_metadata.maker_rebates
+        )
+    }
+
     // Methods for accessing pool data, used by the order_query package
     public fun asks<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
         &pool.asks
@@ -2204,7 +2414,7 @@ module deepbook::clob_v2 {
         current_timestamp: u64,
     ): (u64, u64) {
         let quote_quantity_original = 1 << 63;
-        let (base_balance_filled, quote_balance_left) = match_bid(
+        let (base_balance_filled, quote_balance_left, _matched_order_metadata) = match_bid(
             pool,
             account_cap,
             client_order_id,
@@ -2230,7 +2440,7 @@ module deepbook::clob_v2 {
         current_timestamp: u64,
     ): (u64, u64) {
         let quote_quantity_original = 1 << 63;
-        let (base_balance_filled, quote_balance_left) = match_bid_with_quote_quantity(
+        let (base_balance_filled, quote_balance_left, _matched_order_metadata) = match_bid_with_quote_quantity(
             pool,
             account_cap,
             client_order_id,
@@ -2255,7 +2465,7 @@ module deepbook::clob_v2 {
         price_limit: u64, // upper price limit if bid, lower price limit if ask, inclusive
         current_timestamp: u64,
     ): (u64, u64) {
-        let (base_balance_left, quote_balance_filled) = match_ask(
+        let (base_balance_left, quote_balance_filled, _matched_order_metadata) = match_ask(
             pool,
             account_cap,
             client_order_id,
