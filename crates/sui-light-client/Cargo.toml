@@ -41,6 +41,7 @@ rocksdb.workspace = true
 tempfile.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
+sui-config.workspace = true
 sui-rest-api.workspace = true
 sui-json.workspace = true
 sui-storage.workspace = true

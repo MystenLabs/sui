@@ -12052,6 +12052,7 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "sui-analytics-indexer-derive",
+ "sui-config",
  "sui-indexer",
  "sui-json",
  "sui-json-rpc-types",

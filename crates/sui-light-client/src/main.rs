@@ -13,6 +13,8 @@ use sui_types::{
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
 };
 
+use sui_config::genesis::Genesis;
+
 use sui_json::SuiJsonValue;
 use sui_package_resolver::{Package, PackageStore, Resolver, Result};
 use sui_sdk::SuiClientBuilder;
@@ -57,6 +59,7 @@ impl PackageStore for RemotePackageStore {
         // TODO(SECURITY):  here we also need to authenticate the transaction that wrote this objects,
         //                  and ensure it wrote this object by hash.
         let object = self.client.get_object(id.into()).await.unwrap();
+        println!("Object TID: {:?}", object.previous_transaction);
         let package = Package::read(&object).unwrap();
         Ok(Arc::new(package))
     }
@@ -84,8 +87,8 @@ struct Config {
     /// Checkpoint summary directory
     checkpoint_summary_dir: PathBuf,
 
-    /// Genesis checkpoint digest
-    genesis_digest: String,
+    //  Genesis file name
+    genesis_filename: PathBuf,
 }
 
 // The list of checkpoints at the end of each epoch
@@ -235,10 +238,15 @@ async fn check_and_sync_checkpoints(config: &Config) {
     // Get the local checlpoint list
     let checkpoints_list: CheckpointsList = read_checkpoint_list(config);
 
+    // Load the genesis committee
+    let mut genesis_path = config.checkpoint_summary_dir.clone();
+    genesis_path.push(&config.genesis_filename);
+    let genesis_committee = Genesis::load(&genesis_path).unwrap().committee().unwrap();
+
     // Check the signatures of all checkpoints
     // And download any missing ones
 
-    let mut prev_committee = None;
+    let mut prev_committee = genesis_committee;
     for ckp_id in &checkpoints_list.checkpoints {
         // check if there is a file with this name ckp_id.yaml in the checkpoint_summary_dir
         let mut checkpoint_path = config.checkpoint_summary_dir.clone();
@@ -252,14 +260,7 @@ async fn check_and_sync_checkpoints(config: &Config) {
             download_checkpoint_summary(config, *ckp_id).await
         };
 
-        // If we know the previous committee, we can verify the new committee
-        if let Some(prev_committee) = &prev_committee {
-            summary.clone().verify(prev_committee).unwrap();
-        } else {
-            // If there is no previous committee check the digest is the same as the
-            // given genesis digest
-            assert_eq!(format!("{}", summary.digest()), config.genesis_digest);
-        }
+        summary.clone().verify(&prev_committee).unwrap();
 
         // Pirnt the id of the checkpoint and the epoch number
         println!(
@@ -277,7 +278,7 @@ async fn check_and_sync_checkpoints(config: &Config) {
             let next_committee = next_epoch_committee.iter().cloned().collect();
             let committee = Committee::new(summary.epoch().saturating_add(1), next_committee);
             bcs::to_bytes(&committee).unwrap();
-            prev_committee = Some(committee);
+            prev_committee = committee;
         } else {
             panic!("Expected all checkpoints to be endf-of-epoch checkpoints");
         }
