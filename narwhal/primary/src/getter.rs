@@ -38,14 +38,15 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 /// The HeaderGetter is responsible for fetching headers that this primary is missing
 /// from peers. It is called to get specific headers.
 pub(crate) struct HeaderGetter {
-    // Sends notifications to kickstart a fetch.
-    tx_getter_kickstart: watch::Sender<()>,
+    state: Arc<HeaderFetcherState>,
 }
 
 /// Thread-safe internal state of HeaderFetcher shared with its fetch task.
 struct HeaderFetcherState {
     /// Identity of the current authority.
     authority_id: AuthorityIdentifier,
+    /// Committee of the current epoch.
+    committee: Committee,
     /// Network client to fetch headers from other primaries.
     network: anemo::Network,
     /// Verifies then sends headers to Core for processing.
@@ -60,114 +61,53 @@ impl HeaderFetcher {
     pub fn new(
         authority_id: AuthorityIdentifier,
         committee: Committee,
-        protocol_config: ProtocolConfig,
         network: anemo::Network,
-        dag_state: Arc<DagState>,
         verifier: Arc<Verifier>,
         tx_verified_headers: Sender<SignedHeader>,
         metrics: Arc<PrimaryMetrics>,
     ) -> Self {
-        let state = Arc::new(HeaderFetcherState {
+        let state = HeaderFetcherState {
             authority_id,
+            committee,
             network,
             verifier,
             tx_verified_headers,
             metrics,
-        });
-        let (tx_fetcher_kickstart, mut rx_fetcher_kickstart) = watch::channel(());
-        tokio::spawn(async move {
-            rx_fetcher_kickstart.borrow_and_update();
-            let mut fetch_headers_task = JoinSet::new();
-            loop {
-                tokio::select! {
-                    result = rx_fetcher_kickstart.changed() => {
-                        if result.is_err() {
-                            info!("Fetcher shutting down!");
-                            return;
-                        }
-                        if !fetch_headers_task.is_empty() {
-                            // Already fetching.
-                            continue;
-                        }
-                        // Fall through to start fetching.
-                    }
-                    Some(result) = fetch_headers_task.join_next(), if !fetch_headers_task.is_empty() => {
-                        match result {
-                            Ok(()) => {
-                                if dag_state.num_suspended() == 0 {
-                                    // No more headers missing ancestors.
-                                    continue;
-                                }
-                                // Otherwise fall through to start fetching.
-                            },
-                            Err(e) => {
-                                if e.is_cancelled() {
-                                    // avoid crashing on ungraceful shutdown
-                                    return;
-                                } else if e.is_panic() {
-                                    // propagate panics.
-                                    std::panic::resume_unwind(e.into_panic());
-                                } else {
-                                    panic!("fetch certificates task failed: {e}");
-                                }
-                            },
-                        };
-                    }
-                };
-
-                let last_header_rounds = dag_state.last_round_per_authority();
-                let state = state.clone();
-                let committee = committee.clone();
-                let protocol_config = protocol_config.clone();
-
-                debug!("Starting task to fetch missing headers");
-                fetch_headers_task.spawn(monitored_future!(async move {
-                    let _scope = monitored_scope("Fetcher::task");
-                    state.metrics.certificate_fetcher_inflight_fetch.inc();
-
-                    let now = Instant::now();
-                    match run_fetch_task(
-                        &protocol_config,
-                        state.clone(),
-                        committee,
-                        last_header_rounds,
-                    )
-                    .await
-                    {
-                        Ok(_) => {
-                            debug!(
-                                "Successfully finished task to fetch headers, elapsed = {}s",
-                                now.elapsed().as_secs_f64()
-                            );
-                        }
-                        Err(e) => {
-                            warn!("Error from fetch headers task: {e}");
-                        }
-                    };
-
-                    state.metrics.certificate_fetcher_inflight_fetch.dec();
-                }));
-            }
-        });
-
+        };
         Self {
-            tx_fetcher_kickstart,
+            state: Arc::new(state),
         }
     }
 
-    // A call to kickstart() can be triggered from Core loop by a header with missing ancestors.
-    pub(crate) fn try_start(&self) {
-        self.tx_fetcher_kickstart.send_replace(());
+    pub(crate) fn get_missing(&self, missing: Vec<HeaderKey>) -> JoinHandle<()> {
+        spawn_monitored_task!(async move {
+            let _scope = monitored_scope("Getter::task");
+            let now = Instant::now();
+            match run_get_task(
+                state.clone(),
+                missing,
+            )
+            .await
+            {
+                Ok(_) => {
+                    debug!(
+                        "Successfully finished task to fetch headers, elapsed = {}s",
+                        now.elapsed().as_secs_f64()
+                    );
+                }
+                Err(e) => {
+                    warn!("Error from fetch headers task: {e}");
+                }
+            };
+        })
     }
 }
 
 #[allow(clippy::mutable_key_type)]
 #[instrument(level = "debug", skip_all)]
-async fn run_fetch_task(
-    protocol_config: &ProtocolConfig,
-    state: Arc<HeaderFetcherState>,
-    committee: Committee,
-    last_header_rounds: BTreeMap<AuthorityIdentifier, Round>,
+async fn run_get_task(
+    state: Arc<HeaderGetterState>,
+    missing: Vec<HeaderKey>,
 ) -> DagResult<()> {
     // Send request to fetch headers.
     let request = FetchHeadersRequest {

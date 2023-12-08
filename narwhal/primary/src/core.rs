@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{atomic::AtomicBool, Arc};
 
 use config::{AuthorityIdentifier, Committee, WorkerCache};
 use mysten_metrics::{

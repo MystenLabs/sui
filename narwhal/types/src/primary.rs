@@ -2446,6 +2446,18 @@ pub struct FetchCertificatesResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetHeadersRequest {
+    /// The exclusive lower bound are header keys where each primary should return headers above that.
+    pub keys: Vec<(AuthorityIdentifier, Round)>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetHeadersResponse {
+    /// Headers sorted from lower to higher rounds.
+    pub headers: Vec<SignedHeader>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FetchHeadersRequest {
     /// The exclusive lower bound are header keys where each primary should return headers above that.
     pub exclusive_lower_bounds: Vec<(AuthorityIdentifier, Round)>,
