@@ -168,7 +168,15 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
-			'concepts/cryptography/zklogin',
+			{
+				type: 'category',
+				label: 'zkLogin',
+				link: {
+					type: 'doc',
+					id: 'concepts/cryptography/zklogin',
+				},
+				items: ['concepts/cryptography/zklogin/zklogin-example'],
+			},
 			{
 				type: 'category',
 				label: 'System',
