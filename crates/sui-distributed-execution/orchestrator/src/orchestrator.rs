@@ -518,6 +518,12 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
             display::config(&format!("Metrics address ({})", instance.main_ip), address);
         }
 
+        let results_directory = &self.settings.results_dir;
+        let commit = &self.settings.repository.commit;
+        let results_path: PathBuf = [results_directory, &format!("results-{commit}").into()]
+            .iter()
+            .collect();
+
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut metrics_interval = time::interval(self.scrape_interval);
         metrics_interval.tick().await; // The first tick returns immediately.
@@ -531,14 +537,11 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
             "Scraping metrics (at least {}s)",
             parameters.duration.as_secs()
         ));
-        let start = Instant::now();
+        let mut start = None;
         loop {
             tokio::select! {
                 // Scrape metrics.
                 now = metrics_interval.tick() => {
-                    let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
-                    display::status(format!("{elapsed}s"));
-
                     let mut instances = metrics_commands.clone();
                     instances.retain(|(instance, _)| !killed_nodes.contains(instance));
 
@@ -552,16 +555,21 @@ impl<P: ProtocolCommands<T> + ProtocolMetrics<T>, T: BenchmarkType> Orchestrator
                         }
                     }
 
-                    let results_directory = &self.settings.results_dir;
-                    let commit = &self.settings.repository.commit;
-                    let path: PathBuf = [results_directory, &format!("results-{commit}").into()]
-                        .iter()
-                        .collect();
-                    fs::create_dir_all(&path).expect("Failed to create log directory");
-                    aggregator.save(path);
 
-                    if elapsed > parameters.duration .as_secs() {
-                        break;
+                    if start.is_none() && aggregator.labels().any(|x| aggregator.aggregate_tps(x) > 0) {
+                        display::status(format!("go"));
+                        start = Some(Instant::now());
+                    }
+
+                    if let Some(start) = start {
+                        fs::create_dir_all(&results_path).expect("Failed to create log directory");
+                        aggregator.save(&results_path);
+
+                        let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
+                        display::status(format!("{elapsed}s"));
+                        if elapsed > parameters.duration .as_secs() {
+                            break;
+                        }
                     }
                 },
 
