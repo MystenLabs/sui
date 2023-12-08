@@ -47,15 +47,10 @@ pub(crate) struct Verifier<'m> {
 }
 
 impl Executor {
-    pub(crate) fn new(
-        protocol_config: &ProtocolConfig,
-        paranoid_type_checks: bool,
-        silent: bool,
-    ) -> Result<Self, SuiError> {
+    pub(crate) fn new(protocol_config: &ProtocolConfig, silent: bool) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
             all_natives(silent),
             protocol_config,
-            paranoid_type_checks,
         )?)))
     }
 }

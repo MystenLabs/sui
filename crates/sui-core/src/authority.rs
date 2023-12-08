@@ -1481,11 +1481,8 @@ impl AuthorityState {
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
-        // don't bother with paranoid checks in dry run
-        let enable_move_vm_paranoid_checks = false;
-        let executor =
-            sui_execution::executor(protocol_config, enable_move_vm_paranoid_checks, silent)
-                .expect("Creating an executor should not fail here");
+        let executor = sui_execution::executor(protocol_config, silent)
+            .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
         let (inner_temp_store, effects, _execution_error) = executor
@@ -1638,13 +1635,8 @@ impl AuthorityState {
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let silent = true;
-        let executor = sui_execution::executor(
-            protocol_config,
-            self.expensive_safety_check_config
-                .enable_move_vm_paranoid_checks(),
-            silent,
-        )
-        .expect("Creating an executor should not fail here");
+        let executor = sui_execution::executor(protocol_config, silent)
+            .expect("Creating an executor should not fail here");
         let expensive_checks = false;
         let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
             &self.database,

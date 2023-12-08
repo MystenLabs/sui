@@ -2928,15 +2928,12 @@ impl ExecutionComponents {
         protocol_config: &ProtocolConfig,
         store: Arc<AuthorityStore>,
         metrics: Arc<ResolverMetrics>,
-        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
+        // Keep this as a parameter for possible future use
+        _expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) -> Self {
         let silent = true;
-        let executor = sui_execution::executor(
-            protocol_config,
-            expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-            silent,
-        )
-        .expect("Creating an executor should not fail here");
+        let executor = sui_execution::executor(protocol_config, silent)
+            .expect("Creating an executor should not fail here");
 
         let module_cache = Arc::new(SyncModuleCache::new(ResolverWrapper::new(
             store,

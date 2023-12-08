@@ -71,7 +71,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false
@@ -181,7 +180,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false
@@ -291,7 +289,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false
@@ -401,7 +398,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false
@@ -511,7 +507,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false
@@ -621,7 +616,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false
@@ -731,7 +725,6 @@ validator_configs:
       force-disable-epoch-sui-conservation-check: false
       enable-state-consistency-check: false
       force-disable-state-consistency-check: false
-      enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
       package-publish-disabled: false

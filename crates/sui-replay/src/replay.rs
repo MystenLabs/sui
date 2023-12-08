@@ -2036,7 +2036,7 @@ impl GetModule for LocalExec {
 pub fn get_executor(
     executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
-    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
+    _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
 ) -> Arc<dyn Executor + Send + Sync> {
     let protocol_config = executor_version_override
         .map(|q| {
@@ -2053,12 +2053,8 @@ pub fn get_executor(
         .unwrap_or(protocol_config.clone());
 
     let silent = true;
-    sui_execution::executor(
-        &protocol_config,
-        expensive_safety_check_config.enable_move_vm_paranoid_checks(),
-        silent,
-    )
-    .expect("Creating an executor should not fail here")
+    sui_execution::executor(&protocol_config, silent)
+        .expect("Creating an executor should not fail here")
 }
 
 async fn prep_network(

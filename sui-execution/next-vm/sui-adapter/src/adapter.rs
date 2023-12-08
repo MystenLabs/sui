@@ -92,8 +92,6 @@ mod checked {
                     false, /* we do not enable metering in execution*/
                 ),
                 max_binary_format_version: protocol_config.move_binary_format_version(),
-                // `paranoid_type_checks` are deprecated
-                paranoid_type_checks: false,
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
                     max_value_nest_depth: protocol_config.max_move_value_depth_as_option(),
