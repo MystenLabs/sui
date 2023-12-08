@@ -51,6 +51,7 @@ const references = [
 		},
 		items: [
 			'references/cli/client',
+			'references/cli/ptb',
 			'references/cli/console',
 			'references/cli/keytool',
 			'references/cli/move',
