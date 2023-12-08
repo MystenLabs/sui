@@ -832,19 +832,7 @@ impl ConsensusAdapter {
             {
                 let pending_count = epoch_store.pending_consensus_certificates_count();
                 debug!(epoch=?epoch_store.epoch(), ?pending_count, "Deciding whether to send EndOfPublish");
-                // Send end of epoch if empty and all deferred tx are procesed.
-                if pending_count > 0 {
-                    false
-                } else {
-                    // Don't check deferred table until pending_count is already 0, since it may
-                    // require scanning through a bunch of deletion markers.
-                    let deferred_is_empty = epoch_store.deferred_transactions_empty();
-                    debug!(
-                        ?deferred_is_empty,
-                        "Deciding whether to block EndOfPublish on deferred tx"
-                    );
-                    deferred_is_empty
-                }
+                pending_count == 0 // send end of epoch if empty
             } else {
                 false
             }

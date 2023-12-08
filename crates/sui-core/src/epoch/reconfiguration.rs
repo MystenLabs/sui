@@ -10,6 +10,7 @@ pub enum ReconfigCertStatus {
     AcceptAllCerts,
     RejectUserCerts,
     RejectAllCerts,
+    RejectAllTx,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,7 +46,22 @@ impl ReconfigState {
     }
 
     pub fn should_accept_consensus_certs(&self) -> bool {
-        !matches!(self.status, ReconfigCertStatus::RejectAllCerts)
+        matches!(
+            self.status,
+            ReconfigCertStatus::AcceptAllCerts | ReconfigCertStatus::RejectUserCerts
+        )
+    }
+
+    pub fn is_reject_all_certs(&self) -> bool {
+        matches!(self.status, ReconfigCertStatus::RejectAllCerts)
+    }
+
+    pub fn close_all_tx(&mut self) {
+        self.status = ReconfigCertStatus::RejectAllTx;
+    }
+
+    pub fn should_accept_tx(&self) -> bool {
+        !matches!(self.status, ReconfigCertStatus::RejectAllTx)
     }
 }
 
