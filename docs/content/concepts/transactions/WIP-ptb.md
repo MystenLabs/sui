@@ -8,10 +8,20 @@ This document describes the semantics of commands' execution. Note that it will 
 
 ## Transaction Type
 
-In this document, we will be looking at the two components of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The two main components are:
+In this document, we will be looking at the two components of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The structure of a programmable transaction block is as follows:
 
-- The inputs, `[CallArg]`, is a vector of arguments, either objects or pure values, that can be used in the commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
-- The commands, `[Command]`, is a vector of commands. The possible commands are:
+```
+{
+  inputs: [Input],
+  commands: [Command],
+}
+```
+
+Looking closer at the two main components:
+
+- The `inputs` is a vector of arguments, `[Input]`. These arguments, either objects or pure value,s that can be used in the commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely from their bytes.
+  - Note that for historical reasons, `Input` is `CallArg` in the Rust implementation.
+- The `commands` is a vector of commands, `[Command]`. The possible commands are:
   - `TransferObjects` sends one or more objects to a specified address.
   - `SplitCoins` splits off one or more coins from a single coin. It can be any `sui::coin::Coin<_>` object.
   - `MergeCoins` merges one or more coins into a single coin. Any `sui::coin::Coin<_>` objects can be merged, as long as they are all of the same type.
@@ -20,7 +30,7 @@ In this document, we will be looking at the two components of a programmable tra
   - `Publish` creates a new package and calls the `init` function of each module in the package.
   - `Upgrade` upgrades an existing package. The upgrade is gated by the `sui::package::UpgradeCap` for that package.
 
-## Arguments and Results
+## Inputs and Results
 
 Inputs and Results are the two types of values that can be used in commands. Inputs are the values that are provided to the transaction block, and results are the values that are produced by the transaction block's commands. The inputs are either objects or simple Move values, and the results are arbitrary Move values (including objects).
 
@@ -28,16 +38,15 @@ The inputs and results can be seen as populating an array of values. For inputs,
 
 ### Inputs
 
-Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `[CallArg]`. Each `CallArg` input argument is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `CallArg::Pure(PureArg)`, which contains the bytes of the value.
+Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `[Input]`. Each `Input` input argument is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
 
 For object inputs, the metadata needed differs depending on the type ownership of the object. The rules for authentication of these objects is described elsewhere (TODO LINK), but below is the actual data in the `ObjectArg` enum.
 
-- If the object is owned by an address (or it is immutable), then `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)` is used. The triple respectively specifies the object's ID, its version or sequence number, and the digest of the object's data.
+- If the object is owned by an address (or it is immutable), then `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)` is used. The triple respectively specifies the object's ID, its sequence number (also known as its version), and the digest of the object's data.
 - If an object is shared, then `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }` is used. Unlike `ImmOrOwnedObject`, a shared object's version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object will be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
 If the object is owned by another object, i.e. it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then `ObjectArg::Receiving(ObjectID, SequenceNumber, ObjectDigest)` is used. The object data is the same as for the `ImmOrOwnedObject` case.
 
-
-For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes are not validated until the type is specified in a command, e.g. in `MoveCall` or `MakeMoveVec`. Not all Move values can be constructed from BCS bytes. The following types are supported:
+For pure inputs, the only data that is provided are the BCS (TODO Link) bytes, which are deserialized to construct Move values. Not all Move values can be constructed from BCS bytes. This means that even if the bytes match the expected layout for a given Move type, they cannot be deserialized into a value of that type unless the type is one of the types permitted for `Pure` values. The following types are allowed to be used with pure values:
 
 - All primitive types:
   - `u8`
@@ -53,14 +62,17 @@ For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes 
 - A vector, `vector<T>`, where `T` is a valid type for a pure input, checked recursively.
 - An option, `std::option::Option<T>`, where `T` is a valid type for a pure input, checked recursively.
 
+Interestingly, the bytes are not validated until the type is specified in a command, e.g. in `MoveCall` or `MakeMoveVec`. This means that a given pure input could be used to instantiate Move values of several types. See the section on arguments under execution for more details.
+
 ### Results
 
 Each command produces a (possibly empty) array of values. The type of the value can be any arbitrary Move type, so unlike inputs, the values are not limited to objects or pure values. The number of results generated and their types is specific to each command. The specifics for each command can be found in the section for that command, but in summary:
 
 - `MoveCall`: the number of results and their types are determined by the Move function being called. Note that Move functions that return references are not supported at this time.
 - `SplitCoins`: produces one or more coins from a single coin. The type of each coin is `sui::coin::Coin<T>` where the specific coin type `T` matches the coin being split.
-- `Publish`: returns the upgrade capability, `sui::package::UpgradeCap` for the newly published package.
-- `TransferObjects`, `MergeCoins`, and `Upgrade` do not produce any results (an empty result vector).
+- `Publish`: returns the upgrade capability, `sui::package::UpgradeCap`, for the newly published package.
+- `Upgrade`: returns the upgrade receipt, `sui::package::UpgradeReceipt`, for the upgraded package.
+- `TransferObjects` and `MergeCoins` do not produce any results (an empty result vector).
 
 ### Argument Structure and Usage
 
@@ -100,10 +112,10 @@ After loading the input array, commands are executed in order. First, let's look
 - The transaction fails if an argument is used in any form after being moved. There is no way to restore an argument to its position (its input or result index) after it is moved.
 - If an argument is copied but does not have the `drop` ability, then the last usage is inferred to be a move. As a result, if an argument has `copy` and does not have `drop`, the last usage _must_ be by value. Otherwise, the transaction will fail because a value without `drop` has not been used.
 - The borrowing of arguments has other rules to ensure unique safe usage of an argument by reference:
-  - If an argument is mutably borrowed, there must be no outstanding borrows.
+  - If an argument is mutably borrowed, there must be no outstanding borrows. Duplicate borrows with an outstanding mutable borrow could lead to dangling references (references that point to invalid memory).
   - If an argument is immutably borrowed, there must be no outstanding _mutable_ borrows. Duplicate immutable borrows are allowed.
-  - If an argument is moved, there must be no outstanding borrows. Moving a borrowed value would make those outstanding borrows unsafe.
-  - If an argument is copied, there must be no outstanding _mutable_ borrows. It is safe and allowed to copy a value that is immutably borrowed.
+  - If an argument is moved, there must be no outstanding borrows. Moving a borrowed value would make those outstanding borrows dangling and unsafe.
+  - If an argument is copied, there can be outstanding borrows, mutable or immutable. While it might lead to some unexpected results in some cases, there is no safety concern.
 - Object inputs have the type of their object `T` as you might expect. However, for `ObjectArg::Receiving` inputs, the object type `T` is instead wrapped as `sui::transfer::Receiving<T>`. This is because the object is not owned by the sender, but instead by another object. And to prove ownership with that parent object, you call the `sui::transfer::receive` function which removes the wrapper.
 - The `GasCoin` has special restrictions on being used by-value (moved). It can only be used by-value with the `TransferObjects` command.
 - Shared objects also have restrictions on being used by-value. These restrictions exist to ensure that at the end of the transaction the shared object is either still shared or has been deleted. A shared object cannot be unshared, i.e. having the owner changed, and it cannot be wrapped.
@@ -119,7 +131,7 @@ After loading the input array, commands are executed in order. First, let's look
 
 The command has the form `TransferObjects(ObjectArgs, AddressArg)` where `ObjectArgs` is a vector of objects and `AddressArg` is the address the objects are sent to.
 
-- Each argument `ObjectArgs: [Argument]` must be an object. However, the objects do not have the same type.
+- Each argument `ObjectArgs: [Argument]` must be an object. Notably, the objects do not need have the same type.
 - The address argument `AddressArg: Argument` must be an address, which could come from a `Pure` input or a result.
 - All arguments, objects and address, are taken by value.
 - The command does not produce any results (an empty result vector).
@@ -206,7 +218,7 @@ At the end of execution, the remaining values are checked and effects for the tr
   - Any remaining result with the `drop` ability is dropped.
   - If the value has `copy` but not `drop`, its last usage must have been by-value. In that way, its last usage is treated as a move.
   - Otherwise, an error is given because there is an unused value without `drop`.
-- Any remaining gas is returned to the gas coin, even if the owner has changed.
+- Any remaining `SUI` deducted from the gas coin at the beginning of execution is returned to the coin, even if the owner has changed. In other words, we deduct the maximum possible gas at the beginning of execution, and then return the unused gas at the end of execution (all in terms of `SUI`).
   - Note that since the gas coin can only be taken by-value with `TransferObjects`, it will not have been wrapped or deleted.
 
 The total effects (which contain the created, mutated, and deleted objects) are then passed out of the execution layer and are applied by the Sui network.
@@ -280,7 +292,6 @@ Results: [
   [Coin<SUI> { id: new_coin, value: 100u64 ... }], // The result of SplitCoins
 ],
 ```
-
 
 ### Command 1: `MoveCall`
 
