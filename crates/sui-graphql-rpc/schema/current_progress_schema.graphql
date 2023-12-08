@@ -2437,32 +2437,116 @@ type UpgradeTransaction {
 }
 
 type Validator {
+	"""
+	Validator's address.
+	"""
 	address: Address!
+	"""
+	Validator's set of credentials.
+	"""
 	credentials: ValidatorCredentials
+	"""
+	Validator's set of credentials for the next epoch.
+	"""
 	nextEpochCredentials: ValidatorCredentials
+	"""
+	Validator's name.
+	"""
 	name: String
+	"""
+	Validator's description.
+	"""
 	description: String
+	"""
+	Validator's url containing their custom image.
+	"""
 	imageUrl: String
+	"""
+	Validator's homepage URL.
+	"""
 	projectUrl: String
-	exchangeRatesSize: Int
-	stakingPoolActivationEpoch: Int
-	stakingPoolSuiBalance: BigInt
-	rewardsPool: BigInt
-	poolTokenBalance: BigInt
-	pendingStake: BigInt
-	pendingTotalSuiWithdraw: BigInt
-	pendingPoolTokenWithdraw: BigInt
-	votingPower: Int
-	gasPrice: BigInt
-	commissionRate: Int
-	nextEpochStake: BigInt
-	nextEpochGasPrice: BigInt
-	nextEpochCommissionRate: Int
-	atRisk: Int
-	reportRecords: [SuiAddress!]
+	"""
+	The validator's current valid `Cap` object. Validators can delegate
+	the operation ability to another address. The address holding this `Cap` object
+	can then update the reference gas price and tallying rule on behalf of the validator.
+	"""
 	operationCap: MoveObject
+	"""
+	The validator's current staking pool object, used to track the amount of stake
+	and to compound staking rewards.
+	"""
 	stakingPool: MoveObject
+	"""
+	The validator's current exchange object. The exchange rate is used to determine
+	the amount of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
 	exchangeRates: MoveObject
+	"""
+	Number of exchange rates in the table.
+	"""
+	exchangeRatesSize: Int
+	"""
+	The epoch at which this pool became active.
+	"""
+	stakingPoolActivationEpoch: Int
+	"""
+	The total number of SUI tokens in this pool.
+	"""
+	stakingPoolSuiBalance: BigInt
+	"""
+	The epoch stake rewards will be added here at the end of each epoch.
+	"""
+	rewardsPool: BigInt
+	"""
+	Total number of pool tokens issued by the pool.
+	"""
+	poolTokenBalance: BigInt
+	"""
+	Pending stake amount for this epoch.
+	"""
+	pendingStake: BigInt
+	"""
+	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingTotalSuiWithdraw: BigInt
+	"""
+	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingPoolTokenWithdraw: BigInt
+	"""
+	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
+	"""
+	votingPower: Int
+	"""
+	The reference gas price for this epoch.
+	"""
+	gasPrice: BigInt
+	"""
+	The fee charged by the validator for staking services.
+	"""
+	commissionRate: Int
+	"""
+	The total number of SUI tokens in this pool plus
+	the pending stake amount for this epoch.
+	"""
+	nextEpochStake: BigInt
+	"""
+	The validator's gas price quote for the next epoch.
+	"""
+	nextEpochGasPrice: BigInt
+	"""
+	The proposed next epoch fee for the validator's staking services.
+	"""
+	nextEpochCommissionRate: Int
+	"""
+	The number of epochs for which this validator has been below the
+	low stake threshold.
+	"""
+	atRisk: Int
+	"""
+	The addresses of other validators this validator has reported.
+	"""
+	reportRecords: [Address!]
 }
 
 type ValidatorCredentials {

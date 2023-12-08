@@ -6,7 +6,7 @@ use super::validator::Validator;
 use async_graphql::*;
 
 /// Representation of `0x3::validator_set::ValidatorSet`.
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject, Default)]
+#[derive(Clone, Debug, SimpleObject, Default)]
 pub(crate) struct ValidatorSet {
     /// Total amount of stake for all active validators at the beginning of the epoch.
     pub total_stake: Option<BigInt>,

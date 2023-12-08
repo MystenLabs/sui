@@ -8,7 +8,6 @@ use crate::{
     types::{
         address::{Address, AddressTransactionBlockRelationship},
         balance::Balance,
-        base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
         coin::Coin,
@@ -37,13 +36,12 @@ use crate::{
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
         validator::Validator,
-        validator_credentials::ValidatorCredentials,
         validator_set::ValidatorSet,
     },
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
@@ -1551,8 +1549,10 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
 impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
     type Error = Error;
     fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
-        let active_validators =
-            convert_to_validators(system_state.active_validators.clone(), Some(&system_state));
+        let active_validators = convert_to_validators(
+            system_state.active_validators.clone(),
+            Some(system_state.clone()),
+        );
 
         let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
             Error::Internal(format!(
@@ -1659,77 +1659,29 @@ pub(crate) fn validate_cursor_pagination(
 
 pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
-    system_state: Option<&NativeSuiSystemStateSummary>,
+    system_state: Option<NativeSuiSystemStateSummary>,
 ) -> Vec<Validator> {
+    let at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>> = system_state
+        .clone()
+        .map(|x| BTreeMap::from_iter(x.at_risk_validators));
+
+    let report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>> =
+        system_state.map(|x| BTreeMap::from_iter(x.validator_report_records));
+
     validators
         .iter()
         .map(|v| {
-            let at_risk = system_state
-                .and_then(|system_state| {
-                    system_state
-                        .at_risk_validators
-                        .iter()
-                        .find(|&(address, _)| address == &v.sui_address)
-                })
-                .map(|&(_, value)| value);
-
-            let report_records = system_state
-                .and_then(|system_state| {
-                    system_state
-                        .validator_report_records
-                        .iter()
-                        .find(|&(address, _)| address == &v.sui_address)
-                })
-                .map(|(_, value)| {
-                    value
-                        .iter()
-                        .map(|address| SuiAddress::from_array(address.to_inner()))
-                        .collect::<Vec<_>>()
-                });
-
-            let credentials = ValidatorCredentials {
-                protocol_pub_key: Some(Base64::from(v.protocol_pubkey_bytes.clone())),
-                network_pub_key: Some(Base64::from(v.network_pubkey_bytes.clone())),
-                worker_pub_key: Some(Base64::from(v.worker_pubkey_bytes.clone())),
-                proof_of_possession: Some(Base64::from(v.proof_of_possession_bytes.clone())),
-                net_address: Some(v.net_address.clone()),
-                p2p_address: Some(v.p2p_address.clone()),
-                primary_address: Some(v.primary_address.clone()),
-                worker_address: Some(v.worker_address.clone()),
-            };
+            let at_risk = at_risk_validators
+                .as_ref()
+                .and_then(|map| map.get(&v.sui_address).copied());
+            let report_records = report_records.as_ref().and_then(|map| {
+                map.get(&v.sui_address)
+                    .map(|addrs| addrs.iter().map(Address::from).collect())
+            });
             Validator {
-                address: Address {
-                    address: SuiAddress::from(v.sui_address),
-                },
-                next_epoch_credentials: Some(credentials.clone()),
-                credentials: Some(credentials),
-                name: Some(v.name.clone()),
-                description: Some(v.description.clone()),
-                image_url: Some(v.image_url.clone()),
-                project_url: Some(v.project_url.clone()),
-
-                operation_cap_id: SuiAddress::from_array(**v.operation_cap_id),
-                staking_pool_id: SuiAddress::from_array(**v.staking_pool_id),
-                exchange_rates_id: SuiAddress::from_array(**v.exchange_rates_id),
-                exchange_rates_size: Some(v.exchange_rates_size),
-
-                staking_pool_activation_epoch: v.staking_pool_activation_epoch,
-                staking_pool_sui_balance: Some(BigInt::from(v.staking_pool_sui_balance)),
-                rewards_pool: Some(BigInt::from(v.rewards_pool)),
-                pool_token_balance: Some(BigInt::from(v.pool_token_balance)),
-                pending_stake: Some(BigInt::from(v.pending_stake)),
-                pending_total_sui_withdraw: Some(BigInt::from(v.pending_total_sui_withdraw)),
-                pending_pool_token_withdraw: Some(BigInt::from(v.pending_pool_token_withdraw)),
-                voting_power: Some(v.voting_power),
-                // stake_units: todo!(),
-                gas_price: Some(BigInt::from(v.gas_price)),
-                commission_rate: Some(v.commission_rate),
-                next_epoch_stake: Some(BigInt::from(v.next_epoch_stake)),
-                next_epoch_gas_price: Some(BigInt::from(v.next_epoch_gas_price)),
-                next_epoch_commission_rate: Some(v.next_epoch_commission_rate),
+                validator_summary: v.clone(),
                 at_risk,
                 report_records,
-                // apy: todo!(),
             }
         })
         .collect()
@@ -1750,6 +1702,20 @@ impl From<SuiAddress> for Address {
 impl From<NativeSuiAddress> for SuiAddress {
     fn from(a: NativeSuiAddress) -> Self {
         SuiAddress::from_array(a.to_inner())
+    }
+}
+
+impl From<&NativeSuiAddress> for SuiAddress {
+    fn from(a: &NativeSuiAddress) -> Self {
+        SuiAddress::from_array(a.to_inner())
+    }
+}
+
+impl From<&NativeSuiAddress> for Address {
+    fn from(a: &NativeSuiAddress) -> Self {
+        Self {
+            address: SuiAddress::from_array(a.to_inner()),
+        }
     }
 }
 
