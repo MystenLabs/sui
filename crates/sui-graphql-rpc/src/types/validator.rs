@@ -192,9 +192,7 @@ impl Validator {
     /// low stake threshold.
     async fn at_risk(&self) -> Option<u64> {
         match &self.at_risk_validators {
-            Some(validators) => validators
-                .get(&self.validator_summary.sui_address)
-                .map(|v| v.clone()),
+            Some(validators) => validators.get(&self.validator_summary.sui_address).copied(),
             None => None,
         }
     } // only available on sui_system_state_summary
@@ -206,7 +204,7 @@ impl Validator {
                 .get(&self.validator_summary.sui_address)
                 .map(|addresses| {
                     addresses
-                        .into_iter()
+                        .iter()
                         .map(|addr| Address {
                             address: SuiAddress::from(*addr),
                         })

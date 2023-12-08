@@ -1663,10 +1663,10 @@ pub(crate) fn convert_to_validators(
 ) -> Vec<Validator> {
     let at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>> = system_state
         .clone()
-        .map(|x| BTreeMap::from_iter(x.at_risk_validators.into_iter()));
+        .map(|x| BTreeMap::from_iter(x.at_risk_validators));
 
     let report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>> =
-        system_state.map(|x| BTreeMap::from_iter(x.validator_report_records.into_iter()));
+        system_state.map(|x| BTreeMap::from_iter(x.validator_report_records));
 
     validators
         .iter()
