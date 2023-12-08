@@ -1,20 +1,20 @@
 # Programmable Transactions Blocks
 
-Programmable transaction blocks are used to define all user transactions on Sui. These transactions allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move package! Additionally, the structure of programmable transaction blocks was designed with automation and transaction builders in mind. In other words, they are designed to be a lightweight and flexible way of generating transactions. That being said, more intricate programming patterns, such as loops, are not supported, and in those cases, a new Move package should be published.
+Programmable transaction blocks are used to define all user transactions on Sui. These transactions allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction--without publishing a new Move package! The structure of programmable transaction blocks is designed to be lightweight and flexible, to enable automated transaction generation for transaction builders. As such, intricate programming patterns, such as loops, are not supported, and in those cases, a new Move package should be published.
 
 Each programmable transaction block is comprised of individual transaction commands (sometimes referred to themselves as transactions or simply commands). Each command is executed in order, and the results from a command can be used in any subsequent command. The effects, i.e. object modifications or transfers, of all commands in a block are applied atomically at the end of the transaction, and if one command fails, the entire block fails and no effects from the commands are applied.
 
-This document will cover the semantics of the execution of the commands. Note that it will assume familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents: (TODO LINKS)
+This document describes the semantics of commands' execution. Note that it will assume familiarity with the Sui object model and the Move language. For more information on those topics, see the following documents: (TODO LINKS)
 
 ## Transaction Type
 
-In this document, we will be looking at the two parts of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The programmable transaction block consists of two components
+In this document, we will be looking at the two components of a programmable transaction block that are relevant to the execution semantics. Other transaction information, such as the transaction sender or the gas limit, might be referenced but are out of scope. The two main components are:
 
 - The inputs, `[CallArg]`, is a vector of arguments, either objects or pure values, that can be used in the commands. The objects are either owned by the sender or are shared/immutable objects. The pure values represent simple Move values, such as `u64` or `String` values, which can be constructed purely by their bytes.
 - The commands, `[Command]`, is a vector of commands. The possible commands are:
-  - `TransferObjects` sends multiple (1 or more) objects to a specified address.
-  - `SplitCoins` splits off multiple (1 or more) coins from a single coin. It can be any `sui::coin::Coin<_>` object.
-  - `MergeCoins` merges multiple (1 or more) coins into a single coin. Any `sui::coin::Coin<_>` objects can be merged, as long as they are all of the same type.
+  - `TransferObjects` sends one or more objects to a specified address.
+  - `SplitCoins` splits off one or more coins from a single coin. It can be any `sui::coin::Coin<_>` object.
+  - `MergeCoins` merges one or more coins into a single coin. Any `sui::coin::Coin<_>` objects can be merged, as long as they are all of the same type.
   - `MakeMoveVec` creates a vector (potentially empty) of Move values. This is used primarily to construct vectors of Move values to be used as arguments to `MoveCall`.
   - `MoveCall` invokes either an `entry` or a `public` Move function in a published package.
   - `Publish` creates a new package and calls the `init` function of each module in the package.
@@ -24,17 +24,18 @@ In this document, we will be looking at the two parts of a programmable transact
 
 Inputs and Results are the two types of values that can be used in commands. Inputs are the values that are provided to the transaction block, and results are the values that are produced by the transaction block's commands. The inputs are either objects or simple Move values, and the results are arbitrary Move values (including objects).
 
-The inputs and results can be seen as populating an array of values. For inputs, there is a single array, but for results, there is an array for each individual command, creating a 2D-array of result values. These values can be accessed by borrowing (mutably or immutably), by copying (if the type permits), or by moving (which takes the value out of the array without re-indexing). First, we will look at the shape of each array, and then we will look at the semantics of each access type.
+The inputs and results can be seen as populating an array of values. For inputs, there is a single array, but for results, there is an array for each individual command, creating a 2D-array of result values. These values can be accessed by borrowing (mutably or immutably), by copying (if the type permits), or by moving (which takes the value out of the array without re-indexing). First, let's look at the shape of each array, and then at the semantics of each access type.
 
 ### Inputs
 
-Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `[CallArg]`. Where each `CallArg` is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `CallArg::Pure(PureArg)`, which contains the bytes of the value.
+Input arguments to a programmable transaction block are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. This section will describe information or data needed by the Sui network when specifying the list of inputs, `[CallArg]`. Each `CallArg` input argument is either an object, `CallArg::Object(ObjectArg)`, which contains the necessary metadata to specify to object being used, or a pure value, `CallArg::Pure(PureArg)`, which contains the bytes of the value.
 
 For object inputs, the metadata needed differs depending on the type ownership of the object. The rules for authentication of these objects is described elsewhere (TODO LINK), but below is the actual data in the `ObjectArg` enum.
 
 - If the object is owned by an address (or it is immutable), then `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)` is used. The triple respectively specifies the object's ID, its version or sequence number, and the digest of the object's data.
-- If an object is shared, then `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }` is used. Unlike `ImmOrOwnedObject`, a shared's objects version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object will be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
-- If the object is owned by another object, i.e. it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then `ObjectArg::Receiving(ObjectID, SequenceNumber, ObjectDigest)` is used. The object data the same as for the `ImmOrOwnedObject` case.
+- If an object is shared, then `Object::SharedObject { id: ObjectID, initial_shared_version: SequenceNumber, mutable: bool }` is used. Unlike `ImmOrOwnedObject`, a shared object's version and digest are determined by the network's consensus protocol. The `initial_shared_version` is the version of the object when it was first shared, which is used by consensus when it has not yet seen a transaction with that object. While all shared objects _can_ be mutated, the `mutable` flag indicates whether the object will be used mutably in this transaction. In the case where the `mutable` flag is set to `false`, the object is read-only, and the system can schedule other read-only transactions in parallel.
+If the object is owned by another object, i.e. it was sent to an object's ID via the `TransferObjects` command or the `sui::transfer::transfer` function, then `ObjectArg::Receiving(ObjectID, SequenceNumber, ObjectDigest)` is used. The object data is the same as for the `ImmOrOwnedObject` case.
+
 
 For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes are not validated until the type is specified in a command, e.g. in `MoveCall` or `MakeMoveVec`. Not all Move values can be constructed from BCS bytes. The following types are supported:
 
@@ -57,7 +58,7 @@ For pure inputs, the only data provided is the BCS (TODO Link) bytes. The bytes 
 Each command produces a (possibly empty) array of values. The type of the value can be any arbitrary Move type, so unlike inputs, the values are not limited to objects or pure values. The number of results generated and their types is specific to each command. The specifics for each command can be found in the section for that command, but in summary:
 
 - `MoveCall`: the number of results and their types are determined by the Move function being called. Note that Move functions that return references are not supported at this time.
-- `SplitCoins`: produces (1 or more) coins from a single coin. The type of each coin is `sui::coin::Coin<T>` where the specific coin type `T` matches the coin being split.
+- `SplitCoins`: produces one or more coins from a single coin. The type of each coin is `sui::coin::Coin<T>` where the specific coin type `T` matches the coin being split.
 - `Publish`: returns the upgrade capability, `sui::package::UpgradeCap` for the newly published package.
 - `TransferObjects`, `MergeCoins`, and `Upgrade` do not produce any results (an empty result vector).
 
@@ -72,12 +73,12 @@ Each command takes `Argument`s, which specify the input or result being used. Th
   - This limitation exists to make it easy for the remaining gas to be returned to the coin at the end of execution. In other words, if the gas coin was wrapped or deleted, then there would not be an obvious spot for the excess gas to be returned. See the execution section for more details.
 - `NestedResult(u16, u16)` uses the value from a previous command. The first `u16` is the index of the command in the command vector, and the second `u16` is the index of the result in the result vector of that command.
   - For example, given a command vector of `[MoveCall1, MoveCall2, TransferObjects]` where `MoveCall2` has a result vector of `[Value1, Value2]`, `Value1` would be accessed with `NestedResult(1, 0)` and `Value2` would be accessed with `NestedResult(1, 1)`.
-- `Result(u16)` is a special form of `NestedResult` where `Result(i)` is roughly equivalent to `NestedResult(i, 0)`. However unlike `NestedResult(i, 0)`, `Result(i)` this will error if the result array at index `i` is empty or has more than one value.
-  - The intention of `Result` was to allow for accessing of the entire result array, but that is not yet supported at this time. So in it's current state, `NestedResult` can be used instead of `Result` in all circumstances.
+- `Result(u16)` is a special form of `NestedResult` where `Result(i)` is roughly equivalent to `NestedResult(i, 0)`. However unlike `NestedResult(i, 0)`, `Result(i)` will error if the result array at index `i` is empty or has more than one value.
+  - The intention of `Result` was to allow for accessing of the entire result array, but that is not supported yet. So in its current state, `NestedResult` can be used instead of `Result` in all circumstances.
 
 ## Execution
 
-For the execution of programmable transaction block: the input vector is populated by the input objects or pure value bytes. Then the commands are executed in order, and the results are stored in the result vector. Finally, the effects of the transaction are applied atomically. The following sections will describe each aspect of execution in greater detail.
+For the execution of programmable transaction block, the input vector is populated by the input objects or pure value bytes. The commands are then executed in order, and the results are stored in the result vector. Finally, the effects of the transaction are applied atomically. The following sections will describe each aspect of execution in greater detail.
 
 ### Start of Execution
 
@@ -87,7 +88,7 @@ The most important thing to note at this stage is the effects on the gas coin. A
 
 ### Executing a Command
 
-Each command is then executed in order. First, let's look a the rules around arguments, which are shared by all commands.
+After loading the input array, commands are executed in order. First, let's look at the rules around arguments, which are shared by all commands.
 
 #### Arguments
 
@@ -98,7 +99,7 @@ Each command is then executed in order. First, let's look a the rules around arg
     - Note that no object in Sui has `copy` because the unique ID field `sui::object::UID` present in all objects does not have the `copy` ability.
 - The transaction fails if an argument is used in any form after being moved. There is no way to restore an argument to its position (its input or result index) after it is moved.
 - If an argument is copied but does not have the `drop` ability, then the last usage is inferred to be a move. As a result, if an argument has `copy` and does not have `drop`, the last usage _must_ be by value. Otherwise, the transaction will fail because a value without `drop` has not been used.
-- The borrowing of arguments has other rules to ensure unique safe usage of an argument by reference.
+- The borrowing of arguments has other rules to ensure unique safe usage of an argument by reference:
   - If an argument is mutably borrowed, there must be no outstanding borrows.
   - If an argument is immutably borrowed, there must be no outstanding _mutable_ borrows. Duplicate immutable borrows are allowed.
   - If an argument is moved, there must be no outstanding borrows. Moving a borrowed value would make those outstanding borrows unsafe.
@@ -128,7 +129,7 @@ The command has the form `TransferObjects(ObjectArgs, AddressArg)` where `Object
 
 The command has the form `SplitCoins(CoinArg, AmountArgs)` where `CoinArg` is the coin being split and `AmountArgs` is a vector of amounts to split off.
 
-- When the transaction is signed, the network verifies that the AmountArgs is non-empty.
+- When the transaction is signed, the network verifies that the `AmountArgs` is non-empty.
 - The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being split. It can be any coin type and is not limited to `SUI` coins.
 - The amount arguments `AmountArgs: [Argument]` must be `u64` values, which could come from a `Pure` input or a result.
 - The coin argument `CoinArg` is taken by mutable reference.
@@ -140,7 +141,7 @@ The command has the form `SplitCoins(CoinArg, AmountArgs)` where `CoinArg` is th
 
 The command has the form `MergeCoins(CoinArg, ToMergeArgs)` where the `CoinArg` is the target coin in which the `ToMergeArgs` coins are merged into. In other words, we merge multiple coins (`ToMergeArgs`) into a single coin (`CoinArg`).
 
-- When the transaction is signed, the network verifies that the AmountArgs is non-empty.
+- When the transaction is signed, the network verifies that the `AmountArgs` is non-empty.
 - The coin argument `CoinArg: Argument` must be a coin of type `sui::coin::Coin<T>` where `T` is the type of the coin being merged. It can be any coin type and is not limited to `SUI` coins.
 - The coin arguments `ToMergeArgs: [Argument]` must be `sui::coin::Coin<T>` values where the `T` is the same type as the `CoinArg`.
 - The coin argument `CoinArg` is taken by mutable reference.
@@ -203,7 +204,7 @@ At the end of execution, the remaining values are checked and effects for the tr
   - For any shared object we must also check that it has only been deleted or re-shared. Any other operation (wrap, transfer, freezing, etc) results in an error.
 - For results, the following checks are done:
   - Any remaining result with the `drop` ability is dropped.
-  - If the value has `copy` but not `drop`, it's last usage must have been by-value. In that way, it's last usage is treated as a move.
+  - If the value has `copy` but not `drop`, its last usage must have been by-value. In that way, its last usage is treated as a move.
   - Otherwise, an error is given because there is an unused value without `drop`.
 - Any remaining gas is returned to the gas coin, even if the owner has changed.
   - Note that since the gas coin can only be taken by-value with `TransferObjects`, it will not have been wrapped or deleted.
@@ -214,7 +215,7 @@ The total effects (which contain the created, mutated, and deleted objects) are 
 
 Let's walk through an example of a programmable transaction block's execution. While this example will not be exhaustive in demonstrating all the rules, it will show the general flow of execution.
 
-Let's say we want to buy two items from a marketplace costing `100 MIST`. We keep one for ourselves, and and then send the object and the remaining coin to a friend at address `0x808`. We can do that all in one programmable transaction block:
+Let's say we want to buy two items from a marketplace costing `100 MIST`. We keep one for ourselves, and then send the object and the used coin to a friend at address `0x808`. We can do that all in one programmable transaction block:
 ```
 {
   inputs: [
@@ -234,7 +235,7 @@ Let's say we want to buy two items from a marketplace costing `100 MIST`. We kee
 
 Looking at the inputs, we have the friend's address, the marketplace object, and the value for our coin split. For the commands, we split off the coin, call the market place function, send the gas coin and one object, grab our address (via `sui::tx_context::sender`), and then send the remaining object to ourselves. For simplicity, we are referring to the package names by name, but note, that in reality they would be referenced by the package's Object ID.
 
-To walk through this let's first look at the our memory locations, for the gas object, inputs, and results
+To walk through this let's first look at the memory locations for the gas object, inputs, and results.
 ```
 Gas Coin: sui::coin::Coin<SUI> { id: gas_coin, balance: sui::balance::Balance<SUI> { value: 1_000_000u64 } }
 Inputs: [
@@ -245,7 +246,7 @@ Inputs: [
 Results: []
 ```
 
-Here we we have two objects loaded so far, the gas coin with a value of `1_000_000u64` and the marketplace object of type `some_package::some_marketplace::Marketplace`. (We will shorten these names and representations for simplicity going forward). The pure arguments are not loaded, and are present as BCS bytes.
+Here, we have two objects loaded so far, the gas coin with a value of `1_000_000u64` and the marketplace object of type `some_package::some_marketplace::Marketplace`. (We will shorten these names and representations for simplicity going forward). The pure arguments are not loaded, and are present as BCS bytes.
 
 Note that while gas is deducted at each command, we will not be looking at that aspect of execution in detail.
 
@@ -284,7 +285,7 @@ Results: [
 ### Command 1: `MoveCall`
 
 Now the command, `MoveCall("some_package", "some_marketplace", "buy_two", [], [Input(1), NestedResult(0, 0)])`. We call the function `some_package::some_marketplace::buy_two` with the arguments `Input(1)` and `NestedResult(0, 0)`. To determine how they are used we need to look at the function's signature. For this example, we will assume the signature is
-```
+```move
 entry fun buy_two(
     marketplace: &mut Marketplace,
     coin: Coin<Sui>,
@@ -332,7 +333,7 @@ Results: [
 ### Command 3: `MoveCall`
 
 We make another Move call, this one to `sui::tx_context::sender` with the signature
-```
+```move
 public fun sender(ctx: &TxContext): address
 ```
 While we could have simply passed in the sender's address as a `Pure` input, we wanted to demonstrate calling some of the additional utility of Programmable Transaction Blocks; while this function is not an `entry` function, we can call the `public` function too since we can provide all of the arguments. In this case, the only argument, the `TxContext`, is provided by the runtime. The result of the function is the sender's address. Note that this value is _not_ treated like the `Pure` inputs--the type is fixed to `address` and it cannot be deserialized into a different type, even if it has a compatible BCS representation.
@@ -376,7 +377,7 @@ Results: [
 
 ### After Commands: End of Execution
 
-At the end of execution, the runtime checks the remaining values, which are the 3 inputs and
+At the end of execution, the runtime checks the remaining values, which are the three inputs and
 the sender's address. The following summarizes the checks performed before effects are given:
 
 - Any remaining input objects are marked as being returned to their original owners.
@@ -392,7 +393,7 @@ After these checks are performed, we generate the effects.
 
 - The coin split off from the gas coin, `new_coin`, does _not_ appear in the effects since it was created and deleted in the same transaction.
 - The gas coin and the item with `id1` are transferred to `0x808`.
-  - The gas coin is mutated to update its balance. The remaining gas of the maximum budget of `500_000` is returned the gas coin even though the owner has changed.
+  - The gas coin is mutated to update its balance. The remaining gas of the maximum budget of `500_000` is returned to the gas coin even though the owner has changed.
   - The `Item` with `id1` is a newly created object.
 - The item with `id2` is transferred to the sender's address.
   - The `Item` with `id2` is a newly created object.
