@@ -41,7 +41,7 @@ use crate::{
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
@@ -1549,8 +1549,10 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
 impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
     type Error = Error;
     fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
-        let active_validators =
-            convert_to_validators(system_state.active_validators.clone(), Some(&system_state));
+        let active_validators = convert_to_validators(
+            system_state.active_validators.clone(),
+            Some(system_state.clone()),
+        );
 
         let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
             Error::Internal(format!(
@@ -1657,18 +1659,21 @@ pub(crate) fn validate_cursor_pagination(
 
 pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
-    system_state: Option<&NativeSuiSystemStateSummary>,
+    system_state: Option<NativeSuiSystemStateSummary>,
 ) -> Vec<Validator> {
+    let at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>> = system_state
+        .clone()
+        .map(|x| BTreeMap::from_iter(x.at_risk_validators.into_iter()));
+
+    let report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>> =
+        system_state.map(|x| BTreeMap::from_iter(x.validator_report_records.into_iter()));
+
     validators
         .iter()
-        .map(|v| {
-            // grr, without cloning I'd have to introduce lifetime annotations
-            // in Validator, ValidatorSet, Epoch?, SystemStateSummary
-            let system_state_summary = system_state.map(|x| x.clone());
-            Validator {
-                validator_summary: v.clone(),
-                system_state_summary,
-            }
+        .map(|v| Validator {
+            validator_summary: v.clone(),
+            at_risk_validators: at_risk_validators.clone(),
+            report_records: report_records.clone(),
         })
         .collect()
 }

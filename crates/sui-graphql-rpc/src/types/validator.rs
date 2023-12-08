@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
@@ -9,15 +11,14 @@ use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
 use async_graphql::*;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
-use sui_types::sui_system_state::sui_system_state_summary::{
-    SuiSystemStateSummary as NativeSuiSystemStateSummary,
-    SuiValidatorSummary as NativeSuiValidatorSummary,
-};
+use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary as NativeSuiValidatorSummary;
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
-    pub system_state_summary: Option<NativeSuiSystemStateSummary>,
+    pub at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>>,
+    pub report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>>,
 }
 
 #[Object]
@@ -152,35 +153,30 @@ impl Validator {
         Some(self.validator_summary.next_epoch_commission_rate)
     }
 
+    /// The number of epochs for which this validator has been below the
+    /// low stake threshold.
     async fn at_risk(&self) -> Option<u64> {
-        self.system_state_summary
-            .as_ref()
-            .and_then(|system_state| {
-                system_state
-                    .at_risk_validators
-                    .iter()
-                    .find(|&(address, _)| address == &self.validator_summary.sui_address)
-            })
-            .map(|&(_, value)| value.clone())
+        match &self.at_risk_validators {
+            Some(x) => x
+                .get(&self.validator_summary.sui_address)
+                .map(|v| v.clone()),
+            None => None,
+        }
     }
 
     // only available on sui_system_state_summary
-    /// A map storing the records of validator reporting each other.
-    async fn report_records(&self) -> Option<Vec<SuiAddress>> {
-        self.system_state_summary
-            .as_ref()
-            .and_then(|system_state| {
-                system_state
-                    .validator_report_records
-                    .iter()
-                    .find(|&(address, _)| address == &self.validator_summary.sui_address)
-            })
-            .map(|(_, value)| {
-                value
-                    .iter()
-                    .map(|address| SuiAddress::from_array(address.to_inner()))
-                    .collect::<Vec<_>>()
-            })
+    /// The addresses of other validators this validator has reported
+    async fn report_records(&self) -> Option<Vec<Address>> {
+        match &self.report_records {
+            Some(x) => x.get(&self.validator_summary.sui_address).map(|v| {
+                v.into_iter()
+                    .map(|a| Address {
+                        address: SuiAddress::from_array(a.to_inner()),
+                    })
+                    .collect()
+            }),
+            None => None,
+        }
     }
 
     // TODO async fn apy(&self) -> Option<u64>{}
