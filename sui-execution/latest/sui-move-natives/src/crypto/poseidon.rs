@@ -83,12 +83,13 @@ pub fn poseidon_bn254(
     );
 
     // Read the input vector and convert each element to a field element in le representation
-    let field_elements = (0..length).map(|i| {
-        let reference: Reference = inputs.borrow_elem(i as usize, &Type::U256)?.cast()?;
-        let value = reference.read_ref()?.value_as::<U256>()?;
-        value.to_le_bytes().to_vec();
-    ))
-    .collect()
+    let field_elements = (0..length)
+        .map(|i| {
+            let reference: Reference = inputs.borrow_elem(i as usize, &Type::U256)?.cast()?;
+            let value = reference.read_ref()?.value_as::<U256>()?;
+            value.to_le_bytes().to_vec()
+        })
+        .collect();
 
     match poseidon_bytes(&field_elements) {
         Ok(hash) => {
