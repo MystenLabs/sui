@@ -937,7 +937,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     SuiValue::Digest(_) => bail!("digest is not supported as an input"),
                     SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
                     SuiValue::Receiving(_, _) => bail!("receiving is not supported as an input"),
-                    SuiValue::ReadShared(_, _) => {
+                    SuiValue::ImmShared(_, _) => {
                         bail!("read-only shared object is not supported as an input")
                     }
                 };

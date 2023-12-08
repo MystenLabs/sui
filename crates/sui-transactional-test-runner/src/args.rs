@@ -207,7 +207,7 @@ pub enum SuiExtraValueArgs {
     Object(FakeID, Option<SequenceNumber>),
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
-    ReadShared(FakeID, Option<SequenceNumber>),
+    ImmShared(FakeID, Option<SequenceNumber>),
 }
 
 pub enum SuiValue {
@@ -216,7 +216,7 @@ pub enum SuiValue {
     ObjVec(Vec<(FakeID, Option<SequenceNumber>)>),
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
-    ReadShared(FakeID, Option<SequenceNumber>),
+    ImmShared(FakeID, Option<SequenceNumber>),
 }
 
 impl SuiExtraValueArgs {
@@ -237,8 +237,8 @@ impl SuiExtraValueArgs {
     fn parse_read_shared_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
-        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "readshared")?;
-        Ok(SuiExtraValueArgs::ReadShared(fake_id, version))
+        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "immshared")?;
+        Ok(SuiExtraValueArgs::ImmShared(fake_id, version))
     }
 
     fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -296,7 +296,7 @@ impl SuiValue {
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
-            SuiValue::ReadShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
         }
     }
 
@@ -307,7 +307,7 @@ impl SuiValue {
             SuiValue::ObjVec(_) => panic!("unexpected nested Sui object vector in args"),
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
-            SuiValue::ReadShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
         }
     }
 
@@ -393,7 +393,7 @@ impl SuiValue {
             SuiValue::Receiving(fake_id, version) => {
                 CallArg::Object(Self::receiving_arg(fake_id, version, test_adapter)?)
             }
-            SuiValue::ReadShared(fake_id, version) => {
+            SuiValue::ImmShared(fake_id, version) => {
                 CallArg::Object(Self::read_shared_arg(fake_id, version, test_adapter)?)
             }
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
@@ -436,7 +436,7 @@ impl ParsableValue for SuiExtraValueArgs {
             (ValueToken::Ident, "object") => Some(Self::parse_object_value(parser)),
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
-            (ValueToken::Ident, "readshared") => Some(Self::parse_read_shared_value(parser)),
+            (ValueToken::Ident, "immshared") => Some(Self::parse_read_shared_value(parser)),
             _ => None,
         }
     }
@@ -471,7 +471,7 @@ impl ParsableValue for SuiExtraValueArgs {
             SuiExtraValueArgs::Object(id, version) => Ok(SuiValue::Object(id, version)),
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
             SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
-            SuiExtraValueArgs::ReadShared(id, version) => Ok(SuiValue::ReadShared(id, version)),
+            SuiExtraValueArgs::ImmShared(id, version) => Ok(SuiValue::ImmShared(id, version)),
         }
     }
 }
