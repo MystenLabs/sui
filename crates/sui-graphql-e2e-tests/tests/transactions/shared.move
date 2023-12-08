@@ -25,7 +25,7 @@ module P0::m {
     public fun inc(f: &mut Foo) { f.x = f.x + 1 }
 }
 
-//# programmable --inputs readshared(1,0)
+//# programmable --inputs immshared(1,0)
 //> 0: P0::m::get(Input(0))
 
 //# programmable --inputs object(1,0)
