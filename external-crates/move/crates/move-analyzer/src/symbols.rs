@@ -96,8 +96,8 @@ use move_symbol_pool::Symbol;
 /// Enabling/disabling the language server reporting readiness to support go-to-def and
 /// go-to-references to the IDE.
 pub const DEFS_AND_REFS_SUPPORT: bool = true;
-// Building Move code requires a larger stack size on Windows (16M has been chosen somewhat
-// arbitrarily)
+/// Building Move code requires a larger stack size on Windows (16M has been chosen somewhat
+/// arbitrarily)
 pub const STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
@@ -1023,7 +1023,7 @@ impl Symbolicator {
         }
     }
 
-    /// Get symbols for function a definition
+    /// Get symbols for struct definition
     fn struct_symbols(
         &mut self,
         struct_def: &StructDefinition,
@@ -1062,7 +1062,7 @@ impl Symbolicator {
         }
     }
 
-    /// Get symbols for function a definition
+    /// Get symbols for a function definition
     fn fun_symbols(
         &mut self,
         fun: &Function,
@@ -1084,7 +1084,7 @@ impl Symbolicator {
             self.add_type_id_use_def(ptype, references, use_defs);
 
             // add definition of the parameter
-            self.add_def(
+            self.add_local_def(
                 &pname.loc,
                 &pname.value.name,
                 &mut scope,
@@ -1241,7 +1241,7 @@ impl Symbolicator {
         match &lval.value {
             LValue_::Var { var, ty: t, .. } => {
                 if define {
-                    self.add_def(
+                    self.add_local_def(
                         &var.loc,
                         &var.value.name,
                         scope,
@@ -1611,7 +1611,6 @@ impl Symbolicator {
                 ));
                 let ident_type_def = self.ident_type_def_loc(&ident_type);
 
-                let doc_string = self.extract_doc_string(&start, &fhash);
                 use_defs.insert(
                     start.line,
                     UseDef::new(
@@ -1623,7 +1622,7 @@ impl Symbolicator {
                         &tname,
                         ident_type,
                         ident_type_def,
-                        doc_string,
+                        "".to_string(), // no doc string for type params
                     ),
                 );
                 let exists = tp_scope.insert(tname, DefLoc { fhash, start });
@@ -1887,8 +1886,8 @@ impl Symbolicator {
         }
     }
 
-    /// Add a "generic" definition
-    fn add_def(
+    /// Add a defintion of a local (including function params).
+    fn add_local_def(
         &self,
         pos: &Loc,
         name: &Symbol,
@@ -1908,8 +1907,6 @@ impl Symbolicator {
                 // in rust) a variable can be re-defined in the same scope replacing the previous
                 // definition
 
-                let doc_string = self.extract_doc_string(&name_start, &pos.file_hash());
-
                 // enter self-definition for def name
                 let ident_type = IdentType::RegularType(use_type);
                 let ident_type_def = self.ident_type_def_loc(&ident_type);
@@ -1924,7 +1921,7 @@ impl Symbolicator {
                         name,
                         ident_type,
                         ident_type_def,
-                        doc_string,
+                        "".to_string(), // no doc string for locals or function params
                     ),
                 );
             }
@@ -2507,7 +2504,7 @@ fn docstring_test() {
         None,
         "A documented function that unpacks a DocumentedStruct\n",
     );
-    // param var (unpack function)
+    // param var (unpack function) - should not have doc string
     assert_use_def_with_doc_string(
         mod_symbols,
         &symbols.file_name_mapping,
@@ -2519,7 +2516,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "A documented function that unpacks a DocumentedStruct\n",
+        "",
     );
     // struct name in param type (unpack function)
     assert_use_def_with_doc_string(
@@ -2655,7 +2652,7 @@ fn docstring_test() {
         "Constant containing the answer to the universe\n",
     );
 
-    // // other documented struct name imported (other_doc_struct_import function)
+    // other documented struct name imported (other_doc_struct_import function)
     assert_use_def_with_doc_string(
         mod_symbols,
         &symbols.file_name_mapping,
@@ -2669,6 +2666,37 @@ fn docstring_test() {
         Some((3, 11, "M7.move")),
         "Documented struct in another module\n",
     );
+
+    // Type param definition in documented function (type_param_doc function) - should have no doc string
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        43,
+        23,
+        43,
+        23,
+        "M6.move",
+        "T",
+        None,
+        "",
+    );
+
+    // Param def (of generic type) in documented function (type_param_doc function) - should have no doc string
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        2,
+        43,
+        39,
+        43,
+        39,
+        "M6.move",
+        "T",
+        None,
+        "",
+    );
+
 }
 
 #[test]
