@@ -42,6 +42,8 @@ impl LocalReader {
             }
         }
         files.sort();
+        eprintln!("current checkpoint number {}", current_checkpoint_number);
+        eprintln!("files are {:?}", files);
         for (idx, (sequence_number, filename)) in files.iter().enumerate() {
             assert_eq!(
                 *sequence_number,
