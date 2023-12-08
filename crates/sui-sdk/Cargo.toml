@@ -44,6 +44,7 @@ async-recursion.workspace = true
 tempfile.workspace = true
 futures-core.workspace = true
 futures.workspace = true
+rand.workspace = true
 
 [[example]]
 name = "tic_tac_toe"
@@ -73,6 +74,10 @@ path = "examples/programmable_transactions_api.rs"
 [[example]]
 name = "sui_client"
 path = "examples/sui_client.rs"
+
+[[example]]
+name = "sign_tx_guide"
+path = "examples/sign_tx_guide.rs"
 
 [[example]]
 name = "utils"

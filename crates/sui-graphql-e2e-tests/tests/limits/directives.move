@@ -12,11 +12,11 @@
 //# run-graphql
 
 fragment Modules on Object  @deprecated {
-    location
+    address
     asMovePackage {
         module(name: "m") {
             name
-            package { asObject { location } }
+            package { asObject { address } }
 
             fileFormatVersion
             bytes

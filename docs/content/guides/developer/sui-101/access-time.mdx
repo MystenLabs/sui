@@ -50,7 +50,7 @@ Any transaction that requires access to a `Clock` must go through consensus beca
 
 Transactions that use the clock must accept it as an **immutable reference** (not a mutable reference or value). This prevents contention, as transactions that access the `Clock` can only read it, so do not need to be sequenced relative to each other. Validators refuse to sign transactions that do not meet this requirement and packages that include entry functions that accept a `Clock` or `&mut Clock` fail to publish.
 
-The following functions test `Clock`-dependent code by manually creating (and sharing) a `Clock` object and incrementing its timestamp. This is possible only in test code:
+The following functions test `Clock`-dependent code by manually creating a `Clock` object and manipulating its timestamp. This is possible only in test code:
 
 ```move
 module sui::clock {
@@ -58,7 +58,16 @@ module sui::clock {
     public fun create_for_testing(ctx: &mut TxContext);
 
     #[test_only]
+    public fun share_for_testing(clock: Clock);
+
+    #[test_only]
     public fun increment_for_testing(clock: &mut Clock, tick: u64);
+
+    #[test_only]
+    public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64);
+
+    #[test_only]
+    public fun destroy_for_testing(clock: Clock);
 }
 ```
 
@@ -67,22 +76,20 @@ The next example presents a simple test that creates a Clock, increments it, and
 ```move
 module example::clock_tests {
     use sui::clock::{Self, Clock};
-    use sui::test_scenario as ts;
+    use sui::tx_context;
 
     #[test]
     fun creating_a_clock_and_incrementing_it() {
-        let ts = ts::begin(@0x1);
-        let ctx = ts::ctx(&mut ts);
+        let ctx = tx_context::dummy();
+        let clock = clock::create_for_testing(&mut ctx);
 
-        clock::create_for_testing(ctx);
+        clock::increment_for_testing(&mut clock, 42);
+        assert!(clock::timestamp_ms(&clock) == 42, 1);
 
-        let clock = ts::take_shared<Clock>(&ts);
-        clock::increment_for_testing(&mut clock, 20);
-        clock::increment_for_testing(&mut clock, 22);
-        assert!(clock::timestamp_ms(&clock) == 42, 0);
+        clock::set_for_testing(&mut clock, 50);
+        assert!(clock::timestamp_ms(&clock) == 50, 1);
 
-        ts::return_shared(clock);
-        ts::end(ts);
+        clock::destroy_for_testing(clock);
     }
 }
 ```

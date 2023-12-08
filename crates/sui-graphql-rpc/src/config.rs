@@ -188,18 +188,18 @@ impl ServiceConfig {
     }
 
     /// Default number of elements allowed on a single page of a connection.
-    async fn default_page_size(&self) -> BigInt {
-        BigInt::from(self.limits.default_page_size)
+    async fn default_page_size(&self) -> u64 {
+        self.limits.default_page_size
     }
 
     /// Maximum number of elements allowed on a single page of a connection.
-    async fn max_page_size(&self) -> BigInt {
-        BigInt::from(self.limits.max_page_size)
+    async fn max_page_size(&self) -> u64 {
+        self.limits.max_page_size
     }
 
     /// Maximum time in milliseconds that will be spent to serve one request.
-    async fn request_timeout_ms(&self) -> BigInt {
-        BigInt::from(self.limits.request_timeout_ms)
+    async fn request_timeout_ms(&self) -> u64 {
+        self.limits.request_timeout_ms
     }
 
     /// Maximum length of a query payload string.

@@ -391,19 +391,25 @@ fn parse_address_bytes(
 // Parse the beginning of an access, either an address or an identifier:
 //      LeadingNameAccess = <NumericalAddress> | <Identifier>
 fn parse_leading_name_access(context: &mut Context) -> Result<LeadingNameAccess, Box<Diagnostic>> {
-    parse_leading_name_access_(context, || "an address or an identifier")
+    parse_leading_name_access_(context, false, || "an address or an identifier")
 }
 
 // Parse the beginning of an access, either an address or an identifier with a specific description
 fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
     context: &mut Context,
+    global_name: bool,
     item_description: F,
 ) -> Result<LeadingNameAccess, Box<Diagnostic>> {
     match context.tokens.peek() {
         Tok::RestrictedIdentifier | Tok::Identifier => {
             let loc = current_token_loc(context.tokens);
             let n = parse_identifier(context)?;
-            Ok(sp(loc, LeadingNameAccess_::Name(n)))
+            let name = if global_name {
+                LeadingNameAccess_::GlobalAddress(n)
+            } else {
+                LeadingNameAccess_::Name(n)
+            };
+            Ok(sp(loc, name))
         }
         Tok::NumValue => {
             let sp!(loc, addr) = parse_address_bytes(context)?;
@@ -433,6 +439,7 @@ fn parse_module_name(context: &mut Context) -> Result<ModuleName, Box<Diagnostic
 
 // Parse a module identifier:
 //      ModuleIdent = <LeadingNameAccess> "::" <ModuleName>
+//                  | "::" <LeadingNameAccess> "::" <ModuleName>
 
 // Parse a module access (a variable, struct type, or function):
 //      NameAccessChain = <LeadingNameAccess> ( "::" <Identifier> ( "::" <Identifier> )? )?
@@ -441,7 +448,12 @@ fn parse_name_access_chain<'a, F: FnOnce() -> &'a str>(
     item_description: F,
 ) -> Result<NameAccessChain, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
-    let access = parse_name_access_chain_(context, item_description)?;
+    let access = if context.tokens.peek() == Tok::ColonColon {
+        context.tokens.advance()?;
+        parse_name_access_chain_(context, true, item_description)?
+    } else {
+        parse_name_access_chain_(context, false, item_description)?
+    };
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(
         context.tokens.file_hash(),
@@ -454,10 +466,11 @@ fn parse_name_access_chain<'a, F: FnOnce() -> &'a str>(
 // Parse a module access with a specific description
 fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
     context: &mut Context,
+    global_name: bool,
     item_description: F,
 ) -> Result<NameAccessChain_, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
-    let ln = parse_leading_name_access_(context, item_description)?;
+    let ln = parse_leading_name_access_(context, global_name, item_description)?;
     let ln = match ln {
         // A name by itself is a valid access chain
         sp!(_, LeadingNameAccess_::Name(n1)) if context.tokens.peek() != Tok::ColonColon => {
@@ -465,6 +478,23 @@ fn parse_name_access_chain_<'a, F: FnOnce() -> &'a str>(
         }
         ln => ln,
     };
+
+    if matches!(ln, sp!(_, LeadingNameAccess_::GlobalAddress(_)))
+        && context.tokens.peek() != Tok::ColonColon
+    {
+        let mut diag = diag!(
+            Syntax::UnexpectedToken,
+            (
+                ln.loc,
+                "Expected '::' after the address in this module access chain"
+            )
+        );
+        diag.add_note(
+            "Access chains that start with '::' must be one of the following forms: \
+            \n  '::<address>::<module>', '::<address>::<module>::<member>'",
+        );
+        return Err(Box::new(diag));
+    }
 
     consume_token_(
         context.tokens,
@@ -1057,6 +1087,20 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             Exp_::Vector(vec_loc, tys_opt, args)
         }
 
+        Tok::ColonColon
+            if context
+                .env
+                .supports_feature(context.package_name, FeatureGate::Move2024Paths) =>
+        {
+            if context.tokens.lookahead()? == Tok::Identifier {
+                parse_name_exp(context)?
+            } else {
+                return Err(unexpected_token_error(
+                    context.tokens,
+                    "An identifier after '::'",
+                ));
+            }
+        }
         Tok::Identifier | Tok::RestrictedIdentifier => parse_name_exp(context)?,
 
         Tok::BlockLabel => {
@@ -1315,7 +1359,7 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
 //          | <NameAccessChain> "!" "(" Comma<Exp> ")"
 //          | <NameAccessChain> <OptionalTypeArgs>
 fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
-    let n = parse_name_access_chain(context, || {
+    let name = parse_name_access_chain(context, || {
         panic!("parse_name_exp with something other than a ModuleAccess")
     })?;
 
@@ -1328,11 +1372,11 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
         context.tokens.advance()?;
         let is_macro = true;
         let rhs = parse_call_args(context)?;
-        return Ok(Exp_::Call(n, is_macro, tys, rhs));
+        return Ok(Exp_::Call(name, is_macro, tys, rhs));
     }
     let start_loc = context.tokens.start_loc();
 
-    if context.tokens.peek() == Tok::Less && n.loc.end() as usize == start_loc {
+    if context.tokens.peek() == Tok::Less && name.loc.end() as usize == start_loc {
         let loc = make_loc(context.tokens.file_hash(), start_loc, start_loc);
         tys = parse_optional_type_args(context)
             .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
@@ -1348,18 +1392,18 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
                 parse_exp_field,
                 "a field expression",
             )?;
-            Ok(Exp_::Pack(n, tys, fs))
+            Ok(Exp_::Pack(name, tys, fs))
         }
 
         // Call: "(" Comma<Exp> ")"
         Tok::Exclaim | Tok::LParen => {
             let is_macro = false;
             let rhs = parse_call_args(context)?;
-            Ok(Exp_::Call(n, is_macro, tys, rhs))
+            Ok(Exp_::Call(name, is_macro, tys, rhs))
         }
 
         // Other name reference...
-        _ => Ok(Exp_::Name(n, tys)),
+        _ => Ok(Exp_::Name(name, tys)),
     }
 }
 
@@ -2803,6 +2847,7 @@ fn parse_module(
     let sp!(n1_loc, n1_) = parse_leading_name_access(context)?;
     let (address, name) = match (n1_, context.tokens.peek()) {
         (addr_ @ LeadingNameAccess_::AnonymousAddress(_), _)
+        | (addr_ @ LeadingNameAccess_::GlobalAddress(_), _)
         | (addr_ @ LeadingNameAccess_::Name(_), Tok::ColonColon) => {
             let addr = sp(n1_loc, addr_);
             consume_token(context.tokens, Tok::ColonColon)?;

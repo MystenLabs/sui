@@ -13,6 +13,7 @@ use super::{
 };
 use async_graphql::{connection::Connection, *};
 
+/// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(InputObject)]
 pub(crate) struct CheckpointId {
     pub digest: Option<String>,

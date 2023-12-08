@@ -253,46 +253,6 @@ impl<'a> BytecodeGenerator<'a> {
             ),
             (
                 StackEffect::Nop,
-                BytecodeType::StructIndex(Bytecode::Exists),
-            ),
-            (
-                StackEffect::Nop,
-                BytecodeType::StructInstantiationIndex(Bytecode::ExistsGeneric),
-            ),
-            (
-                StackEffect::Add,
-                BytecodeType::StructIndex(Bytecode::MoveFrom),
-            ),
-            (
-                StackEffect::Add,
-                BytecodeType::StructInstantiationIndex(Bytecode::MoveFromGeneric),
-            ),
-            (
-                StackEffect::Sub,
-                BytecodeType::StructIndex(Bytecode::MoveTo),
-            ),
-            (
-                StackEffect::Sub,
-                BytecodeType::StructInstantiationIndex(Bytecode::MoveToGeneric),
-            ),
-            (
-                StackEffect::Nop,
-                BytecodeType::StructIndex(Bytecode::MutBorrowGlobal),
-            ),
-            (
-                StackEffect::Nop,
-                BytecodeType::StructInstantiationIndex(Bytecode::MutBorrowGlobalGeneric),
-            ),
-            (
-                StackEffect::Nop,
-                BytecodeType::StructIndex(Bytecode::ImmBorrowGlobal),
-            ),
-            (
-                StackEffect::Nop,
-                BytecodeType::StructInstantiationIndex(Bytecode::ImmBorrowGlobalGeneric),
-            ),
-            (
-                StackEffect::Nop,
                 BytecodeType::FieldHandleIndex(Bytecode::MutBorrowField),
             ),
             (

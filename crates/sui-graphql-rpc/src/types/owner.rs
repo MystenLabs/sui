@@ -18,7 +18,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 
 #[derive(Interface)]
 #[graphql(
-    field(name = "location", ty = "SuiAddress"),
+    field(name = "address", ty = "SuiAddress"),
     field(
         name = "object_connection",
         ty = "Option<Connection<String, Object>>",
@@ -116,7 +116,7 @@ impl Owner {
 
     // =========== Owner interface methods =============
 
-    pub async fn location(&self) -> SuiAddress {
+    pub async fn address(&self) -> SuiAddress {
         self.address
     }
 

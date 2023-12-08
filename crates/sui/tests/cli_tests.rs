@@ -384,7 +384,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -606,7 +605,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -674,7 +672,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -782,7 +779,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -909,7 +905,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1036,7 +1031,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1165,7 +1159,6 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1234,7 +1227,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1281,7 +1273,6 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1337,7 +1328,6 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         with_unpublished_dependencies,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1380,7 +1370,6 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1424,7 +1413,6 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await;
@@ -1480,7 +1468,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -1553,7 +1540,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;

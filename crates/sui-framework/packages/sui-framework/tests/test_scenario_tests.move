@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::test_scenario_tests {
-    use sui::dynamic_field as df;
     use sui::object;
     use sui::test_scenario as ts;
     use sui::transfer;
@@ -450,7 +449,7 @@ module sui::test_scenario_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = transfer::ESharedObjectOperationNotSupported)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_invalid_shared_usage() {
         let sender = @0x0;
         let scenario = ts::begin(sender);
@@ -718,7 +717,7 @@ module sui::test_scenario_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = df::ESharedObjectOperationNotSupported)]
+    #[expected_failure(abort_code = ts::EInvalidSharedOrImmutableUsage)]
     fun test_dynamic_object_field_shared_misuse() {
         let sender = @0x0;
         let scenario = ts::begin(sender);

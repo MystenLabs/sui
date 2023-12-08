@@ -22,26 +22,124 @@ module P0::m {
 
 //# run-graphql
 # Query for the publish transaction
+
+fragment ObjectContent on Object {
+    address
+    version
+    digest
+    asMoveObject {
+        contents {
+            type { repr }
+            json
+        }
+    }
+}
+
+fragment TxInput on TransactionInput {
+    __typename
+
+    ... on OwnedOrImmutable {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on SharedInput {
+        address
+        initialSharedVersion
+        mutable
+    }
+
+    ... on Receiving {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on Pure {
+        bytes
+    }
+}
+
+fragment TxArg on TransactionArgument {
+    __typename
+    ... on Input { ix }
+    ... on Result { cmd ix }
+}
+
+fragment Tx on ProgrammableTransaction {
+    __typename
+
+    ... on MoveCallTransaction {
+        package
+        module
+        functionName
+        typeArguments { repr }
+        arguments { ...TxArg }
+
+        function {
+            isEntry
+            typeParameters { constraints }
+            parameters { repr }
+            return { repr }
+        }
+    }
+
+    ... on TransferObjectsTransaction {
+        inputs { ...TxArg }
+        address { ...TxArg }
+    }
+
+    ... on SplitCoinsTransaction {
+        coin { ...TxArg }
+        amounts { ...TxArg }
+    }
+
+    ... on MergeCoinsTransaction {
+        coin { ...TxArg }
+        coins { ...TxArg }
+    }
+
+    ... on PublishTransaction {
+        modules
+        dependencies
+    }
+
+    ... on UpgradeTransaction {
+        modules
+        dependencies
+        currentPackage
+        upgradeTicket { ...TxArg }
+    }
+
+    ... on MakeMoveVecTransaction {
+        type { repr }
+        elements { ...TxArg }
+    }
+}
+
+fragment ComprehensivePTB on ProgrammableTransactionBlock {
+    inputConnection { nodes { __typename ...TxInput } }
+    transactionConnection { nodes { __typename ...Tx } }
+}
+
 {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
-            kind {
-                __typename
-                ... on ProgrammableTransaction {
-                    value
-                }
-            }
+            kind { __typename ...ComprehensivePTB }
 
             effects {
                 status
@@ -50,20 +148,22 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    address
+
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -108,28 +208,125 @@ module P0::m {
 //# create-checkpoint
 
 //# run-graphql
-
 # Query for the upgrade transaction
+
+fragment ObjectContent on Object {
+    address
+    version
+    digest
+    asMoveObject {
+        contents {
+            type { repr }
+            json
+        }
+    }
+}
+
+fragment TxInput on TransactionInput {
+    __typename
+
+    ... on OwnedOrImmutable {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on SharedInput {
+        address
+        initialSharedVersion
+        mutable
+    }
+
+    ... on Receiving {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on Pure {
+        bytes
+    }
+}
+
+fragment TxArg on TransactionArgument {
+    __typename
+    ... on Input { ix }
+    ... on Result { cmd ix }
+}
+
+fragment Tx on ProgrammableTransaction {
+    __typename
+
+    ... on MoveCallTransaction {
+        package
+        module
+        functionName
+        typeArguments { repr }
+        arguments { ...TxArg }
+
+        function {
+            isEntry
+            typeParameters { constraints }
+            parameters { repr }
+            return { repr }
+        }
+    }
+
+    ... on TransferObjectsTransaction {
+        inputs { ...TxArg }
+        address { ...TxArg }
+    }
+
+    ... on SplitCoinsTransaction {
+        coin { ...TxArg }
+        amounts { ...TxArg }
+    }
+
+    ... on MergeCoinsTransaction {
+        coin { ...TxArg }
+        coins { ...TxArg }
+    }
+
+    ... on PublishTransaction {
+        modules
+        dependencies
+    }
+
+    ... on UpgradeTransaction {
+        modules
+        dependencies
+        currentPackage
+        upgradeTicket { ...TxArg }
+    }
+
+    ... on MakeMoveVecTransaction {
+        type { repr }
+        elements { ...TxArg }
+    }
+}
+
+fragment ComprehensivePTB on ProgrammableTransactionBlock {
+    inputConnection { nodes { __typename ...TxInput } }
+    transactionConnection { nodes { __typename ...Tx } }
+}
+
 {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
-            kind {
-                __typename
-                ... on ProgrammableTransaction {
-                    value
-                }
-            }
+            kind { __typename ...ComprehensivePTB }
 
             effects {
                 status
@@ -138,20 +335,22 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    address
+
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -187,28 +386,125 @@ module P0::m {
 //# create-checkpoint
 
 //# run-graphql
-
 # Query for the programmable transaction
+
+fragment ObjectContent on Object {
+    address
+    version
+    digest
+    asMoveObject {
+        contents {
+            type { repr }
+            json
+        }
+    }
+}
+
+fragment TxInput on TransactionInput {
+    __typename
+
+    ... on OwnedOrImmutable {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on SharedInput {
+        address
+        initialSharedVersion
+        mutable
+    }
+
+    ... on Receiving {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on Pure {
+        bytes
+    }
+}
+
+fragment TxArg on TransactionArgument {
+    __typename
+    ... on Input { ix }
+    ... on Result { cmd ix }
+}
+
+fragment Tx on ProgrammableTransaction {
+    __typename
+
+    ... on MoveCallTransaction {
+        package
+        module
+        functionName
+        typeArguments { repr }
+        arguments { ...TxArg }
+
+        function {
+            isEntry
+            typeParameters { constraints }
+            parameters { repr }
+            return { repr }
+        }
+    }
+
+    ... on TransferObjectsTransaction {
+        inputs { ...TxArg }
+        address { ...TxArg }
+    }
+
+    ... on SplitCoinsTransaction {
+        coin { ...TxArg }
+        amounts { ...TxArg }
+    }
+
+    ... on MergeCoinsTransaction {
+        coin { ...TxArg }
+        coins { ...TxArg }
+    }
+
+    ... on PublishTransaction {
+        modules
+        dependencies
+    }
+
+    ... on UpgradeTransaction {
+        modules
+        dependencies
+        currentPackage
+        upgradeTicket { ...TxArg }
+    }
+
+    ... on MakeMoveVecTransaction {
+        type { repr }
+        elements { ...TxArg }
+    }
+}
+
+fragment ComprehensivePTB on ProgrammableTransactionBlock {
+    inputConnection { nodes { __typename ...TxInput } }
+    transactionConnection { nodes { __typename ...Tx } }
+}
+
 {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
-            kind {
-                __typename
-                ... on ProgrammableTransaction {
-                    value
-                }
-            }
+            kind { __typename ...ComprehensivePTB }
 
             effects {
                 status
@@ -217,17 +513,19 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    address
+
                     idCreated
                     idDeleted
 
                     outputState {
-                        location
+                        address
                         digest
                         asMoveObject {
                             contents {
@@ -239,7 +537,7 @@ module P0::m {
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost
@@ -267,28 +565,125 @@ module P0::m {
 //# create-checkpoint
 
 //# run-graphql
-
 # Query for the programmable transaction, which failed.
+
+fragment ObjectContent on Object {
+    address
+    version
+    digest
+    asMoveObject {
+        contents {
+            type { repr }
+            json
+        }
+    }
+}
+
+fragment TxInput on TransactionInput {
+    __typename
+
+    ... on OwnedOrImmutable {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on SharedInput {
+        address
+        initialSharedVersion
+        mutable
+    }
+
+    ... on Receiving {
+        address
+        version
+        digest
+        object { ...ObjectContent }
+    }
+
+    ... on Pure {
+        bytes
+    }
+}
+
+fragment TxArg on TransactionArgument {
+    __typename
+    ... on Input { ix }
+    ... on Result { cmd ix }
+}
+
+fragment Tx on ProgrammableTransaction {
+    __typename
+
+    ... on MoveCallTransaction {
+        package
+        module
+        functionName
+        typeArguments { repr }
+        arguments { ...TxArg }
+
+        function {
+            isEntry
+            typeParameters { constraints }
+            parameters { repr }
+            return { repr }
+        }
+    }
+
+    ... on TransferObjectsTransaction {
+        inputs { ...TxArg }
+        address { ...TxArg }
+    }
+
+    ... on SplitCoinsTransaction {
+        coin { ...TxArg }
+        amounts { ...TxArg }
+    }
+
+    ... on MergeCoinsTransaction {
+        coin { ...TxArg }
+        coins { ...TxArg }
+    }
+
+    ... on PublishTransaction {
+        modules
+        dependencies
+    }
+
+    ... on UpgradeTransaction {
+        modules
+        dependencies
+        currentPackage
+        upgradeTicket { ...TxArg }
+    }
+
+    ... on MakeMoveVecTransaction {
+        type { repr }
+        elements { ...TxArg }
+    }
+}
+
+fragment ComprehensivePTB on ProgrammableTransactionBlock {
+    inputConnection { nodes { __typename ...TxInput } }
+    transactionConnection { nodes { __typename ...Tx } }
+}
+
 {
     transactionBlockConnection(last: 1) {
         nodes {
             digest
-            sender { location }
-            signatures { base64Sig }
+            sender { address }
+            signatures
 
             gasInput {
-                gasSponsor { location }
-                gasPayment { nodes { location } }
+                gasSponsor { address }
+                gasPayment { nodes { address } }
                 gasPrice
                 gasBudget
             }
 
-            kind {
-                __typename
-                ... on ProgrammableTransaction {
-                    value
-                }
-            }
+            kind { __typename ...ComprehensivePTB }
 
             effects {
                 status
@@ -297,20 +692,22 @@ module P0::m {
                 dependencies { digest }
 
                 balanceChanges {
-                    owner { location }
+                    owner { address }
                     amount
                     coinType { repr }
                 }
 
                 objectChanges {
+                    address
+
                     idCreated
                     idDeleted
 
-                    outputState { location digest }
+                    outputState { address digest }
                 }
 
                 gasEffects {
-                    gasObject { location }
+                    gasObject { address }
                     gasSummary {
                         computationCost
                         storageCost

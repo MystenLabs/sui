@@ -111,6 +111,10 @@ impl PgIndexerStoreV2 {
         }
     }
 
+    pub fn blocking_cp(&self) -> PgConnectionPool {
+        self.blocking_cp.clone()
+    }
+
     fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
@@ -653,19 +657,13 @@ impl PgIndexerStoreV2 {
                                 .eq(excluded(epochs::storage_fund_reinvestment)),
                             epochs::storage_charge.eq(excluded(epochs::storage_charge)),
                             epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
-                            epochs::storage_fund_balance.eq(excluded(epochs::storage_fund_balance)),
                             epochs::stake_subsidy_amount.eq(excluded(epochs::stake_subsidy_amount)),
                             epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
                             epochs::total_stake_rewards_distributed
                                 .eq(excluded(epochs::total_stake_rewards_distributed)),
                             epochs::leftover_storage_fund_inflow
                                 .eq(excluded(epochs::leftover_storage_fund_inflow)),
-                            epochs::new_total_stake.eq(excluded(epochs::new_total_stake)),
                             epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                            epochs::next_epoch_reference_gas_price
-                                .eq(excluded(epochs::next_epoch_reference_gas_price)),
-                            epochs::next_epoch_protocol_version
-                                .eq(excluded(epochs::next_epoch_protocol_version)),
                         ))
                         .execute(conn)?;
                 }

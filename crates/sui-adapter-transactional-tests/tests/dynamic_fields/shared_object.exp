@@ -19,8 +19,8 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'run'. lines 82-82:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::add_child_object (function index 10) at offset 0, Abort Code: 4
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 10, instruction: 0, function_name: Some("add_child_object") }, 4) at command Some(0)
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
 
 task 5 'view-object'. lines 84-84:
 Owner: Shared

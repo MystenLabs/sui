@@ -56,6 +56,26 @@ fn create_alias_keystore_file_test() {
 }
 
 #[test]
+fn check_reading_aliases_file_correctly() {
+    // when reading the alias file containing alias + public key base 64,
+    // make sure the addresses are correctly converted back from pk
+
+    let temp_dir = TempDir::new().unwrap();
+    let mut keystore_path = temp_dir.path().join("sui.keystore");
+    let keystore_path_keep = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let kp = keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
+        .unwrap();
+    keystore_path.set_extension("aliases");
+    assert!(keystore_path.exists());
+
+    let new_keystore = Keystore::from(FileBasedKeystore::new(&keystore_path_keep).unwrap());
+    let addresses = new_keystore.addresses_with_alias();
+    assert_eq!(kp.0, *addresses.get(0).unwrap().0)
+}
+
+#[test]
 fn create_alias_if_not_exists_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
@@ -153,4 +173,20 @@ fn keystore_display_test() -> Result<(), anyhow::Error> {
     assert!(keystore.to_string().contains("sui.keystore"));
     assert!(!keystore.to_string().contains("keys:"));
     Ok(())
+}
+
+#[test]
+fn get_alias_by_address_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let alias = "my_alias_test".to_string();
+    let keypair = keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, Some(alias.clone()), None, None)
+        .unwrap();
+    assert_eq!(alias, keystore.get_alias_by_address(&keypair.0).unwrap());
+
+    // Test getting an alias of an address that is not in keystore
+    let address = generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
+    assert!(keystore.get_alias_by_address(&address.0).is_err())
 }

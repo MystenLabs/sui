@@ -1,0 +1,92 @@
+processed 22 tasks
+
+task 1 'publish'. lines 6-101:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10852800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 103-103:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 105-105:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'view-object'. lines 107-107:
+Owner: Shared
+Version: 3
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 5 'view-object'. lines 109-111:
+Owner: Shared
+Version: 4
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}}
+
+task 6 'programmable'. lines 112-116:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 7 'programmable'. lines 117-121:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 8 'programmable'. lines 122-126:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 9 'programmable'. lines 127-131:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 10 'programmable'. lines 132-137:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 11 'programmable'. lines 138-143:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 12 'programmable'. lines 144-149:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 13 'programmable'. lines 150-155:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 14 'programmable'. lines 156-159:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 15 'run'. lines 161-161:
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'view-object'. lines 163-166:
+Owner: Shared
+Version: 14
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 17 'programmable'. lines 167-173:
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 1, return value 0
+Debug of error: UnusedValueWithoutDrop { result_idx: 1, secondary_idx: 0 } at command None
+
+task 18 'programmable'. lines 174-182:
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Debug of error: VMVerificationOrDeserializationError at command Some(4)
+
+task 19 'programmable'. lines 183-191:
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
+
+task 20 'programmable'. lines 192-199:
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
+
+task 21 'programmable'. lines 200-205:
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None

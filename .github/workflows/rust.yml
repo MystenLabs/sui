@@ -431,6 +431,7 @@ jobs:
          cargo nextest run --test-threads 1 --package sui-graphql-rpc --test e2e_tests --test examples_validation_tests --features pg_integration
          cargo nextest run --test-threads 1 --package sui-graphql-e2e-tests --features pg_integration
          cargo nextest run --test-threads 1 --package sui-cluster-test --test local_cluster_test --features pg_integration
+         cargo nextest run --test-threads 1 --package sui-indexer --test ingestion_tests --features pg_integration
 
        env:
          POSTGRES_HOST: localhost

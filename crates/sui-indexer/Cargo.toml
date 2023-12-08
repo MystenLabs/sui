@@ -63,6 +63,7 @@ sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 ntest.workspace = true
 criterion.workspace = true
+simulacrum.workspace = true
 
 [[bin]]
 name = "sui-indexer"

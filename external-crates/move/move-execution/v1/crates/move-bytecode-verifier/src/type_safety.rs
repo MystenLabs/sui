@@ -769,34 +769,34 @@ fn verify_instr(
             }
         }
 
-        Bytecode::MutBorrowGlobal(idx) => {
+        Bytecode::MutBorrowGlobalDeprecated(idx) => {
             borrow_global(verifier, meter, offset, true, *idx, &Signature(vec![]))?
         }
 
-        Bytecode::MutBorrowGlobalGeneric(idx) => {
+        Bytecode::MutBorrowGlobalGenericDeprecated(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let type_inst = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_inst.0)?;
             borrow_global(verifier, meter, offset, true, struct_inst.def, type_inst)?
         }
 
-        Bytecode::ImmBorrowGlobal(idx) => {
+        Bytecode::ImmBorrowGlobalDeprecated(idx) => {
             borrow_global(verifier, meter, offset, false, *idx, &Signature(vec![]))?
         }
 
-        Bytecode::ImmBorrowGlobalGeneric(idx) => {
+        Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let type_inst = verifier.resolver.signature_at(struct_inst.type_parameters);
             verifier.charge_tys(meter, &type_inst.0)?;
             borrow_global(verifier, meter, offset, false, struct_inst.def, type_inst)?
         }
 
-        Bytecode::Exists(idx) => {
+        Bytecode::ExistsDeprecated(idx) => {
             let struct_def = verifier.resolver.struct_def_at(*idx)?;
             exists(verifier, meter, offset, struct_def, &Signature(vec![]))?
         }
 
-        Bytecode::ExistsGeneric(idx) => {
+        Bytecode::ExistsGenericDeprecated(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
@@ -804,12 +804,12 @@ fn verify_instr(
             exists(verifier, meter, offset, struct_def, type_args)?
         }
 
-        Bytecode::MoveFrom(idx) => {
+        Bytecode::MoveFromDeprecated(idx) => {
             let struct_def = verifier.resolver.struct_def_at(*idx)?;
             move_from(verifier, meter, offset, struct_def, &Signature(vec![]))?
         }
 
-        Bytecode::MoveFromGeneric(idx) => {
+        Bytecode::MoveFromGenericDeprecated(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);
@@ -817,12 +817,12 @@ fn verify_instr(
             move_from(verifier, meter, offset, struct_def, type_args)?
         }
 
-        Bytecode::MoveTo(idx) => {
+        Bytecode::MoveToDeprecated(idx) => {
             let struct_def = verifier.resolver.struct_def_at(*idx)?;
             move_to(verifier, offset, struct_def, &Signature(vec![]))?
         }
 
-        Bytecode::MoveToGeneric(idx) => {
+        Bytecode::MoveToGenericDeprecated(idx) => {
             let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
             let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
             let type_args = verifier.resolver.signature_at(struct_inst.type_parameters);

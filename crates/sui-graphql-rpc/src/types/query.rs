@@ -6,6 +6,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
+    available_range::AvailableRange,
     checkpoint::{Checkpoint, CheckpointId},
     coin::Coin,
     coin_metadata::CoinMetadata,
@@ -35,6 +36,12 @@ impl Query {
             .fetch_chain_identifier()
             .await
             .extend()
+    }
+
+    /// Range of checkpoints that the RPC has data available for (for data
+    /// that can be tied to a particular checkpoint).
+    async fn available_range(&self) -> Result<AvailableRange> {
+        Ok(AvailableRange)
     }
 
     /// Configuration for this RPC service
@@ -69,6 +76,7 @@ impl Query {
         Some(Address { address })
     }
 
+    /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
         if let Some(epoch_id) = id {
             ctx.data_unchecked::<PgManager>()
@@ -85,6 +93,8 @@ impl Query {
         }
     }
 
+    /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
+    /// checkpoint).
     async fn checkpoint(
         &self,
         ctx: &Context<'_>,
@@ -109,6 +119,7 @@ impl Query {
         }
     }
 
+    /// Fetch a transaction block by its transaction digest.
     async fn transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -175,7 +186,7 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_events(first, after, last, before, filter)
@@ -198,6 +209,8 @@ impl Query {
             .extend()
     }
 
+    /// Fetch the protocl config by protocol version (defaults to the latest protocol
+    /// version known to the GraphQL)
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,

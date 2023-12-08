@@ -87,6 +87,7 @@ fn build_packages(
         generate_docs: true,
         warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
+        no_lint: true,
         ..Default::default()
     };
     debug_assert!(!config.test_mode);
@@ -106,6 +107,7 @@ fn build_packages(
         test_mode: true,
         warnings_are_errors: true,
         install_dir: Some(PathBuf::from(".")),
+        no_lint: true,
         ..Default::default()
     };
     build_packages_with_move_config(
@@ -136,7 +138,6 @@ fn build_packages_with_move_config(
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
-        lint: false,
     }
     .build(sui_framework_path)
     .unwrap();
@@ -144,7 +145,6 @@ fn build_packages_with_move_config(
         config: config.clone(),
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
-        lint: false,
     }
     .build(sui_system_path)
     .unwrap();
@@ -152,7 +152,6 @@ fn build_packages_with_move_config(
         config,
         run_bytecode_verifier: true,
         print_diags_to_stderr: false,
-        lint: false,
     }
     .build(deepbook_path)
     .unwrap();

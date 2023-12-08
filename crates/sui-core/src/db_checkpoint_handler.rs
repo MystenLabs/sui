@@ -232,7 +232,7 @@ impl DBCheckpointHandler {
         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
         let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
             db_path.join("checkpoints"),
-            MetricConf::default(),
+            MetricConf::new("db_checkpoint"),
             None,
             None,
         ));

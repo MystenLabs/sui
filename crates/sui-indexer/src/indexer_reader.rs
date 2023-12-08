@@ -1052,7 +1052,7 @@ impl IndexerReader {
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<SuiEvent>> {
-        let (tx_seq, event_seq) = if let Some(cursor) = cursor.clone() {
+        let (tx_seq, event_seq) = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,

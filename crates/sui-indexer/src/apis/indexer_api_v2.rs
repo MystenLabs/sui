@@ -190,7 +190,7 @@ impl IndexerApiServer for IndexerApiV2 {
 
         let has_next_page = results.len() > limit;
         results.truncate(limit);
-        let next_cursor = results.last().map(|o| o.id.clone());
+        let next_cursor = results.last().map(|o| o.id);
         Ok(Page {
             data: results,
             next_cursor,

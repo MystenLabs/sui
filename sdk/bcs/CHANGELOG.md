@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.9.0
+
+### Minor Changes
+
+- fce0a08d0f: Deprecate the bcs.generic helper. This helper causes typescript performance issues, and the generated generics can't be exported
+
 ## 0.8.1
 
 ### Patch Changes

@@ -47,7 +47,7 @@ pub trait AccountKeystore: Send + Sync {
     fn addresses(&self) -> Vec<SuiAddress> {
         self.keys().iter().map(|k| k.into()).collect()
     }
-
+    fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
     fn aliases(&self) -> Vec<&Alias>;
     fn alias_names(&self) -> Vec<&str> {
         self.aliases()
@@ -55,8 +55,8 @@ pub trait AccountKeystore: Send + Sync {
             .map(|a| a.alias.as_str())
             .collect()
     }
+    /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
-
     /// Check if an alias exists by its name
     fn alias_exists(&self, alias: &str) -> bool {
         self.alias_names().contains(&alias)
@@ -113,10 +113,10 @@ impl Display for Keystore {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Alias {
-    alias: String,
-    public_key_base64: String,
+    pub alias: String,
+    pub public_key_base64: String,
 }
 
 #[derive(Default)]
@@ -198,6 +198,10 @@ impl AccountKeystore for FileBasedKeystore {
         self.aliases.values().collect()
     }
 
+    fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
+        self.aliases.iter().collect::<Vec<_>>()
+    }
+
     fn keys(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
@@ -221,7 +225,7 @@ impl AccountKeystore for FileBasedKeystore {
         }
     }
 
-    /// Get the alias if it exists, or return an error if it does not exist.
+    /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
@@ -281,8 +285,8 @@ impl FileBasedKeystore {
             aliases
                 .into_iter()
                 .map(|alias| {
-                    let key = SuiKeyPair::decode_base64(&alias.public_key_base64);
-                    key.map(|k| (Into::<SuiAddress>::into(&k.public()), alias))
+                    let key = PublicKey::decode_base64(&alias.public_key_base64);
+                    key.map(|k| (Into::<SuiAddress>::into(&k), alias))
                 })
                 .collect::<Result<BTreeMap<_, _>, _>>()
                 .map_err(|e| {
@@ -301,6 +305,7 @@ impl FileBasedKeystore {
                 .zip(names)
                 .map(|((sui_address, skp), alias)| {
                     let public_key_base64 = EncodeDecodeBase64::encode_base64(&skp.public());
+
                     (
                         *sui_address,
                         Alias {
@@ -435,6 +440,10 @@ impl AccountKeystore for InMemKeystore {
         self.aliases.values().collect()
     }
 
+    fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
+        self.aliases.iter().collect::<Vec<_>>()
+    }
+
     fn keys(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
@@ -446,7 +455,7 @@ impl AccountKeystore for InMemKeystore {
         }
     }
 
-    /// Get an alias by its address
+    /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),

@@ -15,6 +15,8 @@ use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{self, Duration};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry::Retry;
 
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
 const FINALIZED_BLOCK_QUERY_INTERVAL: Duration = Duration::from_secs(2);
@@ -88,12 +90,16 @@ where
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
+            // TODO reconsider panic, should we just log an error and continue the loop?
             let new_value = retry_with_max_delay!(
                 eth_client.get_last_finalized_block_id(),
                 Duration::from_secs(600)
             )
             .expect("Failed to get last finalzied block from eth client after retry");
             tracing::debug!("Last finalized block: {}", new_value);
+
+            // TODO add a metrics for the last finalized block
+
             if new_value > last_block_number {
                 last_finalized_block_sender
                     .send(new_value)
@@ -127,6 +133,7 @@ where
                 );
                 continue;
             }
+            // TODO reconsider panic, should we just log an error and continue the loop?
             let events = retry_with_max_delay!(
                 eth_client.get_events_in_range(contract_address, start_block, new_finalized_block),
                 Duration::from_secs(600)
@@ -138,27 +145,11 @@ where
                     .send(events)
                     .await
                     .expect("All Eth event channel receivers are closed");
-                tracing::info!(
-                    contract_address=?contract_address,
-                    "Observed {len} new events",
-                );
+                tracing::info!(?contract_address, "Observed {len} new Eth events",);
             }
             start_block = new_finalized_block + 1;
         }
     }
-}
-
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
-
-#[macro_export]
-macro_rules! retry_with_max_delay {
-    ($func:expr, $max_delay:expr) => {{
-        let retry_strategy = ExponentialBackoff::from_millis(100)
-            .max_delay($max_delay)
-            .map(jitter);
-        Retry::spawn(retry_strategy, || $func).await
-    }};
 }
 
 #[cfg(test)]

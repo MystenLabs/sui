@@ -8,6 +8,7 @@ use move_package::BuildConfig;
 #[cfg(feature = "unit_test")]
 use move_unit_test::UnitTestingConfig;
 use std::path::PathBuf;
+use sui_move_build::set_sui_flavor;
 
 #[cfg(feature = "build")]
 pub mod build;
@@ -45,9 +46,12 @@ pub struct Calib {
 
 pub fn execute_move_command(
     package_path: Option<PathBuf>,
-    build_config: BuildConfig,
+    mut build_config: BuildConfig,
     command: Command,
 ) -> anyhow::Result<()> {
+    if let Some(err_msg) = set_sui_flavor(&mut build_config) {
+        anyhow::bail!(err_msg);
+    }
     match command {
         #[cfg(feature = "build")]
         Command::Build(c) => c.execute(package_path, build_config),

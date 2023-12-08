@@ -32,13 +32,7 @@ pub fn run_instruction(
             | Bytecode::MutBorrowField(_)
             | Bytecode::MutBorrowFieldGeneric(_)
             | Bytecode::ImmBorrowFieldGeneric(_)
-            | Bytecode::ImmBorrowField(_)
-            | Bytecode::MutBorrowGlobal(_)
-            | Bytecode::MutBorrowGlobalGeneric(_)
-            | Bytecode::ImmBorrowGlobal(_)
-            | Bytecode::ImmBorrowGlobalGeneric(_)
-            | Bytecode::MoveTo(_)
-            | Bytecode::MoveToGeneric(_) => {
+            | Bytecode::ImmBorrowField(_) => {
                 let len = summary.preconditions.len();
                 summary.preconditions[..(len - 1)]
                     .iter()

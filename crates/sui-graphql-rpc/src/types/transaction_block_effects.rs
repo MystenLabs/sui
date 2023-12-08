@@ -35,18 +35,8 @@ pub enum ExecutionStatus {
 #[Object]
 impl TransactionBlockEffects {
     /// The transaction that ran to produce these effects.
-    async fn transaction_block(&self, ctx: &Context<'_>) -> Result<TransactionBlock> {
-        let digest = self.native.transaction_digest().to_string();
-        ctx.data_unchecked::<PgManager>()
-            .fetch_tx(digest.as_str())
-            .await
-            .extend()?
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Failed to get transaction {digest} from its effects"
-                ))
-            })
-            .extend()
+    async fn transaction_block(&self) -> Result<TransactionBlock> {
+        TransactionBlock::try_from(self.stored.clone()).extend()
     }
 
     /// Whether the transaction executed successfully or not.
@@ -108,12 +98,13 @@ impl TransactionBlockEffects {
 
     /// The effect this transaction had on objects on-chain.
     async fn object_changes(&self) -> Result<Option<Vec<ObjectChange>>> {
-        let mut changes = Vec::with_capacity(self.stored.object_changes.len());
-        for change in self.stored.object_changes.iter().flatten() {
-            changes.push(ObjectChange::read(change).extend()?);
-        }
-
-        Ok(Some(changes))
+        Ok(Some(
+            self.native
+                .object_changes()
+                .into_iter()
+                .map(|native| ObjectChange { native })
+                .collect(),
+        ))
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of

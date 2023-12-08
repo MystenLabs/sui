@@ -197,11 +197,6 @@ Response: {
               },
               {
                 "outputState": {
-                  "asMovePackage": null
-                }
-              },
-              {
-                "outputState": {
                   "asMovePackage": {
                     "module": {
                       "friendConnection": {
@@ -222,6 +217,11 @@ Response: {
                       }
                     }
                   }
+                }
+              },
+              {
+                "outputState": {
+                  "asMovePackage": null
                 }
               }
             ]
