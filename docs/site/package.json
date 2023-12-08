@@ -13,9 +13,12 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
-    "fire:deploy-dev": "firebase deploy --only hosting:dev"
+    "fire:deploy-dev": "firebase deploy --only hosting:dev",
+    "ampli": "ampli",
+    "pull-amplitude": "ampli pull web"
   },
   "dependencies": {
+    "@amplitude/analytics-browser": "^2.3.6",
     "@docusaurus/core": "^2.4.1",
     "@docusaurus/plugin-google-tag-manager": "^2.4.1",
     "@docusaurus/preset-classic": "^2.4.1",
