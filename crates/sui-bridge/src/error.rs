@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crypto::BridgeAuthorityPublicKey;
+
 #[derive(Debug)]
 pub enum BridgeError {
     // The input is not an invalid transaction digest/hash
@@ -15,6 +17,12 @@ pub enum BridgeError {
     InternalError(String),
     // Transient Ethereum provider error
     TransientProviderError(String),
+    // Invalid BridgeCommittee
+    InvalidBridgeCommittee(String),
+    // Invalid Bridge authority signature
+    InvalidBridgeAuthoritySignature((BridgeAuthorityPublicKey, String)),
+    // Entity is not in the Bridge committee or is blocklisted
+    InvalidBridgeAuthority(BridgeAuthorityPublicKey),
     // Uncategorized error
     Generic(anyhow::Error),
 }

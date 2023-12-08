@@ -6,10 +6,12 @@ use ethers::{
     contract::{abigen, EthLogDecode},
     types::Log,
 };
+use serde::{Deserialize, Serialize};
 
 // TODO: write a macro to handle variants
 
 // TODO: Dummy placeholder, will be replaced by actual abis
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EthBridgeEvent {
     ExampleContract(ExampleContractEvents),
 }
