@@ -1670,10 +1670,19 @@ pub(crate) fn convert_to_validators(
 
     validators
         .iter()
-        .map(|v| Validator {
-            validator_summary: v.clone(),
-            at_risk_validators: at_risk_validators.clone(),
-            report_records: report_records.clone(),
+        .map(|v| {
+            let at_risk = at_risk_validators
+                .as_ref()
+                .and_then(|map| map.get(&v.sui_address).copied());
+            let report_records = report_records.as_ref().and_then(|map| {
+                map.get(&v.sui_address)
+                    .map(|addrs| addrs.into_iter().map(Address::from).collect())
+            });
+            Validator {
+                validator_summary: v.clone(),
+                at_risk,
+                report_records,
+            }
         })
         .collect()
 }
@@ -1693,6 +1702,20 @@ impl From<SuiAddress> for Address {
 impl From<NativeSuiAddress> for SuiAddress {
     fn from(a: NativeSuiAddress) -> Self {
         SuiAddress::from_array(a.to_inner())
+    }
+}
+
+impl From<&NativeSuiAddress> for SuiAddress {
+    fn from(a: &NativeSuiAddress) -> Self {
+        SuiAddress::from_array(a.to_inner())
+    }
+}
+
+impl From<&NativeSuiAddress> for Address {
+    fn from(a: &NativeSuiAddress) -> Self {
+        Self {
+            address: SuiAddress::from_array(a.to_inner()),
+        }
     }
 }
 

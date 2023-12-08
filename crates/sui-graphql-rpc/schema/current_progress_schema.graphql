@@ -2438,7 +2438,7 @@ type UpgradeTransaction {
 
 type Validator {
 	"""
-	Vvalidator's address.
+	Validator's address.
 	"""
 	address: Address!
 	"""
@@ -2466,15 +2466,19 @@ type Validator {
 	"""
 	projectUrl: String
 	"""
-	The validator's current valid `Cap` object's ID
+	The validator's current valid `Cap` object. Validators can delegate
+	the operation ability to another address. The address holding this `Cap` object
+	can then update the reference gas price and tallying rule on behalf of the validator.
 	"""
 	operationCap: MoveObject
 	"""
-	The validator's current staking pool object
+	The validator's current staking pool object, used to track the amount of stake
+	and to compound staking rewards.
 	"""
 	stakingPool: MoveObject
 	"""
-	The validator's current exchange object
+	The validator's current exchange object. The exchange rate is used to determine
+	the amount of SUI tokens that each past SUI staker can withdraw in the future.
 	"""
 	exchangeRates: MoveObject
 	"""

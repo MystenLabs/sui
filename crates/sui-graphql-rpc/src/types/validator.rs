@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use crate::context_data::db_data_provider::PgManager;
 
 use super::big_int::BigInt;
@@ -11,19 +9,18 @@ use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
 use async_graphql::*;
-use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary as NativeSuiValidatorSummary;
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
-    pub at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>>,
-    pub report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>>,
+    pub at_risk: Option<u64>,
+    pub report_records: Option<Vec<Address>>,
 }
 
 #[Object]
 impl Validator {
-    /// Vvalidator's address.
+    /// Validator's address.
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
@@ -85,7 +82,9 @@ impl Validator {
         Some(self.validator_summary.project_url.clone())
     }
 
-    /// The validator's current valid `Cap` object's ID
+    /// The validator's current valid `Cap` object. Validators can delegate
+    /// the operation ability to another address. The address holding this `Cap` object
+    /// can then update the reference gas price and tallying rule on behalf of the validator.
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_move_obj(self.operation_cap_id(), None)
@@ -93,7 +92,8 @@ impl Validator {
             .extend()
     }
 
-    /// The validator's current staking pool object
+    /// The validator's current staking pool object, used to track the amount of stake
+    /// and to compound staking rewards.
     async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_move_obj(self.staking_pool_id(), None)
@@ -101,7 +101,8 @@ impl Validator {
             .extend()
     }
 
-    /// The validator's current exchange object
+    /// The validator's current exchange object. The exchange rate is used to determine
+    /// the amount of SUI tokens that each past SUI staker can withdraw in the future.
     async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_move_obj(self.exchange_rates_id(), None)
@@ -191,28 +192,13 @@ impl Validator {
     /// The number of epochs for which this validator has been below the
     /// low stake threshold.
     async fn at_risk(&self) -> Option<u64> {
-        match &self.at_risk_validators {
-            Some(validators) => validators.get(&self.validator_summary.sui_address).copied(),
-            None => None,
-        }
-    } // only available on sui_system_state_summary
+        self.at_risk
+    }
 
     /// The addresses of other validators this validator has reported.
-    async fn report_records(&self) -> Option<Vec<Address>> {
-        match &self.report_records {
-            Some(records) => records
-                .get(&self.validator_summary.sui_address)
-                .map(|addresses| {
-                    addresses
-                        .iter()
-                        .map(|addr| Address {
-                            address: SuiAddress::from(*addr),
-                        })
-                        .collect()
-                }),
-            None => None,
-        }
-    } // only available on sui_system_state_summary
+    async fn report_records(&self) -> &Option<Vec<Address>> {
+        &self.report_records
+    }
 
     // TODO async fn apy(&self) -> Option<u64>{}
 }
