@@ -51,7 +51,7 @@ impl From<&[u8]> for Base64 {
 
 impl From<Vec<u8>> for Base64 {
     fn from(bytes: Vec<u8>) -> Self {
-        Base64::from(&bytes)
+        Base64(bytes)
     }
 }
 

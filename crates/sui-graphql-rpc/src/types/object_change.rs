@@ -15,7 +15,7 @@ pub(crate) struct ObjectChange {
 #[Object]
 impl ObjectChange {
     /// The address of the object that has changed.
-    async fn location(&self) -> SuiAddress {
+    async fn address(&self) -> SuiAddress {
         self.native.id.into()
     }
 

@@ -41,13 +41,23 @@ pub(crate) enum ObjectKind {
 
 #[derive(InputObject, Default, Clone)]
 pub(crate) struct ObjectFilter {
-    /// This field is used to specify the type of objects that should be included
-    /// in the query results. Generic types can be queried by either the generic
-    /// type name, e.g. `0x2::coin::Coin`, or by the full type name, such as
-    /// `0x2::coin::Coin<0x2::sui::SUI>`.
+    /// This field is used to specify the type of objects that should be included in the query
+    /// results.
+    ///
+    /// Objects can be filtered by their type's package, package::module, or their fully qualified
+    /// type name.
+    ///
+    /// Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
+    /// the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
     pub type_: Option<String>,
+
+    /// Filter for live objects by their current owners.
     pub owner: Option<SuiAddress>,
+
+    /// Filter for live objects by their IDs.
     pub object_ids: Option<Vec<SuiAddress>>,
+
+    /// Filter for live or potentially historical objects by their ID and version.
     pub object_keys: Option<Vec<ObjectKey>>,
 }
 

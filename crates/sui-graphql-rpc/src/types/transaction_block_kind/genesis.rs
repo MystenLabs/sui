@@ -20,6 +20,7 @@ use crate::{
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct GenesisTransaction(pub NativeGenesisTransaction);
 
+/// System transaction that initializes the network and writes the initial set of objects on-chain.
 #[Object]
 impl GenesisTransaction {
     /// Objects to be created during genesis.

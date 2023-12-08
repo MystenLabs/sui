@@ -24,6 +24,7 @@ pub(crate) struct AuthenticatorStateUpdateTransaction(
 
 struct ActiveJwk(NativeActiveJwk);
 
+/// System transaction for updating the on-chain state used by zkLogin.
 #[Object]
 impl AuthenticatorStateUpdateTransaction {
     /// Epoch of the authenticator state update transaction.

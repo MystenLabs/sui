@@ -58,7 +58,7 @@
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted
@@ -133,7 +133,7 @@
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted
@@ -217,7 +217,7 @@
                 }
 
                 objectChanges {
-                    location
+                    address
 
                     idCreated
                     idDeleted
