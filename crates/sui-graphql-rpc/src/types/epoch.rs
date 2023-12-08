@@ -13,55 +13,37 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_indexer::models_v2::epoch::StoredEpochInfo;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary as NativeSuiSystemStateSummary;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Epoch {
-    pub stored_epoch_info: StoredEpochInfo,
+    pub stored: StoredEpochInfo,
 }
 
 #[Object]
 impl Epoch {
-    /// The epoch's protocol version
-    #[graphql(skip)]
-    pub fn protocol_version(&self) -> u64 {
-        self.stored_epoch_info.protocol_version as u64
-    }
-
     /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
     async fn epoch_id(&self) -> u64 {
-        self.stored_epoch_info.epoch as u64
+        self.stored.epoch as u64
     }
 
     /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for
     async fn reference_gas_price(&self) -> Option<BigInt> {
-        Some(BigInt::from(
-            self.stored_epoch_info.reference_gas_price as u64,
-        ))
+        Some(BigInt::from(self.stored.reference_gas_price as u64))
     }
 
     /// Validator related properties, including the active validators
     async fn validator_set(&self) -> Result<Option<ValidatorSet>> {
-        let validators = self
-            .stored_epoch_info
-            .validators
-            .clone()
-            .into_iter()
-            .flatten()
-            .map(|v| {
-                bcs::from_bytes(&v).map_err(|e| {
-                    Error::Internal(format!(
-                        "Can't convert validator into Validator. Error: {e}",
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let system_state: NativeSuiSystemStateSummary = bcs::from_bytes(&self.stored.system_state)
+            .map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert system_state into SystemState. Error: {e}",
+                ))
+            })?;
 
-        let active_validators = convert_to_validators(validators, None);
+        let active_validators = convert_to_validators(system_state.active_validators, None);
         let validator_set = ValidatorSet {
-            total_stake: self
-                .stored_epoch_info
-                .new_total_stake
-                .map(|s| BigInt::from(s as u64)),
+            total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),
             ..Default::default()
         };
@@ -70,66 +52,75 @@ impl Epoch {
 
     /// The epoch's starting timestamp
     async fn start_timestamp(&self) -> Option<DateTime> {
-        DateTime::from_ms(self.stored_epoch_info.epoch_start_timestamp)
+        DateTime::from_ms(self.stored.epoch_start_timestamp)
     }
+
     /// The epoch's ending timestamp
     async fn end_timestamp(&self) -> Option<DateTime> {
-        self.stored_epoch_info
-            .epoch_end_timestamp
-            .and_then(DateTime::from_ms)
+        DateTime::from_ms(self.stored.epoch_end_timestamp?)
     }
+
     /// The total number of checkpoints in this epoch.
-    async fn total_checkpoints(&self) -> Option<BigInt> {
-        self.stored_epoch_info
-            .last_checkpoint_id
-            .map(|last_chckp_id| {
-                BigInt::from(last_chckp_id - self.stored_epoch_info.first_checkpoint_id)
-            })
+    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, Error> {
+        let last = match self.stored.last_checkpoint_id {
+            Some(last) => last as u64,
+            None => {
+                ctx.data_unchecked::<PgManager>()
+                    .fetch_latest_checkpoint()
+                    .await?
+                    .sequence_number
+            }
+        };
+        Ok(Some(BigInt::from(
+            last - self.stored.first_checkpoint_id as u64,
+        )))
     }
+
     /// The total amount of gas fees (in MIST) that were paid in this epoch.
     async fn total_gas_fees(&self) -> Option<BigInt> {
-        self.stored_epoch_info.total_gas_fees.map(BigInt::from)
+        self.stored.total_gas_fees.map(BigInt::from)
     }
+
     /// The total MIST rewarded as stake.
     async fn total_stake_rewards(&self) -> Option<BigInt> {
-        self.stored_epoch_info
+        self.stored
             .total_stake_rewards_distributed
             .map(BigInt::from)
     }
+
     /// The amount added to total gas fees to make up the total stake rewards.
     async fn total_stake_subsidies(&self) -> Option<BigInt> {
-        self.stored_epoch_info
-            .stake_subsidy_amount
-            .map(BigInt::from)
+        self.stored.stake_subsidy_amount.map(BigInt::from)
     }
+
     /// The storage fund available in this epoch.
     /// This fund is used to redistribute storage fees from past transactions
     /// to future validators.
     async fn fund_size(&self) -> Option<BigInt> {
-        self.stored_epoch_info
-            .storage_fund_balance
-            .map(BigInt::from)
+        Some(BigInt::from(self.stored.storage_fund_balance))
     }
+
     /// The difference between the fund inflow and outflow, representing
     /// the net amount of storage fees accumulated in this epoch.
     async fn net_inflow(&self) -> Option<BigInt> {
-        if let (Some(fund_inflow), Some(fund_outflow)) = (
-            self.stored_epoch_info.storage_charge,
-            self.stored_epoch_info.storage_rebate,
-        ) {
+        if let (Some(fund_inflow), Some(fund_outflow)) =
+            (self.stored.storage_charge, self.stored.storage_rebate)
+        {
             Some(BigInt::from(fund_inflow - fund_outflow))
         } else {
             None
         }
     }
+
     /// The storage fees paid for transactions executed during the epoch.
     async fn fund_inflow(&self) -> Option<BigInt> {
-        self.stored_epoch_info.storage_charge.map(BigInt::from)
+        self.stored.storage_charge.map(BigInt::from)
     }
+
     /// The storage fee rebates paid to users
     /// who deleted the data associated with past transactions.
     async fn fund_outflow(&self) -> Option<BigInt> {
-        self.stored_epoch_info.storage_rebate.map(BigInt::from)
+        self.stored.storage_rebate.map(BigInt::from)
     }
 
     /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options
@@ -151,7 +142,7 @@ impl Epoch {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Checkpoint>>> {
-        let epoch = self.stored_epoch_info.epoch as u64;
+        let epoch = self.stored.epoch as u64;
         ctx.data_unchecked::<PgManager>()
             .fetch_checkpoints(first, after, last, before, Some(epoch))
             .await
@@ -168,7 +159,7 @@ impl Epoch {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        let stored_epoch = &self.stored_epoch_info;
+        let stored_epoch = &self.stored;
 
         let new_filter = TransactionBlockFilter {
             after_checkpoint: if stored_epoch.first_checkpoint_id > 0 {
@@ -187,10 +178,15 @@ impl Epoch {
     }
 }
 
+impl Epoch {
+    /// The epoch's protocol version
+    pub fn protocol_version(&self) -> u64 {
+        self.stored.protocol_version as u64
+    }
+}
+
 impl From<StoredEpochInfo> for Epoch {
     fn from(e: StoredEpochInfo) -> Self {
-        Epoch {
-            stored_epoch_info: e,
-        }
+        Epoch { stored: e }
     }
 }
