@@ -1,16 +1,20 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-use sui_rest_api::Client;
+
+use sui_rest_api::{CheckpointTransaction, Client};
 use sui_types::{
-    base_types::SequenceNumber,
+    base_types::{ObjectID, SequenceNumber},
     committee::Committee,
     crypto::AuthorityQuorumSignInfo,
     digests::TransactionDigest,
+    effects::TransactionEffects,
     message_envelope::Envelope,
     messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData},
+    object::Data,
 };
 
 use sui_config::genesis::Genesis;
@@ -20,10 +24,8 @@ use sui_package_resolver::{Package, PackageStore, Resolver, Result};
 use sui_sdk::SuiClientBuilder;
 
 use clap::{Parser, Subcommand};
-use std::{fs, io::Write, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf, str::FromStr};
 use std::{io::Read, sync::Arc};
-
-use std::str::FromStr;
 
 /// A light client for the Sui blockchain
 #[derive(Parser, Debug)]
@@ -39,11 +41,12 @@ struct Args {
 
 struct RemotePackageStore {
     client: Client,
+    config: Config,
 }
 
 impl RemotePackageStore {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(client: Client, config: Config) -> Self {
+        Self { client, config }
     }
 }
 
@@ -56,10 +59,19 @@ impl PackageStore for RemotePackageStore {
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        // TODO(SECURITY):  here we also need to authenticate the transaction that wrote this objects,
-        //                  and ensure it wrote this object by hash.
         let object = self.client.get_object(id.into()).await.unwrap();
-        println!("Object TID: {:?}", object.previous_transaction);
+
+        // Need to authenticate this object
+        let (effects, _) = check_transaction_tid(&self.config, object.previous_transaction)
+            .await
+            .unwrap();
+        // check that this object ID, version and hash is in the effects
+        effects
+            .all_changed_objects()
+            .iter()
+            .find(|oref| oref.0 == object.compute_object_reference())
+            .unwrap();
+
         let package = Package::read(&object).unwrap();
         Ok(Arc::new(package))
     }
@@ -71,10 +83,17 @@ enum SCommands {
     Sync {},
 
     /// Checks a specific transaction using the light client
-    Check {
+    Transaction {
         /// Transaction hash
         #[arg(short, long, value_name = "TID")]
         tid: String,
+    },
+
+    /// Checks a specific object using the light client
+    Object {
+        /// Transaction hash
+        #[arg(short, long, value_name = "OID")]
+        oid: String,
     },
 }
 
@@ -280,7 +299,7 @@ async fn check_and_sync_checkpoints(config: &Config) {
             bcs::to_bytes(&committee).unwrap();
             prev_committee = committee;
         } else {
-            panic!("Expected all checkpoints to be endf-of-epoch checkpoints");
+            panic!("Expected all checkpoints to be end-of-epoch checkpoints");
         }
 
         // Write the checkpoint summary to a file
@@ -288,7 +307,10 @@ async fn check_and_sync_checkpoints(config: &Config) {
     }
 }
 
-async fn check_transaction_tid(config: &Config, tid: String) {
+async fn check_transaction_tid(
+    config: &Config,
+    tid: TransactionDigest,
+) -> Result<(TransactionEffects, CheckpointTransaction)> {
     let sui_mainnet: Arc<sui_sdk::SuiClient> = Arc::new(
         SuiClientBuilder::default()
             .build("http://ord-mnt-rpcbig-06.mainnet.sui.io:9000")
@@ -300,10 +322,7 @@ async fn check_transaction_tid(config: &Config, tid: String) {
     // Lookup the transaction id and get the checkpoint sequence number
     let options = SuiTransactionBlockResponseOptions::new();
     let seq = read_api
-        .get_transaction_with_options(
-            TransactionDigest::from_str(tid.clone().as_str()).unwrap(),
-            options,
-        )
+        .get_transaction_with_options(tid, options)
         .await
         .unwrap()
         .checkpoint
@@ -358,20 +377,14 @@ async fn check_transaction_tid(config: &Config, tid: String) {
     let found: &Vec<_> = &full_check_point
         .checkpoint_contents
         .enumerate_transactions(summary)
-        .filter(|(_, t)| t.transaction.to_string() == tid)
+        .filter(|(_, t)| t.transaction == tid)
         .collect();
 
-    println!("Valid: {}", !found.is_empty());
     assert!(
         found.len() == 1,
         "Transaction not found in checkpoint contents"
     );
     let exec_digests = found.first().unwrap();
-
-    println!(
-        "Executed TID: {} Effects: {}",
-        exec_digests.1.transaction, exec_digests.1.effects
-    );
 
     let matching_tx = full_check_point
         .transactions
@@ -381,26 +394,7 @@ async fn check_transaction_tid(config: &Config, tid: String) {
         .find(|tx| &tx.effects.execution_digests() == exec_digests.1)
         .unwrap();
 
-    for event in matching_tx.events.as_ref().unwrap().data.iter() {
-        let client = Client::new(config.full_node_url.as_str());
-        let remote_package_store = RemotePackageStore::new(client);
-        let resolver = Resolver::new(remote_package_store);
-
-        let type_layout = resolver
-            .type_layout(event.type_.clone().into())
-            .await
-            .unwrap();
-
-        let json_val = SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
-
-        println!(
-            "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n{}",
-            event.package_id,
-            event.transaction_module,
-            event.sender,
-            serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
-        );
-    }
+    Ok((matching_tx.effects.clone(), matching_tx.clone()))
 }
 
 #[tokio::main]
@@ -422,9 +416,88 @@ pub async fn main() {
     );
 
     match args.command {
-        Some(SCommands::Check { tid }) => {
-            check_transaction_tid(&config, tid).await;
+        Some(SCommands::Transaction { tid }) => {
+            let (_, transaction) =
+                check_transaction_tid(&config, TransactionDigest::from_str(&tid).unwrap())
+                    .await
+                    .unwrap();
+
+            let exec_digests = transaction.effects.execution_digests();
+            println!(
+                "Executed TID: {} Effects: {}",
+                exec_digests.transaction, exec_digests.effects
+            );
+
+            for event in transaction.events.as_ref().unwrap().data.iter() {
+                let client: Client = Client::new(config.full_node_url.as_str());
+                let remote_package_store = RemotePackageStore::new(client, config.clone());
+                let resolver = Resolver::new(remote_package_store);
+
+                let type_layout = resolver
+                    .type_layout(event.type_.clone().into())
+                    .await
+                    .unwrap();
+
+                let json_val =
+                    SuiJsonValue::from_bcs_bytes(Some(&type_layout), &event.contents).unwrap();
+
+                println!(
+                    "Event:\n - Package: {}\n - Module: {}\n - Sender: {}\n - Type: {}\n{}",
+                    event.package_id,
+                    event.transaction_module,
+                    event.sender,
+                    event.type_,
+                    serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+                );
+            }
         }
+        Some(SCommands::Object { oid }) => {
+            let client = Client::new(config.full_node_url.as_str());
+            let object = client
+                .get_object(ObjectID::from_str(&oid).unwrap())
+                .await
+                .unwrap();
+
+            // Authenticate the object
+            // Need to authenticate this object
+            let (effects, _) = check_transaction_tid(&config, object.previous_transaction)
+                .await
+                .unwrap();
+            // check that this object ID, version and hash is in the effects
+            effects
+                .all_changed_objects()
+                .iter()
+                .find(|oref| oref.0 == object.compute_object_reference())
+                .unwrap();
+
+            let remote_package_store = RemotePackageStore::new(client, config.clone());
+            let resolver = Resolver::new(remote_package_store);
+
+            if let Data::Move(move_object) = &object.data {
+                let object_type = move_object.type_().clone();
+
+                let type_layout = resolver
+                    .type_layout(object_type.clone().into())
+                    .await
+                    .unwrap();
+
+                let json_val =
+                    SuiJsonValue::from_bcs_bytes(Some(&type_layout), move_object.contents())
+                        .unwrap();
+
+                let (oid, version, hash) = object.compute_object_reference();
+                println!(
+                    "OID: {}\n - Version: {}\n - Hash: {}\n - Owner: {}\n - Type: {}\n{}",
+                    oid,
+                    version,
+                    hash,
+                    object.owner,
+                    object_type,
+                    serde_json::to_string_pretty(&json_val.to_json_value()).unwrap()
+                );
+            }
+        }
+
         Some(SCommands::Sync {}) => {
             check_and_sync_checkpoints(&config).await;
         }
