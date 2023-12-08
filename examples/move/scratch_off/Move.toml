@@ -2,6 +2,8 @@
 name = "scratch_off"
 version = "0.0.1"
 
+published-at = "0xe5f86db9c9fe9aee951afb2e1494cac0a98778b45147a47a3b8e9803a3cfe10c"
+
 [dependencies]
 Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
 

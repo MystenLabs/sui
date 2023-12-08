@@ -276,7 +276,7 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-        // get the game obj
+                // get the game obj
         if (!ticket_exists<Asset>(store, ticket_id)) return;
         let Ticket {
             id,
@@ -313,10 +313,11 @@ module scratch_off::game {
             // Identify the prize
             while (current_index < target_index) {
                 let current_prize = vector::borrow(&store.winning_tickets, winning_tickets_index);
-                current_index = current_index + current_prize.ticket_amount;
-                winning_tickets_index = winning_tickets_index + 1;
+                    current_index = current_index + current_prize.ticket_amount;
+                if (current_index < target_index) {
+                    winning_tickets_index = winning_tickets_index + 1;
+                };
             };
-
             // Update the ticket count in prizes and the total number
             let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
             let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
