@@ -286,7 +286,7 @@ impl WalletContext {
             .sign_secure(&data.sender(), data, Intent::sui_transaction())
             .unwrap();
         // TODO: To support sponsored transaction, we should also look at the gas owner.
-        Transaction::from_data(data.clone(), Intent::sui_transaction(), vec![sig])
+        Transaction::from_data(data.clone(), vec![sig])
     }
 
     /// Execute a transaction and wait for it to be locally executed on the fullnode.

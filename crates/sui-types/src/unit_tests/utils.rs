@@ -109,9 +109,9 @@ pub fn make_transaction_data(sender: SuiAddress) -> TransactionData {
 
 /// Make a user signed transaction with the given sender and its keypair. This
 /// is not verified or signed by authority.
-pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair, intent: Intent) -> Transaction {
+pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair) -> Transaction {
     let data = make_transaction_data(sender);
-    Transaction::from_data_and_signer(data, intent, vec![kp])
+    Transaction::from_data_and_signer(data, vec![kp])
 }
 
 // This is used to sign transaction with signer using default Intent.
@@ -126,7 +126,7 @@ pub fn to_sender_signed_transaction_with_multi_signers(
     data: TransactionData,
     signers: Vec<&dyn Signer<Signature>>,
 ) -> Transaction {
-    Transaction::from_data_and_signer(data, Intent::sui_transaction(), signers)
+    Transaction::from_data_and_signer(data, signers)
 }
 
 pub fn mock_certified_checkpoint<'a>(
@@ -248,11 +248,7 @@ mod zk_login {
         proof: ZkLoginInputs,
         data: TransactionData,
     ) -> (SuiAddress, Transaction, GenericSignature) {
-        let tx = Transaction::from_data_and_signer(
-            data.clone(),
-            Intent::sui_transaction(),
-            vec![user_key],
-        );
+        let tx = Transaction::from_data_and_signer(data.clone(), vec![user_key]);
 
         let s = match tx.inner().tx_signatures.first().unwrap() {
             GenericSignature::Signature(s) => s,
@@ -300,7 +296,7 @@ mod zk_login {
         )
         .unwrap();
         let addr = SuiAddress::from(&multisig_pk);
-        let tx = make_transaction(addr, &keys[0], Intent::sui_transaction());
+        let tx = make_transaction(addr, &keys[0]);
 
         let msg = IntentMessage::new(Intent::sui_transaction(), tx.transaction_data().clone());
         let sig1 = Signature::new_secure(&msg, &keys[0]).into();

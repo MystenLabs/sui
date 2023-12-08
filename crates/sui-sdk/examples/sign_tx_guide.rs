@@ -140,7 +140,6 @@ async fn main() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             sui_types::transaction::Transaction::from_generic_sig_data(
                 intent_msg.value,
-                Intent::sui_transaction(),
                 vec![GenericSignature::Signature(sui_sig)],
             ),
             SuiTransactionBlockResponseOptions::default(),

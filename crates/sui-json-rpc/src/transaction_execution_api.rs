@@ -104,7 +104,7 @@ impl TransactionExecutionApi {
         for sig in signatures {
             sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
         }
-        let txn = Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
+        let txn = Transaction::from_generic_sig_data(tx_data, sigs);
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data())?
         } else {

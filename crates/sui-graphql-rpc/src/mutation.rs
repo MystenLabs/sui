@@ -5,7 +5,6 @@ use crate::{error::Error, types::execution_result::ExecutionResult};
 use async_graphql::*;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::{encoding::Base64, traits::ToFromBytes};
-use shared_crypto::intent::Intent;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClient;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -71,8 +70,7 @@ impl Mutation {
                 .extend()?,
             );
         }
-        let transaction =
-            Transaction::from_generic_sig_data(tx_data, Intent::sui_transaction(), sigs);
+        let transaction = Transaction::from_generic_sig_data(tx_data, sigs);
 
         let result = sui_sdk_client
             .quorum_driver_api()
