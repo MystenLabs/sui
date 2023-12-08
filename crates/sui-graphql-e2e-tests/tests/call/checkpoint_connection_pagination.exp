@@ -1,0 +1,136 @@
+processed 8 tasks
+
+task 1 'create-checkpoint'. lines 18-18:
+Checkpoint created: 12
+
+task 2 'run-graphql'. lines 20-27:
+Response: {
+  "data": {
+    "checkpointConnection": {
+      "nodes": [
+        {
+          "sequenceNumber": 7
+        },
+        {
+          "sequenceNumber": 8
+        },
+        {
+          "sequenceNumber": 9
+        },
+        {
+          "sequenceNumber": 10
+        }
+      ]
+    }
+  }
+}
+
+task 3 'run-graphql'. lines 29-36:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "'first' can only be used with 'after",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpointConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4 'run-graphql'. lines 38-45:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "'first' can only be used with 'after",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpointConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 5 'run-graphql'. lines 47-54:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "'last' can only be used with 'before'",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpointConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 6 'run-graphql'. lines 56-63:
+Response: {
+  "data": {
+    "checkpointConnection": {
+      "nodes": [
+        {
+          "sequenceNumber": 2
+        },
+        {
+          "sequenceNumber": 3
+        },
+        {
+          "sequenceNumber": 4
+        },
+        {
+          "sequenceNumber": 5
+        }
+      ]
+    }
+  }
+}
+
+task 7 'run-graphql'. lines 65-72:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "'last' can only be used with 'before'",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "checkpointConnection"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

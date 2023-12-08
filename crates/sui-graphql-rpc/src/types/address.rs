@@ -62,7 +62,7 @@ impl Address {
 
     // =========== Owner interface methods =============
 
-    pub async fn location(&self) -> SuiAddress {
+    pub async fn address(&self) -> SuiAddress {
         self.address
     }
 

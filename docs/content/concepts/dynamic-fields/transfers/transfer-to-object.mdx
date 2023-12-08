@@ -3,6 +3,9 @@ title: Transfer to Object
 description: On Sui, you can transfer objects to objects in the same way you can transfer objects to addresses.
 ---
 
+import TabItem from '@theme/TabItem';
+import Tabs from '@theme/Tabs';
+
 You can transfer objects to an object ID in the same way you transfer objects to an address, using the same functions. This is because Sui does not distinguish between the 32-byte ID of an address and the 32-byte ID of an object (which are guaranteed not to overlap). The transfer to object operation takes advantage of this feature, allowing you to provide an object ID as the address input of a transfer operation.
 
 Because of the identical ID structure, you can use an object ID for the address field when transferring an object. In fact, all functionality around address-owned objects works the same for objects owned by other objects, you just replace the address with the object ID.
@@ -118,6 +121,54 @@ This coupled with the fact that the parent object can always define custom rules
 
 Just like with custom transfer policies, you can use and couple these restrictions to create powerful expressions. For example, you can implement [soul-bound objects](#soul-bound-example) using both custom transfer and receivership rules.
 
+## Using SDKs
+
+When creating transactions, you interact with `Receiving` transaction inputs almost exactly as you would with other object arguments in the Sui TypeScript SDK. For example, if in the [Simple Account](#simple-account) example that follows you want to send a transaction that receives a coin object with ID `0xc0ffee` that was sent to your account at `0xcafe`, you can do the following using either the Sui TypeScript SDK or Sui Rust SDK:
+
+<Tabs groupId="code-language">
+
+<TabItem label="TypeScript" value="typescript">
+
+```ts
+... // Setup Typescript SDK as normal.
+const tx = new TransactionBlock();
+tx.moveCall({
+  target: `${examplePackageId}::account::accept_payment`,
+  arguments: [tx.object("0xcafe"), tx.object("0xc0ffee")]
+});
+const result = await client.signAndExecuteTransactionBlock({
+      transactionBlock: tx,
+  });
+...
+```
+
+</TabItem>
+
+<TabItem label="Rust" value="rust">
+
+```rust
+... // setup Rust SDK client as normal
+client
+  .transaction_builder()
+  .move_call(
+     sending_account,
+     example_package_id,
+     "account",
+     "accept_payment",
+     vec!["0x2::sui::SUI"],
+     vec![
+       SuiJsonValue::from_object_id("0xcafe"),
+       SuiJsonValue::from_object_id("0xc0ffee") // 0xcoffee is turned into the `Receiving<...>` argument of `accept_payment` by the SDK
+     ])
+  ...
+```
+
+</TabItem>
+
+</Tabs>
+
+Additionally, just as with object arguments that also have an `ObjectRef` constructor where you can provide an explicit object ID, version, and digest, there is also a `ReceivingRef` constructor that takes the same arguments corresponding to a receiving argument.
+
 ## Examples
 
 The following examples demonstrate receiving previously sent objects.
@@ -163,7 +214,7 @@ module examples::shared_object_auth {
 }
 ```
 
-### Receiving objects and adding them as dynamic fields
+### Receiving objects and adding them as dynamic fields {#simple-account}
 
 This example defines a basic account-type model where an `Account` object holds its coin balances in different dynamic fields. This `Account` is also transferable to a different address or object.
 

@@ -30,3 +30,7 @@ export function getRegisteredWallets<AdditionalFeatures extends Wallet['features
 		...suiWallets.filter((wallet) => !preferredWallets.includes(wallet.name)),
 	];
 }
+
+export function getWalletUniqueIdentifier(wallet?: Wallet) {
+	return wallet?.id ?? wallet?.name;
+}

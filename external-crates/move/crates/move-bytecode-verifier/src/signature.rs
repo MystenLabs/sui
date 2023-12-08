@@ -157,11 +157,11 @@ impl<'a> SignatureChecker<'a> {
                 }
                 PackGeneric(idx)
                 | UnpackGeneric(idx)
-                | ExistsGeneric(idx)
-                | MoveFromGeneric(idx)
-                | MoveToGeneric(idx)
-                | ImmBorrowGlobalGeneric(idx)
-                | MutBorrowGlobalGeneric(idx) => {
+                | ExistsGenericDeprecated(idx)
+                | MoveFromGenericDeprecated(idx)
+                | MoveToGenericDeprecated(idx)
+                | ImmBorrowGlobalGenericDeprecated(idx)
+                | MutBorrowGlobalGenericDeprecated(idx) => {
                     let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
                     let struct_def = self.resolver.struct_def_at(struct_inst.def)?;
                     let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
@@ -215,8 +215,8 @@ impl<'a> SignatureChecker<'a> {
                 | Unpack(_) | ReadRef | WriteRef | FreezeRef | Add | Sub | Mul | Mod | Div
                 | BitOr | BitAnd | Xor | Shl | Shr | Or | And | Not | Eq | Neq | Lt | Gt | Le
                 | Ge | CopyLoc(_) | MoveLoc(_) | StLoc(_) | MutBorrowLoc(_) | ImmBorrowLoc(_)
-                | MutBorrowField(_) | ImmBorrowField(_) | MutBorrowGlobal(_)
-                | ImmBorrowGlobal(_) | Exists(_) | MoveTo(_) | MoveFrom(_) | Abort | Nop => Ok(()),
+                | MutBorrowField(_) | ImmBorrowField(_) | MutBorrowGlobalDeprecated(_)
+                | ImmBorrowGlobalDeprecated(_) | ExistsDeprecated(_) | MoveToDeprecated(_) | MoveFromDeprecated(_) | Abort | Nop => Ok(()),
             };
             result.map_err(|err| {
                 err.append_message_with_separator(' ', format!("at offset {} ", offset))

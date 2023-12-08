@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::db_backend::GenericQueryBuilder;
 use crate::{
     config::{Limits, DEFAULT_SERVER_DB_POOL_SIZE},
     error::Error,
@@ -19,7 +20,8 @@ use crate::{
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
-        gas::{GasCostSummary, GasInput},
+        gas::GasCostSummary,
+        move_function::MoveFunction,
         move_module::MoveModule,
         move_object::MoveObject,
         move_package::MovePackage,
@@ -34,13 +36,6 @@ use crate::{
         sui_system_state_summary::SuiSystemStateSummary,
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockFilter},
-        transaction_block_effects::TransactionBlockEffects,
-        transaction_block_kind::{
-            AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
-            EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
-            RandomnessStateUpdate, TransactionBlockKind,
-        },
-        transaction_signature::TransactionSignature,
         validator::Validator,
         validator_credentials::ValidatorCredentials,
         validator_set::ValidatorSet,
@@ -48,14 +43,13 @@ use crate::{
 };
 use async_graphql::connection::{Connection, Edge};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
     apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
-        transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, events::StoredEvent,
+        objects::StoredObject, transactions::StoredTransaction,
     },
     schema_v2::transactions,
     types_v2::OwnerType,
@@ -65,20 +59,14 @@ use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
-use sui_json_rpc_types::{
-    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as RpcStakedSui,
-    SuiTransactionBlockEffects,
-};
+use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    base_types::{MoveObjectType, ObjectID},
+    base_types::{MoveObjectType, ObjectID, SuiAddress as NativeSuiAddress},
     coin::{CoinMetadata as NativeCoinMetadata, TreasuryCap},
     digests::ChainIdentifier,
     digests::TransactionDigest,
     dynamic_field::{DynamicFieldType, Field},
-    effects::TransactionEffects,
-    event::EventID,
     gas_coin::{GAS, TOTAL_SUPPLY_SUI},
     governance::StakedSui as NativeStakedSui,
     messages_checkpoint::{
@@ -88,13 +76,8 @@ use sui_types::{
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
-    transaction::{
-        GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
-    },
-    Identifier, TypeTag,
+    TypeTag,
 };
-
-use super::db_backend::GenericQueryBuilder;
 
 #[cfg(feature = "pg_backend")]
 use super::pg_backend::{PgQueryExecutor, QueryBuilder};
@@ -125,8 +108,9 @@ pub enum DbValidationError {
     QueryCostExceeded(u64, u64),
     #[error("Page size exceeded - requested: {0}, limit: {1}")]
     PageSizeExceeded(u64, u64),
+    #[error("Invalid type provided as filter: {0}")]
+    InvalidType(String),
 }
-
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
     pub limits: Limits,
@@ -215,6 +199,14 @@ impl PgManager {
             })
         };
 
+        self.run_query_async_with_cost(query, |query| {
+            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
+        })
+        .await
+    }
+
+    async fn get_earliest_complete_checkpoint(&self) -> Result<Option<StoredCheckpoint>, Error> {
+        let query = move || Ok(QueryBuilder::get_earliest_complete_checkpoint());
         self.run_query_async_with_cost(query, |query| {
             move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
         })
@@ -401,6 +393,13 @@ impl PgManager {
             .transpose()
     }
 
+    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        let sequence_number = cursor.parse::<i64>().map_err(|e| {
+            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {}", e))
+        })?;
+        Ok(sequence_number)
+    }
+
     async fn multi_get_checkpoints(
         &self,
         first: Option<u64>,
@@ -409,10 +408,12 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
+        validate_cursor_pagination(&first, &after, &last, &before)?;
         let limit = self.validate_page_limit(first, last)?;
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
+        let before = before
+            .map(|cursor| self.parse_checkpoint_cursor(&cursor))
+            .transpose()?;
+        let after = after
             .map(|cursor| self.parse_checkpoint_cursor(&cursor))
             .transpose()?;
 
@@ -420,8 +421,8 @@ impl PgManager {
             .run_query_async_with_cost(
                 move || {
                     Ok(QueryBuilder::multi_get_checkpoints(
-                        cursor,
-                        descending_order,
+                        before,
+                        after,
                         limit,
                         epoch.map(|e| e as i64),
                     ))
@@ -437,7 +438,72 @@ impl PgManager {
                     stored_checkpoints.pop();
                 }
 
+                if last.is_some() {
+                    stored_checkpoints.reverse();
+                }
+
                 Ok((stored_checkpoints, has_next_page))
+            })
+            .transpose()
+    }
+
+    pub(crate) fn parse_event_cursor(&self, cursor: &str) -> Result<(i64, i64), Error> {
+        let mut parts = cursor.split(':');
+        let tx_sequence_number = parts
+            .next()
+            .ok_or_else(|| {
+                Error::InvalidCursor(
+                    "Failed to parse tx_sequence_number from event cursor".to_string(),
+                )
+            })?
+            .parse::<i64>()
+            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
+        let event_sequence_number = parts
+            .next()
+            .ok_or_else(|| {
+                Error::InvalidCursor(
+                    "Failed to parse event_sequence_number from event cursor".to_string(),
+                )
+            })?
+            .parse::<i64>()
+            .map_err(|_| Error::InvalidCursor("Failed to convert str to i64".to_string()))?;
+        Ok((tx_sequence_number, event_sequence_number))
+    }
+
+    async fn multi_get_events(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<EventFilter>,
+    ) -> Result<Option<(Vec<StoredEvent>, bool)>, Error> {
+        let limit = self.validate_page_limit(first, last)?;
+        let before = before
+            .map(|cursor| self.parse_event_cursor(&cursor))
+            .transpose()?;
+        let after = after
+            .map(|cursor| self.parse_event_cursor(&cursor))
+            .transpose()?;
+
+        let query = move || QueryBuilder::multi_get_events(before, after, limit, filter.clone());
+
+        let result: Option<Vec<StoredEvent>> = self
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
+            .await?;
+
+        result
+            .map(|mut stored_events| {
+                let has_next_page = stored_events.len() as i64 > limit;
+                if has_next_page {
+                    stored_events.pop();
+                }
+
+                if last.is_some() {
+                    stored_events.reverse();
+                }
+
+                Ok((stored_events, has_next_page))
             })
             .transpose()
     }
@@ -499,15 +565,11 @@ impl PgManager {
             .into_vec())
     }
 
-    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        let sequence_number = cursor
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("checkpoint".to_string()))?;
-        Ok(sequence_number)
-    }
-
-    pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
-        EventID::try_from(cursor).map_err(|_| Error::InvalidCursor("event".to_string()))
+    pub(crate) fn build_event_cursor(&self, event: &StoredEvent) -> String {
+        format!(
+            "{}:{}",
+            event.tx_sequence_number, event.event_sequence_number
+        )
     }
 
     pub(crate) fn validate_package_dependencies(
@@ -549,9 +611,6 @@ impl PgManager {
     }
 
     pub(crate) fn validate_obj_filter(&self, filter: &ObjectFilter) -> Result<(), Error> {
-        if filter.package.is_some() || filter.module.is_some() || filter.ty.is_some() {
-            return Err(DbValidationError::UnsupportedPMT.into());
-        }
         if filter.object_keys.is_some() {
             return Err(DbValidationError::UnsupportedObjectKeys.into());
         }
@@ -601,17 +660,14 @@ impl PgManager {
             .await?
             .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
 
-        Epoch::try_from(result)
+        Ok(Epoch::from(result))
     }
 
     // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
     pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
         let epoch_id = i64::try_from(epoch_id)
             .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        self.get_epoch(Some(epoch_id))
-            .await?
-            .map(Epoch::try_from)
-            .transpose()
+        Ok(self.get_epoch(Some(epoch_id)).await?.map(Epoch::from))
     }
 
     // To be used in scenarios where epoch is expected to exist
@@ -646,6 +702,15 @@ impl PgManager {
             )
             .await?;
         stored_checkpoint.map(Checkpoint::try_from).transpose()
+    }
+
+    pub(crate) async fn fetch_earliest_complete_checkpoint(
+        &self,
+    ) -> Result<Option<Checkpoint>, Error> {
+        self.get_earliest_complete_checkpoint()
+            .await?
+            .map(Checkpoint::try_from)
+            .transpose()
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
@@ -720,7 +785,7 @@ impl PgManager {
     pub(crate) async fn fetch_txs_by_digests(
         &self,
         digests: &[TransactionDigest],
-    ) -> Result<Option<Vec<Option<TransactionBlock>>>, Error> {
+    ) -> Result<Option<Vec<TransactionBlock>>, Error> {
         let tx_block_filter = TransactionBlockFilter {
             package: None,
             module: None,
@@ -741,11 +806,15 @@ impl PgManager {
             .multi_get_txs(None, None, None, None, Some(tx_block_filter))
             .await?;
 
-        Ok(txs.map(|x| {
-            x.0.into_iter()
-                .map(|tx| TransactionBlock::try_from(tx).ok())
-                .collect::<Vec<_>>()
-        }))
+        let Some((txs, _)) = txs else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            txs.into_iter()
+                .map(TransactionBlock::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+        ))
     }
 
     pub(crate) async fn fetch_obj(
@@ -801,6 +870,19 @@ impl PgManager {
         };
 
         package.module_impl(name)
+    }
+
+    pub(crate) async fn fetch_move_function(
+        &self,
+        address: SuiAddress,
+        module: &str,
+        function: &str,
+    ) -> Result<Option<MoveFunction>, Error> {
+        let Some(module) = self.fetch_move_module(address, module).await? else {
+            return Ok(None);
+        };
+
+        module.function_impl(function.to_string())
     }
 
     pub(crate) async fn fetch_owned_objs(
@@ -865,7 +947,6 @@ impl PgManager {
         before: Option<String>,
         epoch: Option<u64>,
     ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
-        validate_cursor_pagination(&first, &after, &last, &before)?;
         let checkpoints = self
             .multi_get_checkpoints(first, after, last, before, epoch)
             .await?;
@@ -897,24 +978,27 @@ impl PgManager {
         coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-        let coin_type = parse_to_type_tag(coin_type)
-            .map_err(|e| Error::InvalidCoinType(e.to_string()))?
-            .to_canonical_string(/* with_prefix */ true);
-        let result = self.get_balance(address, coin_type).await?;
+        let coin_type = parse_to_type_tag(coin_type.clone())
+            .map_err(|e| Error::InvalidCoinType(e.to_string()))?;
+        let result = self
+            .get_balance(
+                address,
+                coin_type.to_canonical_string(/* with_prefix */ true),
+            )
+            .await?;
 
         match result {
-            Some(result) => match result {
-                (Some(balance), Some(count), Some(coin_type)) => Ok(Some(Balance {
-                    coin_object_count: Some(count as u64),
-                    total_balance: Some(BigInt::from(balance)),
-                    coin_type: Some(MoveType::new(coin_type)),
-                })),
-                (None, None, None) => Ok(None),
-                _ => Err(Error::Internal(
-                    "Expected fields are missing on balance calculation".to_string(),
-                )),
-            },
-            None => Ok(None),
+            None | Some((None, None, None)) => Ok(None),
+
+            Some((Some(balance), Some(count), Some(_coin_type))) => Ok(Some(Balance {
+                coin_object_count: Some(count as u64),
+                total_balance: Some(BigInt::from(balance)),
+                coin_type: Some(MoveType::new(coin_type)),
+            })),
+
+            _ => Err(Error::Internal(
+                "Expected fields are missing on balance calculation".to_string(),
+            )),
         }
     }
 
@@ -927,33 +1011,35 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<Connection<String, Balance>>, Error> {
         let address = address.into_vec();
-
-        let balances = self
+        let Some(balances) = self
             .multi_get_balances(address, first, after, last, before)
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
 
-        if let Some(balances) = balances {
-            let mut connection = Connection::new(false, false);
-            for (balance, count, coin_type) in balances {
-                if let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) {
-                    connection.edges.push(Edge::new(
-                        coin_type.clone(),
-                        Balance {
-                            coin_object_count: Some(count as u64),
-                            total_balance: Some(BigInt::from(balance)),
-                            coin_type: Some(MoveType::new(coin_type)),
-                        },
-                    ));
-                } else {
-                    return Err(Error::Internal(
-                        "Expected fields are missing on balance calculation".to_string(),
-                    ));
-                }
-            }
-            Ok(Some(connection))
-        } else {
-            Ok(None)
+        let mut connection = Connection::new(false, false);
+        for (balance, count, coin_type) in balances {
+            let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) else {
+                return Err(Error::Internal(
+                    "Expected fields are missing on balance calculation".to_string(),
+                ));
+            };
+
+            let coin_tag = TypeTag::from_str(&coin_type)
+                .map_err(|e| Error::Internal(format!("Error parsing type '{coin_type}': {e}")))?;
+
+            connection.edges.push(Edge::new(
+                coin_type.clone(),
+                Balance {
+                    coin_object_count: Some(count as u64),
+                    total_balance: Some(BigInt::from(balance)),
+                    coin_type: Some(MoveType::new(coin_tag)),
+                },
+            ));
         }
+
+        Ok(Some(connection))
     }
 
     /// Fetches all coins owned by the given address that match the given coin type.
@@ -1077,7 +1163,7 @@ impl PgManager {
         let version: ProtocolVersion = if let Some(version) = protocol_version {
             (version).into()
         } else {
-            (self.fetch_latest_epoch().await?.protocol_version).into()
+            (self.fetch_latest_epoch().await?.protocol_version()).into()
         };
 
         let cfg = ProtocolConfig::get_for_version_if_supported(version, chain)
@@ -1122,9 +1208,7 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<Connection<String, StakedSui>>, Error> {
         let obj_filter = ObjectFilter {
-            package: None,
-            module: None,
-            ty: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
+            type_: Some(MoveObjectType::staked_sui().to_canonical_string(/* with_prefix */ true)),
             owner: Some(address),
             object_ids: None,
             object_keys: None,
@@ -1208,75 +1292,17 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
+        filter: Option<EventFilter>,
     ) -> Result<Option<Connection<String, Event>>, Error> {
-        let event_filter: Result<RpcEventFilter, Error> = if let Some(sender) = filter.sender {
-            let sender = NativeSuiAddress::from_bytes(sender.into_array())
-                .map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::Sender(sender))
-        } else if let Some(digest) = filter.transaction_digest {
-            let digest = TransactionDigest::from_str(&digest).map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::Transaction(digest))
-        } else if let Some(package) = filter.emitting_package {
-            if let Some(module) = filter.emitting_module {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::MoveModule { package, module })
-            } else {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::Package(package))
-            }
-        } else if let Some(event_type) = filter.event_type {
-            let event_type = StructTag::from_str(&event_type).map_err(|_| Error::InvalidFilter)?;
-            Ok(RpcEventFilter::MoveEventType(event_type))
-        } else if let Some(package) = filter.event_package {
-            if let Some(module) = filter.event_module {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::MoveModule { package, module })
-            } else {
-                let package =
-                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
-                Ok(RpcEventFilter::Package(package))
-            }
-        } else {
-            return Err(Error::InvalidFilter);
-        };
+        let events = self
+            .multi_get_events(first, after, last, before, filter)
+            .await?;
 
-        let descending_order = before.is_some();
-        let limit = self.validate_page_limit(first, last)? as usize;
-        let cursor = after
-            .or(before)
-            .map(|c| self.parse_event_cursor(c))
-            .transpose()?;
-        if let Ok(event_filter) = event_filter {
-            let results = self
-                .inner
-                .query_events_in_blocking_task(event_filter, cursor, limit, descending_order)
-                .await?;
-
-            let has_next_page = results.len() > limit;
-
+        if let Some((stored_events, has_next_page)) = events {
             let mut connection = Connection::new(false, has_next_page);
-            connection.edges.extend(results.into_iter().map(|e| {
-                let cursor = String::from(e.id);
-                let event = Event {
-                    sending_package: SuiAddress::from(e.package_id),
-                    sending_module: e.transaction_module.to_string(),
-                    event_type: Some(MoveType::new(
-                        e.type_.to_canonical_string(/* with_prefix */ true),
-                    )),
-                    senders: Some(vec![Address {
-                        address: SuiAddress::from_array(e.sender.to_inner()),
-                    }]),
-                    timestamp: e.timestamp_ms.and_then(|t| DateTime::from_ms(t as i64)),
-                    json: Some(e.parsed_json.to_string()),
-                    bcs: Some(Base64::from(e.bcs)),
-                };
-
+            connection.edges.extend(stored_events.into_iter().map(|e| {
+                let cursor = self.build_event_cursor(&e);
+                let event = Event { stored: e };
                 Edge::new(cursor, event)
             }));
             Ok(Some(connection))
@@ -1522,118 +1548,6 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
     }
 }
 
-impl TryFrom<StoredTransaction> for TransactionBlock {
-    type Error = Error;
-
-    fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
-        let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
-
-        let sender_signed_data: SenderSignedData =
-            bcs::from_bytes(&tx.raw_transaction).map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert raw_transaction into SenderSignedData. Error: {e}",
-                ))
-            })?;
-
-        let sender = Address {
-            address: SuiAddress::from_array(
-                sender_signed_data
-                    .intent_message()
-                    .value
-                    .sender()
-                    .to_inner(),
-            ),
-        };
-
-        let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
-        let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects).map_err(|e| {
-            Error::Internal(format!(
-                "Can't convert raw_effects into TransactionEffects. Error: {e}",
-            ))
-        })?;
-
-        let balance_changes = tx.balance_changes;
-        let object_changes = tx.object_changes;
-        let timestamp = DateTime::from_ms(tx.timestamp_ms);
-        let effects = match SuiTransactionBlockEffects::try_from(effects) {
-            Ok(effects) => TransactionBlockEffects::from_stored_transaction(
-                balance_changes,
-                tx.checkpoint_sequence_number as u64,
-                object_changes,
-                &effects,
-                digest,
-                timestamp,
-            ),
-            Err(e) => Err(Error::Internal(format!(
-                "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
-            ))),
-        }?;
-
-        let epoch_id = match sender_signed_data.intent_message().value.expiration() {
-            TransactionExpiration::None => None,
-            TransactionExpiration::Epoch(epoch_id) => Some(*epoch_id),
-        };
-
-        // TODO Finish implementing all types of transaction kinds
-        let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
-        let signatures = sender_signed_data
-            .tx_signatures()
-            .iter()
-            .map(|s| {
-                Some(TransactionSignature {
-                    base64_sig: Base64::from(s.as_ref()),
-                })
-            })
-            .collect::<Vec<_>>();
-
-        Ok(Self {
-            digest,
-            effects,
-            sender: Some(sender),
-            bcs: Some(Base64::from(&tx.raw_transaction)),
-            gas_input: Some(gas_input),
-            epoch_id,
-            kind: Some(kind),
-            signatures: Some(signatures),
-        })
-    }
-}
-
-impl TryFrom<StoredEpochInfo> for Epoch {
-    type Error = Error;
-    fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
-        let validators: Vec<SuiValidatorSummary> = e
-            .validators
-            .into_iter()
-            .flatten()
-            .map(|v| {
-                bcs::from_bytes(&v).map_err(|e| {
-                    Error::Internal(format!(
-                        "Can't convert validator into Validator. Error: {e}",
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-
-        let active_validators = convert_to_validators(validators, None);
-
-        let validator_set = ValidatorSet {
-            total_stake: e.new_total_stake.map(|s| BigInt::from(s as u64)),
-            active_validators: Some(active_validators),
-            ..Default::default()
-        };
-
-        Ok(Self {
-            epoch_id: e.epoch as u64,
-            protocol_version: e.protocol_version as u64,
-            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
-            validator_set: Some(validator_set),
-            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
-            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
-        })
-    }
-}
-
 impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
     type Error = Error;
     fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
@@ -1714,80 +1628,6 @@ impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
             protocol_version: system_state.protocol_version,
             start_timestamp: Some(start_timestamp),
         })
-    }
-}
-
-impl From<&TransactionKind> for TransactionBlockKind {
-    fn from(value: &TransactionKind) -> Self {
-        match value {
-            TransactionKind::ChangeEpoch(x) => {
-                let change = ChangeEpochTransaction {
-                    epoch_id: x.epoch,
-                    timestamp: DateTime::from_ms(x.epoch_start_timestamp_ms as i64),
-                    storage_charge: Some(BigInt::from(x.storage_charge)),
-                    computation_charge: Some(BigInt::from(x.computation_charge)),
-                    storage_rebate: Some(BigInt::from(x.storage_rebate)),
-                };
-                TransactionBlockKind::ChangeEpochTransaction(change)
-            }
-            TransactionKind::ConsensusCommitPrologue(x) => {
-                let consensus = ConsensusCommitPrologueTransaction {
-                    epoch_id: x.epoch,
-                    round: Some(x.round),
-                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
-                };
-                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
-            }
-            TransactionKind::Genesis(x) => {
-                let genesis = GenesisTransaction {
-                    objects: Some(
-                        x.objects
-                            .clone()
-                            .into_iter()
-                            .map(SuiAddress::from)
-                            .collect::<Vec<_>>(),
-                    ),
-                };
-                TransactionBlockKind::GenesisTransaction(genesis)
-            }
-            // TODO: flesh out type
-            TransactionKind::ProgrammableTransaction(pt) => {
-                TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
-                    value: format!("{:?}", pt),
-                })
-            }
-            // TODO: flesh out type
-            TransactionKind::AuthenticatorStateUpdate(asu) => {
-                TransactionBlockKind::AuthenticatorStateUpdateTransaction(
-                    AuthenticatorStateUpdate {
-                        value: format!("{:?}", asu),
-                    },
-                )
-            }
-            // TODO: flesh out type
-            TransactionKind::RandomnessStateUpdate(rsu) => {
-                TransactionBlockKind::RandomnessStateUpdateTransaction(RandomnessStateUpdate {
-                    value: format!("{:?}", rsu),
-                })
-            }
-            // TODO: flesh out type
-            TransactionKind::EndOfEpochTransaction(et) => {
-                TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
-                    value: format!("{:?}", et),
-                })
-            }
-        }
-    }
-}
-
-// TODO fix this GenesisObject
-impl From<GenesisObject> for SuiAddress {
-    fn from(value: GenesisObject) -> Self {
-        match value {
-            GenesisObject::RawObject { data, owner: _ } => {
-                SuiAddress::from_bytes(data.id().to_vec()).unwrap()
-            }
-        }
     }
 }
 

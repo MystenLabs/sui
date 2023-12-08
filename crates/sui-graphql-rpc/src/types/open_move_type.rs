@@ -97,13 +97,13 @@ pub(crate) enum OpenMoveTypeSignatureBody {
 #[Object]
 impl OpenMoveType {
     /// Structured representation of the type signature.
-    async fn signature(&self) -> Option<&OpenMoveTypeSignature> {
-        Some(&self.signature)
+    async fn signature(&self) -> &OpenMoveTypeSignature {
+        &self.signature
     }
 
     /// Flat representation of the type signature, as a displayable string.
-    async fn repr(&self) -> Option<String> {
-        Some(self.signature.to_string())
+    async fn repr(&self) -> String {
+        self.signature.to_string()
     }
 }
 

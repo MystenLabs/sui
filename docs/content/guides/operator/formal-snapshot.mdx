@@ -3,12 +3,6 @@ title: Formal Snapshots
 description: Formal snapshots provide a mechanism for a node to restore to a canonical state (the state of a full pruned and compacted node at the end of an epoch) at some prior point in time without having to execute all the transactions that have occurred since genesis.
 ---
 
-:::info
-
-Formal snapshots is a feature currently available in Devnet or Testnet only. 
-
-:::
-
 Formal snapshots provide a mechanism for a node to restore to a canonical state (the state of a full pruned and compacted node at the end of an epoch) at some prior point in time without having to execute all the transactions that have occurred since genesis. Unlike existing database snapshots, these formal snapshots have the following properties:
 
 1. **Minimalism:** Formal snapshots currently contain only the end of epoch live object set (the set of all object versions eligible for use as input objects for future transactions). Sui syncs all other critical chain information from the chain or derives it. Thus, formal snapshots contain only the necessary data required for a node to startup at epoch boundary and participate in the network. 

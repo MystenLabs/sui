@@ -52,7 +52,6 @@ use sui_types::messages_grpc::{
     HandleCertificateResponseV2, LayoutGenerationOption, ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
-use tap::TapFallible;
 use tokio::time::{sleep, timeout};
 
 use crate::authority::AuthorityStore;
@@ -1240,7 +1239,7 @@ where
                                 good_stake,
                                 most_staked_conflicting_tx_stake =? state.most_staked_conflicting_tx_stake,
                                 retryable_stake,
-                                "No chance for any tx to get quorum, exiting. Confliting_txes: {:?}",
+                                "No chance for any tx to get quorum, exiting. Conflicting_txes: {:?}",
                                 state.conflicting_tx_digests
                             );
                             // If there is no chance for any tx to get quorum, exit.
@@ -1398,11 +1397,6 @@ where
             Ok(PlainTransactionInfoResponse::Signed(signed)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received signed transaction from validator handle_transaction");
                 self.handle_transaction_response_with_signed(state, signed)
-                    .tap_ok(|opt_cert| {
-                        if let Some(cert) = opt_cert.as_ref() {
-                            debug!(?tx_digest, ?cert, "Collected tx certificate for digest")
-                        }
-                    })
             }
             Ok(PlainTransactionInfoResponse::ExecutedWithCert(cert, effects, events)) => {
                 debug!(?tx_digest, name=?name.concise(), weight, "Received prev certificate and effects from validator handle_transaction");
@@ -1442,9 +1436,6 @@ where
             InsertResult::QuorumReached(cert_sig) => {
                 let ct =
                     CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
-                let ct_bytes = bcs::to_bytes(&ct).expect("to_bytes should never fail");
-                let ct_digest = ct.digest();
-                debug!(?ct, ?ct_bytes, ?ct_digest, "Collected tx certificate");
                 ct.verify_committee_sigs_only(&self.committee)?;
                 Ok(Some(ProcessTransactionResult::Certified(ct)))
             }
@@ -1529,14 +1520,15 @@ where
             if most_staked_effects_digest_stake + self.get_retryable_stake(&state)
                 < self.committee.quorum_threshold()
             {
+                state.retryable = false;
                 if state.check_if_error_indicates_tx_finalized_with_different_user_sig(
                     self.committee.validity_threshold(),
                 ) {
-                    state.retryable = false;
                     state.tx_finalized_with_different_user_sig = true;
                 } else {
-                    panic!(
-                        "We have violated our safety assumption or there is a fork. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
+                    // TODO: Figure out a more reliable way to detect invariance violations.
+                    error!(
+                        "We have seen signed effects but unable to reach quorum threshold even including retriable stakes. This is very rare. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
                     );
                 }
             }

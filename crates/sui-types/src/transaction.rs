@@ -10,13 +10,14 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
+use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
 use crate::execution::SharedInput;
 use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::ConsensusCommitPrologue;
+use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
@@ -229,8 +230,6 @@ impl AuthenticatorStateUpdate {
 pub struct RandomnessStateUpdate {
     /// Epoch of the randomness state update transaction
     pub epoch: u64,
-    /// Consensus round of the randomness state update
-    pub round: u64,
     /// Randomness round of the update
     pub randomness_round: u64,
     /// Updated random bytes
@@ -272,6 +271,8 @@ pub enum TransactionKind {
     EndOfEpochTransaction(Vec<EndOfEpochTransactionKind>),
 
     RandomnessStateUpdate(RandomnessStateUpdate),
+    // V2 ConsensusCommitPrologue also includes the digest of the current consensus output.
+    ConsensusCommitPrologueV2(ConsensusCommitPrologueV2),
     // .. more transaction types go here
 }
 
@@ -449,6 +450,15 @@ impl VersionedProtocolMessage for TransactionKind {
                     }
 
                     Ok(())
+                }
+            }
+            TransactionKind::ConsensusCommitPrologueV2(_) => {
+                if protocol_config.include_consensus_digest_in_prologue() {
+                    Ok(())
+                } else {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "ConsensusCommitPrologueV2 is not supported".to_string(),
+                    })
                 }
             }
         }
@@ -1096,6 +1106,7 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
+                | TransactionKind::ConsensusCommitPrologueV2(_)
                 | TransactionKind::AuthenticatorStateUpdate(_)
                 | TransactionKind::RandomnessStateUpdate(_)
                 | TransactionKind::EndOfEpochTransaction(_)
@@ -1142,7 +1153,7 @@ impl TransactionKind {
                 Either::Left(Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)))
             }
 
-            Self::ConsensusCommitPrologue(_) => {
+            Self::ConsensusCommitPrologue(_) | Self::ConsensusCommitPrologueV2(_) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1185,6 +1196,7 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => vec![],
@@ -1208,7 +1220,7 @@ impl TransactionKind {
             Self::Genesis(_) => {
                 vec![]
             }
-            Self::ConsensusCommitPrologue(_) => {
+            Self::ConsensusCommitPrologue(_) | Self::ConsensusCommitPrologueV2(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1253,7 +1265,8 @@ impl TransactionKind {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => (),
+            | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_) => (),
             TransactionKind::EndOfEpochTransaction(txns) => {
                 // The transaction should have been rejected earlier if the feature is not enabled.
                 assert!(config.end_of_epoch_transaction_supported());
@@ -1303,6 +1316,7 @@ impl TransactionKind {
             Self::ChangeEpoch(_) => "ChangeEpoch",
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
+            Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1329,6 +1343,11 @@ impl Display for TransactionKind {
             Self::ConsensusCommitPrologue(p) => {
                 writeln!(writer, "Transaction Kind : Consensus Commit Prologue")?;
                 writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
+            }
+            Self::ConsensusCommitPrologueV2(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V2")?;
+                writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
+                writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
             }
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
@@ -2405,6 +2424,22 @@ impl VerifiedTransaction {
         .pipe(Self::new_system_transaction)
     }
 
+    pub fn new_consensus_commit_prologue_v2(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+        consensus_commit_digest: ConsensusCommitDigest,
+    ) -> Self {
+        ConsensusCommitPrologueV2 {
+            epoch,
+            round,
+            commit_timestamp_ms,
+            consensus_commit_digest,
+        }
+        .pipe(TransactionKind::ConsensusCommitPrologueV2)
+        .pipe(Self::new_system_transaction)
+    }
+
     pub fn new_authenticator_state_update(
         epoch: u64,
         round: u64,
@@ -2423,14 +2458,12 @@ impl VerifiedTransaction {
 
     pub fn new_randomness_state_update(
         epoch: u64,
-        round: u64,
         randomness_round: u64,
         random_bytes: Vec<u8>,
         randomness_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
         RandomnessStateUpdate {
             epoch,
-            round,
             randomness_round,
             random_bytes,
             randomness_obj_initial_shared_version,

@@ -45,7 +45,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
-        keystore.add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        keystore.add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
     }
 
     // List all addresses with flag
@@ -57,8 +57,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
 
-    keystore.add_key(SuiKeyPair::Secp256k1(get_key_pair().1))?;
-    keystore.add_key(SuiKeyPair::Ed25519(get_key_pair().1))?;
+    keystore.add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+    keystore.add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
 
     for pk in keystore.keys() {
         let pk1 = pk.clone();
@@ -219,6 +219,7 @@ async fn test_private_keys_ed25519() -> Result<(), anyhow::Error> {
     for (private_key, base64, address) in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
+            alias: None,
             input_string: private_key.to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
@@ -235,6 +236,7 @@ async fn test_private_keys_ed25519() -> Result<(), anyhow::Error> {
     for (private_key, _, _) in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         let output = KeyToolCommand::Import {
+            alias: None,
             input_string: private_key[..25].to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
@@ -257,6 +259,7 @@ async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
+            alias: None,
             input_string: t[0].to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
@@ -281,6 +284,7 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
+            alias: None,
             input_string: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256k1,
             derivation_path: None,
@@ -319,6 +323,7 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
+            alias: None,
             input_string: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256r1,
             derivation_path: None,
@@ -340,6 +345,7 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
 async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
@@ -349,6 +355,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
@@ -358,6 +365,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
@@ -367,6 +375,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
@@ -376,6 +385,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     .is_err());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
@@ -391,6 +401,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
@@ -400,6 +411,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
@@ -409,6 +421,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
@@ -418,6 +431,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
@@ -427,6 +441,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     .is_ok());
 
     assert!(KeyToolCommand::Import {
+        alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),

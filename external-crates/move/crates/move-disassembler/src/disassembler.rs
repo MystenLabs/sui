@@ -692,7 +692,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::Exists(struct_idx) => {
+            Bytecode::ExistsDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -700,7 +700,7 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("Exists[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::ExistsGeneric(struct_idx) => {
+            Bytecode::ExistsGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -719,7 +719,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MutBorrowGlobal(struct_idx) => {
+            Bytecode::MutBorrowGlobalDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -730,7 +730,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MutBorrowGlobalGeneric(struct_idx) => {
+            Bytecode::MutBorrowGlobalGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -749,7 +749,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::ImmBorrowGlobal(struct_idx) => {
+            Bytecode::ImmBorrowGlobalDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -760,7 +760,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::ImmBorrowGlobalGeneric(struct_idx) => {
+            Bytecode::ImmBorrowGlobalGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -779,7 +779,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MoveFrom(struct_idx) => {
+            Bytecode::MoveFromDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -787,7 +787,7 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("MoveFrom[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::MoveFromGeneric(struct_idx) => {
+            Bytecode::MoveFromGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
@@ -806,7 +806,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MoveTo(struct_idx) => {
+            Bytecode::MoveToDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -814,7 +814,7 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("MoveTo[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::MoveToGeneric(struct_idx) => {
+            Bytecode::MoveToGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode

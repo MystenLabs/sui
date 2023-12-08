@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCurrentAccount, useSignTransactionBlock } from '@mysten/dapp-kit';
 import { getFullnodeUrl, SuiClient, SuiClientOptions } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { useWalletKit } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useState } from 'react';
@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function OfflineSigner() {
-	const { currentAccount, signTransactionBlock } = useWalletKit();
+	const currentAccount = useCurrentAccount();
+	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
 	const [tab, setTab] = useState<'transaction' | 'signature'>('transaction');
 	const [bytes, setBytes] = useState('');
 	const { mutate, data, isPending } = useMutation({

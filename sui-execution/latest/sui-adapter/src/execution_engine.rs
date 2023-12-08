@@ -15,6 +15,7 @@ mod checked {
     };
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::gas_coin::GAS;
+    use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -43,7 +44,6 @@ mod checked {
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
@@ -536,7 +536,7 @@ mod checked {
             }
             TransactionKind::ConsensusCommitPrologue(prologue) => {
                 setup_consensus_commit(
-                    prologue,
+                    prologue.commit_timestamp_ms,
                     temporary_store,
                     tx_ctx,
                     move_vm,
@@ -545,6 +545,19 @@ mod checked {
                     metrics,
                 )
                 .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::ConsensusCommitPrologueV2(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologueV2 cannot fail");
                 Ok(Mode::empty_results())
             }
             TransactionKind::ProgrammableTransaction(pt) => {
@@ -892,7 +905,7 @@ mod checked {
     /// - Set the timestamp for the `Clock` shared object from the timestamp in the header from
     ///   consensus.
     fn setup_consensus_commit(
-        prologue: ConsensusCommitPrologue,
+        consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
@@ -909,7 +922,7 @@ mod checked {
                 vec![],
                 vec![
                     CallArg::CLOCK_MUT,
-                    CallArg::Pure(bcs::to_bytes(&prologue.commit_timestamp_ms).unwrap()),
+                    CallArg::Pure(bcs::to_bytes(&consensus_commit_timestamp_ms).unwrap()),
                 ],
             );
             assert_invariant!(

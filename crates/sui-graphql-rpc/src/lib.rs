@@ -13,17 +13,19 @@ mod error;
 pub mod examples;
 pub mod extensions;
 mod metrics;
+mod mutation;
 pub mod test_infra;
 mod types;
 pub mod utils;
 
 use async_graphql::*;
+use mutation::Mutation;
 use types::owner::ObjectOwner;
 
 use crate::types::query::Query;
 
 pub fn schema_sdl_export() -> String {
-    let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+    let schema = Schema::build(Query, Mutation, EmptySubscription)
         .register_output_type::<ObjectOwner>()
         .finish();
     schema.sdl()

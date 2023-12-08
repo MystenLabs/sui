@@ -123,14 +123,19 @@ impl CheckpointStore {
     pub fn new(path: &Path) -> Arc<Self> {
         Arc::new(Self::open_tables_read_write(
             path.to_path_buf(),
-            MetricConf::default(),
+            MetricConf::new("checkpoint"),
             None,
             None,
         ))
     }
 
     pub fn open_readonly(path: &Path) -> CheckpointStoreReadOnly {
-        Self::get_read_only_handle(path.to_path_buf(), None, None, MetricConf::default())
+        Self::get_read_only_handle(
+            path.to_path_buf(),
+            None,
+            None,
+            MetricConf::new("checkpoint_readonly"),
+        )
     }
 
     pub fn insert_genesis_checkpoint(
@@ -922,6 +927,7 @@ impl CheckpointBuilder {
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
+                        | TransactionKind::ConsensusCommitPrologueV2(_)
                         | TransactionKind::AuthenticatorStateUpdate(_)
                         | TransactionKind::RandomnessStateUpdate(_)
                 ) {

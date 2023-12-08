@@ -80,7 +80,7 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          location
+          address
           digest
           kind
         }
@@ -95,7 +95,7 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          location
+          address
           digest
           kind
         }
@@ -106,7 +106,7 @@ module Test::M1 {
     objectConnection{
       edges {
         node {
-          location
+          address
           digest
           kind
         }
@@ -117,7 +117,7 @@ module Test::M1 {
   object(address: $obj_2_0) {
     version
     owner {
-      location
+      address
     }
   }
 

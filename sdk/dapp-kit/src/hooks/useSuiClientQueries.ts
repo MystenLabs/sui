@@ -26,7 +26,7 @@ type SuiClientQueryOptions = SuiRpcMethods[keyof SuiRpcMethods] extends infer Me
 		: never
 	: never;
 
-type UseSuiClientQueriesResults<Args extends readonly SuiClientQueryOptions[]> = {
+export type UseSuiClientQueriesResults<Args extends readonly SuiClientQueryOptions[]> = {
 	-readonly [K in keyof Args]: Args[K] extends {
 		method: infer M extends keyof SuiRpcMethods;
 		options?: {

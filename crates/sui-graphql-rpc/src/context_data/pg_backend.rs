@@ -5,25 +5,30 @@ use super::{
     db_backend::{BalanceQuery, Explain, Explained, GenericQueryBuilder},
     db_data_provider::DbValidationError,
 };
-use crate::context_data::db_data_provider::PgManager;
 use crate::{
+    context_data::db_data_provider::PgManager,
     error::Error,
-    types::{digest::Digest, object::ObjectFilter, transaction_block::TransactionBlockFilter},
+    types::{
+        digest::Digest, event::EventFilter, object::ObjectFilter, sui_address::SuiAddress,
+        transaction_block::TransactionBlockFilter,
+    },
 };
 use async_trait::async_trait;
 use diesel::{
     pg::Pg,
     query_builder::{AstPass, QueryFragment},
     BoolExpressionMethods, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
+    TextExpressionMethods,
 };
 use std::str::FromStr;
 use sui_indexer::{
     schema_v2::{
-        checkpoints, epochs, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
-        tx_recipients, tx_senders,
+        checkpoints, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
+        tx_input_objects, tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
 };
+use sui_types::parse_sui_struct_tag;
 
 pub(crate) struct PgQueryBuilder;
 
@@ -77,6 +82,14 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
             .limit(1)
             .into_boxed()
     }
+
+    fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
+        checkpoints::dsl::checkpoints
+            .order_by(checkpoints::dsl::sequence_number.asc())
+            .limit(1)
+            .into_boxed()
+    }
+
     fn multi_get_txs(
         cursor: Option<i64>,
         descending_order: bool,
@@ -305,8 +318,59 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
                 }
             }
 
-            if let Some(object_type) = filter.ty {
-                query = query.filter(objects::dsl::object_type.eq(object_type));
+            if let Some(object_type) = filter.type_ {
+                let parts: Vec<_> = object_type.splitn(3, "::").collect();
+
+                if parts.iter().any(|&part| part.is_empty()) {
+                    return Err(DbValidationError::InvalidType(
+                        "Empty strings are not allowed".to_string(),
+                    ))?;
+                }
+
+                if parts.len() == 1 {
+                    // We check for a leading 0x to determine if it is an address
+                    // And otherwise process it as a primitive type
+                    if parts[0].starts_with("0x") {
+                        let package = SuiAddress::from_str(parts[0])
+                            .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                        query =
+                            query.filter(objects::dsl::object_type.like(format!("{}::%", package)));
+                    } else {
+                        query = query.filter(objects::dsl::object_type.eq(parts[0].to_string()));
+                    }
+                } else if parts.len() == 2 {
+                    // Only package addresses are allowed if there are two or more parts
+                    let package = SuiAddress::from_str(parts[0])
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+                    query = query.filter(
+                        objects::dsl::object_type.like(format!("{}::{}::%", package, parts[1])),
+                    );
+                } else if parts.len() == 3 {
+                    let validated_type = parse_sui_struct_tag(&object_type)
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                    if validated_type.type_params.is_empty() {
+                        query = query.filter(
+                            objects::dsl::object_type
+                                .like(format!(
+                                    "{}<%",
+                                    validated_type.to_canonical_string(/* with_prefix */ true)
+                                ))
+                                .or(objects::dsl::object_type
+                                    .eq(validated_type
+                                        .to_canonical_string(/* with_prefix */ true))),
+                        );
+                    } else {
+                        query = query.filter(
+                            objects::dsl::object_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
+                        );
+                    }
+                } else {
+                    return Err(Error::Internal(
+                        "Invalid type. Type must have 3 or less parts".to_string(),
+                    ));
+                }
             }
         }
 
@@ -336,31 +400,131 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
         query.filter(objects::dsl::coin_type.eq(coin_type))
     }
     fn multi_get_checkpoints(
-        cursor: Option<i64>,
-        descending_order: bool,
+        before: Option<i64>,
+        after: Option<i64>,
         limit: i64,
         epoch: Option<i64>,
     ) -> checkpoints::BoxedQuery<'static, Pg> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
-        if let Some(cursor) = cursor {
-            if descending_order {
-                query = query.filter(checkpoints::dsl::sequence_number.lt(cursor));
-            } else {
-                query = query.filter(checkpoints::dsl::sequence_number.gt(cursor));
-            }
+        // The following assumes that the data is always requested in ascending order
+        if let Some(after) = after {
+            query = query
+                .filter(checkpoints::dsl::sequence_number.gt(after))
+                .order(checkpoints::dsl::sequence_number.asc());
+        } else if let Some(before) = before {
+            query = query
+                .filter(checkpoints::dsl::sequence_number.lt(before))
+                .order(checkpoints::dsl::sequence_number.desc());
         }
-        if descending_order {
-            query = query.order(checkpoints::dsl::sequence_number.desc());
-        } else {
-            query = query.order(checkpoints::dsl::sequence_number.asc());
-        }
+
         if let Some(epoch) = epoch {
             query = query.filter(checkpoints::dsl::epoch.eq(epoch));
         }
+
         query = query.limit(limit + 1);
 
         query
+    }
+    fn multi_get_events(
+        before: Option<(i64, i64)>,
+        after: Option<(i64, i64)>,
+        limit: i64,
+        filter: Option<EventFilter>,
+    ) -> Result<events::BoxedQuery<'static, Pg>, Error> {
+        let mut query = events::dsl::events.into_boxed();
+        if let Some(after) = after {
+            query = query
+                .filter(
+                    events::dsl::tx_sequence_number
+                        .gt(after.0)
+                        .or(events::dsl::tx_sequence_number
+                            .eq(after.0)
+                            .and(events::dsl::event_sequence_number.gt(after.1))),
+                )
+                .order(events::dsl::tx_sequence_number.asc())
+                .then_order_by(events::dsl::event_sequence_number.asc());
+        } else if let Some(before) = before {
+            query = query
+                .filter(
+                    events::dsl::tx_sequence_number.lt(before.0).or(
+                        events::dsl::tx_sequence_number
+                            .eq(before.0)
+                            .and(events::dsl::event_sequence_number.lt(before.1)),
+                    ),
+                )
+                .order(events::dsl::tx_sequence_number.desc())
+                .then_order_by(events::dsl::event_sequence_number.desc());
+        } else {
+            query = query
+                .order(events::dsl::tx_sequence_number.asc())
+                .then_order_by(events::dsl::event_sequence_number.asc());
+        }
+
+        query = query.limit(limit + 1);
+        let Some(filter) = filter else {
+            return Ok(query);
+        };
+
+        if let Some(sender) = filter.sender {
+            // Construct a subquery to filter on senders - this is because we do not have an index on the senders column.
+            let subquery = tx_senders::dsl::tx_senders
+                .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
+                .select(tx_senders::dsl::tx_sequence_number);
+
+            query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
+        }
+
+        if let Some(digest) = filter.transaction_digest {
+            let tx_digest = Digest::from_str(&digest)?.into_vec();
+            let subquery = transactions::dsl::transactions
+                .filter(transactions::dsl::transaction_digest.eq(tx_digest))
+                .select(transactions::dsl::tx_sequence_number);
+
+            query = query.filter(events::dsl::tx_sequence_number.eq_any(subquery));
+        }
+
+        // Filters on the package and/ or module that emitted some event
+        if let Some(p) = filter.emitting_package {
+            query = query.filter(events::dsl::package.eq(p.into_vec()));
+
+            if let Some(m) = filter.emitting_module {
+                query = query.filter(events::dsl::module.eq(m));
+            }
+        }
+
+        // Filters on the event type
+        if let Some(p) = filter.event_package {
+            if let Some(m) = filter.event_module {
+                if let Some(t) = filter.event_type {
+                    let event_type = format!("{}::{}::{}", p, m, t);
+                    let validated_type = parse_sui_struct_tag(&event_type)
+                        .map_err(|e| DbValidationError::InvalidType(e.to_string()))?;
+
+                    if validated_type.type_params.is_empty() {
+                        query = query.filter(
+                            events::dsl::event_type
+                                .like(format!(
+                                    "{}<%",
+                                    validated_type.to_canonical_string(/* with_prefix */ true)
+                                ))
+                                .or(events::dsl::event_type
+                                    .eq(validated_type
+                                        .to_canonical_string(/* with_prefix */ true))),
+                        );
+                    } else {
+                        query = query.filter(
+                            events::dsl::event_type
+                                .eq(validated_type.to_canonical_string(/* with_prefix */ true)),
+                        );
+                    }
+                }
+                query = query.filter(events::dsl::event_type.like(format!("{}::{}::%", p, m)));
+            }
+            query = query.filter(events::dsl::event_type.like(format!("{}::%", p)));
+        }
+
+        Ok(query)
     }
 }
 

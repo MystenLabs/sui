@@ -35,11 +35,11 @@ module pkg::o {
 //# run-graphql
 
 fragment Modules on Object {
-    location
+    address
     asMovePackage {
         module(name: "m") {
             name
-            package { asObject { location } }
+            package { asObject { address } }
 
             fileFormatVersion
             bytes
@@ -69,7 +69,7 @@ fragment NodeNames on MoveModuleConnection {
 }
 
 fragment Modules on Object {
-    location
+    address
     asMovePackage {
         # Tests to make sure `after` and `before` correctly limit the
         # upper and lower bounds on the range of modules, and
@@ -103,7 +103,7 @@ fragment NodeNames on MoveModuleConnection {
 }
 
 fragment Modules on Object {
-    location
+    address
     asMovePackage {
         # Tests to make sure `first` and `last` correctly limit the
         # number of modules returned and correctly detect the

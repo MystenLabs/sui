@@ -30,7 +30,3 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-
-[[test]]
-name = "linter_tests"
-harness = false

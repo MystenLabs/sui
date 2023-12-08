@@ -80,17 +80,17 @@ impl Extension for FeatureGate {
 mod tests {
     use std::collections::BTreeSet;
 
-    use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+    use async_graphql::{EmptySubscription, Schema};
     use expect_test::expect;
 
-    use crate::{functional_group::FunctionalGroup, types::query::Query};
+    use crate::{functional_group::FunctionalGroup, mutation::Mutation, types::query::Query};
 
     use super::*;
 
     #[tokio::test]
     #[should_panic] // because it tries to access the data provider, which isn't there
     async fn test_accessing_an_enabled_field() {
-        Schema::build(Query, EmptyMutation, EmptySubscription)
+        Schema::build(Query, Mutation, EmptySubscription)
             .data(ServiceConfig::default())
             .extension(FeatureGate)
             .finish()
@@ -100,7 +100,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_accessing_a_disabled_field() {
-        let errs: Vec<_> = Schema::build(Query, EmptyMutation, EmptySubscription)
+        let errs: Vec<_> = Schema::build(Query, Mutation, EmptySubscription)
             .data(ServiceConfig {
                 disabled_features: BTreeSet::from_iter([FunctionalGroup::SystemState]),
                 ..Default::default()

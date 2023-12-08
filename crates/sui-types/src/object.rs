@@ -651,6 +651,20 @@ impl Object {
         &self.0
     }
 
+    pub fn new_from_genesis(
+        data: Data,
+        owner: Owner,
+        previous_transaction: TransactionDigest,
+    ) -> Self {
+        ObjectInner {
+            data,
+            owner,
+            previous_transaction,
+            storage_rebate: 0,
+        }
+        .into()
+    }
+
     /// Create a new Move object
     pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
         ObjectInner {

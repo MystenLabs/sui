@@ -1,0 +1,104 @@
+processed 21 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 13-63:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9264400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 65-65:
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'run'. lines 67-67:
+created: object(3,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4 'view-object'. lines 69-69:
+Owner: Shared
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 5 'view-object'. lines 71-74:
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 6 'programmable'. lines 75-79:
+mutated: object(0,0), object(3,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 7 'run'. lines 81-81:
+created: object(7,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8 'run'. lines 83-83:
+created: object(8,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9 'run'. lines 85-85:
+created: object(9,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10 'view-object'. lines 87-87:
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 11 'view-object'. lines 89-89:
+Owner: Shared
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 12 'view-object'. lines 91-93:
+Owner: Shared
+Version: 7
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(9,0)}}}
+
+task 13 'programmable'. lines 94-98:
+mutated: object(0,0), object(9,0)
+deleted: object(7,0), object(8,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 4160772, non_refundable_storage_fee: 42028
+
+task 14 'run'. lines 100-100:
+created: object(14,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15 'run'. lines 102-102:
+created: object(15,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'run'. lines 104-104:
+created: object(16,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17 'view-object'. lines 106-106:
+Owner: Shared
+Version: 8
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(14,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 18 'view-object'. lines 108-108:
+Owner: Shared
+Version: 9
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 0u64}}
+
+task 19 'view-object'. lines 110-112:
+Owner: Shared
+Version: 10
+Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(16,0)}}}
+
+task 20 'programmable'. lines 113-115:
+mutated: object(0,0), object(16,0)
+deleted: object(14,0), object(15,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 4160772, non_refundable_storage_fee: 42028

@@ -1,0 +1,52 @@
+processed 8 tasks
+
+task 1 'publish'. lines 6-11:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 13-14:
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::boom (function index 1) at offset 1, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("boom") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("P0::m::boom at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
+
+task 3 'create-checkpoint'. lines 16-16:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 18-30:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Move Runtime Abort. Location: 00cc077085024849b290aa0b6d88bb5793d457e99fe08b472b7fcd73f775bf91::m::boom (function index 1) at offset 1, Abort Code: 42 in 1st command."
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5 'programmable'. lines 32-35:
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::boom (function index 1) at offset 1, Abort Code: 42
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("boom") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("P0::m::boom at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(2) } }
+
+task 6 'create-checkpoint'. lines 37-37:
+Checkpoint created: 2
+
+task 7 'run-graphql'. lines 39-52:
+Response: {
+  "data": {
+    "transactionBlockConnection": {
+      "nodes": [
+        {
+          "effects": {
+            "status": "FAILURE",
+            "errors": "Move Runtime Abort. Location: 00cc077085024849b290aa0b6d88bb5793d457e99fe08b472b7fcd73f775bf91::m::boom (function index 1) at offset 1, Abort Code: 42 in 3rd command."
+          }
+        }
+      ]
+    }
+  }
+}

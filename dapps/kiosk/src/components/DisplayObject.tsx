@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { KioskListing } from '@mysten/kiosk';
-import { useWalletKit } from '@mysten/wallet-kit';
 import { ReactNode } from 'react';
 
 import { DEFAULT_IMAGE } from '../utils/constants';
@@ -17,7 +17,7 @@ export interface DisplayObject {
 }
 
 export function DisplayObject({ item, listing = null, children }: DisplayObject) {
-	const { currentAccount } = useWalletKit();
+	const currentAccount = useCurrentAccount();
 
 	const price = formatSui(mistToSui(listing?.price));
 

@@ -9,7 +9,7 @@ query transaction_block_with_relation_filter {
     transactionBlockConnection(relation: SENT, filter: { package: "0x2" }) {
       nodes {
         sender {
-          location
+          address
         }
         gasInput {
           gasPrice

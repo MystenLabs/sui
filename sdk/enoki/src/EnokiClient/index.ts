@@ -8,6 +8,8 @@ import type {
 	CreateZkLoginNonceApiResponse,
 	CreateZkLoginZkpApiInput,
 	CreateZkLoginZkpApiResponse,
+	ExecuteSponsoredTransactionBlockApiInput,
+	ExecuteSponsoredTransactionBlockApiResponse,
 	GetAppApiInput,
 	GetAppApiResponse,
 	GetZkLoginApiInput,
@@ -88,6 +90,18 @@ export class EnokiClient {
 				transactionBlockKindBytes: input.transactionBlockKindBytes,
 			}),
 		});
+	}
+
+	executeSponsoredTransactionBlock(input: ExecuteSponsoredTransactionBlockApiInput) {
+		return this.#fetch<ExecuteSponsoredTransactionBlockApiResponse>(
+			`transaction-blocks/sponsor/${input.digest}`,
+			{
+				method: 'POST',
+				body: JSON.stringify({
+					signature: input.signature,
+				}),
+			},
+		);
 	}
 
 	async #fetch<T = unknown>(path: string, init: RequestInit): Promise<T> {

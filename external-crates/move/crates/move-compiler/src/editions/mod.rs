@@ -37,6 +37,7 @@ pub enum FeatureGate {
     Move2024Optimizations,
     Move2024Keywords,
     BlockLabels,
+    Move2024Paths,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -113,6 +114,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::LetMut,
     FeatureGate::Move2024Keywords,
     FeatureGate::BlockLabels,
+    FeatureGate::Move2024Paths,
 ];
 
 impl Edition {
@@ -191,6 +193,7 @@ impl FeatureGate {
             FeatureGate::Move2024Optimizations => "Move 2024 optimizations are",
             FeatureGate::Move2024Keywords => "Move 2024 keywords are",
             FeatureGate::BlockLabels => "Block labels are",
+            FeatureGate::Move2024Paths => "Move 2024 paths are",
         }
     }
 }

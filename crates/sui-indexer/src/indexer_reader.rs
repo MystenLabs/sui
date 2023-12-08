@@ -1052,7 +1052,7 @@ impl IndexerReader {
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<SuiEvent>> {
-        let (tx_seq, event_seq) = if let Some(cursor) = cursor.clone() {
+        let (tx_seq, event_seq) = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,
@@ -1440,7 +1440,10 @@ impl IndexerReader {
         tracing::debug!("get coin balances query: {query}");
         let coin_balances =
             self.run_query(|conn| diesel::sql_query(query).load::<CoinBalance>(conn))?;
-        Ok(coin_balances.into_iter().map(|cb| cb.into()).collect())
+        coin_balances
+            .into_iter()
+            .map(|cb| cb.try_into())
+            .collect::<IndexerResult<Vec<_>>>()
     }
 
     pub fn get_latest_network_metrics(&self) -> IndexerResult<NetworkMetrics> {

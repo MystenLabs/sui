@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
@@ -25,6 +26,18 @@ pub struct ConsensusCommitPrologue {
     pub round: u64,
     /// Unix timestamp from consensus
     pub commit_timestamp_ms: CheckpointTimestamp,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologueV2 {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
+    /// Unix timestamp from consensus
+    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Digest of consensus output
+    pub consensus_commit_digest: ConsensusCommitDigest,
 }
 
 // In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.
@@ -53,7 +66,6 @@ pub enum ConsensusTransactionKey {
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
     // the same id by malfunctioning providers.
     NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
-    RandomnessStateUpdate(u64),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -80,7 +92,6 @@ impl Debug for ConsensusTransactionKey {
                     jwk
                 )
             }
-            Self::RandomnessStateUpdate(round) => write!(f, "RandomnessStateUpdate({round:?})"),
         }
     }
 }
@@ -254,8 +265,8 @@ impl ConsensusTransaction {
                     key.clone(),
                 )))
             }
-            ConsensusTransactionKind::RandomnessStateUpdate(round, _bytes) => {
-                ConsensusTransactionKey::RandomnessStateUpdate(*round)
+            ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {
+                unreachable!("there should never be a RandomnessStateUpdate with SequencedConsensusTransactionKind::External")
             }
         }
     }

@@ -8,8 +8,8 @@ use std::path::Path;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::ConnectionConfig;
-use sui_graphql_rpc::test_infra::cluster::{start_graphql_server, start_test_indexer_v2};
-use sui_indexer::test_utils::start_test_indexer;
+use sui_graphql_rpc::test_infra::cluster::start_graphql_server;
+use sui_indexer::test_utils::{start_test_indexer, start_test_indexer_v2};
 use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -355,7 +355,9 @@ pub async fn new_wallet_context_from_cluster(
     let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
-    keystore.add_key(SuiKeyPair::Ed25519(key_pair)).unwrap();
+    keystore
+        .add_key(None, SuiKeyPair::Ed25519(key_pair))
+        .unwrap();
     SuiClientConfig {
         keystore,
         envs: vec![SuiEnv {
