@@ -11375,6 +11375,7 @@ dependencies = [
  "rocksdb",
  "serde",
  "serde_json",
+ "shared-crypto",
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",
