@@ -3,12 +3,12 @@ title: Simulating References
 description: Use the borrow module in the Sui framework to include objects by reference in your programmable transaction blocks.
 ---
 
-Everything on the Sui blockchain is an object. When you develop Move packages for the Sui network, you're typically manipulating or using on-chain objects in some way through functionality available in the Sui API. For most API functions, you provide an object     
+Everything on the Sui blockchain is an object. When you develop Move packages for the Sui network, you're typically manipulating or using on-chain objects in some way through functionality available in the Sui API. For most API functions, you provide an object by reference.     
 
-References are a key construct when programming in Move and on Sui. Most of the available Sui API methods take objects by reference, which means you pass a pointer to the object instead of the object itself. 
+References are a key construct when programming in Move and on Sui. Most of the functionality available in the Sui API takes objects by reference.
 
 There are two ways to use an object:
-- **by value:** When you use an object by value, you have full control over that object. You can destroy it (if the functionality is available), move it (if it has the `store` ability), or transfer it to an address.
+- **by value:** When you use an object by value, you have full control over that object. You can destroy it (if the functionality is available), wrap it (if it has the `store` ability), or transfer it to an address.
 - **by reference:** When you use an object by reference, operations over that object are determined by the logic the module that defines the object provides because you are using a reference to its data rather than having ownership of the object itself. The restrictions of references allow you to develop smart contracts with a high level of security and safety around assets. There are two types of references:
     - Mutable reference (`&mut`): You can alter the object (according to the API) but you can't destroy or transfer it. 
     - Immutable reference (`&`): Further restricts the set of operations and the guarantees/invariants over the referenced object. You have read-only access to the object's data.
@@ -33,7 +33,7 @@ module a_module {
 }
 ```
 
-The function `use_asset` takes an immutable reference to the asset (`&Asset`), which is a common pattern in a transaction command. 
+The function `use_asset` takes an immutable reference to the asset (`&Asset`), which is a common pattern in a an API definition. 
 
 Now consider another module that uses this asset.
 
@@ -51,7 +51,7 @@ module another_module {
 
 This module creates an object (`AssetManager`) that references the object (`Asset`) created in the previous module (`a_module`).
 
-You could then write a Move function that creates an object by reference and passes it to the `use_asset` function.  
+You could then write a Move function that retrieves an object by reference and passes it to the `use_asset` function.  
 
 ```rust
 fun do_something(manager: &AssetManager) {
@@ -60,7 +60,7 @@ fun do_something(manager: &AssetManager) {
 }
 ```
 
-This function is not valid within a PTB, however, because PTBs do not support a reference returned by a function and passed to another function.
+The two functions in `do_something` are not valid within a PTB, however, because PTBs do not support a reference returned by a function and passed to another function.
 
 To make this operation valid within a PTB, you would need to include functionality from the borrow module. Consequently, you could change the `another_module` code to the following:
 
@@ -90,9 +90,15 @@ Now the PTB can retrieve the asset, use it in a call to `use_asset`, and return 
 
 The `Borrow` object is the key to the guarantees the borrow module offers. The definition of `Borrow` is
 `struct Borrow { ref: address, obj: ID }`
-which makes it such that you cannot drop or save its instance anywhere, so it must be consumed in the same transaction that retrieves it (hot potato). Moreover, fields in the `Borrow` struct make sure that the object returned is for the same `Referent` and the object that was originally held by the `Borrow` instance. In other words, there is no way to either keep the object retrieved or to swap it with another object in a different `Referent`.
+which makes it such that you cannot drop or save its instance anywhere, so it must be consumed in the same transaction that retrieves it (hot potato). Moreover, fields in the `Borrow` struct make sure that the object returned is for the same `Referent` and the object that was originally held by the `Referent` instance. In other words, there is no way to either keep the object retrieved or to swap it with another object in a different `Referent`.
 
-Using a reference inside an object is a very explicit and intrusive change. That has to be taken into consideration when designing a solution. Support for references in a PTB is planned, which is a much more natural and proper pattern for APIs.
+:::caution
+
+Using a `Referent` is a very explicit and intrusive change. That has to be taken into consideration when designing a solution. 
+
+:::
+
+Support for references in a PTB is planned, which is a much more natural and proper pattern for APIs.
 
 You must consider the implications of using the borrow module and whether you have a mechanism to later move to a more natural, reference pattern.
 
