@@ -15,7 +15,7 @@ use crate::{
     context_data::db_data_provider::{validate_cursor_pagination, PgManager},
     error::Error,
     types::{
-        base64::Base64, move_function::MoveFunction, move_type::MoveType, object::Object,
+        base64::Base64, move_function::MoveFunction, move_type::MoveType, object_read::ObjectRead,
         sui_address::SuiAddress,
     },
 };
@@ -33,13 +33,9 @@ enum TransactionInput {
 
 /// A Move object, either immutable, or owned mutable.
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
-#[graphql(complex)]
 struct OwnedOrImmutable {
-    address: SuiAddress,
-    version: u64,
-    /// 32-byte hash that identifies the object's contents at this version, encoded as a Base58
-    /// string.
-    digest: String,
+    #[graphql(flatten)]
+    read: ObjectRead,
 }
 
 /// A Move object that's shared.
@@ -55,11 +51,9 @@ struct SharedInput {
 
 /// A Move object that can be received in this transaction.
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
-#[graphql(complex)]
 struct Receiving {
-    address: SuiAddress,
-    version: u64,
-    digest: String,
+    #[graphql(flatten)]
+    read: ObjectRead,
 }
 
 /// BCS encoded primitive value (not an object or Move struct).
@@ -324,26 +318,6 @@ impl ProgrammableTransactionBlock {
     }
 }
 
-#[ComplexObject]
-impl OwnedOrImmutable {
-    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.address, Some(self.version))
-            .await
-            .extend()
-    }
-}
-
-#[ComplexObject]
-impl Receiving {
-    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(self.address, Some(self.version))
-            .await
-            .extend()
-    }
-}
-
 /// A call to either an entry or a public Move function.
 #[Object]
 impl MoveCallTransaction {
@@ -404,10 +378,8 @@ impl From<NativeCallArg> for TransactionInput {
                 bytes: Base64::from(bytes),
             }),
 
-            N::Object(O::ImmOrOwnedObject((id, v, d))) => I::OwnedOrImmutable(OwnedOrImmutable {
-                address: id.into(),
-                version: v.value(),
-                digest: d.base58_encode(),
+            N::Object(O::ImmOrOwnedObject(oref)) => I::OwnedOrImmutable(OwnedOrImmutable {
+                read: ObjectRead(oref),
             }),
 
             N::Object(O::SharedObject {
@@ -420,10 +392,8 @@ impl From<NativeCallArg> for TransactionInput {
                 mutable,
             }),
 
-            N::Object(O::Receiving((id, v, d))) => I::Receiving(Receiving {
-                address: id.into(),
-                version: v.value(),
-                digest: d.base58_encode(),
+            N::Object(O::Receiving(oref)) => I::Receiving(Receiving {
+                read: ObjectRead(oref),
             }),
         }
     }

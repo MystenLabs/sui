@@ -13,7 +13,7 @@ use crate::{context_data::db_data_provider::PgManager, error::Error};
 use super::{
     balance_change::BalanceChange, base64::Base64, checkpoint::Checkpoint, date_time::DateTime,
     epoch::Epoch, gas::GasEffects, object_change::ObjectChange,
-    transaction_block::TransactionBlock,
+    transaction_block::TransactionBlock, unchanged_shared_object::UnchangedSharedObject,
 };
 
 #[derive(Clone)]
@@ -94,17 +94,26 @@ impl TransactionBlockEffects {
         Some(GasEffects::from(&self.native))
     }
 
-    // TODO object_reads
+    /// Shared objects that are referenced by but not modified by this transaction.
+    async fn unchanged_shared_objects(&self) -> Option<Vec<UnchangedSharedObject>> {
+        Some(
+            self.native
+                .input_shared_objects()
+                .into_iter()
+                .filter_map(|input| UnchangedSharedObject::try_from(input).ok())
+                .collect(),
+        )
+    }
 
     /// The effect this transaction had on objects on-chain.
-    async fn object_changes(&self) -> Result<Option<Vec<ObjectChange>>> {
-        Ok(Some(
+    async fn object_changes(&self) -> Option<Vec<ObjectChange>> {
+        Some(
             self.native
                 .object_changes()
                 .into_iter()
                 .map(|native| ObjectChange { native })
                 .collect(),
-        ))
+        )
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of

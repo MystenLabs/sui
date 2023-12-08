@@ -879,7 +879,6 @@ type Pure {
   bytes: Base64!
 }
 
-
 union TransactionArgument = GasCoin | Input | Result
 
 type GasCoin { _: Boolean }
@@ -956,7 +955,7 @@ type TransactionBlockEffects {
     after: String,
     last: Int,
     before: String,
-  ): MoveObjectConnection!
+  ): UnchangedSharedObjectConnection!
 
   objectChanges(
     first: Int,
@@ -1016,6 +1015,24 @@ type GasCostSummary {
   storageCost: BigInt
   storageRebate: BigInt
   nonRefundableStorageFee: BigInt
+}
+
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+
+type SharedObjectRead {
+  address: SuiAddress!
+  version: u64!
+  digest: String!
+  object: Object
+}
+
+type SharedObjectDelete {
+  address: SuiAddress!
+  version: u64!
+
+  # Whether this transaction intended to use this shared object
+  # mutably or not.
+  mutable: Boolean!
 }
 
 type ObjectChange {
@@ -1453,6 +1470,19 @@ type ProgrammableTransactionConnection {
 type ProgrammableTransactionEdge {
   cursor: String
   node: ProgrammableTransaction!
+}
+
+# UnchangedSharedObjectConnection
+
+type UnchangedSharedObjectConnection {
+  edges: [UnchangedSharedObjectEdge!]!
+  nodes: [UnchangedSharedObject!]!
+  pageInfo: PageInfo!
+}
+
+type UnchangedSharedObjectEdge {
+  cursor: String
+  node: UnchangedSharedObject!
 }
 
 # ObjectChangeConnection
