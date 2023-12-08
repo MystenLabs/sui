@@ -5,13 +5,16 @@ use crate::{
     error::{BridgeError, BridgeResult},
     types::{BridgeAction, BridgeCommittee, SignedBridgeAction, VerifiedSignedBridgeAction},
 };
-use fastcrypto::secp256k1::{Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature};
+use fastcrypto::secp256k1::{
+    Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1PublicKeyAsBytes, Secp256k1Signature,
+};
 use fastcrypto::{hash::Keccak256, traits::KeyPair};
 use serde::{Deserialize, Serialize};
 use std::{pin::Pin, sync::Arc};
 use sui_types::{crypto::Signer, message_envelope::VerifiedEnvelope};
 use tap::TapFallible;
 
+pub type BridgeAuthorityKeyPair = Secp256k1KeyPair;
 pub type BridgeAuthorityPublicKey = Secp256k1PublicKey;
 pub type BridgeAuthorityPublicKeyBytes = Secp256k1PublicKeyAsBytes;
 pub type BridgeAuthoritySignature = Secp256k1Signature;
@@ -41,7 +44,7 @@ impl BridgeAuthoritySignInfo {
         // 1. verify committee member is in the committee and not blocklisted
         if !committee.is_active_member(&self.authority_pub_key_bytes()) {
             return Err(BridgeError::InvalidBridgeAuthority(
-                self.authority_pub_key.clone(),
+                self.authority_pub_key_bytes(),
             ));
         }
 
@@ -52,7 +55,7 @@ impl BridgeAuthoritySignInfo {
             .verify_with_hash::<Keccak256>(&msg_bytes, &self.signature)
             .map_err(|e| {
                 BridgeError::InvalidBridgeAuthoritySignature((
-                    self.authority_pub_key.clone(),
+                    self.authority_pub_key_bytes(),
                     e.to_string(),
                 ))
             })
@@ -63,27 +66,41 @@ impl BridgeAuthoritySignInfo {
     }
 }
 
-pub fn verify_signed_bridge_event(
-    e: SignedBridgeAction,
+/// Verifies a SignedBridgeAction (response from bridge authority to bridge client)
+/// represents the right BridgeAction, and is signed by the right authority.
+pub fn verify_signed_bridge_action(
+    expected_action: &BridgeAction,
+    signed_action: SignedBridgeAction,
+    expected_signer: &BridgeAuthorityPublicKeyBytes,
     committee: &BridgeCommittee,
 ) -> BridgeResult<VerifiedSignedBridgeAction> {
-    e.auth_sig()
-        .verify(e.data(), committee)
-        .tap_err(|e| tracing::error!("Failed to verify SignedBridgeEvent. Error {:?}", e))?;
-    Ok(VerifiedEnvelope::new_from_verified(e))
+    if signed_action.data() != expected_action {
+        return Err(BridgeError::MismatchedAction);
+    }
+
+    let sig = signed_action.auth_sig();
+    if &sig.authority_pub_key_bytes() != expected_signer {
+        return Err(BridgeError::MismatchedAuthoritySigner);
+    }
+    sig.verify(signed_action.data(), committee).tap_err(|e| {
+        tracing::error!(
+            "Failed to verify SignedBridgeEvent {:?}. Error {:?}",
+            signed_action,
+            e
+        )
+    })?;
+    Ok(VerifiedEnvelope::new_from_verified(signed_action))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::events::EmittedSuiToEthTokenBridgeV1;
-    use crate::types::{BridgeAction, BridgeAuthority, BridgeChainId, SuiToEthBridgeAction};
-    use crate::types::{SignedBridgeAction, TokenId};
-    use ethers::types::Address as EthAddress;
+    use crate::test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action};
+    use crate::types::BridgeAction;
+    use crate::types::SignedBridgeAction;
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
-    use sui_types::base_types::{SuiAddress, TransactionDigest};
+    use sui_types::base_types::TransactionDigest;
     use sui_types::crypto::get_key_pair;
-    use sui_types::multiaddr::Multiaddr;
 
     use super::*;
 
@@ -92,70 +109,72 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
-        let (_, kp): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
-        let pubkey = kp.public().clone();
-        let secret = Arc::pin(kp);
-        let mut authority = BridgeAuthority {
-            pubkey: pubkey.clone(),
-            voting_power: 10000,
-            bridge_network_address: Multiaddr::try_from("/ip4/127.0.0.1/tcp/9999/http".to_string())
-                .unwrap(),
-            is_blocklisted: false,
-        };
-        let committee = BridgeCommittee::new(vec![authority.clone()]).unwrap();
 
-        let event = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-            sui_tx_digest: TransactionDigest::random(),
-            sui_tx_event_index: 1,
-            sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
-                nonce: 1,
-                sui_chain_id: BridgeChainId::SuiTestnet,
-                sui_address: SuiAddress::random_for_testing_only(),
-                eth_chain_id: BridgeChainId::EthSepolia,
-                eth_address: EthAddress::random(),
-                token_id: TokenId::Sui,
-                amount: 100,
-            },
-        });
+        let (mut authority1, pubkey, secret) = get_test_authority_and_key(5000, 9999);
+        let pubkey_bytes = BridgeAuthorityPublicKeyBytes::from(&pubkey);
 
-        let sig = BridgeAuthoritySignInfo::new(&event, &secret);
+        let (authority2, pubkey2, _secret) = get_test_authority_and_key(5000, 9999);
+        let pubkey_bytes2 = BridgeAuthorityPublicKeyBytes::from(&pubkey2);
 
-        let signed_event = SignedBridgeAction::new_from_data_and_sig(event.clone(), sig.clone());
+        let committee = BridgeCommittee::new(vec![authority1.clone(), authority2.clone()]).unwrap();
+
+        let action: BridgeAction =
+            get_test_sui_to_eth_bridge_action(TransactionDigest::random(), 1, 1, 100);
+
+        let sig = BridgeAuthoritySignInfo::new(&action, &secret);
+
+        let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig.clone());
 
         // Verification should succeed
-        let _ = verify_signed_bridge_event(signed_event, &committee).unwrap();
+        let _ =
+            verify_signed_bridge_action(&action, signed_action.clone(), &pubkey_bytes, &committee)
+                .unwrap();
+
+        // Verification should fail - mismatched signer
+        assert!(matches!(
+            verify_signed_bridge_action(&action, signed_action.clone(), &pubkey_bytes2, &committee)
+                .unwrap_err(),
+            BridgeError::MismatchedAuthoritySigner
+        ));
+
+        let mismatched_action: BridgeAction =
+            get_test_sui_to_eth_bridge_action(TransactionDigest::random(), 2, 3, 4);
+        // Verification should fail - mismatched action
+        assert!(matches!(
+            verify_signed_bridge_action(
+                &mismatched_action,
+                signed_action.clone(),
+                &pubkey_bytes2,
+                &committee
+            )
+            .unwrap_err(),
+            BridgeError::MismatchedAction,
+        ));
 
         // Signature is invalid (signed over different message), verification should fail
-        let event2 = BridgeAction::SuiToEthBridgeAction(SuiToEthBridgeAction {
-            sui_tx_digest: TransactionDigest::random(),
-            sui_tx_event_index: 2, // <--------------------- this is different
-            sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
-                nonce: 1,
-                sui_chain_id: BridgeChainId::SuiTestnet,
-                sui_address: SuiAddress::random_for_testing_only(),
-                eth_chain_id: BridgeChainId::EthSepolia,
-                eth_address: EthAddress::random(),
-                token_id: TokenId::Sui,
-                amount: 100,
-            },
-        });
+        let action2: BridgeAction =
+            get_test_sui_to_eth_bridge_action(TransactionDigest::random(), 3, 5, 77);
 
-        let invalid_sig = BridgeAuthoritySignInfo::new(&event2, &secret);
-        let signed_event = SignedBridgeAction::new_from_data_and_sig(event.clone(), invalid_sig);
-        let _ = verify_signed_bridge_event(signed_event, &committee).unwrap_err();
+        let invalid_sig = BridgeAuthoritySignInfo::new(&action2, &secret);
+        let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), invalid_sig);
+        let _ = verify_signed_bridge_action(&action, signed_action, &pubkey_bytes, &committee)
+            .unwrap_err();
 
         // Signer is not in committee, verification should fail
         let (_, kp2): (_, fastcrypto::secp256k1::Secp256k1KeyPair) = get_key_pair();
+        let pubkey_bytes_2 = BridgeAuthorityPublicKeyBytes::from(kp2.public());
         let secret2 = Arc::pin(kp2);
-        let sig2 = BridgeAuthoritySignInfo::new(&event, &secret2);
-        let signed_event2 = SignedBridgeAction::new_from_data_and_sig(event.clone(), sig2);
-        let _ = verify_signed_bridge_event(signed_event2, &committee).unwrap_err();
+        let sig2 = BridgeAuthoritySignInfo::new(&action, &secret2);
+        let signed_action2 = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig2);
+        let _ = verify_signed_bridge_action(&action, signed_action2, &pubkey_bytes_2, &committee)
+            .unwrap_err();
 
         // Authority is blocklisted, verification should fail
-        authority.is_blocklisted = true;
-        let committee = BridgeCommittee::new(vec![authority.clone()]).unwrap();
-        let signed_event = SignedBridgeAction::new_from_data_and_sig(event, sig);
-        let _ = verify_signed_bridge_event(signed_event, &committee).unwrap_err();
+        authority1.is_blocklisted = true;
+        let committee = BridgeCommittee::new(vec![authority1, authority2]).unwrap();
+        let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig);
+        let _ = verify_signed_bridge_action(&action, signed_action, &pubkey_bytes, &committee)
+            .unwrap_err();
 
         Ok(())
     }
