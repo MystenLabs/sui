@@ -1676,7 +1676,7 @@ pub(crate) fn convert_to_validators(
                 .and_then(|map| map.get(&v.sui_address).copied());
             let report_records = report_records.as_ref().and_then(|map| {
                 map.get(&v.sui_address)
-                    .map(|addrs| addrs.into_iter().map(Address::from).collect())
+                    .map(|addrs| addrs.iter().map(Address::from).collect())
             });
             Validator {
                 validator_summary: v.clone(),
