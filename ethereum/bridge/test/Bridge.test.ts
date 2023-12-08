@@ -24,28 +24,24 @@ const CONTRACT_INTERFACE = [
 
 	// Define an enum for the Message Types
 	enum MessageType {
-		TOKEN,
-		EMERGENCY_OP,
-		COMMITTEE_BLOCKLIST
+        TOKEN,
+        COMMITTEE_BLOCKLIST,
+        EMERGENCY_OP
 	}
 
 	// Define an enum for the chain IDs
 	enum ChainID {
-		SUI_CHAIN,
-		BTC_CHAIN,
-		ETH_CHAIN,
-		TMP_CHAIN,
-        TMP_CHAIN4,
-        TMP_CHAIN5
+        SUI,
+        ETH
 	}
 
 	// Define an enum for the token IDs
 	enum TokenID {
-		SUI_TOKEN,
-		BTC_TOKEN,
-		ETH_TOKEN,
-		USDC_TOKEN,
-		USDT_TOKEN
+        SUI,
+        BTC,
+        ETH,
+        USDC,
+        USDT
 	}
 
 // Write a test suite for the contract
@@ -280,17 +276,17 @@ describe(CONTRACT_NAME, () => {
         // Example bridgeMessage
         const bridgeMessage = {
             messageType: MessageType.EMERGENCY_OP,
-            version: 2,
-            sourceChain: ChainID.TMP_CHAIN,
-            bridgeSeqNum: 4,
+            version: 0,
+            sourceChain: ChainID.SUI,
+            bridgeSeqNum: 0,
             senderAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
-            targetChain: ChainID.TMP_CHAIN5,
+            targetChain: ChainID.ETH,
             targetAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
         }
 
         // Example signatures array (these would be actual signatures in a real test)
         const signatures = [
-            '0x93f82d7903c6a37336c33d68a890b448665735b4f513003cb4ef0029da0372b9329e0f6fc0b9f9c0c77d66bbf7217da260803fcae345a72f7a7764c56f464b5c1b',
+            '0xb6f1b22f64a3bc050a594d3402e895fcf66a194668a60cc5be747aead316046a1c0d3c95ee18bac38f25156d585965bf16d1a65d70efcb8cb13efa422624ff311b',
         ]
 
         // as [boolean, bigint]
@@ -315,17 +311,17 @@ describe(CONTRACT_NAME, () => {
         // Example bridgeMessage
         const bridgeMessage = {
             messageType: MessageType.EMERGENCY_OP,
-            version: 2,
-            sourceChain: ChainID.TMP_CHAIN,
-            bridgeSeqNum: 4,
+            version: 0,
+            sourceChain: ChainID.SUI,
+            bridgeSeqNum: 0,
             senderAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
-            targetChain: ChainID.TMP_CHAIN5,
+            targetChain: ChainID.ETH,
             targetAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
         }
 
         // Example signatures array (these would be actual signatures in a real test)
         const signatures = [
-            '0x93f82d7903c6a37336c33d68a890b448665735b4f513003cb4ef0029da0372b9329e0f6fc0b9f9c0c77d66bbf7217da260803fcae345a72f7a7764c56f464b5c1b',
+            '0xb6f1b22f64a3bc050a594d3402e895fcf66a194668a60cc5be747aead316046a1c0d3c95ee18bac38f25156d585965bf16d1a65d70efcb8cb13efa422624ff311b',
         ]
 
         await contract.approveBridgeMessage(bridgeMessage, signatures)

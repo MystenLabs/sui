@@ -7,27 +7,23 @@ interface IBridge {
 	// Define an enum for the Message Types
 	enum MessageType {
 		TOKEN,
-		EMERGENCY_OP,
-		COMMITTEE_BLOCKLIST
+		COMMITTEE_BLOCKLIST,
+		EMERGENCY_OP
 	}
 
 	// Define an enum for the chain IDs
 	enum ChainID {
-		SUI_CHAIN,
-		BTC_CHAIN,
-		ETH_CHAIN,
-		TMP_CHAIN,
-		TMP_CHAIN4,
-		TMP_CHAIN5
+		SUI,
+		ETH
 	}
 
 	// Define an enum for the token IDs
 	enum TokenID {
-		SUI_TOKEN,
-		BTC_TOKEN,
-		ETH_TOKEN,
-		USDC_TOKEN,
-		USDT_TOKEN
+		SUI,
+		BTC,
+		ETH,
+		USDC,
+		USDT
 	}
 
 	// STRUCTS

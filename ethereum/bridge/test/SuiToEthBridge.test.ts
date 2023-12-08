@@ -22,7 +22,7 @@ describe(CONTRACT_NAME, function () {
 
     beforeEach(async function () {
         // Get the signers
-        ;[owner, ...validatorAddresses] = await ethers.getSigners()
+        [owner, ...validatorAddresses] = await ethers.getSigners()
         others = validatorAddresses.slice(3)
 
         // Deploy the mock implementation contracts
