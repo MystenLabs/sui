@@ -113,32 +113,7 @@ const concepts = [
 					id: 'concepts/transactions',
 				},
 				items: [
-					{
-						type: 'category',
-						label: 'Programmable Transaction Blocks',
-						link: {
-							type: 'doc',
-							id: 'concepts/transactions/prog-txn-blocks',
-						},
-						items: [
-							'concepts/transactions/input-types',
-							'concepts/transactions/result-and-nested',
-							{
-								type: 'category',
-								label: 'Transaction Types',
-								link: {
-									type: 'doc',
-									id: 'concepts/transactions/transaction-types',
-								},
-								items: [
-									'concepts/transactions/transaction-types/move-call',
-									'concepts/transactions/transaction-types/transfer-object',
-									'concepts/transactions/transaction-types/split-coin',
-									'concepts/transactions/transaction-types/merge-coin',
-								],
-							},
-						],
-					},
+					'concepts/transactions/prog-txn-blocks',
 					'concepts/transactions/sponsored-transactions',
 					'concepts/transactions/gas-smashing',
 				],
