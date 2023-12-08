@@ -99,6 +99,7 @@ const guides = [
 					'guides/developer/advanced/wallet-integrations',
 					'guides/developer/advanced/security-best-practices',
 					'guides/developer/advanced/maximize-reach',
+					'guides/developer/advanced/asset-tokenization',
 				],
 			},
 			{
