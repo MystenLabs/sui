@@ -12213,7 +12213,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "0.0.0"
+version = "1.16.0"
 dependencies = [
  "anyhow",
  "datatest-stable",

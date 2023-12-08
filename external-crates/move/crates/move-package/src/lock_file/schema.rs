@@ -5,7 +5,7 @@
 //! [move] table).  This module does not support serialization because of limitations in the `toml`
 //! crate related to serializing types as inline tables.
 
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, Write};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -182,7 +182,6 @@ pub fn update_compiler_toolchain(
 ) -> Result<()> {
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;
-    file.seek(SeekFrom::Start(0))?;
     let mut toml = toml_string.parse::<toml_edit::Document>()?;
     let move_table = toml["move"].as_table_mut().ok_or(std::fmt::Error)?;
     let toolchain_version = toml::Value::try_from(ToolchainVersion {
@@ -191,6 +190,8 @@ pub fn update_compiler_toolchain(
         flavor,
     })?;
     move_table["toolchain-version"] = to_toml_edit_value(&toolchain_version);
+    file.set_len(0)?;
+    file.rewind()?;
     write!(file, "{}", toml)?;
     file.flush()?;
     Ok(())

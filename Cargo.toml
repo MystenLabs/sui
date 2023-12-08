@@ -184,7 +184,7 @@ members = [
 ]
 
 [workspace.package]
-# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
+# This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
 version = "1.16.0"
 
 [profile.release]
