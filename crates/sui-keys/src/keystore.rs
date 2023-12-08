@@ -3,10 +3,11 @@
 
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::random_names::{random_name, random_names};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
@@ -79,28 +80,38 @@ pub trait AccountKeystore: Send + Sync {
     ) -> Result<String, anyhow::Error> {
         if !self.alias_exists(old_alias) {
             bail!("The provided alias {old_alias} does not exist");
-        } else {
-            let new_alias_name = match new_alias {
-                Some(x) => x.to_string(),
-                None => random_name(
-                    &self
-                        .alias_names()
-                        .into_iter()
-                        .map(|x| x.to_string())
-                        .collect::<HashSet<_>>(),
-                ),
-            };
-            for a in self.aliases_mut() {
-                if a.alias == old_alias {
-                    let pk = &a.public_key_base64;
-                    *a = Alias {
-                        alias: new_alias_name.clone(),
-                        public_key_base64: pk.clone(),
-                    };
-                }
-            }
-            Ok(new_alias_name)
         }
+        let new_alias_name = match new_alias {
+            Some(x) => {
+                let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_]*$").map_err(|_| {
+                    anyhow!("Cannot build the regex needed to validate the alias naming")
+                })?;
+
+                let name = x.trim();
+                ensure!(
+                        re.is_match(name),
+                        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)."
+                    );
+                name.to_string()
+            }
+            None => random_name(
+                &self
+                    .alias_names()
+                    .into_iter()
+                    .map(|x| x.to_string())
+                    .collect::<HashSet<_>>(),
+            ),
+        };
+        for a in self.aliases_mut() {
+            if a.alias == old_alias {
+                let pk = &a.public_key_base64;
+                *a = Alias {
+                    alias: new_alias_name.clone(),
+                    public_key_base64: pk.clone(),
+                };
+            }
+        }
+        Ok(new_alias_name)
     }
 
     fn generate_and_add_new_key(

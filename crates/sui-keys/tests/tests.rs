@@ -145,7 +145,18 @@ fn update_alias_test() {
     let aliases = keystore.alias_names();
     assert_eq!(vec!["new_alias"], aliases);
 
-    let update = keystore.update_alias("new_alias", None).unwrap();
+    // check that it errors on empty alias
+    assert!(keystore.update_alias("new_alias", Some(" ")).is_err());
+    assert!(keystore.update_alias("new_alias", Some("   ")).is_err());
+    // check that alias is trimmed
+    assert!(keystore.update_alias("new_alias", Some("  o ")).is_ok());
+    assert_eq!(vec!["o"], keystore.alias_names());
+    // check the regex works and new alias can be only [A-Za-z][A-Za-z0-9-_]*
+    assert!(keystore.update_alias("o", Some("_alias")).is_err());
+    assert!(keystore.update_alias("o", Some("-alias")).is_err());
+    assert!(keystore.update_alias("o", Some("123")).is_err());
+
+    let update = keystore.update_alias("o", None).unwrap();
     let aliases = keystore.alias_names();
     assert_eq!(vec![&update], aliases);
 }

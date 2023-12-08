@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -432,6 +432,12 @@ impl KeyToolCommand {
                 old_alias,
                 new_alias,
             } => {
+                if new_alias
+                    .as_ref()
+                    .is_some_and(|x| x.is_empty() || x.trim().is_empty())
+                {
+                    bail!("The new alias cannot be empty.");
+                }
                 let new_alias = keystore.update_alias(&old_alias, new_alias.as_deref())?;
                 CommandOutput::Alias(AliasUpdate {
                     old_alias,
