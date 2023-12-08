@@ -97,7 +97,7 @@ While transactions that use shared input objects must be sent to consensus befor
 
 The consensus layer produces a universally agreed-upon ordering of transactions. This ordering is the starting point for the creation of checkpoints. 
 
-The validators take chunks of ordered transactions from the consensus layer and use them to form a checkpoint. Each chunk of transactions is first made causally complete and causally ordered - this means that the validators add any missing dependencies to the list of transactions and order them so that dependencies always appear before dependees in checkpoints.
+The validators take chunks of ordered transactions from the consensus layer and use them to form a checkpoint. Each chunk of transactions is first made causally complete and causally ordered - this means that the validators add any missing dependencies to the list of transactions and order them so that dependencies always appear before dependents in checkpoints.
 
 Then the validator constructs a checkpoint, which (among other data) contains a list of transaction digests as well as the digests of the transaction effects of each transaction. Because checkpoints must be complete, the network sometimes has to wait for the availability of all transactions to form the checkpoints, which may take a couple of commits to process. This process typically completes in the order of a few seconds.
 
