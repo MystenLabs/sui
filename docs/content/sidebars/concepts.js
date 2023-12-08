@@ -194,7 +194,6 @@ const concepts = [
 		items: [
 			'concepts/sui-architecture/high-level',
 			'concepts/transactions/transaction-lifecycle',
-			'concepts/sui-architecture/certification-overview',
 			'concepts/sui-architecture/consensus',
 			'concepts/sui-architecture/indexer-functions',
 			'concepts/sui-architecture/epochs',
