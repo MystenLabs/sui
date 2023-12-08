@@ -61,8 +61,15 @@ const guides = [
 					'guides/developer/sui-101/access-time',
 					'guides/developer/sui-101/sign-and-send-txn',
 					'guides/developer/sui-101/sponsor-txn',
-					'guides/developer/sui-101/coin-mgt',
-					'guides/developer/sui-101/building-ptb',
+					{
+						type: 'category',
+						label: 'Working with PTBs',
+						items: [
+							'guides/developer/sui-101/simulating-refs',
+							'guides/developer/sui-101/coin-mgt',
+							'guides/developer/sui-101/building-ptb',
+						],
+					},
 				],
 			},
 			{
