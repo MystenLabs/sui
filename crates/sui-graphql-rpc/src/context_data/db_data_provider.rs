@@ -660,17 +660,14 @@ impl PgManager {
             .await?
             .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
 
-        Epoch::try_from(result)
+        Ok(Epoch::from(result))
     }
 
     // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
     pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
         let epoch_id = i64::try_from(epoch_id)
             .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        self.get_epoch(Some(epoch_id))
-            .await?
-            .map(Epoch::try_from)
-            .transpose()
+        Ok(self.get_epoch(Some(epoch_id)).await?.map(Epoch::from))
     }
 
     // To be used in scenarios where epoch is expected to exist
@@ -1166,7 +1163,7 @@ impl PgManager {
         let version: ProtocolVersion = if let Some(version) = protocol_version {
             (version).into()
         } else {
-            (self.fetch_latest_epoch().await?.protocol_version).into()
+            (self.fetch_latest_epoch().await?.protocol_version()).into()
         };
 
         let cfg = ProtocolConfig::get_for_version_if_supported(version, chain)
@@ -1547,51 +1544,6 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
             }),
             epoch_id: c.epoch as u64,
             end_of_epoch,
-        })
-    }
-}
-
-impl TryFrom<StoredEpochInfo> for Epoch {
-    type Error = Error;
-    fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
-        let system_state: NativeSuiSystemStateSummary =
-            bcs::from_bytes(&e.system_state).map_err(|e| {
-                Error::Internal(format!(
-                    "Can't convert system_state into SystemState. Error: {e}",
-                ))
-            })?;
-
-        let active_validators = convert_to_validators(system_state.active_validators, None);
-        let validator_set = ValidatorSet {
-            total_stake: Some(BigInt::from(e.total_stake as u64)),
-            active_validators: Some(active_validators),
-            ..Default::default()
-        };
-
-        let net_inflow =
-            if let (Some(fund_inflow), Some(fund_outflow)) = (e.storage_charge, e.storage_rebate) {
-                Some(BigInt::from(fund_inflow - fund_outflow))
-            } else {
-                None
-            };
-
-        Ok(Self {
-            epoch_id: e.epoch as u64,
-            protocol_version: e.protocol_version as u64,
-            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
-            validator_set: Some(validator_set),
-            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
-            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
-            total_checkpoints: e
-                .last_checkpoint_id
-                .map(|last_chckp_id| BigInt::from(last_chckp_id - e.first_checkpoint_id)),
-            total_gas_fees: e.total_gas_fees.map(BigInt::from),
-            total_stake_rewards: e.total_stake_rewards_distributed.map(BigInt::from),
-            total_stake_subsidies: e.stake_subsidy_amount.map(BigInt::from),
-            fund_size: Some(BigInt::from(e.storage_fund_balance as u64)),
-            net_inflow,
-            fund_inflow: e.storage_charge.map(BigInt::from),
-            fund_outflow: e.storage_rebate.map(BigInt::from),
         })
     }
 }

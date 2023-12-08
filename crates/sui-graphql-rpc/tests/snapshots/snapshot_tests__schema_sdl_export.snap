@@ -556,7 +556,7 @@ type EndOfEpochTransactionKindEdge {
 
 type Epoch {
 	"""
-	The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
 	"""
 	epochId: Int!
 	"""
