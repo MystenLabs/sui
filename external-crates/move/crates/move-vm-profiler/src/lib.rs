@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use move_vm_config::runtime::VMProfilerConfig;
 #[cfg(feature = "gas-profiler")]
 use move_vm_config::runtime::DEFAULT_PROFILE_OUTPUT_PATH;
@@ -145,7 +144,7 @@ impl GasProfiler {
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
-        if !self.config.is_some() || self.start_gas == 0 {
+        if self.config.is_none() || self.start_gas == 0 {
             return;
         }
 
@@ -160,7 +159,7 @@ impl GasProfiler {
     }
 
     pub fn close_frame(&mut self, frame_name: String, metadata: String, gas_end: u64) {
-        if !self.config.is_some() || self.start_gas == 0 {
+        if self.config.is_none() || self.start_gas == 0 {
             return;
         }
         let frame_idx = self.add_frame(metadata.clone(), frame_name, metadata);
@@ -332,4 +331,18 @@ macro_rules! profile_dump_file {
         #[cfg(feature = "gas-profiler")]
         $profiler.to_file()
     };
+}
+
+#[cfg(feature = "gas-profiler")]
+#[macro_export]
+macro_rules! gas_profiler_feature {
+    ($($tt:tt)*) => {
+        $($tt)*
+    };
+}
+
+#[cfg(not(feature = "gas-profiler"))]
+#[macro_export]
+macro_rules! gas_profiler_feature {
+    ( $( $tt:tt )* ) => {};
 }

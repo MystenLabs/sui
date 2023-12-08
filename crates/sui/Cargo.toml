@@ -36,10 +36,10 @@ reqwest.workspace = true
 im.workspace = true
 
 sui-config.workspace = true
-sui-execution = { path = "../../sui-execution" }
+sui-execution = { path = "../../sui-execution", features = ["gas-profiler"] }
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
-sui-types.workspace = true
+sui-types = { workspace = true, features = ["gas-profiler"]}
 sui-json.workspace = true
 sui-swarm.workspace = true
 sui-json-rpc-types.workspace = true
@@ -69,8 +69,6 @@ move-package.workspace = true
 csv.workspace = true
 workspace-hack.workspace = true
 
-
-
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
 
@@ -93,13 +91,8 @@ name = "generate-genesis-checkpoint"
 path = "src/generate_genesis_checkpoint.rs"
 test = false
 
-[[bin]]
-name = "sui"
-path = "src/main.rs"
-
 [features]
 gas-profiler = [
     "sui-types/gas-profiler",
     "sui-execution/gas-profiler",
 ]
-

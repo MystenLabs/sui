@@ -43,9 +43,9 @@ move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-move-vm-test-utils.workspace = true
-move-vm-types.workspace = true
-move-vm-profiler.workspace = true
+move-vm-test-utils = { workspace = true, features = ["gas-profiler"] }
+move-vm-types = { workspace = true, features = ["gas-profiler"]}
+move-vm-profiler = { workspace = true, features = ["gas-profiler"] }
 
 narwhal-config.workspace = true
 narwhal-crypto.workspace = true

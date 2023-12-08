@@ -61,6 +61,10 @@ fn main() {
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
 
+    move_vm_profiler::gas_profiler_feature! {
+        error!("Cannot run the sui-node binary with gas-profiler feature enabled");
+    }
+
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path).unwrap();
     assert!(
@@ -103,12 +107,6 @@ fn main() {
     info!(
         "Started Prometheus HTTP endpoint at {}",
         config.metrics_address
-    );
-
-    #[cfg(feature = "gas-profiler")]
-    warn!(
-        "The gas profiler feature is enabled, this feature is not recommended to be enabled for \
-    validator or fullnode binaries"
     );
 
     {

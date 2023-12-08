@@ -906,13 +906,7 @@ fn create_genesis_objects(
     );
 
     let silent = true;
-<<<<<<< HEAD
-    let executor = sui_execution::executor(&protocol_config, silent)
-=======
-    // paranoid checks are a last line of defense for malicious code, no need to run them in genesis
-    let paranoid_checks = false;
-    let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent, None)
->>>>>>> f2b5d4f43d (add profile-transaction to CLI)
+    let executor = sui_execution::executor(&protocol_config, silent, None)
         .expect("Creating an executor should not fail here");
 
     for system_package in system_packages.into_iter() {
