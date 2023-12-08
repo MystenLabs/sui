@@ -23,7 +23,7 @@ pub(crate) struct Validator {
 
 #[Object]
 impl Validator {
-    /// The validator's address.
+    /// Vvalidator's address.
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
@@ -50,14 +50,17 @@ impl Validator {
     async fn next_epoch_credentials(&self) -> Option<ValidatorCredentials> {
         let v = &self.validator_summary;
         let credentials = ValidatorCredentials {
-            protocol_pub_key: Some(Base64::from(v.protocol_pubkey_bytes.clone())),
-            network_pub_key: Some(Base64::from(v.network_pubkey_bytes.clone())),
-            worker_pub_key: Some(Base64::from(v.worker_pubkey_bytes.clone())),
-            proof_of_possession: Some(Base64::from(v.proof_of_possession_bytes.clone())),
-            net_address: Some(v.net_address.clone()),
-            p2p_address: Some(v.p2p_address.clone()),
-            primary_address: Some(v.primary_address.clone()),
-            worker_address: Some(v.worker_address.clone()),
+            protocol_pub_key: v
+                .next_epoch_protocol_pubkey_bytes
+                .as_ref()
+                .map(Base64::from),
+            network_pub_key: v.next_epoch_network_pubkey_bytes.as_ref().map(Base64::from),
+            worker_pub_key: v.next_epoch_worker_pubkey_bytes.as_ref().map(Base64::from),
+            proof_of_possession: v.next_epoch_proof_of_possession.as_ref().map(Base64::from),
+            net_address: v.next_epoch_net_address.clone(),
+            p2p_address: v.next_epoch_p2p_address.clone(),
+            primary_address: v.next_epoch_primary_address.clone(),
+            worker_address: v.next_epoch_worker_address.clone(),
         };
         Some(credentials)
     }
@@ -80,6 +83,30 @@ impl Validator {
     /// Validator's homepage URL.
     async fn project_url(&self) -> Option<String> {
         Some(self.validator_summary.project_url.clone())
+    }
+
+    /// The validator's current valid `Cap` object's ID
+    async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_move_obj(self.operation_cap_id(), None)
+            .await
+            .extend()
+    }
+
+    /// The validator's current staking pool object
+    async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_move_obj(self.staking_pool_id(), None)
+            .await
+            .extend()
+    }
+
+    /// The validator's current exchange object
+    async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_move_obj(self.exchange_rates_id(), None)
+            .await
+            .extend()
     }
 
     /// Number of exchange rates in the table.
@@ -121,34 +148,42 @@ impl Validator {
         ))
     }
 
+    /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
     async fn pending_pool_token_withdraw(&self) -> Option<BigInt> {
         Some(BigInt::from(
             self.validator_summary.pending_pool_token_withdraw,
         ))
     }
 
+    /// The voting power of this validator in basis points (e.g., 100 = 1% voting power).
     async fn voting_power(&self) -> Option<u64> {
         Some(self.validator_summary.voting_power)
     }
 
     // TODO async fn stake_units(&self) -> Option<u64>{}
 
+    /// The reference gas price for this epoch.
     async fn gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.gas_price))
     }
 
+    /// The fee charged by the validator for staking services.
     async fn commission_rate(&self) -> Option<u64> {
         Some(self.validator_summary.commission_rate)
     }
 
+    /// The total number of SUI tokens in this pool plus
+    /// the pending stake amount for this epoch.
     async fn next_epoch_stake(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.next_epoch_stake))
     }
 
+    /// The validator's gas price quote for the next epoch.
     async fn next_epoch_gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.next_epoch_gas_price))
     }
 
+    /// The proposed next epoch fee for the validator's staking services.
     async fn next_epoch_commission_rate(&self) -> Option<u64> {
         Some(self.validator_summary.next_epoch_commission_rate)
     }
@@ -157,50 +192,31 @@ impl Validator {
     /// low stake threshold.
     async fn at_risk(&self) -> Option<u64> {
         match &self.at_risk_validators {
-            Some(x) => x
+            Some(validators) => validators
                 .get(&self.validator_summary.sui_address)
                 .map(|v| v.clone()),
             None => None,
         }
-    }
+    } // only available on sui_system_state_summary
 
-    // only available on sui_system_state_summary
-    /// The addresses of other validators this validator has reported
+    /// The addresses of other validators this validator has reported.
     async fn report_records(&self) -> Option<Vec<Address>> {
         match &self.report_records {
-            Some(x) => x.get(&self.validator_summary.sui_address).map(|v| {
-                v.into_iter()
-                    .map(|a| Address {
-                        address: SuiAddress::from_array(a.to_inner()),
-                    })
-                    .collect()
-            }),
+            Some(records) => records
+                .get(&self.validator_summary.sui_address)
+                .map(|addresses| {
+                    addresses
+                        .into_iter()
+                        .map(|addr| Address {
+                            address: SuiAddress::from(*addr),
+                        })
+                        .collect()
+                }),
             None => None,
         }
-    }
+    } // only available on sui_system_state_summary
 
     // TODO async fn apy(&self) -> Option<u64>{}
-
-    async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_obj(self.operation_cap_id(), None)
-            .await
-            .extend()
-    }
-
-    async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_obj(self.staking_pool_id(), None)
-            .await
-            .extend()
-    }
-
-    async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_move_obj(self.exchange_rates_id(), None)
-            .await
-            .extend()
-    }
 }
 
 impl Validator {
