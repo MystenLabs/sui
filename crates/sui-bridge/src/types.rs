@@ -156,7 +156,7 @@ impl BridgeAction {
                 // Add source tx id
                 bytes.extend_from_slice(a.sui_tx_digest.as_ref());
                 // Add source tx event index
-                bytes.push(a.sui_tx_event_index as u8);
+                bytes.extend_from_slice(&a.sui_tx_event_index.to_le_bytes());
 
                 // Add source address length
                 bytes.push(SUI_ADDRESS_LENGTH as u8);
@@ -267,23 +267,23 @@ mod tests {
         .to_bytes();
 
         // Construct the expected bytes
-        let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec();
-        let message_type = vec![BridgeActionType::TokenTransfer as u8];
-        let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION];
-        let nonce_bytes = nonce.to_le_bytes().to_vec();
-        let source_chain_id_bytes = vec![sui_chain_id as u8];
-        let source_tx_digest_length_bytes = vec![SUI_TX_DIGEST_LENGTH as u8];
-        let source_tx_digest_bytes = sui_tx_digest.inner().to_vec();
-        let source_event_index_bytes = vec![sui_tx_event_index as u8];
+        let prefix_bytes = BRIDGE_MESSAGE_PREFIX.to_vec(); // len: 17
+        let message_type = vec![BridgeActionType::TokenTransfer as u8]; // len: 1
+        let message_version = vec![TOKEN_TRANSFER_MESSAGE_VERSION]; // len: 1
+        let nonce_bytes = nonce.to_le_bytes().to_vec(); // len: 8
+        let source_chain_id_bytes = vec![sui_chain_id as u8]; // len: 1
+        let source_tx_digest_length_bytes = vec![SUI_TX_DIGEST_LENGTH as u8]; // len: 1
+        let source_tx_digest_bytes = sui_tx_digest.inner().to_vec(); // len: 32
+        let source_event_index_bytes = sui_tx_event_index.to_le_bytes().to_vec(); // len: 2
 
-        let sui_address_length_bytes = vec![SUI_ADDRESS_LENGTH as u8];
-        let sui_address_bytes = sui_address.to_vec();
-        let dest_chain_id_bytes = vec![eth_chain_id as u8];
-        let eth_address_length_bytes = vec![EthAddress::len_bytes() as u8];
-        let eth_address_bytes = eth_address.as_bytes().to_vec();
+        let sui_address_length_bytes = vec![SUI_ADDRESS_LENGTH as u8]; // len: 1
+        let sui_address_bytes = sui_address.to_vec(); // len: 32
+        let dest_chain_id_bytes = vec![eth_chain_id as u8]; // len: 1
+        let eth_address_length_bytes = vec![EthAddress::len_bytes() as u8]; // len: 1
+        let eth_address_bytes = eth_address.as_bytes().to_vec(); // len: 20
 
-        let token_id_bytes = vec![token_id as u8];
-        let token_amount_bytes = amount.to_le_bytes().to_vec();
+        let token_id_bytes = vec![token_id as u8]; // len: 1
+        let token_amount_bytes = amount.to_le_bytes().to_vec(); // len: 16
 
         let mut combined_bytes = Vec::new();
         combined_bytes.extend_from_slice(&prefix_bytes);
@@ -303,6 +303,13 @@ mod tests {
         combined_bytes.extend_from_slice(&token_amount_bytes);
 
         assert_eq!(combined_bytes, encoded_bytes);
+
+        // Assert fixed length
+        // TODO: for each action type add a test to assert the length
+        assert_eq!(
+            combined_bytes.len(),
+            17 + 1 + 1 + 8 + 1 + 1 + 32 + 2 + 1 + 32 + 1 + 20 + 1 + 1 + 16
+        );
 
         Ok(())
     }
