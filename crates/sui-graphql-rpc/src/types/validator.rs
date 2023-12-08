@@ -22,11 +22,14 @@ pub(crate) struct Validator {
 
 #[Object]
 impl Validator {
+    /// The validator's address.
     async fn address(&self) -> Address {
         Address {
             address: SuiAddress::from(self.validator_summary.sui_address),
         }
     }
+
+    /// Validator's set of credentials.
     async fn credentials(&self) -> Option<ValidatorCredentials> {
         let v = &self.validator_summary;
         let credentials = ValidatorCredentials {
@@ -41,6 +44,8 @@ impl Validator {
         };
         Some(credentials)
     }
+
+    /// Validator's set of credentials for the next epoch.
     async fn next_epoch_credentials(&self) -> Option<ValidatorCredentials> {
         let v = &self.validator_summary;
         let credentials = ValidatorCredentials {
@@ -55,79 +60,98 @@ impl Validator {
         };
         Some(credentials)
     }
+
+    /// Validator's name.
     async fn name(&self) -> Option<String> {
         Some(self.validator_summary.name.clone())
     }
+
+    /// Validator's description.
     async fn description(&self) -> Option<String> {
         Some(self.validator_summary.description.clone())
     }
+
+    /// Validator's url containing their custom image.
     async fn image_url(&self) -> Option<String> {
         Some(self.validator_summary.image_url.clone())
     }
+
+    /// Validator's homepage URL.
     async fn project_url(&self) -> Option<String> {
         Some(self.validator_summary.project_url.clone())
     }
-    #[graphql(skip)]
-    async fn operation_cap_id(&self) -> SuiAddress {
-        SuiAddress::from_array(**self.validator_summary.operation_cap_id)
-    }
-    #[graphql(skip)]
-    async fn staking_pool_id(&self) -> SuiAddress {
-        SuiAddress::from_array(**self.validator_summary.staking_pool_id)
-    }
-    #[graphql(skip)]
-    async fn exchange_rates_id(&self) -> SuiAddress {
-        SuiAddress::from_array(**self.validator_summary.exchange_rates_id)
-    }
+
+    /// Number of exchange rates in the table.
     async fn exchange_rates_size(&self) -> Option<u64> {
         Some(self.validator_summary.exchange_rates_size)
     }
+
+    /// The epoch at which this pool became active.
     async fn staking_pool_activation_epoch(&self) -> Option<u64> {
         self.validator_summary.staking_pool_activation_epoch
     }
+
+    /// The total number of SUI tokens in this pool.
     async fn staking_pool_sui_balance(&self) -> Option<BigInt> {
         Some(BigInt::from(
             self.validator_summary.staking_pool_sui_balance,
         ))
     }
+
+    /// The epoch stake rewards will be added here at the end of each epoch.
     async fn rewards_pool(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.rewards_pool))
     }
+
+    /// Total number of pool tokens issued by the pool.
     async fn pool_token_balance(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.pool_token_balance))
     }
+
+    /// Pending stake amount for this epoch.
     async fn pending_stake(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.pending_stake))
     }
+
+    /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
     async fn pending_total_sui_withdraw(&self) -> Option<BigInt> {
         Some(BigInt::from(
             self.validator_summary.pending_total_sui_withdraw,
         ))
     }
+
     async fn pending_pool_token_withdraw(&self) -> Option<BigInt> {
         Some(BigInt::from(
             self.validator_summary.pending_pool_token_withdraw,
         ))
     }
+
     async fn voting_power(&self) -> Option<u64> {
         Some(self.validator_summary.voting_power)
     }
-    // async fn stake_units(&self) -> Option<u64>{}
+
+    // TODO async fn stake_units(&self) -> Option<u64>{}
+
     async fn gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.gas_price))
     }
+
     async fn commission_rate(&self) -> Option<u64> {
         Some(self.validator_summary.commission_rate)
     }
+
     async fn next_epoch_stake(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.next_epoch_stake))
     }
+
     async fn next_epoch_gas_price(&self) -> Option<BigInt> {
         Some(BigInt::from(self.validator_summary.next_epoch_gas_price))
     }
+
     async fn next_epoch_commission_rate(&self) -> Option<u64> {
         Some(self.validator_summary.next_epoch_commission_rate)
     }
+
     async fn at_risk(&self) -> Option<u64> {
         self.system_state_summary
             .as_ref()
@@ -138,7 +162,10 @@ impl Validator {
                     .find(|&(address, _)| address == &self.validator_summary.sui_address)
             })
             .map(|&(_, value)| value.clone())
-    } // only available on sui_system_state_summary
+    }
+
+    // only available on sui_system_state_summary
+    /// A map storing the records of validator reporting each other.
     async fn report_records(&self) -> Option<Vec<SuiAddress>> {
         self.system_state_summary
             .as_ref()
@@ -155,25 +182,39 @@ impl Validator {
                     .collect::<Vec<_>>()
             })
     }
-    // async fn apy(&self) -> Option<u64>{}
+
+    // TODO async fn apy(&self) -> Option<u64>{}
+
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_move_obj(self.operation_cap_id().await, None)
+            .fetch_move_obj(self.operation_cap_id(), None)
             .await
             .extend()
     }
 
     async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_move_obj(self.staking_pool_id().await, None)
+            .fetch_move_obj(self.staking_pool_id(), None)
             .await
             .extend()
     }
 
     async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_move_obj(self.exchange_rates_id().await, None)
+            .fetch_move_obj(self.exchange_rates_id(), None)
             .await
             .extend()
+    }
+}
+
+impl Validator {
+    pub fn operation_cap_id(&self) -> SuiAddress {
+        SuiAddress::from_array(**self.validator_summary.operation_cap_id)
+    }
+    pub fn staking_pool_id(&self) -> SuiAddress {
+        SuiAddress::from_array(**self.validator_summary.staking_pool_id)
+    }
+    pub fn exchange_rates_id(&self) -> SuiAddress {
+        SuiAddress::from_array(**self.validator_summary.exchange_rates_id)
     }
 }
