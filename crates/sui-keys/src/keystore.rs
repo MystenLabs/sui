@@ -44,29 +44,20 @@ pub trait AccountKeystore: Send + Sync {
     ) -> Result<Signature, signature::Error>
     where
         T: Serialize;
-
     fn addresses(&self) -> Vec<SuiAddress> {
         self.keys().iter().map(|k| k.into()).collect()
     }
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
-
     fn aliases(&self) -> Vec<&Alias>;
-
-    /// Return the mutable Alias objects in the keystore.
-    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
-        self.aliases.values_mut().collect()
-    }
-
+    fn aliases_mut(&mut self) -> Vec<&mut Alias>;
     fn alias_names(&self) -> Vec<&str> {
         self.aliases()
             .into_iter()
             .map(|a| a.alias.as_str())
             .collect()
     }
-
     /// Get alias of address
     fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
-
     /// Check if an alias exists by its name
     fn alias_exists(&self, alias: &str) -> bool {
         self.alias_names().contains(&alias)
@@ -248,6 +239,11 @@ impl AccountKeystore for FileBasedKeystore {
 
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
         self.aliases.iter().collect::<Vec<_>>()
+    }
+
+    /// Return an array of `Alias`, consisting of every alias and its corresponding public key.
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
     }
 
     fn keys(&self) -> Vec<PublicKey> {
@@ -540,6 +536,10 @@ impl AccountKeystore for InMemKeystore {
                     .collect::<HashSet<_>>(),
             )),
         }
+    }
+
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
     }
 
     /// Updates an old alias to the new alias. If the new_alias is None,
