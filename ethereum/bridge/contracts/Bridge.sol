@@ -17,24 +17,32 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	using SafeERC20 for IERC20;
 	using MessageHashUtils for bytes32;
 
+	uint64 public validatorsCount = 0;
+
 	uint256[48] __gap;
 
 	mapping(address => mapping(uint => bool)) public processedNonces;
 
-	// uint8 private immutable version;
-	// uint8 private version;
-
+	uint64 public version;
+	// nonce for replay protection
+	uint64 public sequenceNumber;
+	// // committee pub keys
+	// committee: BridgeCommittee,
+	// // Escrow for storing native tokens
+	// escrow: BridgeEscrow,
+	// Bridge treasury for mint/burn bridged tokens
+	// treasury: BridgeTreasury,
+	// pending_messages: LinkedTable<BridgeMessageKey, BridgeMessage>,
+	// approved_messages: LinkedTable<BridgeMessageKey, ApprovedBridgeMessage>,
 	bool public paused;
+	uint64 public lastEmergencyOpSeqNum;
 
 	uint16 public constant MAX_TOTAL_WEIGHT = 10000;
 	uint256 public constant MAX_SINGLE_VALIDATOR_WEIGHT = 1000;
 	uint256 public constant APPROVAL_THRESHOLD = 3333;
 
-	// A mapping from address to validator index
-	mapping(address => uint256) public validatorIndex;
-
-	// An array to store the validators
-	Validator[] public validators;
+	// A mapping from address to validator
+	mapping(address => Validator) public validators;
 
 	// Mapping of user address to nonce
 	mapping(address => uint256) public nonces;
@@ -88,21 +96,25 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		bytes[] calldata signatures
 	) public isRunning returns (bool, uint256) {
 		uint256 totalWeight = 0;
-		// verify signatures
 		bytes32 hash = ethSignedMessageHash(bridgeMessage);
+
 		for (uint256 i = 0; i < signatures.length; i++) {
 			address recoveredPK = recoverSigner(hash, signatures[i]);
+
 			// Check if the address is not zero
 			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
-			uint256 index = validatorIndex[recoveredPK] - 1;
-			require(index < validators.length, 'Index out of bounds');
 
-			Validator memory validator = validators[index];
-			require(recoveredPK == validator.addr, 'Invalid signature');
+			// Retrieve the Validator directly from the mapping
+			Validator memory validator = validators[recoveredPK];
+
+			// Validate the recovered address
+			require(validator.addr != address(0), 'Invalid Signer, not a committee authority');
+			require(recoveredPK == validator.addr, 'Invalid signature: Address mismatch');
+
 			totalWeight += validator.weight;
 		}
 
-		if (bridgeMessage.messageType == 1) pauseBridge();
+		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) pauseBridge();
 
 		return (true, totalWeight);
 	}
@@ -112,23 +124,28 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		bytes[] calldata signatures
 	) public isPaused {
 		uint256 totalWeight = 0;
-		// verify signatures
 		bytes32 hash = ethSignedMessageHash(bridgeMessage);
+
 		for (uint256 i = 0; i < signatures.length; i++) {
 			address recoveredPK = recoverSigner(hash, signatures[i]);
+
 			// Check if the address is not zero
 			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
-			uint256 index = validatorIndex[recoveredPK] - 1;
-			require(index < validators.length, 'Index out of bounds');
 
-			Validator memory validator = validators[index];
-			require(recoveredPK == validator.addr, 'Invalid signature');
+			// Retrieve the Validator directly from the mapping
+			Validator memory validator = validators[recoveredPK];
+
+			// Validate the recovered address
+			require(validator.addr != address(0), 'Invalid Signer, not a committee authority');
+			require(recoveredPK == validator.addr, 'Invalid signature: Address mismatch');
+
 			totalWeight += validator.weight;
 		}
 
-		// TODO
+		// TODO: Add your desired total weight requirement
 		require(totalWeight >= 999, 'Not enough total signature weight');
-		if (bridgeMessage.messageType == 1) resumeBridge();
+
+		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) resumeBridge();
 	}
 
 	// Check also weight. i.e. no more than 33% of the total weight
@@ -136,16 +153,13 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	function addValidator(address _pk, uint256 _weight) private {
 		// Check if the address is not zero
 		require(_pk != address(0), 'Zero address.');
-		// Check if the address is not already a validator
-		require(validatorIndex[_pk] == 0, 'Already a validator.');
-		// Add the validator to the array
-		validators.push(Validator(_pk, _weight));
-		// Update the validator index
-		validatorIndex[_pk] = validators.length;
-	}
 
-	function validatorsCount() public view returns (uint count) {
-		return validators.length;
+		// Check if the address is not already a validator
+		require(validators[_pk].addr == address(0), 'Already a validator.');
+
+		// Add the validator to the mapping
+		validators[_pk] = Validator(_pk, _weight);
+		++validatorsCount;
 	}
 
 	// The contract can be upgraded by the owner

@@ -4,12 +4,21 @@ pragma solidity ^0.8.20;
 interface IBridge {
 	// ENUMS
 
+	// Define an enum for the Message Types
+	enum MessageType {
+		TOKEN,
+		EMERGENCY_OP,
+		COMMITTEE_BLOCKLIST
+	}
+
 	// Define an enum for the chain IDs
 	enum ChainID {
 		SUI_CHAIN,
 		BTC_CHAIN,
 		ETH_CHAIN,
-		TMP_CHAIN
+		TMP_CHAIN,
+		TMP_CHAIN4,
+		TMP_CHAIN5
 	}
 
 	// Define an enum for the token IDs
@@ -32,12 +41,12 @@ interface IBridge {
 
 	struct BridgeMessage {
 		// 0: token , 1: object ? TBD
-		uint8 messageType;
+		MessageType messageType;
 		uint8 version;
 		ChainID sourceChain;
 		uint64 bridgeSeqNum;
 		address senderAddress;
-		uint8 targetChain;
+		ChainID targetChain;
 		address targetAddress;
 		// bytes payload;
 	}
