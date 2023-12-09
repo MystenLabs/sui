@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 
-use sui_rest_api::{CheckpointTransaction, Client};
+use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     committee::Committee,
@@ -26,7 +26,12 @@ use sui_package_resolver::{Package, PackageStore, Resolver};
 use sui_sdk::SuiClientBuilder;
 
 use clap::{Parser, Subcommand};
-use std::{fs, io::Write, path::PathBuf, str::FromStr};
+use std::{
+    fs,
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use std::{io::Read, sync::Arc};
 
 /// A light client for the Sui blockchain
@@ -131,8 +136,19 @@ fn read_checkpoint(
     config: &Config,
     seq: u64,
 ) -> anyhow::Result<Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>>> {
+    read_checkpoint_general(config, seq, None)
+}
+
+fn read_checkpoint_general(
+    config: &Config,
+    seq: u64,
+    path: Option<&str>,
+) -> anyhow::Result<Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>>> {
     // Read the resulting file and parse the yaml checkpoint list
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
+    if let Some(path) = path {
+        checkpoint_path.push(path);
+    }
     checkpoint_path.push(format!("{}.yaml", seq));
     let mut reader = fs::File::open(checkpoint_path.clone())?;
     let metadata = fs::metadata(&checkpoint_path)?;
@@ -145,8 +161,19 @@ fn write_checkpoint(
     config: &Config,
     summary: &Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>>,
 ) -> anyhow::Result<()> {
+    write_checkpoint_general(config, summary, None)
+}
+
+fn write_checkpoint_general(
+    config: &Config,
+    summary: &Envelope<CheckpointSummary, AuthorityQuorumSignInfo<true>>,
+    path: Option<&str>,
+) -> anyhow::Result<()> {
     // Write the checkpoint summary to a file
     let mut checkpoint_path = config.checkpoint_summary_dir.clone();
+    if let Some(path) = path {
+        checkpoint_path.push(path);
+    }
     checkpoint_path.push(format!("{}.yaml", summary.sequence_number));
     let mut writer = fs::File::create(checkpoint_path.clone())?;
     let bytes =
@@ -308,6 +335,45 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn read_full_checkpoint(checkpoint_path: &PathBuf) -> anyhow::Result<CheckpointData> {
+    let mut reader = fs::File::open(checkpoint_path.clone())?;
+    let metadata = fs::metadata(checkpoint_path)?;
+    let mut buffer = vec![0; metadata.len() as usize];
+    reader.read_exact(&mut buffer)?;
+    bcs::from_bytes(&buffer).map_err(|_| anyhow!("Unable to parse checkpoint file"))
+}
+
+async fn write_full_checkpoint(
+    checkpoint_path: &Path,
+    ckpt: &CheckpointData,
+) -> anyhow::Result<()> {
+    let mut writer = fs::File::create(checkpoint_path)?;
+    let bytes =
+        bcs::to_bytes(&ckpt).map_err(|_| anyhow!("Unable to serialize checkpoint summary"))?;
+    writer.write_all(&bytes)?;
+    Ok(())
+}
+
+async fn get_full_checkpoint(config: &Config, seq: u64) -> anyhow::Result<CheckpointData> {
+    let mut checkpoint_path = config.checkpoint_summary_dir.clone();
+    checkpoint_path.push("untrusted_cache");
+    checkpoint_path.push(format!("{}.yaml", seq));
+
+    // Try reading the cache
+    if let Ok(ckpt) = read_full_checkpoint(&checkpoint_path).await {
+        return Ok(ckpt);
+    }
+
+    // Downlioading the checkpoint from the server
+    let client: Client = Client::new(config.full_node_url.as_str());
+    let full_check_point = client.get_full_checkpoint(seq).await?;
+
+    // Add to cache
+    write_full_checkpoint(&checkpoint_path, &full_check_point).await?;
+
+    Ok(full_check_point)
+}
+
 async fn check_transaction_tid(
     config: &Config,
     tid: TransactionDigest,
@@ -329,8 +395,7 @@ async fn check_transaction_tid(
         .ok_or(anyhow!("Transaction not found"))?;
 
     // Download the full checkpoint for this sequence number
-    let client = Client::new(config.full_node_url.as_str());
-    let full_check_point = client.get_full_checkpoint(seq).await?;
+    let full_check_point = get_full_checkpoint(config, seq).await?;
     let summary = &full_check_point.checkpoint_summary;
 
     // Check the validity of the checkpoint summary
