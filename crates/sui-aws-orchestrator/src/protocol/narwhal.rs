@@ -109,14 +109,27 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
     fn node_command<I>(
         &self,
         instances: I,
-        _parameters: &BenchmarkParameters<NarwhalBenchmarkType>,
+        parameters: &BenchmarkParameters<NarwhalBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
         let working_dir = self.working_dir.clone();
+        let hosts: Vec<_> = instances.into_iter().collect();
+        // 2 ports used per authority so add 2 * num authorities to base port
+        let mut worker_base_port = BASE_PORT + (2 * hosts.len());
 
-        instances
+        let transaction_addresses: Vec<_> = hosts
+            .iter()
+            .map(|instance| {
+                let transaction_address =
+                    format!("http://{}:{}", instance.main_ip, worker_base_port);
+                worker_base_port += 2;
+                transaction_address
+            })
+            .collect();
+
+        hosts
             .into_iter()
             .enumerate()
             .map(|(i, instance)| {
@@ -140,11 +153,12 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
                     .iter()
                     .collect();
                 let store: PathBuf = [&working_dir, &format!("db-{i}").into()].iter().collect();
-                let parameters: PathBuf = [&working_dir, &"parameters.json".to_string().into()]
+                let nw_parameters: PathBuf = [&working_dir, &"parameters.json".to_string().into()]
                     .iter()
                     .collect();
 
                 let run = [
+                    "ulimit -n 51200 && ", // required so we can scale the client
                     "RUST_LOG=debug cargo run --release --bin narwhal-node run ",
                     &format!(
                         "--primary-keys {} --primary-network-keys {} ",
@@ -158,9 +172,16 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
                         workers.display()
                     ),
                     &format!(
-                        "--store {} --parameters {} benchmark 0",
+                        "--store {} --parameters {} benchmark ",
                         store.display(),
-                        parameters.display()
+                        nw_parameters.display()
+                    ),
+                    &format!(
+                        "--worker-id 0 --addr {} --size {} --rate {} --nodes {}",
+                        transaction_addresses[i],
+                        parameters.benchmark_type.size,
+                        parameters.load / parameters.nodes,
+                        transaction_addresses.join(","),
                     ),
                 ]
                 .join(" ");
@@ -173,53 +194,54 @@ impl ProtocolCommands<NarwhalBenchmarkType> for NarwhalProtocol {
 
     fn client_command<I>(
         &self,
-        instances: I,
-        parameters: &BenchmarkParameters<NarwhalBenchmarkType>,
+        _instances: I,
+        _parameters: &BenchmarkParameters<NarwhalBenchmarkType>,
     ) -> Vec<(Instance, String)>
     where
         I: IntoIterator<Item = Instance>,
     {
-        let clients: Vec<_> = instances.into_iter().collect();
-        // 2 ports used per authority so add 2 * num authorities to base port
-        let mut worker_base_port = BASE_PORT + (2 * clients.len());
+        vec![]
+        // let clients: Vec<_> = instances.into_iter().collect();
+        // // 2 ports used per authority so add 2 * num authorities to base port
+        // let mut worker_base_port = BASE_PORT + (2 * clients.len());
 
-        let transaction_addresses: Vec<_> = clients
-            .iter()
-            .map(|instance| {
-                let transaction_address =
-                    format!("http://{}:{}", instance.main_ip, worker_base_port);
-                worker_base_port += 2;
-                transaction_address
-            })
-            .collect();
+        // let transaction_addresses: Vec<_> = clients
+        //     .iter()
+        //     .map(|instance| {
+        //         let transaction_address =
+        //             format!("http://{}:{}", instance.main_ip, worker_base_port);
+        //         worker_base_port += 2;
+        //         transaction_address
+        //     })
+        //     .collect();
 
-        clients
-            .into_iter()
-            .enumerate()
-            .map(|(i, instance)| {
-                let run = [
-                    "ulimit -n 51200 && ", // required so we can scale the client
-                    "RUST_LOG=info cargo run --release --features benchmark --bin narwhal-benchmark-client -- ",
-                    &format!(
-                        "--addr {} --size {} --rate {} --nodes {} --client-metric-port {}",
-                        transaction_addresses[i],
-                        parameters.benchmark_type.size,
-                        parameters.load / parameters.nodes,
-                        transaction_addresses.join(","),
-                        Self::CLIENT_METRICS_PORT
-                    ),
-                ]
-                .join(" ");
-                let command = ["source $HOME/.cargo/env", &run].join(" && ");
+        // clients
+        //     .into_iter()
+        //     .enumerate()
+        //     .map(|(i, instance)| {
+        //         let run = [
+        //             "ulimit -n 51200 && ", // required so we can scale the client
+        //             "RUST_LOG=info cargo run --release --features benchmark --bin narwhal-benchmark-client -- ",
+        //             &format!(
+        //                 "--addr {} --size {} --rate {} --nodes {} --client-metric-port {}",
+        //                 transaction_addresses[i],
+        //                 parameters.benchmark_type.size,
+        //                 parameters.load / parameters.nodes,
+        //                 transaction_addresses.join(","),
+        //                 Self::CLIENT_METRICS_PORT
+        //             ),
+        //         ]
+        //         .join(" ");
+        //         let command = ["source $HOME/.cargo/env", &run].join(" && ");
 
-                (instance, command)
-            })
-            .collect()
+        //         (instance, command)
+        //     })
+        //     .collect()
     }
 }
 
 impl NarwhalProtocol {
-    const CLIENT_METRICS_PORT: u16 = 8081;
+    // const CLIENT_METRICS_PORT: u16 = 8081;
 
     /// Make a new instance of the Narwhal protocol commands generator.
     pub fn new(settings: &Settings) -> Self {
@@ -267,17 +289,6 @@ impl ProtocolMetrics for NarwhalProtocol {
     where
         I: IntoIterator<Item = Instance>,
     {
-        instances
-            .into_iter()
-            .map(|instance| {
-                let path = format!(
-                    "{}:{}{}",
-                    instance.main_ip,
-                    Self::CLIENT_METRICS_PORT,
-                    mysten_metrics::METRICS_ROUTE
-                );
-                (instance, path)
-            })
-            .collect()
+        vec![]
     }
 }
