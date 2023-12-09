@@ -61,8 +61,8 @@ use im::ordmap::OrdMap;
 use lsp_server::{Request, RequestId};
 use lsp_types::{
     request::GotoTypeDefinitionParams, Diagnostic, DocumentSymbol, DocumentSymbolParams,
-    GotoDefinitionParams, Hover, HoverContents, HoverParams, LanguageString, Location,
-    MarkedString, Position, Range, ReferenceParams, SymbolKind,
+    GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, MarkupKind,
+    Position, Range, ReferenceParams, SymbolKind,
 };
 
 use std::{
@@ -2177,15 +2177,14 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
         col,
         request.id.clone(),
         |u| {
-            let lang_string = LanguageString {
-                language: "".to_string(),
+            let contents = HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
                 value: if let Some(s) = &u.doc_string {
-                    format!("{}\n\n{}", u.use_type, s)
+                    format!("```rust\n{}\n```\n{}", u.use_type, s)
                 } else {
-                    format!("{}", u.use_type)
+                    format!("```rust\n{}\n```", u.use_type)
                 },
-            };
-            let contents = HoverContents::Scalar(MarkedString::LanguageString(lang_string));
+            });
             let range = None;
             Some(serde_json::to_value(Hover { contents, range }).unwrap())
         },
