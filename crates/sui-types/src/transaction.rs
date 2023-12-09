@@ -2237,12 +2237,7 @@ impl AuthenticatedMessage for SenderSignedData {
         for (signer, signature) in
             self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?
         {
-            signature.verify_uncached_checks(
-                self.intent_message(),
-                signer,
-                verify_params,
-                signature.check_author(),
-            )?;
+            signature.verify_uncached_checks(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }
@@ -2284,12 +2279,7 @@ impl AuthenticatedMessage for SenderSignedData {
 
         // Verify all present signatures.
         for (signer, signature) in present_sigs {
-            signature.verify_claims(
-                self.intent_message(),
-                signer,
-                verify_params,
-                signature.check_author(),
-            )?;
+            signature.verify_claims(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
     }
