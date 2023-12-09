@@ -7,6 +7,7 @@ use futures::stream::FuturesUnordered;
 pub use storage::{CertificateStoreCacheMetrics, NodeStorage};
 use thiserror::Error;
 
+pub mod benchmark_client;
 pub mod execution_state;
 pub mod metrics;
 pub mod primary_node;
