@@ -372,7 +372,7 @@ async fn check_transaction_tid(
     // Check the validty of the checkpoint contents
 
     let contents = &full_check_point.checkpoint_contents;
-    if !(contents.digest() == &summary.content_digest) {
+    if contents.digest() != &summary.content_digest {
         return Err(anyhow!("The content digest in the checkpoint summary does not match the digest of the checkpoint contents"));
     };
 
@@ -384,10 +384,9 @@ async fn check_transaction_tid(
         .filter(|(_, t)| t.transaction == tid)
         .collect();
 
-    if !(found.len() == 1) {
-        return Err(anyhow!("Transaction not found in checkpoint contents"));
-    };
-    let exec_digests = found.first().unwrap(); // safe due to check above
+    let exec_digests = found
+        .first()
+        .ok_or(anyhow!("Transaction not found in checkpoint contents"))?;
 
     let matching_tx = full_check_point
         .transactions
