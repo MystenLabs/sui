@@ -3,14 +3,14 @@
 
 use futures::Future;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use tracing::instrument::Instrument;
 use mysten_metrics::monitored_future;
+use tracing::instrument::Instrument;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeTrait, StakeUnit};
 use sui_types::base_types::ConciseAbleName;
+use sui_types::committee::{CommitteeTrait, StakeUnit};
 
 use tokio::time::timeout;
 
@@ -104,4 +104,68 @@ where
     // If we have exhausted all authorities and still have not returned a result, return
     // error with the accumulated state.
     Err(accumulated_state)
+}
+
+/// This function takes an initial state, than executes an asynchronous function (FMap) for each
+/// authority, and folds the results as they become available into the state using an async function (FReduce).
+///
+/// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
+/// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
+/// interrupt the logic of this function.
+///
+/// FReduce returns a result to a ReduceOutput. If the result is Err the function
+/// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
+/// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue),
+/// or continue with a timeout maximum waiting time (ReduceOutput::ContinueWithTimeout).
+///
+/// This function provides a flexible way to communicate with a quorum of authorities, processing and
+/// processing their results into a safe overall result, and also safely allowing operations to continue
+/// past the quorum to ensure all authorities are up to date (up to a timeout).
+pub async fn quorum_map_then_reduce_with_timeout<
+    'a,
+    C,
+    K,
+    Client: 'a,
+    S: 'a,
+    V: 'a,
+    R: 'a,
+    E,
+    FMap,
+    FReduce,
+>(
+    committee: Arc<C>,
+    authority_clients: Arc<BTreeMap<K, Arc<Client>>>,
+    // The initial state that will be used to fold in values from authorities.
+    initial_state: S,
+    // The async function used to apply to each authority. It takes an authority name,
+    // and authority client parameter and returns a Result<V>.
+    map_each_authority: FMap,
+    // The async function that takes an accumulated state, and a new result for V from an
+    // authority and returns a result to a ReduceOutput state.
+    reduce_result: FReduce,
+    // The initial timeout applied to all
+    initial_timeout: Duration,
+) -> Result<
+    (
+        R,
+        FuturesUnordered<impl Future<Output = (K, Result<V, E>)> + 'a>,
+    ),
+    S,
+>
+where
+    K: Ord + ConciseAbleName<'a> + Copy + 'a,
+    C: CommitteeTrait<K>,
+    FMap: FnOnce(K, Arc<Client>) -> AsyncResult<'a, V, E> + Clone + 'a,
+    FReduce: Fn(S, K, StakeUnit, Result<V, E>) -> BoxFuture<'a, ReduceOutput<R, S>> + 'a,
+{
+    quorum_map_then_reduce_with_timeout_and_prefs(
+        committee,
+        authority_clients,
+        None,
+        initial_state,
+        map_each_authority,
+        reduce_result,
+        initial_timeout,
+    )
+    .await
 }

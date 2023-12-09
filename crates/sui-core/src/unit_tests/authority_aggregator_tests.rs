@@ -11,16 +11,16 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use sui_common::authority_aggregation::quorum_map_then_reduce_with_timeout;
+use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
-use sui_types::utils::create_fake_transaction;
-
-use sui_macros::sim_test;
 use sui_types::object::Object;
 use sui_types::transaction::*;
+use sui_types::utils::create_fake_transaction;
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -371,7 +371,7 @@ async fn test_map_reducer() {
     let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
     // Test: mapper errors do not get propagated up, reducer works
-    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+    let res = quorum_map_then_reduce_with_timeout::<_, _, _, _, _, (), _, _, _>(
         authorities.committee.clone(),
         authorities.authority_clients.clone(),
         0usize,
@@ -401,11 +401,11 @@ async fn test_map_reducer() {
     assert_eq!(4, res);
 
     // Test: early end
-    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+    let res = quorum_map_then_reduce_with_timeout(
         authorities.committee.clone(),
         authorities.authority_clients.clone(),
         0usize,
-        |_name, _client| Box::pin(async move { Ok(()) }),
+        |_name, _client| Box::pin(async move { Ok::<(), anyhow::Error>(()) }),
         |mut accumulated_state, _authority_name, _authority_weight, _result| {
             Box::pin(async move {
                 if accumulated_state > 2 {
@@ -423,7 +423,7 @@ async fn test_map_reducer() {
     assert_eq!(3, res.0);
 
     // Test: Global timeout works
-    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+    let res = quorum_map_then_reduce_with_timeout::<_, _, _, _, _, (), _, _, _>(
         authorities.committee.clone(),
         authorities.authority_clients.clone(),
         0usize,
@@ -431,7 +431,7 @@ async fn test_map_reducer() {
             Box::pin(async move {
                 // 10 mins
                 tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-                Ok(())
+                Ok::<(), anyhow::Error>(())
             })
         },
         |_accumulated_state, _authority_name, _authority_weight, _result| {
@@ -445,37 +445,33 @@ async fn test_map_reducer() {
 
     // Test: Local timeout works
     let bad_auth = *authorities.committee.sample();
-    let res: Result<_, _> =
-        AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
-            authorities.committee.clone(),
-            authorities.authority_clients.clone(),
-            HashSet::new(),
-            |_name, _client| {
-                Box::pin(async move {
-                    // 10 mins
-                    if _name == bad_auth {
-                        tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-                    }
-                    Ok(())
-                })
-            },
-            |mut accumulated_state, authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    accumulated_state.insert(authority_name);
-                    if accumulated_state.len() <= 3 {
-                        ReduceOutput::Continue(accumulated_state)
-                    } else {
-                        ReduceOutput::ContinueWithTimeout(
-                            accumulated_state,
-                            Duration::from_millis(10),
-                        )
-                    }
-                })
-            },
-            // large delay
-            Duration::from_millis(10 * 60),
-        )
-        .await;
+    let res = quorum_map_then_reduce_with_timeout::<_, _, _, _, _, (), _, _, _>(
+        authorities.committee.clone(),
+        authorities.authority_clients.clone(),
+        HashSet::new(),
+        |_name, _client| {
+            Box::pin(async move {
+                // 10 mins
+                if _name == bad_auth {
+                    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+                }
+                Ok::<(), anyhow::Error>(())
+            })
+        },
+        |mut accumulated_state, authority_name, _authority_weight, _result| {
+            Box::pin(async move {
+                accumulated_state.insert(authority_name);
+                if accumulated_state.len() <= 3 {
+                    ReduceOutput::Continue(accumulated_state)
+                } else {
+                    ReduceOutput::ContinueWithTimeout(accumulated_state, Duration::from_millis(10))
+                }
+            })
+        },
+        // large delay
+        Duration::from_millis(10 * 60),
+    )
+    .await;
     assert_eq!(res.as_ref().unwrap_err().len(), 3);
     assert!(!res.as_ref().unwrap_err().contains(&bad_auth));
 }
