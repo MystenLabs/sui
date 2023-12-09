@@ -152,7 +152,7 @@ pub struct UseDef {
     /// Location of the type definition
     type_def_loc: Option<DefLoc>,
     /// Doc string for the relevant identifier/function
-    doc_string: String,
+    doc_string: Option<String>,
 }
 
 /// Definition of a struct field
@@ -510,7 +510,7 @@ impl UseDef {
         use_name: &Symbol,
         use_type: IdentType,
         type_def_loc: Option<DefLoc>,
-        doc_string: String,
+        doc_string: Option<String>,
     ) -> Self {
         let def_loc = DefLoc {
             fhash: def_fhash,
@@ -1119,25 +1119,23 @@ impl Symbolicator {
     }
 
     /// Extracts the docstring (/// or /** ... */) for a given definition by traversing up from the line definition
-    fn extract_doc_string(&self, name_start: &Position, file_hash: &FileHash) -> String {
-        let mut doc_string = String::new();
-        let file_id = match self.file_id_mapping.get(file_hash) {
-            None => return doc_string,
-            Some(v) => v,
+    fn extract_doc_string(&self, name_start: &Position, file_hash: &FileHash) -> Option<String> {
+        let Some(file_id) = self.file_id_mapping.get(file_hash) else {
+            return None;
         };
 
-        let file_lines = match self.file_id_to_lines.get(file_id) {
-            None => return doc_string,
-            Some(v) => v,
+        let Some(file_lines) = self.file_id_to_lines.get(file_id) else {
+            return None;
         };
 
         if name_start.line == 0 {
-            return doc_string;
+            return None;
         }
 
         let mut iter = (name_start.line - 1) as usize;
         let mut line_before = file_lines[iter].trim();
 
+        let mut doc_string = String::new();
         // Detect the two different types of docstrings
         if line_before.starts_with("///") {
             while let Some(stripped_line) = line_before.strip_prefix("///") {
@@ -1158,9 +1156,9 @@ impl Symbolicator {
                 if line_before.starts_with("/*") {
                     let is_doc = line_before.starts_with("/**") && !line_before.starts_with("/***");
 
-                    // Invalid doc_string start prefix so return empty doc string.
+                    // Invalid doc_string start prefix.
                     if !is_doc {
-                        return String::new();
+                        return None;
                     }
 
                     line_before = line_before.strip_prefix("/**").unwrap_or("").trim();
@@ -1179,11 +1177,16 @@ impl Symbolicator {
 
             // No doc_string found - return String::new();
             if !doc_string_found {
-                return String::new();
+                return None;
             }
         }
 
-        doc_string
+        // No point in trying to print empty comment
+        if doc_string.is_empty() {
+            return None;
+        }
+
+        Some(doc_string)
     }
 
     /// Get symbols for a sequence representing function body
@@ -1622,7 +1625,7 @@ impl Symbolicator {
                         &tname,
                         ident_type,
                         ident_type_def,
-                        "".to_string(), // no doc string for type params
+                        None, // no doc string for type params
                     ),
                 );
                 let exists = tp_scope.insert(tname, DefLoc { fhash, start });
@@ -1921,7 +1924,7 @@ impl Symbolicator {
                         name,
                         ident_type,
                         ident_type_def,
-                        "".to_string(), // no doc string for locals or function params
+                        None, // no doc string for locals or function params
                     ),
                 );
             }
@@ -2176,8 +2179,8 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
         |u| {
             let lang_string = LanguageString {
                 language: "".to_string(),
-                value: if !u.doc_string.is_empty() {
-                    format!("{}\n\n{}", u.use_type, u.doc_string)
+                value: if let Some(s) = &u.doc_string {
+                    format!("{}\n\n{}", u.use_type, s)
                 } else {
                     format!("{}", u.use_type)
                 },
@@ -2380,7 +2383,7 @@ fn assert_use_def_with_doc_string(
     def_file: &str,
     type_str: &str,
     type_def: Option<(u32, u32, &str)>,
-    doc_string: &str,
+    doc_string: Option<&str>,
 ) {
     let Some(uses) = mod_symbols.get(use_line) else {
         panic!("No use_line {use_line} in mod_symbols {mod_symbols:#?}");
@@ -2398,7 +2401,7 @@ fn assert_use_def_with_doc_string(
         .ends_with(def_file));
     assert_eq!(type_str, format!("{}", use_def.use_type));
 
-    assert_eq!(doc_string, use_def.doc_string);
+    assert_eq!(doc_string.map(|s| s.to_string()), use_def.doc_string);
     match use_def.type_def_loc {
         Some(type_def_loc) => {
             let tdef_line = type_def.unwrap().0;
@@ -2440,7 +2443,7 @@ fn assert_use_def(
         def_file,
         type_str,
         type_def,
-        "",
+        None,
     )
 }
 
@@ -2472,7 +2475,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "This is a documented struct\nWith a multi-line docstring\n",
+        Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
 
     // const def name
@@ -2487,7 +2490,7 @@ fn docstring_test() {
         "M6.move",
         "u64",
         None,
-        "Constant containing the answer to the universe\n",
+        Some("Constant containing the answer to the universe\n"),
     );
 
     // function def name
@@ -2502,7 +2505,7 @@ fn docstring_test() {
         "M6.move",
         "fun Symbols::M6::unpack(s: Symbols::M6::DocumentedStruct): u64",
         None,
-        "A documented function that unpacks a DocumentedStruct\n",
+        Some("A documented function that unpacks a DocumentedStruct\n"),
     );
     // param var (unpack function) - should not have doc string
     assert_use_def_with_doc_string(
@@ -2516,7 +2519,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "",
+        None,
     );
     // struct name in param type (unpack function)
     assert_use_def_with_doc_string(
@@ -2530,7 +2533,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "This is a documented struct\nWith a multi-line docstring\n",
+        Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
     // struct name in unpack (unpack function)
     assert_use_def_with_doc_string(
@@ -2544,7 +2547,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "This is a documented struct\nWith a multi-line docstring\n",
+        Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
     // field name in unpack (unpack function)
     assert_use_def_with_doc_string(
@@ -2558,7 +2561,7 @@ fn docstring_test() {
         "M6.move",
         "u64",
         None,
-        "A documented field\n",
+        Some("A documented field\n"),
     );
     // moved var in unpack assignment (unpack function)
     assert_use_def_with_doc_string(
@@ -2572,7 +2575,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "A documented function that unpacks a DocumentedStruct\n",
+        Some("A documented function that unpacks a DocumentedStruct\n"),
     );
 
     // docstring construction for multi-line /** .. */ based strings
@@ -2587,7 +2590,7 @@ fn docstring_test() {
         "M6.move",
         "fun Symbols::M6::other_doc_struct(): Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "\nThis is a multiline docstring\n\nThis docstring has empty lines.\n\nIt uses the ** format instead of ///\n\n",
+        Some("\nThis is a multiline docstring\n\nThis docstring has empty lines.\n\nIt uses the ** format instead of ///\n\n"),
     );
 
     // docstring construction for single-line /** .. */ based strings
@@ -2602,7 +2605,7 @@ fn docstring_test() {
         "M6.move",
         "fun Symbols::M6::acq(uint: u64): u64",
         None,
-        "Asterix based single-line docstring\n",
+        Some("Asterix based single-line docstring\n"),
     );
 
     /* Test doc_string construction for struct/function imported from another module */
@@ -2619,7 +2622,7 @@ fn docstring_test() {
         "M7.move",
         "Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "Documented struct in another module\n",
+        Some("Documented struct in another module\n"),
     );
 
     // function name in a call (other_doc_struct function)
@@ -2634,7 +2637,7 @@ fn docstring_test() {
         "M7.move",
         "fun Symbols::M7::create_other_struct(v: u64): Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "Documented initializer in another module\n",
+        Some("Documented initializer in another module\n"),
     );
 
     // const in param (other_doc_struct function)
@@ -2649,7 +2652,7 @@ fn docstring_test() {
         "M6.move",
         "u64",
         None,
-        "Constant containing the answer to the universe\n",
+        Some("Constant containing the answer to the universe\n"),
     );
 
     // other documented struct name imported (other_doc_struct_import function)
@@ -2664,7 +2667,7 @@ fn docstring_test() {
         "M7.move",
         "Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "Documented struct in another module\n",
+        Some("Documented struct in another module\n"),
     );
 
     // Type param definition in documented function (type_param_doc function) - should have no doc string
@@ -2679,7 +2682,7 @@ fn docstring_test() {
         "M6.move",
         "T",
         None,
-        "",
+        None,
     );
 
     // Param def (of generic type) in documented function (type_param_doc function) - should have no doc string
@@ -2694,9 +2697,8 @@ fn docstring_test() {
         "M6.move",
         "T",
         None,
-        "",
+        None,
     );
-
 }
 
 #[test]
