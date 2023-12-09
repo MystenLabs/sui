@@ -6,17 +6,19 @@ use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::crypto::{BridgeAuthorityPublicKey, BridgeAuthoritySignInfo, BridgeAuthoritySignature};
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
+use ethers::core::rand::Rng;
 use ethers::types::Address as EthAddress;
+pub use ethers::types::H256 as EthTransactionHash;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use sui_types::committee::CommitteeTrait;
+use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::multiaddr::Multiaddr;
 use sui_types::{base_types::SUI_ADDRESS_LENGTH, committee::EpochId};
-
-pub use ethers::types::H256 as EthTransactionHash;
 
 pub const BRIDGE_AUTHORITY_TOTAL_VOTING_POWER: u64 = 10000;
 
@@ -71,6 +73,39 @@ impl BridgeCommittee {
 
     pub fn members(&self) -> &BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthority> {
         &self.members
+    }
+}
+
+impl CommitteeTrait<BridgeAuthorityPublicKeyBytes> for BridgeCommittee {
+    // Note this function does not shuffle today.
+    fn shuffle_by_stake_with_rng(
+        &self,
+        // try these authorities first
+        _preferences: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
+        // only attempt from these authorities.
+        restrict_to: Option<&BTreeSet<BridgeAuthorityPublicKeyBytes>>,
+        _rng: &mut impl Rng,
+    ) -> Vec<BridgeAuthorityPublicKeyBytes> {
+        // TODO does BridgeCommittee need shuffling?
+
+        self.members
+            .keys()
+            .filter(|name| {
+                if let Some(restrict_to) = restrict_to {
+                    restrict_to.contains(name)
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn weight(&self, author: &BridgeAuthorityPublicKeyBytes) -> StakeUnit {
+        self.members
+            .get(author)
+            .map(|a| a.voting_power)
+            .unwrap_or(0)
     }
 }
 

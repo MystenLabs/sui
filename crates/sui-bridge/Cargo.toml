@@ -11,6 +11,7 @@ ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 arc-swap.workspace = true
+futures.workspace = true
 move-core-types.workspace = true
 once_cell.workspace = true
 telemetry-subscribers.workspace = true

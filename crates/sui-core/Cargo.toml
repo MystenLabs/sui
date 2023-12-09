@@ -68,6 +68,7 @@ narwhal-worker.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
 sui-config.workspace = true
+sui-common.workspace = true
 sui-execution = { path = "../../sui-execution" }
 sui-framework.workspace = true
 sui-swarm-config.workspace = true

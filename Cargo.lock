@@ -7111,6 +7111,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "parking_lot 0.12.1",
+ "sui-types",
  "tokio",
  "workspace-hack",
 ]
@@ -11367,6 +11368,7 @@ dependencies = [
  "ethers",
  "eyre",
  "fastcrypto",
+ "futures",
  "move-core-types",
  "mysten-metrics",
  "once_cell",
@@ -11428,6 +11430,18 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.2.2",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-common"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "mysten-metrics",
+ "sui-types",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -11521,6 +11535,7 @@ dependencies = [
  "signature 1.6.4",
  "static_assertions",
  "sui-archival",
+ "sui-common",
  "sui-config",
  "sui-execution",
  "sui-framework",
