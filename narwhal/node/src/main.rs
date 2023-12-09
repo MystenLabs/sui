@@ -18,6 +18,8 @@ use fastcrypto::traits::{EncodeDecodeBase64, KeyPair as _};
 use futures::join;
 use mysten_metrics::start_prometheus_server;
 use narwhal_node as node;
+use narwhal_node::benchmark_client::{parse_url, url_to_multiaddr, Client, LazyNarwhalClient};
+use narwhal_node::metrics::NarwhalBenchMetrics;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNode;
 use network::client::NetworkClient;
@@ -27,6 +29,7 @@ use node::{
 };
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
+use std::sync::Arc;
 use std::{
     collections::BTreeMap,
     fs,
@@ -46,6 +49,9 @@ use sui_types::{
 };
 use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::channel;
+use tokio::time::Duration;
+use url::Url;
+
 // TODO: remove when old benchmark code is removed
 // #[cfg(feature = "benchmark")]
 // use tracing::subscriber::set_global_default;
@@ -147,7 +153,23 @@ enum NodeType {
     /// Run a primary & worker in the same process as part of benchmark
     Benchmark {
         /// The worker Id
+        #[clap(long, value_name = "NUM")]
         worker_id: WorkerId,
+        /// The network address of the node where to send txs. A url format is expected ex 'http://127.0.0.1:7000'
+        #[clap(long, value_parser = parse_url, global = true)]
+        addr: Url,
+        /// The size of each transaciton in bytes
+        #[clap(long, default_value = "512", global = true)]
+        size: usize,
+        /// The rate (txs/s) at which to send the transactions
+        #[clap(long, default_value = "100", global = true)]
+        rate: u64,
+        /// Optional duration of the benchmark in seconds. If not provided the benchmark will run forever.
+        #[clap(long, global = true)]
+        duration: Option<u64>,
+        /// Network addresses that must be reachable before starting the benchmark.
+        #[clap(long, value_delimiter = ',', value_parser = parse_url, global = true)]
+        nodes: Vec<Url>,
     },
 }
 
@@ -235,7 +257,14 @@ async fn main() -> Result<(), eyre::Report> {
             let (primary_registry, worker_registry) = match subcommand {
                 NodeType::Primary => (Some(primary_metrics_registry(authority_id)), None),
                 NodeType::Worker { id } => (None, Some(worker_metrics_registry(*id, authority_id))),
-                NodeType::Benchmark { worker_id } => (
+                NodeType::Benchmark {
+                    worker_id,
+                    size: _,
+                    rate: _,
+                    duration: _,
+                    nodes: _,
+                    addr: _,
+                } => (
                     Some(primary_metrics_registry(authority_id)),
                     Some(worker_metrics_registry(*worker_id, authority_id)),
                 ),
@@ -531,8 +560,8 @@ async fn run(
     // The channel returning the result for each transaction's execution.
     let (_tx_transaction_confirmation, _rx_transaction_confirmation) = channel(100);
 
-    // Check whether to run a primary, a worker, or an entire authority.
-    let (primary, worker) = match node_type {
+    // Check whether to run a primary, a worker, or an entire benchmark cluster.
+    let (primary, worker, client) = match node_type {
         NodeType::Primary => {
             let primary = PrimaryNode::new(parameters.clone(), registry_service.clone());
 
@@ -550,7 +579,7 @@ async fn run(
                 )
                 .await?;
 
-            (Some(primary), None)
+            (Some(primary), None, None)
         }
         NodeType::Worker { id } => {
             let worker = WorkerNode::new(
@@ -573,9 +602,16 @@ async fn run(
                 )
                 .await?;
 
-            (None, Some(worker))
+            (None, Some(worker), None)
         }
-        NodeType::Benchmark { worker_id } => {
+        NodeType::Benchmark {
+            worker_id,
+            size,
+            rate,
+            duration,
+            nodes,
+            addr,
+        } => {
             let primary = PrimaryNode::new(parameters.clone(), registry_service.clone());
 
             primary
@@ -624,7 +660,37 @@ async fn run(
                 )
                 .await?;
 
-            (Some(primary), Some(worker))
+            let registry: Registry = registry_service.default_registry();
+            mysten_metrics::init_metrics(&registry);
+            let metrics = NarwhalBenchMetrics::new(&registry);
+
+            let target = addr;
+            let size = *size;
+            let rate = *rate;
+            let nodes = nodes.to_vec();
+
+            let duration: Option<Duration> = match duration {
+                Some(d) => {
+                    info!("Benchmark Duration: {d}");
+                    Some(Duration::from_secs(*d))
+                }
+                None => None,
+            };
+
+            let client = Client {
+                target: target.clone(),
+                size,
+                rate,
+                nodes,
+                duration,
+                metrics,
+                local_client: Arc::new(LazyNarwhalClient::new(url_to_multiaddr(&addr)?)),
+            };
+
+            // Waits for all nodes to be online and synchronized and then start benchmark.
+            client.start().await?;
+
+            (Some(primary), Some(worker), Some(client))
         }
     };
 
@@ -638,17 +704,21 @@ async fn run(
         registry_service.add(registry);
     }
 
-    match (primary, worker) {
-        (Some(primary), Some(worker)) => {
-            join!(primary.wait(), worker.wait());
+    match (primary, worker, client) {
+        (Some(primary), Some(worker), Some(client)) => {
+            join!(primary.wait(), worker.wait(), client.wait());
         }
-        (Some(primary), None) => {
+        (Some(primary), None, None) => {
             primary.wait().await;
         }
-        (None, Some(worker)) => {
+        (None, Some(worker), None) => {
             worker.wait().await;
         }
-        (None, None) => {
+        (None, None, None)
+        | (None, None, Some(_))
+        | (None, Some(_), Some(_))
+        | (Some(_), None, Some(_))
+        | (Some(_), Some(_), None) => {
             warn!("No primary or worker node was started");
         }
     }

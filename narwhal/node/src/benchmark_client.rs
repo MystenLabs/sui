@@ -1,11 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::NarwhalBenchMetrics;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use bytes::Bytes;
 use clap::*;
 use eyre::Context;
 use futures::future::join_all;
-use narwhal_node::metrics::NarwhalBenchMetrics;
+use mysten_network::Multiaddr;
 use prometheus::Registry;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::str::FromStr;
@@ -13,12 +15,13 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::{
     net::TcpStream,
-    time::{interval, sleep, Duration, Instant},
+    time::{interval, sleep, timeout, Duration, Instant},
 };
 use tracing::{info, subscriber::set_global_default, warn};
 use tracing_subscriber::filter::EnvFilter;
 use types::{TransactionProto, TransactionsClient};
 use url::Url;
+use worker::LocalNarwhalClient;
 
 /// Benchmark client for Narwhal and Tusk
 ///
@@ -51,6 +54,67 @@ struct App {
     client_metric_host: String,
     #[clap(long, default_value = "8081", global = true)]
     client_metric_port: u16,
+}
+
+/// A Narwhal client that instantiates LocalNarwhalClient lazily. (taken from consensus adapter)
+pub struct LazyNarwhalClient {
+    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
+    /// Inner ArcSwap allows Narwhal restarts across epoch changes <-- may not be necessary for benchmark client
+    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
+    addr: Multiaddr,
+}
+
+impl LazyNarwhalClient {
+    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
+    pub fn new(addr: Multiaddr) -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+            addr,
+        }
+    }
+
+    async fn get(&self) -> Result<Arc<ArcSwap<LocalNarwhalClient>>, eyre::Report> {
+        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
+        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
+        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
+            loop {
+                match LocalNarwhalClient::get_global(&self.addr) {
+                    Some(c) => return c,
+                    None => {
+                        sleep(Duration::from_millis(100)).await;
+                    }
+                };
+            }
+        })
+        .await
+        {
+            return Ok(client);
+        }
+        Err(eyre::Report::msg(format!(
+            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
+            NARWHAL_WORKER_START_TIMEOUT, self.addr,
+        )))
+    }
+
+    async fn submit_to_consensus(&self, transaction: Vec<u8>) -> Result<(), eyre::Report> {
+        // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
+        // Narwhal shuts down, so there should be no correctness issue.
+        let client = {
+            let c = self.client.load();
+            if c.is_some() {
+                c
+            } else {
+                self.client.store(Some(self.get().await?));
+                self.client.load()
+            }
+        };
+        let client = client.as_ref().unwrap().load();
+        client
+            .submit_transaction(transaction)
+            .await
+            .map_err(|e| eyre::Report::msg(format!("Failed to submit to consensus: {:?}", e)))?;
+        Ok(())
+    }
 }
 
 #[tokio::main]
@@ -104,12 +168,13 @@ async fn main() -> Result<(), eyre::Report> {
     info!("Transactions rate: {rate} tx/s");
 
     let client = Client {
-        target,
+        target: target.clone(),
         size,
         rate,
         nodes,
         duration,
         metrics,
+        local_client: Arc::new(LazyNarwhalClient::new(url_to_multiaddr(&target)?)),
     };
 
     // Wait for all nodes to be online and synchronized, if any.
@@ -119,16 +184,22 @@ async fn main() -> Result<(), eyre::Report> {
     client.send().await.context("Failed to submit transactions")
 }
 
-struct Client {
-    target: Url,
-    size: usize,
-    rate: u64,
-    nodes: Vec<Url>,
-    duration: Option<Duration>,
-    metrics: NarwhalBenchMetrics,
+pub struct Client {
+    pub target: Url,
+    pub size: usize,
+    pub rate: u64,
+    pub nodes: Vec<Url>,
+    pub duration: Option<Duration>,
+    pub metrics: NarwhalBenchMetrics,
+    pub local_client: Arc<LazyNarwhalClient>,
 }
 
 impl Client {
+    pub async fn start(&self) -> Result<(), eyre::Report> {
+        self.wait().await;
+        self.send().await
+    }
+
     pub async fn send(&self) -> Result<(), eyre::Report> {
         // The transaction size must be at least 100 bytes to ensure all txs are different.
         if self.size < 100 {
@@ -142,12 +213,13 @@ impl Client {
         // TODO: figure out how to scale the client without needing to scale tasks
         // Current results are showing about 10 tx/s per task.
         let num_parallel_tasks = self.rate.min(25000);
-        let rate_per_task = self.rate / num_parallel_tasks;
-        let target_tx_interval: Duration = Duration::from_millis(1000 / rate_per_task);
+        let base_rate_per_task = self.rate / num_parallel_tasks;
+        let remaining_transactions = self.rate % num_parallel_tasks;
+        let base_target_tx_interval: Duration = Duration::from_millis(1000 / base_rate_per_task);
         info!(
             "Distributing transactions across {num_parallel_tasks} parallel tasks, with  \
-            each task sending approximately {rate_per_task} transactions. Each task  \
-            sends 1 transaction every {target_tx_interval:#?} to achieve a rate of {} tx/sec",
+            each task sending approximately {base_rate_per_task} transactions. Each task  \
+            sends 1 transaction every {base_target_tx_interval:#?} to achieve a rate of {} tx/sec",
             self.rate
         );
 
@@ -155,8 +227,15 @@ impl Client {
         let metrics = Arc::new(self.metrics.clone());
 
         for i in 0..num_parallel_tasks {
-            // Connect to the mempool.
-            let mut client = TransactionsClient::connect(self.target.as_str().to_owned())
+            let task_rate = if i < remaining_transactions {
+                base_rate_per_task + 1
+            } else {
+                base_rate_per_task
+            };
+            let task_interval = Duration::from_millis(1000 / task_rate);
+
+            let local_client_clone = Arc::clone(&self.local_client);
+            let mut grpc_client = TransactionsClient::connect(self.target.as_str().to_owned())
                 .await
                 .context(format!("failed to connect to {}", self.target))?;
             let metrics_clone = metrics.clone();
@@ -165,11 +244,16 @@ impl Client {
             let size = self.size;
 
             let handle = tokio::spawn(async move {
-                let interval = interval(target_tx_interval);
+                let interval = interval(task_interval);
                 tokio::pin!(interval);
                 let mut rng = StdRng::seed_from_u64(client_id);
                 let mut random: u64 = rng.gen(); // 8 bytes
                 let mut counter = 0;
+
+                let local_client = match local_client_clone.get().await {
+                    Ok(client) => Some(client),
+                    Err(_) => None,
+                };
 
                 loop {
                     interval.as_mut().tick().await;
@@ -183,16 +267,30 @@ impl Client {
                     transaction[8..16].copy_from_slice(&timestamp); // 8 bytes
                     transaction[16..24].copy_from_slice(&random.to_le_bytes()); // 8 bytes
 
-                    let tx_proto = TransactionProto {
-                        transaction: Bytes::from(transaction),
-                    };
+                    let submission_error: Option<eyre::Report>;
+                    if let Some(_) = local_client {
+                        if let Err(e) = local_client_clone.submit_to_consensus(transaction).await {
+                            submission_error = Some(e)
+                        } else {
+                            submission_error = None;
+                        }
+                    } else {
+                        let tx_proto = TransactionProto {
+                            transaction: Bytes::from(transaction),
+                        };
+                        if let Err(e) = grpc_client.submit_transaction(tx_proto).await {
+                            submission_error = Some(eyre::Report::msg(format!("{e}")));
+                        } else {
+                            submission_error = None;
+                        }
+                    }
 
                     let now = Instant::now();
 
                     metrics_clone.narwhal_client_num_submitted.inc();
 
-                    if let Err(e) = client.submit_transaction(tx_proto).await {
-                        warn!("Failed to send transaction: {e}");
+                    if let Some(submission_error) = submission_error {
+                        warn!("Failed to send transaction: {submission_error}");
                         metrics_clone.narwhal_client_num_error.inc();
                     } else {
                         metrics_clone.narwhal_client_num_success.inc();
@@ -281,8 +379,20 @@ impl Client {
     }
 }
 
-fn parse_url(s: &str) -> Result<Url, url::ParseError> {
+pub fn parse_url(s: &str) -> Result<Url, url::ParseError> {
     Url::from_str(s)
+}
+
+pub fn url_to_multiaddr(url: &Url) -> Result<Multiaddr, eyre::Report> {
+    let host_str = url
+        .host_str()
+        .ok_or(eyre::Report::msg("URL does not have a host"))?;
+    let port = url
+        .port()
+        .ok_or(eyre::Report::msg("URL does not specify a port"))?;
+
+    Multiaddr::try_from(format!("/ip4/{}/tcp/{}/http", host_str, port))
+        .map_err(|_| eyre::Report::msg("Failed to create Multiaddr from URL"))
 }
 
 pub fn timestamp_utc() -> Duration {

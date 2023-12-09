@@ -21,7 +21,6 @@ use types::{
     ConditionalBroadcastReceiver, Empty, Transaction, TransactionProto, Transactions,
     TransactionsServer, TxResponse,
 };
-
 pub struct TxServer<V: TransactionValidator> {
     address: Multiaddr,
     rx_shutdown: ConditionalBroadcastReceiver,
