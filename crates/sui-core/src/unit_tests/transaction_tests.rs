@@ -2,18 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use rand::{rngs::StdRng, SeedableRng};
+use shared_crypto::intent::{Intent, IntentMessage};
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
-    crypto::AccountKeyPair,
-    crypto::{get_key_pair, Signature},
+    crypto::{
+        get_key_pair, AccountKeyPair, PublicKey, Signature, SuiKeyPair, ZkLoginPublicIdentifier,
+    },
+    multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
     transaction::{AuthenticatorStateUpdate, TransactionDataAPI, TransactionExpiration},
-    utils::to_sender_signed_transaction,
+    utils::{to_sender_signed_transaction, TestData},
     zk_login_authenticator::ZkLoginAuthenticator,
+    zk_login_util::DEFAULT_JWK_BYTES,
 };
 
 use crate::{
@@ -606,4 +610,136 @@ async fn init_zklogin_transfer(
     ));
     tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0] = authenticator;
     tx
+}
+
+#[tokio::test]
+async fn zk_multisig_test() {
+    telemetry_subscribers::init_for_testing();
+
+    // User generate a multisig account with no zklogin signer.
+    let keys = sui_types::utils::keys();
+    let pk1 = keys[0].public();
+    let pk2 = keys[1].public();
+    let pk3 = keys[2].public();
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![pk1.clone(), pk2.clone(), pk3.clone()],
+        vec![1, 1, 1],
+        2,
+    )
+    .unwrap();
+    let victim_addr = SuiAddress::from(&multisig_pk);
+
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(victim_addr, object_id), (victim_addr, gas_object_id)]).await;
+
+    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch).unwrap();
+    let epoch_store = authority_state.epoch_store_for_testing();
+    epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
+        epoch: 0,
+        round: 0,
+        new_active_jwks: jwks
+            .into_iter()
+            .map(|(jwk_id, jwk)| ActiveJwk {
+                jwk_id,
+                jwk,
+                epoch: 0,
+            })
+            .collect(),
+        authenticator_obj_initial_shared_version: 1.into(),
+    });
+
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let data = TransactionData::new_transfer(
+        recipient,
+        object.compute_object_reference(),
+        victim_addr,
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    // Poof of concept for bypassing zklogin verification starts here.
+    // Step 1. construct 2 zklogin signatures
+    // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
+
+    let file = std::fs::File::open("../sui-types/src/unit_tests/zklogin_test_vectors.json")
+        .expect("Unable to open file");
+    let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
+    let mut pks = vec![];
+    let mut kps_and_zklogin_inputs = vec![];
+    for test in test_datum {
+        let kp = SuiKeyPair::decode_base64(&test.kp).unwrap();
+        let pk_zklogin = PublicKey::ZkLogin(
+            ZkLoginPublicIdentifier::new(
+                &OIDCProvider::Twitch.get_config().iss,
+                &test.address_seed,
+            )
+            .unwrap(),
+        );
+        pks.push(pk_zklogin);
+        kps_and_zklogin_inputs.push((
+            kp,
+            ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap(),
+        ));
+    }
+
+    let mut zklogin_sigs = vec![];
+    for (kp, inputs) in kps_and_zklogin_inputs {
+        let intent_message = IntentMessage::new(Intent::sui_transaction(), data.clone());
+        let eph_sig = Signature::new_secure(&intent_message, &kp);
+        let zklogin_sig =
+            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
+        zklogin_sigs.push(zklogin_sig);
+    }
+
+    // Step 2. Construct the fake multisig with the zklogin signatures.
+    let multisig = MultiSig::new(
+        vec![
+            zklogin_sigs[0].clone().to_compressed().unwrap(),
+            zklogin_sigs[1].clone().to_compressed().unwrap(),
+        ], // zklogin sigs
+        3,
+        multisig_pk,
+    );
+
+    let generic_sig = GenericSignature::MultiSig(multisig);
+
+    let transfer_transaction =
+        Transaction::from_generic_sig_data(data, Intent::sui_transaction(), vec![generic_sig]);
+
+    let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+
+    let server = AuthorityServer::new_for_test(
+        "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
+        authority_state.clone(),
+        consensus_address,
+    );
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(server_handle.address())
+        .await
+        .unwrap();
+
+    let err = client
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+
+    assert!(dbg!(err).is_err());
+
+    check_locks(authority_state.clone(), vec![object_id]).await;
 }
