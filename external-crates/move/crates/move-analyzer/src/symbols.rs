@@ -2177,6 +2177,7 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
         col,
         request.id.clone(),
         |u| {
+            // use rust for highlighting in Markdown until there is support for Move
             let contents = HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: if let Some(s) = &u.doc_string {
