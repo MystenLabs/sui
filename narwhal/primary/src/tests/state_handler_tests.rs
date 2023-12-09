@@ -252,6 +252,18 @@ async fn resume_from_store() {
         randomness_states.push(randomness_state);
     }
 
+    // Verify Confirmations were resent after re-start.
+    for (i, channel) in rx_system_messages_channels.iter_mut().enumerate() {
+        loop {
+            if let SystemMessage::DkgConfirmation(bytes) = channel.recv().await.unwrap() {
+                let conf: fastcrypto_tbls::dkg::Confirmation<DkgG> = bcs::from_bytes(&bytes)
+                    .expect("DKG confirmation deserialization should not fail");
+                assert_eq!(conf.sender, fixture.authority(i).id().0);
+                break;
+            }
+        }
+    }
+
     // Distribute Confirmations.
     for randomness_state in randomness_states.iter_mut() {
         for dkg_confirmation in dkg_confirmations.iter().cloned() {
