@@ -61,8 +61,8 @@ use im::ordmap::OrdMap;
 use lsp_server::{Request, RequestId};
 use lsp_types::{
     request::GotoTypeDefinitionParams, Diagnostic, DocumentSymbol, DocumentSymbolParams,
-    GotoDefinitionParams, Hover, HoverContents, HoverParams, LanguageString, Location,
-    MarkedString, Position, Range, ReferenceParams, SymbolKind,
+    GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, MarkupKind,
+    Position, Range, ReferenceParams, SymbolKind,
 };
 
 use std::{
@@ -96,8 +96,8 @@ use move_symbol_pool::Symbol;
 /// Enabling/disabling the language server reporting readiness to support go-to-def and
 /// go-to-references to the IDE.
 pub const DEFS_AND_REFS_SUPPORT: bool = true;
-// Building Move code requires a larger stack size on Windows (16M has been chosen somewhat
-// arbitrarily)
+/// Building Move code requires a larger stack size on Windows (16M has been chosen somewhat
+/// arbitrarily)
 pub const STACK_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
@@ -152,7 +152,7 @@ pub struct UseDef {
     /// Location of the type definition
     type_def_loc: Option<DefLoc>,
     /// Doc string for the relevant identifier/function
-    doc_string: String,
+    doc_string: Option<String>,
 }
 
 /// Definition of a struct field
@@ -510,7 +510,7 @@ impl UseDef {
         use_name: &Symbol,
         use_type: IdentType,
         type_def_loc: Option<DefLoc>,
-        doc_string: String,
+        doc_string: Option<String>,
     ) -> Self {
         let def_loc = DefLoc {
             fhash: def_fhash,
@@ -1023,7 +1023,7 @@ impl Symbolicator {
         }
     }
 
-    /// Get symbols for function a definition
+    /// Get symbols for struct definition
     fn struct_symbols(
         &mut self,
         struct_def: &StructDefinition,
@@ -1062,7 +1062,7 @@ impl Symbolicator {
         }
     }
 
-    /// Get symbols for function a definition
+    /// Get symbols for a function definition
     fn fun_symbols(
         &mut self,
         fun: &Function,
@@ -1084,7 +1084,7 @@ impl Symbolicator {
             self.add_type_id_use_def(ptype, references, use_defs);
 
             // add definition of the parameter
-            self.add_def(
+            self.add_local_def(
                 &pname.loc,
                 &pname.value.name,
                 &mut scope,
@@ -1119,25 +1119,23 @@ impl Symbolicator {
     }
 
     /// Extracts the docstring (/// or /** ... */) for a given definition by traversing up from the line definition
-    fn extract_doc_string(&self, name_start: &Position, file_hash: &FileHash) -> String {
-        let mut doc_string = String::new();
-        let file_id = match self.file_id_mapping.get(file_hash) {
-            None => return doc_string,
-            Some(v) => v,
+    fn extract_doc_string(&self, name_start: &Position, file_hash: &FileHash) -> Option<String> {
+        let Some(file_id) = self.file_id_mapping.get(file_hash) else {
+            return None;
         };
 
-        let file_lines = match self.file_id_to_lines.get(file_id) {
-            None => return doc_string,
-            Some(v) => v,
+        let Some(file_lines) = self.file_id_to_lines.get(file_id) else {
+            return None;
         };
 
         if name_start.line == 0 {
-            return doc_string;
+            return None;
         }
 
         let mut iter = (name_start.line - 1) as usize;
         let mut line_before = file_lines[iter].trim();
 
+        let mut doc_string = String::new();
         // Detect the two different types of docstrings
         if line_before.starts_with("///") {
             while let Some(stripped_line) = line_before.strip_prefix("///") {
@@ -1158,9 +1156,9 @@ impl Symbolicator {
                 if line_before.starts_with("/*") {
                     let is_doc = line_before.starts_with("/**") && !line_before.starts_with("/***");
 
-                    // Invalid doc_string start prefix so return empty doc string.
+                    // Invalid doc_string start prefix.
                     if !is_doc {
-                        return String::new();
+                        return None;
                     }
 
                     line_before = line_before.strip_prefix("/**").unwrap_or("").trim();
@@ -1179,11 +1177,16 @@ impl Symbolicator {
 
             // No doc_string found - return String::new();
             if !doc_string_found {
-                return String::new();
+                return None;
             }
         }
 
-        doc_string
+        // No point in trying to print empty comment
+        if doc_string.is_empty() {
+            return None;
+        }
+
+        Some(doc_string)
     }
 
     /// Get symbols for a sequence representing function body
@@ -1241,7 +1244,7 @@ impl Symbolicator {
         match &lval.value {
             LValue_::Var { var, ty: t, .. } => {
                 if define {
-                    self.add_def(
+                    self.add_local_def(
                         &var.loc,
                         &var.value.name,
                         scope,
@@ -1611,7 +1614,6 @@ impl Symbolicator {
                 ));
                 let ident_type_def = self.ident_type_def_loc(&ident_type);
 
-                let doc_string = self.extract_doc_string(&start, &fhash);
                 use_defs.insert(
                     start.line,
                     UseDef::new(
@@ -1623,7 +1625,7 @@ impl Symbolicator {
                         &tname,
                         ident_type,
                         ident_type_def,
-                        doc_string,
+                        None, // no doc string for type params
                     ),
                 );
                 let exists = tp_scope.insert(tname, DefLoc { fhash, start });
@@ -1887,8 +1889,8 @@ impl Symbolicator {
         }
     }
 
-    /// Add a "generic" definition
-    fn add_def(
+    /// Add a defintion of a local (including function params).
+    fn add_local_def(
         &self,
         pos: &Loc,
         name: &Symbol,
@@ -1908,8 +1910,6 @@ impl Symbolicator {
                 // in rust) a variable can be re-defined in the same scope replacing the previous
                 // definition
 
-                let doc_string = self.extract_doc_string(&name_start, &pos.file_hash());
-
                 // enter self-definition for def name
                 let ident_type = IdentType::RegularType(use_type);
                 let ident_type_def = self.ident_type_def_loc(&ident_type);
@@ -1924,7 +1924,7 @@ impl Symbolicator {
                         name,
                         ident_type,
                         ident_type_def,
-                        doc_string,
+                        None, // no doc string for locals or function params
                     ),
                 );
             }
@@ -2177,15 +2177,15 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
         col,
         request.id.clone(),
         |u| {
-            let lang_string = LanguageString {
-                language: "".to_string(),
-                value: if !u.doc_string.is_empty() {
-                    format!("{}\n\n{}", u.use_type, u.doc_string)
+            // use rust for highlighting in Markdown until there is support for Move
+            let contents = HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: if let Some(s) = &u.doc_string {
+                    format!("```rust\n{}\n```\n{}", u.use_type, s)
                 } else {
-                    format!("{}", u.use_type)
+                    format!("```rust\n{}\n```", u.use_type)
                 },
-            };
-            let contents = HoverContents::Scalar(MarkedString::LanguageString(lang_string));
+            });
             let range = None;
             Some(serde_json::to_value(Hover { contents, range }).unwrap())
         },
@@ -2383,7 +2383,7 @@ fn assert_use_def_with_doc_string(
     def_file: &str,
     type_str: &str,
     type_def: Option<(u32, u32, &str)>,
-    doc_string: &str,
+    doc_string: Option<&str>,
 ) {
     let Some(uses) = mod_symbols.get(use_line) else {
         panic!("No use_line {use_line} in mod_symbols {mod_symbols:#?}");
@@ -2401,7 +2401,7 @@ fn assert_use_def_with_doc_string(
         .ends_with(def_file));
     assert_eq!(type_str, format!("{}", use_def.use_type));
 
-    assert_eq!(doc_string, use_def.doc_string);
+    assert_eq!(doc_string.map(|s| s.to_string()), use_def.doc_string);
     match use_def.type_def_loc {
         Some(type_def_loc) => {
             let tdef_line = type_def.unwrap().0;
@@ -2443,7 +2443,7 @@ fn assert_use_def(
         def_file,
         type_str,
         type_def,
-        "",
+        None,
     )
 }
 
@@ -2475,7 +2475,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "This is a documented struct\nWith a multi-line docstring\n",
+        Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
 
     // const def name
@@ -2490,7 +2490,7 @@ fn docstring_test() {
         "M6.move",
         "u64",
         None,
-        "Constant containing the answer to the universe\n",
+        Some("Constant containing the answer to the universe\n"),
     );
 
     // function def name
@@ -2505,9 +2505,9 @@ fn docstring_test() {
         "M6.move",
         "fun Symbols::M6::unpack(s: Symbols::M6::DocumentedStruct): u64",
         None,
-        "A documented function that unpacks a DocumentedStruct\n",
+        Some("A documented function that unpacks a DocumentedStruct\n"),
     );
-    // param var (unpack function)
+    // param var (unpack function) - should not have doc string
     assert_use_def_with_doc_string(
         mod_symbols,
         &symbols.file_name_mapping,
@@ -2519,7 +2519,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "A documented function that unpacks a DocumentedStruct\n",
+        None,
     );
     // struct name in param type (unpack function)
     assert_use_def_with_doc_string(
@@ -2533,7 +2533,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "This is a documented struct\nWith a multi-line docstring\n",
+        Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
     // struct name in unpack (unpack function)
     assert_use_def_with_doc_string(
@@ -2547,7 +2547,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "This is a documented struct\nWith a multi-line docstring\n",
+        Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
     // field name in unpack (unpack function)
     assert_use_def_with_doc_string(
@@ -2561,7 +2561,7 @@ fn docstring_test() {
         "M6.move",
         "u64",
         None,
-        "A documented field\n",
+        Some("A documented field\n"),
     );
     // moved var in unpack assignment (unpack function)
     assert_use_def_with_doc_string(
@@ -2575,7 +2575,7 @@ fn docstring_test() {
         "M6.move",
         "Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        "A documented function that unpacks a DocumentedStruct\n",
+        Some("A documented function that unpacks a DocumentedStruct\n"),
     );
 
     // docstring construction for multi-line /** .. */ based strings
@@ -2590,7 +2590,7 @@ fn docstring_test() {
         "M6.move",
         "fun Symbols::M6::other_doc_struct(): Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "\nThis is a multiline docstring\n\nThis docstring has empty lines.\n\nIt uses the ** format instead of ///\n\n",
+        Some("\nThis is a multiline docstring\n\nThis docstring has empty lines.\n\nIt uses the ** format instead of ///\n\n"),
     );
 
     // docstring construction for single-line /** .. */ based strings
@@ -2605,7 +2605,7 @@ fn docstring_test() {
         "M6.move",
         "fun Symbols::M6::acq(uint: u64): u64",
         None,
-        "Asterix based single-line docstring\n",
+        Some("Asterix based single-line docstring\n"),
     );
 
     /* Test doc_string construction for struct/function imported from another module */
@@ -2622,7 +2622,7 @@ fn docstring_test() {
         "M7.move",
         "Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "Documented struct in another module\n",
+        Some("Documented struct in another module\n"),
     );
 
     // function name in a call (other_doc_struct function)
@@ -2637,7 +2637,7 @@ fn docstring_test() {
         "M7.move",
         "fun Symbols::M7::create_other_struct(v: u64): Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "Documented initializer in another module\n",
+        Some("Documented initializer in another module\n"),
     );
 
     // const in param (other_doc_struct function)
@@ -2652,10 +2652,10 @@ fn docstring_test() {
         "M6.move",
         "u64",
         None,
-        "Constant containing the answer to the universe\n",
+        Some("Constant containing the answer to the universe\n"),
     );
 
-    // // other documented struct name imported (other_doc_struct_import function)
+    // other documented struct name imported (other_doc_struct_import function)
     assert_use_def_with_doc_string(
         mod_symbols,
         &symbols.file_name_mapping,
@@ -2667,7 +2667,37 @@ fn docstring_test() {
         "M7.move",
         "Symbols::M7::OtherDocStruct",
         Some((3, 11, "M7.move")),
-        "Documented struct in another module\n",
+        Some("Documented struct in another module\n"),
+    );
+
+    // Type param definition in documented function (type_param_doc function) - should have no doc string
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        1,
+        43,
+        23,
+        43,
+        23,
+        "M6.move",
+        "T",
+        None,
+        None,
+    );
+
+    // Param def (of generic type) in documented function (type_param_doc function) - should have no doc string
+    assert_use_def_with_doc_string(
+        mod_symbols,
+        &symbols.file_name_mapping,
+        2,
+        43,
+        39,
+        43,
+        39,
+        "M6.move",
+        "T",
+        None,
+        None,
     );
 }
 
