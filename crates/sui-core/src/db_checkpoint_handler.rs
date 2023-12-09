@@ -65,6 +65,8 @@ pub struct DBCheckpointHandler {
     prune_and_compact_before_upload: bool,
     /// Indirect object config for pruner
     indirect_objects_threshold: usize,
+    /// If true, upload will block on state snapshot upload completed marker
+    state_snapshot_enabled: bool,
     /// Pruning objects
     pruning_config: AuthorityStorePruningConfig,
     metrics: Arc<DBCheckpointMetrics>,
@@ -99,6 +101,7 @@ impl DBCheckpointHandler {
             gc_markers,
             prune_and_compact_before_upload,
             indirect_objects_threshold,
+            state_snapshot_enabled,
             pruning_config,
             metrics: DBCheckpointMetrics::new(registry),
         }))
@@ -108,6 +111,7 @@ impl DBCheckpointHandler {
         output_object_store_config: Option<&ObjectStoreConfig>,
         interval_s: u64,
         prune_and_compact_before_upload: bool,
+        state_snapshot_enabled: bool,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(DBCheckpointHandler {
             input_object_store: input_object_store_config.make()?,
@@ -122,6 +126,7 @@ impl DBCheckpointHandler {
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string(), TEST_MARKER.to_string()],
             prune_and_compact_before_upload,
             indirect_objects_threshold: 0,
+            state_snapshot_enabled,
             pruning_config: AuthorityStorePruningConfig::default(),
             metrics: DBCheckpointMetrics::new(&Registry::default()),
         }))
@@ -402,6 +407,7 @@ mod tests {
             Some(&output_store_config),
             10,
             false,
+            false,
         )?;
         let local_checkpoints_by_epoch =
             find_all_dirs_with_epoch_prefix(&db_checkpoint_handler.input_object_store, None)
@@ -472,6 +478,7 @@ mod tests {
             &input_store_config,
             Some(&output_store_config),
             10,
+            false,
             false,
         )?;
 
@@ -594,6 +601,7 @@ mod tests {
             Some(&output_store_config),
             10,
             false,
+            false,
         )?;
 
         let missing_epochs = find_missing_epochs_dirs(
@@ -657,6 +665,7 @@ mod tests {
             &input_store_config,
             Some(&output_store_config),
             10,
+            false,
             false,
         )?;
 
