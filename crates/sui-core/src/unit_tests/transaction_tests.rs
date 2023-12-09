@@ -676,10 +676,8 @@ async fn zk_multisig_test() {
     // Step 1. construct 2 zklogin signatures
     // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
 
-    let file = std::fs::File::open(
-        "/Users/marklogan/dev/sui/crates/sui-types/src/unit_tests/zklogin_test_vectors.json",
-    )
-    .expect("Unable to open file");
+    let file = std::fs::File::open("../sui-types/src/unit_tests/zklogin_test_vectors.json")
+        .expect("Unable to open file");
     let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
     let mut pks = vec![];
     let mut kps_and_zklogin_inputs = vec![];
