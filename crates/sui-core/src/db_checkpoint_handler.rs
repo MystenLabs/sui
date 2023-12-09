@@ -65,6 +65,8 @@ pub struct DBCheckpointHandler {
     prune_and_compact_before_upload: bool,
     /// Indirect object config for pruner
     indirect_objects_threshold: usize,
+    /// If true, upload will block on state snapshot upload completed marker
+    state_snapshot_enabled: bool,
     /// Pruning objects
     pruning_config: AuthorityStorePruningConfig,
     metrics: Arc<DBCheckpointMetrics>,
@@ -99,6 +101,7 @@ impl DBCheckpointHandler {
             gc_markers,
             prune_and_compact_before_upload,
             indirect_objects_threshold,
+            state_snapshot_enabled,
             pruning_config,
             metrics: DBCheckpointMetrics::new(registry),
         }))
@@ -108,6 +111,7 @@ impl DBCheckpointHandler {
         output_object_store_config: Option<&ObjectStoreConfig>,
         interval_s: u64,
         prune_and_compact_before_upload: bool,
+        state_snapshot_enabled: bool,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(DBCheckpointHandler {
             input_object_store: input_object_store_config.make()?,
@@ -122,6 +126,7 @@ impl DBCheckpointHandler {
             gc_markers: vec![UPLOAD_COMPLETED_MARKER.to_string(), TEST_MARKER.to_string()],
             prune_and_compact_before_upload,
             indirect_objects_threshold: 0,
+            state_snapshot_enabled,
             pruning_config: AuthorityStorePruningConfig::default(),
             metrics: DBCheckpointMetrics::new(&Registry::default()),
         }))
@@ -273,7 +278,23 @@ impl DBCheckpointHandler {
             .expect("Expected object store to exist")
             .clone();
         for (epoch, db_path) in dirs {
+            // Convert `db_path` to the local filesystem path to where db checkpoint is stored
+            let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                if self.state_snapshot_enabled {
+                    let snapshot_completed_marker =
+                        local_db_path.join(STATE_SNAPSHOT_COMPLETED_MARKER);
+                    if !snapshot_completed_marker.exists() {
+                        info!("DB checkpoint upload for epoch {} to wait until state snasphot uploaded", *epoch);
+                        continue;
+                    }
+                }
+
+                if self.prune_and_compact_before_upload {
+                    // Invoke pruning and compaction on the db checkpoint
+                    self.prune_and_compact(local_db_path, *epoch).await?;
+                }
+
                 // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
                 write_snapshot_manifest(
                     db_path,
@@ -282,12 +303,6 @@ impl DBCheckpointHandler {
                 )
                 .await?;
 
-                if self.prune_and_compact_before_upload {
-                    // Convert `db_path` to the local filesystem path to where db checkpoint is stored
-                    let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;
-                    // Invoke pruning and compaction on the db checkpoint
-                    self.prune_and_compact(local_db_path, *epoch).await?;
-                }
                 info!("Copying db checkpoint for epoch: {epoch} to remote storage");
                 copy_recursively(
                     db_path,
@@ -393,6 +408,7 @@ mod tests {
             Some(&output_store_config),
             10,
             false,
+            false,
         )?;
         let local_checkpoints_by_epoch =
             find_all_dirs_with_epoch_prefix(&db_checkpoint_handler.input_object_store, None)
@@ -463,6 +479,7 @@ mod tests {
             &input_store_config,
             Some(&output_store_config),
             10,
+            false,
             false,
         )?;
 
@@ -585,6 +602,7 @@ mod tests {
             Some(&output_store_config),
             10,
             false,
+            false,
         )?;
 
         let missing_epochs = find_missing_epochs_dirs(
@@ -648,6 +666,7 @@ mod tests {
             &input_store_config,
             Some(&output_store_config),
             10,
+            false,
             false,
         )?;
 
