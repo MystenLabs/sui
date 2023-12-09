@@ -56,7 +56,6 @@ impl VerifyParams {
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
-    fn check_author(&self) -> bool;
     fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult;
 
     fn verify_claims<T>(
@@ -64,7 +63,6 @@ pub trait AuthenticatorTrait {
         value: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        check_author: bool,
     ) -> SuiResult
     where
         T: Serialize;
@@ -82,8 +80,7 @@ pub trait AuthenticatorTrait {
         if let Some(epoch) = epoch {
             self.verify_user_authenticator_epoch(epoch)?;
         }
-        // when invoked from verify_authenticator, always check author.
-        self.verify_claims(value, author, aux_verify_data, true)
+        self.verify_claims(value, author, aux_verify_data)
     }
 
     fn verify_uncached_checks<T>(
@@ -91,7 +88,6 @@ pub trait AuthenticatorTrait {
         value: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        check_author: bool,
     ) -> SuiResult
     where
         T: Serialize;
@@ -285,9 +281,6 @@ impl<'de> ::serde::Deserialize<'de> for GenericSignature {
 
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {
-    fn check_author(&self) -> bool {
-        true
-    }
     fn verify_user_authenticator_epoch(&self, _: EpochId) -> SuiResult {
         Ok(())
     }
@@ -296,7 +289,6 @@ impl AuthenticatorTrait for Signature {
         _value: &IntentMessage<T>,
         _author: SuiAddress,
         _aux_verify_data: &VerifyParams,
-        _check_author: bool,
     ) -> SuiResult
     where
         T: Serialize,
@@ -309,7 +301,6 @@ impl AuthenticatorTrait for Signature {
         value: &IntentMessage<T>,
         author: SuiAddress,
         _aux_verify_data: &VerifyParams,
-        _check_author: bool,
     ) -> SuiResult
     where
         T: Serialize,
