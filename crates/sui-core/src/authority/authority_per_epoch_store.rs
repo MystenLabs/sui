@@ -2043,7 +2043,7 @@ impl AuthorityPerEpochStore {
         'a,
         C: CheckpointServiceNotify,
     >(
-        self: &'a Arc<Self>,
+        &self,
         transactions: Vec<SequencedConsensusTransaction>,
         consensus_stats: &ExecutionIndicesWithStats,
         checkpoint_service: &Arc<C>,
