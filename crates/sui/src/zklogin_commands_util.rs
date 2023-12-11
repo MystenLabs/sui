@@ -102,13 +102,7 @@ pub async fn perform_zk_login_test_tx(
     let skp1 = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32])));
     let multisig_pk = MultiSigPublicKey::new(
         vec![
-            PublicKey::ZkLogin(
-                ZkLoginPublicIdentifier::new(
-                    zk_login_inputs.get_iss(),
-                    zk_login_inputs.get_address_seed(),
-                )
-                .unwrap(),
-            ),
+            PublicKey::from_zklogin_inputs(&zk_login_inputs)?,
             skp1.public(),
         ],
         vec![1, 1],

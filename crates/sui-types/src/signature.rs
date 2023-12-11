@@ -4,7 +4,6 @@
 use crate::committee::EpochId;
 use crate::crypto::{
     CompressedSignature, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes,
-    ZkLoginPublicIdentifier,
 };
 use crate::error::SuiError;
 use crate::multisig_legacy::MultiSigLegacy;
@@ -190,9 +189,7 @@ impl GenericSignature {
                     }),
                 }
             }
-            GenericSignature::ZkLoginAuthenticator(s) => Ok(PublicKey::ZkLogin(
-                ZkLoginPublicIdentifier::new(s.get_iss(), s.get_address_seed())?,
-            )),
+            GenericSignature::ZkLoginAuthenticator(s) => s.get_pk(),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
             }),
