@@ -104,7 +104,7 @@
 
 ### Minor Changes
 
-- 5ee8c24f1: Introduces BREAKING CHANGES. Migration guide and explanation: https://sui-typescript-docs.vercel.app/kiosk/from-v1
+- 5ee8c24f1: Introduces BREAKING CHANGES. Migration guide and explanation: https://sdk.mystenlabs.com/kiosk/from-v1
 
 ## 0.6.0
 

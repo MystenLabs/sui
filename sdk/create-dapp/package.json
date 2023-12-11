@@ -2,7 +2,7 @@
 	"name": "@mysten/create-dapp",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A CLI for creating new Sui dApps",
-	"homepage": "https://sui-typescript-docs.vercel.app",
+	"homepage": "https://sdk.mystenlabs.com",
 	"version": "0.1.7",
 	"license": "Apache-2.0",
 	"files": [

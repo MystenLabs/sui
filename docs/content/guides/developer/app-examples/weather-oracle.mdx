@@ -3,7 +3,7 @@ title: Sui Weather Oracle
 description: Write a module (smart contract) in Move that fetches the weather data from the OpenWeather API every 10 minutes and updates the weather conditions for over 1,000 locations around the world.
 ---
 
-This guide demonstrates writing a module (smart contract) in Move, deploying it on Devnet, and adding a backend, which fetches the weather data from the OpenWeather API every 10 minutes and updates the weather conditions for each city. The dApp created in this guide is called Sui Weather Oracle and it provides real-time weather data for over 1,000 locations around the world. 
+This guide demonstrates writing a module (smart contract) in Move, deploying it on Devnet, and adding a backend, which fetches the weather data from the OpenWeather API every 10 minutes and updates the weather conditions for each city. The dApp created in this guide is called Sui Weather Oracle and it provides real-time weather data for over 1,000 locations around the world.
 
 You can access and use the weather data from the OpenWeather API for various applications, such as randomness, betting, gaming, insurance, travel, education, or research. You can also mint a weather NFT based on the weather data of a city, using the `mint` function of the SUI Weather Oracle smart contract.
 
@@ -121,7 +121,7 @@ public fun add_city(
 ) {
     dof::add(&mut oracle.id, geoname_id, // Add a new dynamic object field to the oracle object with the geoname ID as the key and a new city weather oracle object as the value.
         CityWeatherOracle {
-            id: object::new(ctx), // Assign a unique ID to the city weather oracle object 
+            id: object::new(ctx), // Assign a unique ID to the city weather oracle object
             geoname_id, // Set the geoname ID of the city weather oracle object
             name,  // Set the name of the city weather oracle object
             country,  // Set the country of the city weather oracle object
@@ -129,16 +129,16 @@ public fun add_city(
             positive_latitude,  // Set whether the latitude is positive (north) or negative (south)
             longitude,  // Set the longitude of the city weather oracle object
             positive_longitude,  // Set whether the longitude is positive (east) or negative (west)
-            weather_id: 0, // Initialize the weather condition code to be zero 
-            temp: 0, // Initialize the temperature to be zero 
-            pressure: 0, // Initialize the pressure to be zero 
-            humidity: 0, // Initialize the humidity to be zero 
-            visibility: 0, // Initialize the visibility to be zero 
-            wind_speed: 0, // Initialize the wind speed to be zero 
-            wind_deg: 0, // Initialize the wind direction to be zero 
-            wind_gust: option::none(), // Initialize the wind gust to be none 
-            clouds: 0, // Initialize the cloudiness to be zero 
-            dt: 0 // Initialize the timestamp to be zero 
+            weather_id: 0, // Initialize the weather condition code to be zero
+            temp: 0, // Initialize the temperature to be zero
+            pressure: 0, // Initialize the pressure to be zero
+            humidity: 0, // Initialize the humidity to be zero
+            visibility: 0, // Initialize the visibility to be zero
+            wind_speed: 0, // Initialize the wind speed to be zero
+            wind_deg: 0, // Initialize the wind direction to be zero
+            wind_gust: option::none(), // Initialize the wind gust to be none
+            clouds: 0, // Initialize the cloudiness to be zero
+            dt: 0 // Initialize the timestamp to be zero
         }
     );
 }
@@ -151,27 +151,27 @@ If you want to delete a city from the Sui Weather Oracle, call the `remove_city`
 ```rust title='weather.move'
 public fun remove_city(
     _: &AdminCap,
-    oracle: &mut WeatherOracle, 
+    oracle: &mut WeatherOracle,
     geoname_id: u32
     ) {
-        let CityWeatherOracle { 
-            id, 
-            geoname_id: _, 
-            name: _, 
-            country: _, 
-            latitude: _, 
-            positive_latitude: _, 
-            longitude: _, 
-            positive_longitude: _, 
-            weather_id: _, 
-            temp: _, 
-            pressure: _, 
-            humidity: _, 
-            visibility: _, 
-            wind_speed: _, 
-            wind_deg: _, 
-            wind_gust: _, 
-            clouds: _, 
+        let CityWeatherOracle {
+            id,
+            geoname_id: _,
+            name: _,
+            country: _,
+            latitude: _,
+            positive_latitude: _,
+            longitude: _,
+            positive_longitude: _,
+            weather_id: _,
+            temp: _,
+            pressure: _,
+            humidity: _,
+            visibility: _,
+            wind_speed: _,
+            wind_deg: _,
+            wind_gust: _,
+            clouds: _,
             dt: _ } = dof::remove(&mut oracle.id, geoname_id);
         object::delete(id);
 }
@@ -216,7 +216,7 @@ You have defined the data structure of the Sui Weather Oracle smart contract, bu
 
 /// Returns the `name` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_name(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): String {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -224,7 +224,7 @@ public fun city_weather_oracle_name(
 }
 /// Returns the `country` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_country(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): String {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -240,7 +240,7 @@ public fun city_weather_oracle_latitude(
 }
 /// Returns the `positive_latitude` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_positive_latitude(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): bool {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -248,7 +248,7 @@ public fun city_weather_oracle_positive_latitude(
 }
 /// Returns the `longitude` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_longitude(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): u32 {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -256,7 +256,7 @@ public fun city_weather_oracle_longitude(
 }
 /// Returns the `positive_longitude` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_positive_longitude(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): bool {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -280,7 +280,7 @@ public fun city_weather_oracle_temp(
 }
 /// Returns the `pressure` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_pressure(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): u32 {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -288,7 +288,7 @@ public fun city_weather_oracle_pressure(
 }
 /// Returns the `humidity` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_humidity(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): u8 {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -312,7 +312,7 @@ public fun city_weather_oracle_wind_speed(
 }
 /// Returns the `wind_deg` of the `CityWeatherOracle` with the given `geoname_id`.
 public fun city_weather_oracle_wind_deg(
-    weather_oracle: &WeatherOracle, 
+    weather_oracle: &WeatherOracle,
     geoname_id: u32
 ): u16 {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&weather_oracle.id, geoname_id);
@@ -369,8 +369,8 @@ struct WeatherNFT has key, store {
 }
 
 public fun mint(
-    oracle: &WeatherOracle, 
-    geoname_id: u32, 
+    oracle: &WeatherOracle,
+    geoname_id: u32,
     ctx: &mut TxContext
 ): WeatherNFT {
     let city_weather_oracle = dof::borrow<u32, CityWeatherOracle>(&oracle.id, geoname_id);
@@ -397,7 +397,7 @@ public fun mint(
 }
 ```
 
-And with that, your `weather.move` code is complete. 
+And with that, your `weather.move` code is complete.
 
 ## Deployment
 
@@ -413,7 +413,7 @@ You have successfully deployed the Sui Weather Oracle smart contract on the bloc
 - Fetch the weather data for each city from the OpenWeather API every 10 minutes, using the API key that you obtained from the website. The backend parses the JSON response and extracts the weather data for each city, such as the weather ID, temperature, pressure, humidity, visibility, wind speed, wind degree, wind gust, clouds, and timestamp.
 - Update the weather data for each city on the blockchain, using the `update` function of the smart contract. The backend passes the geoname ID and the new weather data of each city as parameters to the function.
 
-The Express backend uses the [Sui Typescript SDK](https://sui-typescript-docs.vercel.app/typescript), a TypeScript library that enables you to interact with the Sui blockchain and smart contracts. With the Sui Typescript SDK, you can connect to the Sui network, sign and submit transactions, and query the state of the smart contract. You also use the OpenWeather API to fetch the weather data for each city and update the smart contract every 10 minutes. Additionally, you can mint weather NFTs, if you want to explore that feature of the smart contract.
+The Express backend uses the [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript), a TypeScript library that enables you to interact with the Sui blockchain and smart contracts. With the Sui Typescript SDK, you can connect to the Sui network, sign and submit transactions, and query the state of the smart contract. You also use the OpenWeather API to fetch the weather data for each city and update the smart contract every 10 minutes. Additionally, you can mint weather NFTs, if you want to explore that feature of the smart contract.
 
 ### Initialize the project
 
@@ -682,7 +682,7 @@ async function run() {
 run();
 ```
 
-The code in index.ts does the following: 
+The code in index.ts does the following:
 
 - Uses `dotenv` to load some environment variables from a `.env` file, such as `ADMIN_PHRASE`, `FULLNODE`, `PACKAGE_ID`, `ADMIN_CAP_ID`, `WEATHER_ORACLE_ID`, `APPID`, and `MODULE_NAME`. These variables are used to configure some parameters for the code, such as the key pair, the provider, the signer, and the target package and module.
 - Defines some constants, such as `CHUNK_SIZE`, `MS`, `MINUTE`, and `TEN_MINUTES`. These constants are used to control the frequency and size of the updates that the code performs.

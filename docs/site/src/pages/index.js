@@ -145,7 +145,7 @@ export default function Home() {
           <HomeCard title="References" aux>
             <Link
               className={`${cardlinks} text-md`}
-              to="https://sui-typescript-docs.vercel.app/dapp-kit?ref=blog.sui.io"
+              to="https://sdk.mystenlabs.com/dapp-kit?ref=blog.sui.io"
             >
               Sui dApp Kit
             </Link>

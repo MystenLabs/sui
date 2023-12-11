@@ -55,7 +55,7 @@ const references = [
 			{
 				type: 'link',
 				label: 'Sui TypeScript SDK Site',
-				href: 'https://sui-typescript-docs.vercel.app/typescript',
+				href: 'https://sdk.mystenlabs.com/typescript',
 			},
 			'references/rust-sdk',
 		],
@@ -63,7 +63,7 @@ const references = [
 	{
 		type: 'link',
 		label: 'dApp Kit Site',
-		href: 'https://sui-typescript-docs.vercel.app/dapp-kit',
+		href: 'https://sdk.mystenlabs.com/dapp-kit',
 	},
 	{
 		type: 'category',

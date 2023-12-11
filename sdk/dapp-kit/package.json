@@ -2,7 +2,7 @@
 	"name": "@mysten/dapp-kit",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A collection of React hooks and components for interacting with the Sui blockchain and wallets.",
-	"homepage": "https://sui-typescript-docs.vercel.app/typescript",
+	"homepage": "https://sdk.mystenlabs.com/typescript",
 	"version": "0.10.2",
 	"license": "Apache-2.0",
 	"files": [
