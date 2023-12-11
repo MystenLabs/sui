@@ -718,8 +718,7 @@ async fn zk_multisig_test() {
 
     let generic_sig = GenericSignature::MultiSig(multisig);
 
-    let transfer_transaction =
-        Transaction::from_generic_sig_data(data, Intent::sui_transaction(), vec![generic_sig]);
+    let transfer_transaction = Transaction::from_generic_sig_data(data, vec![generic_sig]);
 
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
 
