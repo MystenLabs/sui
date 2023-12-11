@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//#[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
@@ -158,7 +158,7 @@ mod tests {
         let mut sim = Simulacrum::new_with_rng(rng);
         let (mut max_nodes, mut max_depth, mut max_payload) = (0, 0, 0);
 
-        sim.create_checkpoint();f
+        sim.create_checkpoint();
 
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 

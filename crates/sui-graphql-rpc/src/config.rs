@@ -90,7 +90,7 @@ impl Limits {
         self.max_query_payload_size
     }
 
-    pub fn default_for_simulator_testing()-> Self {
+    pub fn default_for_simulator_testing() -> Self {
         Self {
             max_query_nodes: 500,
             max_query_depth: 20,
