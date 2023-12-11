@@ -237,6 +237,19 @@ macro_rules! fail_point_if {
     ($tag: expr, $callback: expr) => {};
 }
 
+/// Use to write DEBUG level logs only when REPLAY_LOG
+/// environment variable is set. Useful for log lines that
+/// are only relevant to test infra which still may need to
+/// run a release build
+#[macro_export]
+macro_rules! replay_log {
+    ($($arg:tt)+) => {
+        if std::env::var("REPLAY_LOG").is_ok() {
+            tracing::debug!($($arg)+);
+        }
+    };
+}
+
 // These tests need to be run in release mode, since debug mode does overflow checks by default!
 #[cfg(test)]
 mod test {
