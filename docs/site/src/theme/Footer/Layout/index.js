@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "@docusaurus/Link";
 import * as amplitude from "@amplitude/analytics-browser";
 
 export default function FooterLayout({ style, links, logo, copyright }) {
-  amplitude.init("d671bf65238a07fd7c249d0a23e7d13d", {
-    defaultTracking: {
-      formInteractions: false,
-    },
-  });
+  useEffect(() => {
+    amplitude.init("d671bf65238a07fd7c249d0a23e7d13d", {
+      defaultTracking: {
+        pageViews: false,
+        formInteractions: false,
+      },
+    });
+  }, []);
+
   return (
     <footer className="px-2 pb-2 bg-sui-black">
       <div className="bg-sui-card-dark text-white rounded-sui flex flex-row flex-wrap-reverse">
