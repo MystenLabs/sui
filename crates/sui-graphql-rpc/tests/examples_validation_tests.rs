@@ -67,29 +67,25 @@ mod tests {
                     err
                 ))
             });
-            let usage = resp
-                .usage()
-                .expect("Usage fetch should succeed")
-                .expect(&format!(
-                    "Usage should be present for query: {}",
-                    query.name
-                ));
+            if resp.errors().is_empty() {
+                let usage = resp
+                    .usage()
+                    .expect("Usage fetch should succeed")
+                    .unwrap_or_else(|| panic!("Usage should be present for query: {}", query.name));
 
-            let nodes = *usage.get("nodes").expect(&format!(
-                "Node usage should be present for query: {}",
-                query.name
-            ));
-            let depth = *usage.get("depth").expect(&format!(
-                "Depth usage should be present for query: {}",
-                query.name
-            ));
-            let payload = *usage.get("query_payload").expect(&format!(
-                "Payload usage should be present for query: {}",
-                query.name
-            ));
-            *max_nodes = max(*max_nodes, nodes);
-            *max_depth = max(*max_depth, depth);
-            *max_payload = max(*max_payload, payload);
+                let nodes = *usage.get("nodes").unwrap_or_else(|| {
+                    panic!("Node usage should be present for query: {}", query.name)
+                });
+                let depth = *usage.get("depth").unwrap_or_else(|| {
+                    panic!("Depth usage should be present for query: {}", query.name)
+                });
+                let payload = *usage.get("query_payload").unwrap_or_else(|| {
+                    panic!("Payload usage should be present for query: {}", query.name)
+                });
+                *max_nodes = max(*max_nodes, nodes);
+                *max_depth = max(*max_depth, depth);
+                *max_payload = max(*max_payload, payload);
+            }
         }
         errors
     }
