@@ -65,6 +65,7 @@ pub enum KeyToolCommand {
     #[clap(name = "update-alias")]
     Alias {
         old_alias: String,
+        /// The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
         new_alias: Option<String>,
     },
     /// Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format
@@ -105,7 +106,7 @@ pub enum KeyToolCommand {
     /// Set an alias for the key with the --alias flag. If no alias is provided,
     /// the tool will automatically generate one.
     Import {
-        /// Sets an alias for this address
+        /// Sets an alias for this address. The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
         #[clap(long)]
         alias: Option<String>,
         input_string: String,
@@ -432,12 +433,6 @@ impl KeyToolCommand {
                 old_alias,
                 new_alias,
             } => {
-                if new_alias
-                    .as_ref()
-                    .is_some_and(|x| x.is_empty() || x.trim().is_empty())
-                {
-                    bail!("The new alias cannot be empty.");
-                }
                 let new_alias = keystore.update_alias(&old_alias, new_alias.as_deref())?;
                 CommandOutput::Alias(AliasUpdate {
                     old_alias,
