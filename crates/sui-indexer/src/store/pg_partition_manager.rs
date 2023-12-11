@@ -5,7 +5,7 @@ use diesel::sql_types::{BigInt, VarChar};
 use diesel::{QueryableByName, RunQueryDsl};
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::handlers::EpochToCommit;
 use crate::models_v2::epoch::StoredEpochInfo;
@@ -122,32 +122,33 @@ impl PgPartitionManager {
             tracing::info!("Epoch 0 partition has been crate in migrations, skipped.");
             return Ok(());
         }
-        assert!(
-            last_partition == data.last_epoch,
-            "last_partition != last_epoch for table {}, {}, {}",
-            table,
-            last_partition,
-            data.last_epoch
-        );
-        transactional_blocking_with_retry!(
-            &self.cp,
-            |conn| {
-                RunQueryDsl::execute(
-                    diesel::sql_query("CALL advance_partition($1, $2, $3, $4, $5)")
-                        .bind::<diesel::sql_types::Text, _>(table.clone())
-                        .bind::<diesel::sql_types::BigInt, _>(data.last_epoch as i64)
-                        .bind::<diesel::sql_types::BigInt, _>(data.next_epoch as i64)
-                        .bind::<diesel::sql_types::BigInt, _>(data.last_epoch_start_cp as i64)
-                        .bind::<diesel::sql_types::BigInt, _>(data.next_epoch_start_cp as i64),
-                    conn,
-                )
-            },
-            Duration::from_secs(10)
-        )?;
-        info!(
-            "Advanced epoch partition for table {} from {} to {}",
-            table, last_partition, data.next_epoch
-        );
+        if last_partition == data.last_epoch {
+            transactional_blocking_with_retry!(
+                &self.cp,
+                |conn| {
+                    RunQueryDsl::execute(
+                        diesel::sql_query("CALL advance_partition($1, $2, $3, $4, $5)")
+                            .bind::<diesel::sql_types::Text, _>(table.clone())
+                            .bind::<diesel::sql_types::BigInt, _>(data.last_epoch as i64)
+                            .bind::<diesel::sql_types::BigInt, _>(data.next_epoch as i64)
+                            .bind::<diesel::sql_types::BigInt, _>(data.last_epoch_start_cp as i64)
+                            .bind::<diesel::sql_types::BigInt, _>(data.next_epoch_start_cp as i64),
+                        conn,
+                    )
+                },
+                Duration::from_secs(10)
+            )?;
+            info!(
+                "Advanced epoch partition for table {} from {} to {}",
+                table, last_partition, data.next_epoch
+            );
+        } else if last_partition != data.next_epoch {
+            // skip when the partition is already advanced once, otherwise error.
+            error!(
+                "Epoch partition for table {} is not in sync with the last epoch {}.",
+                table, data.last_epoch
+            );
+        }
         Ok(())
     }
 

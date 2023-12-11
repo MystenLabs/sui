@@ -701,15 +701,31 @@ impl PgIndexerStoreV2 {
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
                 for (table, last_partition) in table_partitions {
+                    let guard = self.metrics.advance_epoch_latency.start_timer();
                     self.partition_manager.advance_table_epoch_partition(
                         table.clone(),
                         last_partition,
                         &epoch_partition_data,
                     )?;
+                    let elapsed = guard.stop_and_record();
+                    info!(
+                        elapsed,
+                        "Advanced epoch partition {} for table {}",
+                        last_partition,
+                        table.clone()
+                    );
                     // update objects_snapshot with objects_history of last epoch
                     if table == *"objects_history" {
+                        let snapshot_guard =
+                            self.metrics.update_object_snapshot_latency.start_timer();
                         self.partition_manager
                             .update_objects_snapshot(&epoch_partition_data)?;
+                        let elapsed = snapshot_guard.stop_and_record();
+                        info!(
+                            elapsed,
+                            "Updated objects_snapshot at partition {} with objects_history of last epoch",
+                            last_partition
+                        );
                     }
                 }
             } else {

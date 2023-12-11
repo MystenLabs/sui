@@ -163,18 +163,6 @@ async fn commit_checkpoints<S>(
             .expect("Persisting data into DB should not fail.");
     }
 
-    state
-        .persist_checkpoints(checkpoint_batch)
-        .await
-        .tap_err(|e| {
-            error!(
-                "Failed to persist checkpoint data with error: {}",
-                e.to_string()
-            );
-        })
-        .expect("Persisting data into DB should not fail.");
-    let elapsed = guard.stop_and_record();
-
     // handle partitioning on epoch boundary
     if let Some(epoch_data) = epoch {
         state
@@ -186,6 +174,18 @@ async fn commit_checkpoints<S>(
             .expect("Advancing epochs in DB should not fail.");
         metrics.total_epoch_committed.inc();
     }
+
+    state
+        .persist_checkpoints(checkpoint_batch)
+        .await
+        .tap_err(|e| {
+            error!(
+                "Failed to persist checkpoint data with error: {}",
+                e.to_string()
+            );
+        })
+        .expect("Persisting data into DB should not fail.");
+    let elapsed = guard.stop_and_record();
 
     commit_notifier
         .send(Some(last_checkpoint_seq))
