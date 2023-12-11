@@ -571,7 +571,7 @@ The full source code for the frontend is available at the [Satoshi Coin Flip Fro
 
 :::
 
-To expose the backend you have created to your users, you need a frontend (UI). In this section, you create a React frontend project using the [Sui Typescript SDK](https://sui-typescript-docs.vercel.app/typescript) and the [Sui dApp Kit](https://sui-typescript-docs.vercel.app/dapp-kit) that interacts with the deployed smart contracts.
+To expose the backend you have created to your users, you need a frontend (UI). In this section, you create a React frontend project using the [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) and the [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) that interacts with the deployed smart contracts.
 
 ### Initialize the project
 
@@ -581,7 +581,7 @@ The following instructions are using `pnpm` as the package manager. Follow the [
 
 :::
 
-First, initialize your frontend project. To do this rapidly, use the [`create-dapp` tool](https://sui-typescript-docs.vercel.app/dapp-kit/create-dapp) to bootstrap the project using [dApp Kit](https://sui-typescript-docs.vercel.app/dapp-kit). Run the following command in your terminal or console:
+First, initialize your frontend project. To do this rapidly, use the [`create-dapp` tool](https://sdk.mystenlabs.com/dapp-kit/create-dapp) to bootstrap the project using [dApp Kit](https://sdk.mystenlabs.com/dapp-kit). Run the following command in your terminal or console:
 
 ```
 pnpm create @mysten/dapp
@@ -717,7 +717,7 @@ Okay, that’s a good start to have an overview of the project. Time to move to 
         txb.object(HOUSECAP_ID),
         houseStakeCoin,
         // This argument is not an on-chain object, hence, we must serialize it using `bcs`
-        // https://sui-typescript-docs.vercel.app/typescript/transaction-building/basics#pure-values
+        // https://sdk.mystenlabs.com/typescript/transaction-building/basics#pure-values
         txb.pure(
           bcs
             .vector(bcs.U8)

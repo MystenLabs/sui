@@ -138,13 +138,13 @@ _Go to Settings_
 
 ### Kakao
 
-1. Register for a Kakao developer account. Access the [dashboard](https://developers.kakao.com/console/app) and add an application. 
+1. Register for a Kakao developer account. Access the [dashboard](https://developers.kakao.com/console/app) and add an application.
 
 ![1](images/zklogin-kakao1.png "Add applications to Kakao")
 
 *Add applications to Kakao*
 
-1. Go to "App Keys" where you can find the corresponding client ID for different platforms. 
+1. Go to "App Keys" where you can find the corresponding client ID for different platforms.
 
 - Native app key: Used to call APIs through the Android or iOS SDK.
 - JavaScript key: Used to call APIs through the JavaScript SDK.
@@ -162,27 +162,27 @@ _Go to Settings_
 
 ### Slack
 
-1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch". 
+1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch".
 
 	![1](images/zklogin-slack1.png "Create app in Slack")
-	
+
 	*Create app in Slack*
 
-1. Find the Client ID and Client Secret under "App Credentials". 
+1. Find the Client ID and Client Secret under "App Credentials".
 
 	![1](images/zklogin-slack2.png "Find Client ID and Client Secret")
-	
+
 	*Find Client ID and Client Secret*
 
 1. Set Redirect URL in "OAuth & Permissions" under "Features". This should be the wallet or application frontend.
 
 	![1](images/zklogin-slack3.png "Set Redirect URL")
-	
+
 	*Set Redirect URL*
 
 ## Get JWT Token
 
-1. Generate an ephemeral KeyPair. Follow the same process as you would generating a KeyPair in a traditional wallet. See [Sui SDK](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs) for details.
+1. Generate an ephemeral KeyPair. Follow the same process as you would generating a KeyPair in a traditional wallet. See [Sui SDK](https://sdk.mystenlabs.com/typescript/cryptography/keypairs) for details.
 
 1. Set the expiration time for the ephemeral KeyPair. The wallet decides whether the maximum epoch is the current epoch or later. The wallet also determines whether this is adjustable by the user.
 
@@ -202,18 +202,18 @@ const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomnes
 ```
 The auth flow URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$NONCE`.
 
-For some providers ("Yes" for "Auth Flow Only"), the JWT token can be found immediately in the redirect URL after the auth flow. 
+For some providers ("Yes" for "Auth Flow Only"), the JWT token can be found immediately in the redirect URL after the auth flow.
 
 For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT token, an additional POST call is required with "Token Exchange URL".
 
-| Provider | Auth Flow URL | Token Exchange URL | Auth Flow Only | 
+| Provider | Auth Flow URL | Token Exchange URL | Auth Flow Only |
 | ----------- | ----------- | ----------- | ----------- |
 | Google | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE` | N/A | Yes |
 | Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` | N/A | Yes |
 | Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL& response_type=id_token&scope=openid&nonce=$NONCE` | N/A | Yes |
 | Kakao | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE` | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No |
 | Apple | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE` | N/A | Yes |
-| Slack | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid` | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET` | No | 
+| Slack | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid` | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET` | No |
 
 ## Decoding JWT
 
@@ -232,7 +232,7 @@ To decode the JWT you can use a library like: `jwt_decode:` and map the response
 const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
 
 export interface JwtPayload {
-   iss?: string;  
+   iss?: string;
    sub?: string;  //Subject ID
    aud?: string[] | string;
    exp?: number;
@@ -274,7 +274,7 @@ const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
 
 ## Get the Zero-Knowledge Proof
 
-The next step is to fetch the ZK proof. This is an attestation (proof) over the ephemeral key pair that proves the ephemeral key pair is valid. 
+The next step is to fetch the ZK proof. This is an attestation (proof) over the ephemeral key pair that proves the ephemeral key pair is valid.
 
 First, generate the extended ephemeral public key to use as an input to the ZKP.
 
@@ -288,20 +288,20 @@ You need to fetch a new ZK proof if the previous ephemeral key pair is expired o
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-There are two options:  
+There are two options:
 1. Call the Mysten Labs-maintained proving service
-1. Run the proving service in your backend using the provided Docker images. 
+1. Run the proving service in your backend using the provided Docker images.
 
 ### Call the Mysten Labs-maintained proving service
 
 If you wish to use the Mysten ran ZK Proving Service for Mainnet, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
-To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet fails.  
+To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet fails.
 
 | Network | Prover URL |
 | ------- | ---------- |
-| Mainnet, Testnet | https://prover.mystenlabs.com/v1 | 
-| Devnet | https://prover-dev.mystenlabs.com/v1 | 
+| Mainnet, Testnet | https://prover.mystenlabs.com/v1 |
+| Devnet | https://prover-dev.mystenlabs.com/v1 |
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
@@ -338,7 +338,7 @@ Response:
 		["12744153306027049365027606189549081708414309055722206371798414155740784907883",
 		"17883388059920040098415197241200663975335711492591606641576557652282627716838"],
 		["1","0"]],
-		
+
 		"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
 		"19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]
 		},
@@ -351,7 +351,7 @@ Response:
 
 To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
 
-The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK. 
+The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK.
 
 ```typescript
 const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
@@ -365,7 +365,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Run the proving service in your backend
 
-1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
+1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`.
 
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. There are zkeys available for Mainnet and Testnet, as well as a test zkey for Devnet. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
 
@@ -422,7 +422,7 @@ A few things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sdk.mystenlabs.com/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
 
 ```typescript
  const ephemeralKeyPair = new Ed25519Keypair();
@@ -758,12 +758,12 @@ The key differentiators that zkLogin brings to Sui are:
 
 ## How to verify a zkLogin signature offchain?
 
-The following options support a zkLogin signature over either transaction data or personal message. 
+The following options support a zkLogin signature over either transaction data or personal message.
 
-1. Use keytool: See usage in keytool. 
+1. Use keytool: See usage in keytool.
 
 ```bash
 $SUI_BINARY keytool zk-login-sig-verify -h
 ```
 
-2. Use a self hosted server endpoint: See usage in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier). 
+2. Use a self hosted server endpoint: See usage in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier).

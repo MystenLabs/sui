@@ -16,7 +16,7 @@
 
 ### Minor Changes
 
-- 1bc430161: Add new type-safe schema builder. See https://sui-typescript-docs.vercel.app/bcs for updated documentation
+- 1bc430161: Add new type-safe schema builder. See https://sdk.mystenlabs.com/bcs for updated documentation
 - e4484852b: Add isSerializedBcs helper
 
 ## 0.7.4
