@@ -1095,7 +1095,7 @@ impl<'a> SuiTestAdapter<'a> {
                 )
             })?;
             let pattern = format!("@{{{var_name}}}");
-            interpolated_query = interpolated_query.replace(&pattern, &value);
+            interpolated_query = interpolated_query.replace(&pattern, value);
         }
 
         Ok(interpolated_query)
