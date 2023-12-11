@@ -3,10 +3,11 @@
 
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::random_names::{random_name, random_names};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
+use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
@@ -49,6 +50,7 @@ pub trait AccountKeystore: Send + Sync {
     }
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
     fn aliases(&self) -> Vec<&Alias>;
+    fn aliases_mut(&mut self) -> Vec<&mut Alias>;
     fn alias_names(&self) -> Vec<&str> {
         self.aliases()
             .into_iter()
@@ -63,6 +65,54 @@ pub trait AccountKeystore: Send + Sync {
     }
 
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error>;
+
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error>;
+
+    // Internal function. Use update_alias instead
+    fn update_alias_value(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        if !self.alias_exists(old_alias) {
+            bail!("The provided alias {old_alias} does not exist");
+        }
+        let new_alias_name = match new_alias {
+            Some(x) => {
+                let re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_]*$").map_err(|_| {
+                    anyhow!("Cannot build the regex needed to validate the alias naming")
+                })?;
+
+                let name = x.trim();
+                ensure!(
+                        re.is_match(name),
+                        "Invalid alias. A valid alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)."
+                    );
+                name.to_string()
+            }
+            None => random_name(
+                &self
+                    .alias_names()
+                    .into_iter()
+                    .map(|x| x.to_string())
+                    .collect::<HashSet<_>>(),
+            ),
+        };
+        for a in self.aliases_mut() {
+            if a.alias == old_alias {
+                let pk = &a.public_key_base64;
+                *a = Alias {
+                    alias: new_alias_name.clone(),
+                    public_key_base64: pk.clone(),
+                };
+            }
+        }
+        Ok(new_alias_name)
+    }
 
     fn generate_and_add_new_key(
         &mut self,
@@ -202,6 +252,11 @@ impl AccountKeystore for FileBasedKeystore {
         self.aliases.iter().collect::<Vec<_>>()
     }
 
+    /// Return an array of `Alias`, consisting of every alias and its corresponding public key.
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
+    }
+
     fn keys(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
@@ -238,6 +293,18 @@ impl AccountKeystore for FileBasedKeystore {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
         }
+    }
+
+    /// Updates an old alias to the new alias and saves it to the alias file.
+    /// If the new_alias is None, it will generate a new random alias.
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        let new_alias_name = self.update_alias_value(old_alias, new_alias)?;
+        self.save_aliases()?;
+        Ok(new_alias_name)
     }
 }
 
@@ -480,6 +547,20 @@ impl AccountKeystore for InMemKeystore {
                     .collect::<HashSet<_>>(),
             )),
         }
+    }
+
+    fn aliases_mut(&mut self) -> Vec<&mut Alias> {
+        self.aliases.values_mut().collect()
+    }
+
+    /// Updates an old alias to the new alias. If the new_alias is None,
+    /// it will generate a new random alias.
+    fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, anyhow::Error> {
+        self.update_alias_value(old_alias, new_alias)
     }
 }
 

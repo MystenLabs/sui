@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -60,6 +60,13 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
+    /// Update an old alias to a new one.
+    /// If a new alias is not provided, a random one will be generated.
+    #[clap(name = "update-alias")]
+    Alias {
+        old_alias: String,
+        new_alias: Option<String>,
+    },
     /// Convert private key from wallet format (hex of 32 byte private key) to sui.keystore format
     /// (base64 of 33 byte flag || private key) or vice versa.
     Convert { value: String },
@@ -259,6 +266,13 @@ pub enum KeyToolCommand {
 // Command Output types
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AliasUpdate {
+    old_alias: String,
+    new_alias: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DecodedMultiSig {
     public_base64_key: String,
     sig_base64: String,
@@ -390,6 +404,7 @@ pub struct ZkLoginInsecureSignPersonalMessage {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum CommandOutput {
+    Alias(AliasUpdate),
     Convert(ConvertOutput),
     DecodeMultiSig(DecodedMultiSigOutput),
     DecodeTxBytes(TransactionData),
@@ -413,6 +428,22 @@ pub enum CommandOutput {
 impl KeyToolCommand {
     pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
         let cmd_result = Ok(match self {
+            KeyToolCommand::Alias {
+                old_alias,
+                new_alias,
+            } => {
+                if new_alias
+                    .as_ref()
+                    .is_some_and(|x| x.is_empty() || x.trim().is_empty())
+                {
+                    bail!("The new alias cannot be empty.");
+                }
+                let new_alias = keystore.update_alias(&old_alias, new_alias.as_deref())?;
+                CommandOutput::Alias(AliasUpdate {
+                    old_alias,
+                    new_alias,
+                })
+            }
             KeyToolCommand::Convert { value } => {
                 let result = convert_private_key_to_base64(value)?;
                 CommandOutput::Convert(result)
@@ -1066,6 +1097,13 @@ impl From<PublicKey> for Key {
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            CommandOutput::Alias(update) => {
+                write!(
+                    formatter,
+                    "Old alias {} was updated to {}",
+                    update.old_alias, update.new_alias
+                )
+            }
             // Sign needs to be manually built because we need to wrap the very long
             // rawTxData string and rawIntentMsg strings into multiple rows due to
             // their lengths, which we cannot do with a JsonTable
