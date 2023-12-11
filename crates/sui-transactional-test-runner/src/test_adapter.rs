@@ -501,6 +501,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 show_headers,
                 show_service_version,
                 variables,
+                interpolations,
             }) => {
                 let file = data.ok_or_else(|| anyhow::anyhow!("Missing GraphQL query"))?;
                 let contents = std::fs::read_to_string(file.path())?;
@@ -510,11 +511,13 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
                     .await;
 
+                let interpolated = self.interpolate_query(&contents, &interpolations)?;
+
                 let used_variables = self.resolve_graphql_variables(&variables)?;
                 let resp = cluster
                     .graphql_client
                     .execute_to_graphql(
-                        contents.trim().to_owned(),
+                        interpolated.trim().to_owned(),
                         show_usage,
                         used_variables,
                         vec![],
@@ -1046,6 +1049,56 @@ impl<'a> SuiTestAdapter<'a> {
             }
         }
         Ok(res)
+    }
+
+    fn named_variables(&self) -> BTreeMap<String, String> {
+        let mut variables = BTreeMap::new();
+        let named_addrs = self
+            .compiled_state
+            .named_address_mapping
+            .iter()
+            .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
+
+        let objects = self
+            .object_enumeration
+            .iter()
+            .filter_map(|(oid, fid)| match fid {
+                FakeID::Known(_) => None,
+                FakeID::Enumerated(x, y) => Some((format!("obj_{x}_{y}"), oid.to_string())),
+            });
+
+        for (name, addr) in named_addrs.chain(objects) {
+            let addr = addr.to_string();
+
+            // Required variant
+            variables.insert(name.to_owned(), addr.clone());
+            // Optional variant
+            let name = name.to_string() + "_opt";
+            variables.insert(name.clone(), addr.clone());
+        }
+        variables
+    }
+    fn interpolate_query(
+        &self,
+        contents: &str,
+        interpolations: &[String],
+    ) -> anyhow::Result<String> {
+        let variables = self.named_variables();
+        let mut interpolated_query = contents.to_string();
+
+        for var_name in interpolations {
+            let value = variables.get(var_name).ok_or_else(|| {
+                anyhow!(
+                    "Unknown variable: {}\nAllowed variable mappings are are {:#?}",
+                    var_name,
+                    variables
+                )
+            })?;
+            let pattern = format!("@{{{var_name}}}");
+            interpolated_query = interpolated_query.replace(&pattern, &value);
+        }
+
+        Ok(interpolated_query)
     }
 
     async fn upgrade_package(
