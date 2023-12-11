@@ -21,9 +21,10 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 
 	uint256[48] __gap;
 
-	mapping(address => mapping(uint => bool)) public processedNonces;
+	mapping(uint256 => bool) public processedNonces;
 
 	uint64 public version;
+	uint8 public messageVersion;
 	// nonce for replay protection
 	uint64 public sequenceNumber;
 	// Bridge treasury for mint/burn bridged tokens
@@ -73,21 +74,23 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	}
 
 	function initialize(Member[] calldata _committeeMembers) public initializer {
-		// addValidator(firstPK, firstWeight);
-		// __Ownable_init();
 		__UUPSUpgradeable_init();
-		running = true;
 
 		for (uint256 i = 0; i < _committeeMembers.length; i++) {
 			addCommitteeMember(_committeeMembers[i].account, _committeeMembers[i].stake);
 			emit CommitteeMemberAdded(_committeeMembers[i].account, _committeeMembers[i].stake);
 		}
+		running = true;
+		version = 1;
+		messageVersion = 1;
 	}
 
 	function approveBridgeMessage(
 		BridgeMessage calldata bridgeMessage,
 		bytes[] calldata signatures
 	) public whenRunning returns (bool, uint256) {
+		require(bridgeMessage.messageVersion == messageVersion, 'Invalid message version');
+
 		// Declare an array to store the recovered addresses
 		address[] memory seen = new address[](signatures.length);
 		uint256 seenIndex = 0;
@@ -206,10 +209,10 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		bytes memory signature
 	) private {
 		// Verify that the nonce is correct
-		require(processedNonces[recipient][nonce] == false, 'transfer already processed');
+		require(processedNonces[nonce] == false, 'transfer already processed');
 
 		// Increment the nonce for the recipient
-		processedNonces[recipient][nonce] = true;
+		processedNonces[nonce] = true;
 
 		// Emit the transfer completed event
 		emit TransferCompleted(sender, recipient, amount, nonce);
