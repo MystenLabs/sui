@@ -16,6 +16,15 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey
 - Microsoft Windows - Windows 10 and 11
 
+## Install using Homebrew {#install-homebrew}
+
+If you use [Homebrew](https://brew.sh/), you can install Sui with the following commands:
+
+```bash
+brew tap mystenlabs/tap
+brew install mystenlabs/tap/sui
+```
+
 ## Install from binaries {#install-binaries}
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
@@ -226,25 +235,9 @@ Use the following command to install [Homebrew](https://brew.sh/):
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-#### Homebrew complete install
-
-You can install Sui along with prerequisites using the following commands.
-
-First, create a tap to the Sui repository.
-
-```bash
-brew tap mystenlabs/tap
-```
-
-Second, install Sui using the tap you created.
-
-```bash
-brew install mystenlabs/tap/sui
-```
-
 :::info
 
-You do not need to install prerequisites if you install Sui using the tap.
+If you used the commands in the [Install using Homebrew](#install-homebrew) section, you do not need to install anything else.
 
 :::
 
