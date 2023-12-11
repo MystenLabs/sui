@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
