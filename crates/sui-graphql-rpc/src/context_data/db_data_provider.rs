@@ -1783,7 +1783,7 @@ pub(crate) fn validate_cursor_pagination(
     Ok(())
 }
 
-pub fn convert_to_validators(
+pub(crate) fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
     validator_apys: ValidatorApys,
     system_state: Option<NativeSuiSystemStateSummary>,
