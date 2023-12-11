@@ -2732,6 +2732,10 @@ type Validator {
 	The addresses of other validators this validator has reported.
 	"""
 	reportRecords: [Address!]
+	"""
+	The apy of this validator.
+	"""
+	apy: Float
 }
 
 type ValidatorCredentials {

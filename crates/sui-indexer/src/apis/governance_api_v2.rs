@@ -312,7 +312,7 @@ impl GovernanceReadApiServer for GovernanceReadApiV2 {
     }
 
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
-        self.get_validators_apy().await.map_err(Into::into)
+        Ok(self.get_validators_apy().await?)
     }
 }
 

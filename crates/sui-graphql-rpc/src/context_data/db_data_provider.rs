@@ -59,9 +59,7 @@ use sui_json_rpc::{
     coin_api::{parse_to_struct_tag, parse_to_type_tag},
     name_service::{Domain, NameRecord, NameServiceConfig},
 };
-use sui_json_rpc_types::{
-    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as RpcStakedSui, ValidatorApys,
-};
+use sui_json_rpc_types::{ProtocolConfigResponse, Stake as RpcStakedSui, ValidatorApys};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::ConciseableName;
 use sui_types::{
@@ -1208,7 +1206,7 @@ impl PgManager {
             .spawn_blocking(|this| this.get_latest_sui_system_state())
             .await?;
 
-        try_from_native_sui_system_state_summary(result, self.fetch_validator_apys().await?)
+        try_from_native_sui_system_summary(result, self.fetch_validator_apys().await?)
     }
 
     pub(crate) async fn fetch_protocol_configs(
@@ -1672,13 +1670,16 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
     }
 }
 
-impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
-    type Error = Error;
-    fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
-        let active_validators = convert_to_validators(
-            system_state.active_validators.clone(),
-            Some(system_state.clone()),
-        );
+// TODO replace this when we get rid of SuiSystemStateSummary
+fn try_from_native_sui_system_summary(
+    system_state: NativeSuiSystemStateSummary,
+    validator_apys: ValidatorApys,
+) -> Result<SuiSystemStateSummary, Error> {
+    let active_validators = convert_to_validators(
+        system_state.active_validators.clone(),
+        validator_apys,
+        Some(system_state.clone()),
+    );
 
     let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
         Error::Internal(format!(
@@ -1782,10 +1783,10 @@ pub(crate) fn validate_cursor_pagination(
     Ok(())
 }
 
-fn convert_to_validators(
+pub fn convert_to_validators(
     validators: Vec<SuiValidatorSummary>,
-    system_state: Option<NativeSuiSystemStateSummary>,
     validator_apys: ValidatorApys,
+    system_state: Option<NativeSuiSystemStateSummary>,
 ) -> Vec<Validator> {
     let at_risk_validators: Option<BTreeMap<NativeSuiAddress, u64>> = system_state
         .clone()
@@ -1793,7 +1794,6 @@ fn convert_to_validators(
 
     let report_records: Option<BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>> =
         system_state.map(|x| BTreeMap::from_iter(x.validator_report_records));
-    let apys = validator_apys.apys;
 
     validators
         .iter()
@@ -1805,10 +1805,16 @@ fn convert_to_validators(
                 map.get(&v.sui_address)
                     .map(|addrs| addrs.iter().map(Address::from).collect())
             });
+            let apy = validator_apys
+                .apys
+                .iter()
+                .find(|x| x.address == v.sui_address)
+                .map(|a| a.apy);
             Validator {
                 validator_summary: v.clone(),
                 at_risk,
                 report_records,
+                apy,
             }
         })
         .collect()
