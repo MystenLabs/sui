@@ -32,8 +32,11 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	// escrow: BridgeEscrow,
 	// Bridge treasury for mint/burn bridged tokens
 	// treasury: BridgeTreasury,
-	// pending_messages: LinkedTable<BridgeMessageKey, BridgeMessage>,
-	// approved_messages: LinkedTable<BridgeMessageKey, ApprovedBridgeMessage>,
+
+	// Use a mapping from bytes32 to BridgeMessage
+	mapping(bytes32 => BridgeMessage) public pendingMessages;
+	// Use a mapping from bytes32 to ApprovedBridgeMessage
+	mapping(bytes32 => ApprovedBridgeMessage) public approvedMessages;
 
 	bool public running;
 	uint64 public lastEmergencyOpSeqNum;
@@ -90,14 +93,32 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		BridgeMessage calldata bridgeMessage,
 		bytes[] calldata signatures
 	) public whenRunning returns (bool, uint256) {
+		// Declare an array to store the recovered addresses
+		address[] memory seen = new address[](signatures.length);
+		uint256 seenIndex = 0;
+
 		uint256 totalStake = 0;
 		bytes32 hash = ethSignedMessageHash(bridgeMessage);
 
+		// Verify Signatures
 		for (uint256 i = 0; i < signatures.length; i++) {
 			address recoveredPK = recoverSigner(hash, signatures[i]);
 
 			// Check if the address is not zero
 			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
+
+			// Check if the address has already been seen
+			bool found = false;
+			for (uint256 j = 0; j < seen.length; j++) {
+				if (seen[j] == recoveredPK) {
+					found = true;
+					break;
+				}
+			}
+			require(!found, 'Duplicate signature: Address already seen');
+
+			// Add the address to the array
+			seen[seenIndex++] = recoveredPK;
 
 			// Retrieve the Validator directly from the mapping
 			Member memory member = committee[recoveredPK];
@@ -108,6 +129,18 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 
 			totalStake += member.stake;
 		}
+
+		// // retrieve pending message if source chain is Ethereum
+		// if (bridgeMessage.sourceChain == ChainID.ETH) {
+		// 	BridgeMessageKey memory key = BridgeMessageKey(
+		// 		bridgeMessage.sourceChain,
+		// 		bridgeMessage.targetChain,
+		// 		bridgeMessage.targetAddress,
+		// 		bridgeMessage.tokenAddress,
+		// 		bridgeMessage.tokenId
+		// 	);
+
+		// }
 
 		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) pauseBridge();
 
@@ -204,12 +237,10 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		bytes32 hash = keccak256(
 			abi.encodePacked(
 				bridgeMessage.messageType,
-				bridgeMessage.version,
+				bridgeMessage.messageVersion,
+				bridgeMessage.seqNum,
 				bridgeMessage.sourceChain,
-				bridgeMessage.bridgeSeqNum,
-				bridgeMessage.senderAddress,
-				bridgeMessage.targetChain,
-				bridgeMessage.targetAddress
+				bridgeMessage.payload
 			)
 		);
 		return MessageHashUtils.toEthSignedMessageHash(hash);
@@ -222,5 +253,44 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 
 	function recoverSigner(bytes32 hash, bytes calldata signature) public pure returns (address) {
 		return ECDSA.recover(hash, signature);
+	}
+
+	// Define a function to set a pending message
+	function setPendingMessage(BridgeMessageKey memory key, BridgeMessage memory value) external {
+		// Generate a hash of the key values
+		bytes32 hash = keccak256(abi.encode(key));
+		// Store the value in the mapping
+		pendingMessages[hash] = value;
+	}
+
+	// Define a function to get a pending message
+	function getPendingMessage(
+		BridgeMessageKey memory key
+	) external view returns (BridgeMessage memory) {
+		// Generate a hash of the key values
+		bytes32 hash = keccak256(abi.encode(key));
+		// Return the value from the mapping
+		return pendingMessages[hash];
+	}
+
+	// Define a function to set an approved message
+	function setApprovedMessage(
+		BridgeMessageKey memory key,
+		ApprovedBridgeMessage memory value
+	) external {
+		// Generate a hash of the key values
+		bytes32 hash = keccak256(abi.encode(key));
+		// Store the value in the mapping
+		approvedMessages[hash] = value;
+	}
+
+	// Define a function to get an approved message
+	function getApprovedMessage(
+		BridgeMessageKey memory key
+	) external view returns (ApprovedBridgeMessage memory) {
+		// Generate a hash of the key values
+		bytes32 hash = keccak256(abi.encode(key));
+		// Return the value from the mapping
+		return approvedMessages[hash];
 	}
 }

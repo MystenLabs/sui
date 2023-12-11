@@ -278,17 +278,15 @@ describe(CONTRACT_NAME, () => {
         // Example bridgeMessage
         const bridgeMessage = {
             messageType: MessageType.EMERGENCY_OP,
-            version: 0,
+            messageVersion: 0,
+            seqNum: 0,
             sourceChain: ChainID.SUI,
-            bridgeSeqNum: 0,
-            senderAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
-            targetChain: ChainID.ETH,
-            targetAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
+            payload: "0x00",
         }
 
         // Example signatures array (these would be actual signatures in a real test)
         const signatures = [
-            '0xb6f1b22f64a3bc050a594d3402e895fcf66a194668a60cc5be747aead316046a1c0d3c95ee18bac38f25156d585965bf16d1a65d70efcb8cb13efa422624ff311b',
+            '0x38a816ce06bb5f941789e52d7179137f4c612e7e3430dbabcff26cac780966157138a1ec8ce22e1cdd6176452228cceec86c968c2b604efecefcfb8bb09012f01b',
         ]
 
         // as [boolean, bigint]
@@ -315,17 +313,15 @@ describe(CONTRACT_NAME, () => {
         // Example bridgeMessage
         const bridgeMessage = {
             messageType: MessageType.EMERGENCY_OP,
-            version: 0,
+            messageVersion: 0,
+            seqNum: 0,
             sourceChain: ChainID.SUI,
-            bridgeSeqNum: 0,
-            senderAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
-            targetChain: ChainID.ETH,
-            targetAddress: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
+            payload: "0x00"
         }
 
         // Example signatures array (these would be actual signatures in a real test)
         const signatures = [
-            '0xb6f1b22f64a3bc050a594d3402e895fcf66a194668a60cc5be747aead316046a1c0d3c95ee18bac38f25156d585965bf16d1a65d70efcb8cb13efa422624ff311b',
+            '0x38a816ce06bb5f941789e52d7179137f4c612e7e3430dbabcff26cac780966157138a1ec8ce22e1cdd6176452228cceec86c968c2b604efecefcfb8bb09012f01b',
         ]
 
         await contract.approveBridgeMessage(bridgeMessage, signatures)
