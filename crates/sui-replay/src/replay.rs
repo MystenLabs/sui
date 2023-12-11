@@ -19,6 +19,7 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
+use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -828,12 +829,14 @@ impl LocalExec {
         let required_objects = pre_run_sandbox.required_objects.clone();
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
-        let transaction_intent = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .intent_message()
-            .intent
-            .clone();
+        assert_eq!(
+            pre_run_sandbox
+                .transaction_info
+                .sender_signed_data
+                .intent_message()
+                .intent,
+            Intent::sui_transaction()
+        );
         let transaction_signatures = pre_run_sandbox
             .transaction_info
             .sender_signed_data
@@ -859,11 +862,8 @@ impl LocalExec {
         )
         .await;
 
-        let sender_signed_tx = Transaction::from_generic_sig_data(
-            transaction_data,
-            transaction_intent,
-            transaction_signatures,
-        );
+        let sender_signed_tx =
+            Transaction::from_generic_sig_data(transaction_data, transaction_signatures);
         let sender_signed_tx = VerifiedTransaction::new_unchecked(
             VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
         );

@@ -57,7 +57,6 @@ fn test_signed_values() {
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
             gas_price,
         ),
-        Intent::sui_transaction(),
         vec![&sender_sec],
     )
     .verify(&Default::default())
@@ -72,7 +71,6 @@ fn test_signed_values() {
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
             gas_price,
         ),
-        Intent::sui_transaction(),
         vec![&sender_sec2],
     ));
 
@@ -144,7 +142,6 @@ fn test_certificates() {
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
             gas_price,
         ),
-        Intent::sui_transaction(),
         vec![&sender_sec],
     )
     .verify(&Default::default())
@@ -481,7 +478,6 @@ fn test_digest_caching() {
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
             gas_price,
         ),
-        Intent::sui_transaction(),
         vec![&ssec2],
     )
     .verify(&Default::default())
@@ -565,15 +561,9 @@ fn test_user_signature_committed_in_transactions() {
     let mut tx_data_2 = tx_data.clone();
     tx_data_2.gas_data_mut().budget += 1;
 
-    let transaction_a = Transaction::from_data_and_signer(
-        tx_data.clone(),
-        Intent::sui_transaction(),
-        vec![&sender_sec],
-    );
-    let transaction_b =
-        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![&sender_sec2]);
-    let transaction_c =
-        Transaction::from_data_and_signer(tx_data_2, Intent::sui_transaction(), vec![&sender_sec2]);
+    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), vec![&sender_sec]);
+    let transaction_b = Transaction::from_data_and_signer(tx_data, vec![&sender_sec2]);
+    let transaction_c = Transaction::from_data_and_signer(tx_data_2, vec![&sender_sec2]);
 
     let tx_digest_a = transaction_a.digest();
     let tx_digest_b = transaction_b.digest();
@@ -615,17 +605,12 @@ fn test_user_signature_committed_in_signed_transactions() {
         TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
         gas_price,
     );
-    let transaction_a = Transaction::from_data_and_signer(
-        tx_data.clone(),
-        Intent::sui_transaction(),
-        vec![&sender_sec],
-    )
-    .verify(&Default::default())
-    .unwrap();
+    let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), vec![&sender_sec])
+        .verify(&Default::default())
+        .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
     let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         tx_data,
-        Intent::sui_transaction(),
         vec![&sender_sec2],
     ));
 
@@ -720,7 +705,6 @@ fn test_sponsored_transaction_message() {
         signature_from_signer(tx_data.clone(), intent.clone(), &sponsor_kp).into();
     let transaction = Transaction::from_generic_sig_data(
         tx_data.clone(),
-        intent.clone(),
         vec![sender_sig.clone(), sponsor_sig.clone()],
     )
     .verify(&Default::default())
@@ -737,7 +721,6 @@ fn test_sponsored_transaction_message() {
     // Sig order does not matter
     let transaction = Transaction::from_generic_sig_data(
         tx_data.clone(),
-        intent.clone(),
         vec![sponsor_sig.clone(), sender_sig.clone()],
     )
     .verify(&Default::default())
@@ -745,25 +728,17 @@ fn test_sponsored_transaction_message() {
 
     // Test incomplete signature lists (missing sponsor sig)
     assert!(matches!(
-        Transaction::from_generic_sig_data(
-            tx_data.clone(),
-            intent.clone(),
-            vec![sender_sig.clone()],
-        )
-        .verify(&Default::default())
-        .unwrap_err(),
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![sender_sig.clone()],)
+            .verify(&Default::default())
+            .unwrap_err(),
         SuiError::SignerSignatureNumberMismatch { .. }
     ));
 
     // Test incomplete signature lists (missing sender sig)
     assert!(matches!(
-        Transaction::from_generic_sig_data(
-            tx_data.clone(),
-            intent.clone(),
-            vec![sponsor_sig.clone()],
-        )
-        .verify(&Default::default())
-        .unwrap_err(),
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![sponsor_sig.clone()],)
+            .verify(&Default::default())
+            .unwrap_err(),
         SuiError::SignerSignatureNumberMismatch { .. }
     ));
 
@@ -774,7 +749,6 @@ fn test_sponsored_transaction_message() {
     assert!(matches!(
         Transaction::from_generic_sig_data(
             tx_data.clone(),
-            intent.clone(),
             vec![sender_sig, sponsor_sig.clone(), third_party_sig.clone()],
         )
         .verify(&Default::default())
@@ -784,7 +758,7 @@ fn test_sponsored_transaction_message() {
 
     // Test irrelevant sigs
     assert!(matches!(
-        Transaction::from_generic_sig_data(tx_data, intent, vec![sponsor_sig, third_party_sig],)
+        Transaction::from_generic_sig_data(tx_data, vec![sponsor_sig, third_party_sig],)
             .verify(&Default::default())
             .unwrap_err(),
         SuiError::SignerSignatureAbsent { .. }
@@ -946,10 +920,9 @@ fn verify_sender_signature_correctly_with_flag() {
     *tx_data_3.sender_mut_for_testing() = (&sender_kp_3.public()).into();
     tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
-    let transaction =
-        Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![&sender_kp])
-            .verify(&Default::default())
-            .unwrap();
+    let transaction = Transaction::from_data_and_signer(tx_data, vec![&sender_kp])
+        .verify(&Default::default())
+        .unwrap();
 
     // create tx also signed by authority
     let signed_tx = SignedTransaction::new(
@@ -976,10 +949,9 @@ fn verify_sender_signature_correctly_with_flag() {
         )
         .is_ok());
 
-    let transaction_1 =
-        Transaction::from_data_and_signer(tx_data_2, Intent::sui_transaction(), vec![&sender_kp_2])
-            .verify(&Default::default())
-            .unwrap();
+    let transaction_1 = Transaction::from_data_and_signer(tx_data_2, vec![&sender_kp_2])
+        .verify(&Default::default())
+        .unwrap();
 
     let signed_tx_1 = SignedTransaction::new(
         committee.epoch(),
@@ -1015,8 +987,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .is_err());
 
     // create transaction with r1 signer
-    let tx_3 =
-        Transaction::from_data_and_signer(tx_data_3, Intent::sui_transaction(), vec![&sender_kp_3]);
+    let tx_3 = Transaction::from_data_and_signer(tx_data_3, vec![&sender_kp_3]);
     let tx_31 = tx_3.clone();
     let tx_32 = tx_3.clone();
 
@@ -1306,7 +1277,6 @@ fn test_certificate_digest() {
                 TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
                 gas_price,
             ),
-            Intent::sui_transaction(),
             vec![&sender_sec],
         )
         .verify(&Default::default())

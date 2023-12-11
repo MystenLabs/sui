@@ -2317,24 +2317,20 @@ impl<S> Envelope<SenderSignedData, S> {
 impl Transaction {
     pub fn from_data_and_signer(
         data: TransactionData,
-        intent: Intent,
         signers: Vec<&dyn Signer<Signature>>,
     ) -> Self {
-        let intent_msg = IntentMessage::new(intent.clone(), data.clone());
+        // TODO: Avoid clone of data. This can be done by adjusting the API around tx construction.
+        let intent_msg = IntentMessage::new(Intent::sui_transaction(), data.clone());
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
             signatures.push(Signature::new_secure(&intent_msg, signer));
         }
-        Self::from_data(data, intent, signatures)
+        Self::from_data(data, signatures)
     }
 
     // TODO: Rename this function and above to make it clearer.
-    pub fn from_data(data: TransactionData, intent: Intent, signatures: Vec<Signature>) -> Self {
-        Self::from_generic_sig_data(
-            data,
-            intent,
-            signatures.into_iter().map(|s| s.into()).collect(),
-        )
+    pub fn from_data(data: TransactionData, signatures: Vec<Signature>) -> Self {
+        Self::from_generic_sig_data(data, signatures.into_iter().map(|s| s.into()).collect())
     }
 
     pub fn signature_from_signer(
@@ -2346,12 +2342,12 @@ impl Transaction {
         Signature::new_secure(&intent_msg, signer)
     }
 
-    pub fn from_generic_sig_data(
-        data: TransactionData,
-        intent: Intent,
-        signatures: Vec<GenericSignature>,
-    ) -> Self {
-        Self::new(SenderSignedData::new(data, intent, signatures))
+    pub fn from_generic_sig_data(data: TransactionData, signatures: Vec<GenericSignature>) -> Self {
+        Self::new(SenderSignedData::new(
+            data,
+            Intent::sui_transaction(),
+            signatures,
+        ))
     }
 
     /// Returns the Base64 encoded tx_bytes

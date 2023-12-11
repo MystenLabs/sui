@@ -45,8 +45,6 @@ pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 pub use self::store::SimulatorStore;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
-
-use shared_crypto::intent::Intent;
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -358,11 +356,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(pt);
         let tx_data =
             sui_types::transaction::TransactionData::new_with_gas_data(kind, *sender, gas_data);
-        let tx = Transaction::from_data_and_signer(
-            tx_data,
-            shared_crypto::intent::Intent::sui_transaction(),
-            vec![key],
-        );
+        let tx = Transaction::from_data_and_signer(tx_data, vec![key]);
 
         self.execute_transaction(tx).map(|x| x.0)
     }
@@ -441,7 +435,7 @@ impl Simulacrum {
             budget: 1_000_000_000,
         };
         let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
-        let tx = Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![key]);
+        let tx = Transaction::from_data_and_signer(tx_data, vec![key]);
         (tx, transfer_amount)
     }
 }

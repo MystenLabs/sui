@@ -34,6 +34,7 @@ move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 tokio.workspace = true
 
+shared-crypto.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-execution.workspace = true

@@ -56,7 +56,7 @@ async fn _split_coins_equally(
         .keystore
         .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
         .unwrap();
-    let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(tx_data, vec![signature]);
     let resp = client
         .quorum_driver_api()
         .execute_transaction_block(
@@ -110,7 +110,7 @@ async fn _merge_coins(gas_coin: &str, mut wallet: WalletContext) -> Result<(), a
             .keystore
             .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
             .unwrap();
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
+        let tx = Transaction::from_data(tx_data, vec![signature]);
         client
             .quorum_driver_api()
             .execute_transaction_block(
