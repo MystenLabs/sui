@@ -10,9 +10,9 @@ use sui_json_rpc::name_service::NameServiceConfig;
 use crate::functional_group::FunctionalGroup;
 
 // TODO: calculate proper cost limits
-const MAX_QUERY_DEPTH: u32 = 20;
-const MAX_QUERY_NODES: u32 = 200;
-const MAX_QUERY_PAYLOAD_SIZE: u32 = 5_000;
+const MAX_QUERY_DEPTH: u32 = 15;
+const MAX_QUERY_NODES: u32 = 50;
+const MAX_QUERY_PAYLOAD_SIZE: u32 = 2_000;
 const MAX_DB_QUERY_COST: u64 = 20_000; // Max DB query cost (normally f64) truncated
 const DEFAULT_PAGE_SIZE: u64 = 20; // Default number of elements allowed on a page of a connection
 const MAX_PAGE_SIZE: u64 = 50; // Maximum number of elements allowed on a page of a connection
@@ -75,6 +75,29 @@ pub struct Limits {
     pub(crate) max_page_size: u64,
     #[serde(default)]
     pub(crate) request_timeout_ms: u64,
+}
+
+impl Limits {
+    pub fn max_query_depth(&self) -> u32 {
+        self.max_query_depth
+    }
+
+    pub fn max_query_nodes(&self) -> u32 {
+        self.max_query_nodes
+    }
+
+    pub fn max_query_payload_size(&self) -> u32 {
+        self.max_query_payload_size
+    }
+
+    pub fn default_for_simulator_testing() -> Self {
+        Self {
+            max_query_nodes: 500,
+            max_query_depth: 20,
+            max_query_payload_size: 5_000,
+            ..Self::default()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -172,12 +195,12 @@ impl ServiceConfig {
     }
 
     /// The maximum depth a GraphQL query can be to be accepted by this service.
-    async fn max_query_depth(&self) -> u32 {
+    pub async fn max_query_depth(&self) -> u32 {
         self.limits.max_query_depth
     }
 
     /// The maximum number of nodes (field names) the service will accept in a single query.
-    async fn max_query_nodes(&self) -> u32 {
+    pub async fn max_query_nodes(&self) -> u32 {
         self.limits.max_query_nodes
     }
 
