@@ -6,16 +6,14 @@ import { ethers } from 'ethers'
         let wallet = new ethers.Wallet(privateKey)
 
         const messageType = 2
-        const version = 0
+        const messageVersion = 0
+        const seqNum = 0
         const sourceChain = 0
-        const bridgeSeqNum = 0
-        const senderAddress = '0x5567f54B29B973343d632f7BFCe9507343D41FCa'
-        const targetChain = 1
-        const targetAddress = '0x5567f54B29B973343d632f7BFCe9507343D41FCa'
+        const payload = "0x00"
 
         const messageHash = ethers.solidityPackedKeccak256(
-            ['uint8', 'uint8', 'uint8', 'uint64', 'address', 'uint8' ,'address'],
-            [messageType, version, sourceChain, bridgeSeqNum, senderAddress, targetChain, targetAddress],
+            ['uint8', 'uint8', 'uint64', 'uint8', 'bytes'],
+            [messageType, messageVersion, seqNum, sourceChain, payload],
         )
         const messageHashBinary = ethers.getBytes(messageHash)
         const signature = await wallet.signMessage(messageHashBinary)
