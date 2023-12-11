@@ -6,11 +6,8 @@ import * as amplitude from "@amplitude/analytics-browser";
 
 export default function FooterLayout({ style, links, logo, copyright }) {
   useEffect(() => {
-    amplitude.init("d671bf65238a07fd7c249d0a23e7d13d", {
-      defaultTracking: {
-        pageViews: false,
-        formInteractions: false,
-      },
+    amplitude.init(process.env.AMPLITUDE_KEY || null, {
+      defaultTracking: true,
     });
   }, []);
 
