@@ -26,13 +26,8 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	uint64 public version;
 	// nonce for replay protection
 	uint64 public sequenceNumber;
-	// // committee pub keys
-	// committee: BridgeCommittee,
-	// // Escrow for storing native tokens
-	// escrow: BridgeEscrow,
 	// Bridge treasury for mint/burn bridged tokens
-	// treasury: BridgeTreasury,
-
+	// treasury: BridgeTreasury
 	// Use a mapping from bytes32 to BridgeMessage
 	mapping(bytes32 => BridgeMessage) public pendingMessages;
 	// Use a mapping from bytes32 to ApprovedBridgeMessage
@@ -130,17 +125,17 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			totalStake += member.stake;
 		}
 
-		// // retrieve pending message if source chain is Ethereum
-		// if (bridgeMessage.sourceChain == ChainID.ETH) {
-		// 	BridgeMessageKey memory key = BridgeMessageKey(
-		// 		bridgeMessage.sourceChain,
-		// 		bridgeMessage.targetChain,
-		// 		bridgeMessage.targetAddress,
-		// 		bridgeMessage.tokenAddress,
-		// 		bridgeMessage.tokenId
-		// 	);
+		// retrieve pending message if source chain is Ethereum
+		if (bridgeMessage.sourceChain == ChainID.ETH) {
+			BridgeMessageKey memory bridgeMessageKey = BridgeMessageKey(
+				bridgeMessage.sourceChain,
+				bridgeMessage.seqNum
+			);
 
-		// }
+			BridgeMessage memory pendingMessage = pendingMessages[
+				keccak256(abi.encode(bridgeMessageKey))
+			];
+		}
 
 		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) pauseBridge();
 
@@ -229,8 +224,6 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		transferAddress.transfer(amount);
 	}
 
-	// "0x93f82d7903c6a37336c33d68a890b448665735b4f513003cb4ef0029da0372b9329e0f6fc0b9f9c0c77d66bbf7217da260803fcae345a72f7a7764c56f464b5c1b"
-	// [1 ,2 ,3 ,4 ,"0x5567f54B29B973343d632f7BFCe9507343D41FCa" ,5 ,"0x5567f54B29B973343d632f7BFCe9507343D41FCa"]
 	function ethSignedMessageHash(
 		BridgeMessage calldata bridgeMessage
 	) public pure returns (bytes32) {
@@ -273,6 +266,14 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		return pendingMessages[hash];
 	}
 
+	// Define a function to remove a pending message
+	function removePendingMessage(BridgeMessageKey memory key) external {
+		// Generate a hash of the key values
+		bytes32 hash = keccak256(abi.encode(key));
+		// Delete the value from the mapping
+		delete pendingMessages[hash];
+	}
+
 	// Define a function to set an approved message
 	function setApprovedMessage(
 		BridgeMessageKey memory key,
@@ -292,5 +293,13 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 		bytes32 hash = keccak256(abi.encode(key));
 		// Return the value from the mapping
 		return approvedMessages[hash];
+	}
+
+	// Define a function to remove an approved message
+	function removeApprovedMessage(BridgeMessageKey memory key) external {
+		// Generate a hash of the key values
+		bytes32 hash = keccak256(abi.encode(key));
+		// Delete the value from the mapping
+		delete approvedMessages[hash];
 	}
 }
