@@ -223,7 +223,7 @@ pub enum UsageKind {
 pub enum Value {
     Object(ObjectValue),
     Raw(RawValueType, Vec<u8>),
-    Receiving(ObjectID, SequenceNumber, Option<Type>),
+    Receiving(ObjectID, SequenceNumber, Option<Type>, MoveUsage),
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +234,7 @@ pub struct ObjectValue {
     // In other words, false if all usages have been with non-Move commands or
     // entry Move functions
     pub used_in_non_entry_move_call: bool,
+    pub used_with_move: MoveUsage,
     pub contents: ObjectContents,
 }
 
@@ -250,7 +251,15 @@ pub enum RawValueType {
         ty: Type,
         abilities: AbilitySet,
         used_in_non_entry_move_call: bool,
+        used_with_move: MoveUsage,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoveUsage {
+    None,
+    EntryInput,
+    Other,
 }
 
 #[derive(Clone, Copy)]
@@ -302,7 +311,7 @@ impl InputValue {
     pub fn new_receiving_object(id: ObjectID, version: SequenceNumber) -> Self {
         InputValue {
             object_metadata: Some(InputObjectMetadata::Receiving { id, version }),
-            inner: ResultValue::new(Value::Receiving(id, version, None)),
+            inner: ResultValue::new(Value::Receiving(id, version, None, MoveUsage::None)),
         }
     }
 }
@@ -322,7 +331,7 @@ impl Value {
             Value::Object(_) => false,
             Value::Raw(RawValueType::Any, _) => true,
             Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
-            Value::Receiving(_, _, _) => false,
+            Value::Receiving(_, _, _, _) => false,
         }
     }
 
@@ -330,7 +339,7 @@ impl Value {
         match self {
             Value::Object(obj_value) => obj_value.write_bcs_bytes(buf),
             Value::Raw(_, bytes) => buf.extend(bytes),
-            Value::Receiving(id, version, _) => {
+            Value::Receiving(id, version, _, _) => {
                 buf.extend(Receiving::new(*id, *version).to_bcs_bytes())
             }
         }
@@ -351,7 +360,18 @@ impl Value {
             ) => *used_in_non_entry_move_call,
             // Only thing you can do with a `Receiving<T>` is consume it, so once it's used it
             // can't be used again.
-            Value::Receiving(_, _, _) => false,
+            Value::Receiving(_, _, _, _) => false,
+        }
+    }
+
+    pub fn move_usage(&self) -> MoveUsage {
+        match self {
+            // Any is only used for Pure inputs, and if it was used by &mut it would have switched
+            // to Loaded
+            Value::Raw(RawValueType::Any, _) => MoveUsage::None,
+            Value::Object(ObjectValue { used_with_move, .. })
+            | Value::Raw(RawValueType::Loaded { used_with_move, .. }, _)
+            | Value::Receiving(_, _, _, used_with_move) => *used_with_move,
         }
     }
 }
@@ -359,11 +379,12 @@ impl Value {
 impl ObjectValue {
     /// # Safety
     /// We must have the Type is the coin type, but we are unable to check it at this spot
-    pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
+    pub unsafe fn coin(type_: Type, coin: Coin, used_with_move: MoveUsage) -> Self {
         Self {
             type_,
             has_public_transfer: true,
             used_in_non_entry_move_call: false,
+            used_with_move,
             contents: ObjectContents::Coin(coin),
         }
     }
@@ -379,6 +400,19 @@ impl ObjectValue {
         match &self.contents {
             ObjectContents::Raw(bytes) => buf.extend(bytes),
             ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
+        }
+    }
+}
+
+impl MoveUsage {
+    pub fn join(self, other: Self) -> Self {
+        match (self, other) {
+            // this case wouldn't happen in practice since using a value that was an
+            // EntryInput is an error
+            (MoveUsage::EntryInput, _) | (_, MoveUsage::EntryInput) => MoveUsage::EntryInput,
+            // Expected cases
+            (MoveUsage::None, usage) | (usage, MoveUsage::None) => usage,
+            (MoveUsage::Other, MoveUsage::Other) => MoveUsage::Other,
         }
     }
 }
@@ -399,7 +433,7 @@ impl TryFromValue for ObjectValue {
             Value::Object(o) => Ok(o),
             Value::Raw(RawValueType::Any, _) => Err(CommandArgumentError::TypeMismatch),
             Value::Raw(RawValueType::Loaded { .. }, _) => Err(CommandArgumentError::TypeMismatch),
-            Value::Receiving(_, _, _) => Err(CommandArgumentError::TypeMismatch),
+            Value::Receiving(_, _, _, _) => Err(CommandArgumentError::TypeMismatch),
         }
     }
 }
@@ -422,7 +456,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
 ) -> Result<T, CommandArgumentError> {
     match value {
         Value::Object(_) => Err(CommandArgumentError::TypeMismatch),
-        Value::Receiving(_, _, _) => Err(CommandArgumentError::TypeMismatch),
+        Value::Receiving(_, _, _, _) => Err(CommandArgumentError::TypeMismatch),
         Value::Raw(RawValueType::Any, bytes) => {
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }

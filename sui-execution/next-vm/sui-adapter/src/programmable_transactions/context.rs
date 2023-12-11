@@ -488,7 +488,7 @@ mod checked {
             }
 
             // We eagerly reify receiving argument types at the first usage of them.
-            if let &mut Some(Value::Receiving(_, _, ref mut recv_arg_type @ None)) = val_opt {
+            if let &mut Some(Value::Receiving(_, _, ref mut recv_arg_type @ None, _)) = val_opt {
                 let Type::Reference(inner) = arg_type else {
                     return Err(CommandArgumentError::InvalidValueUsage);
                 };
@@ -688,7 +688,7 @@ mod checked {
                                 }
                             }
                             // Receiving arguments can be dropped without being received
-                            Some(Value::Receiving(_, _, _)) => (),
+                            Some(Value::Receiving(_, _, _, _)) => (),
                         }
                     }
                 }
@@ -1156,6 +1156,7 @@ mod checked {
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
+            used_with_move: false,
             contents,
         })
     }

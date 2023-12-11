@@ -144,6 +144,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call: false,
+                        used_with_move: false,
                     },
                     bytes,
                 )]
@@ -187,6 +188,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call,
+                        used_with_move: false,
                     },
                     res,
                 )]
@@ -225,7 +227,7 @@ mod checked {
                         let coin_type = obj.type_.clone();
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
-                        let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin) };
+                        let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin, false) };
                         Ok(Value::Object(new_coin))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
@@ -443,6 +445,7 @@ mod checked {
                     ty,
                     abilities,
                     used_in_non_entry_move_call,
+                    used_with_move: false,
                 },
                 bytes,
             ),
@@ -615,6 +618,7 @@ mod checked {
                 ty: upgrade_receipt_type,
                 abilities: AbilitySet::EMPTY,
                 used_in_non_entry_move_call: false,
+                used_with_move: false,
             },
             bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
         )])
@@ -1312,7 +1316,7 @@ mod checked {
                     ));
                 }
             }
-            Value::Receiving(_, _, assigned_type) => {
+            Value::Receiving(_, _, assigned_type, _) => {
                 // If the type has been fixed, make sure the types match up
                 if let Some(assigned_type) = assigned_type {
                     if assigned_type != param_ty {

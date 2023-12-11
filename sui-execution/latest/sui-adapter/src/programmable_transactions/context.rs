@@ -45,7 +45,7 @@ mod checked {
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::ExecutionResults;
+    use sui_types::execution::{ExecutionResults, MoveUsage};
     use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
@@ -108,6 +108,9 @@ mod checked {
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
         borrowed: HashMap<Argument, /* mut */ bool>,
+        /* TEMP LOGGING */
+        pub had_private_entry: bool,
+        pub had_unique_inputs_private_entry: bool,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -229,6 +232,8 @@ mod checked {
                 new_packages: vec![],
                 user_events: vec![],
                 borrowed: HashMap::new(),
+                had_private_entry: false,
+                had_unique_inputs_private_entry: true,
             })
         }
 
@@ -488,7 +493,7 @@ mod checked {
             }
 
             // We eagerly reify receiving argument types at the first usage of them.
-            if let &mut Some(Value::Receiving(_, _, ref mut recv_arg_type @ None)) = val_opt {
+            if let &mut Some(Value::Receiving(_, _, ref mut recv_arg_type @ None, _)) = val_opt {
                 let Type::Reference(inner) = arg_type else {
                     return Err(CommandArgumentError::InvalidValueUsage);
                 };
@@ -524,6 +529,27 @@ mod checked {
                 The take+restore is an implementation detail of mutable references"
             );
 
+            Ok(())
+        }
+
+        pub fn mark_used_with_move(
+            &mut self,
+            arg: Argument,
+            usage: MoveUsage,
+        ) -> Result<(), ExecutionError> {
+            let Ok((_input_metadata_opt, val_opt)) = self.borrow_mut_impl(arg, None) else {
+                invariant_violation!("Previously used argument now out of bounds")
+            };
+            if let Some(val) = val_opt {
+                match val {
+                    Value::Raw(RawValueType::Any, _) => (),
+                    Value::Object(ObjectValue { used_with_move, .. })
+                    | Value::Raw(RawValueType::Loaded { used_with_move, .. }, _)
+                    | Value::Receiving(_, _, _, used_with_move) => {
+                        *used_with_move = usage;
+                    }
+                }
+            }
             Ok(())
         }
 
@@ -688,7 +714,7 @@ mod checked {
                                 }
                             }
                             // Receiving arguments can be dropped without being received
-                            Some(Value::Receiving(_, _, _)) => (),
+                            Some(Value::Receiving(_, _, _, _)) => (),
                         }
                     }
                 }
@@ -931,6 +957,13 @@ mod checked {
             };
             if let Some(usage) = update_last_usage {
                 result_value.last_usage_kind = Some(usage);
+                if result_value
+                    .value
+                    .as_ref()
+                    .is_some_and(|v| v.move_usage() == MoveUsage::EntryInput)
+                {
+                    self.had_unique_inputs_private_entry = false;
+                }
             }
             Ok((metadata, &mut result_value.value))
         }
@@ -975,6 +1008,7 @@ mod checked {
             type_: MoveObjectType,
             has_public_transfer: bool,
             used_in_non_entry_move_call: bool,
+            used_with_move: MoveUsage,
             contents: &[u8],
         ) -> Result<ObjectValue, ExecutionError> {
             make_object_value(
@@ -985,6 +1019,7 @@ mod checked {
                 type_,
                 has_public_transfer,
                 used_in_non_entry_move_call,
+                used_with_move,
                 contents,
             )
         }
@@ -1136,6 +1171,7 @@ mod checked {
         type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
+        used_with_move: MoveUsage,
         contents: &[u8],
     ) -> Result<ObjectValue, ExecutionError> {
         let contents = if type_.is_coin() {
@@ -1163,6 +1199,7 @@ mod checked {
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
+            used_with_move,
             contents,
         })
     }
@@ -1183,6 +1220,7 @@ mod checked {
         };
 
         let used_in_non_entry_move_call = false;
+        let used_with_move = MoveUsage::None;
         make_object_value(
             protocol_config,
             vm,
@@ -1191,6 +1229,7 @@ mod checked {
             object.type_().clone(),
             object.has_public_transfer(),
             used_in_non_entry_move_call,
+            used_with_move,
             object.contents(),
         )
     }

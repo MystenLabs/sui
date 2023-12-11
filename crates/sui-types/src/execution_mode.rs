@@ -278,7 +278,7 @@ fn value_to_bytes_and_tag(
             let tag = resolver.get_type_tag(ty)?;
             (tag, bytes.clone())
         }
-        Value::Receiving(id, seqno, _) => (
+        Value::Receiving(id, seqno, _, _) => (
             Receiving::type_tag(),
             Receiving::new(*id, *seqno).to_bcs_bytes(),
         ),

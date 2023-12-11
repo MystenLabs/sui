@@ -663,7 +663,7 @@ mod checked {
                                     ));
                                 }
                             }
-                            Some(Value::Receiving(_, _, _)) => {
+                            Some(Value::Receiving(_, _, _, _)) => {
                                 unreachable!("Impossible to hit Receiving in v0")
                             }
                         }
@@ -1141,6 +1141,7 @@ mod checked {
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
+            used_with_move: false,
             contents,
         })
     }

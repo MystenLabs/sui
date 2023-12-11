@@ -3,7 +3,6 @@
 
 pub use checked::*;
 
-#[sui_macros::with_checked_arithmetic]
 mod checked {
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
@@ -32,7 +31,6 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -52,6 +50,10 @@ mod checked {
         transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         SUI_FRAMEWORK_ADDRESS,
+    };
+    use sui_types::{
+        execution::MoveUsage,
+        storage::{get_package_objects, PackageObject},
     };
     use sui_types::{
         execution_mode::ExecutionMode,
@@ -85,6 +87,25 @@ mod checked {
             gas_charger,
             inputs,
         )?;
+        let is_exactly_one_move_call =
+            commands.len() == 1 && matches!(commands[0], Command::MoveCall(_));
+        let only_one_move_command = {
+            let move_idx = commands
+                .iter()
+                .position(|c| matches!(c, Command::MoveCall(_)));
+            move_idx.is_some_and(|idx| {
+                commands.iter().enumerate().all(|(i, c)| {
+                    i == idx
+                        || !matches!(
+                            c,
+                            Command::MoveCall(_)
+                                | Command::Publish(_, _)
+                                | Command::Upgrade(_, _, _, _)
+                        )
+                })
+            })
+        };
+
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
@@ -104,6 +125,16 @@ mod checked {
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
         let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
+        if context.had_private_entry {
+            let sol_1_only_command = is_exactly_one_move_call;
+            let sol_2_only_move_command = only_one_move_command;
+            let sol_3_independent_private_entry = context.had_unique_inputs_private_entry;
+            println!("PRIVATE_ENTRY_HEADER, sol_1_only_command, sol_2_only_move_command, sol_3_independent_private_entry");
+            println!(
+                "PRIVATE_ENTRY_LOGGING, {}, {}, {}",
+                sol_1_only_command, sol_2_only_move_command, sol_3_independent_private_entry
+            );
+        }
 
         // apply changes
         let finished = context.finish::<Mode>();
@@ -144,6 +175,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call: false,
+                        used_with_move: MoveUsage::None,
                     },
                     bytes,
                 )]
@@ -152,12 +184,12 @@ mod checked {
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
-                let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
+                let (mut used_in_non_entry_move_call, mut used_with_move, elem_ty) = match tag_opt {
                     Some(tag) => {
                         let elem_ty = context
                             .load_type(&tag)
                             .map_err(|e| context.convert_vm_error(e))?;
-                        (false, elem_ty)
+                        (false, MoveUsage::None, elem_ty)
                     }
                     // If no tag specified, it _must_ be an object
                     None => {
@@ -166,7 +198,11 @@ mod checked {
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                         obj.write_bcs_bytes(&mut res);
-                        (obj.used_in_non_entry_move_call, obj.type_)
+                        (
+                            obj.used_in_non_entry_move_call,
+                            obj.used_with_move,
+                            obj.type_,
+                        )
                     }
                 };
                 for (idx, arg) in arg_iter {
@@ -174,6 +210,7 @@ mod checked {
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
+                    used_with_move = used_with_move.join(value.move_usage());
                     value.write_bcs_bytes(&mut res);
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
@@ -187,6 +224,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call,
+                        used_with_move,
                     },
                     res,
                 )]
@@ -215,6 +253,7 @@ mod checked {
                     let msg = "Expected a coin but got an non coin object".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 };
+                let used_with_move = obj.used_with_move;
                 let split_coins = amount_args
                     .into_iter()
                     .map(|amount_arg| {
@@ -225,7 +264,8 @@ mod checked {
                         let coin_type = obj.type_.clone();
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
-                        let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin) };
+                        let new_coin =
+                            unsafe { ObjectValue::coin(coin_type, new_coin, used_with_move) };
                         Ok(Value::Object(new_coin))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
@@ -375,12 +415,11 @@ mod checked {
         let saved_linkage = context.linkage_view.steal_linkage();
         // write back mutable inputs. We also update if they were used in non entry Move calls
         // though we do not care for immutable usages of objects or other values
-        let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
         let res = write_back_results::<Mode>(
             context,
             argument_updates,
             &arguments,
-            used_in_non_entry_move_call,
+            kind,
             mutable_reference_outputs
                 .into_iter()
                 .map(|(i, bytes, _layout)| (i, bytes)),
@@ -397,16 +436,32 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         arguments: &[Argument],
-        non_entry_move_call: bool,
+        kind: FunctionKind,
         mut_ref_values: impl IntoIterator<Item = (u8, Vec<u8>)>,
         mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
         return_values: impl IntoIterator<Item = Vec<u8>>,
         return_value_kinds: impl IntoIterator<Item = ValueKind>,
     ) -> Result<Vec<Value>, ExecutionError> {
+        let non_entry_move_call = kind == FunctionKind::NonEntry;
+        let move_arg_usage = match kind {
+            FunctionKind::PrivateEntry => MoveUsage::EntryInput,
+            FunctionKind::PublicEntry | FunctionKind::NonEntry | FunctionKind::Init => {
+                MoveUsage::None
+            }
+        };
+        for arg in arguments {
+            context.mark_used_with_move(*arg, move_arg_usage)?;
+        }
         for ((i, bytes), (j, kind)) in mut_ref_values.into_iter().zip(mut_ref_kinds) {
             assert_invariant!(i == j, "lost mutable input");
             let arg_idx = i as usize;
-            let value = make_value(context, kind, bytes, non_entry_move_call)?;
+            let value = make_value(
+                context,
+                kind,
+                bytes,
+                non_entry_move_call,
+                /* used_with_move */ move_arg_usage,
+            )?;
             context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
         }
 
@@ -416,7 +471,11 @@ mod checked {
             .map(|(bytes, kind)| {
                 // only non entry functions have return values
                 make_value(
-                    context, kind, bytes, /* used_in_non_entry_move_call */ true,
+                    context,
+                    kind,
+                    bytes,
+                    /* used_in_non_entry_move_call */ true,
+                    /* used_with_move */ MoveUsage::Other,
                 )
             })
             .collect()
@@ -427,6 +486,7 @@ mod checked {
         value_info: ValueKind,
         bytes: Vec<u8>,
         used_in_non_entry_move_call: bool,
+        used_with_move: MoveUsage,
     ) -> Result<Value, ExecutionError> {
         Ok(match value_info {
             ValueKind::Object {
@@ -436,6 +496,7 @@ mod checked {
                 type_,
                 has_public_transfer,
                 used_in_non_entry_move_call,
+                used_with_move,
                 &bytes,
             )?),
             ValueKind::Raw(ty, abilities) => Value::Raw(
@@ -443,6 +504,7 @@ mod checked {
                     ty,
                     abilities,
                     used_in_non_entry_move_call,
+                    used_with_move,
                 },
                 bytes,
             ),
@@ -509,6 +571,7 @@ mod checked {
                 UpgradeCap::type_().into(),
                 /* has_public_transfer */ true,
                 /* used_in_non_entry_move_call */ false,
+                MoveUsage::Other,
                 &bcs::to_bytes(cap).unwrap(),
             )?)]
         };
@@ -610,11 +673,13 @@ mod checked {
         )?;
 
         context.write_package(package);
+        context.mark_used_with_move(upgrade_ticket_arg, MoveUsage::Other)?;
         Ok(vec![Value::Raw(
             RawValueType::Loaded {
                 ty: upgrade_receipt_type,
                 abilities: AbilitySet::EMPTY,
                 used_in_non_entry_move_call: false,
+                used_with_move: MoveUsage::Other,
             },
             bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
         )])
@@ -965,7 +1030,10 @@ mod checked {
             .map(|code| code.code.len() - 1)
             .unwrap_or(0) as CodeOffset;
         let function_kind = match (fdef.visibility, fdef.is_entry) {
-            (Visibility::Private | Visibility::Friend, true) => FunctionKind::PrivateEntry,
+            (Visibility::Private | Visibility::Friend, true) => {
+                context.had_private_entry = true;
+                FunctionKind::PrivateEntry
+            }
             (Visibility::Public, true) => FunctionKind::PublicEntry,
             (Visibility::Public, false) => FunctionKind::NonEntry,
             (Visibility::Private, false) if from_init => {
@@ -1248,6 +1316,11 @@ mod checked {
                     idx,
                 ));
             }
+            if matches!(function_kind, FunctionKind::PrivateEntry)
+                && !matches!(value.move_usage(), MoveUsage::None)
+            {
+                context.had_unique_inputs_private_entry = false;
+            }
             check_param_type::<Mode>(context, idx, &value, non_ref_param_ty)?;
             let bytes = {
                 let mut v = vec![];
@@ -1312,7 +1385,7 @@ mod checked {
                     ));
                 }
             }
-            Value::Receiving(_, _, assigned_type) => {
+            Value::Receiving(_, _, assigned_type, _) => {
                 // If the type has been fixed, make sure the types match up
                 if let Some(assigned_type) = assigned_type {
                     if assigned_type != param_ty {
