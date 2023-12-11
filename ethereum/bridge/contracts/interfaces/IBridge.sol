@@ -48,9 +48,9 @@ interface IBridge {
 	}
 
 	// A struct to represent a validator
-	struct Validator {
-		address addr; // The address of the validator
-		uint256 weight; // The weight of the validator
+	struct Member {
+		address account; // The address of the validator
+		uint256 stake; // The weight of the validator
 	}
 
 	struct ApprovedBridgeMessage {
@@ -66,10 +66,9 @@ interface IBridge {
 
 	// EVENTS
 
-	// Event to emit when a transfer is initiated
-	event ValidatorAdded(
-		address addr, // The address of the validator
-		uint256 weight // The weight of the validator
+	event CommitteeMemberAdded(
+		address account, // The address of the validator
+		uint256 stake // The weight of the validator
 	);
 
 	// Event to emit when a transfer is initiated

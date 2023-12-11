@@ -34,68 +34,63 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 	// treasury: BridgeTreasury,
 	// pending_messages: LinkedTable<BridgeMessageKey, BridgeMessage>,
 	// approved_messages: LinkedTable<BridgeMessageKey, ApprovedBridgeMessage>,
-	bool public paused;
+
+	bool public running;
 	uint64 public lastEmergencyOpSeqNum;
 
 	uint16 public constant MAX_TOTAL_WEIGHT = 10000;
-	uint256 public constant MAX_SINGLE_VALIDATOR_WEIGHT = 1000;
+	uint256 public constant MAX_SINGLE_VALIDATOR_STAKE = 1000;
 	uint256 public constant APPROVAL_THRESHOLD = 3333;
 
 	// A mapping from address to validator
-	mapping(address => Validator) public validators;
+	mapping(address => Member) public committee;
 
 	// Mapping of user address to nonce
 	mapping(address => uint256) public nonces;
 
-	// Function to pause the bridge
-	function pauseBridge() private isRunning {
-		paused = true;
-	}
-
-	// Function to pause the bridge
-	function resumeBridge() private isPaused {
-		paused = false;
-	}
-
-	// modifier to check if bridge is running
-	modifier isRunning() {
-		// If the first argument of 'require' evaluates to 'false', execution terminates and all
-		// changes to the state and to Ether balances are reverted.
-		// This used to consume all gas in old EVM versions, but not anymore.
-		// It is often a good idea to use 'require' to check if functions are called correctly.
-		// As a second argument, you can also provide an explanation about what went wrong.
-		require(!paused, 'Bridge is not Running');
+	/**
+	 * @dev Modifier to make a function callable only when the contract is Running.
+	 */
+	modifier whenRunning() {
+		require(running, 'Bridge is Running');
 		_;
 	}
 
-	// modifier to check if bridge is paused
-	modifier isPaused() {
-		// If the first argument of 'require' evaluates to 'false', execution terminates and all
-		// changes to the state and to Ether balances are reverted.
-		// This used to consume all gas in old EVM versions, but not anymore.
-		// It is often a good idea to use 'require' to check if functions are called correctly.
-		// As a second argument, you can also provide an explanation about what went wrong.
-		require(paused, 'Bridge is Paused');
+	/**
+	 * @dev Modifier to make a function callable only when the contract is not Running.
+	 */
+	modifier whenNotRunning() {
+		require(!running, 'Bridge is Not Running');
 		_;
 	}
 
-	function initialize(Validator[] calldata _validators) public initializer {
+	// Function to pause the bridge
+	function pauseBridge() private whenRunning {
+		running = false;
+	}
+
+	// Function to pause the bridge
+	function resumeBridge() private whenNotRunning {
+		running = true;
+	}
+
+	function initialize(Member[] calldata _committeeMembers) public initializer {
 		// addValidator(firstPK, firstWeight);
 		// __Ownable_init();
 		__UUPSUpgradeable_init();
-		paused = false;
+		running = true;
 
-		for (uint256 i = 0; i < _validators.length; i++) {
-			addValidator(_validators[i].addr, _validators[i].weight);
-			emit ValidatorAdded(_validators[i].addr, _validators[i].weight);
+		for (uint256 i = 0; i < _committeeMembers.length; i++) {
+			addCommitteeMember(_committeeMembers[i].account, _committeeMembers[i].stake);
+			emit CommitteeMemberAdded(_committeeMembers[i].account, _committeeMembers[i].stake);
 		}
 	}
 
 	function approveBridgeMessage(
 		BridgeMessage calldata bridgeMessage,
 		bytes[] calldata signatures
-	) public isRunning returns (bool, uint256) {
-		uint256 totalWeight = 0;
+	) public whenRunning returns (bool, uint256) {
+		uint256 totalStake = 0;
 		bytes32 hash = ethSignedMessageHash(bridgeMessage);
 
 		for (uint256 i = 0; i < signatures.length; i++) {
@@ -105,25 +100,25 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
 
 			// Retrieve the Validator directly from the mapping
-			Validator memory validator = validators[recoveredPK];
+			Member memory member = committee[recoveredPK];
 
 			// Validate the recovered address
-			require(validator.addr != address(0), 'Invalid Signer, not a committee authority');
-			require(recoveredPK == validator.addr, 'Invalid signature: Address mismatch');
+			require(member.account != address(0), 'Invalid Signer, not a committee authority');
+			require(recoveredPK == member.account, 'Invalid signature: Address mismatch');
 
-			totalWeight += validator.weight;
+			totalStake += member.stake;
 		}
 
 		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) pauseBridge();
 
-		return (true, totalWeight);
+		return (true, totalStake);
 	}
 
 	function resumePausedBridge(
 		BridgeMessage calldata bridgeMessage,
 		bytes[] calldata signatures
-	) public isPaused {
-		uint256 totalWeight = 0;
+	) public whenNotRunning {
+		uint256 totalStake = 0;
 		bytes32 hash = ethSignedMessageHash(bridgeMessage);
 
 		for (uint256 i = 0; i < signatures.length; i++) {
@@ -133,32 +128,32 @@ contract Bridge is Initializable, UUPSUpgradeable, ERC721Upgradeable, IBridge {
 			require(recoveredPK != address(0), 'Invalid signature: Recovered Zero address.');
 
 			// Retrieve the Validator directly from the mapping
-			Validator memory validator = validators[recoveredPK];
+			Member memory member = committee[recoveredPK];
 
 			// Validate the recovered address
-			require(validator.addr != address(0), 'Invalid Signer, not a committee authority');
-			require(recoveredPK == validator.addr, 'Invalid signature: Address mismatch');
+			require(member.account != address(0), 'Invalid Signer, not a committee authority');
+			require(recoveredPK == member.account, 'Invalid signature: Address mismatch');
 
-			totalWeight += validator.weight;
+			totalStake += member.stake;
 		}
 
 		// TODO: Add your desired total weight requirement
-		require(totalWeight >= 999, 'Not enough total signature weight');
+		require(totalStake >= 999, 'Not enough stake to resume the bridge');
 
 		if (bridgeMessage.messageType == MessageType.EMERGENCY_OP) resumeBridge();
 	}
 
 	// Check also weight. i.e. no more than 33% of the total weight
 	// A function to add a validator
-	function addValidator(address _pk, uint256 _weight) private {
+	function addCommitteeMember(address _pk, uint256 _stake) private {
 		// Check if the address is not zero
 		require(_pk != address(0), 'Zero address.');
 
 		// Check if the address is not already a validator
-		require(validators[_pk].addr == address(0), 'Already a validator.');
+		require(committee[_pk].account == address(0), 'Already a Committee Member.');
 
 		// Add the validator to the mapping
-		validators[_pk] = Validator(_pk, _weight);
+		committee[_pk] = Member(_pk, _stake);
 		++validatorsCount;
 	}
 

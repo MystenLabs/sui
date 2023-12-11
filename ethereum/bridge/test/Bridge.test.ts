@@ -46,7 +46,7 @@ const CONTRACT_INTERFACE = [
 
 // Write a test suite for the contract
 describe(CONTRACT_NAME, () => {
-    let validators: { addr: string; weight: number }[]
+    let committee: { account: string; stake: number }[]
     let hardhatEthersSigners: HardhatEthersSigner[]
     let others
 
@@ -60,40 +60,40 @@ describe(CONTRACT_NAME, () => {
         const contractFactory = await ethers.getContractFactory(CONTRACT_NAME)
         const contract = await contractFactory.deploy()
 
-        const tmpValidators = await Promise.all(
+        const tmpCommittee = await Promise.all(
             hardhatEthersSigners
                 .slice(1)
                 .map(async (g) => ({
-                    addr: await g.getAddress(),
-                    weight: 1000,
+                    account: await g.getAddress(),
+                    stake: 1000,
                 })),
         )
 
         // Create the new validator object
-        const defaultValidator = {
-            addr: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
-            weight: 1000,
+        const defaultCommitteeMember = {
+            account: '0x5567f54B29B973343d632f7BFCe9507343D41FCa',
+            stake: 1000,
         }
 
-        validators = [defaultValidator, ...tmpValidators]
+        committee = [defaultCommitteeMember, ...tmpCommittee]
 
-        return { contract, owner, validators }
+        return { contract, owner, committee }
     }
 
     it('should correctly initialize validators', async function () {
-        const { contract, validators } = await loadFixture(beforeEach)
+        const { contract, committee } = await loadFixture(beforeEach)
 
-        await contract.initialize(validators)
+        await contract.initialize(committee)
 
         // // Check if the validators were initialized correctly
-        for (let i = 0; i < validators.length; i++) {
-            const validator = await contract.validators(validators[i].addr)
-            expect(validator.addr).to.equal(validators[i].addr)
-            expect(validator.weight).to.equal(validators[i].weight)
+        for (let i = 0; i < committee.length; i++) {
+            const committeeMember = await contract.committee(committee[i].account)
+            expect(committeeMember.account).to.equal(committee[i].account)
+            expect(committeeMember.stake).to.equal(committee[i].stake)
         }
 
         // Check if the validatorsCount matches the expected length
-        const expectedCount = validators.length
+        const expectedCount = committee.length
         const actualCount = await contract.validatorsCount()
         expect(actualCount.toString()).to.equal(expectedCount.toString())
     })
@@ -116,7 +116,7 @@ describe(CONTRACT_NAME, () => {
         // await contract.initialize();
 
         // Check if the bridge state is running
-        expect(await contract.paused()).to.be.false
+        expect(await contract.running()).to.be.false
     })
 
     // // Test the hashMessage function by comparing the output with the expected hash of a given message
@@ -222,19 +222,19 @@ describe(CONTRACT_NAME, () => {
         const expectedWeight = await contract.MAX_TOTAL_WEIGHT()
 
         // Get the actual length of validators by iterating over the array
-        let actualWeight = 0
+        let actualStake = 0
         const arrLength = await contract.validatorsCount()
         for (let i = 0; i < arrLength; i++) {
             // Get the validator at index i
-            const validator = await contract.validators(validators[i].addr)
-            expect(validator.addr).to.equal(validators[i].addr)
-            expect(validator.weight).to.equal(validators[i].weight)
+            const committeeMember = await contract.committee(committee[i].account)
+            expect(committeeMember.account).to.equal(committee[i].account)
+            expect(committeeMember.stake).to.equal(committee[i].stake)
 
-            actualWeight += Number(validator.weight)
+            actualStake += Number(committeeMember.stake)
         }
 
         // Compare the expected and actual lengths
-        expect(actualWeight).to.equal(0)
+        expect(actualStake).to.equal(0)
 
         // expect((await contract.validators).length).to.equal(1);
     })
@@ -267,11 +267,13 @@ describe(CONTRACT_NAME, () => {
     })
 
     it('should approve the bridge message and return the total weight of valid signatures', async function () {
-        const { contract, validators } = await loadFixture(beforeEach)
+        const { contract, committee } = await loadFixture(beforeEach)
 
-        expect(await contract.paused()).to.be.false
+        expect(await contract.running()).to.be.false
 
-        await contract.initialize(validators)
+        await contract.initialize(committee)
+
+        expect(await contract.running()).to.be.true
 
         // Example bridgeMessage
         const bridgeMessage = {
@@ -298,15 +300,17 @@ describe(CONTRACT_NAME, () => {
         // expect(totalWeight).to.equal(validators[0].weight);
 
         await contract.approveBridgeMessage(bridgeMessage, signatures)
-        expect(await contract.paused()).to.be.true
+        expect(await contract.running()).to.be.false
     })
 
     it('should resume the bridge if messageType is 1 and total weight is at least 999', async function () {
-        const { contract, validators } = await loadFixture(beforeEach)
+        const { contract, committee } = await loadFixture(beforeEach)
 
-        expect(await contract.paused()).to.be.false
+        expect(await contract.running()).to.be.false
 
-        await contract.initialize(validators)
+        await contract.initialize(committee)
+
+        expect(await contract.running()).to.be.true
 
         // Example bridgeMessage
         const bridgeMessage = {
@@ -325,13 +329,13 @@ describe(CONTRACT_NAME, () => {
         ]
 
         await contract.approveBridgeMessage(bridgeMessage, signatures)
-        expect(await contract.paused()).to.be.true
+        expect(await contract.running()).to.be.false
 
         // Call the resumePausedBridge function with the bridgeMessage and signatures
         await contract.resumePausedBridge(bridgeMessage, signatures)
 
         // Add logic to check if the bridge has been resumed
-        expect(await contract.paused()).to.be.false
+        expect(await contract.running()).to.be.true
     })
 
     // it("should pause the bridge", async function () {
