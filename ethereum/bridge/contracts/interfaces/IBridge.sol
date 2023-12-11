@@ -1,31 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-interface IBridge {
-	// ENUMS
+import './IMessageType.sol';
+import './IChainID.sol';
+import './ITokenID.sol';
 
-	// Define an enum for the Message Types
-	enum MessageType {
-		TOKEN,
-		COMMITTEE_BLOCKLIST,
-		EMERGENCY_OP
-	}
-
-	// Define an enum for the chain IDs
-	enum ChainID {
-		SUI,
-		ETH
-	}
-
-	// Define an enum for the token IDs
-	enum TokenID {
-		SUI,
-		BTC,
-		ETH,
-		USDC,
-		USDT
-	}
-
+interface IBridge is IMessageType, IChainID, ITokenID {
 	// STRUCTS
 
 	struct Erc20Transfer {
@@ -34,18 +14,6 @@ interface IBridge {
 		address from;
 		address to;
 	}
-
-	// struct BridgeMessage {
-	// 	// 0: token , 1: object ? TBD
-	// 	MessageType messageType;
-	// 	uint8 version;
-	// 	ChainID sourceChain;
-	// 	uint64 bridgeSeqNum;
-	// 	address senderAddress;
-	// 	ChainID targetChain;
-	// 	address targetAddress;
-	// 	// bytes payload;
-	// }
 
 	// Define a struct for BridgeMessage
 	struct BridgeMessage {
@@ -71,7 +39,7 @@ interface IBridge {
 
 	// Define a struct for BridgeMessageKey
 	struct BridgeMessageKey {
-		uint8 sourceChain;
+		ChainID sourceChain;
 		uint64 bridgeSeqNum;
 	}
 
@@ -128,15 +96,18 @@ interface IBridge {
 
 	function getPendingMessage(BridgeMessageKey memory key) external returns (BridgeMessage memory);
 
+	function removePendingMessage(BridgeMessageKey memory key) external;
+
 	function setApprovedMessage(
 		BridgeMessageKey memory key,
 		ApprovedBridgeMessage memory value
 	) external;
 
-	// Define a function to get an approved message
 	function getApprovedMessage(
 		BridgeMessageKey memory key
 	) external view returns (ApprovedBridgeMessage memory);
+
+	function removeApprovedMessage(BridgeMessageKey memory key) external;
 
 	/**
 	// function _parseTransferCommon(bytes memory encoded) external pure returns (Transfer memory transfer);
