@@ -5,6 +5,7 @@ const lightCodeTheme = require("prism-react-renderer/themes/github");
 const darkCodeTheme = require("prism-react-renderer/themes/nightOwl");
 const math = require("remark-math");
 const katex = require("rehype-katex");
+require("dotenv").config();
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -14,6 +15,9 @@ const config = {
   favicon: "img/favicon.ico",
   url: "https://docs.sui.io",
   baseUrl: "/",
+  customFields: {
+    amplitudeKey: process.env.AMPLITUDE_KEY,
+  },
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
   /*  i18n: {
