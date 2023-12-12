@@ -27,6 +27,7 @@ function Header({
 }) {
 	const { data: domainName, isLoading, error: resolveSuinsError } = useResolveSuiNSName(address);
 	const { data, isPending, error: getObjectError } = useGetObject(address!);
+	const isObject = !!data?.data;
 	const errorText = getObjectError?.message ?? resolveSuinsError?.message ?? error?.message;
 
 	return (
@@ -34,7 +35,7 @@ function Header({
 			<PageHeader
 				error={errorText}
 				loading={loading || isLoading || isPending}
-				type={data ? 'Object' : 'Address'}
+				type={isObject ? 'Object' : 'Address'}
 				title={address}
 				subtitle={domainName}
 				before={<ObjectDetailsHeader className="h-6 w-6" />}
