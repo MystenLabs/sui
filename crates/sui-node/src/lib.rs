@@ -94,7 +94,7 @@ use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_kvstore::writer::setup_key_value_store_uploader;
-use sui_macros::fail_point_async;
+use sui_macros::{fail_point_async, replay_log};
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
@@ -466,6 +466,12 @@ impl SuiNode {
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
             ChainIdentifier::from(*genesis.checkpoint().digest()),
+        );
+
+        replay_log!(
+            "Beginning replay run. Epoch: {:?}, Protocol config: {:?}",
+            epoch_store.epoch(),
+            epoch_store.protocol_config()
         );
 
         // the database is empty at genesis time
