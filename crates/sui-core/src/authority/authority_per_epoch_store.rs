@@ -212,7 +212,12 @@ pub struct ExecutionComponents {
 }
 
 pub struct AuthorityPerEpochStore {
+    /// Committee of validators for the current epoch.
     committee: Arc<Committee>,
+
+    /// Holds the underlying per-epoch typed store tables.
+    /// This is an ArcSwapOption because it needs to be used concurrently,
+    /// and it nees to be cleared at the end of the epoch.
     tables: ArcSwapOption<AuthorityEpochTables>,
 
     protocol_config: ProtocolConfig,
