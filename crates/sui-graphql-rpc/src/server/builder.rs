@@ -439,7 +439,10 @@ pub mod tests {
             .map(|e| e.message)
             .collect();
 
-        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
+        assert_eq!(
+            errs,
+            vec!["Query has too many levels of nesting. The maximum allowed is 0".to_string()]
+        );
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
@@ -451,7 +454,10 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
+        assert_eq!(
+            errs,
+            vec!["Query has too many levels of nesting. The maximum allowed is 2".to_string()]
+        );
     }
 
     pub async fn test_query_node_limit_impl() {
@@ -499,7 +505,10 @@ pub mod tests {
             .into_iter()
             .map(|e| e.message)
             .collect();
-        assert_eq!(err, vec!["Query is too complex.".to_string()]);
+        assert_eq!(
+            err,
+            vec!["Query has too many nodes. The maximum allowed is 0".to_string()]
+        );
 
         let err: Vec<_> = exec_query_node_limit(
             4,
@@ -512,7 +521,10 @@ pub mod tests {
         .into_iter()
         .map(|e| e.message)
         .collect();
-        assert_eq!(err, vec!["Query is too complex.".to_string()]);
+        assert_eq!(
+            err,
+            vec!["Query has too many nodes. The maximum allowed is 4".to_string()]
+        );
     }
 
     pub async fn test_query_default_page_limit_impl() {
