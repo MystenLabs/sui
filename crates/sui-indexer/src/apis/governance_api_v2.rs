@@ -40,16 +40,10 @@ impl GovernanceReadApiV2 {
         let apys = validators_apys_map(self.get_validators_apy().await?);
         let epoch = match epoch {
             Some(e) => *e,
-            None => {
-                let system_state_summary: SuiSystemStateSummary =
-                    self.get_latest_sui_system_state().await?;
-                let epoch = system_state_summary.epoch;
-                epoch
-            }
+            None => self.get_latest_sui_system_state().await?.epoch,
         };
 
-        let apy = &apys.get(&epoch).map(|a| a.get(address)).flatten();
-        Ok(apy.copied())
+        Ok(&apys.get(&epoch).and_then(|a| a.get(address)).copied())
     }
 
     async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
