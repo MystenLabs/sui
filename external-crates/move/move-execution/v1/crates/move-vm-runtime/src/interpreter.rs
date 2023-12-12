@@ -220,9 +220,9 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
-                    // Compiled out in release mode
-
-                    profile_open_frame!(gas_meter, func.pretty_string().clone());
+                    #[cfg(feature = "gas-profiler")]
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
                     let module_id = func
@@ -247,7 +247,7 @@ impl Interpreter {
                         self.call_native(&resolver, gas_meter, extensions, func.clone(), vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, func.pretty_string().clone());
+                        profile_close_frame!(gas_meter, func_name.clone());
                         continue;
                     }
                     let frame = self
@@ -268,9 +268,9 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
-                    // Compiled out in release mode
-
-                    profile_open_frame!(gas_meter, func.pretty_string().clone());
+                    #[cfg(debug_assertions)]
+                    let func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
                     let module_id = func
@@ -296,7 +296,7 @@ impl Interpreter {
                         self.call_native(&resolver, gas_meter, extensions, func.clone(), ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, func.pretty_string().clone());
+                        profile_close_frame!(gas_meter, func_name.clone());
 
                         continue;
                     }

@@ -67,6 +67,8 @@ use tabled::{
         Modify as TableModify, Panel as TablePanel, Style as TableStyle,
     },
 };
+#[cfg(not(feature = "gas-profiler"))]
+use tracing::error;
 use tracing::info;
 
 use crate::key_identity::{get_identity_address, KeyIdentity};
@@ -647,7 +649,7 @@ pub enum SuiClientCommands {
         address_override: Option<ObjectID>,
     },
 
-    /// Profile the gas usage of a transaction. If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
+    /// Profile the gas usage of a transaction. Unless an output filepath is not specified, outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
     #[clap(name = "profile-transaction")]
     ProfileTransaction {
         /// The digest of the transaction to replay
@@ -655,6 +657,7 @@ pub enum SuiClientCommands {
         tx_digest: String,
 
         /// If specified, overrides the filepath of the output profile, for example -- /temp/my_profile.json
+        /// If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json`
         #[clap(name = "profile_output")]
         profile_output: Option<PathBuf>,
     },
@@ -714,6 +717,9 @@ impl SuiClientCommands {
                 tx_digest,
                 profile_output,
             } => {
+                #[cfg(not(feature = "gas-profiler"))]
+                error!("gas-profiler feature is not enabled, rebuild or reinstall with --features gas-profiler");
+
                 let cmd = ReplayToolCommand::ProfileTransaction {
                     tx_digest,
                     show_effects: false,

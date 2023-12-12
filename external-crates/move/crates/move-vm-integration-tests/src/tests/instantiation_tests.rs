@@ -548,7 +548,6 @@ fn run_with_module(
         .into_iter()
         .map(|tag| session.load_type(&tag))
         .collect::<VMResult<Vec<_>>>();
-
     #[cfg(feature = "gas-profiler")]
     gas.set_profiler(GasProfiler::init(
         &session.vm_config().profiler_config,

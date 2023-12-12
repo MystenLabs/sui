@@ -214,9 +214,9 @@ impl Interpreter {
                 }
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
-                    // Compiled out in release mode
-
-                    profile_open_frame!(gas_meter, func.pretty_string().clone());
+                    #[cfg(feature = "gas-profiler")]
+                    let _func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, _func_name.clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -236,7 +236,7 @@ impl Interpreter {
 
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, func.pretty_string().clone());
+                        profile_close_frame!(gas_meter, _func_name.clone());
                         continue;
                     }
                     let frame = self
@@ -258,7 +258,9 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
 
-                    profile_open_frame!(gas_meter, func.pretty_string().clone());
+                    #[cfg(debug_assertions)]
+                    let _func_name = func.pretty_string();
+                    profile_open_frame!(gas_meter, _func_name.clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -278,7 +280,7 @@ impl Interpreter {
                         self.call_native(&resolver, gas_meter, extensions, func.clone(), ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, func.pretty_string().clone());
+                        profile_close_frame!(gas_meter, _func_name.clone());
 
                         continue;
                     }
