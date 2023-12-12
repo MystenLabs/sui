@@ -4,11 +4,9 @@ use crate::NativesCostTable;
 use fastcrypto_zkp::bn254::poseidon::poseidon_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::u256::U256;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::natives::function::PartialVMError;
-use move_vm_types::values::{Reference, VMValueCast};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -20,7 +18,6 @@ use std::collections::VecDeque;
 use std::ops::Mul;
 
 pub const NON_CANONICAL_INPUT: u64 = 0;
-pub const EMPTY_INPUT: u64 = 1;
 
 #[derive(Clone)]
 pub struct PoseidonBN254CostParams {
@@ -32,11 +29,11 @@ pub struct PoseidonBN254CostParams {
 
 /***************************************************************************************************
  * native fun poseidon_bn254
- * Implementation of the Move native function `poseidon::poseidon_bn254(data: &vector<u256>): u256
+ * Implementation of the Move native function `poseidon::poseidon_bn254_internal(data: &vector<vector<u8>>): vector<u8>
  *   gas cost: poseidon_bn254_cost_base                           | base cost for function call and fixed opers
  *              + poseidon_bn254_data_cost_per_block * num_inputs | cost depends on number of inputs
  **************************************************************************************************/
-pub fn poseidon_bn254(
+pub fn poseidon_bn254_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -64,11 +61,10 @@ pub fn poseidon_bn254(
 
     // The input is a reference to a vector of vector<u8>'s
     let inputs = pop_arg!(args, VectorRef);
-    let length = inputs.len(&Type::U256)?.value_as::<u64>()?;
 
-    if length == 0 {
-        return Ok(NativeResult::err(context.gas_used(), EMPTY_INPUT));
-    }
+    let length = inputs
+        .len(&Type::Vector(Box::new(Type::U8)))?
+        .value_as::<u64>()?;
 
     // Charge the msg dependent costs
     native_charge_gas_early_exit!(
@@ -82,23 +78,21 @@ pub fn poseidon_bn254(
             .mul(length.into())
     );
 
-    // Read the input vector and convert each element to a field element in le representation
+    // Read the input vector
     let field_elements = (0..length)
         .map(|i| {
-            let reference: Reference = inputs.borrow_elem(i as usize, &Type::U256)?.cast()?;
-            let value = reference.read_ref()?.value_as::<U256>()?;
-            Ok(value.to_le_bytes().to_vec())
+            let reference = inputs.borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))?;
+            let value = reference.value_as::<VectorRef>()?.as_bytes_ref().clone();
+            Ok(value)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     match poseidon_bytes(&field_elements) {
-        Ok(hash) => {
-            let result = U256::from_le_bytes(&hash);
-            Ok(NativeResult::ok(
-                context.gas_used(),
-                smallvec![Value::u256(result)],
-            ))
-        }
+        Ok(result) => Ok(NativeResult::ok(
+            context.gas_used(),
+            smallvec![Value::vector_u8(result)],
+        )),
+        // This is also checked in the poseidon_bn254 move function but to be sure we handle it here also.
         Err(_) => Ok(NativeResult::err(context.gas_used(), NON_CANONICAL_INPUT)),
     }
 }

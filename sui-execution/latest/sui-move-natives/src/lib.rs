@@ -721,8 +721,8 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
         ),
         (
             "poseidon",
-            "poseidon_bn254",
-            make_native!(poseidon::poseidon_bn254),
+            "poseidon_bn254_internal",
+            make_native!(poseidon::poseidon_bn254_internal),
         ),
     ];
     let sui_framework_natives_iter =
