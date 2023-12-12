@@ -148,10 +148,12 @@ pub async fn verify_package(
     package_path: impl AsRef<Path>,
 ) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let config = resolve_lock_file_path(
+    let mut config = resolve_lock_file_path(
         MoveBuildConfig::default(),
         Some(package_path.as_ref().to_path_buf()),
     )?;
+    config.no_lint = true;
+    config.silence_warnings = true;
     let build_config = BuildConfig {
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */

@@ -1,6 +1,5 @@
 [package]
 name = "print_stack_trace"
-version = "0.0.0"
 
 [addresses]
 std = "0x1"

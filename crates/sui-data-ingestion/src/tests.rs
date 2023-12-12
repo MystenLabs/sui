@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::progress_store::ExecutorProgress;
+use crate::reader::ENV_VAR_LOCAL_READ_TIMEOUT_MS;
 use crate::workers::Worker;
 use crate::{DataIngestionMetrics, FileProgressStore, IndexerExecutor, WorkerPool};
 use anyhow::Result;
@@ -38,8 +39,9 @@ async fn run(
     path: Option<PathBuf>,
     duration: Option<Duration>,
 ) -> Result<ExecutorProgress> {
+    std::env::set_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS, "10");
     let (sender, recv) = oneshot::channel();
-    match duration {
+    let result = match duration {
         None => indexer.run(path.unwrap_or_else(temp_dir), recv).await,
         Some(duration) => {
             let handle = tokio::task::spawn(async move {
@@ -49,7 +51,9 @@ async fn run(
             drop(sender);
             handle.await?
         }
-    }
+    };
+    std::env::remove_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS);
+    result
 }
 
 struct ExecutorBundle {

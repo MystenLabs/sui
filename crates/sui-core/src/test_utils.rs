@@ -433,7 +433,6 @@ pub fn make_dummy_tx(
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
             10,
         ),
-        Intent::sui_transaction(),
         vec![sender_sec],
     )
 }

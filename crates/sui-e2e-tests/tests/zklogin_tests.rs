@@ -176,7 +176,7 @@ async fn test_create_authenticator_state_object() {
     test_cluster.wait_for_protocol_version(24.into()).await;
     // wait until next epoch - authenticator state object is created at the end of the first epoch
     // in which it is supported.
-    test_cluster.wait_for_epoch(None).await;
+    test_cluster.wait_for_epoch_all_nodes(2).await; // protocol upgrade completes in epoch 1
 
     for h in &handles {
         h.with(|node| {

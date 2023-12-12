@@ -489,7 +489,6 @@ def generate_lib(output_file: TextIO):
             executor = (
                 "{spc}{version} => Arc::new({cut}::Executor::new(\n"
                 "{spc}    protocol_config,\n"
-                "{spc}    paranoid_type_checks,\n"
                 "{spc}    silent,\n"
                 "{spc})?),\n"
             )

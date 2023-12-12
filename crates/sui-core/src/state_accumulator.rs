@@ -23,7 +23,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
-use typed_store::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
@@ -371,7 +370,7 @@ impl StateAccumulator {
         epoch: &EpochId,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> Result<Accumulator, TypedStoreError> {
+    ) -> SuiResult<Accumulator> {
         if let Some((_checkpoint, acc)) = self
             .authority_store
             .perpetual_tables
@@ -482,7 +481,7 @@ impl StateAccumulator {
         epoch: &EpochId,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> Result<ECMHLiveObjectSetDigest, TypedStoreError> {
+    ) -> SuiResult<ECMHLiveObjectSetDigest> {
         Ok(self
             .accumulate_epoch(epoch, last_checkpoint_of_epoch, epoch_store)
             .await?

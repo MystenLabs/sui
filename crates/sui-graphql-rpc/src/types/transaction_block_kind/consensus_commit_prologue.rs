@@ -29,6 +29,8 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
     consensus_commit_digest: Option<ConsensusCommitDigest>,
 }
 
+/// System transaction that runs at the beginning of a checkpoint, and is responsible for setting
+/// the current value of the clock, based on the timestamp from consensus.
 #[Object]
 impl ConsensusCommitPrologueTransaction {
     /// Epoch of the commit prologue transaction.

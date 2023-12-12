@@ -115,6 +115,9 @@ type AuthenticatorStateExpireTransaction {
 	authenticatorObjInitialSharedVersion: Int!
 }
 
+"""
+System transaction for updating the on-chain state used by zkLogin.
+"""
 type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
@@ -203,9 +206,19 @@ type BalanceEdge {
 
 scalar Base64
 
+"""
+String representation of an arbitrary width, possibly signed integer.
+"""
 scalar BigInt
 
 
+"""
+A system transaction that updates epoch information on-chain (increments the current epoch).
+Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
+submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+"""
 type ChangeEpochTransaction {
 	"""
 	The next (to become) epoch.
@@ -322,6 +335,9 @@ type CheckpointEdge {
 	cursor: String!
 }
 
+"""
+Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
+"""
 input CheckpointId {
 	digest: String
 	sequenceNumber: Int
@@ -400,6 +416,10 @@ type CommitteeMember {
 	stakeUnit: Int
 }
 
+"""
+System transaction that runs at the beginning of a checkpoint, and is responsible for setting
+the current value of the clock, based on the timestamp from consensus.
+"""
 type ConsensusCommitPrologueTransaction {
 	"""
 	Epoch of the commit prologue transaction.
@@ -420,6 +440,9 @@ type ConsensusCommitPrologueTransaction {
 	consensusCommitDigest: String
 }
 
+"""
+ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ
+"""
 scalar DateTime
 
 type DynamicField {
@@ -484,6 +507,11 @@ type EndOfEpochData {
 	nextProtocolVersion: Int
 }
 
+"""
+System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions
+at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other
+optional transactions to run at the end of the epoch.
+"""
 type EndOfEpochTransaction {
 	"""
 	The list of system transactions that are allowed to run at the end of the epoch.
@@ -524,7 +552,7 @@ type EndOfEpochTransactionKindEdge {
 
 type Epoch {
 	"""
-	The epoch's id as a sequence number that starts at 0 and it is incremented by one at every epoch change
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change
 	"""
 	epochId: Int!
 	"""
@@ -666,18 +694,14 @@ input EventFilter {
 	sender: SuiAddress
 	transactionDigest: String
 	"""
-	Events emitted by a particular package.
-	An event is emitted by a particular package
-	if some function in the package is called
-	by a PTB and emits an event.
+	Events emitted by a particular package. An event is emitted by a particular package if some
+	function in the package is called by a PTB and emits an event.
 	"""
 	emittingPackage: SuiAddress
 	"""
-	Events emitted by a particular Move module.
-	An event is emitted by a particular module
-	if some function in the module is called
-	by a PTB and emits an event.
-	Requires `emitting_package` to be set.
+	Events emitted by a particular Move module. An event is emitted by a particular module if
+	some function in the module is called by a PTB and emits an event. Requires
+	`emitting_package` to be set.
 	"""
 	emittingModule: String
 	eventPackage: SuiAddress
@@ -734,6 +758,17 @@ enum Feature {
 }
 
 
+"""
+Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be
+used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
+"""
+type GasCoin {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 type GasCostSummary {
 	"""
 	Gas paid for executing this transaction (in MIST).
@@ -781,6 +816,9 @@ type GasInput {
 	gasBudget: BigInt
 }
 
+"""
+System transaction that initializes the network and writes the initial set of objects on-chain.
+"""
 type GenesisTransaction {
 	"""
 	Objects to be created during genesis.
@@ -788,6 +826,16 @@ type GenesisTransaction {
 	objectConnection(first: Int, after: String, last: Int, before: String): ObjectConnection!
 }
 
+
+"""
+One of the input objects or primitive values to the programmable transaction block.
+"""
+type Input {
+	"""
+	Index of the programmable transaction block input (0-indexed).
+	"""
+	ix: Int!
+}
 
 
 """
@@ -813,11 +861,69 @@ type Linkage {
 	version: Int!
 }
 
+"""
+Create a vector (possibly empty).
+"""
+type MakeMoveVecTransaction {
+	"""
+	If the elements are not objects, or the vector is empty, a type must be supplied.
+	"""
+	type: MoveType
+	"""
+	The values to pack into the vector, all of the same type.
+	"""
+	elements: [TransactionArgument!]!
+}
+
+"""
+Merges `coins` into the first `coin` (produces no results).
+"""
+type MergeCoinsTransaction {
+	"""
+	The coin to merge into.
+	"""
+	coin: TransactionArgument!
+	"""
+	The coins to be merged.
+	"""
+	coins: [TransactionArgument!]!
+}
+
 enum MoveAbility {
 	COPY
 	DROP
 	KEY
 	STORE
+}
+
+"""
+A call to either an entry or a public Move function.
+"""
+type MoveCallTransaction {
+	"""
+	The storage ID of the package the function being called is defined in.
+	"""
+	package: SuiAddress!
+	"""
+	The name of the module the function being called is defined in.
+	"""
+	module: String!
+	"""
+	The name of the function being called.
+	"""
+	functionName: String!
+	"""
+	The function being called, resolved.
+	"""
+	function: MoveFunction
+	"""
+	The actual type parameters passed in for this move call.
+	"""
+	typeArguments: [MoveType!]!
+	"""
+	The actual function parameters passed in for this move call.
+	"""
+	arguments: [TransactionArgument!]!
 }
 
 """
@@ -1329,7 +1435,7 @@ type ObjectChange {
 	"""
 	The address of the object that has changed.
 	"""
-	location: SuiAddress!
+	address: SuiAddress!
 	"""
 	The contents of the object immediately before the transaction.
 	"""
@@ -1379,14 +1485,27 @@ type ObjectEdge {
 
 input ObjectFilter {
 	"""
-	This field is used to specify the type of objects that should be included
-	in the query results. Generic types can be queried by either the generic
-	type name, e.g. `0x2::coin::Coin`, or by the full type name, such as
-	`0x2::coin::Coin<0x2::sui::SUI>`.
+	This field is used to specify the type of objects that should be included in the query
+	results.
+	
+	Objects can be filtered by their type's package, package::module, or their fully qualified
+	type name.
+	
+	Generic types can be queried by either the generic type name, e.g. `0x2::coin::Coin`, or by
+	the full type name, such as `0x2::coin::Coin<0x2::sui::SUI>`.
 	"""
 	type: String
+	"""
+	Filter for live objects by their current owners.
+	"""
 	owner: SuiAddress
+	"""
+	Filter for live objects by their IDs.
+	"""
 	objectIds: [SuiAddress!]
+	"""
+	Filter for live or potentially historical objects by their ID and version.
+	"""
 	objectKeys: [ObjectKey!]
 }
 
@@ -1423,11 +1542,11 @@ type OpenMoveType {
 	"""
 	Structured representation of the type signature.
 	"""
-	signature: OpenMoveTypeSignature
+	signature: OpenMoveTypeSignature!
 	"""
 	Flat representation of the type signature, as a displayable string.
 	"""
-	repr: String
+	repr: String!
 }
 
 """
@@ -1454,6 +1573,20 @@ type OpenMoveTypeSignatureBody =
   | { typeParameter: number }
 """
 scalar OpenMoveTypeSignature
+
+"""
+A Move object, either immutable, or owned mutable.
+"""
+type OwnedOrImmutable {
+	address: SuiAddress!
+	version: Int!
+	"""
+	32-byte hash that identifies the object's contents at this version, encoded as a Base58
+	string.
+	"""
+	digest: String!
+	object: Object
+}
 
 type Owner implements ObjectOwner {
 	asAddress: Address
@@ -1518,8 +1651,53 @@ type PageInfo {
 	endCursor: String
 }
 
+"""
+A single transaction, or command, in the programmable transaction block.
+"""
+union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
+
+"""
+A user transaction that allows the interleaving of native commands (like transfer, split coins,
+merge coins, etc) and move calls, executed atomically.
+"""
 type ProgrammableTransactionBlock {
-	value: String!
+	"""
+	Input objects or primitive values.
+	"""
+	inputConnection(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	transactionConnection(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+}
+
+type ProgrammableTransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ProgrammableTransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ProgrammableTransaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ProgrammableTransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ProgrammableTransaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -1570,6 +1748,30 @@ type ProtocolConfigs {
 	featureFlag(key: String!): ProtocolConfigFeatureFlag
 }
 
+"""
+Publishes a Move Package.
+"""
+type PublishTransaction {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]!
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]!
+}
+
+"""
+BCS encoded primitive value (not an object or Move struct).
+"""
+type Pure {
+	"""
+	BCS serialized and Base64 encoded primitive value.
+	"""
+	bytes: Base64!
+}
+
 type Query {
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the
@@ -1588,8 +1790,18 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
+	"""
+	Fetch epoch information by ID (defaults to the latest epoch).
+	"""
 	epoch(id: Int): Epoch
+	"""
+	Fetch checkpoint information by sequence number or digest (defaults to the latest available
+	checkpoint).
+	"""
 	checkpoint(id: CheckpointId): Checkpoint
+	"""
+	Fetch a transaction block by its transaction digest.
+	"""
 	transactionBlock(digest: String!): TransactionBlock
 	"""
 	The coin objects that exist in the network.
@@ -1602,6 +1814,10 @@ type Query {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	"""
+	Fetch the protocl config by protocol version (defaults to the latest protocol
+	version known to the GraphQL)
+	"""
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	"""
 	Resolves the owner address of the provided domain name
@@ -1638,6 +1854,31 @@ type RandomnessStateUpdateTransaction {
 	The initial version the randomness object was shared at.
 	"""
 	randomnessObjInitialSharedVersion: Int!
+}
+
+"""
+A Move object that can be received in this transaction.
+"""
+type Receiving {
+	address: SuiAddress!
+	version: Int!
+	digest: String!
+	object: Object
+}
+
+"""
+The result of another transaction command.
+"""
+type Result {
+	"""
+	The index of the previous command (0-indexed) that returned this result.
+	"""
+	cmd: Int!
+	"""
+	If the previous command returns multiple values, this is the index of the individual result
+	among the multiple results from that command (also 0-indexed).
+	"""
+	ix: Int
 }
 
 """
@@ -1681,19 +1922,50 @@ type ServiceConfig {
 	"""
 	Default number of elements allowed on a single page of a connection.
 	"""
-	defaultPageSize: BigInt!
+	defaultPageSize: Int!
 	"""
 	Maximum number of elements allowed on a single page of a connection.
 	"""
-	maxPageSize: BigInt!
+	maxPageSize: Int!
 	"""
 	Maximum time in milliseconds that will be spent to serve one request.
 	"""
-	requestTimeoutMs: BigInt!
+	requestTimeoutMs: Int!
 	"""
 	Maximum length of a query payload string.
 	"""
 	maxQueryPayloadSize: Int!
+}
+
+"""
+A Move object that's shared.
+"""
+type SharedInput {
+	address: SuiAddress!
+	"""
+	The version that this this object was shared at.
+	"""
+	initialSharedVersion: Int!
+	"""
+	Controls whether the transaction block can reference the shared object as a mutable
+	reference or by value.
+	"""
+	mutable: Boolean!
+}
+
+"""
+Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as
+many as there are amounts.)
+"""
+type SplitCoinsTransaction {
+	"""
+	The coin to split.
+	"""
+	coin: TransactionArgument!
+	"""
+	The denominations to split off from the coin.
+	"""
+	amounts: [TransactionArgument!]!
 }
 
 enum StakeStatus {
@@ -1825,6 +2097,9 @@ type StorageFund {
 }
 
 
+"""
+String containing 32B hex-encoded address, with a leading "0x". Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+"""
 scalar SuiAddress
 
 """
@@ -1918,6 +2193,11 @@ type SystemParameters {
 	"""
 	validatorLowStakeGracePeriod: BigInt
 }
+
+"""
+An argument to a programmable transaction command.
+"""
+union TransactionArgument = GasCoin | Input | Result
 
 type TransactionBlock {
 	"""
@@ -2070,6 +2350,52 @@ enum TransactionBlockKindInput {
 	PROGRAMMABLE_TX
 }
 
+union TransactionInput = OwnedOrImmutable | SharedInput | Receiving | Pure
+
+type TransactionInputConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionInputEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionInput!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionInputEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public
+transfer) and must not be previously immutable or shared.
+"""
+type TransferObjectsTransaction {
+	"""
+	The objects to transfer.
+	"""
+	inputs: [TransactionArgument!]!
+	"""
+	The address to transfer to.
+	"""
+	address: TransactionArgument!
+}
+
 """
 Information about which previous versions of a package introduced its types.
 """
@@ -2088,33 +2414,139 @@ type TypeOrigin {
 	definingId: SuiAddress!
 }
 
+"""
+Upgrades a Move Package.
+"""
+type UpgradeTransaction {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]!
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]!
+	"""
+	ID of the package being upgraded.
+	"""
+	currentPackage: SuiAddress!
+	"""
+	The `UpgradeTicket` authorizing the upgrade.
+	"""
+	upgradeTicket: TransactionArgument!
+}
+
 type Validator {
+	"""
+	Validator's address.
+	"""
 	address: Address!
+	"""
+	Validator's set of credentials.
+	"""
 	credentials: ValidatorCredentials
+	"""
+	Validator's set of credentials for the next epoch.
+	"""
 	nextEpochCredentials: ValidatorCredentials
+	"""
+	Validator's name.
+	"""
 	name: String
+	"""
+	Validator's description.
+	"""
 	description: String
+	"""
+	Validator's url containing their custom image.
+	"""
 	imageUrl: String
+	"""
+	Validator's homepage URL.
+	"""
 	projectUrl: String
-	exchangeRatesSize: Int
-	stakingPoolActivationEpoch: Int
-	stakingPoolSuiBalance: BigInt
-	rewardsPool: BigInt
-	poolTokenBalance: BigInt
-	pendingStake: BigInt
-	pendingTotalSuiWithdraw: BigInt
-	pendingPoolTokenWithdraw: BigInt
-	votingPower: Int
-	gasPrice: BigInt
-	commissionRate: Int
-	nextEpochStake: BigInt
-	nextEpochGasPrice: BigInt
-	nextEpochCommissionRate: Int
-	atRisk: Int
-	reportRecords: [SuiAddress!]
+	"""
+	The validator's current valid `Cap` object. Validators can delegate
+	the operation ability to another address. The address holding this `Cap` object
+	can then update the reference gas price and tallying rule on behalf of the validator.
+	"""
 	operationCap: MoveObject
+	"""
+	The validator's current staking pool object, used to track the amount of stake
+	and to compound staking rewards.
+	"""
 	stakingPool: MoveObject
+	"""
+	The validator's current exchange object. The exchange rate is used to determine
+	the amount of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
 	exchangeRates: MoveObject
+	"""
+	Number of exchange rates in the table.
+	"""
+	exchangeRatesSize: Int
+	"""
+	The epoch at which this pool became active.
+	"""
+	stakingPoolActivationEpoch: Int
+	"""
+	The total number of SUI tokens in this pool.
+	"""
+	stakingPoolSuiBalance: BigInt
+	"""
+	The epoch stake rewards will be added here at the end of each epoch.
+	"""
+	rewardsPool: BigInt
+	"""
+	Total number of pool tokens issued by the pool.
+	"""
+	poolTokenBalance: BigInt
+	"""
+	Pending stake amount for this epoch.
+	"""
+	pendingStake: BigInt
+	"""
+	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingTotalSuiWithdraw: BigInt
+	"""
+	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+	"""
+	pendingPoolTokenWithdraw: BigInt
+	"""
+	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
+	"""
+	votingPower: Int
+	"""
+	The reference gas price for this epoch.
+	"""
+	gasPrice: BigInt
+	"""
+	The fee charged by the validator for staking services.
+	"""
+	commissionRate: Int
+	"""
+	The total number of SUI tokens in this pool plus
+	the pending stake amount for this epoch.
+	"""
+	nextEpochStake: BigInt
+	"""
+	The validator's gas price quote for the next epoch.
+	"""
+	nextEpochGasPrice: BigInt
+	"""
+	The proposed next epoch fee for the validator's staking services.
+	"""
+	nextEpochCommissionRate: Int
+	"""
+	The number of epochs for which this validator has been below the
+	low stake threshold.
+	"""
+	atRisk: Int
+	"""
+	The addresses of other validators this validator has reported.
+	"""
+	reportRecords: [Address!]
 }
 
 type ValidatorCredentials {

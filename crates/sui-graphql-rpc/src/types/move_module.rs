@@ -342,7 +342,7 @@ impl MoveModule {
         )))
     }
 
-    fn function_impl(&self, name: String) -> Result<Option<MoveFunction>, Error> {
+    pub(crate) fn function_impl(&self, name: String) -> Result<Option<MoveFunction>, Error> {
         let def = match self.parsed.function_def(&name) {
             Ok(Some(def)) => def,
             Ok(None) => return Ok(None),

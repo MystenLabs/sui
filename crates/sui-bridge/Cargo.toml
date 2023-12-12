@@ -35,6 +35,7 @@ reqwest.workspace = true
 fastcrypto.workspace = true
 tap.workspace = true
 workspace-hack.workspace = true
+shared-crypto.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

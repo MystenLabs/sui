@@ -39,7 +39,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
-                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -48,7 +47,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/ADep",
                 ),
-                version: None,
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
@@ -59,7 +57,7 @@ ResolvedGraph {
             "ADep",
             "Root",
         },
-        manifest_digest: "E1187C3104285580A1E8194F9C285C1A87D5732BACA176B8380028E5CE5C20F5",
+        manifest_digest: "2401A97D2FE979752E0726963BFC3F677A4FA8041F3C6FAE5A4302401B165463",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
@@ -88,11 +86,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "A",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -109,7 +102,6 @@ ResolvedGraph {
                                 "../ADep",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -126,11 +118,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "ADep",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -152,11 +139,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -176,7 +158,6 @@ ResolvedGraph {
                                 "deps_only/ADep",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

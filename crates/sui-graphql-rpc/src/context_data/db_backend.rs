@@ -51,15 +51,15 @@ pub(crate) trait GenericQueryBuilder<DB: Backend> {
         before_tx_seq_num: Option<i64>,
     ) -> Result<transactions::BoxedQuery<'static, DB>, Error>;
     fn multi_get_coins(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
+        before: Option<Vec<u8>>,
+        after: Option<Vec<u8>>,
         limit: i64,
         address: Option<Vec<u8>>,
         coin_type: String,
     ) -> objects::BoxedQuery<'static, DB>;
     fn multi_get_objs(
-        cursor: Option<Vec<u8>>,
-        descending_order: bool,
+        before: Option<Vec<u8>>,
+        after: Option<Vec<u8>>,
         limit: i64,
         filter: Option<ObjectFilter>,
         owner_type: Option<OwnerType>,

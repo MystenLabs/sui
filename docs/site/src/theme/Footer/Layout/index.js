@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import React, { useEffect } from "react";
 import Link from "@docusaurus/Link";
+
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import * as amplitude from "@amplitude/analytics-browser";
 
@@ -13,6 +14,7 @@ export default function FooterLayout({ style, links, logo, copyright }) {
       defaultTracking: true,
     });
   }, [siteConfig.customFields.amplitudeKey]);
+
 
   return (
     <footer className="px-2 pb-2 bg-sui-black">

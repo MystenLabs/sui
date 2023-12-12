@@ -9,7 +9,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use sui_keys::key_derive::generate_new_key;
 use tempfile::TempDir;
 
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
 use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
 use sui_types::{
     base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
@@ -92,6 +92,10 @@ fn create_alias_if_not_exists_test() {
     // test expected result
     let create_alias_result = keystore.create_alias(Some("test".to_string()));
     assert_eq!("test".to_string(), create_alias_result.unwrap());
+    assert!(keystore.create_alias(Some("_test".to_string())).is_err());
+    assert!(keystore.create_alias(Some("-A".to_string())).is_err());
+    assert!(keystore.create_alias(Some("1A".to_string())).is_err());
+    assert!(keystore.create_alias(Some("&&AA".to_string())).is_err());
 }
 
 #[test]
@@ -114,6 +118,78 @@ fn keystore_no_aliases() {
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
     assert_eq!(1, keystore.aliases().len());
+}
+
+#[test]
+fn update_alias_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    keystore
+        .generate_and_add_new_key(
+            SignatureScheme::ED25519,
+            Some("my_alias_test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+    let aliases = keystore.alias_names();
+    assert_eq!(1, aliases.len());
+    assert_eq!(vec!["my_alias_test"], aliases);
+
+    // read the alias file again and check if it was saved
+    let keystore1 = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let aliases1 = keystore1.alias_names();
+    assert_eq!(vec!["my_alias_test"], aliases1);
+
+    let update = keystore.update_alias("alias_does_not_exist", None);
+    assert!(update.is_err());
+
+    let _ = keystore.update_alias("my_alias_test", Some("new_alias"));
+    let aliases = keystore.alias_names();
+    assert_eq!(vec!["new_alias"], aliases);
+
+    // check that it errors on empty alias
+    assert!(keystore.update_alias("new_alias", Some(" ")).is_err());
+    assert!(keystore.update_alias("new_alias", Some("   ")).is_err());
+    // check that alias is trimmed
+    assert!(keystore.update_alias("new_alias", Some("  o ")).is_ok());
+    assert_eq!(vec!["o"], keystore.alias_names());
+    // check the regex works and new alias can be only [A-Za-z][A-Za-z0-9-_]*
+    assert!(keystore.update_alias("o", Some("_alias")).is_err());
+    assert!(keystore.update_alias("o", Some("-alias")).is_err());
+    assert!(keystore.update_alias("o", Some("123")).is_err());
+
+    let update = keystore.update_alias("o", None).unwrap();
+    let aliases = keystore.alias_names();
+    assert_eq!(vec![&update], aliases);
+}
+
+#[test]
+fn update_alias_in_memory_test() {
+    let mut keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(0));
+    keystore
+        .generate_and_add_new_key(
+            SignatureScheme::ED25519,
+            Some("my_alias_test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+    let aliases = keystore.alias_names();
+    assert_eq!(1, aliases.len());
+    assert_eq!(vec!["my_alias_test"], aliases);
+
+    let update = keystore.update_alias("alias_does_not_exist", None);
+    assert!(update.is_err());
+
+    let _ = keystore.update_alias("my_alias_test", Some("new_alias"));
+    let aliases = keystore.alias_names();
+    assert_eq!(vec!["new_alias"], aliases);
+
+    let update = keystore.update_alias("new_alias", None).unwrap();
+    let aliases = keystore.alias_names();
+    assert_eq!(vec![&update], aliases);
 }
 
 #[test]

@@ -17,7 +17,7 @@ const config = {
 	},
 	head: (
 		<>
-			<meta name="google-site-verification" content="vRwZ3B3JxeegVwxa01XL4edDasP3pT8jPxEiBqqEaqw" />
+			<meta name="google-site-verification" content="T-2HWJAKh8s63o9KFxCFXg5MON_NGLJG76KJzr_Hp0A" />
 			<meta httpEquiv="Content-Language" content="en" />
 		</>
 	),

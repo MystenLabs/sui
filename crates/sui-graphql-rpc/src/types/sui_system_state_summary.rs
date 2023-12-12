@@ -16,7 +16,7 @@ use async_graphql::*;
 
 /// Aspects that affect the running of the system that are managed by the validators either
 /// directly, or through system transactions.
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[derive(Clone, Debug, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct SuiSystemStateSummary {
     #[graphql(skip)]
