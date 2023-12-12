@@ -129,10 +129,12 @@ mod checked {
             let sol_1_only_command = is_exactly_one_move_call;
             let sol_2_only_move_command = only_one_move_command;
             let sol_3_independent_private_entry = context.had_unique_inputs_private_entry;
-            println!("PRIVATE_ENTRY_HEADER, sol_1_only_command, sol_2_only_move_command, sol_3_independent_private_entry");
-            println!(
+            sui_macros::replay_log!("PRIVATE_ENTRY_HEADER, sol_1_only_command, sol_2_only_move_command, sol_3_independent_private_entry");
+            sui_macros::replay_log!(
                 "PRIVATE_ENTRY_LOGGING, {}, {}, {}",
-                sol_1_only_command, sol_2_only_move_command, sol_3_independent_private_entry
+                sol_1_only_command,
+                sol_2_only_move_command,
+                sol_3_independent_private_entry
             );
         }
 
