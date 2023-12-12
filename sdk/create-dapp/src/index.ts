@@ -5,7 +5,7 @@
 
 import { existsSync, statSync } from 'fs';
 import { mkdir, readdir, readFile, writeFile } from 'fs/promises';
-import { relative, resolve } from 'path';
+import { relative, resolve, join, sep } from 'path';
 import { parseArgs } from 'util';
 import { prompt } from 'enquirer';
 
@@ -111,8 +111,7 @@ async function collectFiles(template: string, dAppName: string) {
 async function writeFiles(files: Array<{ path: string; content: Buffer }>, outDir: string) {
 	for (const file of files) {
 		const filePath = resolve(outDir, file.path);
-		const dirPath = filePath.split('/').slice(0, -1).join('/');
-
+		const dirPath = join(...filePath.split(sep).slice(0, -1));
 		if (!existsSync(dirPath)) {
 			await mkdir(dirPath, { recursive: true });
 		}
