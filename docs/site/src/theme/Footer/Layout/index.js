@@ -5,11 +5,6 @@ import Link from "@docusaurus/Link";
 import * as amplitude from "@amplitude/analytics-browser";
 
 export default function FooterLayout({ style, links, logo, copyright }) {
-  useEffect(() => {
-    amplitude.init(process.env.AMPLITUDE_KEY || null, {
-      defaultTracking: true,
-    });
-  }, []);
 
   return (
     <footer className="px-2 pb-2 bg-sui-black">
