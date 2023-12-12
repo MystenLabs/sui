@@ -27,6 +27,8 @@ module scratch_off::game {
     const EInvalidBlsSig: u64 = 1;
     const ENoTicketsLeft: u64 = 2;
     const ENotAuthorizedEmployee: u64 = 3;
+    const EWrongStore: u64 = 4;
+    const ENotExactAmount: u64 = 5;
 
     // --------------- Events ---------------
     struct NewDrawing<phantom T> has copy, drop {
@@ -163,7 +165,7 @@ module scratch_off::game {
         public_key: vector<u8>,
         max_players_in_leaderboard: u64,
         ctx: &mut TxContext
-    ): Coin<Asset> {
+    ) {
         let number_of_prizes_len = vector::length(&number_of_prizes);
         let value_of_prizes_len = vector::length(&value_of_prizes);
         assert!(number_of_prizes_len == value_of_prizes_len, EInvalidInputs);
@@ -172,6 +174,7 @@ module scratch_off::game {
         let idx = 0;
         let prize_pool = balance::zero<Asset>();
         let winning_ticket_count = 0;
+        let required_funds = 0;
 
         while (idx < number_of_prizes_len) {
             let target_prize_amount = vector::pop_back(&mut number_of_prizes);
@@ -186,10 +189,13 @@ module scratch_off::game {
             // of this smart contract we do not need to consider this.
             let target_amount = target_prize_amount * target_prize_value;
             // Pull the required balance from the coin and stuff it into a balance.
-            balance::join(&mut prize_pool, coin::into_balance(coin::split(&mut coin, target_amount, ctx)));
+            required_funds = required_funds + target_amount;
             winning_ticket_count = winning_ticket_count + target_prize_amount;
             idx = idx + 1;
         };
+
+        assert!(coin::value(&coin) == required_funds, ENotExactAmount);
+        balance::join(&mut prize_pool, coin::into_balance(coin));
 
         let new_store = ConvenienceStore<Asset> {
             id: object::new(ctx),
@@ -208,13 +214,13 @@ module scratch_off::game {
             },
             public_key,
         };
+        
         transfer::public_transfer(StoreCap {
             id: object::new(ctx),
             store_id: object::id(&new_store)
         }, tx_context::sender(ctx));
 
         transfer::share_object(new_store);
-        coin
     }
 
     /// Initializes a ticket and sends it to someone.
@@ -224,7 +230,7 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-        assert!(store_cap.store_id == object::uid_to_inner(&store.id), ENotAuthorizedEmployee);
+        assert!(store_cap.store_id == object::id(store), ENotAuthorizedEmployee);
         assert!(store.tickets_issued < store.original_ticket_count, ENoTicketsLeft);
         store.tickets_issued = store.tickets_issued + 1;
         let ticket = Ticket {
@@ -244,6 +250,8 @@ module scratch_off::game {
         ctx: &mut TxContext
     ): ID {
         assert!(store.tickets_issued <= store.original_ticket_count, ENoTicketsLeft);
+        assert!(object::id(store) == ticket.convenience_store_id, EWrongStore);
+
         let ticket_id = object::uid_to_inner(&ticket.id);
 
         // Modify the ticket holder even if it got transfered so that the evaluation will
@@ -400,11 +408,11 @@ module scratch_off::game {
 
     // --------------- House Accessors ---------------
 
-    public fun public_key<T>(store: &ConvenienceStore<T>): vector<u8> {
+    public fun public_key<Asset>(store: &ConvenienceStore<Asset>): vector<u8> {
         store.public_key
     }
 
-    public fun ticket_exists<T>(store: &ConvenienceStore<T>, ticket_id: ID): bool {
+    public fun ticket_exists<Asset>(store: &ConvenienceStore<Asset>, ticket_id: ID): bool {
         dof::exists_with_type<ID, Ticket>(&store.id, ticket_id)
     }
 

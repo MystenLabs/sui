@@ -22,12 +22,14 @@ module scratch_off::test_game {
         creator: address,
         number_of_prizes: vector<u64>,
         value_of_prizes: vector<u64>,
+        coin_amount: u64,
         max_leaderboard_size: u64,
     ) {
         ts::next_tx(scenario, creator);
         {
-            let coin = mint_for_testing<SUI>(1000 * 100000000, ts::ctx(scenario));
-            let leftover_coin = game::open_store<SUI>(
+            let coin = mint_for_testing<SUI>(coin_amount, ts::ctx(scenario));
+
+            game::open_store<SUI>(
                 coin,
                 number_of_prizes,
                 value_of_prizes,
@@ -35,7 +37,6 @@ module scratch_off::test_game {
                 max_leaderboard_size,
                 ts::ctx(scenario)
             );
-            burn_for_testing<SUI>(leftover_coin);
         }
     }
 
@@ -79,6 +80,7 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
+                4,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -162,6 +164,7 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
+                3,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -220,12 +223,13 @@ module scratch_off::test_game {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {
             let number_of_prizes = vector<u64>[1, 1, 1];
-            let value_of_prizes = vector<u64>[1,2,5];
+            let value_of_prizes = vector<u64>[1, 2, 5];
             setup_test_sui_store(
                 &mut test,
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
+                8,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -262,6 +266,7 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
+                3,
                 MAX_LEADERBOARD_SIZE
             )
         };
@@ -301,6 +306,7 @@ module scratch_off::test_game {
                 OWNER_ADDRESS,
                 number_of_prizes,
                 value_of_prizes,
+                1000 + 1000 + 2500 + 1000,
                 MAX_LEADERBOARD_SIZE
             )
         };
