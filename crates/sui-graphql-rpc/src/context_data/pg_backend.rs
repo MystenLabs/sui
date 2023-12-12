@@ -23,7 +23,7 @@ use diesel::{
 use std::str::FromStr;
 use sui_indexer::{
     schema_v2::{
-        checkpoints, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
+        checkpoints, display, epochs, events, objects, transactions, tx_calls, tx_changed_objects,
         tx_input_objects, tx_recipients, tx_senders,
     },
     types_v2::OwnerType,
@@ -90,6 +90,13 @@ impl GenericQueryBuilder<Pg> for PgQueryBuilder {
     fn get_earliest_complete_checkpoint() -> checkpoints::BoxedQuery<'static, Pg> {
         checkpoints::dsl::checkpoints
             .order_by(checkpoints::dsl::sequence_number.asc())
+            .limit(1)
+            .into_boxed()
+    }
+
+    fn get_display_by_obj_type(object_type: String) -> display::BoxedQuery<'static, Pg> {
+        display::dsl::display
+            .filter(display::dsl::object_type.eq(object_type))
             .limit(1)
             .into_boxed()
     }
