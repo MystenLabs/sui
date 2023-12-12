@@ -921,7 +921,7 @@ impl Symbolicator {
                     field_defs,
                     ident_type: IdentOnHover::Struct(
                         mod_ident.value,
-                        name.clone(),
+                        *name,
                         def.type_parameters
                             .iter()
                             .map(|t| {
@@ -2073,7 +2073,7 @@ impl Symbolicator {
             Some(v) => v,
             None => return None,
         };
-        mod_defs.structs.get(&struct_name).map(|struct_def| {
+        mod_defs.structs.get(struct_name).map(|struct_def| {
             let fhash = mod_defs.fhash;
             let start = struct_def.name_start;
             DefLoc { fhash, start }
