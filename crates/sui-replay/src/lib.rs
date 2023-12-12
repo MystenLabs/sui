@@ -7,7 +7,6 @@ use config::ReplayableNetworkConfigSet;
 use fuzz::ReplayFuzzer;
 use fuzz::ReplayFuzzerConfig;
 use fuzz_mutations::base_fuzzers;
-use move_vm_config::runtime::DEFAULT_PROFILE_OUTPUT_PATH;
 use sui_types::digests::get_mainnet_chain_identifier;
 use sui_types::digests::get_testnet_chain_identifier;
 use sui_types::message_envelope::Message;
@@ -377,6 +376,14 @@ pub async fn execute_replay_command(
             protocol_version,
             profile_output,
         } => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Error getting system time")
+                .as_nanos();
+            let mut default_name = std::path::PathBuf::from(".");
+            default_name.push(format!("gas_profile_{}_{}.json", tx_digest, now));
+            let output_path = profile_output.or(Some(default_name));
+
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
@@ -387,7 +394,7 @@ pub async fn execute_replay_command(
                 use_authority,
                 executor_version,
                 protocol_version,
-                profile_output.or(Some((*DEFAULT_PROFILE_OUTPUT_PATH.clone()).to_path_buf())),
+                output_path,
             )
             .await?;
 

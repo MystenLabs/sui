@@ -29,8 +29,8 @@ use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
     values::{
-        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
-        Vector, VectorRef,
+        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Vector,
+        VectorRef,
     },
     views::TypeView,
 };
@@ -187,10 +187,9 @@ impl Interpreter {
             .map_err(|err| self.set_location(err))?;
         loop {
             let resolver = current_frame.resolver(link_context, loader);
-            let exit_code =
-                current_frame //self
-                    .execute_code(&resolver, &mut self, gas_meter)
-                    .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
+            let exit_code = current_frame //self
+                .execute_code(&resolver, &mut self, gas_meter)
+                .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
             match exit_code {
                 ExitCode::Return => {
                     let non_ref_vals = current_frame
@@ -217,8 +216,7 @@ impl Interpreter {
                     let func = resolver.function_from_handle(fh_idx);
                     // Compiled out in release mode
 
-                    let _func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, _func_name.clone());
+                    profile_open_frame!(gas_meter, func.pretty_string().clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -234,16 +232,10 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(
-                            &resolver,
-                            gas_meter,
-                            extensions,
-                            func,
-                            vec![],
-                        )?;
+                        self.call_native(&resolver, gas_meter, extensions, func.clone(), vec![])?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, _func_name.clone());
+                        profile_close_frame!(gas_meter, func.pretty_string().clone());
                         continue;
                     }
                     let frame = self
@@ -266,8 +258,7 @@ impl Interpreter {
                     let func = resolver.function_from_instantiation(idx);
                     // Compiled out in release mode
 
-                    let _func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, _func_name.clone());
+                    profile_open_frame!(gas_meter, func.pretty_string().clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -284,10 +275,10 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
+                        self.call_native(&resolver, gas_meter, extensions, func.clone(), ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, _func_name.clone());
+                        profile_close_frame!(gas_meter, func.pretty_string().clone());
 
                         continue;
                     }
@@ -358,23 +349,17 @@ impl Interpreter {
         ty_args: Vec<Type>,
     ) -> VMResult<()> {
         // Note: refactor if native functions push a frame on the stack
-        self.call_native_impl(
-            resolver,
-            gas_meter,
-            extensions,
-            function.clone(),
-            ty_args,
-        )
-        .map_err(|e| {
-            let id = function.module_id();
-            let e = if resolver.loader().vm_config().error_execution_state {
-                e.with_exec_state(self.get_internal_state())
-            } else {
-                e
-            };
-            e.at_code_offset(function.index(), 0)
-                .finish(Location::Module(id.clone()))
-        })
+        self.call_native_impl(resolver, gas_meter, extensions, function.clone(), ty_args)
+            .map_err(|e| {
+                let id = function.module_id();
+                let e = if resolver.loader().vm_config().error_execution_state {
+                    e.with_exec_state(self.get_internal_state())
+                } else {
+                    e
+                };
+                e.at_code_offset(function.index(), 0)
+                    .finish(Location::Module(id.clone()))
+            })
     }
 
     fn call_native_impl(
@@ -417,12 +402,8 @@ impl Interpreter {
             args.push_front(self.operand_stack.pop()?);
         }
 
-        let mut native_context = NativeContext::new(
-            self,
-            resolver,
-            extensions,
-            gas_meter.remaining_gas(),
-        );
+        let mut native_context =
+            NativeContext::new(self, resolver, extensions, gas_meter.remaining_gas());
         let native_function = function.get_native()?;
 
         gas_meter.charge_native_function_before_execution(
