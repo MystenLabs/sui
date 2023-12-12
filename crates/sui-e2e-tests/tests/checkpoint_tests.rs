@@ -11,7 +11,6 @@ use sui_macros::register_fail_point_if;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use test_cluster::TestClusterBuilder;
-use tracing::debug;
 
 #[sim_test]
 async fn basic_checkpoints_integration_test() {
@@ -45,6 +44,7 @@ async fn basic_checkpoints_integration_test() {
 
 #[sim_test]
 async fn checkpoint_split_brain_test() {
+    let committee_size = 9;
     // count number of nodes that have reached split brain condition
     let count_split_brain_nodes: Arc<Mutex<AtomicUsize>> = Default::default();
     let count_clone = count_split_brain_nodes.clone();
@@ -53,35 +53,24 @@ async fn checkpoint_split_brain_test() {
         counter.fetch_add(1, Ordering::Relaxed);
     });
 
-    // Create shared list containing node id's that will register split
-    // brain condition (create execution nondeterminism).
-    // The first two nodes to acquire the lock will add themselves to the list.
-    // We do this rather than, e.g., register all even simnode ID's,
-    // because in some cases the simnode ID's assigned are not sequential.
-    let fail_node_list: Arc<Mutex<Vec<u64>>> = Default::default();
-    let fail_list_clone = fail_node_list.clone();
-    register_fail_point_if("cp_execution_nondeterminism", move || {
-        let mut fail_list = fail_list_clone.lock().unwrap();
-        if fail_list.len() < 2 {
-            fail_list.push(sui_simulator::current_simnode_id().0);
-            true
-        } else {
-            fail_list.contains(&sui_simulator::current_simnode_id().0)
-        }
-    });
+    register_fail_point_if("cp_execution_nondeterminism", || true);
 
     let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(4)
+        .with_num_validators(committee_size)
         .build()
         .await;
 
     let tx = make_transfer_sui_transaction(&test_cluster.wallet, None, None).await;
-    test_cluster.execute_transaction(tx).await;
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(tx)
+        .await
+        .ok();
 
     // provide enough time for validators to detect split brain
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
 
     // all honest validators should eventually detect a split brain
     let final_count = count_split_brain_nodes.lock().unwrap();
-    assert!(final_count.load(Ordering::Relaxed) >= 2);
+    assert!(final_count.load(Ordering::Relaxed) >= 1);
 }

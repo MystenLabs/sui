@@ -1667,8 +1667,8 @@ async fn diagnose_split_brain(
 
     // There is no option to never restart the node, so choosing longer than should
     // be needed for any testcase
-    #[cfg(msim)]
-    sui_simulator::task::kill_current_node(Some(Duration::from_secs(100)));
+    // #[cfg(msim)]
+    // sui_simulator::task::kill_current_node(Some(Duration::from_secs(100)));
 }
 
 pub trait CheckpointServiceNotify {
