@@ -237,15 +237,17 @@ macro_rules! fail_point_if {
     ($tag: expr, $callback: expr) => {};
 }
 
-/// Use to write DEBUG level logs only when REPLAY_LOG
+/// Use to write INFO level logs only when REPLAY_LOG
 /// environment variable is set. Useful for log lines that
 /// are only relevant to test infra which still may need to
-/// run a release build
+/// run a release build. Also note that since logs of a chain
+/// replay are exceedingly verbose, this will allow one to bubble
+/// up "debug level" info while running with RUST_LOG=info.
 #[macro_export]
 macro_rules! replay_log {
     ($($arg:tt)+) => {
         if std::env::var("REPLAY_LOG").is_ok() {
-            tracing::debug!($($arg)+);
+            tracing::info!($($arg)+);
         }
     };
 }
