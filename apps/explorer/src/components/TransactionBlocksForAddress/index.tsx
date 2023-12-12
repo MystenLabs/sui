@@ -23,9 +23,7 @@ export enum FILTER_VALUES {
 type TransactionBlocksForAddressProps = {
 	address: string;
 	filter?: FILTER_VALUES;
-	isObject?: boolean;
-	noBorderBottom?: boolean;
-	noHeader?: boolean;
+	header?: string;
 };
 
 enum PAGE_ACTIONS {
@@ -71,7 +69,7 @@ const reducer = (state: PageStateByFilterMap, action: TransactionBlocksForAddres
 	}
 };
 
-function FiltersControl({
+export function FiltersControl({
 	filterValue,
 	setFilterValue,
 }: {
@@ -94,9 +92,7 @@ function FiltersControl({
 function TransactionBlocksForAddress({
 	address,
 	filter = FILTER_VALUES.CHANGED,
-	isObject = false,
-	noBorderBottom,
-	noHeader,
+	header,
 }: TransactionBlocksForAddressProps) {
 	const [filterValue, setFilterValue] = useState(filter);
 	const [currentPageState, dispatch] = useReducer(reducer, {
@@ -117,17 +113,17 @@ function TransactionBlocksForAddress({
 
 	return (
 		<div data-testid="tx">
-			{!noHeader && (
-				<div className="flex items-center justify-between border-b border-gray-45 pb-5">
+			<div className="flex items-center justify-between border-b border-gray-45 pb-5">
+				{header && (
 					<Heading color="gray-90" variant="heading4/semibold">
-						Transaction Blocks
+						{header}
 					</Heading>
+				)}
 
-					{isObject && <FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />}
-				</div>
-			)}
+				<FiltersControl filterValue={filterValue} setFilterValue={setFilterValue} />
+			</div>
 
-			<div className={clsx(!noHeader && 'pt-5', 'flex flex-col space-y-5 text-left xl:pr-10')}>
+			<div className={clsx(header && 'pt-5', 'flex flex-col space-y-5 text-left xl:pr-10')}>
 				{isPending || isFetching || isFetchingNextPage || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}
@@ -137,11 +133,7 @@ function TransactionBlocksForAddress({
 					/>
 				) : (
 					<div>
-						<TableCard
-							data={cardData.data}
-							columns={cardData.columns}
-							noBorderBottom={noBorderBottom}
-						/>
+						<TableCard data={cardData.data} columns={cardData.columns} />
 					</div>
 				)}
 

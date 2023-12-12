@@ -77,12 +77,7 @@ export function FieldsContent({ objectId }: { objectId: string }) {
 
 	const { data: dynamicFieldsData } = useGetDynamicFields(objectId);
 
-	const renderFields = !!fieldsCount;
 	const renderDynamicFields = !!dynamicFieldsData?.pages?.[0].data.length;
-
-	if (!renderFields && !renderDynamicFields) {
-		return null;
-	}
 
 	return (
 		<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
@@ -128,7 +123,7 @@ export function TokenView({ data }: { data: SuiObjectResponse }) {
 		<div className="flex flex-col flex-nowrap gap-14">
 			<FieldsContent objectId={objectId} />
 
-			<TransactionBlocksForAddress address={objectId} isObject />
+			<TransactionBlocksForAddress address={objectId} header="Transaction Blocks" />
 		</div>
 	);
 }

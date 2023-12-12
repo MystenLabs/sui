@@ -116,7 +116,7 @@ function PkgView({ data }: { data: DataType }) {
 						<TransactionBlocksForAddress
 							address={viewedData.id}
 							filter={FILTER_VALUES.INPUT}
-							isObject
+							header="Transaction Blocks"
 						/>
 					</ErrorBoundary>
 				</div>

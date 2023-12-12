@@ -55,7 +55,7 @@ export function TransactionsForAddressTable({
 		);
 	}
 
-	return <TableCard noBorderBottom data={tableData.data} columns={tableData.columns} />;
+	return <TableCard data={tableData.data} columns={tableData.columns} />;
 }
 
 export function TransactionsForAddress({ address, type }: Props) {
