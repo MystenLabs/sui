@@ -2846,15 +2846,15 @@ impl AuthorityPerEpochStore {
             .multi_contains_keys(digests)?)
     }
 
-    pub fn get_last_checkpoint_signature_index(&self) -> u64 {
-        self.tables()
-            .expect("CheckpointService initialization should not cross epoch boundary")
+    pub fn get_last_checkpoint_signature_index(&self) -> SuiResult<u64> {
+        Ok(self
+            .tables()?
             .pending_checkpoint_signatures
             .unbounded_iter()
             .skip_to_last()
             .next()
             .map(|((_, index), _)| index)
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 
     pub fn insert_checkpoint_signature(

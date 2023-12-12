@@ -1477,7 +1477,9 @@ impl CheckpointService {
 
         spawn_monitored_task!(aggregator.run());
 
-        let last_signature_index = epoch_store.get_last_checkpoint_signature_index();
+        let last_signature_index = epoch_store
+            .get_last_checkpoint_signature_index()
+            .expect("should not cross end of epoch");
         let last_signature_index = Mutex::new(last_signature_index);
 
         let service = Arc::new(Self {
