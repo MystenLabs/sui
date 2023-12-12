@@ -73,6 +73,82 @@ module scratch_off::test_game {
         test_player_metadata_(scenario());
     }
 
+    #[test]
+    fun test_multiple_ticket_play_and_evaluate() {
+        test_multiple_ticket_play_and_evaluate_(scenario());
+    }
+
+    #[test]
+    #[expected_failure(abort_code = ENoTicketsLeft)]
+    fun test_multiple_ticket_play_and_evaluate_failure() {
+        test_multiple_ticket_play_and_evaluate_failure_(scenario());
+    }
+
+    fun test_multiple_ticket_play_and_evaluate_failure_(test: Scenario) {
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            let number_of_prizes = vector<u64>[1, 1, 1];
+            let value_of_prizes = vector<u64>[1, 1, 1];
+            setup_test_sui_store(
+                &mut test,
+                OWNER_ADDRESS,
+                number_of_prizes,
+                value_of_prizes,
+                3,
+                MAX_LEADERBOARD_SIZE
+            )
+        };
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            // Send a batch 3 tickets to alice
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 4, ts::ctx(&mut test));
+            ts::return_to_sender(&test, store_cap);
+            ts::return_shared(store);
+        };
+        test_scenario::end(test);
+    }
+
+    fun test_multiple_ticket_play_and_evaluate_(test: Scenario) {
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            let number_of_prizes = vector<u64>[1, 1, 1];
+            let value_of_prizes = vector<u64>[1, 1, 1];
+            setup_test_sui_store(
+                &mut test,
+                OWNER_ADDRESS,
+                number_of_prizes,
+                value_of_prizes,
+                3,
+                MAX_LEADERBOARD_SIZE
+            )
+        };
+        ts::next_tx(&mut test, OWNER_ADDRESS);
+        {
+            // Send a batch 3 tickets to alice
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+            let store_cap: StoreCap = ts::take_from_sender(&test);
+            game::send_ticket(&store_cap, ALICE_ADDRESS, &mut store, 3, ts::ctx(&mut test));
+            ts::return_to_sender(&test, store_cap);
+            ts::return_shared(store);
+        };
+        ts::next_tx(&mut test, ALICE_ADDRESS);
+        {
+            let ticket: Ticket = ts::take_from_sender(&test);
+            let store: ConvenienceStore<SUI> = ts::take_shared(&test);
+
+            assert!(prize_pool_balance(&store) == 3, 0);
+
+            let id = game::evaluate_ticket<SUI>(ticket, &mut store, ts::ctx(&mut test));
+            game::finish_evaluation_for_testing<SUI>(id, b"test", &mut store, ts::ctx(&mut test));
+            assert!(tickets_left(&store) == 0, 0);
+            assert!(prize_pool_balance(&store) == 0, 0);
+            ts::return_shared(store);
+        };
+        test_scenario::end(test);
+    }
+
     fun test_player_metadata_(test: Scenario) {
         ts::next_tx(&mut test, OWNER_ADDRESS);
         {

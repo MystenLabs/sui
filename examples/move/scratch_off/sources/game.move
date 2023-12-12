@@ -239,8 +239,8 @@ module scratch_off::game {
         ctx: &mut TxContext
     ) {
         assert!(store_cap.store_id == object::id(store), ENotAuthorizedEmployee);
-        assert!(store.tickets_issued < store.original_ticket_count, ENoTicketsLeft);
-        store.tickets_issued = store.tickets_issued + 1;
+        assert!(store.tickets_issued + drawing_count <= store.original_ticket_count, ENoTicketsLeft);
+        store.tickets_issued = store.tickets_issued + drawing_count;
         let ticket = Ticket {
             id: object::new(ctx),
             convenience_store_id: object::uid_to_inner(&store.id),
