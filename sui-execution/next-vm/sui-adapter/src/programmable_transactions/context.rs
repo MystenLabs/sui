@@ -54,8 +54,8 @@ mod checked {
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,
         execution::{
-            ExecutionResultsV2, ExecutionState, InputObjectMetadata, InputValue, ObjectValue,
-            RawValueType, ResultValue, UsageKind,
+            ExecutionResultsV2, ExecutionState, InputObjectMetadata, InputValue, MoveUsage,
+            ObjectValue, RawValueType, ResultValue, UsageKind,
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
@@ -1156,7 +1156,7 @@ mod checked {
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
-            used_with_move: false,
+            used_with_move: MoveUsage::None,
             contents,
         })
     }

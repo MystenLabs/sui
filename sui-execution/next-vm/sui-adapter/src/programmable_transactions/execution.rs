@@ -41,7 +41,8 @@ mod checked {
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         execution::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+            CommandKind, ExecutionState, MoveUsage, ObjectContents, ObjectValue, RawValueType,
+            Value,
         },
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
@@ -144,7 +145,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call: false,
-                        used_with_move: false,
+                        used_with_move: MoveUsage::None,
                     },
                     bytes,
                 )]
@@ -188,7 +189,7 @@ mod checked {
                         ty,
                         abilities,
                         used_in_non_entry_move_call,
-                        used_with_move: false,
+                        used_with_move: MoveUsage::None,
                     },
                     res,
                 )]
@@ -227,7 +228,8 @@ mod checked {
                         let coin_type = obj.type_.clone();
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
-                        let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin, false) };
+                        let new_coin =
+                            unsafe { ObjectValue::coin(coin_type, new_coin, MoveUsage::None) };
                         Ok(Value::Object(new_coin))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
@@ -445,7 +447,7 @@ mod checked {
                     ty,
                     abilities,
                     used_in_non_entry_move_call,
-                    used_with_move: false,
+                    used_with_move: MoveUsage::None,
                 },
                 bytes,
             ),
@@ -618,7 +620,7 @@ mod checked {
                 ty: upgrade_receipt_type,
                 abilities: AbilitySet::EMPTY,
                 used_in_non_entry_move_call: false,
-                used_with_move: false,
+                used_with_move: MoveUsage::None,
             },
             bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
         )])

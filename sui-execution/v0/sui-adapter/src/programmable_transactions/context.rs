@@ -43,8 +43,8 @@ mod checked {
         event::Event,
         execution::{
             CommandKind, ExecutionResults, ExecutionResultsV1, ExecutionState, InputObjectMetadata,
-            InputValue, ObjectContents, ObjectValue, RawValueType, ResultValue, TryFromValue,
-            UsageKind, Value,
+            InputValue, MoveUsage, ObjectContents, ObjectValue, RawValueType, ResultValue,
+            TryFromValue, UsageKind, Value,
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
@@ -1141,7 +1141,7 @@ mod checked {
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
-            used_with_move: false,
+            used_with_move: MoveUsage::None,
             contents,
         })
     }
