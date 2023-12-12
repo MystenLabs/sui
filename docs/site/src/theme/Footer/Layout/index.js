@@ -7,7 +7,7 @@ import * as amplitude from "@amplitude/analytics-browser";
 
 export default function FooterLayout({ style, links, logo, copyright }) {
   const { siteConfig } = useDocusaurusContext();
-  console.log(siteConfig.customFields.amplitudeKey);
+
   useEffect(() => {
     amplitude.init(siteConfig.customFields.amplitudeKey, {
       defaultTracking: true,
