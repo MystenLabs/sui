@@ -238,6 +238,7 @@ pub enum SuiClientCommands {
     #[clap(name = "new-address")]
     NewAddress {
         key_scheme: SignatureScheme,
+        /// The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
         alias: Option<String>,
         word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
