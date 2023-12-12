@@ -19,6 +19,7 @@ pub struct MetricsPushClient {
     client: reqwest::Client,
 }
 
+/// MetricsPushClient wraps our tls cert and a reqwest client that we use to push metrics
 impl MetricsPushClient {
     pub fn new(network_key: sui_types::crypto::NetworkKeyPair) -> Self {
         use fastcrypto::traits::KeyPair;
@@ -38,12 +39,29 @@ impl MetricsPushClient {
         }
     }
 
+    /// return a handle to the certificate we use
     pub fn certificate(&self) -> &sui_tls::SelfSignedCertificate {
         &self.certificate
     }
 
+    /// return a handle to our reqwest client
     pub fn client(&self) -> &reqwest::Client {
         &self.client
+    }
+
+    /// recreate will return a new instance of self.  we only call this when we hit an error condition
+    /// on posting data. NB do not call this in a fast loop
+    pub fn recreate(&self) -> Self {
+        let certificate = self.certificate.to_owned();
+        let identity = certificate.reqwest_identity();
+        let client = reqwest::Client::builder()
+            .identity(identity)
+            .build()
+            .unwrap();
+        MetricsPushClient {
+            certificate,
+            client,
+        }
     }
 }
 
@@ -69,7 +87,7 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
         _ => return,
     };
 
-    let client = MetricsPushClient::new(config.network_key_pair().copy());
+    let mut client = MetricsPushClient::new(config.network_key_pair().copy());
 
     async fn push_metrics(
         client: &MetricsPushClient,
@@ -136,6 +154,9 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
             interval.tick().await;
 
             if let Err(error) = push_metrics(&client, &url, &registry).await {
+                // aggressively recreate our client connection if we hit an error
+                // since our tick interval is only every min, this should not be racey
+                client = client.recreate();
                 tracing::warn!("unable to push metrics: {error}");
             }
         }
