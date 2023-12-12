@@ -31,14 +31,12 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/C",
                 ),
-                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
-                version: None,
                 resolver: None,
             },
         },
@@ -47,7 +45,7 @@ ResolvedGraph {
             "D",
             "test",
         },
-        manifest_digest: "FE671355454D2C48E232FB7E8E32B2D48AB921C4993F4758705F3CD9BC52792F",
+        manifest_digest: "9DB26BA0BAD462FDDF65A0EDFF4C77DB02930DF5610D82F97B38FA6CC6EBEDA6",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
@@ -76,11 +74,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -110,11 +103,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "D",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -144,11 +132,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "test",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -171,7 +154,6 @@ ResolvedGraph {
                                 "deps_only/C",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -182,7 +164,6 @@ ResolvedGraph {
                                 "deps_only/D",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

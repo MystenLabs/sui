@@ -69,35 +69,30 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
-                version: None,
                 resolver: None,
             },
             "B": Package {
                 kind: Local(
                     "deps_only/B",
                 ),
-                version: None,
                 resolver: None,
             },
             "C": Package {
                 kind: Local(
                     "deps_only/C2",
                 ),
-                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
-                version: None,
                 resolver: None,
             },
             "E": Package {
                 kind: Local(
                     "deps_only/E",
                 ),
-                version: None,
                 resolver: None,
             },
         },
@@ -109,7 +104,7 @@ ResolvedGraph {
             "E",
             "Root",
         },
-        manifest_digest: "0706DACA94014A2ADD1A782C6FE1B29553ED6FFDD67464A5672B900E0038C61F",
+        manifest_digest: "29407D5EEB9708B0005BD2BB6ED487E03C55AA23B440DAB7A0C4F8588239D4F6",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
@@ -138,11 +133,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "A",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -159,7 +149,6 @@ ResolvedGraph {
                                 "../B",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -170,7 +159,6 @@ ResolvedGraph {
                                 "../C1",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -187,11 +175,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "B",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -208,7 +191,6 @@ ResolvedGraph {
                                 "../D",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -225,11 +207,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -251,11 +228,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "D",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -272,7 +244,6 @@ ResolvedGraph {
                                 "../E",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -289,11 +260,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "E",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -315,11 +281,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -336,7 +297,6 @@ ResolvedGraph {
                                 "deps_only/A",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -347,7 +307,6 @@ ResolvedGraph {
                                 "deps_only/C2",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: true,
                         },

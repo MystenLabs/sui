@@ -2,10 +2,9 @@
 
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies]
-C = { local = "./deps_only/C", version = "1.0.0", override = true }
+C = { local = "./deps_only/C-v1", override = true }
 
 [dev-dependencies]
 A = { local = "./deps_only/A" }
