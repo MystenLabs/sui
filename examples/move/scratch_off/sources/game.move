@@ -40,6 +40,7 @@ module scratch_off::game {
         ticket_id: ID,
         player: address,
         amount_won: u64,
+        tickets_opened: u64,
     }
 
     struct Ticket has key, store {
@@ -48,6 +49,8 @@ module scratch_off::game {
         convenience_store_id: ID,
         /// Original receiver address, but on evaluation this is set to the ctx::sender addr
         player: address,
+        // Number of tickets that are in a given ticket
+        drawing_count: u64
 	}
 
     struct PrizeStruct has store, drop {
@@ -101,6 +104,10 @@ module scratch_off::game {
         leaderboard: LeaderBoard,
         public_key: vector<u8>,
     }     
+
+    public fun total_players<Asset>(store: &ConvenienceStore<Asset>): u64 {
+        table::length(&store.player_metadata)
+    }
 
     public fun leaderboard<Asset>(store: &ConvenienceStore<Asset>): &LeaderBoard {
        &store.leaderboard 
@@ -214,7 +221,7 @@ module scratch_off::game {
             },
             public_key,
         };
-        
+
         transfer::public_transfer(StoreCap {
             id: object::new(ctx),
             store_id: object::id(&new_store)
@@ -228,6 +235,7 @@ module scratch_off::game {
         store_cap: &StoreCap,
         player: address,
         store: &mut ConvenienceStore<Asset>,
+        drawing_count: u64,
         ctx: &mut TxContext
     ) {
         assert!(store_cap.store_id == object::id(store), ENotAuthorizedEmployee);
@@ -236,7 +244,8 @@ module scratch_off::game {
         let ticket = Ticket {
             id: object::new(ctx),
             convenience_store_id: object::uid_to_inner(&store.id),
-            player
+            player,
+            drawing_count
         };
         transfer::public_transfer(ticket, player);
     }
@@ -275,12 +284,13 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-                // get the game obj
+        // get the game obj
         if (!ticket_exists<Asset>(store, ticket_id)) return;
         let Ticket {
             id,
             convenience_store_id: _,
-            player
+            player,
+            drawing_count
         } = dof::remove<ID, Ticket>(&mut store.id, ticket_id);
 
         // verify BLS sig
@@ -296,39 +306,48 @@ module scratch_off::game {
         // use the BLS to generate randomness
         let random_32b = blake2b256(&bls_sig);
 
-        // Randomly pick a ticket from the prizes
-        let target_index = math::get_random_u64_in_range(&random_32b, tickets_left<Asset>(store));
-        let current_index = 0;
-        // let current_prize = vector::pop_back(&mut store.winning_tickets);
-        let winning_tickets_index = 0;
-        // Identify the prize
-        while (current_index < target_index) {
-            let current_prize = vector::borrow(&store.winning_tickets, winning_tickets_index);
-                current_index = current_index + current_prize.ticket_amount;
-            if (current_index < target_index) {
-                winning_tickets_index = winning_tickets_index + 1;
+        let ticket_index = 0;
+        let reward_balance = 0;
+        while (ticket_index < drawing_count) {
+            // Randomly pick a ticket from the prizes
+            let target_index = math::get_random_u64_in_range(&random_32b, tickets_left<Asset>(store));
+            // Rehash so next number is different
+            random_32b = blake2b256(&random_32b);
+            let current_index = 0;
+            // let current_prize = vector::pop_back(&mut store.winning_tickets);
+            let winning_tickets_index = 0;
+            // Identify the prize
+            while (current_index < target_index) {
+                let current_prize = vector::borrow(&store.winning_tickets, winning_tickets_index);
+                    current_index = current_index + current_prize.ticket_amount;
+                if (current_index < target_index) {
+                    winning_tickets_index = winning_tickets_index + 1;
+                };
             };
-        };
-        // Update the ticket count in prizes and the total number
-        let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
-        let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
-        prize.ticket_amount = prize.ticket_amount - 1;
-        let value_won = prize.prize_value;
-        if (prize.ticket_amount > 0) {
-            vector::push_back(&mut store.winning_tickets, prize);
+            // Update the ticket count in prizes and the total number
+            let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
+            prize.ticket_amount = prize.ticket_amount - 1;
+            reward_balance = reward_balance + prize.prize_value;
+            if (prize.ticket_amount > 0) {
+                vector::push_back(&mut store.winning_tickets, prize);
+            };
+
+            store.tickets_evaluated = store.tickets_evaluated + 1;
+            ticket_index = ticket_index + 1; 
         };
 
-        store.tickets_evaluated = store.tickets_evaluated + 1;
+        let prize_coin = coin::take(&mut store.prize_pool, reward_balance, ctx);
         transfer::public_transfer(prize_coin, player);
+
         // Update player mapping to metadata
         if (table_contains_player(&store.player_metadata, player)) {
             let player_metadata = get_player_metadata_mut(&mut store.player_metadata, player);
             player_metadata.tickets_claimed = player_metadata.tickets_claimed + 1;
-            player_metadata.amount_won = player_metadata.amount_won + value_won;
+            player_metadata.amount_won = player_metadata.amount_won + reward_balance;
         } else {
             table::add(&mut store.player_metadata, player, Metadata {
                 tickets_claimed: 1, 
-                amount_won: value_won
+                amount_won: reward_balance
             });
         };
 
@@ -402,7 +421,8 @@ module scratch_off::game {
         event::emit(DrawingResult<Asset> { 
             ticket_id,
             player: tx_context::sender(ctx),
-            amount_won: value_won,
+            amount_won: reward_balance,
+            tickets_opened: drawing_count
         });
     }
 
@@ -424,12 +444,13 @@ module scratch_off::game {
         store: &mut ConvenienceStore<Asset>,
         ctx: &mut TxContext
     ) {
-                // get the game obj
+        // get the game obj
         if (!ticket_exists<Asset>(store, ticket_id)) return;
         let Ticket {
             id,
             convenience_store_id: _,
-            player
+            player,
+            drawing_count
         } = dof::remove<ID, Ticket>(&mut store.id, ticket_id);
 
         // verify BLS sig
@@ -445,39 +466,48 @@ module scratch_off::game {
         // use the BLS to generate randomness
         let random_32b = blake2b256(&bls_sig);
 
-        // Randomly pick a ticket from the prizes
-        let target_index = math::get_random_u64_in_range(&random_32b, tickets_left<Asset>(store));
-        let current_index = 0;
-        // let current_prize = vector::pop_back(&mut store.winning_tickets);
-        let winning_tickets_index = 0;
-        // Identify the prize
-        while (current_index < target_index) {
-            let current_prize = vector::borrow(&store.winning_tickets, winning_tickets_index);
-                current_index = current_index + current_prize.ticket_amount;
-            if (current_index < target_index) {
-                winning_tickets_index = winning_tickets_index + 1;
+        let ticket_index = 0;
+        let reward_balance = 0;
+        while (ticket_index < drawing_count) {
+            // Randomly pick a ticket from the prizes
+            let target_index = math::get_random_u64_in_range(&random_32b, tickets_left<Asset>(store));
+            // Rehash so next number is different
+            random_32b = blake2b256(&random_32b);
+            let current_index = 0;
+            // let current_prize = vector::pop_back(&mut store.winning_tickets);
+            let winning_tickets_index = 0;
+            // Identify the prize
+            while (current_index < target_index) {
+                let current_prize = vector::borrow(&store.winning_tickets, winning_tickets_index);
+                    current_index = current_index + current_prize.ticket_amount;
+                if (current_index < target_index) {
+                    winning_tickets_index = winning_tickets_index + 1;
+                };
             };
-        };
-        // Update the ticket count in prizes and the total number
-        let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
-        let prize_coin = coin::take(&mut store.prize_pool, prize.prize_value, ctx);
-        prize.ticket_amount = prize.ticket_amount - 1;
-        let value_won = prize.prize_value;
-        if (prize.ticket_amount > 0) {
-            vector::push_back(&mut store.winning_tickets, prize);
+            // Update the ticket count in prizes and the total number
+            let prize = vector::remove(&mut store.winning_tickets, winning_tickets_index);
+            prize.ticket_amount = prize.ticket_amount - 1;
+            reward_balance = reward_balance + prize.prize_value;
+            if (prize.ticket_amount > 0) {
+                vector::push_back(&mut store.winning_tickets, prize);
+            };
+
+            store.tickets_evaluated = store.tickets_evaluated + 1;
+            ticket_index = ticket_index + 1; 
         };
 
-        store.tickets_evaluated = store.tickets_evaluated + 1;
+        let prize_coin = coin::take(&mut store.prize_pool, reward_balance, ctx);
         transfer::public_transfer(prize_coin, player);
+
         // Update player mapping to metadata
         if (table_contains_player(&store.player_metadata, player)) {
             let player_metadata = get_player_metadata_mut(&mut store.player_metadata, player);
             player_metadata.tickets_claimed = player_metadata.tickets_claimed + 1;
-            player_metadata.amount_won = player_metadata.amount_won + value_won;
+            player_metadata.amount_won = player_metadata.amount_won + reward_balance;
         } else {
             table::add(&mut store.player_metadata, player, Metadata {
                 tickets_claimed: 1, 
-                amount_won: value_won
+                amount_won: reward_balance
             });
         };
 
@@ -551,7 +581,8 @@ module scratch_off::game {
         event::emit(DrawingResult<Asset> { 
             ticket_id,
             player: tx_context::sender(ctx),
-            amount_won: value_won,
+            amount_won: reward_balance,
+            tickets_opened: drawing_count
         });
     }
 }
