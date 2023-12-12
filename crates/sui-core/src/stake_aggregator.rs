@@ -93,6 +93,10 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         self.data.contains_key(authority)
     }
 
+    pub fn keys(&self) -> impl Iterator<Item = &AuthorityName> {
+        self.data.keys()
+    }
+
     pub fn committee(&self) -> &Committee {
         &self.committee
     }
@@ -274,6 +278,36 @@ where
             .iter()
             .map(|(k, (_, s))| (k.clone(), (s.data.keys().copied().collect(), s.total_votes)))
             .collect()
+    }
+}
+
+impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH>
+where
+    K: Hash + Eq,
+{
+    #[allow(dead_code)]
+    pub fn authorities_for_key(&self, k: &K) -> Option<impl Iterator<Item = &AuthorityName>> {
+        self.stake_maps.get(k).map(|(_, agg)| agg.keys())
+    }
+
+    /// The sum of all remaining stake, i.e. all stake not yet
+    /// committed by vote to a specific value
+    pub fn uncommitted_stake(&self) -> StakeUnit {
+        self.committee.total_votes() - self.total_votes()
+    }
+
+    /// Total stake of the largest faction
+    pub fn plurality_stake(&self) -> StakeUnit {
+        self.stake_maps
+            .values()
+            .map(|(_, agg)| agg.total_votes())
+            .max()
+            .unwrap_or_default()
+    }
+
+    /// If true, there isn't enough uncommitted stake to reach quorum for any value
+    pub fn quorum_unreachable(&self) -> bool {
+        self.uncommitted_stake() + self.plurality_stake() < self.committee.threshold::<STRENGTH>()
     }
 }
 

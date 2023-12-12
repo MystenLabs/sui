@@ -28,7 +28,9 @@ use sui_types::{effects::TransactionEffectsAPI, message_envelope::Message};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
-    messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    messages_checkpoint::{
+        CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
+    },
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
@@ -602,6 +604,17 @@ impl Validator for ValidatorService {
         let request = request.into_inner();
 
         let response = self.state.handle_checkpoint_request(&request)?;
+
+        return Ok(tonic::Response::new(response));
+    }
+
+    async fn checkpoint_v2(
+        &self,
+        request: tonic::Request<CheckpointRequestV2>,
+    ) -> Result<tonic::Response<CheckpointResponseV2>, tonic::Status> {
+        let request = request.into_inner();
+
+        let response = self.state.handle_checkpoint_request_v2(&request)?;
 
         return Ok(tonic::Response::new(response));
     }
