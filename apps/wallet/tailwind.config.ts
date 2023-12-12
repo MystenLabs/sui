@@ -60,6 +60,7 @@ export default {
 			},
 			maxWidth: {
 				'popup-width': '360px',
+				'token-width': '80px',
 			},
 			dropShadow: {
 				accountModal: ['0px 10px 30px rgba(0, 0, 0, 0.15)', '0px 10px 50px rgba(0, 0, 0, 0.15)'],
