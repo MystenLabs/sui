@@ -604,7 +604,7 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &move_package::source_package::parsed_manifest::SourceManifest,
     ) -> anyhow::Result<Symbol> {
-        Ok(manifest.package.name.clone())
+        Ok(manifest.package.name)
     }
 }
 
