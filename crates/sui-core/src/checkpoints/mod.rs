@@ -1290,7 +1290,8 @@ impl CheckpointAggregator {
                 self.current.as_mut().unwrap()
             };
 
-            let iter = self.epoch_store.get_pending_checkpoint_signatures_iter(
+            let epoch_tables = self.epoch_store.tables();
+            let iter = epoch_tables.get_pending_checkpoint_signatures_iter(
                 current.summary.sequence_number,
                 current.next_index,
             )?;
