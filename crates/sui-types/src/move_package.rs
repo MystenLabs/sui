@@ -699,7 +699,7 @@ fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin
         .iter()
         .flat_map(|m| {
             m.struct_defs().iter().map(|struct_def| {
-                let struct_handle = m.struct_handle_at(struct_def.struct_handle);
+                let struct_handle = m.datatype_handle_at(struct_def.struct_handle);
                 let module_name = m.name().to_string();
                 let struct_name = m.identifier_at(struct_handle.name).to_string();
                 let package: ObjectID = (*m.self_id().address()).into();
@@ -723,7 +723,7 @@ fn build_upgraded_type_origin_table(
     let mut existing_table = predecessor.type_origin_map();
     for m in modules {
         for struct_def in m.struct_defs() {
-            let struct_handle = m.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = m.datatype_handle_at(struct_def.struct_handle);
             let module_name = m.name().to_string();
             let struct_name = m.identifier_at(struct_handle.name).to_string();
             let mod_key = (module_name.clone(), struct_name.clone());

@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-116:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 12646400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 12722400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 118-118:
 mutated: object(0,0)
@@ -33,7 +33,11 @@ mutated: object(0,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 6011600,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
 
 task 7 'run'. lines 132-136:
+<<<<<<< HEAD
 Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(6,0), parent_id: object(6,1) }
+=======
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0x364f4d4a0b866246973b54e3bc17e842ef0947ecb2378221f8cdf89fb4a000da, parent_id: 0xfb1747e3901492729f771934131bba8562160e639941359fbcbd688e14e09845 }
+>>>>>>> b6f17f43a7 ([3/n][move-enums] Changes to Sui to support enums)
 
 task 8 'run'. lines 138-138:
 created: object(8,0)

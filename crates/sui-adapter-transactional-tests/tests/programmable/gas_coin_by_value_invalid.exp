@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-23:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 3860800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 3883600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 24-25:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid taking of the Gas coin. It can only be used by-value with TransferObjects

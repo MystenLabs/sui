@@ -578,6 +578,9 @@ pub struct ProtocolConfig {
     /// Maximum depth of a Move value within the VM.
     max_move_value_depth: Option<u64>,
 
+    /// Maximum number of variants in an enum. Enforced by the bytecode verifier at signing.
+    max_move_enum_variants: Option<u64>,
+
     /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
     max_back_edges_per_function: Option<u64>,
 
@@ -1466,6 +1469,7 @@ impl ProtocolConfig {
             // Limits the length of a Move identifier
             max_move_identifier_len: None,
             max_move_value_depth: None,
+            max_move_enum_variants: None,
 
             gas_rounding_step: None,
 
@@ -1747,6 +1751,7 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.enable_effects_v2 = true;
+                    cfg.move_binary_format_version = Some(7);
                 }
                 34 => {}
                 35 => {

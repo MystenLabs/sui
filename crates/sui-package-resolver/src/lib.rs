@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use lru::LruCache;
 use move_binary_format::file_format::{
-    AbilitySet, FunctionDefinitionIndex, Signature, SignatureIndex, StructTypeParameter, Visibility,
+    AbilitySet, DatatypeTyParameter, FunctionDefinitionIndex, Signature, SignatureIndex, Visibility,
 };
 use std::collections::btree_map::Entry;
 use std::num::NonZeroUsize;
@@ -16,7 +16,7 @@ use move_binary_format::errors::Location;
 use move_binary_format::{
     access::ModuleAccess,
     file_format::{
-        SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
+        DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, StructFieldInformation,
         TableIndex,
     },
     CompiledModule,
@@ -113,7 +113,7 @@ pub struct StructDef {
     pub abilities: AbilitySet,
 
     /// Ability constraints and phantom status for type parameters
-    pub type_params: Vec<StructTypeParameter>,
+    pub type_params: Vec<DatatypeTyParameter>,
 
     /// Serialized representation of fields (names and deserialized signatures). Signatures refer to
     /// packages at their runtime IDs (not their storage ID or defining ID).
@@ -460,7 +460,7 @@ impl Module {
     ) -> std::result::Result<Self, String> {
         let mut struct_index = BTreeMap::new();
         for (index, def) in bytecode.struct_defs.iter().enumerate() {
-            let sh = bytecode.struct_handle_at(def.struct_handle);
+            let sh = bytecode.datatype_handle_at(def.struct_handle);
             let struct_ = bytecode.identifier_at(sh.name).to_string();
             let index = StructDefinitionIndex::new(index as TableIndex);
 
@@ -523,7 +523,7 @@ impl Module {
         };
 
         let struct_def = self.bytecode.struct_def_at(index);
-        let struct_handle = self.bytecode.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = self.bytecode.datatype_handle_at(struct_def.struct_handle);
         let abilities = struct_handle.abilities;
         let type_params = struct_handle.type_parameters.clone();
 
@@ -628,8 +628,8 @@ impl OpenSignatureBody {
 
             S::Vector(sig) => O::Vector(Box::new(OpenSignatureBody::read(sig, bytecode)?)),
 
-            S::Struct(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
-            S::StructInstantiation(ix, params) => O::Datatype(
+            S::Datatype(ix) => O::Datatype(DatatypeKey::read(*ix, bytecode), vec![]),
+            S::DatatypeInstantiation(ix, params) => O::Datatype(
                 DatatypeKey::read(*ix, bytecode),
                 params
                     .iter()
@@ -651,8 +651,8 @@ impl<'m, 'n> DatatypeRef<'m, 'n> {
 }
 
 impl DatatypeKey {
-    fn read(ix: StructHandleIndex, bytecode: &CompiledModule) -> Self {
-        let sh = bytecode.struct_handle_at(ix);
+    fn read(ix: DatatypeHandleIndex, bytecode: &CompiledModule) -> Self {
+        let sh = bytecode.datatype_handle_at(ix);
         let mh = bytecode.module_handle_at(sh.module);
 
         let package = *bytecode.address_identifier_at(mh.address);
@@ -1712,11 +1712,11 @@ mod tests {
                 defining_id: 00000000000000000000000000000000000000000000000000000000000000a0,
                 abilities: [],
                 type_params: [
-                    StructTypeParameter {
+                    DatatypeTyParameter {
                         constraints: [],
                         is_phantom: false,
                     },
-                    StructTypeParameter {
+                    DatatypeTyParameter {
                         constraints: [],
                         is_phantom: false,
                     },

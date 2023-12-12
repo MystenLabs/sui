@@ -1096,7 +1096,7 @@ mod checked {
                 }
 
                 if type_params.is_empty() {
-                    Type::Struct(idx)
+                    Type::Datatype(idx)
                 } else {
                     let loaded_type_params = type_params
                         .iter()
@@ -1111,7 +1111,7 @@ mod checked {
                         }
                     }
 
-                    Type::StructInstantiation(idx, loaded_type_params)
+                    Type::DatatypeInstantiation(idx, loaded_type_params)
                 }
             }
         })

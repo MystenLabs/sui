@@ -9,8 +9,8 @@ use move_binary_format::{
         FunctionHandleIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex, Signature,
         SignatureIndex,
         SignatureToken::{self, *},
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructHandle,
-        StructHandleIndex, TypeSignature, Visibility,
+        StructDefinition, StructDefinitionIndex, StructFieldInformation, DatatypeHandle,
+        DatatypeHandleIndex, TypeSignature, Visibility,
         Visibility::*,
     },
     CompiledModule,
@@ -26,7 +26,7 @@ fn unbalanced_stack_crash() {
     let mut module = empty_module();
     module.version = 5;
 
-    module.struct_handles.push(StructHandle {
+    module.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(1),
         abilities: AbilitySet::ALL,
@@ -70,7 +70,7 @@ fn unbalanced_stack_crash() {
     });
 
     module.struct_defs.push(StructDefinition {
-        struct_handle: StructHandleIndex(0),
+        struct_handle: DatatypeHandleIndex(0),
         field_information: StructFieldInformation::Declared(vec![FieldDefinition {
             name: IdentifierIndex::new(3),
             signature: TypeSignature(Address),
@@ -128,7 +128,7 @@ fn too_many_locals() {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
         }],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         function_handles: vec![FunctionHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(0),
@@ -176,7 +176,7 @@ fn borrow_graph() {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
         }],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         function_handles: vec![FunctionHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(0),
@@ -272,7 +272,7 @@ fn indirect_code() {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
         }],
-        struct_handles: vec![],
+        datatype_handles: vec![],
         function_handles: vec![FunctionHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(0),

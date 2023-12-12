@@ -896,7 +896,7 @@ impl TxContext {
             _ => return TxContextKind::None,
         };
 
-        let S::Struct(idx) = &**s else {
+        let S::Datatype(idx) = &**s else {
             return TxContextKind::None;
         };
 

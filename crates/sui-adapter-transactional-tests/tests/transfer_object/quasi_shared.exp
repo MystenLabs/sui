@@ -6,7 +6,7 @@ A: object(0,0), B: object(0,1)
 task 1 'publish'. lines 8-27:
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6163600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 29-29:
 created: object(2,0)
@@ -24,7 +24,11 @@ Version: 4
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(3,1)}}
 
 task 5 'transfer-object'. lines 35-35:
+<<<<<<< HEAD
 Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(3,0), parent_id: object(2,0) }
+=======
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0xf42b53bac6731653d648ef9d06e2f87db9d03e7c897e86e25aa7e3c2c65a21f0, parent_id: 0xf744b6daeba28edb88222452c1b6e8a59af84f95a493f6bd6c9e350263d36f2d }
+>>>>>>> b6f17f43a7 ([3/n][move-enums] Changes to Sui to support enums)
 
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(2,0) )

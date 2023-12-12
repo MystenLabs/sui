@@ -3,7 +3,7 @@ processed 6 tasks
 task 1 'publish'. lines 6-33:
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6756400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6771600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 35-35:
 created: object(2,0), object(2,1)
@@ -18,4 +18,8 @@ task 4 'programmable'. lines 41-44:
 Error: Error checking transaction input objects: DuplicateObjectRefInput
 
 task 5 'programmable'. lines 45-46:
+<<<<<<< HEAD
 Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object object(2,1) is owned by account address object(2,0), but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e" }
+=======
+Error: Error checking transaction input objects: IncorrectUserSignature { error: "Object 0xfb87158d90156ad11f3ea25935842fbece88139f70128ef96d00b9a3bf32e4cf is owned by account address 0x838a0a6f2cec0009ab63f67dea2ade1ea51adb52deeb2df76ab5b315bf14098a, but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e" }
+>>>>>>> b6f17f43a7 ([3/n][move-enums] Changes to Sui to support enums)

@@ -171,8 +171,8 @@ fn verify_private_event_emit(
 
 fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureToken) -> bool {
     match type_arg {
-        SignatureToken::Struct(idx) | SignatureToken::StructInstantiation(idx, _) => {
-            let shandle = view.struct_handle_at(*idx);
+        SignatureToken::Datatype(idx) | SignatureToken::DatatypeInstantiation(idx, _) => {
+            let shandle = view.datatype_handle_at(*idx);
             view.self_handle_idx() == Some(shandle.module)
         }
         SignatureToken::TypeParameter(_)

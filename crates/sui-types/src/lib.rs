@@ -268,10 +268,10 @@ pub fn is_primitive(
         // optimistic, but no primitive has key
         S::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),
 
-        S::Struct(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
+        S::Datatype(idx) => [RESOLVED_SUI_ID, RESOLVED_ASCII_STR, RESOLVED_UTF8_STR]
             .contains(&resolve_struct(view, *idx)),
 
-        S::StructInstantiation(idx, targs) => {
+        S::DatatypeInstantiation(idx, targs) => {
             let resolved_struct = resolve_struct(view, *idx);
             // option is a primitive
             resolved_struct == RESOLVED_STD_OPTION
@@ -333,7 +333,7 @@ fn is_object_struct(
             .get(*idx as usize)
             .map(|abs| abs.has_key())
             .unwrap_or(false)),
-        S::Struct(_) | S::StructInstantiation(_, _) => {
+        S::Datatype(_) | S::DatatypeInstantiation(_, _) => {
             let abilities = view
                 .abilities(s, function_type_args)
                 .map_err(|vm_err| vm_err.to_string())?;

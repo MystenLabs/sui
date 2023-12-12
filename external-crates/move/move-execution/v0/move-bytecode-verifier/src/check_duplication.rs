@@ -14,8 +14,8 @@ use move_binary_format::{
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, CompiledScript, Constant, FunctionHandle, FunctionHandleIndex,
-        FunctionInstantiation, ModuleHandle, Signature, StructFieldInformation, StructHandle,
-        StructHandleIndex, TableIndex,
+        FunctionInstantiation, ModuleHandle, Signature, StructFieldInformation, DatatypeHandle,
+        DatatypeHandleIndex, TableIndex,
     },
     IndexKind,
 };
@@ -40,7 +40,7 @@ impl<'a> DuplicationChecker<'a> {
         Self::check_signatures(module.signatures())?;
         Self::check_module_handles(module.module_handles())?;
         Self::check_module_handles(module.friend_decls())?;
-        Self::check_struct_handles(module.struct_handles())?;
+        Self::check_datatype_handles(module.datatype_handles())?;
         Self::check_function_handles(module.function_handles())?;
         Self::check_function_instantiations(module.function_instantiations())?;
 
@@ -62,7 +62,7 @@ impl<'a> DuplicationChecker<'a> {
         Self::check_constants(script.constant_pool())?;
         Self::check_signatures(script.signatures())?;
         Self::check_module_handles(script.module_handles())?;
-        Self::check_struct_handles(script.struct_handles())?;
+        Self::check_datatype_handles(script.datatype_handles())?;
         Self::check_function_handles(script.function_handles())?;
         Self::check_function_instantiations(script.function_instantiations())
     }
@@ -122,12 +122,12 @@ impl<'a> DuplicationChecker<'a> {
         }
     }
 
-    // StructHandles - module and name define uniqueness
-    fn check_struct_handles(struct_handles: &[StructHandle]) -> PartialVMResult<()> {
-        match Self::first_duplicate_element(struct_handles.iter().map(|x| (x.module, x.name))) {
+    // DatatypeHandles - module and name define uniqueness
+    fn check_datatype_handles(datatype_handles: &[DatatypeHandle]) -> PartialVMResult<()> {
+        match Self::first_duplicate_element(datatype_handles.iter().map(|x| (x.module, x.name))) {
             Some(idx) => Err(verification_error(
                 StatusCode::DUPLICATE_ELEMENT,
-                IndexKind::StructHandle,
+                IndexKind::DatatypeHandle,
                 idx,
             )),
             None => Ok(()),
@@ -197,7 +197,7 @@ impl<'a> DuplicationChecker<'a> {
     }
 
     fn check_struct_definitions(&self) -> PartialVMResult<()> {
-        // StructDefinition - contained StructHandle defines uniqueness
+        // StructDefinition - contained DatatypeHandle defines uniqueness
         if let Some(idx) =
             Self::first_duplicate_element(self.module.struct_defs().iter().map(|x| x.struct_handle))
         {
@@ -230,7 +230,7 @@ impl<'a> DuplicationChecker<'a> {
         }
         // Check that each struct definition is pointing to the self module
         if let Some(idx) = self.module.struct_defs().iter().position(|x| {
-            self.module.struct_handle_at(x.struct_handle).module != self.module.self_handle_idx()
+            self.module.datatype_handle_at(x.struct_handle).module != self.module.self_handle_idx()
         }) {
             return Err(verification_error(
                 StatusCode::INVALID_MODULE_HANDLE,
@@ -239,20 +239,20 @@ impl<'a> DuplicationChecker<'a> {
             ));
         }
         // Check that each struct handle in self module is implemented (has a declaration)
-        let implemented_struct_handles: HashSet<StructHandleIndex> = self
+        let implemented_datatype_handles: HashSet<DatatypeHandleIndex> = self
             .module
             .struct_defs()
             .iter()
             .map(|x| x.struct_handle)
             .collect();
-        if let Some(idx) = (0..self.module.struct_handles().len()).position(|x| {
-            let y = StructHandleIndex::new(x as u16);
-            self.module.struct_handle_at(y).module == self.module.self_handle_idx()
-                && !implemented_struct_handles.contains(&y)
+        if let Some(idx) = (0..self.module.datatype_handles().len()).position(|x| {
+            let y = DatatypeHandleIndex::new(x as u16);
+            self.module.datatype_handle_at(y).module == self.module.self_handle_idx()
+                && !implemented_datatype_handles.contains(&y)
         }) {
             return Err(verification_error(
                 StatusCode::UNIMPLEMENTED_HANDLE,
-                IndexKind::StructHandle,
+                IndexKind::DatatypeHandle,
                 idx as TableIndex,
             ));
         }

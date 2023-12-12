@@ -11,7 +11,7 @@ pub struct ModuleBuilder {
 }
 
 pub struct StructInfo {
-    pub handle: StructHandleIndex,
+    pub handle: DatatypeHandleIndex,
     pub def: StructDefinitionIndex,
     pub fields: Vec<FieldHandleIndex>,
 }
@@ -161,13 +161,13 @@ impl ModuleBuilder {
         fields: Vec<(&str, SignatureToken)>,
         type_parameters: Vec<StructTypeParameter>,
     ) -> StructInfo {
-        let new_handle = StructHandle {
+        let new_handle = DatatypeHandle {
             module: module_index,
             name: self.add_identifier(name),
             abilities,
             type_parameters,
         };
-        let handle_idx = StructHandleIndex(self.module.struct_handles.len() as u16);
+        let handle_idx = DatatypeHandleIndex(self.module.struct_handles.len() as u16);
         self.module.struct_handles.push(new_handle);
 
         let field_len = fields.len();

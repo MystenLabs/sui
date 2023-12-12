@@ -12,7 +12,11 @@ task 2 'view-object'. lines 13-13:
 1,0::m
 
 task 3 'transfer-object'. lines 15-15:
+<<<<<<< HEAD
 Error: Error checking transaction input objects: MovePackageAsObject { object_id: object(1,0) }
+=======
+Error: Error checking transaction input objects: MovePackageAsObject { object_id: 0xcf09f578606626d7f05f3173a945ed710e610a2e7113c9ee352a9037cad3d41b }
+>>>>>>> b6f17f43a7 ([3/n][move-enums] Changes to Sui to support enums)
 
 task 4 'view-object'. lines 17-17:
 1,0::m

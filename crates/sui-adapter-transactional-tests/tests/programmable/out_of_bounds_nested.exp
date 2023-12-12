@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-16:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 4864000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4902000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'programmable'. lines 18-20:
 Error: Transaction Effects Status: Invalid command argument at 0. Out of bounds secondary access to result vector 0 at secondary index 2

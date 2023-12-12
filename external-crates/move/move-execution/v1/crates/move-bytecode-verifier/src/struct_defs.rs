@@ -9,7 +9,7 @@ use move_binary_format::{
     access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, SignatureToken, StructDefinitionIndex, StructHandleIndex, TableIndex,
+        CompiledModule, SignatureToken, StructDefinitionIndex, DatatypeHandleIndex, TableIndex,
     },
     internals::ModuleIndex,
     views::StructDefinitionView,
@@ -50,7 +50,7 @@ impl<'a> RecursiveStructDefChecker<'a> {
 struct StructDefGraphBuilder<'a> {
     module: &'a CompiledModule,
     /// Used to follow field definitions' signatures' struct handles to their struct definitions.
-    handle_to_def: BTreeMap<StructHandleIndex, StructDefinitionIndex>,
+    handle_to_def: BTreeMap<DatatypeHandleIndex, StructDefinitionIndex>,
 }
 
 impl<'a> StructDefGraphBuilder<'a> {
@@ -122,7 +122,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                 )
             }
             T::Vector(inner) => self.add_signature_token(neighbors, cur_idx, inner)?,
-            T::Struct(sh_idx) => {
+            T::Datatype(sh_idx) => {
                 if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
                     neighbors
                         .entry(cur_idx)
@@ -130,7 +130,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                         .insert(*struct_def_idx);
                 }
             }
-            T::StructInstantiation(sh_idx, inners) => {
+            T::DatatypeInstantiation(sh_idx, inners) => {
                 if let Some(struct_def_idx) = self.handle_to_def.get(sh_idx) {
                     neighbors
                         .entry(cur_idx)

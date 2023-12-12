@@ -6,17 +6,17 @@ A: object(0,0)
 task 1 'publish'. lines 6-21:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5183200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5190800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'publish'. lines 23-52:
 created: object(2,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 7668400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 7698800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3 'publish'. lines 55-82:
 created: object(3,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 8215600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 8238400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'run'. lines 84-84:
 created: object(4,0)
@@ -39,4 +39,8 @@ Version: 3
 Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,1)}}}
 
 task 8 'run'. lines 93-93:
+<<<<<<< HEAD
 Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(4,0), parent_id: object(5,0) }
+=======
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: 0x51cf9e2ab9ad5f4dcd494ef296391be8177a0dc697cfdd20f6dd8c868feb09cd, parent_id: 0xc22a1f92d3d8d02f640a8a726469e290299cb85b715e0652ce416aedb66dd34e }
+>>>>>>> b6f17f43a7 ([3/n][move-enums] Changes to Sui to support enums)

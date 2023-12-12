@@ -9,8 +9,8 @@ use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CompiledModule, CompiledScript, FunctionDefinitionIndex,
-        FunctionHandleIndex, ModuleHandleIndex, SignatureToken, StructHandleIndex,
-        StructTypeParameter, TableIndex, Visibility,
+        FunctionHandleIndex, ModuleHandleIndex, SignatureToken, DatatypeHandleIndex,
+        DatatypeTyParameter, TableIndex, Visibility,
     },
     file_format_common::VERSION_5,
     safe_unwrap, IndexKind,
@@ -23,7 +23,7 @@ struct Context<'a, 'b> {
     // (Module -> CompiledModule) for (at least) all immediate dependencies
     dependency_map: BTreeMap<ModuleId, &'b CompiledModule>,
     // (Module::StructName -> handle) for all types of all dependencies
-    struct_id_to_handle_map: BTreeMap<(ModuleId, Identifier), StructHandleIndex>,
+    struct_id_to_handle_map: BTreeMap<(ModuleId, Identifier), DatatypeHandleIndex>,
     // (Module::FunctionName -> handle) for all functions that can ever be called by this
     // module/script in all dependencies
     func_id_to_handle_map: BTreeMap<(ModuleId, Identifier), FunctionHandleIndex>,
@@ -86,7 +86,7 @@ impl<'a, 'b> Context<'a, 'b> {
 
             // Module::StructName -> def handle idx
             for struct_def in module.struct_defs() {
-                let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+                let struct_handle = module.datatype_handle_at(struct_def.struct_handle);
                 let struct_name = module.identifier_at(struct_handle.name);
                 context.struct_id_to_handle_map.insert(
                     (module_id.clone(), struct_name.to_owned()),
@@ -218,7 +218,7 @@ fn verify_imported_modules(context: &Context) -> PartialVMResult<()> {
 
 fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
     let self_module = context.resolver.self_handle_idx();
-    for (idx, struct_handle) in context.resolver.struct_handles().iter().enumerate() {
+    for (idx, struct_handle) in context.resolver.datatype_handles().iter().enumerate() {
         if Some(struct_handle.module) == self_module {
             continue;
         }
@@ -233,7 +233,7 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
             .get(&(owner_module_id, struct_name.to_owned()))
         {
             Some(def_idx) => {
-                let def_handle = owner_module.struct_handle_at(*def_idx);
+                let def_handle = owner_module.datatype_handle_at(*def_idx);
                 if !compatible_struct_abilities(struct_handle.abilities, def_handle.abilities)
                     || !compatible_struct_type_parameters(
                         &struct_handle.type_parameters,
@@ -242,7 +242,7 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
                 {
                     return Err(verification_error(
                         StatusCode::TYPE_MISMATCH,
-                        IndexKind::StructHandle,
+                        IndexKind::DatatypeHandle,
                         idx as TableIndex,
                     ));
                 }
@@ -250,7 +250,7 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
             None => {
                 return Err(verification_error(
                     StatusCode::LOOKUP_FAILED,
-                    IndexKind::StructHandle,
+                    IndexKind::DatatypeHandle,
                     idx as TableIndex,
                 ))
             }
@@ -379,8 +379,8 @@ fn compatible_fun_type_parameters(
 // - The number of type parameters must be the same
 // - Each pair of parameters must satisfy [`compatible_type_parameter_constraints`] and [`compatible_type_parameter_phantom_decl`]
 fn compatible_struct_type_parameters(
-    local_type_parameters_declaration: &[StructTypeParameter],
-    defined_type_parameters: &[StructTypeParameter],
+    local_type_parameters_declaration: &[DatatypeTyParameter],
+    defined_type_parameters: &[DatatypeTyParameter],
 ) -> bool {
     local_type_parameters_declaration.len() == defined_type_parameters.len()
         && local_type_parameters_declaration
@@ -412,8 +412,8 @@ fn compatible_type_parameter_constraints(
 // Adding phantom declarations relaxes the requirements for clients, thus, the local view may
 // lack a phantom declaration present in the definition.
 fn compatible_type_parameter_phantom_decl(
-    local_type_parameter_declaration: &StructTypeParameter,
-    defined_type_parameter: &StructTypeParameter,
+    local_type_parameter_declaration: &DatatypeTyParameter,
+    defined_type_parameter: &DatatypeTyParameter,
 ) -> bool {
     // local_type_parameter_declaration.is_phantom => defined_type_parameter.is_phantom
     !local_type_parameter_declaration.is_phantom || defined_type_parameter.is_phantom
@@ -453,12 +453,12 @@ fn compare_types(
         (SignatureToken::Vector(ty1), SignatureToken::Vector(ty2)) => {
             compare_types(context, ty1, ty2, def_module)
         }
-        (SignatureToken::Struct(idx1), SignatureToken::Struct(idx2)) => {
+        (SignatureToken::Datatype(idx1), SignatureToken::Datatype(idx2)) => {
             compare_structs(context, *idx1, *idx2, def_module)
         }
         (
-            SignatureToken::StructInstantiation(idx1, inst1),
-            SignatureToken::StructInstantiation(idx2, inst2),
+            SignatureToken::DatatypeInstantiation(idx1, inst1),
+            SignatureToken::DatatypeInstantiation(idx2, inst2),
         ) => {
             compare_structs(context, *idx1, *idx2, def_module)?;
             compare_cross_module_signatures(context, inst1, inst2, def_module)
@@ -481,8 +481,8 @@ fn compare_types(
         | (SignatureToken::Address, _)
         | (SignatureToken::Signer, _)
         | (SignatureToken::Vector(_), _)
-        | (SignatureToken::Struct(_), _)
-        | (SignatureToken::StructInstantiation(_, _), _)
+        | (SignatureToken::Datatype(_), _)
+        | (SignatureToken::DatatypeInstantiation(_, _), _)
         | (SignatureToken::Reference(_), _)
         | (SignatureToken::MutableReference(_), _)
         | (SignatureToken::TypeParameter(_), _)
@@ -494,18 +494,18 @@ fn compare_types(
 
 fn compare_structs(
     context: &Context,
-    idx1: StructHandleIndex,
-    idx2: StructHandleIndex,
+    idx1: DatatypeHandleIndex,
+    idx2: DatatypeHandleIndex,
     def_module: &CompiledModule,
 ) -> PartialVMResult<()> {
     // grab ModuleId and struct name for the module being verified
-    let struct_handle = context.resolver.struct_handle_at(idx1);
+    let struct_handle = context.resolver.datatype_handle_at(idx1);
     let module_handle = context.resolver.module_handle_at(struct_handle.module);
     let module_id = context.resolver.module_id_for_handle(module_handle);
     let struct_name = context.resolver.identifier_at(struct_handle.name);
 
     // grab ModuleId and struct name for the definition
-    let def_struct_handle = def_module.struct_handle_at(idx2);
+    let def_struct_handle = def_module.datatype_handle_at(idx2);
     let def_module_handle = def_module.module_handle_at(def_struct_handle.module);
     let def_module_id = def_module.module_id_for_handle(def_module_handle);
     let def_struct_name = def_module.identifier_at(def_struct_handle.name);

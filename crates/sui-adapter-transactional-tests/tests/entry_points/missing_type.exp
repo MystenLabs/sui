@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-15:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 3883600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 17-17:
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.

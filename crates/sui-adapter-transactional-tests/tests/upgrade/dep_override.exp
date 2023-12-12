@@ -6,96 +6,205 @@ A: object(0,0)
 task 1 'publish'. lines 10-18:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'upgrade'. lines 20-28:
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3 'upgrade'. lines 30-41:
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 6817200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4 'publish'. lines 44-49:
-created: object(4,0), object(4,1)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpWsWNdh:46:9
+   │
+46 │     use Test_DepDepV1::DepDepM1;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: 'Test_DepDepV1::DepDepM1'
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpWsWNdh:47:20
+   │
+47 │     public fun bar(ctx: &mut sui::tx_context::TxContext) { DepDepM1::foo(ctx) }
+   │                    ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpWsWNdh:47:60
+   │
+47 │     public fun bar(ctx: &mut sui::tx_context::TxContext) { DepDepM1::foo(ctx) }
+   │                                                            ^^^^^^^^ Unbound module alias 'DepDepM1'
+
+
 
 task 5 'upgrade'. lines 51-59:
-created: object(5,0)
-mutated: object(0,0), object(4,1)
-gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+Error: INVALID TEST. Unknown object, object(4,1)
 
 task 6 'publish'. lines 62-69:
-created: object(6,0), object(6,1)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmppZOqBu:64:9
+   │
+64 │     use Test_DepV1::DepM1;
+   │         ^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: '(Test_DepV1=0x0)::DepM1'
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmppZOqBu:65:26
+   │
+65 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+   │                          ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmppZOqBu:65:66
+   │
+65 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+   │                                                                  ^^^^^ Unbound module alias 'DepM1'
+
+
 
 task 7 'upgrade'. lines 71-78:
-created: object(7,0)
-mutated: object(0,0), object(6,1)
-gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+Error: error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpQCjWdQ:73:9
+   │
+73 │     use Test_DepV2::DepM1;
+   │         ^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: '(Test_DepV2=0x0)::DepM1'
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpQCjWdQ:74:26
+   │
+74 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+   │                          ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpQCjWdQ:74:66
+   │
+74 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+   │                                                                  ^^^^^ Unbound module alias 'DepM1'
+
+
 
 task 8 'upgrade'. lines 80-85:
-created: object(8,0)
-mutated: object(0,0), object(6,1)
-gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+Error: error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpLTbxm1:82:9
+   │
+82 │     use Test_DepV1::DepM1;
+   │         ^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: '(Test_DepV1=0x0)::DepM1'
+
+warning[W09002]: unused variable
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpLTbxm1:83:26
+   │
+83 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+   │                          ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+   ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpLTbxm1:83:66
+   │
+83 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+   │                                                                  ^^^^^ Unbound module alias 'DepM1'
+
+
 
 task 9 'run'. lines 87-87:
-created: object(9,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 10 'view-object'. lines 89-89:
-Owner: Shared
-Version: 2
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(9,0)}}, v: 42u64}
+Error: task 10, lines 89-89. Unbound fake id 9,0
 
 task 11 'run'. lines 91-91:
-created: object(11,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 12 'view-object'. lines 93-93:
-Owner: Shared
-Version: 3
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(11,0)}}, v: 7u64}
+Error: task 12, lines 93-93. Unbound fake id 11,0
 
 task 13 'run'. lines 95-95:
-created: object(13,0)
-mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 14 'view-object'. lines 97-100:
-Owner: Shared
-Version: 4
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(13,0)}}, v: 0u64}
+Error: task 14, lines 97-97. Unbound fake id 13,0
 
 task 15 'programmable'. lines 101-103:
-created: object(15,0), object(15,1)
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
 
 task 16 'view-object'. lines 105-105:
-Owner: Shared
-Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,0)}}, v: 7u64}
+Error: task 16, lines 105-105. Unbound fake id 15,0
 
 task 17 'view-object'. lines 107-112:
-Owner: Shared
-Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(15,1)}}, v: 0u64}
+Error: task 17, lines 107-107. Unbound fake id 15,1
 
 task 18 'upgrade'. lines 114-120:
-Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+Error: error[E03002]: unbound module
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpuw3mWl:116:9
+    │
+116 │     use Test_DepV1::DepM1;
+    │         ^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: '(Test_DepV1=0x0)::DepM1'
+
+warning[W09002]: unused variable
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpuw3mWl:117:26
+    │
+117 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+    │                          ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpuw3mWl:117:66
+    │
+117 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+    │                                                                  ^^^^^ Unbound module alias 'DepM1'
+
+
 
 task 19 'upgrade'. lines 122-128:
-Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+Error: error[E03002]: unbound module
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpCFg9DN:124:9
+    │
+124 │     use Test_DepV2::DepM1;
+    │         ^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: '(Test_DepV2=0x0)::DepM1'
+
+warning[W09002]: unused variable
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpCFg9DN:125:26
+    │
+125 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+    │                          ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpCFg9DN:125:66
+    │
+125 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+    │                                                                  ^^^^^ Unbound module alias 'DepM1'
+
+
 
 task 20 'upgrade'. lines 130-134:
-Error: Transaction Effects Status: Publish/Upgrade Error, Dependency downgrade. Indirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package's transitive dependencies.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeDependencyDowngrade, source: None, command: Some(1) } }
+Error: error[E03002]: unbound module
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpuJIs4F:132:9
+    │
+132 │     use Test_DepV2::DepM1;
+    │         ^^^^^^^^^^^^^^^^^ Invalid 'use'. Unbound module: '(Test_DepV2=0x0)::DepM1'
+
+warning[W09002]: unused variable
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpuJIs4F:133:26
+    │
+133 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+    │                          ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+    │
+    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03002]: unbound module
+    ┌─ /var/folders/hg/k2qbtbvd7n35hk0sl3mtjlbw0000gn/T/.tmpuJIs4F:133:66
+    │
+133 │     public entry fun baz(ctx: &mut sui::tx_context::TxContext) { DepM1::bar(ctx) }
+    │                                                                  ^^^^^ Unbound module alias 'DepM1'
+
+

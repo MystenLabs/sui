@@ -788,26 +788,33 @@ mod checked {
             // 2. Deleted.
             // Otherwise, the shared object operation is not allowed and we fail the transaction.
             for id in &by_value_shared_objects {
-                match written_objects.get(id) {
-                    Some(obj) => {
-                        if !obj.is_shared() {
-                            return Err(ExecutionError::new(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                Some(
-                                    format!("Shared object operation on {} not allowed", id).into(),
-                                ),
-                            ));
-                        }
+                // If it's been written it must have been reshared so must still have an ownership
+                // of `Shared`.
+                if let Some(obj) = written_objects.get(id) {
+                    if !obj.is_shared() {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!(
+                                    "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                    id
+                                )
+                                .into(),
+                            ),
+                        ));
                     }
-                    None => {
-                        if !deleted_object_ids.contains_key(id) {
-                            return Err(ExecutionError::new(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                Some(
-                                    format!("Shared object operation on {} not allowed", id).into(),
-                                ),
-                            ));
-                        }
+                } else {
+                    // If it's not in the written objects, the object must have been deleted. Otherwise
+                    // it's an error.
+                    if !deleted_object_ids.contains_key(id) {
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         shared objects used by value must be re-shared if not deleted", id).into(),
+                            ),
+                        ));
                     }
                 }
             }
@@ -1063,7 +1070,7 @@ mod checked {
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
-        let res = vm.get_runtime().load_struct(&runtime_id, name, &data_store);
+        let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
         linkage_view.reset_linkage();
         let (idx, struct_type) = res?;
 
@@ -1074,7 +1081,7 @@ mod checked {
         }
 
         if type_params.is_empty() {
-            Ok(Type::Struct(idx))
+            Ok(Type::Datatype(idx))
         } else {
             let loaded_type_params = type_params
                 .iter()
@@ -1089,7 +1096,7 @@ mod checked {
                 }
             }
 
-            Ok(Type::StructInstantiation(idx, loaded_type_params))
+            Ok(Type::DatatypeInstantiation(idx, loaded_type_params))
         }
     }
 

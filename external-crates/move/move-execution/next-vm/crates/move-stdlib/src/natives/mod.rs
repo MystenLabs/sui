@@ -96,6 +96,9 @@ impl GasParameters {
                     base_cost: 0.into(),
                     unit_cost: 0.into(),
                 },
+                poison: unit_test::PoisonGasParameters {
+                    base_cost: 0.into(),
+                },
             },
         }
     }

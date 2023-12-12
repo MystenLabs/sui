@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 8-82:
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 9963600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 10001600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 83-85:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
