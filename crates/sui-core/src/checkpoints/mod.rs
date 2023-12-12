@@ -709,8 +709,15 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last = self.epoch_store.last_built_checkpoint_commit_height();
-            for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
+            let mut last = self
+                .epoch_store
+                .last_built_checkpoint_commit_height()
+                .expect("epoch should not have ended");
+            for (height, pending) in self
+                .epoch_store
+                .get_pending_checkpoints(last)
+                .expect("unexpected epoch store error")
+            {
                 last = Some(height);
                 debug!(
                     checkpoint_commit_height = height,
@@ -1290,7 +1297,10 @@ impl CheckpointAggregator {
                 self.current.as_mut().unwrap()
             };
 
-            let epoch_tables = self.epoch_store.tables().unwrap();
+            let epoch_tables = self
+                .epoch_store
+                .tables()
+                .expect("should not run past end of epoch");
             let iter = epoch_tables.get_pending_checkpoint_signatures_iter(
                 current.summary.sequence_number,
                 current.next_index,

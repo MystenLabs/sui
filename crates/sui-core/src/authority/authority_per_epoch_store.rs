@@ -1478,7 +1478,10 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn deferred_transactions_empty(&self) -> bool {
-        self.tables().unwrap().deferred_transactions.is_empty()
+        self.tables()
+            .expect("deferred transactions should not be read past end of epoch")
+            .deferred_transactions
+            .is_empty()
     }
 
     /// Stores a list of pending certificates to be executed.
@@ -2089,13 +2092,14 @@ impl AuthorityPerEpochStore {
         Some(VerifiedSequencedConsensusTransaction(transaction))
     }
 
-    fn db_batch(&self) -> DBBatch {
-        self.tables().unwrap().last_consensus_index.batch()
+    fn db_batch(&self) -> SuiResult<DBBatch> {
+        Ok(self.tables()?.last_consensus_index.batch())
     }
 
     #[cfg(test)]
     pub fn db_batch_for_test(&self) -> DBBatch {
         self.db_batch()
+            .expect("test should not be write past end of epoch")
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -2134,7 +2138,9 @@ impl AuthorityPerEpochStore {
                 sequenced_transactions.push(tx);
             }
         }
-        let mut batch = self.db_batch();
+        let mut batch = self
+            .db_batch()
+            .expect("Consensus should not be processed past end of epoch");
 
         // Pre-process transactions to find the most recent randomness round included in the commit.
         let mut last_randomness_round_written = self.last_randomness_round_written()?;
@@ -2717,15 +2723,13 @@ impl AuthorityPerEpochStore {
     pub fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointCommitHeight>,
-    ) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
-        let tables = self.tables().unwrap();
+    ) -> SuiResult<Vec<(CheckpointCommitHeight, PendingCheckpoint)>> {
+        let tables = self.tables()?;
         let mut iter = tables.pending_checkpoints.unbounded_iter();
         if let Some(last_processed_height) = last {
-            iter = iter
-                .skip_to(&(last_processed_height + 1))
-                .expect("Unexpected storage error");
+            iter = iter.skip_to(&(last_processed_height + 1))?;
         }
-        iter.collect()
+        Ok(iter.collect())
     }
 
     pub fn get_pending_checkpoint(
@@ -2794,14 +2798,14 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn last_built_checkpoint_commit_height(&self) -> Option<CheckpointCommitHeight> {
-        self.tables()
-            .expect("CheckpointBuilder should not cross epoch boundary")
+    pub fn last_built_checkpoint_commit_height(&self) -> SuiResult<Option<CheckpointCommitHeight>> {
+        Ok(self
+            .tables()?
             .builder_checkpoint_summary_v2
             .unbounded_iter()
             .skip_to_last()
             .next()
-            .and_then(|(_, b)| b.commit_height)
+            .and_then(|(_, b)| b.commit_height))
     }
 
     pub fn last_built_checkpoint_summary(
