@@ -204,6 +204,7 @@ mod checked {
             #[cfg(feature = "gas-profiler")]
             {
                 let tx_digest = tx_context.digest();
+
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
                         .into();

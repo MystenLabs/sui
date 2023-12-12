@@ -4,6 +4,9 @@ use move_vm_config::runtime::VMProfilerConfig;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+#[cfg(feature = "gas-profiler")]
+use tracing::info;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct FrameName {
     name: String,
@@ -138,7 +141,10 @@ impl GasProfiler {
     }
 
     pub fn open_frame(&mut self, frame_name: String, metadata: String, gas_start: u64) {
-        if self.config.is_none() || self.start_gas == 0 {
+        if self.config.is_none() {
+            return;
+        }
+        if self.start_gas == 0 {
             return;
         }
 
@@ -168,13 +174,11 @@ impl GasProfiler {
     }
 
     pub fn to_file(&self) {
-        let config;
-        if let Some(c) = &self.config {
-            config = c
-        } else {
+        let Some(config) = &self.config else {
             return;
-        }
+        };
         if !self.is_metered() {
+            info!("No meaningful gas usage for this transaction, it may be a system transaction");
             return;
         }
 
@@ -184,7 +188,7 @@ impl GasProfiler {
 
         let json = serde_json::to_string_pretty(&self).expect("Unable to serialize profile");
         std::io::Write::write_all(&mut file, json.as_bytes()).expect("Unable to write to file");
-        println!("Gas profile written to file: {}", path_str);
+        info!("Gas profile written to file: {}", path_str);
     }
 
     pub fn finish(&mut self) {
@@ -267,7 +271,7 @@ macro_rules! profile_close_frame_impl {
                     } else {
                         $frame_name
                     };
-                    profiler.open_frame(name, $frame_name, $gas_rem)
+                    profiler.close_frame(name, $frame_name, $gas_rem)
                 }
             }
         }
