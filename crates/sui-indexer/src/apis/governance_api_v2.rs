@@ -43,7 +43,7 @@ impl GovernanceReadApiV2 {
             None => self.get_latest_sui_system_state().await?.epoch,
         };
 
-        Ok(&apys.get(&epoch).and_then(|a| a.get(address)).copied())
+        Ok(apys.get(&epoch).and_then(|a| a.get(address)).copied())
     }
 
     async fn get_validators_apy(&self) -> Result<ValidatorApys, IndexerError> {
