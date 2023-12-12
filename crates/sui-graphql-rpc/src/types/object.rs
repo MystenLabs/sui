@@ -3,9 +3,13 @@
 
 use async_graphql::{connection::Connection, *};
 use fastcrypto::encoding::{Base58, Encoding};
+use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
+use move_core_types::language_storage::StructTag;
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_json_rpc::name_service::NameServiceConfig;
+use sui_package_resolver::Resolver;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::TypeTag;
 
 use super::big_int::BigInt;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -16,9 +20,12 @@ use super::{
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
+use crate::context_data::package_cache::PackageCache;
 use crate::error::Error;
 use crate::types::base64::Base64;
-use sui_types::object::{Object as NativeObject, Owner as NativeOwner};
+use sui_types::object::{
+    MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
@@ -86,6 +93,33 @@ impl Object {
     /// This number is recalculated based on the present storage gas price.
     async fn storage_rebate(&self) -> Option<BigInt> {
         Some(BigInt::from(self.native.storage_rebate))
+    }
+
+    async fn display(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        let resolver: &Resolver<PackageCache> = ctx
+            .data()
+            .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
+            .extend()?;
+        let move_object = self
+            .native
+            .data
+            .try_as_move()
+            .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
+            .extend()?;
+
+        let (struct_tag, move_struct) = deserialize_move_struct(move_object, resolver)
+            .await
+            .extend()?;
+
+        // get_display_object_by_type
+        let stored_display = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_display_object_by_type(&struct_tag)
+            .await
+            .extend()?;
+        // get_rendered_fields
+
+        Ok(None)
     }
 
     /// The Base64 encoded bcs serialization of the object's content.
@@ -339,4 +373,34 @@ fn addr(bytes: impl AsRef<[u8]>) -> Result<SuiAddress, Error> {
         let bytes = bytes.as_ref().to_vec();
         Error::Internal(format!("Error deserializing address: {bytes:?}: {e}"))
     })
+}
+
+pub(crate) async fn deserialize_move_struct(
+    move_object: &NativeMoveObject,
+    resolver: &Resolver<PackageCache>,
+) -> Result<(StructTag, MoveStruct), Error> {
+    let struct_tag = StructTag::from(move_object.type_().clone());
+    let contents = move_object.contents();
+    let move_type_layout = resolver
+        .type_layout(TypeTag::from(struct_tag.clone()))
+        .await
+        .map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                struct_tag.to_canonical_string(/* with_prefix */ true)
+            ))
+        })?;
+
+    let MoveTypeLayout::Struct(layout) = move_type_layout else {
+        return Err(Error::Internal("Object is not a move struct".to_string()));
+    };
+
+    let move_struct = MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+        Error::Internal(format!(
+            "Error deserializing move struct for type {}: {e}",
+            struct_tag.to_canonical_string(/* with_prefix */ true)
+        ))
+    })?;
+
+    Ok((struct_tag, move_struct))
 }

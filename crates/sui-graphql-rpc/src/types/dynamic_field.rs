@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
-use move_core_types::annotated_value::{self as A, MoveStruct, MoveTypeLayout};
-use move_core_types::language_storage::StructTag;
+use move_core_types::annotated_value::{self as A, MoveStruct};
 use sui_indexer::models_v2::objects::StoredObject;
 use sui_package_resolver::Resolver;
-use sui_types::dynamic_field::DynamicFieldInfo;
-use sui_types::{dynamic_field::DynamicFieldType, TypeTag};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 
+use super::object::deserialize_move_struct;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
 };
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::package_cache::PackageCache;
 use crate::error::Error;
-use sui_types::object::Object as NativeSuiObject;
+use sui_types::object::Object as NativeObject;
 
 pub(crate) struct DynamicField {
     pub stored_object: StoredObject,
@@ -47,11 +46,17 @@ impl DynamicField {
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
+        let native_object: NativeObject = bcs::from_bytes(&self.stored_object.serialized_object)
+            .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?;
+        let move_object = native_object
+            .data
+            .try_as_move()
+            .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
+            .extend()?;
 
-        let (struct_tag, move_struct) =
-            deserialize_move_struct(&self.stored_object.serialized_object, resolver)
-                .await
-                .extend()?;
+        let (struct_tag, move_struct) = deserialize_move_struct(move_object, resolver)
+            .await
+            .extend()?;
 
         // Get TypeTag of the DynamicField name from StructTag of the MoveStruct
         let type_tag = DynamicFieldInfo::try_extract_field_name(&struct_tag, &self.df_kind)
@@ -96,11 +101,20 @@ impl DynamicField {
                 .data()
                 .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
                 .extend()?;
+            let native_object: NativeObject =
+                bcs::from_bytes(&self.stored_object.serialized_object)
+                    .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?;
+            let move_object = native_object
+                .data
+                .try_as_move()
+                .ok_or_else(|| {
+                    Error::Internal("Failed to convert object into MoveObject".to_string())
+                })
+                .extend()?;
 
-            let (struct_tag, move_struct) =
-                deserialize_move_struct(&self.stored_object.serialized_object, resolver)
-                    .await
-                    .extend()?;
+            let (struct_tag, move_struct) = deserialize_move_struct(move_object, resolver)
+                .await
+                .extend()?;
 
             // Get TypeTag of the DynamicField value from StructTag of the MoveStruct
             let type_tag = DynamicFieldInfo::try_extract_field_value(&struct_tag)
@@ -120,45 +134,6 @@ impl DynamicField {
             ))))
         }
     }
-}
-
-pub(crate) async fn deserialize_move_struct(
-    serialized_object: &[u8],
-    resolver: &Resolver<PackageCache>,
-) -> Result<(StructTag, MoveStruct), Error> {
-    let native_object: NativeSuiObject = bcs::from_bytes(serialized_object)
-        .map_err(|e| Error::Internal(format!("Failed to deserialize object: {e}")))?;
-
-    let Some(move_object) = native_object.data.try_as_move() else {
-        return Err(Error::Internal(
-            "Failed to convert object into MoveObject".to_string(),
-        ));
-    };
-
-    let struct_tag = StructTag::from(move_object.type_().clone());
-    let contents = move_object.contents();
-    let move_type_layout = resolver
-        .type_layout(TypeTag::from(struct_tag.clone()))
-        .await
-        .map_err(|e| {
-            Error::Internal(format!(
-                "Error fetching layout for type {}: {e}",
-                struct_tag.to_canonical_string(/* with_prefix */ true)
-            ))
-        })?;
-
-    let MoveTypeLayout::Struct(layout) = move_type_layout else {
-        return Err(Error::Internal("Object is not a move struct".to_string()));
-    };
-
-    let move_struct = MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
-        Error::Internal(format!(
-            "Error deserializing move struct for type {}: {e}",
-            struct_tag.to_canonical_string(/* with_prefix */ true)
-        ))
-    })?;
-
-    Ok((struct_tag, move_struct))
 }
 
 pub fn extract_field_from_move_struct(
