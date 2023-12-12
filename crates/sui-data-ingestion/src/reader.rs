@@ -2,17 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::executor::MAX_CHECKPOINTS_IN_PROGRESS;
+use anyhow::anyhow;
 use anyhow::Result;
 use notify::RecursiveMode;
 use notify::Watcher;
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_storage::blob::Blob;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tokio::time::timeout;
+use tracing::debug;
+
+pub(crate) const ENV_VAR_LOCAL_READ_TIMEOUT_MS: &str = "LOCAL_READ_TIMEOUT_MS";
 
 /// Implements a checkpoint reader that monitors a local directory.
 /// Designed for setups where the indexer daemon is colocated with FN.
@@ -42,12 +48,14 @@ impl LocalReader {
             }
         }
         files.sort();
+        debug!(
+            "local reader: current checkpoint number is {}. Unprocessed local files are {:?}",
+            current_checkpoint_number, files
+        );
         for (idx, (sequence_number, filename)) in files.iter().enumerate() {
-            assert_eq!(
-                *sequence_number,
-                current_checkpoint_number + idx as u64,
-                "checkpoint sequence should not have any gaps"
-            );
+            if current_checkpoint_number + idx as u64 != *sequence_number {
+                return Err(anyhow!("checkpoint sequence should not have any gaps"));
+            }
             let checkpoint = Blob::from_bytes::<CheckpointData>(&fs::read(filename)?)?;
             self.checkpoint_sender.send(checkpoint).await?;
         }
@@ -95,7 +103,7 @@ impl LocalReader {
         (reader, checkpoint_recv, processed_sender, exit_sender)
     }
 
-    pub async fn run(mut self, mut checkpoint_number: CheckpointSequenceNumber) {
+    pub async fn run(mut self, mut checkpoint_number: CheckpointSequenceNumber) -> Result<()> {
         let (inotify_sender, mut inotify_recv) = mpsc::channel(1);
         std::fs::create_dir_all(self.path.clone()).expect("failed to create a directory");
         let mut watcher = notify::recommended_watcher(move |res| {
@@ -112,17 +120,19 @@ impl LocalReader {
             .watch(&self.path, RecursiveMode::NonRecursive)
             .expect("Inotify watcher failed");
 
-        checkpoint_number = self
-            .read_files(checkpoint_number)
-            .await
-            .expect("Failed to read checkpoint files");
+        let timeout_ms = std::env::var(ENV_VAR_LOCAL_READ_TIMEOUT_MS)
+            .unwrap_or("60000".to_string())
+            .parse::<u64>()?;
 
         loop {
             tokio::select! {
-                Some(_) = inotify_recv.recv() => {
-                    checkpoint_number = self.read_files(checkpoint_number)
-                        .await
-                        .expect("Failed to read checkpoint files");
+                Ok(Some(_)) | Err(_) = timeout(Duration::from_millis(timeout_ms), inotify_recv.recv())  => {
+                    let backoff = backoff::ExponentialBackoff::default();
+                    checkpoint_number = backoff::future::retry(backoff, || async {
+                        self.read_files(checkpoint_number).await.map_err(backoff::Error::transient)
+                    })
+                    .await
+                    .expect("Failed to read checkpoint files");
                 }
                 Some(gc_checkpoint_number) = self.processed_receiver.recv() => {
                     self.gc_processed_files(gc_checkpoint_number).expect("Failed to clean the directory");
@@ -130,5 +140,6 @@ impl LocalReader {
                 _ = &mut self.exit_receiver => break,
             }
         }
+        Ok(())
     }
 }
