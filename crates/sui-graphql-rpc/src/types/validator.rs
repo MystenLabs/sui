@@ -16,7 +16,6 @@ pub(crate) struct Validator {
     pub validator_summary: NativeSuiValidatorSummary,
     pub at_risk: Option<u64>,
     pub report_records: Option<Vec<Address>>,
-    // pub apy: Option<f64>,
 }
 
 #[Object]
