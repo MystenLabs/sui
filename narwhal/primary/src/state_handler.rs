@@ -444,11 +444,12 @@ impl RandomnessState {
         {
             // If verifiation fails, some of the inputs must be invalid. We have to go through
             // one-by-one to find which.
-            self.partial_sigs.retain(|&(r, authority_id), partial_sig| {
+            // TODO: add test for individual sig verification.
+            self.partial_sigs.retain(|&(r, authority_id), partial_sigs| {
                 if ThresholdBls12381MinSig::partial_verify_batch(
                     &dkg_output.vss_pk,
                     &r.signature_message(),
-                     partial_sig.as_slice(),
+                     partial_sigs.as_slice(),
                     &mut rand::thread_rng(),
                 )
                 .is_err()
