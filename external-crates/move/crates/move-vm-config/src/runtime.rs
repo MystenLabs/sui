@@ -4,7 +4,6 @@
 use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
 use move_binary_format::file_format_common::VERSION_MAX;
 use once_cell::sync::Lazy;
-use std::path::PathBuf;
 
 #[cfg(feature = "gas-profiler")]
 const MOVE_VM_PROFILER_ENV_VAR_NAME: &str = "MOVE_VM_PROFILE";
@@ -14,8 +13,6 @@ static PROFILER_ENABLED: Lazy<bool> =
     Lazy::new(|| std::env::var(MOVE_VM_PROFILER_ENV_VAR_NAME).is_ok());
 
 pub const DEFAULT_MAX_VALUE_NEST_DEPTH: u64 = 128;
-
-pub static DEFAULT_PROFILE_OUTPUT_PATH: Lazy<PathBuf> = Lazy::new(|| std::path::PathBuf::from("."));
 
 /// Dynamic config options for the Move VM.
 pub struct VMConfig {
@@ -71,7 +68,7 @@ impl Default for VMRuntimeLimitsConfig {
 #[derive(Clone, Debug, Default)]
 pub struct VMProfilerConfig {
     /// User configured full path override
-    pub full_path: Option<std::path::PathBuf>,
+    pub full_path: std::path::PathBuf,
     /// Whether or not to track bytecode instructions
     pub track_bytecode_instructions: bool,
     /// Whether or not to use the long name for functions

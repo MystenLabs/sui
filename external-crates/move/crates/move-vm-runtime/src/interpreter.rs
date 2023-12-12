@@ -215,9 +215,8 @@ impl Interpreter {
                 ExitCode::Call(fh_idx) => {
                     let func = resolver.function_from_handle(fh_idx);
                     // Compiled out in release mode
-                    #[cfg(feature = "gas-profiler")]
-                    let func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, func_name.clone());
+
+                    profile_open_frame!(gas_meter, func.pretty_string().clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -233,10 +232,11 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func, vec![])?;
+                        self.call_native(&resolver, gas_meter, extensions, func.clone(), vec![])?;
+
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, func_name.clone());
+                        profile_close_frame!(gas_meter, func.pretty_string().clone());
                         continue;
                     }
                     let frame = self
@@ -257,10 +257,8 @@ impl Interpreter {
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
                     let func = resolver.function_from_instantiation(idx);
-                    // Compiled out in release mode
-                    #[cfg(feature = "gas-profiler")]
-                    let func_name = func.pretty_string();
-                    profile_open_frame!(gas_meter, func_name.clone());
+
+                    profile_open_frame!(gas_meter, func.pretty_string().clone());
 
                     // Charge gas
                     let module_id = func.module_id();
@@ -277,10 +275,10 @@ impl Interpreter {
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
                     if func.is_native() {
-                        self.call_native(&resolver, gas_meter, extensions, func, ty_args)?;
+                        self.call_native(&resolver, gas_meter, extensions, func.clone(), ty_args)?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        profile_close_frame!(gas_meter, func_name.clone());
+                        profile_close_frame!(gas_meter, func.pretty_string().clone());
 
                         continue;
                     }

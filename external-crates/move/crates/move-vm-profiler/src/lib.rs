@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use move_vm_config::runtime::VMProfilerConfig;
-#[cfg(feature = "gas-profiler")]
-use move_vm_config::runtime::DEFAULT_PROFILE_OUTPUT_PATH;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -107,10 +105,6 @@ impl GasProfiler {
         )
     }
 
-    fn profile_name(&self) -> String {
-        self.name.clone()
-    }
-
     pub fn short_name(s: &String) -> String {
         s.split("::").last().unwrap_or(s).to_string()
     }
@@ -184,19 +178,8 @@ impl GasProfiler {
             return;
         }
 
-        let mut p = (*DEFAULT_PROFILE_OUTPUT_PATH.clone()).to_path_buf();
-        if let Some(f) = &config.full_path {
-            p = f.clone();
-        } else {
-            // Get the unix timestamp
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Clock may have gone backwards")
-                .as_nanos();
-            p.push(format!("gas_profile_{}_{}.json", self.profile_name(), now));
-        }
+        let p = &config.full_path.clone();
         let path_str = p.as_os_str().to_string_lossy().to_string();
-
         let mut file = std::fs::File::create(p).expect("Unable to create file");
 
         let json = serde_json::to_string_pretty(&self).expect("Unable to serialize profile");

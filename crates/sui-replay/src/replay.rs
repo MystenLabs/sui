@@ -238,7 +238,7 @@ pub struct LocalExec {
     // None implies use the protocol version at the time of execution
     pub protocol_version: Option<i64>,
     // Whether or not to enable the gas profiler, the PathBuf contains either a user specified
-    // filepath or DEFAULT_PROFILE_OUTPUT_PATH for the profile output
+    // filepath or the default current directory and name format for the profile output
     pub enable_profiler: Option<PathBuf>,
     // Retry policies due to RPC errors
     pub num_retries_for_timeout: u32,
